@@ -1,0 +1,52 @@
+/*
+ * Copyright 2018 The Starlark in Rust Authors.
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+//! Implementation of `struct` function.
+use crate as starlark;
+use crate::{
+    collections::SmallMap,
+    environment::GlobalsBuilder,
+    values::{structs::Struct, Value, ValueLike},
+};
+
+#[starlark_module]
+pub fn global(builder: &mut GlobalsBuilder) {
+    /// Creates a struct.
+    ///
+    /// `struct` creates a struct. It accepts keyword arguments, keys become
+    /// struct field names, and values become field values.
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// # starlark::assert::all_true(r#"
+    /// struct(host='localhost', port=80).port == 80
+    /// "host" in dir(struct(host='localhost', port=80))
+    /// "port" in dir(struct(host='localhost', port=80))
+    /// # "#);
+    /// ```
+    fn r#struct(kwargs: SmallMap<String, Value>) -> Struct<'v> {
+        Ok(Struct { fields: kwargs })
+    }
+}
+
+#[starlark_module]
+pub(crate) fn struct_members(builder: &mut GlobalsBuilder) {
+    fn to_json(this: Value) -> String {
+        Ok(this.to_json())
+    }
+}

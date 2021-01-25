@@ -1,0 +1,45 @@
+/*
+ * Copyright 2018 The Starlark in Rust Authors.
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+//! The syntax module that handle lexing and parsing
+
+pub use ast::AstModule;
+pub use dialect::Dialect;
+pub use parser::{parse, parse_file};
+
+#[cfg(test)]
+mod grammar_tests;
+#[cfg(test)]
+mod testing;
+
+pub(crate) mod ast;
+mod dialect;
+pub(crate) mod lexer;
+pub(crate) mod validate;
+
+#[allow(clippy::all)]
+// Things we explicitly turn on need to be explicitly turned off
+#[allow(clippy::inefficient_to_string)]
+#[allow(clippy::trivially_copy_pass_by_ref)]
+#[allow(clippy::too_many_arguments)]
+#[cfg_attr(feature = "custom_linter", allow(gazebo_use_dupe))]
+mod grammar {
+    include!(concat!(env!("OUT_DIR"), "/syntax/grammar.rs"));
+}
+
+pub(crate) mod parser;
+pub(crate) mod uniplate;

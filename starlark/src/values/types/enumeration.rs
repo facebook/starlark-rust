@@ -1,0 +1,275 @@
+/*
+ * Copyright 2018 The Starlark in Rust Authors.
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+use crate::{
+    collections::SmallMap,
+    eval::Parameters,
+    values::{
+        error::ValueError,
+        function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
+        index::convert_index,
+        Freezer, Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueLike, Walker,
+    },
+};
+use gazebo::{any::AnyLifetime, cell::ARef};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+enum EnumError {
+    #[error("enum values must all be distinct, but repeated `{0}`")]
+    DuplicateEnumValue(String),
+    #[error("Unknown enum element `{0}`, given to `{1}`")]
+    InvalidElement(String, String),
+}
+
+// The type of an enum. Deliberately store fully populated values
+// for each entry, so we can produce enum values with zero allocation.
+#[derive(Clone, Debug)]
+pub struct EnumTypeGen<V> {
+    typ: Option<String>,
+    // The key is the value of the enumeration
+    // The value is a value of type EnumValue
+    elements: SmallMap<V, V>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumValueGen<V> {
+    typ: V,     // Must be EnumType it points back to (so it can get the type)
+    value: V,   // The value of this enumeration
+    index: i32, // The index in the enumeration
+}
+
+starlark_value!(pub EnumType);
+starlark_value!(pub EnumValue);
+
+impl<'v> MutableValue<'v> for EnumType<'v> {
+    fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+        let mut elements = SmallMap::with_capacity(self.elements.len());
+        for (k, t) in self.elements.into_iter_hashed() {
+            elements.insert_hashed(k.freeze(freezer), t.freeze(freezer));
+        }
+        box FrozenEnumType {
+            typ: self.typ,
+            elements,
+        }
+    }
+
+    fn walk(&mut self, walker: &Walker<'v>) {
+        self.elements.iter_mut().for_each(|(k, v)| {
+            walker.walk_dictionary_key(k);
+            walker.walk(v);
+        })
+    }
+
+    fn export_as(&mut self, _heap: &'v Heap, _module_name: &str, variable_name: &str) {
+        if self.typ.is_none() {
+            self.typ = Some(variable_name.to_owned())
+        }
+    }
+}
+
+impl<'v> MutableValue<'v> for EnumValue<'v> {
+    fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+        box FrozenEnumValue {
+            typ: self.typ.freeze(freezer),
+            value: self.value.freeze(freezer),
+            index: self.index,
+        }
+    }
+
+    fn walk(&mut self, walker: &Walker<'v>) {
+        walker.walk(&mut self.typ);
+        walker.walk(&mut self.value);
+    }
+}
+
+impl<'v> EnumType<'v> {
+    pub(crate) fn new(elements: Vec<Value<'v>>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        // We are constructing the enum and all elements in one go.
+        // They both point at each other, which adds to the complexity.
+        let typ = heap.alloc(EnumType {
+            typ: None,
+            elements: SmallMap::new(),
+        });
+
+        let mut res = SmallMap::with_capacity(elements.len());
+        for (i, x) in elements.iter().enumerate() {
+            let v = heap.alloc(EnumValue {
+                typ,
+                index: i as i32,
+                value: *x,
+            });
+            if res.insert_hashed(x.get_hashed()?, v).is_some() {
+                return Err(EnumError::DuplicateEnumValue(x.to_string()).into());
+            }
+        }
+
+        // Here we tie the cycle
+        let mut t = EnumType::from_value_mut(typ, heap)?.unwrap();
+        t.elements = res;
+        Ok(typ)
+    }
+}
+
+impl<'v, T: ValueLike<'v>> EnumValueGen<T> {
+    pub const TYPE: &'static str = "enum";
+
+    fn get_enum_type(&self) -> ARef<'v, EnumType<'v>> {
+        // Safe to unwrap because we always ensure typ is EnumType
+        EnumType::from_value(self.typ.to_value()).unwrap()
+    }
+}
+
+impl<'v> ImmutableValue<'v> for FrozenEnumType {}
+
+impl<'v> ImmutableValue<'v> for FrozenEnumValue {}
+
+impl<'v, T: ValueLike<'v>> TypedValue<'v> for EnumTypeGen<T>
+where
+    Self: AnyLifetime<'v>,
+{
+    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+
+    // So we can get the name set and tie the cycle
+    fn naturally_mutable(&self) -> bool {
+        true
+    }
+
+    fn collect_repr(&self, collector: &mut String) {
+        collector.push_str("enum(");
+        for (i, (v, _)) in self.elements.iter().enumerate() {
+            if i != 0 {
+                collector.push_str(", ");
+            }
+            v.collect_repr(collector);
+        }
+        collector.push(')');
+    }
+
+    fn new_invoker<'a>(
+        &self,
+        me: Value<'v>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+        let name = self.typ.as_deref().unwrap_or("enum").to_owned();
+        let mut signature = Parameters::with_capacity(name, 2);
+        signature.required("me"); // Hidden first argument
+        signature.required("value");
+
+        // We want to get the value of `me` into the function, but that doesn't work since it
+        // might move between threads - so we create the NativeFunction and apply it later.
+        let fun = NativeFunction::new(
+            move |context, mut param_parser: ParameterParser| {
+                let typ_val = param_parser.next("me", context.heap())?;
+                let val: Value = param_parser.next("value", context.heap())?;
+                let typ = EnumType::from_value(typ_val).unwrap();
+                match typ.elements.get_hashed(val.get_hashed()?.borrow()) {
+                    Some(v) => Ok(*v),
+                    None => {
+                        Err(EnumError::InvalidElement(val.to_string(), typ_val.to_string()).into())
+                    }
+                }
+            },
+            signature,
+        );
+        let mut f = heap.alloc(fun).new_invoker(heap)?;
+        f.push_pos(me);
+        Ok(f)
+    }
+
+    fn length(&self) -> anyhow::Result<i32> {
+        Ok(self.elements.len() as i32)
+    }
+
+    fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        let i = convert_index(index, self.elements.len() as i32)? as usize;
+        // Must be in the valid range since convert_index checks that, so just unwrap
+        Ok(self.elements.get_index(i).map(|x| *x.1).unwrap().to_value())
+    }
+
+    fn dir_attr(&self) -> Vec<String> {
+        vec!["type".to_owned()]
+    }
+
+    fn has_attr(&self, attribute: &str) -> bool {
+        attribute == "type"
+    }
+
+    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if attribute == "type" {
+            Ok(heap.alloc(self.typ.as_deref().unwrap_or(EnumValue::TYPE)))
+        } else {
+            Err(ValueError::OperationNotSupported {
+                op: attribute.to_owned(),
+                typ: self.to_repr(),
+            }
+            .into())
+        }
+    }
+}
+
+impl<'v, T: ValueLike<'v>> TypedValue<'v> for EnumValueGen<T>
+where
+    Self: AnyLifetime<'v>,
+{
+    starlark_type!(EnumValue::TYPE);
+
+    fn matches_type(&self, ty: &str) -> bool {
+        ty == EnumValue::TYPE || Some(ty) == self.get_enum_type().typ.as_deref()
+    }
+
+    fn to_json(&self) -> String {
+        self.value.to_json()
+    }
+
+    fn collect_repr(&self, collector: &mut String) {
+        self.value.collect_repr(collector)
+    }
+
+    fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
+        // The type uses reference equality, since we didn't define an equals() for EnumType.
+        // That's very probably the right thing to do.
+        match EnumValue::from_value(other) {
+            Some(other) if self.typ.equals(other.typ)? => Ok(self.index == other.index),
+            _ => Ok(false),
+        }
+    }
+
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        self.value.get_hash()
+    }
+
+    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match attribute {
+            "index" => Ok(Value::new_int(self.index)),
+            "value" => Ok(self.value.to_value()),
+            _ => Err(ValueError::OperationNotSupported {
+                op: attribute.to_owned(),
+                typ: self.to_repr(),
+            }
+            .into()),
+        }
+    }
+
+    fn has_attr(&self, attribute: &str) -> bool {
+        attribute == "index" || attribute == "value"
+    }
+
+    fn dir_attr(&self) -> Vec<String> {
+        vec!["index".to_string(), "value".to_owned()]
+    }
+}

@@ -1,0 +1,19 @@
+[package]
+name = "starlark_module"
+version = "0.4.0-pre"
+edition = "2018"
+license = "Apache-2.0"
+description = "Derive helpers for the starlark package."
+documentation = "https://docs.rs/starlark_module"
+repository = "https://github.com/facebookexperimental/starlark-rust"
+authors = ["Facebook"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+syn = {version = "1.0.57", features = ["full"]}
+# @oss-disable: gazebo = { path = "../../gazebo/gazebo", features =  ["str_pattern_extensions"] }
+gazebo = { git = "https://github.com/facebookincubator/gazebo", features =  ["str_pattern_extensions"] } # @oss-enable
+quote = "1.0.3"
