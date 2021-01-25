@@ -19,7 +19,8 @@ use crate::syntax::{
     ast::Stmt,
     dialect::Dialect,
     grammar::StarlarkParser,
-    parser::{parse_error_add_span, parse_file},
+    parse,
+    parser::parse_error_add_span,
     testing::{assert_diagnostics, testcase_files},
 };
 use gazebo::prelude::*;
@@ -255,14 +256,14 @@ fn test_nested_def() {
 #[test]
 fn smoke_test() {
     let mut diagnostics = Vec::new();
-    for path in testcase_files() {
-        if path.ends_with("js.star") {
+    for (file, content) in testcase_files() {
+        if file.ends_with("js.star") {
             // This file has:
             // `_vulcanize_rule(*args, pkg=PACKAGE_NAME, **kwargs)`
             // Which is not valid Starlark, as a named argument comes after *args
             continue;
         }
-        if let Err(err) = parse_file(&path, &Dialect::Extended) {
+        if let Err(err) = parse(file, content, &Dialect::Extended) {
             diagnostics.push(err);
         }
     }

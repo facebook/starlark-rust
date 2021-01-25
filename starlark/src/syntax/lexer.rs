@@ -895,7 +895,7 @@ mod tests {
     use super::*;
     use crate::syntax::testing::{assert_diagnostics, testcase_files};
     use gazebo::prelude::*;
-    use std::{fs, sync::Arc};
+    use std::sync::Arc;
 
     fn collect_result(s: &'static str) -> Vec<Token> {
         let mut codemap = codemap::CodeMap::new();
@@ -1303,13 +1303,13 @@ test("abc")
     #[test]
     fn smoke_test() {
         let mut diagnostics = Vec::new();
-        for file in testcase_files() {
-            let content = fs::read_to_string(&file).unwrap();
+        for (file, content) in testcase_files() {
             let mut codemap = codemap::CodeMap::new();
-            let filename = file.to_string_lossy().into_owned();
-            let file_span = codemap.add_file(filename, content.clone()).span;
+            let file_span = codemap
+                .add_file((*file).to_owned(), (*content).to_owned())
+                .span;
             let codemap = Arc::new(codemap);
-            super::Lexer::new(&content, &Dialect::Standard).for_each(|x| {
+            super::Lexer::new(content, &Dialect::Standard).for_each(|x| {
                 if x.is_err() {
                     diagnostics.push(x.err().unwrap().add_span(file_span, codemap.dupe()).into());
                 }
