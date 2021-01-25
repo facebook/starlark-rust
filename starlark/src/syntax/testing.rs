@@ -41,7 +41,7 @@ pub fn testcase_files() -> Vec<PathBuf> {
     });
     for p in paths {
         let path = p.unwrap().path();
-        if path.ends_with(".star") {
+        if path.extension().unwrap_or_default() == "star" {
             res.push(path)
         }
     }

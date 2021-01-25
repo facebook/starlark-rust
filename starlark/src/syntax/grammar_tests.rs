@@ -256,6 +256,12 @@ fn test_nested_def() {
 fn smoke_test() {
     let mut diagnostics = Vec::new();
     for path in testcase_files() {
+        if path.ends_with("js.star") {
+            // This file has:
+            // `_vulcanize_rule(*args, pkg=PACKAGE_NAME, **kwargs)`
+            // Which is not valid Starlark, as a named argument comes after *args
+            continue;
+        }
         if let Err(err) = parse_file(&path, &Dialect::Extended) {
             diagnostics.push(err);
         }
