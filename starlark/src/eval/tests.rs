@@ -1190,7 +1190,6 @@ fn test_go() {
                 env!("CARGO_MANIFEST_DIR"),
                 "/testcases/eval/go/",
                 $name,
-                ".star"
             ))
         };
     }
@@ -1206,7 +1205,7 @@ fn test_go() {
 
     let assert = Assert::new();
     assert.conformance_except(
-        test_case!("assign"),
+        test_case!("assign.star"),
         &[
             "A comprehension establishes", // test_comprehension_blocks
             "hasfields()",                 // Not sure what this is, but we don't support
@@ -1214,13 +1213,13 @@ fn test_go() {
     );
     // Skip benchmark.star, for benchmarking not testing
     assert.conformance(&ignore_bad_lines(
-        test_case!("bool"),
+        test_case!("bool.star"),
         &[
             "0.0", // Floats, unsupported
         ],
     ));
     assert.conformance(&ignore_bad_lines(
-        test_case!("builtin"),
+        test_case!("builtin.star"),
         &[
             "2.0",                   // Floats, unsupported
             "<<",                    // Bit shift, unsupported
@@ -1252,10 +1251,10 @@ fn test_go() {
             "dir([])[:3]",
         ],
     ));
-    assert.conformance(test_case!("control"));
+    assert.conformance(test_case!("control.star"));
     assert.conformance_except(
         &ignore_bad_lines(
-            test_case!("dict"),
+            test_case!("dict.star"),
             &[
                 "unknown binary op: dict \\\\+ dict",   // We support {} + {}
                 "duplicate key: \"bb\"", // We allow {1: 1, 1: 2}, as per test_dict_with_duplicates
@@ -1274,7 +1273,7 @@ fn test_go() {
     );
     // Skip float.star, since we don't support floats
     assert.conformance(&ignore_bad_lines(
-        test_case!("function"),
+        test_case!("function.star"),
         &[
             "eq(str",             // We render function names differently
             "frozen list",        // Our freeze does nothing
@@ -1287,7 +1286,7 @@ fn test_go() {
     // Skip list.star, our strings disagree about whether they are lists of codepoints or lists of 1-char strings
     assert.conformance_except(
         &ignore_bad_lines(
-            test_case!("misc"),
+            test_case!("misc.star"),
             &[
                 "2.0",                          // We don't support float
                 "None < None", // We don't believe this should be an error, see test_none_comparison
@@ -1306,7 +1305,7 @@ fn test_go() {
     assert.conformance(
         // Our elems() works differently
         &ignore_bad_lines(
-            &test_case!("tuple").replace("\"abc\".elems()", "[\"a\",\"b\",\"c\"]"),
+            &test_case!("tuple.star").replace("\"abc\".elems()", "[\"a\",\"b\",\"c\"]"),
             &[
                 "1000000 * 1000000", // Some tests check that you can't create too large tuples, but that's not principled, so we allow it
                                      // But it takes approximately forever, so doing it is a bad idea.
