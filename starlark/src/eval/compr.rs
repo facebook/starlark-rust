@@ -64,7 +64,7 @@ fn compile_clause(clause: AstClause, compiler: &mut Compiler) -> ClauseCompiled 
 
     // Everything after must be compiled with the new variables in scope
     let var = compiler.assign(*var);
-    let ifs = ifs.into_map(|expr| compiler.expr(*expr));
+    let ifs = ifs.into_map(|expr| compiler.expr(expr));
     ClauseCompiled {
         var,
         over,

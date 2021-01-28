@@ -72,10 +72,10 @@ to_ast_trait!(String, AstString);
 
 #[derive(Debug)]
 pub enum Argument {
-    Positional(Box<AstExpr>),
-    Named(AstString, Box<AstExpr>),
-    ArgsArray(Box<AstExpr>),
-    KWArgsDict(Box<AstExpr>),
+    Positional(AstExpr),
+    Named(AstString, AstExpr),
+    ArgsArray(AstExpr),
+    KWArgsDict(AstExpr),
 }
 to_ast_trait!(Argument, AstArgument);
 
@@ -97,12 +97,12 @@ pub enum AstLiteral {
 
 #[derive(Debug)]
 pub enum Expr {
-    Tuple(Vec<Box<AstExpr>>),
+    Tuple(Vec<AstExpr>),
     Dot(Box<AstExpr>, AstString),
     Call(
         Box<AstExpr>,
-        Vec<Box<AstExpr>>,
-        Vec<(AstString, Box<AstExpr>)>,
+        Vec<AstExpr>,
+        Vec<(AstString, AstExpr)>,
         Option<Box<AstExpr>>,
         Option<Box<AstExpr>>,
     ),
@@ -121,18 +121,18 @@ pub enum Expr {
     Plus(Box<AstExpr>),
     Op(Box<AstExpr>, BinOp, Box<AstExpr>),
     If(Box<AstExpr>, Box<AstExpr>, Box<AstExpr>), // Order: condition, v1, v2 <=> v1 if condition else v2
-    List(Vec<Box<AstExpr>>),
-    Dict(Vec<(Box<AstExpr>, Box<AstExpr>)>),
+    List(Vec<AstExpr>),
+    Dict(Vec<(AstExpr, AstExpr)>),
     ListComprehension(Box<AstExpr>, Vec<AstClause>),
     DictComprehension((Box<AstExpr>, Box<AstExpr>), Vec<AstClause>),
 }
-to_ast_trait!(Expr, Box<AstExpr>, Box);
+to_ast_trait!(Expr, AstExpr);
 
 #[derive(Debug)]
 pub struct Clause {
     pub var: Box<AstExpr>,
     pub over: Box<AstExpr>,
-    pub ifs: Vec<Box<AstExpr>>,
+    pub ifs: Vec<AstExpr>,
 }
 to_ast_trait!(Clause, AstClause);
 

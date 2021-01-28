@@ -25,7 +25,7 @@ ASTS<E>: AstStmt = <l:@L> <e:E> <r:@R>
     => e.to_ast(file_span.subspan(l, r));
 
 #[inline]
-ASTE<E>: Box<AstExpr> = <l:@L> <e:E> <r:@R>
+ASTE<E>: AstExpr = <l:@L> <e:E> <r:@R>
     => e.to_ast(file_span.subspan(l, r));
 
 #[inline]
@@ -69,13 +69,13 @@ DefStmt_: Stmt =
       =>? Ok(Stmt::check_def(<>)?);
 
 ReturnType: Option<Box<AstExpr>> = {
-    "->" <Test> =>? Ok(Some(dialect.check_type(<>)?)),
+    "->" <Test> =>? Ok(Some(box dialect.check_type(<>)?)),
     => None,
 }
 
 Parameter: AstParameter = ASTP<Parameter_>;
 Parameter_: Parameter = {
-    <n:identifier> "=" <e:Test> => Parameter::WithDefaultValue(n, None, e),
+    <n:identifier> "=" <e:Test> => Parameter::WithDefaultValue(n, None, box e),
     <identifier>            => Parameter::Normal(<>, None),
     "*" <identifier>        => Parameter::Args(<>, None),
     <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(file_span.subspan(l, r), Parameter::NoArgs)?),
@@ -84,7 +84,7 @@ Parameter_: Parameter = {
 
 ParameterTyped: AstParameter = ASTP<ParameterTyped_>;
 ParameterTyped_: Parameter = {
-    <identifier> <Type> "=" <Test> => Parameter::WithDefaultValue(<>),
+    <n:identifier> <t:Type> "=" <e:Test> => Parameter::WithDefaultValue(n, t, box e),
     <identifier> <Type>            => Parameter::Normal(<>),
     "*" <identifier> <Type>        => Parameter::Args(<>),
     <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(file_span.subspan(l, r), Parameter::NoArgs)?),
@@ -92,7 +92,7 @@ ParameterTyped_: Parameter = {
 };
 
 Type: Option<Box<AstExpr>> = {
-    ":" <Test> =>? Ok(Some(dialect.check_type(<>)?)),
+    ":" <Test> =>? Ok(Some(box dialect.check_type(<>)?)),
     => None,
 }
 
@@ -107,8 +107,8 @@ Stmt: AstStmt = { DefStmt, IfStmt, ForStmt, SimpleStmt<SmallStmt> };
 IfBody: AstStmt = ASTS<IfBody_>;
 IfBody_: Stmt = <c:Test> ":" <s:Suite> <el:ElseStmt?> => {
     match el {
-        None   => Stmt::If(c, box s),
-        Some(e) => Stmt::IfElse(c, box s, box e)
+        None   => Stmt::If(box c, box s),
+        Some(e) => Stmt::IfElse(box c, box s, box e)
     }
 };
 
@@ -120,7 +120,7 @@ ElseStmt: AstStmt = {
 
 ForStmt: AstStmt = ASTS<ForStmt_>;
 ForStmt_: Stmt = "for" <e:ExprList> "in" <c:Test> ":" <s:Suite>
-    => Stmt::For(e, c, box s);
+    => Stmt::For(box e, box c, box s);
 
 SimpleStmt<S>: AstStmt =
     <l:@L> <e:S> <v:(";" <S>)*> ";"? <r:@R> "\n" => {
@@ -135,7 +135,7 @@ SimpleStmt<S>: AstStmt =
 
 SmallStmt: AstStmt = {
     <l:@L> "return" <e:TestList?> <r:@R>
-        => Stmt::Return(e).to_ast(file_span.subspan(l, r)),
+        => Stmt::Return(e.map(|x| box x)).to_ast(file_span.subspan(l, r)),
     <@L> "break" <@R>
         => Stmt::Break.to_ast(file_span.subspan(<>)),
     <@L> "continue" <@R>
@@ -156,15 +156,15 @@ AssignOp: AssignOp = {
 };
 
 AssignStmt: AstStmt = ASTS<AssignStmt_>;
-AssignStmt_: Stmt = <TestList> <AssignOp> <TestList>
-        => Stmt::Assign(<>);
+AssignStmt_: Stmt = <lhs:TestList> <op:AssignOp> <rhs:TestList>
+        => Stmt::Assign(box lhs, op, box rhs);
 
 // In python ExprStmt is an AssignStmt (
 // https://docs.python.org/3/reference/grammar.html). This ExprStmt is
 // according to the spec provided on https://github.com/google/skylark. It
 // enable parsing docstring and method calls.
 ExprStmt: AstStmt = ASTS<ExprStmt_>;
-ExprStmt_: Stmt = <Test> => Stmt::Expression(<>);
+ExprStmt_: Stmt = <Test> => Stmt::Expression(box <>);
 
 LoadStmt: AstStmt = ASTS<LoadStmt_> =>? Ok(dialect.check_load(<>)?);
 LoadStmt_: Stmt = "load" "(" <string> <("," <LoadStmtSyms>)+> ","? ")"
@@ -176,7 +176,7 @@ LoadStmtSyms: (AstString, AstString) = <id:LoadStmtBindingName?> <n:string>
     => (id.unwrap_or(n.clone()), n);
 
 // Expression
-L<E>: Box<AstExpr> = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>
+L<E>: AstExpr = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>
     => {
         if f.is_some() || !v.is_empty() {
             Expr::Tuple(v.into_iter().chain(vec![e].into_iter()).collect())
@@ -186,32 +186,32 @@ L<E>: Box<AstExpr> = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>
         }
     };
 
-ExprList: Box<AstExpr> = L<Expr>;
+ExprList: AstExpr = L<Expr>;
 
-TestList: Box<AstExpr> = L<Test>;
+TestList: AstExpr = L<Test>;
 
-PipedExpr: Box<AstExpr> = {
+PipedExpr: AstExpr = {
     <l:@L> <e1:ArithExpr> "|" <e2:PipedExpr> <r:@R>
-      => Expr::Op(e1, BinOp::Pipe, e2).to_ast(file_span.subspan(l, r)),
+      => Expr::Op(box e1, BinOp::Pipe, box e2).to_ast(file_span.subspan(l, r)),
     ArithExpr
 };
 
-PrimaryExpr: Box<AstExpr> = {
+PrimaryExpr: AstExpr = {
     <l:@L> <e:PrimaryExpr> "." <i:identifier> <r:@R>
-        => Expr::Dot(e, i).to_ast(file_span.subspan(l, r)),
+        => Expr::Dot(box e, i).to_ast(file_span.subspan(l, r)),
     <l:@L> <e:PrimaryExpr> "(" <a:COMMA<Argument>> ")" <r:@R>
         =>? Ok(Expr::check_call(e, a)?.to_ast(file_span.subspan(l, r))),
     <l:@L> <e:PrimaryExpr> "[" <i1:Test?> ":" <i2:Test?> <i3:(":" <Test?>)?> "]"
         <r:@R> => {
-          Expr::Slice(e, i1, i2, i3.unwrap_or(None))
+          Expr::Slice(box e, i1.map(|x| box x), i2.map(|x| box x), i3.unwrap_or(None).map(|x| box x))
               .to_ast(file_span.subspan(l, r))
         },
     <l:@L> <e:PrimaryExpr> "[" <i:TestList> "]" <r:@R>
-        => Expr::ArrayIndirection(e, i).to_ast(file_span.subspan(l, r)),
+        => Expr::ArrayIndirection(box e, box i).to_ast(file_span.subspan(l, r)),
     Operand
 };
 
-OptionalSlice: Box<AstExpr> = ":" <Test>;
+OptionalSlice: AstExpr = ":" <Test>;
 
 // Note that the order of arguments (args, named, *args, **kwargs) is enforced
 // at the syntax evaluation, not by the Grammar.
@@ -223,7 +223,7 @@ Argument_: Argument = {
     "**" <Test>               => Argument::KWArgsDict(<>)
 };
 
-Operand: Box<AstExpr> = {
+Operand: AstExpr = {
     <l:@L> <i:identifier> <r:@R>
         => Expr::Identifier(i).to_ast(file_span.subspan(l, r)),
     <l:@L> <i:integer> <r:@R>
@@ -243,105 +243,105 @@ Operand: Box<AstExpr> = {
         }
 };
 
-DictEntry: (Box<AstExpr>, Box<AstExpr>) = <Test> ":" <Test> => (<>);
+DictEntry: (AstExpr, AstExpr) = <Test> ":" <Test> => (<>);
 
-ListComp: Box<AstExpr> = ASTE<ListComp_>;
-ListComp_: Expr = "[" <Test> <CompClause> "]"
-    => Expr::ListComprehension(<>);
+ListComp: AstExpr = ASTE<ListComp_>;
+ListComp_: Expr = "[" <t:Test> <c:CompClause> "]"
+    => Expr::ListComprehension(box t, c);
 
-DictComp: Box<AstExpr> = ASTE<DictComp_>;
+DictComp: AstExpr = ASTE<DictComp_>;
 DictComp_: Expr = "{" <k:DictEntry> <v:CompClause>"}"
-    => Expr::DictComprehension(<>);
+    => Expr::DictComprehension((box k.0, box k.1), v);
 
 CompClause: Vec<AstClause> = <CompIter+>;
 CompIter: AstClause = ASTC<CompIter_>;
 CompIter_: Clause = "for" <var:ExprList> "in" <over:OrTest> <ifs:IfClause*>
-    => Clause {var, over, ifs};
-IfClause: Box<AstExpr> = "if" <OrTest>;
+    => Clause {var: box var, over: box over, ifs};
+IfClause: AstExpr = "if" <OrTest>;
 
 // Base expression. Priorities are taken from Python 3 grammar.
-Test: Box<AstExpr> = {
+Test: AstExpr = {
     <l:@L> <e1:OrTest> "if" <t:OrTest> "else" <e2:Test> <r:@R>
-        => Expr::If(t, e1, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::If(box t, box e1, box e2).to_ast(file_span.subspan(l, r)),
     OrTest,
     LambDef
 };
 
-LambDef: Box<AstExpr> = {
+LambDef: AstExpr = {
     <l:@L> "lambda" <p:COMMA<Parameter>> ":" <e:Test> <r:@R>
-        =>? Ok(dialect.check_lambda(Expr::Lambda(p, e).to_ast(file_span.subspan(l, r)))?),
+        =>? Ok(dialect.check_lambda(Expr::Lambda(p, box e).to_ast(file_span.subspan(l, r)))?),
 }
 
 // Binary operators
-OrTest: Box<AstExpr> = {
+OrTest: AstExpr = {
     <l:@L> <e1:AndTest> "or" <e2:OrTest> <r:@R>
-        => Expr::Op(e1, BinOp::Or, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::Or, box e2).to_ast(file_span.subspan(l, r)),
     AndTest,
 };
 
-AndTest: Box<AstExpr> =  {
+AndTest: AstExpr =  {
     <l:@L> <e1:NotTest> "and" <e2:AndTest> <r:@R>
-        => Expr::Op(e1, BinOp::And, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::And, box e2).to_ast(file_span.subspan(l, r)),
     NotTest,
 };
 
-NotTest: Box<AstExpr> = {
+NotTest: AstExpr = {
   <l:@L> "not" <e:NotTest> <r:@R>
-      => Expr::Not(e).to_ast(file_span.subspan(l, r)),
+      => Expr::Not(box e).to_ast(file_span.subspan(l, r)),
   CompTest,
 };
 
-CompTest: Box<AstExpr> = {
+CompTest: AstExpr = {
     <l:@L> <e1:Expr> "==" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::EqualsTo, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::EqualsTo, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> "!=" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::Different, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::Different, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> "<" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::LessThan, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::LessThan, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> ">" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::GreaterThan, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::GreaterThan, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> "<=" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::LessOrEqual, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::LessOrEqual, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> ">=" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::GreaterOrEqual, e2)
+        => Expr::Op(box e1, BinOp::GreaterOrEqual, box e2)
                       .to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> "in" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::In, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::In, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> "not in" <e2:CompTest> <r:@R>
-        => Expr::Op(e1, BinOp::NotIn, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::NotIn, box e2).to_ast(file_span.subspan(l, r)),
     Expr
 };
 
-Expr: Box<AstExpr> = {
+Expr: AstExpr = {
     <l:@L> <e1:ArithExpr> "|" <e2:Expr> <r:@R>
-        => Expr::Op(e1, BinOp::Pipe, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::Pipe, box e2).to_ast(file_span.subspan(l, r)),
     ArithExpr,
 };
 
-ArithExpr: Box<AstExpr> = {
+ArithExpr: AstExpr = {
     <l:@L> <e1:ArithExpr> "+" <e2:ProductExpr> <r:@R>
-        => Expr::Op(e1, BinOp::Addition, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::Addition, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:ArithExpr> "-" <e2:ProductExpr> <r:@R>
-        => Expr::Op(e1, BinOp::Subtraction, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::Subtraction, box e2).to_ast(file_span.subspan(l, r)),
     ProductExpr,
 };
 
-ProductExpr: Box<AstExpr> = {
+ProductExpr: AstExpr = {
     <l:@L> <e1:ProductExpr> "*" <e2:FactorExpr> <r:@R>
-        => Expr::Op(e1, BinOp::Multiplication, e2)
+        => Expr::Op(box e1, BinOp::Multiplication, box e2)
             .to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:ProductExpr> "%" <e2:FactorExpr> <r:@R>
-        => Expr::Op(e1, BinOp::Percent, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::Percent, box e2).to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:ProductExpr> "//" <e2:FactorExpr> <r:@R>
-        => Expr::Op(e1, BinOp::FloorDivision, e2).to_ast(file_span.subspan(l, r)),
+        => Expr::Op(box e1, BinOp::FloorDivision, box e2).to_ast(file_span.subspan(l, r)),
     FactorExpr
 };
 
-FactorExpr: Box<AstExpr> = {
+FactorExpr: AstExpr = {
     <l:@L> "+" <e:FactorExpr> <r:@R>
-        => Expr::Plus(e).to_ast(file_span.subspan(l, r)),
+        => Expr::Plus(box e).to_ast(file_span.subspan(l, r)),
     <l:@L> "-" <e:FactorExpr> <r:@R>
-        => Expr::Minus(e).to_ast(file_span.subspan(l, r)),
+        => Expr::Minus(box e).to_ast(file_span.subspan(l, r)),
     PrimaryExpr
 };
 

@@ -39,7 +39,7 @@ enum ArgsStage {
 }
 
 impl Expr {
-    pub fn check_call(f: Box<AstExpr>, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
+    pub fn check_call(f: AstExpr, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
         let mut pos_args = Vec::new();
         let mut named_args = Vec::new();
         let mut args_array = None;
@@ -76,7 +76,7 @@ impl Expr {
                         });
                     } else {
                         stage = ArgsStage::Args;
-                        args_array = Some(v);
+                        args_array = Some(box v);
                     }
                 }
                 Argument::KWArgsDict(d) => {
@@ -87,7 +87,7 @@ impl Expr {
                         });
                     } else {
                         stage = ArgsStage::Kwargs;
-                        kwargs_dict = Some(d);
+                        kwargs_dict = Some(box d);
                     }
                 }
             }
@@ -102,7 +102,13 @@ impl Expr {
                 });
             }
         }
-        Ok(Expr::Call(f, pos_args, named_args, args_array, kwargs_dict))
+        Ok(Expr::Call(
+            box f,
+            pos_args,
+            named_args,
+            args_array,
+            kwargs_dict,
+        ))
     }
 }
 

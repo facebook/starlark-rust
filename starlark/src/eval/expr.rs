@@ -153,13 +153,13 @@ fn eval_dot(
 impl Compiler<'_> {
     fn exprs(
         &mut self,
-        v: Vec<Box<AstExpr>>,
+        v: Vec<AstExpr>,
     ) -> Box<
         dyn for<'v> Fn(&mut EvaluationContext<'v, '_>) -> Result<Vec<Value<'v>>, EvalException<'v>>
             + Send
             + Sync,
     > {
-        let v = v.into_map(|x| self.expr(*x));
+        let v = v.into_map(|x| self.expr(x));
         box move |context| {
             let mut r = Vec::with_capacity(v.len());
             for s in &v {
@@ -334,7 +334,7 @@ impl Compiler<'_> {
                     let result = self.heap.alloc(FrozenDict::new(res));
                     box move |context| Ok(context.heap.alloc_thaw_on_write(result))
                 } else {
-                    let v = exprs.into_map(|(k, v)| (self.expr(*k), self.expr(*v)));
+                    let v = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
                     box move |context| {
                         let mut r = SmallMap::with_capacity(v.len());
                         for (k, v) in v.iter() {
@@ -365,14 +365,14 @@ impl Compiler<'_> {
                 }
             }
             Expr::Call(left, positional, named, args, kwargs) => {
-                let positional = positional.into_map(|x| self.expr(*x));
+                let positional = positional.into_map(|x| self.expr(x));
                 let named = named.into_map(|(name, value)| {
                     let name_value = self
                         .heap
                         .alloc(name.node.as_str())
                         .get_hashed()
                         .expect("String is Hashable");
-                    (name.node, name_value, self.expr(*value))
+                    (name.node, name_value, self.expr(value))
                 });
                 let args = args.map(|x| self.expr(*x));
                 let kwargs = kwargs.map(|x| self.expr(*x));

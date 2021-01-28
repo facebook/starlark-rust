@@ -76,10 +76,7 @@ impl Dialect {
 }
 
 impl Dialect {
-    pub(crate) fn check_lambda<T>(
-        &self,
-        x: Box<Spanned<T>>,
-    ) -> Result<Box<Spanned<T>>, LexerError> {
+    pub(crate) fn check_lambda<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
         if self.enable_lambda {
             Ok(x)
         } else {
@@ -127,7 +124,7 @@ impl Dialect {
         }
     }
 
-    pub(crate) fn check_type<T>(&self, x: Box<Spanned<T>>) -> Result<Box<Spanned<T>>, LexerError> {
+    pub(crate) fn check_type<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
         if self.enable_types {
             Ok(x)
         } else {

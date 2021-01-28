@@ -89,7 +89,7 @@ impl Compiler<'_> {
                 }
             }
             Expr::Tuple(v) | Expr::List(v) => {
-                let v = v.into_map(|x| self.assign(*x));
+                let v = v.into_map(|x| self.assign(x));
                 box move |value, context| eval_assign_list(&v, span, value, context)
             }
             Expr::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
