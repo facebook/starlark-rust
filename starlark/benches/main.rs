@@ -18,14 +18,18 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use starlark::{
     environment::{Globals, Module},
-    eval::eval_no_load,
+    eval::{eval_function, eval_module, eval_no_load, EvaluationContext, NoLoadFileLoader},
     stdlib::extended_environment,
-    syntax::Dialect,
+    syntax::{parse, Dialect},
 };
 
 fn benchmark_run(globals: &Globals, code: &str) {
     let mut env = Module::new("benchmark");
     eval_no_load("benchmark.sky", code, &Dialect::Standard, &mut env, globals).unwrap();
+}
+
+fn benchmark_pure_parsing(code: &str) {
+    parse("benchmark.sky", code, &Dialect::Standard).unwrap();
 }
 
 const EMPTY: &str = r#"
@@ -49,10 +53,47 @@ def bench():
 bench()
 "#;
 
+const TIGHT_LOOP: &str = r#"
+def bench():
+    n = 10000
+    x = 0
+    for i in range(n + 1):
+        x = x + i
+
+    if(x != (n + 1) * n // 2):
+        fail("Wrong answer!")
+
+bench
+"#;
+
+pub fn criterion_general_benchmark(c: &mut Criterion, globals: &Globals) {
+    let g = extended_environment().build();
+    c.bench_function("empty", |b| b.iter(|| benchmark_run(&globals, EMPTY)));
+    c.bench_function("bubble_sort", |b| b.iter(|| benchmark_run(&g, BUBBLE_SORT)));
+}
+
+pub fn criterion_parsing_benchmark(c: &mut Criterion) {
+    c.bench_function("parse_long_buble_sort", |b| {
+        let long_code = &BUBBLE_SORT.repeat(100)[..];
+        b.iter(|| benchmark_pure_parsing(long_code))
+    });
+}
+
+pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
+    c.bench_function("run_tight_loop", |b| {
+        let mut env = Module::new("benchmark");
+        let mut context = EvaluationContext::new(&mut env, &globals, &NoLoadFileLoader);
+        let ast = parse("benchmark.sky", TIGHT_LOOP, &Dialect::Standard).unwrap();
+        let bench_function = eval_module(ast, &mut context).unwrap();
+        b.iter(move || eval_function(bench_function, &[], &[], &mut context).unwrap())
+    });
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     let g = extended_environment().build();
-    c.bench_function("empty", |b| b.iter(|| benchmark_run(&g, EMPTY)));
-    c.bench_function("bubble_sort", |b| b.iter(|| benchmark_run(&g, BUBBLE_SORT)));
+    criterion_general_benchmark(c, &g);
+    criterion_parsing_benchmark(c);
+    criterion_eval_benchmark(c, &g);
 }
 
 criterion_group!(benches, criterion_benchmark);
