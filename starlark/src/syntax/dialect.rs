@@ -90,7 +90,7 @@ impl Dialect {
         }
     }
 
-    pub(crate) fn check_def<T>(&self, x: Box<Spanned<T>>) -> Result<Box<Spanned<T>>, LexerError> {
+    pub(crate) fn check_def<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
         if self.enable_def {
             Ok(x)
         } else {
@@ -101,7 +101,7 @@ impl Dialect {
         }
     }
 
-    pub(crate) fn check_load<T>(&self, x: Box<Spanned<T>>) -> Result<Box<Spanned<T>>, LexerError> {
+    pub(crate) fn check_load<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
         if self.enable_load {
             Ok(x)
         } else {

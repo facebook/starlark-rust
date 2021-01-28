@@ -126,7 +126,7 @@ impl Stmt {
         name: AstString,
         parameters: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
-        stmts: Box<AstStmt>,
+        stmts: AstStmt,
     ) -> Result<Stmt, LexerError> {
         // you can't repeat argument names
         let mut argset = HashSet::new();
@@ -189,7 +189,7 @@ impl Stmt {
                 }
             }
         }
-        Ok(Stmt::Def(name, parameters, return_type, stmts))
+        Ok(Stmt::Def(name, parameters, return_type, box stmts))
     }
 
     /// Validate `break` and `continue` is only used inside loops

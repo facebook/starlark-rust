@@ -21,7 +21,7 @@ use crate::syntax::ast::*;
 grammar(file_span: Span, dialect: &Dialect);
 
 #[inline]
-ASTS<E>: Box<AstStmt> = <l:@L> <e:E> <r:@R>
+ASTS<E>: AstStmt = <l:@L> <e:E> <r:@R>
     => e.to_ast(file_span.subspan(l, r));
 
 #[inline]
@@ -56,14 +56,14 @@ COMMA<E>: Vec<E> =
     <v0:(<E> ",")*> <e1:E?>
         => v0.into_iter().chain(e1).collect();
 
-pub(crate) Starlark: Box<AstStmt> = ASTS<starlark_>;
+pub(crate) Starlark: AstStmt = ASTS<starlark_>;
 starlark_: Stmt = "\n"* <(<TopStmt> "\n"*)*>
     => Stmt::Statements(<>);
 
-TopStmt: Box<AstStmt> = { DefStmt, SimpleStmt<BuildTopStmt> };
-BuildTopStmt: Box<AstStmt> = { AssignStmt, ExprStmt, LoadStmt };
+TopStmt: AstStmt = { DefStmt, SimpleStmt<BuildTopStmt> };
+BuildTopStmt: AstStmt = { AssignStmt, ExprStmt, LoadStmt };
 
-DefStmt: Box<AstStmt> = ASTS<DefStmt_> =>? Ok(dialect.check_def(<>)?);
+DefStmt: AstStmt = ASTS<DefStmt_> =>? Ok(dialect.check_def(<>)?);
 DefStmt_: Stmt =
   "def" <identifier> "(" <COMMA<ParameterTyped>> ")" <ReturnType> ":" <Suite>
       =>? Ok(Stmt::check_def(<>)?);
@@ -96,33 +96,33 @@ Type: Option<Box<AstExpr>> = {
     => None,
 }
 
-Suite: Box<AstStmt> = {
+Suite: AstStmt = {
     SimpleStmt<SmallStmt>,
     "\n"+ "INDENT" <l:@L> "\n"* <v:(<Stmt> "\n"*)+> <r:@R> "DEDENT"
         => Stmt::Statements(v).to_ast(file_span.subspan(l, r))
 };
 
-Stmt: Box<AstStmt> = { DefStmt, IfStmt, ForStmt, SimpleStmt<SmallStmt> };
+Stmt: AstStmt = { DefStmt, IfStmt, ForStmt, SimpleStmt<SmallStmt> };
 
-IfBody: Box<AstStmt> = ASTS<IfBody_>;
+IfBody: AstStmt = ASTS<IfBody_>;
 IfBody_: Stmt = <c:Test> ":" <s:Suite> <el:ElseStmt?> => {
     match el {
-        None   => Stmt::If(c, s),
-        Some(e) => Stmt::IfElse(c, s, e)
+        None   => Stmt::If(c, box s),
+        Some(e) => Stmt::IfElse(c, box s, box e)
     }
 };
 
-IfStmt: Box<AstStmt> = "if" <IfBody>;
-ElseStmt: Box<AstStmt> = {
+IfStmt: AstStmt = "if" <IfBody>;
+ElseStmt: AstStmt = {
     "elif" <IfBody>,
     "else" ":" <Suite>
 };
 
-ForStmt: Box<AstStmt> = ASTS<ForStmt_>;
+ForStmt: AstStmt = ASTS<ForStmt_>;
 ForStmt_: Stmt = "for" <e:ExprList> "in" <c:Test> ":" <s:Suite>
-    => Stmt::For(e, c, s);
+    => Stmt::For(e, c, box s);
 
-SimpleStmt<S>: Box<AstStmt> =
+SimpleStmt<S>: AstStmt =
     <l:@L> <e:S> <v:(";" <S>)*> ";"? <r:@R> "\n" => {
         if v.is_empty() {
             e
@@ -133,7 +133,7 @@ SimpleStmt<S>: Box<AstStmt> =
         }
     };
 
-SmallStmt: Box<AstStmt> = {
+SmallStmt: AstStmt = {
     <l:@L> "return" <e:TestList?> <r:@R>
         => Stmt::Return(e).to_ast(file_span.subspan(l, r)),
     <@L> "break" <@R>
@@ -155,7 +155,7 @@ AssignOp: AssignOp = {
     "%=" => AssignOp::Percent,
 };
 
-AssignStmt: Box<AstStmt> = ASTS<AssignStmt_>;
+AssignStmt: AstStmt = ASTS<AssignStmt_>;
 AssignStmt_: Stmt = <TestList> <AssignOp> <TestList>
         => Stmt::Assign(<>);
 
@@ -163,10 +163,10 @@ AssignStmt_: Stmt = <TestList> <AssignOp> <TestList>
 // https://docs.python.org/3/reference/grammar.html). This ExprStmt is
 // according to the spec provided on https://github.com/google/skylark. It
 // enable parsing docstring and method calls.
-ExprStmt: Box<AstStmt> = ASTS<ExprStmt_>;
+ExprStmt: AstStmt = ASTS<ExprStmt_>;
 ExprStmt_: Stmt = <Test> => Stmt::Expression(<>);
 
-LoadStmt: Box<AstStmt> = ASTS<LoadStmt_> =>? Ok(dialect.check_load(<>)?);
+LoadStmt: AstStmt = ASTS<LoadStmt_> =>? Ok(dialect.check_load(<>)?);
 LoadStmt_: Stmt = "load" "(" <string> <("," <LoadStmtSyms>)+> ","? ")"
     => Stmt::Load(<>, dialect.load_visibility());
 

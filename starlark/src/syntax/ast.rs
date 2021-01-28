@@ -42,7 +42,7 @@ pub type AstStmt = Spanned<Stmt>;
 pub struct AstModule {
     #[derivative(Debug = "ignore")]
     pub(crate) codemap: Arc<CodeMap>,
-    pub(crate) statement: Box<AstStmt>,
+    pub(crate) statement: AstStmt,
 }
 
 pub(crate) trait ToAst<T> {
@@ -180,7 +180,7 @@ pub enum Stmt {
     Return(Option<Box<AstExpr>>),
     Expression(Box<AstExpr>),
     Assign(Box<AstExpr>, AssignOp, Box<AstExpr>),
-    Statements(Vec<Box<AstStmt>>),
+    Statements(Vec<AstStmt>),
     If(Box<AstExpr>, Box<AstStmt>),
     IfElse(Box<AstExpr>, Box<AstStmt>, Box<AstStmt>),
     For(Box<AstExpr>, Box<AstExpr>, Box<AstStmt>),
@@ -193,7 +193,7 @@ pub enum Stmt {
     // The Visibility of a Load is implicit from the Dialect, not written by a user
     Load(AstString, Vec<(AstString, AstString)>, Visibility),
 }
-to_ast_trait!(Stmt, Box<AstStmt>, Box);
+to_ast_trait!(Stmt, AstStmt);
 
 impl Display for BinOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

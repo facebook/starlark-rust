@@ -276,7 +276,7 @@ impl Stmt {
         }
     }
 
-    fn flatten_statements(xs: Vec<Box<AstStmt>>) -> Vec<Box<AstStmt>> {
+    fn flatten_statements(xs: Vec<AstStmt>) -> Vec<AstStmt> {
         let mut res = Vec::with_capacity(xs.len());
         for x in xs.into_iter() {
             match x.node {
@@ -366,7 +366,7 @@ impl Compiler<'_> {
                 // No need to do before_stmt on these statements as they are
                 // not meaningful statements
                 let stmts = Stmt::flatten_statements(stmts);
-                let mut stmts = stmts.into_map(|x| self.stmt(*x));
+                let mut stmts = stmts.into_map(|x| self.stmt(x));
                 match stmts.len() {
                     0 => box move |_| Ok(Value::new_none()),
                     1 => stmts.pop().unwrap(),
