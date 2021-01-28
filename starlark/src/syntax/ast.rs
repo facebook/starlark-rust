@@ -28,7 +28,7 @@ use std::{
 
 // Boxed types used for storing information from the parsing will be used
 // especially for the location of the AST item
-pub type AstExpr = Box<Spanned<Expr>>;
+pub type AstExpr = Spanned<Expr>;
 pub type AstArgument = Spanned<Argument>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = Spanned<Parameter>;
@@ -72,20 +72,20 @@ to_ast_trait!(String, AstString);
 
 #[derive(Debug)]
 pub enum Argument {
-    Positional(AstExpr),
-    Named(AstString, AstExpr),
-    ArgsArray(AstExpr),
-    KWArgsDict(AstExpr),
+    Positional(Box<AstExpr>),
+    Named(AstString, Box<AstExpr>),
+    ArgsArray(Box<AstExpr>),
+    KWArgsDict(Box<AstExpr>),
 }
 to_ast_trait!(Argument, AstArgument);
 
 #[derive(Debug)]
 pub enum Parameter {
-    Normal(AstString, Option<AstExpr>),
-    WithDefaultValue(AstString, Option<AstExpr>, AstExpr),
+    Normal(AstString, Option<Box<AstExpr>>),
+    WithDefaultValue(AstString, Option<Box<AstExpr>>, Box<AstExpr>),
     NoArgs,
-    Args(AstString, Option<AstExpr>),
-    KWArgs(AstString, Option<AstExpr>),
+    Args(AstString, Option<Box<AstExpr>>),
+    KWArgs(AstString, Option<Box<AstExpr>>),
 }
 to_ast_trait!(Parameter, AstParameter);
 
@@ -97,37 +97,42 @@ pub enum AstLiteral {
 
 #[derive(Debug)]
 pub enum Expr {
-    Tuple(Vec<AstExpr>),
-    Dot(AstExpr, AstString),
+    Tuple(Vec<Box<AstExpr>>),
+    Dot(Box<AstExpr>, AstString),
     Call(
-        AstExpr,
-        Vec<AstExpr>,
-        Vec<(AstString, AstExpr)>,
-        Option<AstExpr>,
-        Option<AstExpr>,
+        Box<AstExpr>,
+        Vec<Box<AstExpr>>,
+        Vec<(AstString, Box<AstExpr>)>,
+        Option<Box<AstExpr>>,
+        Option<Box<AstExpr>>,
     ),
-    ArrayIndirection(AstExpr, AstExpr),
-    Slice(AstExpr, Option<AstExpr>, Option<AstExpr>, Option<AstExpr>),
+    ArrayIndirection(Box<AstExpr>, Box<AstExpr>),
+    Slice(
+        Box<AstExpr>,
+        Option<Box<AstExpr>>,
+        Option<Box<AstExpr>>,
+        Option<Box<AstExpr>>,
+    ),
     Identifier(AstString),
-    Lambda(Vec<AstParameter>, AstExpr),
+    Lambda(Vec<AstParameter>, Box<AstExpr>),
     Literal(AstLiteral),
-    Not(AstExpr),
-    Minus(AstExpr),
-    Plus(AstExpr),
-    Op(AstExpr, BinOp, AstExpr),
-    If(AstExpr, AstExpr, AstExpr), // Order: condition, v1, v2 <=> v1 if condition else v2
-    List(Vec<AstExpr>),
-    Dict(Vec<(AstExpr, AstExpr)>),
-    ListComprehension(AstExpr, Vec<AstClause>),
-    DictComprehension((AstExpr, AstExpr), Vec<AstClause>),
+    Not(Box<AstExpr>),
+    Minus(Box<AstExpr>),
+    Plus(Box<AstExpr>),
+    Op(Box<AstExpr>, BinOp, Box<AstExpr>),
+    If(Box<AstExpr>, Box<AstExpr>, Box<AstExpr>), // Order: condition, v1, v2 <=> v1 if condition else v2
+    List(Vec<Box<AstExpr>>),
+    Dict(Vec<(Box<AstExpr>, Box<AstExpr>)>),
+    ListComprehension(Box<AstExpr>, Vec<AstClause>),
+    DictComprehension((Box<AstExpr>, Box<AstExpr>), Vec<AstClause>),
 }
-to_ast_trait!(Expr, AstExpr, Box);
+to_ast_trait!(Expr, Box<AstExpr>, Box);
 
 #[derive(Debug)]
 pub struct Clause {
-    pub var: AstExpr,
-    pub over: AstExpr,
-    pub ifs: Vec<AstExpr>,
+    pub var: Box<AstExpr>,
+    pub over: Box<AstExpr>,
+    pub ifs: Vec<Box<AstExpr>>,
 }
 to_ast_trait!(Clause, AstClause);
 
@@ -172,14 +177,19 @@ pub enum Stmt {
     Break,
     Continue,
     Pass,
-    Return(Option<AstExpr>),
-    Expression(AstExpr),
-    Assign(AstExpr, AssignOp, AstExpr),
+    Return(Option<Box<AstExpr>>),
+    Expression(Box<AstExpr>),
+    Assign(Box<AstExpr>, AssignOp, Box<AstExpr>),
     Statements(Vec<Box<AstStmt>>),
-    If(AstExpr, Box<AstStmt>),
-    IfElse(AstExpr, Box<AstStmt>, Box<AstStmt>),
-    For(AstExpr, AstExpr, Box<AstStmt>),
-    Def(AstString, Vec<AstParameter>, Option<AstExpr>, Box<AstStmt>),
+    If(Box<AstExpr>, Box<AstStmt>),
+    IfElse(Box<AstExpr>, Box<AstStmt>, Box<AstStmt>),
+    For(Box<AstExpr>, Box<AstExpr>, Box<AstStmt>),
+    Def(
+        AstString,
+        Vec<AstParameter>,
+        Option<Box<AstExpr>>,
+        Box<AstStmt>,
+    ),
     // The Visibility of a Load is implicit from the Dialect, not written by a user
     Load(AstString, Vec<(AstString, AstString)>, Visibility),
 }

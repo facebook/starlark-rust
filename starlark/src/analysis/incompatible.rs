@@ -54,11 +54,11 @@ static TYPES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
 
 fn match_bad_type_equality(
     codemap: &CodeMap,
-    x: &AstExpr,
+    x: &Box<AstExpr>,
     types: &HashMap<&str, &str>,
     res: &mut Vec<LintT<Incompatibility>>,
 ) {
-    fn lookup_type<'a>(x: &AstExpr, types: &HashMap<&str, &'a str>) -> Option<&'a str> {
+    fn lookup_type<'a>(x: &Box<AstExpr>, types: &HashMap<&str, &'a str>) -> Option<&'a str> {
         match &***x {
             Expr::Identifier(name) => types.get(name.node.as_str()).copied(),
             _ => None,
@@ -66,7 +66,7 @@ fn match_bad_type_equality(
     }
 
     // Return true if this expression matches `type($x)`
-    fn is_type_call(x: &AstExpr) -> bool {
+    fn is_type_call(x: &Box<AstExpr>) -> bool {
         match &***x {
             Expr::Call(fun, arg1, arg2, None, None) if arg1.len() == 1 && arg2.is_empty() => {
                 match &***fun {
@@ -101,7 +101,7 @@ fn bad_type_equality(module: &AstModule, res: &mut Vec<LintT<Incompatibility>>) 
     let types = Lazy::force(&TYPES);
     fn check(
         codemap: &CodeMap,
-        x: &AstExpr,
+        x: &Box<AstExpr>,
         types: &HashMap<&str, &str>,
         res: &mut Vec<LintT<Incompatibility>>,
     ) {

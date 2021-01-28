@@ -31,7 +31,7 @@ use gazebo::prelude::*;
 use std::mem;
 
 impl Compiler<'_> {
-    pub fn list_comprehension(&mut self, x: AstExpr, clauses: Vec<AstClause>) -> EvalCompiled {
+    pub fn list_comprehension(&mut self, x: Box<AstExpr>, clauses: Vec<AstClause>) -> EvalCompiled {
         self.scope.enter_compr();
         let clauses = compile_clauses(clauses, self);
         let x = self.expr(x);
@@ -41,8 +41,8 @@ impl Compiler<'_> {
 
     pub fn dict_comprehension(
         &mut self,
-        k: AstExpr,
-        v: AstExpr,
+        k: Box<AstExpr>,
+        v: Box<AstExpr>,
         clauses: Vec<AstClause>,
     ) -> EvalCompiled {
         self.scope.enter_compr();

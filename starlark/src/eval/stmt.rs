@@ -67,7 +67,7 @@ fn eval_assign_list<'v>(
 }
 
 impl Compiler<'_> {
-    pub fn assign(&mut self, expr: AstExpr) -> AssignCompiled {
+    pub fn assign(&mut self, expr: Box<AstExpr>) -> AssignCompiled {
         let span = expr.span;
         match expr.node {
             Expr::Dot(e, s) => {
@@ -115,7 +115,7 @@ impl Compiler<'_> {
     fn assign_modify(
         &mut self,
         span_op: Span,
-        lhs: AstExpr,
+        lhs: Box<AstExpr>,
         rhs: EvalCompiled,
         op: for<'v> fn(
             Value<'v>,

@@ -153,7 +153,7 @@ fn eval_dot(
 impl Compiler<'_> {
     fn exprs(
         &mut self,
-        v: Vec<AstExpr>,
+        v: Vec<Box<AstExpr>>,
     ) -> Box<
         dyn for<'v> Fn(&mut EvaluationContext<'v, '_>) -> Result<Vec<Value<'v>>, EvalException<'v>>
             + Send
@@ -207,8 +207,8 @@ impl Expr {
     // Does an entire sequence of additions reduce to a string literal
     fn reduces_to_string<'a>(
         mut op: BinOp,
-        mut left: &'a AstExpr,
-        mut right: &'a AstExpr,
+        mut left: &'a Box<AstExpr>,
+        mut right: &'a Box<AstExpr>,
     ) -> Option<String> {
         let mut results = Vec::new();
         loop {
@@ -238,7 +238,7 @@ impl Expr {
     // Collect variables defined in an expression on the LHS of an assignment (or
     // for variable etc)
     pub(crate) fn collect_defines_lvalue<'a>(
-        expr: &'a AstExpr,
+        expr: &'a Box<AstExpr>,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         expr.node.visit_expr_lvalue(|x| {
@@ -248,14 +248,14 @@ impl Expr {
 }
 
 impl Compiler<'_> {
-    pub fn expr_opt(&mut self, expr: Option<AstExpr>) -> Option<EvalCompiled> {
+    pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<EvalCompiled> {
         match expr {
             None => None,
             Some(v) => Some(self.expr(v)),
         }
     }
 
-    pub fn expr(&mut self, expr: AstExpr) -> EvalCompiled {
+    pub fn expr(&mut self, expr: Box<AstExpr>) -> EvalCompiled {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {

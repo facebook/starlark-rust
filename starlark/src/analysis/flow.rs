@@ -48,8 +48,8 @@ impl LintWarning for FlowIssue {
     }
 }
 
-fn returns(x: &Box<AstStmt>) -> Vec<(Span, Option<&AstExpr>)> {
-    fn f<'a>(x: &'a Box<AstStmt>, res: &mut Vec<(Span, Option<&'a AstExpr>)>) {
+fn returns(x: &Box<AstStmt>) -> Vec<(Span, Option<&Box<AstExpr>>)> {
+    fn f<'a>(x: &'a Box<AstStmt>, res: &mut Vec<(Span, Option<&'a Box<AstExpr>>)>) {
         match &***x {
             Stmt::Return(ret) => res.push((x.span, ret.as_ref())),
             Stmt::Def(..) => {} // Do not descend
@@ -63,7 +63,7 @@ fn returns(x: &Box<AstStmt>) -> Vec<(Span, Option<&AstExpr>)> {
 }
 
 // fail is kind of like a return with error
-fn is_fail(x: &AstExpr) -> bool {
+fn is_fail(x: &Box<AstExpr>) -> bool {
     match &***x {
         Expr::Call(x, _, _, _, _) => match &***x {
             Expr::Identifier(name) => name.node == "fail",
@@ -86,7 +86,7 @@ fn final_return(x: &Box<AstStmt>) -> bool {
     }
 }
 
-fn require_return_expression(ret_type: &Option<AstExpr>) -> Option<Span> {
+fn require_return_expression(ret_type: &Option<Box<AstExpr>>) -> Option<Span> {
     match ret_type {
         None => None,
         Some(x) => match &***x {

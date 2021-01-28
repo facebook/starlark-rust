@@ -22,7 +22,10 @@ use crate::syntax::ast::{AstExpr, AstStmt, AstString, Clause, Expr, Parameter, S
 use either::Either;
 
 impl Stmt {
-    pub fn visit_children<'a>(&'a self, mut f: impl FnMut(Either<&'a Box<AstStmt>, &'a AstExpr>)) {
+    pub fn visit_children<'a>(
+        &'a self,
+        mut f: impl FnMut(Either<&'a Box<AstStmt>, &'a Box<AstExpr>>),
+    ) {
         match self {
             Stmt::Statements(xs) => xs.iter().for_each(|x| f(Either::Left(x))),
             Stmt::If(condition, then_block) => {
@@ -69,10 +72,13 @@ impl Stmt {
         })
     }
 
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
+    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a Box<AstExpr>)) {
         // Note the &mut impl on f, it's subtle, see
         // https://stackoverflow.com/questions/54613966/error-reached-the-recursion-limit-while-instantiating-funcclosure
-        fn pick<'a>(x: Either<&'a Box<AstStmt>, &'a AstExpr>, f: &mut impl FnMut(&'a AstExpr)) {
+        fn pick<'a>(
+            x: Either<&'a Box<AstStmt>, &'a Box<AstExpr>>,
+            f: &mut impl FnMut(&'a Box<AstExpr>),
+        ) {
             match x {
                 Either::Left(x) => x.visit_children(|x| pick(x, f)),
                 Either::Right(x) => f(x),
@@ -98,7 +104,13 @@ impl Stmt {
 
 impl Parameter {
     // Split a parameter into name, type, default value
-    pub fn split(&self) -> (Option<&AstString>, Option<&AstExpr>, Option<&AstExpr>) {
+    pub fn split(
+        &self,
+    ) -> (
+        Option<&AstString>,
+        Option<&Box<AstExpr>>,
+        Option<&Box<AstExpr>>,
+    ) {
         match self {
             Parameter::Normal(a, b) | Parameter::Args(a, b) | Parameter::KWArgs(a, b) => {
                 (Some(a), b.as_ref(), None)
@@ -108,7 +120,7 @@ impl Parameter {
         }
     }
 
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
+    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a Box<AstExpr>)) {
         let (_, typ, def) = self.split();
         typ.iter().for_each(|x| f(x));
         def.iter().for_each(|x| f(x));
@@ -116,7 +128,7 @@ impl Parameter {
 }
 
 impl Expr {
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
+    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a Box<AstExpr>)) {
         match self {
             Expr::Tuple(xs) => xs.iter().for_each(f),
             Expr::Dot(x, _) => f(x),
@@ -174,8 +186,8 @@ impl Expr {
 
     // See through compound statements (tuple, array) - mostly useful for lvalue's
     // where those compound forms are structure rather than lvalue
-    pub fn visit_expr_compound<'a>(x: &'a AstExpr, mut f: impl FnMut(&'a AstExpr)) {
-        fn recurse<'a>(x: &'a AstExpr, f: &mut impl FnMut(&'a AstExpr)) {
+    pub fn visit_expr_compound<'a>(x: &'a Box<AstExpr>, mut f: impl FnMut(&'a Box<AstExpr>)) {
+        fn recurse<'a>(x: &'a Box<AstExpr>, f: &mut impl FnMut(&'a Box<AstExpr>)) {
             match &***x {
                 Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(x, f)),
                 _ => f(x),
@@ -200,7 +212,7 @@ impl Expr {
 }
 
 impl Clause {
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
+    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a Box<AstExpr>)) {
         f(&self.var);
         f(&self.over);
         self.ifs.iter().for_each(f);

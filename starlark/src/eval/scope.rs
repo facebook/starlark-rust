@@ -171,7 +171,7 @@ impl<'a> Scope<'a> {
         self.unscopes.push(Unscope::default());
     }
 
-    pub fn add_compr(&mut self, var: &AstExpr) {
+    pub fn add_compr(&mut self, var: &Box<AstExpr>) {
         let mut locals = HashMap::new();
         Expr::collect_defines_lvalue(var, &mut locals);
         for k in locals.into_iter() {

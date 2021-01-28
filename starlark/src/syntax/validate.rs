@@ -39,7 +39,7 @@ enum ArgsStage {
 }
 
 impl Expr {
-    pub fn check_call(f: AstExpr, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
+    pub fn check_call(f: Box<AstExpr>, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
         let mut pos_args = Vec::new();
         let mut named_args = Vec::new();
         let mut args_array = None;
@@ -125,7 +125,7 @@ impl Stmt {
     pub fn check_def(
         name: AstString,
         parameters: Vec<AstParameter>,
-        return_type: Option<AstExpr>,
+        return_type: Option<Box<AstExpr>>,
         stmts: Box<AstStmt>,
     ) -> Result<Stmt, LexerError> {
         // you can't repeat argument names

@@ -71,7 +71,7 @@ impl Scope {
     }
 }
 
-fn opt_expr(x: Option<&AstExpr>, res: &mut Vec<Bind>) {
+fn opt_expr(x: Option<&Box<AstExpr>>, res: &mut Vec<Bind>) {
     if let Some(x) = x {
         expr(x, res)
     }
@@ -92,7 +92,7 @@ fn comprehension(clauses: &[AstClause], res: &mut Vec<Bind>, end: impl Fn(&mut V
     }
 }
 
-fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
+fn expr(x: &Box<AstExpr>, res: &mut Vec<Bind>) {
     match &***x {
         Expr::Identifier(x) => res.push(Bind::Get(x.clone())),
         Expr::Lambda(args, body) => {
@@ -113,7 +113,7 @@ fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
     }
 }
 
-fn expr_lvalue(x: &AstExpr, res: &mut Vec<Bind>) {
+fn expr_lvalue(x: &Box<AstExpr>, res: &mut Vec<Bind>) {
     Expr::visit_expr_compound(x, |x| match &***x {
         // A value doesn't get read first
         Expr::Identifier(_) => {}
