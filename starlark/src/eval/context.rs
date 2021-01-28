@@ -23,7 +23,7 @@ use crate::{
     eval::call_stack::CallStack,
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
-use codemap::{CodeMap, Span};
+use codemap::{CodeMap, Span, SpanLoc};
 use gazebo::any::AnyLifetime;
 use std::{mem, sync::Arc};
 
@@ -109,6 +109,10 @@ impl<'v, 'a> EvaluationContext<'v, 'a> {
             None => self.module_env.name(),
             Some(v) => v.name(),
         }
+    }
+
+    pub fn look_up_span(&self, span: Span) -> SpanLoc {
+        self.codemap.look_up_span(span)
     }
 
     /// Called to add an entry to the call stack, from the caller.
