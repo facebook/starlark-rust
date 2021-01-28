@@ -165,9 +165,9 @@ pub enum Stmt {
     Expression(Box<AstExpr>),
     Assign(Box<AstExpr>, AssignOp, Box<AstExpr>),
     Statements(Vec<AstStmt>),
-    If(Box<AstExpr>, Box<AstStmt>),
-    IfElse(Box<AstExpr>, Box<AstStmt>, Box<AstStmt>),
-    For(Box<AstExpr>, Box<AstExpr>, Box<AstStmt>),
+    If(Box<(AstExpr, AstStmt)>),
+    IfElse(Box<(AstExpr, AstStmt, AstStmt)>),
+    For(Box<(AstExpr, AstExpr, AstStmt)>),
     Def(
         AstString,
         Vec<AstParameter>,
@@ -413,17 +413,17 @@ impl Stmt {
                 }
                 Ok(())
             }
-            Stmt::If(cond, suite) => {
+            Stmt::If(box (cond, suite)) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::IfElse(cond, suite1, suite2) => {
+            Stmt::IfElse(box (cond, suite1, suite2)) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite1.node.fmt_with_tab(f, tab.clone() + "  ")?;
                 writeln!(f, "{}else:", tab)?;
                 suite2.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::For(bind, coll, suite) => {
+            Stmt::For(box (bind, coll, suite)) => {
                 writeln!(f, "{}for {} in {}:", tab, bind.node, coll.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }

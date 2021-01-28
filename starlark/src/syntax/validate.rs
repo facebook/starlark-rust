@@ -211,7 +211,7 @@ impl Stmt {
         // Outside a for, a continue/break is an error
         fn outside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
             match &stmt.node {
-                Stmt::For(_, _, body) => inside_for(codemap, body),
+                Stmt::For(box (_, _, body)) => inside_for(codemap, body),
                 Stmt::Break | Stmt::Continue => {
                     let kw = if let Stmt::Break = stmt.node {
                         "break"

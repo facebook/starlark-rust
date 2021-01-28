@@ -107,8 +107,8 @@ Stmt: AstStmt = { DefStmt, IfStmt, ForStmt, SimpleStmt<SmallStmt> };
 IfBody: AstStmt = ASTS<IfBody_>;
 IfBody_: Stmt = <c:Test> ":" <s:Suite> <el:ElseStmt?> => {
     match el {
-        None   => Stmt::If(box c, box s),
-        Some(e) => Stmt::IfElse(box c, box s, box e)
+        None   => Stmt::If(box (c, s)),
+        Some(e) => Stmt::IfElse(box (c, s, e))
     }
 };
 
@@ -120,7 +120,7 @@ ElseStmt: AstStmt = {
 
 ForStmt: AstStmt = ASTS<ForStmt_>;
 ForStmt_: Stmt = "for" <e:ExprList> "in" <c:Test> ":" <s:Suite>
-    => Stmt::For(box e, box c, box s);
+    => Stmt::For(box (e, c, s));
 
 SimpleStmt<S>: AstStmt =
     <l:@L> <e:S> <v:(";" <S>)*> ";"? <r:@R> "\n" => {

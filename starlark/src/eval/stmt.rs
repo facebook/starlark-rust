@@ -257,7 +257,7 @@ impl Stmt {
             Stmt::Assign(dest, _, _) => {
                 Expr::collect_defines_lvalue(dest, result);
             }
-            Stmt::For(dest, _, body) => {
+            Stmt::For(box (dest, _, body)) => {
                 Expr::collect_defines_lvalue(dest, result);
                 Stmt::collect_defines(body, result);
             }
@@ -304,11 +304,11 @@ impl Compiler<'_> {
                     Ok(Value::new_none())
                 }
             }
-            Stmt::For(var, over, body) => {
+            Stmt::For(box (var, over, body)) => {
                 let over_span = over.span;
-                let var = self.assign(*var);
-                let over = self.expr(*over);
-                let st = self.stmt(*body);
+                let var = self.assign(var);
+                let over = self.expr(over);
+                let st = self.stmt(body);
                 box move |context| {
                     before_stmt(span, context);
                     let iterable = over(context)?;
@@ -337,9 +337,9 @@ impl Compiler<'_> {
                 before_stmt(span, context);
                 Err(EvalException::Return(Value::new_none()))
             },
-            Stmt::If(cond, then_block) => {
-                let cond = self.expr(*cond);
-                let then_block = self.stmt(*then_block);
+            Stmt::If(box (cond, then_block)) => {
+                let cond = self.expr(cond);
+                let then_block = self.stmt(then_block);
                 box move |context| {
                     before_stmt(span, context);
                     if cond(context)?.to_bool() {
@@ -349,10 +349,10 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Stmt::IfElse(cond, then_block, else_block) => {
-                let cond = self.expr(*cond);
-                let then_block = self.stmt(*then_block);
-                let else_block = self.stmt(*else_block);
+            Stmt::IfElse(box (cond, then_block, else_block)) => {
+                let cond = self.expr(cond);
+                let then_block = self.stmt(then_block);
+                let else_block = self.stmt(else_block);
                 box move |context| {
                     before_stmt(span, context);
                     if cond(context)?.to_bool() {
