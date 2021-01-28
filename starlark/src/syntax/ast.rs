@@ -114,8 +114,8 @@ impl ToAst for Expr {}
 
 #[derive(Debug)]
 pub struct Clause {
-    pub var: Box<AstExpr>,
-    pub over: Box<AstExpr>,
+    pub var: AstExpr,
+    pub over: AstExpr,
     pub ifs: Vec<AstExpr>,
 }
 impl ToAst for Clause {}

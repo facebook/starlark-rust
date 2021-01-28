@@ -59,11 +59,11 @@ fn compile_clause(clause: AstClause, compiler: &mut Compiler) -> ClauseCompiled 
 
     // Must be compiled without the new variables in scope
     let over_span = over.span;
-    let over = compiler.expr(*over);
+    let over = compiler.expr(over);
     compiler.scope.add_compr(&var);
 
     // Everything after must be compiled with the new variables in scope
-    let var = compiler.assign(*var);
+    let var = compiler.assign(var);
     let ifs = ifs.into_map(|expr| compiler.expr(expr));
     ClauseCompiled {
         var,

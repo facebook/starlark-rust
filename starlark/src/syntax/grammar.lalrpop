@@ -256,7 +256,7 @@ DictComp_: Expr = "{" <k:DictEntry> <v:CompClause>"}"
 CompClause: Vec<AstClause> = <CompIter+>;
 CompIter: AstClause = ASTC<CompIter_>;
 CompIter_: Clause = "for" <var:ExprList> "in" <over:OrTest> <ifs:IfClause*>
-    => Clause {var: box var, over: box over, ifs};
+    => Clause {var, over, ifs};
 IfClause: AstExpr = "if" <OrTest>;
 
 // Base expression. Priorities are taken from Python 3 grammar.
