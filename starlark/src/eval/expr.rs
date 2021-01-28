@@ -159,7 +159,7 @@ impl Compiler<'_> {
             + Send
             + Sync,
     > {
-        let v = v.into_map(|x| self.expr(x));
+        let v = v.into_map(|x| self.expr(*x));
         box move |context| {
             let mut r = Vec::with_capacity(v.len());
             for s in &v {
@@ -251,11 +251,11 @@ impl Compiler<'_> {
     pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<EvalCompiled> {
         match expr {
             None => None,
-            Some(v) => Some(self.expr(v)),
+            Some(v) => Some(self.expr(*v)),
         }
     }
 
-    pub fn expr(&mut self, expr: Box<AstExpr>) -> EvalCompiled {
+    pub fn expr(&mut self, expr: AstExpr) -> EvalCompiled {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
@@ -294,7 +294,7 @@ impl Compiler<'_> {
                 box move |context| Ok(context.heap.alloc(tuple::Tuple::new(exprs(context)?)))
             }
             Expr::Lambda(params, inner) => {
-                let suite = box Spanned {
+                let suite = Spanned {
                     span: expr.span,
                     node: Stmt::Return(Some(inner)),
                 };
@@ -334,7 +334,7 @@ impl Compiler<'_> {
                     let result = self.heap.alloc(FrozenDict::new(res));
                     box move |context| Ok(context.heap.alloc_thaw_on_write(result))
                 } else {
-                    let v = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                    let v = exprs.into_map(|(k, v)| (self.expr(*k), self.expr(*v)));
                     box move |context| {
                         let mut r = SmallMap::with_capacity(v.len());
                         for (k, v) in v.iter() {
@@ -345,9 +345,9 @@ impl Compiler<'_> {
                 }
             }
             Expr::If(cond, then_expr, else_expr) => {
-                let cond = self.expr(cond);
-                let then_expr = self.expr(then_expr);
-                let else_expr = self.expr(else_expr);
+                let cond = self.expr(*cond);
+                let then_expr = self.expr(*then_expr);
+                let else_expr = self.expr(*else_expr);
                 box move |context| {
                     if cond(context)?.to_bool() {
                         then_expr(context)
@@ -357,7 +357,7 @@ impl Compiler<'_> {
                 }
             }
             Expr::Dot(left, right) => {
-                let left = self.expr(left);
+                let left = self.expr(*left);
                 let res = eval_dot(expr.span, left, right.node);
                 box move |context| match res(context)? {
                     Either::Left(v) => Ok(v),
@@ -365,21 +365,21 @@ impl Compiler<'_> {
                 }
             }
             Expr::Call(left, positional, named, args, kwargs) => {
-                let positional = positional.into_map(|x| self.expr(x));
+                let positional = positional.into_map(|x| self.expr(*x));
                 let named = named.into_map(|(name, value)| {
                     let name_value = self
                         .heap
                         .alloc(name.node.as_str())
                         .get_hashed()
                         .expect("String is Hashable");
-                    (name.node, name_value, self.expr(value))
+                    (name.node, name_value, self.expr(*value))
                 });
-                let args = args.map(|x| self.expr(x));
-                let kwargs = kwargs.map(|x| self.expr(x));
+                let args = args.map(|x| self.expr(*x));
+                let kwargs = kwargs.map(|x| self.expr(*x));
                 let call = eval_call(span, positional, named, args, kwargs);
                 match left.node {
                     Expr::Dot(e, s) => {
-                        let e = self.expr(e);
+                        let e = self.expr(*e);
                         let dot = eval_dot(span, e, s.node);
                         box move |context| match dot(context)? {
                             Either::Left(function) => {
@@ -394,7 +394,7 @@ impl Compiler<'_> {
                         }
                     }
                     _ => {
-                        let left = self.expr(left);
+                        let left = self.expr(*left);
                         box move |context| {
                             let function = left(context)?;
                             let invoker = thrw(function.new_invoker(context.heap), span, context)?;
@@ -404,8 +404,8 @@ impl Compiler<'_> {
                 }
             }
             Expr::ArrayIndirection(array, index) => {
-                let array = self.expr(array);
-                let index = self.expr(index);
+                let array = self.expr(*array);
+                let index = self.expr(*index);
                 box move |context| {
                     thrw(
                         array(context)?.at(index(context)?, context.heap),
@@ -415,19 +415,19 @@ impl Compiler<'_> {
                 }
             }
             Expr::Slice(collection, start, stop, stride) => {
-                let collection = self.expr(collection);
-                let start = start.map(|x| self.expr(x));
-                let stop = stop.map(|x| self.expr(x));
-                let stride = stride.map(|x| self.expr(x));
+                let collection = self.expr(*collection);
+                let start = start.map(|x| self.expr(*x));
+                let stop = stop.map(|x| self.expr(*x));
+                let stride = stride.map(|x| self.expr(*x));
                 eval_slice(span, collection, start, stop, stride)
             }
             Expr::Not(expr) => {
-                let expr = self.expr(expr);
+                let expr = self.expr(*expr);
                 box move |context| Ok(Value::new_bool(!expr(context)?.to_bool()))
             }
             Expr::Minus(expr) => match expr.unpack_int_literal().and_then(i32::checked_neg) {
                 None => {
-                    let expr = self.expr(expr);
+                    let expr = self.expr(*expr);
                     box move |context| thrw(expr(context)?.minus(context.heap), span, context)
                 }
                 Some(x) => {
@@ -437,7 +437,7 @@ impl Compiler<'_> {
             },
             Expr::Plus(expr) => match expr.unpack_int_literal() {
                 None => {
-                    let expr = self.expr(expr);
+                    let expr = self.expr(*expr);
                     box move |context| thrw(expr(context)?.plus(context.heap), span, context)
                 }
                 Some(x) => {
@@ -450,8 +450,8 @@ impl Compiler<'_> {
                     let val = self.heap.alloc(x);
                     box move |_| Ok(Value::new_frozen(val))
                 } else {
-                    let l = self.expr(left);
-                    let r = self.expr(right);
+                    let l = self.expr(*left);
+                    let r = self.expr(*right);
                     match op {
                         BinOp::Or => box move |context| {
                             let l = l(context)?;
@@ -515,8 +515,8 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::ListComprehension(x, clauses) => self.list_comprehension(x, clauses),
-            Expr::DictComprehension((k, v), clauses) => self.dict_comprehension(k, v, clauses),
+            Expr::ListComprehension(x, clauses) => self.list_comprehension(*x, clauses),
+            Expr::DictComprehension((k, v), clauses) => self.dict_comprehension(*k, *v, clauses),
             Expr::Literal(x) => {
                 let val = x.compile(self.heap);
                 box move |_| Ok(Value::new_frozen(val))

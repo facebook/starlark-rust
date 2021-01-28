@@ -67,19 +67,19 @@ fn eval_assign_list<'v>(
 }
 
 impl Compiler<'_> {
-    pub fn assign(&mut self, expr: Box<AstExpr>) -> AssignCompiled {
+    pub fn assign(&mut self, expr: AstExpr) -> AssignCompiled {
         let span = expr.span;
         match expr.node {
             Expr::Dot(e, s) => {
-                let e = self.expr(e);
+                let e = self.expr(*e);
                 let s = s.node;
                 box move |value, context| {
                     thrw(e(context)?.set_attr(&s, value, context.heap), span, context)
                 }
             }
             Expr::ArrayIndirection(e, idx) => {
-                let e = self.expr(e);
-                let idx = self.expr(idx);
+                let e = self.expr(*e);
+                let idx = self.expr(*idx);
                 box move |value, context| {
                     thrw(
                         e(context)?.set_at(idx(context)?, value, context.heap),
@@ -89,7 +89,7 @@ impl Compiler<'_> {
                 }
             }
             Expr::Tuple(v) | Expr::List(v) => {
-                let v = v.into_map(|x| self.assign(x));
+                let v = v.into_map(|x| self.assign(*x));
                 box move |value, context| eval_assign_list(&v, span, value, context)
             }
             Expr::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
@@ -115,7 +115,7 @@ impl Compiler<'_> {
     fn assign_modify(
         &mut self,
         span_op: Span,
-        lhs: Box<AstExpr>,
+        lhs: AstExpr,
         rhs: EvalCompiled,
         op: for<'v> fn(
             Value<'v>,
@@ -126,7 +126,7 @@ impl Compiler<'_> {
         let span = lhs.span;
         match lhs.node {
             Expr::Dot(e, s) => {
-                let e = self.expr(e);
+                let e = self.expr(*e);
                 let s = s.node;
                 box move |context| {
                     before_stmt(span, context);
@@ -146,8 +146,8 @@ impl Compiler<'_> {
                 }
             }
             Expr::ArrayIndirection(e, idx) => {
-                let e = self.expr(e);
-                let idx = self.expr(idx);
+                let e = self.expr(*e);
+                let idx = self.expr(*idx);
                 box move |context| {
                     before_stmt(span, context);
                     let e: Value = e(context)?;
@@ -289,12 +289,12 @@ impl Stmt {
 }
 
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: Box<AstStmt>) -> EvalCompiled {
+    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> EvalCompiled {
         let span = stmt.span;
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
-                let rhs = self.function(&name.node, params, return_type, suite);
-                let lhs = self.assign(box Spanned {
+                let rhs = self.function(&name.node, params, return_type, *suite);
+                let lhs = self.assign(Spanned {
                     span: name.span,
                     node: Expr::Identifier(name),
                 });
@@ -306,9 +306,9 @@ impl Compiler<'_> {
             }
             Stmt::For(var, over, body) => {
                 let over_span = over.span;
-                let var = self.assign(var);
-                let over = self.expr(over);
-                let st = self.stmt(body);
+                let var = self.assign(*var);
+                let over = self.expr(*over);
+                let st = self.stmt(*body);
                 box move |context| {
                     before_stmt(span, context);
                     let iterable = over(context)?;
@@ -327,7 +327,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Return(Some(e)) => {
-                let e = self.expr(e);
+                let e = self.expr(*e);
                 box move |context| {
                     before_stmt(span, context);
                     Err(EvalException::Return(e(context)?))
@@ -338,8 +338,8 @@ impl Compiler<'_> {
                 Err(EvalException::Return(Value::new_none()))
             },
             Stmt::If(cond, then_block) => {
-                let cond = self.expr(cond);
-                let then_block = self.stmt(then_block);
+                let cond = self.expr(*cond);
+                let then_block = self.stmt(*then_block);
                 box move |context| {
                     before_stmt(span, context);
                     if cond(context)?.to_bool() {
@@ -350,9 +350,9 @@ impl Compiler<'_> {
                 }
             }
             Stmt::IfElse(cond, then_block, else_block) => {
-                let cond = self.expr(cond);
-                let then_block = self.stmt(then_block);
-                let else_block = self.stmt(else_block);
+                let cond = self.expr(*cond);
+                let then_block = self.stmt(*then_block);
+                let else_block = self.stmt(*else_block);
                 box move |context| {
                     before_stmt(span, context);
                     if cond(context)?.to_bool() {
@@ -366,7 +366,7 @@ impl Compiler<'_> {
                 // No need to do before_stmt on these statements as they are
                 // not meaningful statements
                 let stmts = Stmt::flatten_statements(stmts);
-                let mut stmts = stmts.into_map(|x| self.stmt(x));
+                let mut stmts = stmts.into_map(|x| self.stmt(*x));
                 match stmts.len() {
                     0 => box move |_| Ok(Value::new_none()),
                     1 => stmts.pop().unwrap(),
@@ -380,39 +380,39 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Expression(e) => {
-                let e = self.expr(e);
+                let e = self.expr(*e);
                 box move |context| {
                     before_stmt(span, context);
                     e(context)
                 }
             }
             Stmt::Assign(lhs, op, rhs) => {
-                let rhs = self.expr(rhs);
+                let rhs = self.expr(*rhs);
                 match op {
                     AssignOp::Assign => {
-                        let lhs = self.assign(lhs);
+                        let lhs = self.assign(*lhs);
                         box move |context| {
                             before_stmt(span, context);
                             lhs(rhs(context)?, context)?;
                             Ok(Value::new_none())
                         }
                     }
-                    AssignOp::Increment => self.assign_modify(span, lhs, rhs, |l, r, context| {
+                    AssignOp::Increment => self.assign_modify(span, *lhs, rhs, |l, r, context| {
                         l.add_assign(r, context.heap)
                     }),
                     AssignOp::Decrement => {
-                        self.assign_modify(span, lhs, rhs, |l, r, context| l.sub(r, context.heap))
+                        self.assign_modify(span, *lhs, rhs, |l, r, context| l.sub(r, context.heap))
                     }
                     AssignOp::Multiplier => {
-                        self.assign_modify(span, lhs, rhs, |l, r, context| l.mul(r, context.heap))
+                        self.assign_modify(span, *lhs, rhs, |l, r, context| l.mul(r, context.heap))
                     }
                     AssignOp::FloorDivider => {
-                        self.assign_modify(span, lhs, rhs, |l, r, context| {
+                        self.assign_modify(span, *lhs, rhs, |l, r, context| {
                             l.floor_div(r, context.heap)
                         })
                     }
                     AssignOp::Percent => self
-                        .assign_modify(span, lhs, rhs, |l, r, context| l.percent(r, context.heap)),
+                        .assign_modify(span, *lhs, rhs, |l, r, context| l.percent(r, context.heap)),
                 }
             }
             Stmt::Load(name, v, _) => {

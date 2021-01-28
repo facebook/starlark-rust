@@ -82,7 +82,7 @@ impl Compiler<'_> {
         match x.node {
             Parameter::Normal(x, t) => ParameterCompiled::Normal(x.node, self.expr_opt(t)),
             Parameter::WithDefaultValue(x, t, v) => {
-                ParameterCompiled::WithDefaultValue(x.node, self.expr_opt(t), self.expr(v))
+                ParameterCompiled::WithDefaultValue(x.node, self.expr_opt(t), self.expr(*v))
             }
             Parameter::NoArgs => ParameterCompiled::NoArgs,
             Parameter::Args(x, t) => ParameterCompiled::Args(x.node, self.expr_opt(t)),
@@ -95,7 +95,7 @@ impl Compiler<'_> {
         name: &str,
         params: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
-        suite: Box<AstStmt>,
+        suite: AstStmt,
     ) -> EvalCompiled {
         let function_name = format!("{}.{}", self.scope.module_name(), name);
 

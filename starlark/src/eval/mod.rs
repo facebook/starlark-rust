@@ -157,7 +157,7 @@ pub fn eval_module<'v>(
         errors: Vec::new(),
         codemap: codemap.dupe(),
     };
-    let stmt = compiler.stmt(statement);
+    let stmt = compiler.stmt(*statement);
 
     // We want to grab the first error only, with ownership, so drop all but the first
     compiler.errors.truncate(1);

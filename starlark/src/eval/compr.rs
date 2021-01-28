@@ -31,7 +31,7 @@ use gazebo::prelude::*;
 use std::mem;
 
 impl Compiler<'_> {
-    pub fn list_comprehension(&mut self, x: Box<AstExpr>, clauses: Vec<AstClause>) -> EvalCompiled {
+    pub fn list_comprehension(&mut self, x: AstExpr, clauses: Vec<AstClause>) -> EvalCompiled {
         self.scope.enter_compr();
         let clauses = compile_clauses(clauses, self);
         let x = self.expr(x);
@@ -41,8 +41,8 @@ impl Compiler<'_> {
 
     pub fn dict_comprehension(
         &mut self,
-        k: Box<AstExpr>,
-        v: Box<AstExpr>,
+        k: AstExpr,
+        v: AstExpr,
         clauses: Vec<AstClause>,
     ) -> EvalCompiled {
         self.scope.enter_compr();
@@ -59,12 +59,12 @@ fn compile_clause(clause: AstClause, compiler: &mut Compiler) -> ClauseCompiled 
 
     // Must be compiled without the new variables in scope
     let over_span = over.span;
-    let over = compiler.expr(over);
+    let over = compiler.expr(*over);
     compiler.scope.add_compr(&var);
 
     // Everything after must be compiled with the new variables in scope
-    let var = compiler.assign(var);
-    let ifs = ifs.into_map(|expr| compiler.expr(expr));
+    let var = compiler.assign(*var);
+    let ifs = ifs.into_map(|expr| compiler.expr(*expr));
     ClauseCompiled {
         var,
         over,
