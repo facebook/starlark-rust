@@ -77,9 +77,9 @@ impl Compiler<'_> {
                     thrw(e(context)?.set_attr(&s, value, context.heap), span, context)
                 }
             }
-            Expr::ArrayIndirection(e, idx) => {
-                let e = self.expr(*e);
-                let idx = self.expr(*idx);
+            Expr::ArrayIndirection(box (e, idx)) => {
+                let e = self.expr(e);
+                let idx = self.expr(idx);
                 box move |value, context| {
                     thrw(
                         e(context)?.set_at(idx(context)?, value, context.heap),
@@ -145,9 +145,9 @@ impl Compiler<'_> {
                     Ok(Value::new_none())
                 }
             }
-            Expr::ArrayIndirection(e, idx) => {
-                let e = self.expr(*e);
-                let idx = self.expr(*idx);
+            Expr::ArrayIndirection(box (e, idx)) => {
+                let e = self.expr(e);
+                let idx = self.expr(idx);
                 box move |context| {
                     before_stmt(span, context);
                     let e: Value = e(context)?;

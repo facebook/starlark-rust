@@ -127,7 +127,7 @@ impl Expr {
                 d.iter().for_each(|x| f(x));
                 e.iter().for_each(|x| f(x));
             }
-            Expr::ArrayIndirection(a, b) => {
+            Expr::ArrayIndirection(box (a, b)) => {
                 f(a);
                 f(b);
             }
@@ -150,7 +150,7 @@ impl Expr {
                 f(x);
                 f(y);
             }
-            Expr::If(a, b, c) => {
+            Expr::If(box (a, b, c)) => {
                 f(a);
                 f(b);
                 f(c);

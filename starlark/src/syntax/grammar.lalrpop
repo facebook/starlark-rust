@@ -207,7 +207,7 @@ PrimaryExpr: AstExpr = {
               .to_ast(file_span.subspan(l, r))
         },
     <l:@L> <e:PrimaryExpr> "[" <i:TestList> "]" <r:@R>
-        => Expr::ArrayIndirection(box e, box i).to_ast(file_span.subspan(l, r)),
+        => Expr::ArrayIndirection(box (e, i)).to_ast(file_span.subspan(l, r)),
     Operand
 };
 
@@ -251,7 +251,7 @@ ListComp_: Expr = "[" <t:Test> <c:CompClause> "]"
 
 DictComp: AstExpr = ASTE<DictComp_>;
 DictComp_: Expr = "{" <k:DictEntry> <v:CompClause>"}"
-    => Expr::DictComprehension((box k.0, box k.1), v);
+    => Expr::DictComprehension(box k, v);
 
 CompClause: Vec<AstClause> = <CompIter+>;
 CompIter: AstClause = ASTC<CompIter_>;
@@ -262,7 +262,7 @@ IfClause: AstExpr = "if" <OrTest>;
 // Base expression. Priorities are taken from Python 3 grammar.
 Test: AstExpr = {
     <l:@L> <e1:OrTest> "if" <t:OrTest> "else" <e2:Test> <r:@R>
-        => Expr::If(box t, box e1, box e2).to_ast(file_span.subspan(l, r)),
+        => Expr::If(box (t, e1, e2)).to_ast(file_span.subspan(l, r)),
     OrTest,
     LambDef
 };

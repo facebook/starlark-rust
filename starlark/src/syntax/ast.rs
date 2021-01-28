@@ -90,7 +90,7 @@ pub enum Expr {
         Option<Box<AstExpr>>,
         Option<Box<AstExpr>>,
     ),
-    ArrayIndirection(Box<AstExpr>, Box<AstExpr>),
+    ArrayIndirection(Box<(AstExpr, AstExpr)>),
     Slice(
         Box<AstExpr>,
         Option<Box<AstExpr>>,
@@ -104,11 +104,11 @@ pub enum Expr {
     Minus(Box<AstExpr>),
     Plus(Box<AstExpr>),
     Op(Box<AstExpr>, BinOp, Box<AstExpr>),
-    If(Box<AstExpr>, Box<AstExpr>, Box<AstExpr>), // Order: condition, v1, v2 <=> v1 if condition else v2
+    If(Box<(AstExpr, AstExpr, AstExpr)>), // Order: condition, v1, v2 <=> v1 if condition else v2
     List(Vec<AstExpr>),
     Dict(Vec<(AstExpr, AstExpr)>),
     ListComprehension(Box<AstExpr>, Vec<AstClause>),
-    DictComprehension((Box<AstExpr>, Box<AstExpr>), Vec<AstClause>),
+    DictComprehension(Box<(AstExpr, AstExpr)>, Vec<AstClause>),
 }
 impl ToAst for Expr {}
 
@@ -307,7 +307,7 @@ impl Display for Expr {
                 }
                 f.write_str(")")
             }
-            Expr::ArrayIndirection(e, i) => write!(f, "{}[{}]", e.node, i.node),
+            Expr::ArrayIndirection(box (e, i)) => write!(f, "{}[{}]", e.node, i.node),
             Expr::Slice(e, i1, i2, i3) => {
                 write!(f, "{}[]", e.node)?;
                 if let Some(x) = i1 {
@@ -328,7 +328,9 @@ impl Display for Expr {
             Expr::Minus(e) => write!(f, "-{}", e.node),
             Expr::Plus(e) => write!(f, "+{}", e.node),
             Expr::Op(l, op, r) => write!(f, "({}{}{})", l.node, op, r.node),
-            Expr::If(cond, v1, v2) => write!(f, "({} if {} else {})", v1.node, cond.node, v2.node),
+            Expr::If(box (cond, v1, v2)) => {
+                write!(f, "({} if {} else {})", v1.node, cond.node, v2.node)
+            }
             Expr::List(v) => {
                 f.write_str("[")?;
                 comma_separated_fmt(f, v, |x, f| x.node.fmt(f), false)?;
@@ -344,7 +346,7 @@ impl Display for Expr {
                 comma_separated_fmt(f, v, |x, f| x.node.fmt(f), false)?;
                 f.write_str("]")
             }
-            Expr::DictComprehension((k, v), c) => {
+            Expr::DictComprehension(box (k, v), c) => {
                 write!(f, "{{{}: {}", k.node, v.node)?;
                 comma_separated_fmt(f, c, |x, f| x.node.fmt(f), false)?;
                 f.write_str("}}")

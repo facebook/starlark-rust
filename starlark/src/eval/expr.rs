@@ -344,10 +344,10 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::If(cond, then_expr, else_expr) => {
-                let cond = self.expr(*cond);
-                let then_expr = self.expr(*then_expr);
-                let else_expr = self.expr(*else_expr);
+            Expr::If(box (cond, then_expr, else_expr)) => {
+                let cond = self.expr(cond);
+                let then_expr = self.expr(then_expr);
+                let else_expr = self.expr(else_expr);
                 box move |context| {
                     if cond(context)?.to_bool() {
                         then_expr(context)
@@ -403,9 +403,9 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::ArrayIndirection(array, index) => {
-                let array = self.expr(*array);
-                let index = self.expr(*index);
+            Expr::ArrayIndirection(box (array, index)) => {
+                let array = self.expr(array);
+                let index = self.expr(index);
                 box move |context| {
                     thrw(
                         array(context)?.at(index(context)?, context.heap),
@@ -516,7 +516,7 @@ impl Compiler<'_> {
                 }
             }
             Expr::ListComprehension(x, clauses) => self.list_comprehension(*x, clauses),
-            Expr::DictComprehension((k, v), clauses) => self.dict_comprehension(*k, *v, clauses),
+            Expr::DictComprehension(box (k, v), clauses) => self.dict_comprehension(k, v, clauses),
             Expr::Literal(x) => {
                 let val = x.compile(self.heap);
                 box move |_| Ok(Value::new_frozen(val))

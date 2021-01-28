@@ -81,6 +81,7 @@
 
 // Features we use
 #![feature(backtrace)]
+#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(hash_set_entry)]
 #![feature(iter_order_by)]
