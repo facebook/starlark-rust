@@ -144,8 +144,8 @@ impl Stmt {
         let mut seen_optional = false;
 
         for arg in parameters.iter() {
-            match arg.node {
-                Parameter::Normal(ref n, ..) => {
+            match &arg.node {
+                Parameter::Normal(n, ..) => {
                     if seen_kwargs || seen_optional {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
@@ -154,7 +154,7 @@ impl Stmt {
                     }
                     test_param_name(&mut argset, n, arg)?;
                 }
-                Parameter::WithDefaultValue(ref n, ..) => {
+                Parameter::WithDefaultValue(n, ..) => {
                     if seen_kwargs {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
@@ -173,7 +173,7 @@ impl Stmt {
                     }
                     seen_args = true;
                 }
-                Parameter::Args(ref n, ..) => {
+                Parameter::Args(n, ..) => {
                     if seen_args || seen_kwargs {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
@@ -183,7 +183,7 @@ impl Stmt {
                     seen_args = true;
                     test_param_name(&mut argset, n, arg)?;
                 }
-                Parameter::KWArgs(ref n, ..) => {
+                Parameter::KWArgs(n, ..) => {
                     if seen_kwargs {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
@@ -202,16 +202,16 @@ impl Stmt {
     pub fn validate_break_continue(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
         // Inside a for, the only thing that might disallow break/continue is def
         fn inside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
-            match stmt.node {
-                Stmt::Def(_, _, _, ref body) => outside_for(codemap, body),
+            match &stmt.node {
+                Stmt::Def(_, _, _, body) => outside_for(codemap, body),
                 _ => stmt.node.visit_stmt_result(|x| inside_for(codemap, x)),
             }
         }
 
         // Outside a for, a continue/break is an error
         fn outside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
-            match stmt.node {
-                Stmt::For(_, _, ref body) => inside_for(codemap, body),
+            match &stmt.node {
+                Stmt::For(_, _, body) => inside_for(codemap, body),
                 Stmt::Break | Stmt::Continue => {
                     let kw = if let Stmt::Break = stmt.node {
                         "break"

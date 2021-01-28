@@ -362,7 +362,7 @@ impl<'v> Walker<'v> {
         let mut old_mem = unsafe { ptr::replace(old_mem, ValueMem::Copied(new_val)) };
 
         match &mut old_mem {
-            ValueMem::Ref(ref x) => self.walk_cell(x),
+            ValueMem::Ref(x) => self.walk_cell(x),
             ValueMem::Mutable(x) => x.borrow_mut().walk(self),
             ValueMem::ThawOnWrite(x) => x.walk(self),
             ValueMem::Pseudo(x) => x.walk(self),
