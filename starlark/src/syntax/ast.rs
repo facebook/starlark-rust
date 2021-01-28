@@ -50,14 +50,6 @@ pub(crate) trait ToAst<T> {
 }
 
 macro_rules! to_ast_trait {
-    ($t1:ty, $t2:ty, $t3:ident) => {
-        impl ToAst<$t2> for $t1 {
-            fn to_ast(self, span: Span) -> $t2 {
-                #[cfg_attr(feature = "custom_linter", allow(gazebo_use_box))]
-                $t3::new(Spanned { span, node: self })
-            }
-        }
-    };
     ($t1:ty, $t2:ty) => {
         impl ToAst<$t2> for $t1 {
             fn to_ast(self, span: Span) -> $t2 {
