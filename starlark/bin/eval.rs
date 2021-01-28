@@ -153,11 +153,11 @@ impl Context {
     }
 }
 
-fn globals() -> Globals {
+pub fn globals() -> Globals {
     extended_environment().with(add_typing).build()
 }
 
-fn dialect() -> Dialect {
+pub fn dialect() -> Dialect {
     Dialect {
         enable_types: true,
         ..Dialect::Extended
