@@ -45,17 +45,15 @@ pub struct AstModule {
     pub(crate) statement: AstStmt,
 }
 
-pub(crate) trait ToAst<T> {
-    fn to_ast(self, span: Span) -> T;
+pub(crate) trait ToAst: Sized {
+    fn to_ast(self, span: Span) -> Spanned<Self> {
+        Spanned { span, node: self }
+    }
 }
 
 macro_rules! to_ast_trait {
     ($t1:ty, $t2:ty) => {
-        impl ToAst<$t2> for $t1 {
-            fn to_ast(self, span: Span) -> $t2 {
-                Spanned { span, node: self }
-            }
-        }
+        impl ToAst for $t1 {}
     };
 }
 
