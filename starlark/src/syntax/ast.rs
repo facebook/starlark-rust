@@ -51,14 +51,8 @@ pub(crate) trait ToAst: Sized {
     }
 }
 
-macro_rules! to_ast_trait {
-    ($t1:ty, $t2:ty) => {
-        impl ToAst for $t1 {}
-    };
-}
-
-to_ast_trait!(i32, AstInt);
-to_ast_trait!(String, AstString);
+impl ToAst for i32 {}
+impl ToAst for String {}
 
 #[derive(Debug)]
 pub enum Argument {
@@ -67,7 +61,7 @@ pub enum Argument {
     ArgsArray(AstExpr),
     KWArgsDict(AstExpr),
 }
-to_ast_trait!(Argument, AstArgument);
+impl ToAst for Argument {}
 
 #[derive(Debug)]
 pub enum Parameter {
@@ -77,7 +71,7 @@ pub enum Parameter {
     Args(AstString, Option<Box<AstExpr>>),
     KWArgs(AstString, Option<Box<AstExpr>>),
 }
-to_ast_trait!(Parameter, AstParameter);
+impl ToAst for Parameter {}
 
 #[derive(Debug, Clone)]
 pub enum AstLiteral {
@@ -116,7 +110,7 @@ pub enum Expr {
     ListComprehension(Box<AstExpr>, Vec<AstClause>),
     DictComprehension((Box<AstExpr>, Box<AstExpr>), Vec<AstClause>),
 }
-to_ast_trait!(Expr, AstExpr);
+impl ToAst for Expr {}
 
 #[derive(Debug)]
 pub struct Clause {
@@ -124,7 +118,7 @@ pub struct Clause {
     pub over: Box<AstExpr>,
     pub ifs: Vec<AstExpr>,
 }
-to_ast_trait!(Clause, AstClause);
+impl ToAst for Clause {}
 
 #[derive(Debug, Clone, Copy, Dupe, Eq, PartialEq)]
 pub enum BinOp {
@@ -183,7 +177,7 @@ pub enum Stmt {
     // The Visibility of a Load is implicit from the Dialect, not written by a user
     Load(AstString, Vec<(AstString, AstString)>, Visibility),
 }
-to_ast_trait!(Stmt, AstStmt);
+impl ToAst for Stmt {}
 
 impl Display for BinOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
