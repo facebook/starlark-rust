@@ -20,6 +20,7 @@
 use codemap::{CodeMap, Span, Spanned};
 use derivative::Derivative;
 use gazebo::prelude::*;
+use static_assertions::assert_eq_size;
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -35,6 +36,12 @@ pub type AstParameter = Spanned<Parameter>;
 pub type AstClause = Spanned<Clause>;
 pub type AstInt = Spanned<i32>;
 pub type AstStmt = Spanned<Stmt>;
+
+// We don't care _that_ much about the size of these structures,
+// but we equally don't want to regress without noticing.
+// If it wasn't for Call (which has the wrong data in it) AstExpr would be 7 words.
+assert_eq_size!(AstStmt, [usize; 11]);
+assert_eq_size!(AstExpr, [usize; 11]);
 
 // Wrapper around an AstModule. Must have been compiled.
 #[derive(Derivative)]
