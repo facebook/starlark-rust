@@ -39,6 +39,18 @@ enum ArgsStage {
 }
 
 impl Expr {
+    /// We want to check a function call is well-formed.
+    /// Our eventual plan is to follow the Python invariants, but for now, we are closer
+    /// to the Starlark invariants.
+    ///
+    /// Python invariants are no positional arguments after named arguments,
+    /// no *args after **kwargs, no repeated argument names.
+    ///
+    /// Starlark invariants are the above, plus at most one *args and the *args must appear
+    /// after all positional and named arguments. The spec is silent on whether you are allowed
+    /// multiple **kwargs.
+    ///
+    /// We allow at most one **kwargs.
     pub fn check_call(f: AstExpr, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
         let mut pos_args = Vec::new();
         let mut named_args = Vec::new();

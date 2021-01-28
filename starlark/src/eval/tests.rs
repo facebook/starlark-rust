@@ -121,6 +121,8 @@ def rec6(): rec2()
     // Invalid order of parameter
     assert::is_true("def f(a, *args, b): return b\nf(1, b=True)");
     assert::is_true("def f(a, *args, b=True): return b\nf(1)");
+    assert::is_true("NAME=True\ndef f(*args, pkg=NAME, **kwargs): return pkg\nf()");
+    assert::is_true("def f(*args, pkg=False, **kwargs): return pkg\nf(pkg=True)");
     assert::is_true("def f(a, b=1, *args, c=False): return c\nf(a=1,c=True)");
     assert::fail("def f(a, **kwargs, b=1): pass", "Default parameter after");
     assert::fail(
