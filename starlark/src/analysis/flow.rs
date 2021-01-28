@@ -180,9 +180,9 @@ fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) ->
 
 // If you have a definition which ends with return, or a loop which ends with continue
 // that is a useless statement that just
-fn redundant(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
-    fn check(is_loop: bool, codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
-        match &***x {
+fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+    fn check(is_loop: bool, codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+        match &**x {
             Stmt::Continue if is_loop => res.push(LintT::new(
                 codemap.look_up_span(x.span),
                 FlowIssue::RedundantContinue,

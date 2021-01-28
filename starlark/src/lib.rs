@@ -107,7 +107,6 @@
 #![allow(clippy::useless_transmute)] // Seems to be a clippy bug, but we should be using less transmute anyway
 #![allow(clippy::boxed_local)] // Should remove some boxes
 #![allow(clippy::vec_box)] // Should remove some boxes
-#![allow(clippy::borrowed_box)] // Should remove some boxes
 
 #[macro_use]
 extern crate gazebo;

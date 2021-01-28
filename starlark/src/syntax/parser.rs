@@ -126,7 +126,7 @@ impl AstModule {
     }
 
     pub fn collect_loads(&self) -> Vec<&str> {
-        fn f<'a>(ast: &'a Box<AstStmt>, vec: &mut Vec<&'a str>) {
+        fn f<'a>(ast: &'a AstStmt, vec: &mut Vec<&'a str>) {
             match ast.node {
                 Stmt::Load(ref module, ..) => vec.push(&module.node),
                 Stmt::Statements(ref stmts) => {

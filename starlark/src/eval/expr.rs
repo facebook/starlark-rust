@@ -207,8 +207,8 @@ impl Expr {
     // Does an entire sequence of additions reduce to a string literal
     fn reduces_to_string<'a>(
         mut op: BinOp,
-        mut left: &'a Box<AstExpr>,
-        mut right: &'a Box<AstExpr>,
+        mut left: &'a AstExpr,
+        mut right: &'a AstExpr,
     ) -> Option<String> {
         let mut results = Vec::new();
         loop {
@@ -238,7 +238,7 @@ impl Expr {
     // Collect variables defined in an expression on the LHS of an assignment (or
     // for variable etc)
     pub(crate) fn collect_defines_lvalue<'a>(
-        expr: &'a Box<AstExpr>,
+        expr: &'a AstExpr,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         expr.node.visit_expr_lvalue(|x| {
