@@ -48,10 +48,10 @@ impl LintWarning for FlowIssue {
     }
 }
 
-fn returns(x: &Box<AstStmt>) -> Vec<(Span, Option<&Box<AstExpr>>)> {
-    fn f<'a>(x: &'a Box<AstStmt>, res: &mut Vec<(Span, Option<&'a Box<AstExpr>>)>) {
-        match &***x {
-            Stmt::Return(ret) => res.push((x.span, ret.as_ref())),
+fn returns(x: &AstStmt) -> Vec<(Span, Option<&AstExpr>)> {
+    fn f<'a>(x: &'a AstStmt, res: &mut Vec<(Span, Option<&'a AstExpr>)>) {
+        match &**x {
+            Stmt::Return(ret) => res.push((x.span, ret.as_ref().map(|x| &**x))),
             Stmt::Def(..) => {} // Do not descend
             _ => x.visit_stmt(|x| f(x, res)),
         }
@@ -63,8 +63,8 @@ fn returns(x: &Box<AstStmt>) -> Vec<(Span, Option<&Box<AstExpr>>)> {
 }
 
 // fail is kind of like a return with error
-fn is_fail(x: &Box<AstExpr>) -> bool {
-    match &***x {
+fn is_fail(x: &AstExpr) -> bool {
+    match &**x {
         Expr::Call(x, _, _, _, _) => match &***x {
             Expr::Identifier(name) => name.node == "fail",
             _ => false,
@@ -73,8 +73,8 @@ fn is_fail(x: &Box<AstExpr>) -> bool {
     }
 }
 
-fn final_return(x: &Box<AstStmt>) -> bool {
-    match &***x {
+fn final_return(x: &AstStmt) -> bool {
+    match &**x {
         Stmt::Return(_) => true,
         Stmt::Expression(x) if is_fail(x) => true,
         Stmt::Statements(xs) => match xs.last() {
@@ -96,8 +96,8 @@ fn require_return_expression(ret_type: &Option<Box<AstExpr>>) -> Option<Span> {
     }
 }
 
-fn check_stmt(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
-    match &***x {
+fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+    match &**x {
         Stmt::Def(name, _params, ret_type, body) => {
             let rets = returns(body);
 
@@ -133,14 +133,14 @@ fn check_stmt(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue
     }
 }
 
-fn stmt(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
+fn stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     check_stmt(codemap, x, res);
     x.visit_stmt(|x| stmt(codemap, x, res));
 }
 
 // Returns true if the code aborts this sequence early, due to return, fail, break or continue
-fn reachable(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) -> bool {
-    match &***x {
+fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) -> bool {
+    match &**x {
         Stmt::Break | Stmt::Continue | Stmt::Return(_) => true,
         Stmt::Expression(x) => is_fail(x),
         Stmt::Statements(xs) => {
@@ -203,8 +203,8 @@ fn redundant(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>
         }
     }
 
-    fn f(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
-        match &***x {
+    fn f(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+        match &**x {
             Stmt::For(_, _, body) => check(true, codemap, body, res),
             Stmt::Def(_, _, _, body) => check(false, codemap, body, res),
             _ => {}
@@ -216,10 +216,10 @@ fn redundant(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>
     x.visit_stmt(|x| f(codemap, x, res));
 }
 
-fn misplaced_load(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
+fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     // accumulate all statements at the top-level
-    fn top_statements<'a>(x: &'a Box<AstStmt>, stmts: &mut Vec<&'a Box<AstStmt>>) {
-        match &***x {
+    fn top_statements<'a>(x: &'a AstStmt, stmts: &mut Vec<&'a AstStmt>) {
+        match &**x {
             Stmt::Statements(xs) => {
                 for x in xs {
                     top_statements(x, stmts);
@@ -235,7 +235,7 @@ fn misplaced_load(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowI
     // We allow loads or documentation strings, but after that, no loads
     let mut allow_loads = true;
     for x in stmts {
-        match &***x {
+        match &**x {
             Stmt::Load(..) => {
                 if !allow_loads {
                     res.push(LintT::new(

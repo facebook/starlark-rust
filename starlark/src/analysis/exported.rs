@@ -24,7 +24,7 @@ pub fn exported_symbols(module: &AstModule) -> Vec<(SpanLoc, String)> {
     // Map since we only want to store the first of each export
     // IndexMap since we want the order to match the order they were defined in
     let mut result = IndexMap::new();
-    module.statement.visit_stmt(|x| match &***x {
+    module.statement.visit_stmt(|x| match &**x {
         Stmt::Assign(dest, _, _) => {
             dest.visit_expr_lvalue(|name| {
                 result.entry(&name.node).or_insert(name.span);

@@ -193,12 +193,9 @@ impl Stmt {
     }
 
     /// Validate `break` and `continue` is only used inside loops
-    pub fn validate_break_continue(
-        codemap: &Arc<CodeMap>,
-        stmt: &Box<AstStmt>,
-    ) -> anyhow::Result<()> {
+    pub fn validate_break_continue(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
         // Inside a for, the only thing that might disallow break/continue is def
-        fn inside_for(codemap: &Arc<CodeMap>, stmt: &Box<AstStmt>) -> anyhow::Result<()> {
+        fn inside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
             match stmt.node {
                 Stmt::Def(_, _, _, ref body) => outside_for(codemap, body),
                 _ => stmt.node.visit_stmt_result(|x| inside_for(codemap, x)),
@@ -206,7 +203,7 @@ impl Stmt {
         }
 
         // Outside a for, a continue/break is an error
-        fn outside_for(codemap: &Arc<CodeMap>, stmt: &Box<AstStmt>) -> anyhow::Result<()> {
+        fn outside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
             match stmt.node {
                 Stmt::For(_, _, ref body) => inside_for(codemap, body),
                 Stmt::Break | Stmt::Continue => {

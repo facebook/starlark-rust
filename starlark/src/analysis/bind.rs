@@ -71,7 +71,7 @@ impl Scope {
     }
 }
 
-fn opt_expr(x: Option<&Box<AstExpr>>, res: &mut Vec<Bind>) {
+fn opt_expr(x: Option<&AstExpr>, res: &mut Vec<Bind>) {
     if let Some(x) = x {
         expr(x, res)
     }
@@ -92,8 +92,8 @@ fn comprehension(clauses: &[AstClause], res: &mut Vec<Bind>, end: impl Fn(&mut V
     }
 }
 
-fn expr(x: &Box<AstExpr>, res: &mut Vec<Bind>) {
-    match &***x {
+fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
+    match &**x {
         Expr::Identifier(x) => res.push(Bind::Get(x.clone())),
         Expr::Lambda(args, body) => {
             let mut inner = Vec::new();
@@ -113,8 +113,8 @@ fn expr(x: &Box<AstExpr>, res: &mut Vec<Bind>) {
     }
 }
 
-fn expr_lvalue(x: &Box<AstExpr>, res: &mut Vec<Bind>) {
-    Expr::visit_expr_compound(x, |x| match &***x {
+fn expr_lvalue(x: &AstExpr, res: &mut Vec<Bind>) {
+    Expr::visit_expr_compound(x, |x| match &**x {
         // A value doesn't get read first
         Expr::Identifier(_) => {}
         // But things like a[i] do get read first
@@ -138,8 +138,8 @@ fn flow(res: &mut Vec<Bind>) {
     res.push(Bind::Flow)
 }
 
-fn stmt(x: &Box<AstStmt>, res: &mut Vec<Bind>) {
-    match &***x {
+fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
+    match &**x {
         Stmt::Statements(xs) => {
             for x in xs {
                 stmt(x, res)
@@ -167,7 +167,7 @@ fn stmt(x: &Box<AstStmt>, res: &mut Vec<Bind>) {
             flow(res);
         }
         Stmt::Def(name, args, ret, body) => {
-            opt_expr(ret.as_ref(), res);
+            opt_expr(ret.as_ref().map(|x| &**x), res);
             let mut inner = Vec::new();
             parameters(args, res, &mut inner);
             res.push(Bind::Set(Assigner::Assign, name.clone()));

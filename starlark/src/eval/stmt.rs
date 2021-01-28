@@ -250,7 +250,7 @@ fn before_stmt(span: Span, context: &mut EvaluationContext) {
 impl Stmt {
     // Collect all the variables that are defined in this scope
     pub(crate) fn collect_defines<'a>(
-        stmt: &'a Box<AstStmt>,
+        stmt: &'a AstStmt,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         match stmt.node {

@@ -54,20 +54,20 @@ static TYPES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
 
 fn match_bad_type_equality(
     codemap: &CodeMap,
-    x: &Box<AstExpr>,
+    x: &AstExpr,
     types: &HashMap<&str, &str>,
     res: &mut Vec<LintT<Incompatibility>>,
 ) {
-    fn lookup_type<'a>(x: &Box<AstExpr>, types: &HashMap<&str, &'a str>) -> Option<&'a str> {
-        match &***x {
+    fn lookup_type<'a>(x: &AstExpr, types: &HashMap<&str, &'a str>) -> Option<&'a str> {
+        match &**x {
             Expr::Identifier(name) => types.get(name.node.as_str()).copied(),
             _ => None,
         }
     }
 
     // Return true if this expression matches `type($x)`
-    fn is_type_call(x: &Box<AstExpr>) -> bool {
-        match &***x {
+    fn is_type_call(x: &AstExpr) -> bool {
+        match &**x {
             Expr::Call(fun, arg1, arg2, None, None) if arg1.len() == 1 && arg2.is_empty() => {
                 match &***fun {
                     Expr::Identifier(x) => x.node == "type",
@@ -79,7 +79,7 @@ fn match_bad_type_equality(
     }
 
     // If we see type(x) == y (or negated), where y is in our types table, suggest a replacement
-    match &***x {
+    match &**x {
         Expr::Op(lhs, op, rhs)
             if (*op == BinOp::EqualsTo || *op == BinOp::Different) && is_type_call(lhs) =>
         {
@@ -101,7 +101,7 @@ fn bad_type_equality(module: &AstModule, res: &mut Vec<LintT<Incompatibility>>) 
     let types = Lazy::force(&TYPES);
     fn check(
         codemap: &CodeMap,
-        x: &Box<AstExpr>,
+        x: &AstExpr,
         types: &HashMap<&str, &str>,
         res: &mut Vec<LintT<Incompatibility>>,
     ) {
@@ -141,13 +141,13 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
     }
 
     fn stmt<'a>(
-        x: &'a Box<AstStmt>,
+        x: &'a AstStmt,
         codemap: &CodeMap,
         defined: &mut HashMap<&'a str, (Span, bool)>,
         exported: &mut HashSet<&'a str>,
         res: &mut Vec<LintT<Incompatibility>>,
     ) {
-        match &***x {
+        match &**x {
             Stmt::Assign(lhs, op, rhs) => match (&***lhs, op, &***rhs) {
                 (Expr::Identifier(x), AssignOp::Assign, Expr::Identifier(y))
                     if x.node == y.node
