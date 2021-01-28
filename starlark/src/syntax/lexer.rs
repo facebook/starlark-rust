@@ -182,10 +182,10 @@ impl Display for Token {
             Token::ClosingBracket => write!(f, "symbol ']'"),
             Token::ClosingCurlyBracket => write!(f, "symbol '}}'"),
             Token::ClosingParenthesis => write!(f, "symbol ')'"),
-            Token::Reserved(ref s) => write!(f, "reserved keyword '{}'", s),
-            Token::Identifier(ref s) => write!(f, "identifier '{}'", s),
-            Token::IntegerLiteral(ref i) => write!(f, "integer literal '{}'", i),
-            Token::StringLiteral(ref s) => write!(f, "string literal '{}'", s),
+            Token::Reserved(s) => write!(f, "reserved keyword '{}'", s),
+            Token::Identifier(s) => write!(f, "identifier '{}'", s),
+            Token::IntegerLiteral(i) => write!(f, "integer literal '{}'", i),
+            Token::StringLiteral(s) => write!(f, "string literal '{}'", s),
         }
     }
 }

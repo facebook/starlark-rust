@@ -253,23 +253,23 @@ impl Stmt {
         stmt: &'a AstStmt,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
-        match stmt.node {
-            Stmt::Assign(ref dest, _, _) => {
+        match &stmt.node {
+            Stmt::Assign(dest, _, _) => {
                 Expr::collect_defines_lvalue(dest, result);
             }
-            Stmt::For(ref dest, _, ref body) => {
+            Stmt::For(dest, _, body) => {
                 Expr::collect_defines_lvalue(dest, result);
                 Stmt::collect_defines(body, result);
             }
-            Stmt::Def(ref name, ..) => {
+            Stmt::Def(name, ..) => {
                 result.insert(&name.node, Visibility::Public);
             }
-            Stmt::Load(_, ref names, vis) => {
+            Stmt::Load(_, names, vis) => {
                 for (name, _) in names {
                     // If we are in the map as Public and Private, then Public wins.
                     // Everything but Load is definitely Public.
                     // So only insert if it wasn't already there.
-                    result.entry(&name.node).or_insert(vis);
+                    result.entry(&name.node).or_insert(*vis);
                 }
             }
             _ => stmt.node.visit_stmt(|x| Stmt::collect_defines(x, result)),

@@ -51,39 +51,39 @@ pub(crate) fn parse_error_add_span(
     span: Span,
     codemap: Arc<CodeMap>,
 ) -> Diagnostic {
-    let message = match err {
+    let message = match &err {
         lu::ParseError::InvalidToken { .. } => "Parse error: invalid token".to_owned(),
         lu::ParseError::UnrecognizedToken {
-            token: (_x, Token::Reserved(ref s), _y),
-            expected: ref _unused,
+            token: (_x, Token::Reserved(s), _y),
+            expected: _unused,
         } => format!("Parse error: cannot use reserved keyword `{}`", s),
         lu::ParseError::ExtraToken {
-            token: (_x, Token::Reserved(ref s), _y),
+            token: (_x, Token::Reserved(s), _y),
         } => format!("Parse error: cannot use reserved keyword `{}`", s),
         lu::ParseError::UnrecognizedToken {
-            token: (_x, ref t, ..),
-            ref expected,
+            token: (_x, t, ..),
+            expected,
         } => format!(
             "Parse error: unexpected {} here, expected {}",
             t,
             one_of(expected)
         ),
-        lu::ParseError::ExtraToken {
-            token: (_x, ref t, ..),
-        } => format!("Parse error: extraneous token {}", t),
+        lu::ParseError::ExtraToken { token: (_x, t, ..) } => {
+            format!("Parse error: extraneous token {}", t)
+        }
         lu::ParseError::UnrecognizedEOF { .. } => "Parse error: unexpected end of file".to_owned(),
-        lu::ParseError::User { ref error } => return error.add_span(span, codemap),
+        lu::ParseError::User { error } => return error.add_span(span, codemap),
     };
-    let span = match err {
-        lu::ParseError::InvalidToken { ref location } => span.subspan(*location, *location),
+    let span = match &err {
+        lu::ParseError::InvalidToken { location } => span.subspan(*location, *location),
         lu::ParseError::UnrecognizedToken {
             token: (x, .., y), ..
-        } => span.subspan(x, y),
+        } => span.subspan(*x, *y),
         lu::ParseError::UnrecognizedEOF { .. } => {
             let x = span.high() - span.low();
             span.subspan(x, x)
         }
-        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(x, y),
+        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x, *y),
         lu::ParseError::User { .. } => unreachable!(),
     };
 
@@ -127,9 +127,9 @@ impl AstModule {
 
     pub fn collect_loads(&self) -> Vec<&str> {
         fn f<'a>(ast: &'a AstStmt, vec: &mut Vec<&'a str>) {
-            match ast.node {
-                Stmt::Load(ref module, ..) => vec.push(&module.node),
-                Stmt::Statements(ref stmts) => {
+            match &ast.node {
+                Stmt::Load(module, ..) => vec.push(&module.node),
+                Stmt::Statements(stmts) => {
                     for s in stmts {
                         f(s, vec);
                     }

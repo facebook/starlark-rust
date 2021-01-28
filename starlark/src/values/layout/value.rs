@@ -246,9 +246,9 @@ impl FrozenValueMem {
     }
 
     fn get_ref<'v>(&self) -> &dyn TypedValue<'v> {
-        match *self {
-            Self::Str(ref x) => x,
-            Self::Immutable(ref x) => immutable_unstatic(Box::as_ref(x)).as_typed_value(),
+        match self {
+            Self::Str(x) => x,
+            Self::Immutable(x) => immutable_unstatic(Box::as_ref(x)).as_typed_value(),
             _ => self.unexpected("get_ref"),
         }
     }

@@ -113,7 +113,7 @@ fn eval_call(
 
         // TODO: maybe compute a mapping and store it somewhere?
         // TODO: could construct the mapping with two sorted sets
-        for &(ref k, ref kk, ref v) in named.iter() {
+        for (k, kk, v) in named.iter() {
             invoker.push_named(k, kk.to_hashed_value(), v(context)?);
         }
 
@@ -218,8 +218,8 @@ impl Expr {
             // a + b + c  associates as  (a + b) + c
             let x = right.unpack_string_literal()?;
             results.push(x.to_owned());
-            match left.node {
-                Expr::Op(ref left2, ref op2, ref right2) => {
+            match &left.node {
+                Expr::Op(left2, op2, right2) => {
                     op = *op2;
                     left = left2;
                     right = right2;
