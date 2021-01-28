@@ -21,6 +21,7 @@ pub use types::{LineColSpan, Lint};
 use crate::{analysis::types::LintT, syntax::AstModule};
 
 mod bind;
+mod dubious;
 mod exported;
 mod flow;
 mod incompatible;
@@ -35,6 +36,7 @@ pub fn lint(module: &AstModule, globals: Option<&[&str]>) -> Vec<Lint> {
             .into_iter()
             .map(LintT::erase),
     );
+    res.extend(dubious::dubious(module).into_iter().map(LintT::erase));
     res.extend(
         names::name_warnings(module, globals)
             .into_iter()

@@ -1164,7 +1164,8 @@ not ("one" in range(10))
 #[test]
 fn test_dict_with_duplicates() {
     // In Go Starlark this is a runtime error.
-    // Doesn't seem unreasonable.
+    // We match Python instead, but have a lint for duplicate dictionary fields.
+    // I think either is arguable, but have added a linter to remove the worst offenders.
     assert::pass("assert_eq({1: 1, 1: 2}[1], 2)");
 }
 
