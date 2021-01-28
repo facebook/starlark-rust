@@ -22,7 +22,7 @@ use crate::syntax::ast::{AstExpr, AstStmt, AstString, Clause, Expr, Parameter, S
 use either::Either;
 
 impl Stmt {
-    pub fn visit_children<'a>(&'a self, mut f: impl FnMut(Either<&'a AstStmt, &'a AstExpr>)) {
+    pub fn visit_children<'a>(&'a self, mut f: impl FnMut(Either<&'a Box<AstStmt>, &'a AstExpr>)) {
         match self {
             Stmt::Statements(xs) => xs.iter().for_each(|x| f(Either::Left(x))),
             Stmt::If(condition, then_block) => {
@@ -62,7 +62,7 @@ impl Stmt {
         }
     }
 
-    pub fn visit_stmt<'a>(&'a self, mut f: impl FnMut(&'a AstStmt)) {
+    pub fn visit_stmt<'a>(&'a self, mut f: impl FnMut(&'a Box<AstStmt>)) {
         self.visit_children(|x| match x {
             Either::Left(x) => f(x),
             Either::Right(_) => {} // Nothing to do
@@ -72,7 +72,7 @@ impl Stmt {
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
         // Note the &mut impl on f, it's subtle, see
         // https://stackoverflow.com/questions/54613966/error-reached-the-recursion-limit-while-instantiating-funcclosure
-        fn pick<'a>(x: Either<&'a AstStmt, &'a AstExpr>, f: &mut impl FnMut(&'a AstExpr)) {
+        fn pick<'a>(x: Either<&'a Box<AstStmt>, &'a AstExpr>, f: &mut impl FnMut(&'a AstExpr)) {
             match x {
                 Either::Left(x) => x.visit_children(|x| pick(x, f)),
                 Either::Right(x) => f(x),
@@ -83,10 +83,10 @@ impl Stmt {
 
     pub fn visit_stmt_result<E>(
         &self,
-        mut f: impl FnMut(&AstStmt) -> Result<(), E>,
+        mut f: impl FnMut(&Box<AstStmt>) -> Result<(), E>,
     ) -> Result<(), E> {
         let mut result = Ok(());
-        let f2 = |x: &AstStmt| {
+        let f2 = |x: &Box<AstStmt>| {
             if result.is_ok() {
                 result = f(x);
             }

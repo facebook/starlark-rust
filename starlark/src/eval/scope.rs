@@ -113,7 +113,11 @@ impl<'a> Scope<'a> {
         self.module_name
     }
 
-    pub fn enter_module(module_name: &'a str, module: &'a MutableNames, code: &AstStmt) -> Self {
+    pub fn enter_module(
+        module_name: &'a str,
+        module: &'a MutableNames,
+        code: &Box<AstStmt>,
+    ) -> Self {
         let mut locals = HashMap::new();
         Stmt::collect_defines(code, &mut locals);
         let mut module_private = ScopeNames::default();
@@ -140,7 +144,7 @@ impl<'a> Scope<'a> {
         (self.module.slot_count(), scope.used)
     }
 
-    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &AstStmt) {
+    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &Box<AstStmt>) {
         let mut names = ScopeNames::default();
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the

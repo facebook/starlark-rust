@@ -119,14 +119,14 @@ pub fn parse_lexer<T1: Iterator<Item = LexerItem>, T2: LexerIntoIter<T1>>(
 }
 
 impl AstModule {
-    fn create(codemap: CodeMap, statement: AstStmt) -> anyhow::Result<AstModule> {
+    fn create(codemap: CodeMap, statement: Box<AstStmt>) -> anyhow::Result<AstModule> {
         let codemap = Arc::new(codemap);
         Stmt::validate_break_continue(&codemap, &statement)?;
         Ok(AstModule { codemap, statement })
     }
 
     pub fn collect_loads(&self) -> Vec<&str> {
-        fn f<'a>(ast: &'a AstStmt, vec: &mut Vec<&'a str>) {
+        fn f<'a>(ast: &'a Box<AstStmt>, vec: &mut Vec<&'a str>) {
             match ast.node {
                 Stmt::Load(ref module, ..) => vec.push(&module.node),
                 Stmt::Statements(ref stmts) => {

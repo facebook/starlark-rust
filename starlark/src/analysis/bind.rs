@@ -138,7 +138,7 @@ fn flow(res: &mut Vec<Bind>) {
     res.push(Bind::Flow)
 }
 
-fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
+fn stmt(x: &Box<AstStmt>, res: &mut Vec<Bind>) {
     match &***x {
         Stmt::Statements(xs) => {
             for x in xs {

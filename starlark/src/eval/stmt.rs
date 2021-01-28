@@ -250,7 +250,7 @@ fn before_stmt(span: Span, context: &mut EvaluationContext) {
 impl Stmt {
     // Collect all the variables that are defined in this scope
     pub(crate) fn collect_defines<'a>(
-        stmt: &'a AstStmt,
+        stmt: &'a Box<AstStmt>,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         match stmt.node {
@@ -276,7 +276,7 @@ impl Stmt {
         }
     }
 
-    fn flatten_statements(xs: Vec<AstStmt>) -> Vec<AstStmt> {
+    fn flatten_statements(xs: Vec<Box<AstStmt>>) -> Vec<Box<AstStmt>> {
         let mut res = Vec::with_capacity(xs.len());
         for x in xs.into_iter() {
             match x.node {
@@ -289,7 +289,7 @@ impl Stmt {
 }
 
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> EvalCompiled {
+    pub(crate) fn stmt(&mut self, stmt: Box<AstStmt>) -> EvalCompiled {
         let span = stmt.span;
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {

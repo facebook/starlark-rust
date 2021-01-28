@@ -48,8 +48,8 @@ impl LintWarning for FlowIssue {
     }
 }
 
-fn returns(x: &AstStmt) -> Vec<(Span, Option<&AstExpr>)> {
-    fn f<'a>(x: &'a AstStmt, res: &mut Vec<(Span, Option<&'a AstExpr>)>) {
+fn returns(x: &Box<AstStmt>) -> Vec<(Span, Option<&AstExpr>)> {
+    fn f<'a>(x: &'a Box<AstStmt>, res: &mut Vec<(Span, Option<&'a AstExpr>)>) {
         match &***x {
             Stmt::Return(ret) => res.push((x.span, ret.as_ref())),
             Stmt::Def(..) => {} // Do not descend
@@ -73,7 +73,7 @@ fn is_fail(x: &AstExpr) -> bool {
     }
 }
 
-fn final_return(x: &AstStmt) -> bool {
+fn final_return(x: &Box<AstStmt>) -> bool {
     match &***x {
         Stmt::Return(_) => true,
         Stmt::Expression(x) if is_fail(x) => true,
@@ -96,7 +96,7 @@ fn require_return_expression(ret_type: &Option<AstExpr>) -> Option<Span> {
     }
 }
 
-fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+fn check_stmt(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
     match &***x {
         Stmt::Def(name, _params, ret_type, body) => {
             let rets = returns(body);
@@ -133,13 +133,13 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     }
 }
 
-fn stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+fn stmt(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
     check_stmt(codemap, x, res);
     x.visit_stmt(|x| stmt(codemap, x, res));
 }
 
 // Returns true if the code aborts this sequence early, due to return, fail, break or continue
-fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) -> bool {
+fn reachable(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) -> bool {
     match &***x {
         Stmt::Break | Stmt::Continue | Stmt::Return(_) => true,
         Stmt::Expression(x) => is_fail(x),
@@ -180,8 +180,8 @@ fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) ->
 
 // If you have a definition which ends with return, or a loop which ends with continue
 // that is a useless statement that just
-fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
-    fn check(is_loop: bool, codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+fn redundant(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
+    fn check(is_loop: bool, codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
         match &***x {
             Stmt::Continue if is_loop => res.push(LintT::new(
                 codemap.look_up_span(x.span),
@@ -203,7 +203,7 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
         }
     }
 
-    fn f(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+    fn f(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
         match &***x {
             Stmt::For(_, _, body) => check(true, codemap, body, res),
             Stmt::Def(_, _, _, body) => check(false, codemap, body, res),
@@ -216,9 +216,9 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     x.visit_stmt(|x| f(codemap, x, res));
 }
 
-fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
+fn misplaced_load(codemap: &CodeMap, x: &Box<AstStmt>, res: &mut Vec<LintT<FlowIssue>>) {
     // accumulate all statements at the top-level
-    fn top_statements<'a>(x: &'a AstStmt, stmts: &mut Vec<&'a AstStmt>) {
+    fn top_statements<'a>(x: &'a Box<AstStmt>, stmts: &mut Vec<&'a Box<AstStmt>>) {
         match &***x {
             Stmt::Statements(xs) => {
                 for x in xs {

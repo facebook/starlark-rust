@@ -93,7 +93,6 @@
 #![cfg_attr(feature = "custom_linter", plugin(linter))]
 //
 // Good reasons
-#![allow(clippy::boxed_local)] // Things like AstExpr are in a Box
 #![allow(clippy::new_ret_no_self)] // We often return Value, even though its morally a Self
 #![allow(clippy::needless_return)] // Mixing explicit returns with implicit ones sometimes looks odd
 // Disagree these are good hints
@@ -106,6 +105,9 @@
 #![allow(clippy::needless_lifetimes)]
 // FIXME: Temporary
 #![allow(clippy::useless_transmute)] // Seems to be a clippy bug, but we should be using less transmute anyway
+#![allow(clippy::boxed_local)] // Should remove some boxes
+#![allow(clippy::vec_box)] // Should remove some boxes
+#![allow(clippy::borrowed_box)] // Should remove some boxes
 
 #[macro_use]
 extern crate gazebo;

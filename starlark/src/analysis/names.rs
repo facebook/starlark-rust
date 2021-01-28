@@ -203,7 +203,7 @@ fn unassigned_variable(codemap: &CodeMap, scope: &Scope, res: &mut Vec<LintT<Nam
 // There's no reason to make a def or lambda and give it an underscore name not at the top level
 fn inappropriate_underscore(
     codemap: &CodeMap,
-    x: &AstStmt,
+    x: &Box<AstStmt>,
     top: bool,
     res: &mut Vec<LintT<NameWarning>>,
 ) {

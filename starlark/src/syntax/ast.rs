@@ -34,7 +34,7 @@ pub type AstString = Spanned<String>;
 pub type AstParameter = Spanned<Parameter>;
 pub type AstClause = Spanned<Clause>;
 pub type AstInt = Spanned<i32>;
-pub type AstStmt = Box<Spanned<Stmt>>;
+pub type AstStmt = Spanned<Stmt>;
 
 // Wrapper around an AstModule. Must have been compiled.
 #[derive(Derivative)]
@@ -42,7 +42,7 @@ pub type AstStmt = Box<Spanned<Stmt>>;
 pub struct AstModule {
     #[derivative(Debug = "ignore")]
     pub(crate) codemap: Arc<CodeMap>,
-    pub(crate) statement: AstStmt,
+    pub(crate) statement: Box<AstStmt>,
 }
 
 pub(crate) trait ToAst<T> {
@@ -175,15 +175,15 @@ pub enum Stmt {
     Return(Option<AstExpr>),
     Expression(AstExpr),
     Assign(AstExpr, AssignOp, AstExpr),
-    Statements(Vec<AstStmt>),
-    If(AstExpr, AstStmt),
-    IfElse(AstExpr, AstStmt, AstStmt),
-    For(AstExpr, AstExpr, AstStmt),
-    Def(AstString, Vec<AstParameter>, Option<AstExpr>, AstStmt),
+    Statements(Vec<Box<AstStmt>>),
+    If(AstExpr, Box<AstStmt>),
+    IfElse(AstExpr, Box<AstStmt>, Box<AstStmt>),
+    For(AstExpr, AstExpr, Box<AstStmt>),
+    Def(AstString, Vec<AstParameter>, Option<AstExpr>, Box<AstStmt>),
     // The Visibility of a Load is implicit from the Dialect, not written by a user
     Load(AstString, Vec<(AstString, AstString)>, Visibility),
 }
-to_ast_trait!(Stmt, AstStmt, Box);
+to_ast_trait!(Stmt, Box<AstStmt>, Box);
 
 impl Display for BinOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

@@ -21,7 +21,7 @@ use crate::syntax::{
 };
 use codemap::Span;
 
-fn go(x: &AstStmt, res: &mut Vec<Span>) {
+fn go(x: &Box<AstStmt>, res: &mut Vec<Span>) {
     match &***x {
         Stmt::Statements(_) => {} // These are not interesting statements that come up
         _ => res.push(x.span),

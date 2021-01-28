@@ -141,7 +141,7 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
     }
 
     fn stmt<'a>(
-        x: &'a AstStmt,
+        x: &'a Box<AstStmt>,
         codemap: &CodeMap,
         defined: &mut HashMap<&'a str, (Span, bool)>,
         exported: &mut HashSet<&'a str>,

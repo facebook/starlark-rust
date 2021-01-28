@@ -95,7 +95,7 @@ impl Compiler<'_> {
         name: &str,
         params: Vec<AstParameter>,
         return_type: Option<AstExpr>,
-        suite: AstStmt,
+        suite: Box<AstStmt>,
     ) -> EvalCompiled {
         let function_name = format!("{}.{}", self.scope.module_name(), name);
 
