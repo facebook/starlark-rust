@@ -254,28 +254,28 @@ impl Display for AstLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AstLiteral::IntLiteral(i) => i.node.fmt(f),
-            AstLiteral::StringLiteral(ref s) => fmt_string_literal(f, &s.node),
+            AstLiteral::StringLiteral(s) => fmt_string_literal(f, &s.node),
         }
     }
 }
 
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match *self {
-            Expr::Tuple(ref e) => {
+        match self {
+            Expr::Tuple(e) => {
                 f.write_str("(")?;
                 comma_separated_fmt(f, e, |x, f| x.node.fmt(f), true)?;
                 f.write_str(")")
             }
-            Expr::Dot(ref e, ref s) => write!(f, "{}.{}", e.node, s.node),
-            Expr::Lambda(ref params, ref e) => {
+            Expr::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
+            Expr::Lambda(params, e) => {
                 f.write_str("(lambda ")?;
                 comma_separated_fmt(f, params, |x, f| x.node.fmt(f), false)?;
                 f.write_str(": ")?;
                 e.node.fmt(f)?;
                 f.write_str(")")
             }
-            Expr::Call(ref e, ref pos, ref named, ref args, ref kwargs) => {
+            Expr::Call(e, pos, named, args, kwargs) => {
                 write!(f, "{}(", e.node)?;
                 let mut first = true;
                 for a in pos {
@@ -285,21 +285,21 @@ impl Display for Expr {
                     first = false;
                     a.node.fmt(f)?;
                 }
-                for &(ref k, ref v) in named {
+                for (k, v) in named {
                     if !first {
                         f.write_str(", ")?;
                     }
                     first = false;
                     write!(f, "{} = {}", k.node, v.node)?;
                 }
-                if let Some(ref x) = args {
+                if let Some(x) = args {
                     if !first {
                         f.write_str(", ")?;
                     }
                     first = false;
                     write!(f, "*{}", x.node)?;
                 }
-                if let Some(ref x) = kwargs {
+                if let Some(x) = kwargs {
                     if !first {
                         f.write_str(", ")?;
                     }
@@ -307,62 +307,60 @@ impl Display for Expr {
                 }
                 f.write_str(")")
             }
-            Expr::ArrayIndirection(ref e, ref i) => write!(f, "{}[{}]", e.node, i.node),
-            Expr::Slice(ref e, ref i1, ref i2, ref i3) => {
+            Expr::ArrayIndirection(e, i) => write!(f, "{}[{}]", e.node, i.node),
+            Expr::Slice(e, i1, i2, i3) => {
                 write!(f, "{}[]", e.node)?;
-                if let Some(ref x) = i1 {
+                if let Some(x) = i1 {
                     write!(f, "{}:", x.node)?
                 } else {
                     f.write_str(":")?
                 }
-                if let Some(ref x) = i2 {
+                if let Some(x) = i2 {
                     x.node.fmt(f)?
                 }
-                if let Some(ref x) = i3 {
+                if let Some(x) = i3 {
                     write!(f, ":{}", x.node)?
                 }
                 Ok(())
             }
-            Expr::Identifier(ref s) => s.node.fmt(f),
-            Expr::Not(ref e) => write!(f, "(not {})", e.node),
-            Expr::Minus(ref e) => write!(f, "-{}", e.node),
-            Expr::Plus(ref e) => write!(f, "+{}", e.node),
-            Expr::Op(ref l, ref op, ref r) => write!(f, "({}{}{})", l.node, op, r.node),
-            Expr::If(ref cond, ref v1, ref v2) => {
-                write!(f, "({} if {} else {})", v1.node, cond.node, v2.node)
-            }
-            Expr::List(ref v) => {
+            Expr::Identifier(s) => s.node.fmt(f),
+            Expr::Not(e) => write!(f, "(not {})", e.node),
+            Expr::Minus(e) => write!(f, "-{}", e.node),
+            Expr::Plus(e) => write!(f, "+{}", e.node),
+            Expr::Op(l, op, r) => write!(f, "({}{}{})", l.node, op, r.node),
+            Expr::If(cond, v1, v2) => write!(f, "({} if {} else {})", v1.node, cond.node, v2.node),
+            Expr::List(v) => {
                 f.write_str("[")?;
                 comma_separated_fmt(f, v, |x, f| x.node.fmt(f), false)?;
                 f.write_str("]")
             }
-            Expr::Dict(ref v) => {
+            Expr::Dict(v) => {
                 f.write_str("{")?;
                 comma_separated_fmt(f, v, |x, f| write!(f, "{}: {}", x.0.node, x.1.node), false)?;
                 f.write_str("}")
             }
-            Expr::ListComprehension(ref e, ref v) => {
+            Expr::ListComprehension(e, v) => {
                 write!(f, "[{}", e.node)?;
                 comma_separated_fmt(f, v, |x, f| x.node.fmt(f), false)?;
                 f.write_str("]")
             }
-            Expr::DictComprehension((ref k, ref v), ref c) => {
+            Expr::DictComprehension((k, v), c) => {
                 write!(f, "{{{}: {}", k.node, v.node)?;
                 comma_separated_fmt(f, c, |x, f| x.node.fmt(f), false)?;
                 f.write_str("}}")
             }
-            Expr::Literal(ref x) => x.fmt(f),
+            Expr::Literal(x) => x.fmt(f),
         }
     }
 }
 
 impl Display for Argument {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match *self {
-            Argument::Positional(ref s) => s.node.fmt(f),
-            Argument::Named(ref s, ref e) => write!(f, "{} = {}", s.node, e.node),
-            Argument::ArgsArray(ref s) => write!(f, "*{}", s.node),
-            Argument::KWArgsDict(ref s) => write!(f, "**{}", s.node),
+        match self {
+            Argument::Positional(s) => s.node.fmt(f),
+            Argument::Named(s, e) => write!(f, "{} = {}", s.node, e.node),
+            Argument::ArgsArray(s) => write!(f, "*{}", s.node),
+            Argument::KWArgsDict(s) => write!(f, "**{}", s.node),
         }
     }
 }
@@ -403,31 +401,31 @@ impl Stmt {
             Stmt::Break => writeln!(f, "{}break", tab),
             Stmt::Continue => writeln!(f, "{}continue", tab),
             Stmt::Pass => writeln!(f, "{}pass", tab),
-            Stmt::Return(Some(ref e)) => writeln!(f, "{}return {}", tab, e.node),
+            Stmt::Return(Some(e)) => writeln!(f, "{}return {}", tab, e.node),
             Stmt::Return(None) => writeln!(f, "{}return", tab),
-            Stmt::Expression(ref e) => writeln!(f, "{}{}", tab, e.node),
-            Stmt::Assign(ref l, ref op, ref r) => writeln!(f, "{}{}{}{}", tab, l.node, op, r.node),
-            Stmt::Statements(ref v) => {
+            Stmt::Expression(e) => writeln!(f, "{}{}", tab, e.node),
+            Stmt::Assign(l, op, r) => writeln!(f, "{}{}{}{}", tab, l.node, op, r.node),
+            Stmt::Statements(v) => {
                 for s in v {
                     s.node.fmt_with_tab(f, tab.clone())?;
                 }
                 Ok(())
             }
-            Stmt::If(ref cond, ref suite) => {
+            Stmt::If(cond, suite) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::IfElse(ref cond, ref suite1, ref suite2) => {
+            Stmt::IfElse(cond, suite1, suite2) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite1.node.fmt_with_tab(f, tab.clone() + "  ")?;
                 writeln!(f, "{}else:", tab)?;
                 suite2.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::For(ref bind, ref coll, ref suite) => {
+            Stmt::For(bind, coll, suite) => {
                 writeln!(f, "{}for {} in {}:", tab, bind.node, coll.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::Def(ref name, ref params, ref return_type, ref suite) => {
+            Stmt::Def(name, params, return_type, suite) => {
                 write!(f, "{}def {}(", tab, name.node)?;
                 comma_separated_fmt(f, params, |x, f| x.node.fmt(f), false)?;
                 f.write_str(")")?;
@@ -437,7 +435,7 @@ impl Stmt {
                 f.write_str(":\n")?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::Load(ref filename, ref v, _) => {
+            Stmt::Load(filename, v, _) => {
                 write!(f, "{}load(", tab)?;
                 fmt_string_literal(f, &filename.node)?;
                 comma_separated_fmt(
