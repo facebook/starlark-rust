@@ -286,7 +286,7 @@ impl Lexer {
         self.peek().unwrap_or((0, '\0')).1
     }
 
-    fn return_none(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn return_none(&mut self) -> Option<LexerItem> {
         // Emit a newline and N DEDENT at EOF
         let p = self.end_pos();
         if !self.last_new_line {
@@ -320,23 +320,23 @@ impl Lexer {
         }
     }
 
-    fn end(&mut self, res: Token) -> Option<<Self as Iterator>::Item> {
+    fn end(&mut self, res: Token) -> Option<LexerItem> {
         let p = self.end_pos();
         assert!(p.0 <= p.1, "{} > {}", p.0, p.1);
         Some(Ok((p.0, res, p.1)))
     }
 
-    fn consume(&mut self, res: Token) -> Option<<Self as Iterator>::Item> {
+    fn consume(&mut self, res: Token) -> Option<LexerItem> {
         self.pop();
         self.end(res)
     }
 
-    fn invalid(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn invalid(&mut self) -> Option<LexerItem> {
         let p = self.end_pos();
         Some(Err(LexerError::InvalidCharacter(p.1)))
     }
 
-    fn internal_next(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn internal_next(&mut self) -> Option<LexerItem> {
         if !self.backlog.is_empty() {
             return self.backlog.pop();
         }
@@ -401,7 +401,7 @@ impl Lexer {
         }
     }
 
-    fn skip_spaces(&mut self, newline: bool) -> Option<<Self as Iterator>::Item> {
+    fn skip_spaces(&mut self, newline: bool) -> Option<LexerItem> {
         loop {
             match self.peek_char() {
                 '\n' | '\r' | '\u{2028}' | '\u{2029}' => {
@@ -452,7 +452,7 @@ impl Lexer {
         }
     }
 
-    fn consume_indentation(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn consume_indentation(&mut self) -> Option<LexerItem> {
         loop {
             self.begin();
             let spaces = match self.consume_spaces() {
@@ -496,7 +496,7 @@ impl Lexer {
         }
     }
 
-    fn consume_nl(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn consume_nl(&mut self) -> Option<LexerItem> {
         self.begin();
         match (self.next_char(), self.peek_char()) {
             ('\n', '\r') | ('\r', '\n') => self.consume(Token::Newline),
@@ -504,7 +504,7 @@ impl Lexer {
         }
     }
 
-    fn consume_identifier_queue(&mut self, head: &str) -> Option<<Self as Iterator>::Item> {
+    fn consume_identifier_queue(&mut self, head: &str) -> Option<LexerItem> {
         let mut result = head.to_owned();
         while self.peek_char().is_alphabetic()
             || self.peek_char().is_digit(10)
@@ -537,7 +537,7 @@ impl Lexer {
         }
     }
 
-    fn consume_identifier(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn consume_identifier(&mut self) -> Option<LexerItem> {
         self.begin();
         assert!(!self.peek_char().is_digit(10));
         self.consume_identifier_queue("")
@@ -555,7 +555,7 @@ impl Lexer {
         }
     }
 
-    fn consume_int_radix(&mut self, radix: u32) -> Option<<Self as Iterator>::Item> {
+    fn consume_int_radix(&mut self, radix: u32) -> Option<LexerItem> {
         let val = self.consume_int_r(radix);
         match val {
             Err(_) => self.invalid(),
@@ -563,7 +563,7 @@ impl Lexer {
         }
     }
 
-    fn consume_int(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn consume_int(&mut self) -> Option<LexerItem> {
         self.begin();
         let cur = self.peek_char();
         if cur == '0' {
@@ -676,7 +676,7 @@ impl Lexer {
         }
     }
 
-    fn consume_string(&mut self, raw: bool) -> Option<<Self as Iterator>::Item> {
+    fn consume_string(&mut self, raw: bool) -> Option<LexerItem> {
         self.begin();
         let mut res = String::new();
         let quote = self.next_char();
@@ -749,7 +749,7 @@ impl Lexer {
         self.end(Token::StringLiteral(res))
     }
 
-    fn consume_token(&mut self) -> Option<<Self as Iterator>::Item> {
+    fn consume_token(&mut self) -> Option<LexerItem> {
         if self.last_new_line && self.parentheses == 0 {
             if let Some(r) = self.consume_indentation() {
                 return Some(r);
