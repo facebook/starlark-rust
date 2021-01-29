@@ -67,9 +67,10 @@ bench
 "#;
 
 pub fn criterion_general_benchmark(c: &mut Criterion, globals: &Globals) {
-    let g = extended_environment().build();
     c.bench_function("empty", |b| b.iter(|| benchmark_run(&globals, EMPTY)));
-    c.bench_function("bubble_sort", |b| b.iter(|| benchmark_run(&g, BUBBLE_SORT)));
+    c.bench_function("bubble_sort", |b| {
+        b.iter(|| benchmark_run(&globals, BUBBLE_SORT))
+    });
 }
 
 pub fn criterion_parsing_benchmark(c: &mut Criterion) {
