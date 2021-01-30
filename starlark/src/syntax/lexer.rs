@@ -101,7 +101,7 @@ pub enum Token {
     BangEqual,        // '!='
     LessEqual,        // '<='
     GreaterEqual,     // '>='
-    Doublestar,       // '**'
+    DoubleStar,       // '**'
     RightArrow,       // '->'
     Equal,            // '='
     LessThan,         // '<'
@@ -163,7 +163,7 @@ impl Display for Token {
             Token::BangEqual => write!(f, "symbol '!='"),
             Token::LessEqual => write!(f, "symbol '<='"),
             Token::GreaterEqual => write!(f, "symbol '>='"),
-            Token::Doublestar => write!(f, "symbol '**'"),
+            Token::DoubleStar => write!(f, "symbol '**'"),
             Token::RightArrow => write!(f, "symbol '->'"),
             Token::Equal => write!(f, "symbol '='"),
             Token::LessThan => write!(f, "symbol '<'"),
@@ -800,7 +800,7 @@ impl Lexer {
                 self.pop();
                 match self.peek_char() {
                     '=' => self.consume(Token::StarEqual),
-                    '*' => self.consume(Token::Doublestar),
+                    '*' => self.consume(Token::DoubleStar),
                     _ => self.end(Token::Star),
                 }
             }
@@ -1002,7 +1002,7 @@ mod tests {
                 Token::BangEqual,
                 Token::LessEqual,
                 Token::GreaterEqual,
-                Token::Doublestar,
+                Token::DoubleStar,
                 Token::Equal,
                 Token::LessThan,
                 Token::GreaterThan,

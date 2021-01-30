@@ -383,7 +383,7 @@ extern {
       "!=" => lexer::Token::BangEqual,
       "<=" => lexer::Token::LessEqual,
       ">=" => lexer::Token::GreaterEqual,
-      "**" => lexer::Token::Doublestar,
+      "**" => lexer::Token::DoubleStar,
       "->" => lexer::Token::RightArrow,
       "=" => lexer::Token::Equal,
       "<" => lexer::Token::LessThan,
