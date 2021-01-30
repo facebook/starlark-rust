@@ -115,12 +115,12 @@ pub enum Token {
     Dot,              // '.'
     Pipe,             // '|'
     // Brackets
-    OpeningBracket,      // '['
-    OpeningCurlyBracket, // '{'
-    OpeningParenthesis,  // '('
-    ClosingBracket,      // ']'
-    ClosingCurlyBracket, // '}'
-    ClosingParenthesis,  // ')'
+    OpeningSquare, // '['
+    OpeningCurly,  // '{'
+    OpeningRound,  // '('
+    ClosingSquare, // ']'
+    ClosingCurly,  // '}'
+    ClosingRound,  // ')'
 
     Reserved(String),      // One of the reserved keywords
     Identifier(String),    // An identifier
@@ -176,12 +176,12 @@ impl Display for Token {
             Token::DoubleSlash => write!(f, "symbol '//'"),
             Token::Dot => write!(f, "symbol '.'"),
             Token::Pipe => write!(f, "symbol '|'"),
-            Token::OpeningBracket => write!(f, "symbol '['"),
-            Token::OpeningCurlyBracket => write!(f, "symbol '{{'"),
-            Token::OpeningParenthesis => write!(f, "symbol '('"),
-            Token::ClosingBracket => write!(f, "symbol ']'"),
-            Token::ClosingCurlyBracket => write!(f, "symbol '}}'"),
-            Token::ClosingParenthesis => write!(f, "symbol ')'"),
+            Token::OpeningSquare => write!(f, "symbol '['"),
+            Token::OpeningCurly => write!(f, "symbol '{{'"),
+            Token::OpeningRound => write!(f, "symbol '('"),
+            Token::ClosingSquare => write!(f, "symbol ']'"),
+            Token::ClosingCurly => write!(f, "symbol '}}'"),
+            Token::ClosingRound => write!(f, "symbol ')'"),
             Token::Reserved(s) => write!(f, "reserved keyword '{}'", s),
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
             Token::IntegerLiteral(i) => write!(f, "integer literal '{}'", i),
@@ -863,27 +863,27 @@ impl Lexer {
             '.' => self.consume(Token::Dot),
             '[' => {
                 self.parentheses += 1;
-                self.consume(Token::OpeningBracket)
+                self.consume(Token::OpeningSquare)
             }
             ']' => {
                 self.parentheses -= 1;
-                self.consume(Token::ClosingBracket)
+                self.consume(Token::ClosingSquare)
             }
             '(' => {
                 self.parentheses += 1;
-                self.consume(Token::OpeningParenthesis)
+                self.consume(Token::OpeningRound)
             }
             ')' => {
                 self.parentheses -= 1;
-                self.consume(Token::ClosingParenthesis)
+                self.consume(Token::ClosingRound)
             }
             '{' => {
                 self.parentheses += 1;
-                self.consume(Token::OpeningCurlyBracket)
+                self.consume(Token::OpeningCurly)
             }
             '}' => {
                 self.parentheses -= 1;
-                self.consume(Token::ClosingCurlyBracket)
+                self.consume(Token::ClosingCurly)
             }
             _ => self.invalid(),
         }
@@ -1013,12 +1013,12 @@ mod tests {
                 Token::Slash,
                 Token::DoubleSlash,
                 Token::Dot,
-                Token::OpeningCurlyBracket,
-                Token::ClosingCurlyBracket,
-                Token::OpeningBracket,
-                Token::ClosingBracket,
-                Token::OpeningParenthesis,
-                Token::ClosingParenthesis,
+                Token::OpeningCurly,
+                Token::ClosingCurly,
+                Token::OpeningSquare,
+                Token::ClosingSquare,
+                Token::OpeningRound,
+                Token::ClosingRound,
                 Token::Pipe,
                 Token::Newline,
             ],
@@ -1128,7 +1128,7 @@ mod tests {
         // But it should not eat everything
         let r = collect_result("[\n# a comment\n]");
         assert_eq!(
-            &[Token::OpeningBracket, Token::ClosingBracket, Token::Newline],
+            &[Token::OpeningSquare, Token::ClosingSquare, Token::Newline],
             &r[..]
         );
     }
@@ -1231,16 +1231,16 @@ def _impl(ctx):
                 Token::Newline,
                 Token::Def,
                 Token::Identifier("_impl".to_owned()),
-                Token::OpeningParenthesis,
+                Token::OpeningRound,
                 Token::Identifier("ctx".to_owned()),
-                Token::ClosingParenthesis,
+                Token::ClosingRound,
                 Token::Colon,
                 Token::Newline,
                 Token::Indent,
                 Token::Identifier("print".to_owned()),
-                Token::OpeningParenthesis,
+                Token::OpeningRound,
                 Token::StringLiteral("Hello, World!".to_owned()),
-                Token::ClosingParenthesis,
+                Token::ClosingRound,
                 Token::Newline,
                 Token::Dedent,
             ],
@@ -1267,23 +1267,23 @@ def _impl(ctx):
             (0, Token::Newline, 1),
             (1, Token::Def, 4),
             (5, Token::Identifier("test".to_owned()), 9),
-            (9, Token::OpeningParenthesis, 10),
+            (9, Token::OpeningRound, 10),
             (10, Token::Identifier("a".to_owned()), 11),
-            (11, Token::ClosingParenthesis, 12),
+            (11, Token::ClosingRound, 12),
             (12, Token::Colon, 13),
             (13, Token::Newline, 14),
             (14, Token::Indent, 16),
             (16, Token::Identifier("fail".to_owned()), 20),
-            (20, Token::OpeningParenthesis, 21),
+            (20, Token::OpeningRound, 21),
             (21, Token::Identifier("a".to_owned()), 22),
-            (22, Token::ClosingParenthesis, 23),
+            (22, Token::ClosingRound, 23),
             (23, Token::Newline, 24),
             (24, Token::Newline, 25),
             (25, Token::Dedent, 25),
             (25, Token::Identifier("test".to_owned()), 29),
-            (29, Token::OpeningParenthesis, 30),
+            (29, Token::OpeningRound, 30),
             (30, Token::StringLiteral("abc".to_owned()), 35),
-            (35, Token::ClosingParenthesis, 36),
+            (35, Token::ClosingRound, 36),
             (36, Token::Newline, 37),
         ];
         let actual: Vec<(u64, Token, u64)> = super::Lexer::new(

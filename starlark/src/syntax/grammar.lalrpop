@@ -396,12 +396,12 @@ extern {
       "." => lexer::Token::Dot,
       "|" => lexer::Token::Pipe,
       // Brackets
-      "[" => lexer::Token::OpeningBracket,
-      "{" => lexer::Token::OpeningCurlyBracket,
-      "(" => lexer::Token::OpeningParenthesis,
-      "]" => lexer::Token::ClosingBracket,
-      "}" => lexer::Token::ClosingCurlyBracket,
-      ")" => lexer::Token::ClosingParenthesis,
+      "[" => lexer::Token::OpeningSquare,
+      "{" => lexer::Token::OpeningCurly,
+      "(" => lexer::Token::OpeningRound,
+      "]" => lexer::Token::ClosingSquare,
+      "}" => lexer::Token::ClosingCurly,
+      ")" => lexer::Token::ClosingRound,
 
 
       "RESERVED" => lexer::Token::Reserved(<String>),
