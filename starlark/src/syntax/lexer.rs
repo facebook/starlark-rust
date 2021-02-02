@@ -123,7 +123,7 @@ pub enum Token {
 
     Reserved(String),      // One of the reserved keywords
     Identifier(String),    // An identifier
-    IntegerLiteral(i32),   // An integer literal (123, 0x1, 0b1011, 0755, ...)
+    IntegerLiteral(i32),   // An integer literal (123, 0x1, 0b1011, 0o755, ...)
     StringLiteral(String), // A string literal
 }
 
@@ -551,7 +551,7 @@ impl Lexer {
                     self.pop();
                     self.consume_int_radix(8)
                 }
-                '0'..='7' => self.consume_int_radix(8),
+                // NEIL: '0'..='7' => self.consume_int_radix(8),
                 'x' | 'X' => {
                     self.pop();
                     self.consume_int_radix(16)
@@ -910,7 +910,7 @@ mod tests {
         assert_eq!(vec![0, 123], get_result("0 123"));
         assert_eq!(vec![0x7f, 0x7f], get_result("0x7F 0x7f"));
         assert_eq!(vec![0b1011, 0b1011], get_result("0B1011 0b1011"));
-        assert_eq!(vec![0o755, 0o755, 0o755], get_result("0o755 0O755 0755"));
+        assert_eq!(vec![0o755, 0o755], get_result("0o755 0O755"));
     }
 
     #[test]
