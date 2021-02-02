@@ -551,7 +551,6 @@ impl Lexer {
                     self.pop();
                     self.consume_int_radix(8)
                 }
-                // NEIL: '0'..='7' => self.consume_int_radix(8),
                 'x' | 'X' => {
                     self.pop();
                     self.consume_int_radix(16)
