@@ -307,7 +307,7 @@ CompTest: AstExpr = {
                       .to_ast(file_span.subspan(l, r)),
     <l:@L> <e1:Expr> "in" <e2:CompTest> <r:@R>
         => Expr::Op(box e1, BinOp::In, box e2).to_ast(file_span.subspan(l, r)),
-    <l:@L> <e1:Expr> "not in" <e2:CompTest> <r:@R>
+    <l:@L> <e1:Expr> "not" "in" <e2:CompTest> <r:@R>
         => Expr::Op(box e1, BinOp::NotIn, box e2).to_ast(file_span.subspan(l, r)),
     Expr
 };
@@ -360,7 +360,6 @@ extern {
       "break" => lexer::Token::Break,
       "for" => lexer::Token::For,
       "not" => lexer::Token::Not,
-      "not in" => lexer::Token::NotIn,
       "continue" => lexer::Token::Continue,
       "if" => lexer::Token::If,
       "or" => lexer::Token::Or,

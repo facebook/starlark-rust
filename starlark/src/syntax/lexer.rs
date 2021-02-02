@@ -77,7 +77,6 @@ pub enum Token {
     Break,    // "break" keyword
     For,      // "for" keyword
     Not,      // "not" keyword
-    NotIn,    // "not in" keyword (taken as keyword)
     Continue, // "continue" keyword
     If,       // "if" keyword
     Or,       // "or" keyword
@@ -140,7 +139,6 @@ impl Display for Token {
             Token::Break => write!(f, "keyword 'break'"),
             Token::For => write!(f, "keyword 'for'"),
             Token::Not => write!(f, "keyword 'not'"),
-            Token::NotIn => write!(f, "keyword 'not in'"),
             Token::Continue => write!(f, "keyword 'continue'"),
             Token::If => write!(f, "keyword 'if'"),
             Token::Or => write!(f, "keyword 'or'"),
@@ -513,28 +511,7 @@ impl Lexer {
             result.push(self.next_char());
         }
         assert!(!result.is_empty());
-        let r = self.end(Self::token_from_identifier(&result));
-        match r {
-            Some(Ok((b, Token::Not, ..))) => {
-                // Special handling of "not in"
-                if let Err(e) = self.consume_spaces() {
-                    return Some(Err(e));
-                }
-                if self.peek_char() == 'i' {
-                    match self.consume_identifier() {
-                        Some(Ok((.., Token::In, e))) => Some(Ok((b, Token::NotIn, e))),
-                        Some(next_id) => {
-                            self.backlog.push(next_id);
-                            r
-                        }
-                        None => r, // This should never happen but it is safe to just return r.
-                    }
-                } else {
-                    r
-                }
-            }
-            _ => r,
-        }
+        self.end(Self::token_from_identifier(&result))
     }
 
     fn consume_identifier(&mut self) -> Option<LexerItem> {
@@ -1039,7 +1016,8 @@ mod tests {
                 Token::Break,
                 Token::For,
                 Token::Not,
-                Token::NotIn,
+                Token::Not,
+                Token::In,
                 Token::Continue,
                 Token::If,
                 Token::Or,
@@ -1078,7 +1056,8 @@ mod tests {
                 Token::IntegerLiteral(6),
                 Token::Not,
                 Token::IntegerLiteral(7),
-                Token::NotIn,
+                Token::Not,
+                Token::In,
                 Token::IntegerLiteral(8),
                 Token::Continue,
                 Token::IntegerLiteral(10),
