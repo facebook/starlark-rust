@@ -1130,14 +1130,14 @@ pub(crate) fn string_members(builder: &mut GlobalsBuilder) {
                     lines.push(s.get(..y).unwrap())
                 }
                 if x == s.len() {
-                    return Ok(lines.owns());
+                    return Ok(lines.owned());
                 }
                 s = s.get(x..).unwrap();
             } else {
                 if !s.is_empty() {
                     lines.push(s);
                 }
-                return Ok(lines.owns());
+                return Ok(lines.owned());
             }
         }
     }
