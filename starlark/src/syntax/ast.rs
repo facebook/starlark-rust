@@ -161,12 +161,12 @@ pub enum Stmt {
     Break,
     Continue,
     Pass,
-    Return(Option<Box<AstExpr>>),
-    Expression(Box<AstExpr>),
+    Return(Option<AstExpr>),
+    Expression(AstExpr),
     Assign(Box<AstExpr>, AssignOp, Box<AstExpr>),
     Statements(Vec<AstStmt>),
-    If(Box<(AstExpr, AstStmt)>),
-    IfElse(Box<(AstExpr, AstStmt, AstStmt)>),
+    If(AstExpr, Box<AstStmt>),
+    IfElse(AstExpr, Box<(AstStmt, AstStmt)>),
     For(Box<(AstExpr, AstExpr, AstStmt)>),
     Def(
         AstString,
@@ -402,11 +402,11 @@ impl Stmt {
                 }
                 Ok(())
             }
-            Stmt::If(box (cond, suite)) => {
+            Stmt::If(cond, box suite) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::IfElse(box (cond, suite1, suite2)) => {
+            Stmt::IfElse(cond, box (suite1, suite2)) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite1.node.fmt_with_tab(f, tab.clone() + "  ")?;
                 writeln!(f, "{}else:", tab)?;

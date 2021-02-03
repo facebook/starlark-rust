@@ -25,11 +25,11 @@ impl Stmt {
     pub fn visit_children<'a>(&'a self, mut f: impl FnMut(Either<&'a AstStmt, &'a AstExpr>)) {
         match self {
             Stmt::Statements(xs) => xs.iter().for_each(|x| f(Either::Left(x))),
-            Stmt::If(box (condition, then_block)) => {
+            Stmt::If(condition, box then_block) => {
                 f(Either::Right(condition));
                 f(Either::Left(then_block));
             }
-            Stmt::IfElse(box (condition, then_block, else_block)) => {
+            Stmt::IfElse(condition, box (then_block, else_block)) => {
                 f(Either::Right(condition));
                 f(Either::Left(then_block));
                 f(Either::Left(else_block));

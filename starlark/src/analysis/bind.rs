@@ -152,13 +152,13 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             flow(res)
         }
         Stmt::Expression(x) => expr(x, res),
-        Stmt::If(box (a, b)) => {
+        Stmt::If(a, box b) => {
             expr(a, res);
             flow(res);
             stmt(b, res);
             flow(res);
         }
-        Stmt::IfElse(box (a, b, c)) => {
+        Stmt::IfElse(a, box (b, c)) => {
             expr(a, res);
             flow(res);
             stmt(b, res);

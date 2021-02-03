@@ -290,7 +290,7 @@ impl Compiler<'_> {
                 let exprs = self.exprs(exprs);
                 box move |context| Ok(context.heap.alloc(tuple::Tuple::new(exprs(context)?)))
             }
-            Expr::Lambda(params, inner) => {
+            Expr::Lambda(params, box inner) => {
                 let suite = Spanned {
                     span: expr.span,
                     node: Stmt::Return(Some(inner)),

@@ -327,7 +327,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Return(Some(e)) => {
-                let e = self.expr(*e);
+                let e = self.expr(e);
                 box move |context| {
                     before_stmt(span, context);
                     Err(EvalException::Return(e(context)?))
@@ -337,7 +337,7 @@ impl Compiler<'_> {
                 before_stmt(span, context);
                 Err(EvalException::Return(Value::new_none()))
             },
-            Stmt::If(box (cond, then_block)) => {
+            Stmt::If(cond, box then_block) => {
                 let cond = self.expr(cond);
                 let then_block = self.stmt(then_block);
                 box move |context| {
@@ -349,7 +349,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Stmt::IfElse(box (cond, then_block, else_block)) => {
+            Stmt::IfElse(cond, box (then_block, else_block)) => {
                 let cond = self.expr(cond);
                 let then_block = self.stmt(then_block);
                 let else_block = self.stmt(else_block);
@@ -380,7 +380,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Expression(e) => {
-                let e = self.expr(*e);
+                let e = self.expr(e);
                 box move |context| {
                     before_stmt(span, context);
                     e(context)

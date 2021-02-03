@@ -22,7 +22,7 @@ use crate::{
         AstModule,
     },
 };
-use codemap::{CodeMap, Span};
+use codemap::{CodeMap, Span, Spanned};
 use gazebo::variants::VariantName;
 use thiserror::Error;
 
@@ -51,7 +51,7 @@ impl LintWarning for FlowIssue {
 fn returns(x: &AstStmt) -> Vec<(Span, Option<&AstExpr>)> {
     fn f<'a>(x: &'a AstStmt, res: &mut Vec<(Span, Option<&'a AstExpr>)>) {
         match &**x {
-            Stmt::Return(ret) => res.push((x.span, ret.as_ref().map(|x| &**x))),
+            Stmt::Return(ret) => res.push((x.span, ret.as_ref())),
             Stmt::Def(..) => {} // Do not descend
             _ => x.visit_stmt(|x| f(x, res)),
         }
@@ -81,7 +81,7 @@ fn final_return(x: &AstStmt) -> bool {
             None => false,
             Some(x) => final_return(x),
         },
-        Stmt::IfElse(box (_, x, y)) => final_return(x) && final_return(y),
+        Stmt::IfElse(_, box (x, y)) => final_return(x) && final_return(y),
         _ => false,
     }
 }
@@ -161,7 +161,7 @@ fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) ->
             }
             false
         }
-        Stmt::IfElse(box (_, x, y)) => {
+        Stmt::IfElse(_, box (x, y)) => {
             let abort1 = reachable(codemap, x, res);
             let abort2 = reachable(codemap, y, res);
             abort1 && abort2
@@ -194,8 +194,8 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
             Stmt::Statements(xs) if !xs.is_empty() => {
                 check(is_loop, codemap, xs.last().unwrap(), res)
             }
-            Stmt::If(box (_, x)) => check(is_loop, codemap, x, res),
-            Stmt::IfElse(box (_, x, y)) => {
+            Stmt::If(_, box x) => check(is_loop, codemap, x, res),
+            Stmt::IfElse(_, box (x, y)) => {
                 check(is_loop, codemap, x, res);
                 check(is_loop, codemap, y, res);
             }
@@ -244,7 +244,10 @@ fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>
                     ))
                 }
             }
-            Stmt::Expression(e) if matches!(&***e, Expr::Literal(AstLiteral::StringLiteral(_))) => {
+            Stmt::Expression(Spanned {
+                node: Expr::Literal(AstLiteral::StringLiteral(_)),
+                ..
+            }) => {
                 // Still allow loads after a literal string (probably documentation)
             }
             _ => allow_loads = false,
