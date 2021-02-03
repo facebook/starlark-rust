@@ -21,7 +21,7 @@ use crate::{
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{context::EvaluationContext, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
-    syntax::ast::{AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
+    syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
         dict::FrozenDict, function::WrappedMethod, list::FrozenList, FrozenHeap, FrozenValue, *,
     },
@@ -91,34 +91,31 @@ fn eval_slice(
     }
 }
 
+enum ArgCompiled {
+    Pos(EvalCompiled),
+    Named(String, Hashed<FrozenValue>, EvalCompiled),
+    Args(EvalCompiled),
+    KWArgs(EvalCompiled),
+}
+
 fn eval_call(
     span: Span,
-    pos: Vec<EvalCompiled>,
-    named: Vec<(String, Hashed<FrozenValue>, EvalCompiled)>,
-    args: Option<EvalCompiled>,
-    kwargs: Option<EvalCompiled>,
+    args: Vec<ArgCompiled>,
 ) -> impl for<'v> Fn(
     FunctionInvoker<'v, '_>,
     Value<'v>,
     &mut EvaluationContext<'v, '_>,
 ) -> Result<Value<'v>, EvalException<'v>> {
     move |mut invoker, function, context| {
-        for expr in &pos {
-            invoker.push_pos(expr(context)?);
-        }
-
-        if let Some(ref x) = args {
-            invoker.push_args(x(context)?, context.heap);
-        }
-
-        // TODO: maybe compute a mapping and store it somewhere?
-        // TODO: could construct the mapping with two sorted sets
-        for (k, kk, v) in named.iter() {
-            invoker.push_named(k, kk.to_hashed_value(), v(context)?);
-        }
-
-        if let Some(ref x) = kwargs {
-            invoker.push_kwargs(x(context)?, context.heap);
+        for x in &args {
+            match x {
+                ArgCompiled::Pos(expr) => invoker.push_pos(expr(context)?),
+                ArgCompiled::Named(k, kk, expr) => {
+                    invoker.push_named(k, kk.to_hashed_value(), expr(context)?)
+                }
+                ArgCompiled::Args(expr) => invoker.push_args(expr(context)?, context.heap),
+                ArgCompiled::KWArgs(expr) => invoker.push_kwargs(expr(context)?, context.heap),
+            }
         }
 
         let res = invoker.invoke(function, Some(span), context);
@@ -364,19 +361,21 @@ impl Compiler<'_> {
                     Either::Right(v) => Ok(context.heap.alloc(v)),
                 }
             }
-            Expr::Call(left, positional, named, args, kwargs) => {
-                let positional = positional.into_map(|x| self.expr(x));
-                let named = named.into_map(|(name, value)| {
-                    let name_value = self
-                        .heap
-                        .alloc(name.node.as_str())
-                        .get_hashed()
-                        .expect("String is Hashable");
-                    (name.node, name_value, self.expr(value))
+            Expr::Call(left, args) => {
+                let args = args.into_map(|x| match x.node {
+                    Argument::Positional(x) => ArgCompiled::Pos(self.expr(x)),
+                    Argument::Named(name, value) => {
+                        let name_value = self
+                            .heap
+                            .alloc(name.node.as_str())
+                            .get_hashed()
+                            .expect("String is Hashable");
+                        ArgCompiled::Named(name.node, name_value, self.expr(value))
+                    }
+                    Argument::ArgsArray(x) => ArgCompiled::Args(self.expr(x)),
+                    Argument::KWArgsDict(x) => ArgCompiled::KWArgs(self.expr(x)),
                 });
-                let args = args.map(|x| self.expr(*x));
-                let kwargs = kwargs.map(|x| self.expr(*x));
-                let call = eval_call(span, positional, named, args, kwargs);
+                let call = eval_call(span, args);
                 match left.node {
                     Expr::Dot(e, s) => {
                         let e = self.expr(*e);

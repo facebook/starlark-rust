@@ -65,7 +65,7 @@ fn returns(x: &AstStmt) -> Vec<(Span, Option<&AstExpr>)> {
 // fail is kind of like a return with error
 fn is_fail(x: &AstExpr) -> bool {
     match &**x {
-        Expr::Call(x, _, _, _, _) => match &***x {
+        Expr::Call(x, _) => match &***x {
             Expr::Identifier(name) => name.node == "fail",
             _ => false,
         },

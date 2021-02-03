@@ -36,7 +36,6 @@ In this section we outline where we don't comply with the [Starlark spec](https:
 * We have plenty of extensions, e.g. type annotations, `lambda`, recursion.
 * We don't have the common extensions of floats, bit operations, byte strings or sets.
 * Our strings are not compliant in several ways, often returning code points instead of singleton strings, and have poor performance.
-* Function arguments are sometimes evaluated in the wrong order, which is visible if their arguments have side effects.
 * We follow proper lexical binding for list comprehensions, so each `for` clause introduces a fresh variable (_deliberately_).
 * We allow comparison between `None` values (_deliberately_).
 * In some cases creating circular data structures may lead to stack overflows.

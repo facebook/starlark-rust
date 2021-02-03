@@ -52,35 +52,35 @@ impl Expr {
     ///
     /// We allow at most one **kwargs.
     pub fn check_call(f: AstExpr, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
-        let mut pos_args = Vec::new();
-        let mut named_args = Vec::new();
-        let mut args_array = None;
-        let mut kwargs_dict = None;
         let mut stage = ArgsStage::Positional;
-        for arg in args {
-            match arg.node {
-                Argument::Positional(s) => {
+        let mut named_args = HashSet::new();
+        for arg in &args {
+            match &arg.node {
+                Argument::Positional(_) => {
                     if stage != ArgsStage::Positional {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
                             message: "positional argument after non positional",
                         });
-                    } else {
-                        pos_args.push(s);
                     }
                 }
-                Argument::Named(n, v) => {
+                Argument::Named(n, _) => {
                     if stage > ArgsStage::Named {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
                             message: "named argument after *args or **kwargs",
                         });
+                    } else if !named_args.insert(&n.node) {
+                        // Check the names are distinct
+                        return Err(LexerError::WrappedError {
+                            span: n.span,
+                            message: "repeated named argument",
+                        });
                     } else {
                         stage = ArgsStage::Named;
-                        named_args.push((n, v));
                     }
                 }
-                Argument::ArgsArray(v) => {
+                Argument::ArgsArray(_) => {
                     if stage > ArgsStage::Named {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
@@ -88,10 +88,9 @@ impl Expr {
                         });
                     } else {
                         stage = ArgsStage::Args;
-                        args_array = Some(box v);
                     }
                 }
-                Argument::KWArgsDict(d) => {
+                Argument::KWArgsDict(_) => {
                     if stage == ArgsStage::Kwargs {
                         return Err(LexerError::WrappedError {
                             span: arg.span,
@@ -99,28 +98,11 @@ impl Expr {
                         });
                     } else {
                         stage = ArgsStage::Kwargs;
-                        kwargs_dict = Some(box d);
                     }
                 }
             }
         }
-        // Now check the names are distinct
-        let mut named_set = HashSet::new();
-        for (name, _) in &named_args {
-            if !named_set.insert(&name.node) {
-                return Err(LexerError::WrappedError {
-                    span: name.span,
-                    message: "repeated named argument",
-                });
-            }
-        }
-        Ok(Expr::Call(
-            box f,
-            pos_args,
-            named_args,
-            args_array,
-            kwargs_dict,
-        ))
+        Ok(Expr::Call(box f, args))
     }
 }
 

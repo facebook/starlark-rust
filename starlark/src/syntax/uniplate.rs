@@ -120,12 +120,9 @@ impl Expr {
         match self {
             Expr::Tuple(xs) => xs.iter().for_each(|x| f(x)),
             Expr::Dot(x, _) => f(x),
-            Expr::Call(a, b, c, d, e) => {
+            Expr::Call(a, b) => {
                 f(a);
-                b.iter().for_each(|x| f(x));
-                c.iter().for_each(|(_, x)| f(x));
-                d.iter().for_each(|x| f(x));
-                e.iter().for_each(|x| f(x));
+                b.iter().for_each(|x| f(x.expr()));
             }
             Expr::ArrayIndirection(box (a, b)) => {
                 f(a);

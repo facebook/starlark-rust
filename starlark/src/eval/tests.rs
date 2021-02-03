@@ -1087,9 +1087,7 @@ def f(*args, **kwargs):
 
 y = f(id(1), id(2), x=id(3), *[id(4)], **dict(z=id(5)))
 assert_eq(y, ((1, 2, 4), dict(x=3, z=5)))
-# FIXME: Starlark specifies we should have 1,2,3,4,5
-# NOTE: Be careful of performance while fixing this
-assert_eq(r, [1, 2, 4, 3, 5])
+assert_eq(r, [1,2,3,4,5])
 "#,
     );
 }
@@ -1282,7 +1280,6 @@ fn test_go() {
             "frozen list",        // Our freeze does nothing
             "called recursively", // We allow recursion
             "hf",                 // We don't support hasfield
-            "[1, 2, 3, 4, 5]", // Skip an argument evaluate test, because of test_argument_evaluation_order
         ],
     ));
     // Skip int.star, a lot of bit mask stuff, floats and int's outside our range

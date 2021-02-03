@@ -39,9 +39,8 @@ pub type AstStmt = Spanned<Stmt>;
 
 // We don't care _that_ much about the size of these structures,
 // but we equally don't want to regress without noticing.
-// If it wasn't for Call (which has the wrong data in it) AstExpr would be 7 words.
 assert_eq_size!(AstStmt, [usize; 11]);
-assert_eq_size!(AstExpr, [usize; 11]);
+assert_eq_size!(AstExpr, [usize; 7]);
 
 // Wrapper around an AstModule. Must have been compiled.
 #[derive(Derivative)]
@@ -90,13 +89,7 @@ pub enum AstLiteral {
 pub enum Expr {
     Tuple(Vec<AstExpr>),
     Dot(Box<AstExpr>, AstString),
-    Call(
-        Box<AstExpr>,
-        Vec<AstExpr>,
-        Vec<(AstString, AstExpr)>,
-        Option<Box<AstExpr>>,
-        Option<Box<AstExpr>>,
-    ),
+    Call(Box<AstExpr>, Vec<AstArgument>),
     ArrayIndirection(Box<(AstExpr, AstExpr)>),
     Slice(
         Box<AstExpr>,
@@ -185,6 +178,17 @@ pub enum Stmt {
     Load(AstString, Vec<(AstString, AstString)>, Visibility),
 }
 impl ToAst for Stmt {}
+
+impl Argument {
+    pub fn expr(&self) -> &AstExpr {
+        match self {
+            Argument::Positional(x) => x,
+            Argument::Named(_, x) => x,
+            Argument::ArgsArray(x) => x,
+            Argument::KWArgsDict(x) => x,
+        }
+    }
+}
 
 impl Display for BinOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -282,35 +286,13 @@ impl Display for Expr {
                 e.node.fmt(f)?;
                 f.write_str(")")
             }
-            Expr::Call(e, pos, named, args, kwargs) => {
+            Expr::Call(e, args) => {
                 write!(f, "{}(", e.node)?;
-                let mut first = true;
-                for a in pos {
-                    if !first {
+                for (i, x) in args.iter().enumerate() {
+                    if i != 0 {
                         f.write_str(", ")?;
                     }
-                    first = false;
-                    a.node.fmt(f)?;
-                }
-                for (k, v) in named {
-                    if !first {
-                        f.write_str(", ")?;
-                    }
-                    first = false;
-                    write!(f, "{} = {}", k.node, v.node)?;
-                }
-                if let Some(x) = args {
-                    if !first {
-                        f.write_str(", ")?;
-                    }
-                    first = false;
-                    write!(f, "*{}", x.node)?;
-                }
-                if let Some(x) = kwargs {
-                    if !first {
-                        f.write_str(", ")?;
-                    }
-                    write!(f, "**{}", x.node)?;
+                    x.fmt(f)?;
                 }
                 f.write_str(")")
             }

@@ -185,6 +185,7 @@ impl<V> Parameters<V> {
         ParametersCollect {
             params: me,
             slots: vec![ValueRef::new_unassigned(); cmp::max(slots, len)],
+            only_positional: true,
             next_position: 0,
             args: Vec::new(),
             kwargs: SmallMap::new(),
@@ -245,6 +246,9 @@ pub struct ParametersCollect<'v, 'a, V> {
     params: ARef<'a, Parameters<V>>,
     slots: Vec<ValueRef<'v>>,
 
+    /// Initially true, becomes false once we see something not-positional.
+    /// Required since we can fast-path positional if there are no conflicts.
+    only_positional: bool,
     next_position: usize,
     args: Vec<Value<'v>>,
     kwargs: SmallMap<Value<'v>, Value<'v>>,
@@ -261,14 +265,27 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
 
     pub fn positional(&mut self, val: Value<'v>) {
         if self.next_position < self.params.positional {
-            self.slots[self.next_position].set(val);
-            self.next_position += 1;
+            // Checking unassigned is moderately expensive, so use only_positional
+            // which knows we have never set anything below next_position
+            if self.only_positional || self.slots[self.next_position].is_unassigned() {
+                self.slots[self.next_position].set(val);
+                self.next_position += 1;
+            } else {
+                // Occurs if we have def f(a), then a=1, *[2]
+                self.set_err(
+                    FunctionError::RepeatedParameter {
+                        name: self.params.names[self.next_position].0.clone(),
+                    }
+                    .into(),
+                );
+            }
         } else {
             self.args.push(val);
         }
     }
 
     pub fn named(&mut self, name: &str, name_value: Hashed<Value<'v>>, val: Value<'v>) {
+        self.only_positional = false;
         // Safe to use new_unchecked because hash for the Value and str are the same
         let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
         let repeated = match self.params.indices.get_hashed(name_hash) {
