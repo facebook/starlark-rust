@@ -31,6 +31,13 @@ use either::Either;
 use function::{FunctionInvoker, NativeAttribute};
 use gazebo::prelude::*;
 use std::{cmp::Ordering, collections::HashMap};
+use thiserror::Error;
+
+#[derive(Debug, Clone, Error)]
+pub enum EvalError {
+    #[error("Dictionary key repeated for `{0}`")]
+    DuplicateDictionaryKey(String),
+}
 
 fn eval_compare(
     span: Span,
@@ -328,17 +335,29 @@ impl Compiler<'_> {
                             v.compile(self.heap),
                         );
                     }
-                    let result = self.heap.alloc(FrozenDict::new(res));
-                    box move |context| Ok(context.heap.alloc_thaw_on_write(result))
-                } else {
-                    let v = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
-                    box move |context| {
-                        let mut r = SmallMap::with_capacity(v.len());
-                        for (k, v) in v.iter() {
-                            r.insert_hashed(k(context)?.get_hashed()?, v(context)?);
-                        }
-                        Ok(context.heap.alloc(dict::Dict::new(r)))
+                    // If we lost some elements, then there are duplicates, so don't take the fast-literal
+                    // path and go down the slow runtime path (which will raise the error).
+                    // We have a lint that will likely fire on this issue (and others).
+                    if res.len() == lits.len() {
+                        let result = self.heap.alloc(FrozenDict::new(res));
+                        return box move |context| Ok(context.heap.alloc_thaw_on_write(result));
                     }
+                }
+
+                let v = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                box move |context| {
+                    let mut r = SmallMap::with_capacity(v.len());
+                    for (k, v) in v.iter() {
+                        let k = k(context)?;
+                        if r.insert_hashed(k.get_hashed()?, v(context)?).is_some() {
+                            thrw(
+                                Err(EvalError::DuplicateDictionaryKey(k.to_string()).into()),
+                                span,
+                                context,
+                            )?;
+                        }
+                    }
+                    Ok(context.heap.alloc(dict::Dict::new(r)))
                 }
             }
             Expr::If(box (cond, then_expr, else_expr)) => {

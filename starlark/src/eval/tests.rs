@@ -1163,10 +1163,11 @@ not ("one" in range(10))
 
 #[test]
 fn test_dict_with_duplicates() {
-    // In Go Starlark this is a runtime error.
-    // We match Python instead, but have a lint for duplicate dictionary fields.
-    // I think either is arguable, but have added a linter to remove the worst offenders.
-    assert::pass("assert_eq({1: 1, 1: 2}[1], 2)");
+    // In Starlark spec this is a runtime error. In Python it's fine.
+    // We make it a runtime error, plus have a lint that checks for it statically.
+    assert::fails("{40+2: 2, 6*7: 3}", &["key repeated", "42"]);
+    // Also check we fail if the entire dictionary is static (a different code path).
+    assert::fails("{42: 2, 42: 3}", &["key repeated", "42"]);
 }
 
 #[test]
@@ -1258,7 +1259,6 @@ fn test_go() {
             test_case!("dict.star"),
             &[
                 "unknown binary op: dict \\\\+ dict",   // We support {} + {}
-                "duplicate key: \"bb\"", // We allow {1: 1, 1: 2}, as per test_dict_with_duplicates
                 "cannot insert into frozen hash table", // We don't actually have freeze
                 "cannot clear frozen hash table",
                 "a, x[0] = x",     // Our bug, see test_self_assign
@@ -1268,7 +1268,7 @@ fn test_go() {
         ),
         &[
             "Verify position of an \"unhashable key\"", // FIXME: We should give a better error message
-            "Verify position of a \"duplicate key\"", // Not an error for us, as per test_dict_with_duplicates
+            "Verify position of a \"duplicate key\"",   // FIXME: Give a better line number
             "Verify position of an \"unhashable key\"", // FIXME: we should do better
         ],
     );
