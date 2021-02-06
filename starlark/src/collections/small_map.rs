@@ -749,14 +749,8 @@ mod tests {
         assert_eq!(m2.is_empty(), false);
         assert_eq!(m2.len(), 26);
 
-        assert_eq!(
-            m1.iter().eq_by(entries1, |m, e| m.0 == &e.0 && m.1 == &e.1),
-            true
-        );
-        assert_eq!(
-            m2.iter().eq_by(entries2, |m, e| m.0 == &e.0 && m.1 == &e.1),
-            true
-        );
+        assert_eq!(m1.clone().into_iter().eq(entries1), true);
+        assert_eq!(m2.clone().into_iter().eq(entries2), true);
         assert_eq!(m1.iter().eq(m2.iter()), false);
         assert_eq!(m1, m1);
         assert_eq!(m2, m2);
