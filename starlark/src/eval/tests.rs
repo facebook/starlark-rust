@@ -901,7 +901,7 @@ load('m', 'values', 'hashes_unfrozen')
 hashes_frozen = [hash(x) for x in values]
 assert_eq(hashes_unfrozen, hashes_frozen)
 "#,
-    )
+    );
 }
 
 #[test]

@@ -194,7 +194,7 @@ assert_eq([], filter(positive, [-1, -2, -3]))
 assert_eq([1, 2, 3], filter(positive, [-1, 1, 2, -2, -3, 3]))
 assert_eq(["hello world!"], filter(contains_hello, ["hello world!", "goodbye"]))
 "#,
-        )
+        );
     }
 
     #[test]
@@ -209,7 +209,7 @@ assert_eq([1,2,3], map(int, ["1","2","3"]))
 assert_eq(["0","1","2"], map(str, range(3)))
 assert_eq(["11",8], map(double, ["1",4]))
 "#,
-        )
+        );
     }
 
     #[test]

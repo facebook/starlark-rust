@@ -128,6 +128,6 @@ foo(v[0](host="localhost", port=80))"#,
             r#"
 rec_type = record(host=String, port=field(Int, 80), mask=Int)
 assert_eq(rec_type(host="localhost", mask=255), rec_type(host="localhost", port=80, mask=255))"#,
-        )
+        );
     }
 }

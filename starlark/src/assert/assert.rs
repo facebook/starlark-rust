@@ -28,7 +28,7 @@ use crate::{
     values::{
         none::{NoneType, NONE},
         structs::Struct,
-        Value,
+        OwnedFrozenValue, Value,
     },
 };
 use anyhow::anyhow;
@@ -261,9 +261,11 @@ impl Assert {
         self.fails_with_name("fails", program, msgs)
     }
 
-    pub fn pass(&self, program: &str) {
+    pub fn pass(&self, program: &str) -> OwnedFrozenValue {
         let env = Module::new("pass");
-        self.execute_unwrap("pass", "test.bzl", program, &env);
+        let res = self.execute_unwrap("pass", "test.bzl", program, &env);
+        env.set("_", res);
+        env.freeze().get("_").unwrap()
     }
 
     pub fn is_true(&self, program: &str) {
@@ -384,11 +386,11 @@ pub fn fail_with(module_name: &str, module_contents: &str, program: &str, msg: &
 }
 
 /// A program that must execute successfully without an exception. Often uses
-/// assert_eq.
+/// assert_eq. Returns the resulting value.
 ///
 /// ```
 /// starlark::assert::pass("assert_eq(1, 1)");
 /// ```
-pub fn pass(program: &str) {
+pub fn pass(program: &str) -> OwnedFrozenValue {
     Assert::new().pass(program)
 }

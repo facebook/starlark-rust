@@ -172,6 +172,6 @@ mod test {
 
         let mut a = Assert::new();
         a.globals_add(global);
-        a.pass("x = [1,2,3]; breakpoint(); print(x)")
+        a.pass("x = [1,2,3]; breakpoint(); print(x)");
     }
 }

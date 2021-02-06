@@ -102,6 +102,6 @@ x = enum_type("option1")
 assert_eq(str(enum_type), "enum(\"option1\", \"option2\")")
 assert_eq(str(x), "\"option1\"")
 "#,
-        )
+        );
     }
 }

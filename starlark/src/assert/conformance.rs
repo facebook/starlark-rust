@@ -87,7 +87,9 @@ impl ConformanceTest {
         }
 
         match &self.error {
-            None => assert.pass(&self.code),
+            None => {
+                assert.pass(&self.code);
+            }
             Some((line, _msg)) => {
                 // We don't actually check error messages, since these tests were taken from upstream
                 // and our error messages are different
