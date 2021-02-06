@@ -142,13 +142,24 @@ impl<'v, 'a> ParameterParser<'v, 'a> {
 }
 
 /// A native function that can be evaluated
-pub trait NativeFunc = for<'v> Fn(
-    &mut EvaluationContext<'v, '_>,
-    ParameterParser<'v, '_>,
-) -> anyhow::Result<Value<'v>>
+pub trait NativeFunc:
+    for<'v> Fn(&mut EvaluationContext<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
-    + 'static;
+    + 'static
+{
+}
+
+impl<T> NativeFunc for T where
+    T: for<'v> Fn(
+        &mut EvaluationContext<'v, '_>,
+        ParameterParser<'v, '_>,
+    ) -> anyhow::Result<Value<'v>>
+        + Send
+        + Sync
+        + 'static
+{
+}
 
 /// A function that can be evaluated which can also collect parameters
 pub(crate) struct NativeFunctionInvoker<'v, 'a> {
@@ -158,18 +169,8 @@ pub(crate) struct NativeFunctionInvoker<'v, 'a> {
 
 impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
     pub fn new<F: NativeFunc>(func: ARef<'a, NativeFunction<F>>) -> Self {
-        // Important we write out the full trait alias in the return type of convert, or it fails to type check
-        fn convert<F: NativeFunc>(
-            x: &F,
-        ) -> &(
-             dyn for<'v> Fn(
-            &mut EvaluationContext<'v, '_>,
-            ParameterParser<'v, '_>,
-        ) -> anyhow::Result<Value<'v>>
-                 + Send
-                 + Sync
-                 + 'static
-         ) {
+        // Used to help guide the type checker
+        fn convert(x: &impl NativeFunc) -> &(dyn NativeFunc) {
             x
         }
 

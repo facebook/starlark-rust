@@ -85,7 +85,6 @@
 #![feature(box_syntax)]
 #![feature(hash_set_entry)]
 #![feature(iter_order_by)]
-#![feature(trait_alias)]
 #![feature(try_blocks)]
 //
 // Plugins
