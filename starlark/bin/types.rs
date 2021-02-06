@@ -85,7 +85,7 @@ impl Message {
                     code: code(),
                     severity: Severity::Error,
                     name: "error".to_owned(),
-                    description: format!("{:#?}", message),
+                    description: format!("{:#}", message),
                 }
             }
             _ => Self {
@@ -94,7 +94,7 @@ impl Message {
                 code: code(),
                 severity: Severity::Error,
                 name: "error".to_owned(),
-                description: format!("{:#?}", x),
+                description: format!("{:#}", x),
             },
         }
     }
