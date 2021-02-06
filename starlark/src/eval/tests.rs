@@ -1093,6 +1093,21 @@ assert_eq(r, [1,2,3,4,5])
 }
 
 #[test]
+// FIXME: All of these tests are broken with either compile-time or runtime failures.
+// Our lexing needs some work.
+#[ignore]
+fn test_escape_characters() {
+    assert_eq!(
+        assert::pass(r#"'\a\b\f\n\r\t\v'"#).to_string(),
+        "\x07\x08\x0C\x0A\x0D\x09\x0B"
+    );
+    assert_eq!(assert::pass(r#"\0"#).to_string(), "\x00");
+    assert_eq!(assert::pass(r#"\12"#).to_string(), "\n");
+    assert_eq!(assert::pass(r#"\101-\132"#).to_string(), "A-Z");
+    assert_eq!(assert::pass(r#"\119"#).to_string(), "\t9");
+}
+
+#[test]
 fn test_deallocation() {
     // Check that we really do deallocate values we create
     static COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
