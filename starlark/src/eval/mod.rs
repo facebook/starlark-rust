@@ -236,7 +236,7 @@ fn eval<'v, T: FileLoader>(
     path: &str,
     content: &str,
     dialect: &Dialect,
-    env: &'v mut Module,
+    env: &'v Module,
     globals: &Globals,
     file_loader: T,
 ) -> anyhow::Result<Value<'v>> {

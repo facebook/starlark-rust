@@ -60,7 +60,7 @@ pub fn eval_no_load<'v>(
     path: &str,
     content: &str,
     dialect: &Dialect,
-    env: &'v mut Module,
+    env: &'v Module,
     globals: &Globals,
 ) -> anyhow::Result<Value<'v>> {
     eval(path, content, dialect, env, globals, NoLoadFileLoader)
@@ -87,7 +87,7 @@ pub fn eval_with_modules<'v>(
     path: &str,
     content: &str,
     dialect: &Dialect,
-    env: &'v mut Module,
+    env: &'v Module,
     globals: &Globals,
     modules: &HashMap<String, &FrozenModule>,
 ) -> anyhow::Result<Value<'v>> {

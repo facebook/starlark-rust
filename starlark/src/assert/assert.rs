@@ -151,12 +151,7 @@ impl Assert {
         }
     }
 
-    fn execute<'a>(
-        &self,
-        path: &str,
-        program: &str,
-        env: &'a mut Module,
-    ) -> anyhow::Result<Value<'a>> {
+    fn execute<'a>(&self, path: &str, program: &str, env: &'a Module) -> anyhow::Result<Value<'a>> {
         let mut modules = HashMap::with_capacity(self.modules.len());
         for (k, v) in &self.modules {
             modules.insert(k.clone(), v);
@@ -164,7 +159,7 @@ impl Assert {
         eval::eval_with_modules(path, program, &self.dialect, env, &self.globals, &modules)
     }
 
-    fn execute_fail<'a>(&self, func: &str, program: &str, env: &'a mut Module) -> anyhow::Error {
+    fn execute_fail<'a>(&self, func: &str, program: &str, env: &'a Module) -> anyhow::Error {
         match self.execute("test.bzl", program, env) {
             Ok(v) => panic!(
                 "starlark::assert::{}, didn't fail!\nCode:\n{}\nResult:\n{}\n",
@@ -179,7 +174,7 @@ impl Assert {
         func: &str,
         path: &str,
         program: &str,
-        env: &'a mut Module,
+        env: &'a Module,
     ) -> Value<'a> {
         match self.execute(path, program, env) {
             Ok(v) => v,
@@ -193,7 +188,7 @@ impl Assert {
         }
     }
 
-    fn execute_unwrap_true<'a>(&self, func: &str, program: &str, env: &'a mut Module) {
+    fn execute_unwrap_true<'a>(&self, func: &str, program: &str, env: &'a Module) {
         let v = self.execute_unwrap(func, "test.bzl", program, env);
         match v.unpack_bool() {
             Some(true) => {}
@@ -218,8 +213,8 @@ impl Assert {
     }
 
     pub fn module(&mut self, name: &str, program: &str) {
-        let mut module = Module::new(name);
-        self.execute_unwrap("module", &format!("{}.bzl", name), program, &mut module);
+        let module = Module::new(name);
+        self.execute_unwrap("module", &format!("{}.bzl", name), program, &module);
         self.module_add(name, module.freeze());
     }
 
@@ -236,8 +231,8 @@ impl Assert {
     }
 
     fn fails_with_name(&self, func: &str, program: &str, msgs: &[&str]) -> anyhow::Error {
-        let mut module_env = Module::new(func);
-        let original = self.execute_fail(func, program, &mut module_env);
+        let module_env = Module::new(func);
+        let original = self.execute_fail(func, program, &module_env);
         // We really want to check the error message, but if in our doc tests we do:
         // fail("bad") # error: magic
         // Then when we print the source code, magic is contained in the error message.
@@ -267,13 +262,13 @@ impl Assert {
     }
 
     pub fn pass(&self, program: &str) {
-        let mut env = Module::new("pass");
-        self.execute_unwrap("pass", "test.bzl", program, &mut env);
+        let env = Module::new("pass");
+        self.execute_unwrap("pass", "test.bzl", program, &env);
     }
 
     pub fn is_true(&self, program: &str) {
-        let mut env = Module::new("assert");
-        self.execute_unwrap_true("is_true", program, &mut env);
+        let env = Module::new("assert");
+        self.execute_unwrap_true("is_true", program, &env);
     }
 
     pub fn all_true(&self, program: &str) {
@@ -281,16 +276,16 @@ impl Assert {
             if s == "" {
                 continue;
             }
-            let mut env = Module::new("assert");
-            self.execute_unwrap_true("all_true", s, &mut env);
+            let env = Module::new("assert");
+            self.execute_unwrap_true("all_true", s, &env);
         }
     }
 
     pub fn eq(&self, lhs: &str, rhs: &str) {
-        let mut lhs_m = Module::new("lhs");
-        let mut rhs_m = Module::new("rhs");
-        let lhs_v = self.execute_unwrap("eq", "lhs.bzl", lhs, &mut lhs_m);
-        let rhs_v = self.execute_unwrap("eq", "rhs.bzl", rhs, &mut rhs_m);
+        let lhs_m = Module::new("lhs");
+        let rhs_m = Module::new("rhs");
+        let lhs_v = self.execute_unwrap("eq", "lhs.bzl", lhs, &lhs_m);
+        let rhs_v = self.execute_unwrap("eq", "rhs.bzl", rhs, &rhs_m);
         if lhs_v != rhs_v {
             panic!(
                 "starlark::assert::eq, values differ!\nCode 1:\n{}\nCode 2:\n{}\nValue 1:\n{}\nValue 2\n{}",

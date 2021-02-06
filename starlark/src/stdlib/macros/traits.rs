@@ -140,13 +140,13 @@ mod tests {
     #[test]
     fn test_simple() {
         let globals = standard_environment().with(global).build();
-        let mut child = Module::new("my");
+        let child = Module::new("my");
 
         let r = eval_no_load(
             "test_simple.star",
             "cc_binary(name='star', srcs=['a.cc', 'b.cc'])",
             &Dialect::Extended,
-            &mut child,
+            &child,
             &globals,
         )
         .unwrap();
