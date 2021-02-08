@@ -15,18 +15,21 @@
  * limitations under the License.
  */
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use starlark::{
     analysis::{LineColSpan, Lint},
     errors::Diagnostic,
 };
 use std::fmt::{self, Display};
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+/// A standardised set of severities.
+#[derive(Debug, Serialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Error,
     Warning,
+    // Not all severities are used right now
+    #[allow(dead_code)]
     Advice,
     Disabled,
 }
@@ -42,11 +45,10 @@ impl Display for Severity {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct Message {
     pub path: String,
     pub span: Option<LineColSpan>,
-    pub code: String,
     pub severity: Severity,
     pub name: String,
     pub description: String,
@@ -60,10 +62,6 @@ impl Display for Message {
         }
         write!(f, " {}", self.description)
     }
-}
-
-fn code() -> String {
-    "STARLARK".to_owned()
 }
 
 impl Message {
@@ -82,7 +80,6 @@ impl Message {
                 Self {
                     path: file.name().to_owned(),
                     span: Some(span),
-                    code: code(),
                     severity: Severity::Error,
                     name: "error".to_owned(),
                     description: format!("{:#}", message),
@@ -91,7 +88,6 @@ impl Message {
             _ => Self {
                 path: file.to_owned(),
                 span: None,
-                code: code(),
                 severity: Severity::Error,
                 name: "error".to_owned(),
                 description: format!("{:#}", x),
@@ -103,7 +99,6 @@ impl Message {
         Self {
             path: x.location.file.name().to_owned(),
             span: Some(LineColSpan::from_span_loc(&x.location)),
-            code: code(),
             severity: if x.serious {
                 Severity::Warning
             } else {
@@ -112,6 +107,33 @@ impl Message {
             },
             name: x.short_name,
             description: x.problem,
+        }
+    }
+}
+
+/// A JSON-deriving type that gives a stable interface to downstream types.
+/// Do NOT change this type, change Message instead.
+#[derive(Debug, Clone, Serialize)]
+pub struct LintMessage {
+    path: String,
+    line: Option<usize>,
+    char: Option<usize>,
+    code: String,
+    severity: Severity,
+    name: String,
+    description: Option<String>,
+}
+
+impl LintMessage {
+    pub fn new(x: Message) -> Self {
+        Self {
+            path: x.path,
+            line: x.span.map(|x| x.begin.line),
+            char: x.span.map(|x| x.begin.column),
+            code: "STARLARK".to_owned(),
+            severity: x.severity,
+            name: x.name,
+            description: Some(x.description),
         }
     }
 }

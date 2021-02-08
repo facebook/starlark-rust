@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::types::{Message, Severity};
+use crate::types::{LintMessage, Message, Severity};
 use anyhow::anyhow;
 use eval::Context;
 use gazebo::prelude::*;
@@ -148,12 +148,12 @@ impl Stats {
 
 fn drain(xs: impl Iterator<Item = Message>, json: bool, stats: &mut Stats) {
     for x in xs {
+        stats.increment(x.severity);
         if json {
-            println!("{}", serde_json::to_string(&x).unwrap());
+            println!("{}", serde_json::to_string(&LintMessage::new(x)).unwrap());
         } else {
             println!("{}", x);
         }
-        stats.increment(x.severity);
     }
 }
 
