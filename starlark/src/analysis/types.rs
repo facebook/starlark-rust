@@ -17,14 +17,13 @@
 
 use codemap::{LineCol, SpanLoc};
 use gazebo::variants::VariantName;
-use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 
 pub(crate) trait LintWarning: Display + VariantName {
     fn is_serious(&self) -> bool;
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct LineCol1 {
     /// The line number within the file (1-indexed).
     pub line: usize,
@@ -33,7 +32,7 @@ pub struct LineCol1 {
     pub column: usize,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy)]
 pub struct LineColSpan {
     pub begin: LineCol1,
     pub end: LineCol1,
