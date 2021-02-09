@@ -87,6 +87,9 @@ rec1 = rec_type(host = "test", port=80)
 rec2 = rec_type(host = "test", port=90)
 assert_eq(rec1, rec1)
 assert_eq(rec1 == rec2, False)
+assert_eq(rec1.host, "test")
+assert_eq(rec1.port, 80)
+assert_eq(dir(rec1), ["host", "port"])
 "#,
         );
         assert::fails(
