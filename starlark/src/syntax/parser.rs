@@ -21,7 +21,7 @@ use crate::{
         ast::{AstModule, AstStmt, Stmt},
         dialect::Dialect,
         grammar::StarlarkParser,
-        lexer::{Lexer, LexerError, LexerIntoIter, LexerItem, Token},
+        lexer::{Lexer, LexerError, Token},
     },
 };
 use codemap::{CodeMap, Span, SpanLoc};
@@ -102,11 +102,11 @@ pub(crate) fn parse_error_add_span(
 /// * content: the content to parse
 /// * dialect: starlark language dialect
 /// * lexer: the lexer to use for parsing
-pub fn parse_lexer<T1: Iterator<Item = LexerItem>, T2: LexerIntoIter<T1>>(
+pub(crate) fn parse_lexer(
     filename: &str,
     content: &str,
     dialect: &Dialect,
-    lexer: T2,
+    lexer: Lexer,
 ) -> anyhow::Result<AstModule> {
     let mut codemap = CodeMap::new();
     let filespan = codemap

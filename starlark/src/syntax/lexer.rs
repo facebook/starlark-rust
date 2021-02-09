@@ -189,19 +189,11 @@ impl Display for Token {
 }
 
 pub type LexerItem = Result<(u64, Token, u64), LexerError>;
-pub trait LexerIntoIter<T: Iterator<Item = LexerItem>>:
-    IntoIterator<Item = LexerItem, IntoIter = T>
-{
-}
-impl<T1: Iterator<Item = LexerItem>, T2: IntoIterator<Item = LexerItem, IntoIter = T1>>
-    LexerIntoIter<T1> for T2
-{
-}
 
 /// An iterator over a string slice that convert it to a list of token, i.e. the
 /// lexer.
 #[derive(Debug)]
-pub struct Lexer {
+pub(crate) struct Lexer {
     input: String,
     /// Byte offset of the next char in `input`
     pos_bytes: usize,
