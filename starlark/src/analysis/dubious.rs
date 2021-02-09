@@ -69,7 +69,8 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
                     if let Some((key_id, pos)) = to_key(key) {
                         if let Some(old) = seen.insert(key_id, pos) {
                             res.push(LintT::new(
-                                codemap.look_up_span(old),
+                                codemap,
+                                old,
                                 Dubious::DuplicateKey(key.to_string(), codemap.look_up_span(pos)),
                             ))
                         }

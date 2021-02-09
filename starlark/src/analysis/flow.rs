@@ -107,7 +107,8 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
             if let Some(reason) = require_expression {
                 if !final_return(body) {
                     res.push(LintT::new(
-                        codemap.look_up_span(x.span),
+                        codemap,
+                        x.span,
                         FlowIssue::MissingReturn(
                             // Statements often end with \n, so remove that to fit nicely
                             name.node.trim_end().to_owned(),
@@ -118,7 +119,8 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
                 for (span, ret) in rets {
                     if ret.is_none() {
                         res.push(LintT::new(
-                            codemap.look_up_span(span),
+                            codemap,
+                            span,
                             FlowIssue::MissingReturnExpression(
                                 name.node.clone(),
                                 FileSpanLoc::from_span_loc(&codemap.look_up_span(x.span)),
@@ -150,7 +152,8 @@ fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) ->
                 if aborts {
                     if let Some(nxt) = i.next() {
                         res.push(LintT::new(
-                            codemap.look_up_span(nxt.span),
+                            codemap,
+                            nxt.span,
                             FlowIssue::Unreachable(nxt.node.to_string().trim().to_owned()),
                         ))
                     }
@@ -183,14 +186,12 @@ fn reachable(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) ->
 fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     fn check(is_loop: bool, codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
         match &**x {
-            Stmt::Continue if is_loop => res.push(LintT::new(
-                codemap.look_up_span(x.span),
-                FlowIssue::RedundantContinue,
-            )),
-            Stmt::Return(None) if !is_loop => res.push(LintT::new(
-                codemap.look_up_span(x.span),
-                FlowIssue::RedundantReturn,
-            )),
+            Stmt::Continue if is_loop => {
+                res.push(LintT::new(codemap, x.span, FlowIssue::RedundantContinue))
+            }
+            Stmt::Return(None) if !is_loop => {
+                res.push(LintT::new(codemap, x.span, FlowIssue::RedundantReturn))
+            }
             Stmt::Statements(xs) if !xs.is_empty() => {
                 check(is_loop, codemap, xs.last().unwrap(), res)
             }
@@ -238,10 +239,7 @@ fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>
         match &**x {
             Stmt::Load(..) => {
                 if !allow_loads {
-                    res.push(LintT::new(
-                        codemap.look_up_span(x.span),
-                        FlowIssue::MisplacedLoad,
-                    ))
+                    res.push(LintT::new(codemap, x.span, FlowIssue::MisplacedLoad))
                 }
             }
             Stmt::Expression(Spanned {

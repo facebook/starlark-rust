@@ -83,7 +83,8 @@ fn match_bad_type_equality(
         {
             if let Some(replacement) = lookup_type(rhs, types) {
                 res.push(LintT::new(
-                    codemap.look_up_span(x.span),
+                    codemap,
+                    x.span,
                     Incompatibility::IncompatibleTypeCheck(
                         x.to_string(),
                         format!("{}{}type({})", lhs.node, op, replacement),
@@ -127,7 +128,8 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
     ) {
         if let Some((old, _)) = defined.get(x.node.as_str()) {
             res.push(LintT::new(
-                codemap.look_up_span(x.span),
+                codemap,
+                x.span,
                 Incompatibility::DuplicateTopLevelAssign(
                     x.node.clone(),
                     codemap.look_up_span(*old),

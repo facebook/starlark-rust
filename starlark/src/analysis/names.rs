@@ -26,7 +26,7 @@ use crate::{
         AstModule,
     },
 };
-use codemap::{CodeMap, SpanLoc};
+use codemap::{CodeMap, Span};
 use gazebo::{prelude::*, variants::VariantName};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
@@ -59,8 +59,9 @@ impl LintWarning for NameWarning {
 }
 
 impl NameWarning {
-    fn unused(typ: Assigner, span: SpanLoc, name: String) -> LintT<Self> {
+    fn unused(typ: Assigner, codemap: &CodeMap, span: Span, name: String) -> LintT<Self> {
         LintT::new(
+            codemap,
             span,
             match typ {
                 Assigner::Load => NameWarning::UnusedLoad(name),
@@ -98,7 +99,8 @@ fn undefined_variable(
     for (name, span) in &scope.free {
         if !globals.contains(name.as_str()) {
             res.push(LintT::new(
-                codemap.look_up_span(*span),
+                codemap,
+                *span,
                 NameWarning::UsingUndefined(name.clone()),
             ))
         }
@@ -120,11 +122,7 @@ fn duplicate_assign(
                 let ignored = !top && x.starts_with('_');
                 if !ignored && !captured.contains(&x.node) {
                     if let Some((span, typ)) = warnings.insert(&x.node, (x.span, *reason)) {
-                        res.push(NameWarning::unused(
-                            typ,
-                            codemap.look_up_span(span),
-                            x.node.clone(),
-                        ))
+                        res.push(NameWarning::unused(typ, codemap, span, x.node.clone()))
                     }
                 }
             }
@@ -172,11 +170,7 @@ fn unused_variable(codemap: &CodeMap, scope: &Scope, top: bool, res: &mut Vec<Li
     }
 
     for (name, (typ, span)) in warnings {
-        res.push(NameWarning::unused(
-            typ,
-            codemap.look_up_span(span),
-            name.clone(),
-        ))
+        res.push(NameWarning::unused(typ, codemap, span, name.clone()))
     }
 }
 
@@ -187,7 +181,8 @@ fn unassigned_variable(codemap: &CodeMap, scope: &Scope, res: &mut Vec<LintT<Nam
         match x {
             Bind::Get(x) if scope.bound.get(&x.node).is_some() && !assigned.contains(&x.node) => {
                 res.push(LintT::new(
-                    codemap.look_up_span(x.span),
+                    codemap,
+                    x.span,
                     NameWarning::UsingUnassigned(x.node.clone()),
                 ))
             }
@@ -211,7 +206,8 @@ fn inappropriate_underscore(
         Stmt::Def(name, _, _, x) => {
             if !top && name.starts_with('_') {
                 res.push(LintT::new(
-                    codemap.look_up_span(name.span),
+                    codemap,
+                    name.span,
                     NameWarning::UnderscoreFunction(name.node.clone()),
                 ))
             }
@@ -220,7 +216,8 @@ fn inappropriate_underscore(
         Stmt::Assign(lhs, _, rhs) if !top => match (&***lhs, &***rhs) {
             (Expr::Identifier(name), Expr::Lambda(..)) if name.starts_with('_') => {
                 res.push(LintT::new(
-                    codemap.look_up_span(name.span),
+                    codemap,
+                    name.span,
                     NameWarning::UnderscoreFunction(name.node.clone()),
                 ))
             }
@@ -262,7 +259,8 @@ fn use_ignored(
                         };
                         if !defined_at_root() && !shadows() {
                             res.push(LintT::new(
-                                codemap.look_up_span(x.span),
+                                codemap,
+                                x.span,
                                 NameWarning::UsingIgnored(x.node.clone()),
                             ))
                         }

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use codemap::{LineCol, SpanLoc};
+use codemap::{CodeMap, LineCol, Span, SpanLoc};
 use gazebo::variants::VariantName;
 use std::fmt::{self, Display};
 
@@ -143,8 +143,11 @@ impl<T: Display> Display for LintT<T> {
 }
 
 impl<T: LintWarning> LintT<T> {
-    pub(crate) fn new(location: SpanLoc, problem: T) -> Self {
-        Self { location, problem }
+    pub(crate) fn new(codemap: &CodeMap, span: Span, problem: T) -> Self {
+        Self {
+            location: codemap.look_up_span(span),
+            problem,
+        }
     }
 
     pub(crate) fn erase(self) -> Lint {
