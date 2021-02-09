@@ -44,7 +44,11 @@ pub(crate) enum FlowIssue {
 
 impl LintWarning for FlowIssue {
     fn is_serious(&self) -> bool {
-        true
+        match self {
+            // Sometimes people add these to make flow clearer
+            FlowIssue::RedundantContinue | FlowIssue::RedundantReturn => false,
+            _ => true,
+        }
     }
 }
 
