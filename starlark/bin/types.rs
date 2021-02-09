@@ -52,6 +52,8 @@ pub struct Message {
     pub severity: Severity,
     pub name: String,
     pub description: String,
+    /// The text referred to by span
+    pub original: Option<String>,
 }
 
 impl Display for Message {
@@ -73,6 +75,7 @@ impl Message {
                 ..
             }) => {
                 let file = codemap.find_file(span.low());
+                let original = file.source_slice(*span).to_owned();
                 let span = LineColSpan::from_span(
                     file.find_line_col(span.low()),
                     file.find_line_col(span.high()),
@@ -83,6 +86,7 @@ impl Message {
                     severity: Severity::Error,
                     name: "error".to_owned(),
                     description: format!("{:#}", message),
+                    original: Some(original),
                 }
             }
             _ => Self {
@@ -91,6 +95,7 @@ impl Message {
                 severity: Severity::Error,
                 name: "error".to_owned(),
                 description: format!("{:#}", x),
+                original: None,
             },
         }
     }
@@ -107,6 +112,8 @@ impl Message {
             },
             name: x.short_name,
             description: x.problem,
+            // FIXME: Would be good to fill in the original field.
+            original: None,
         }
     }
 }
@@ -122,6 +129,8 @@ pub struct LintMessage {
     severity: Severity,
     name: String,
     description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    original: Option<String>,
 }
 
 impl LintMessage {
@@ -134,6 +143,7 @@ impl LintMessage {
             severity: x.severity,
             name: x.name,
             description: Some(x.description),
+            original: x.original,
         }
     }
 }
