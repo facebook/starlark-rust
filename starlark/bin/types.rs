@@ -112,8 +112,7 @@ impl Message {
             },
             name: x.short_name,
             description: x.problem,
-            // FIXME: Would be good to fill in the original field.
-            original: None,
+            original: Some(x.original),
         }
     }
 }

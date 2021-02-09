@@ -113,6 +113,7 @@ impl Display for FileSpanLoc {
 /// using full matching, but then erase the internal details when exporting to users.
 pub(crate) struct LintT<T> {
     pub location: SpanLoc,
+    pub original: String,
     pub problem: T,
 }
 
@@ -128,6 +129,8 @@ pub struct Lint {
     pub serious: bool,
     /// The underlying problem.
     pub problem: String,
+    /// The source at SpanLoc
+    pub original: String,
 }
 
 impl Display for Lint {
@@ -144,8 +147,10 @@ impl<T: Display> Display for LintT<T> {
 
 impl<T: LintWarning> LintT<T> {
     pub(crate) fn new(codemap: &CodeMap, span: Span, problem: T) -> Self {
+        let location = codemap.look_up_span(span);
         Self {
-            location: codemap.look_up_span(span),
+            original: location.file.source_slice(span).to_owned(),
+            location,
             problem,
         }
     }
@@ -156,6 +161,7 @@ impl<T: LintWarning> LintT<T> {
             short_name: kebab(self.problem.variant_name()),
             serious: self.problem.is_serious(),
             problem: self.problem.to_string(),
+            original: self.original,
         }
     }
 }
