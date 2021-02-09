@@ -24,6 +24,8 @@ pub use parser::{parse, parse_file};
 #[cfg(test)]
 mod grammar_tests;
 #[cfg(test)]
+mod lexer_tests;
+#[cfg(test)]
 mod testing;
 
 pub(crate) mod ast;
