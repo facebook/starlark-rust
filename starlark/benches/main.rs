@@ -24,8 +24,8 @@ use starlark::{
 };
 
 fn benchmark_run(globals: &Globals, code: &str) {
-    let mut env = Module::new("benchmark");
-    eval_no_load("benchmark.sky", code, &Dialect::Standard, &mut env, globals).unwrap();
+    let env = Module::new("benchmark");
+    eval_no_load("benchmark.sky", code, &Dialect::Standard, &env, globals).unwrap();
 }
 
 fn benchmark_pure_parsing(code: &str) {
@@ -67,9 +67,9 @@ bench
 "#;
 
 pub fn criterion_general_benchmark(c: &mut Criterion, globals: &Globals) {
-    c.bench_function("empty", |b| b.iter(|| benchmark_run(&globals, EMPTY)));
+    c.bench_function("empty", |b| b.iter(|| benchmark_run(globals, EMPTY)));
     c.bench_function("bubble_sort", |b| {
-        b.iter(|| benchmark_run(&globals, BUBBLE_SORT))
+        b.iter(|| benchmark_run(globals, BUBBLE_SORT))
     });
 }
 
@@ -82,8 +82,8 @@ pub fn criterion_parsing_benchmark(c: &mut Criterion) {
 
 pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
     c.bench_function("run_tight_loop", |b| {
-        let mut env = Module::new("benchmark");
-        let mut context = EvaluationContext::new(&mut env, &globals, &NoLoadFileLoader);
+        let env = Module::new("benchmark");
+        let mut context = EvaluationContext::new(&env, globals, &NoLoadFileLoader);
         let ast = parse("benchmark.sky", TIGHT_LOOP, &Dialect::Standard).unwrap();
         let bench_function = eval_module(ast, &mut context).unwrap();
         b.iter(move || eval_function(bench_function, &[], &[], &mut context).unwrap())
