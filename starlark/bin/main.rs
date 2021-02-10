@@ -120,6 +120,7 @@ fn expand_dirs(extension: &str, xs: Vec<PathBuf>) -> impl Iterator<Item = PathBu
 
 #[derive(Default)]
 struct Stats {
+    file: usize,
     error: usize,
     warning: usize,
     advice: usize,
@@ -129,13 +130,17 @@ struct Stats {
 impl Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&format!(
-            "{} errors, {} warnings, {} advices, {} disabled",
-            self.error, self.warning, self.advice, self.disabled
+            "{} files, {} errors, {} warnings, {} advices, {} disabled",
+            self.file, self.error, self.warning, self.advice, self.disabled
         ))
     }
 }
 
 impl Stats {
+    fn increment_file(&mut self) {
+        self.file += 1;
+    }
+
     fn increment(&mut self, x: Severity) {
         match x {
             Severity::Error => self.error += 1,
@@ -192,10 +197,12 @@ fn main() -> anyhow::Result<()> {
 
     let mut stats = Stats::default();
     for e in args.evaluate {
+        stats.increment_file();
         drain(ctx.expression(&e), args.json, &mut stats);
     }
 
     for file in expand_dirs(ext, expand_args(args.files)?) {
+        stats.increment_file();
         drain(ctx.file(&file), args.json, &mut stats);
     }
 
