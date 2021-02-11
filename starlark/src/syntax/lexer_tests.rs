@@ -385,6 +385,27 @@ fn test_escape_newline() {
 }
 
 #[test]
+fn test_lexer_multiline_triple() {
+    let r = collect_result(
+        r#"
+cmd = """A \
+    B \
+    C \
+    """"#,
+    );
+    assert_eq!(
+        &[
+            Token::Newline,
+            Token::Identifier("cmd".to_owned()),
+            Token::Equal,
+            Token::StringLiteral("A     B     C     ".to_owned()),
+            Token::Newline,
+        ],
+        &r[..]
+    );
+}
+
+#[test]
 fn test_span() {
     let expected = vec![
         (0, Token::Newline, 1),
@@ -421,6 +442,24 @@ test("abc")
     .map(Result::unwrap)
     .collect();
     assert_eq!(expected, actual);
+}
+
+#[test]
+fn test_lexer_final_comment() {
+    let r = collect_result(
+        r#"
+x
+# test"#,
+    );
+    assert_eq!(
+        &[
+            Token::Newline,
+            Token::Identifier("x".to_owned()),
+            Token::Newline,
+            Token::Newline
+        ],
+        &r[..]
+    );
 }
 
 #[test]
