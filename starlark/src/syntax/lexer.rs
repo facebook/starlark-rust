@@ -150,9 +150,7 @@ impl<'a> Lexer<'a> {
         self.lexer.bump(spaces + tabs + skip);
         let indent = spaces + tabs * 8;
         if tabs > 0 && !self.dialect_allow_tabs {
-            self.buffer
-                .push_back(Err(LexerError::InvalidTab(self.lexer.span().start as u64)));
-            return Ok(());
+            return Err(LexerError::InvalidTab(self.lexer.span().start as u64));
         }
         let now = self.indent_levels.last().copied().unwrap_or(0);
 
