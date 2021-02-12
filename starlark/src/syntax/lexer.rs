@@ -373,91 +373,93 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next(&mut self) -> Option<Lexeme> {
-        if let Some(x) = self.buffer.pop_front() {
-            Some(x)
-        } else if self.done {
-            None
-        } else {
-            match self.lexer.next() {
-                None => {
-                    self.done = true;
-                    let pos = self.lexer.span().end as u64;
-                    for _ in 0..self.indent_levels.len() {
-                        self.buffer.push_back(Ok((pos, Token::Dedent, pos)))
-                    }
-                    self.indent_levels.clear();
-                    self.wrap(Token::Newline)
-                }
-                Some(token) => match token {
-                    Token::Tabs => {
-                        if !self.dialect_allow_tabs {
-                            self.buffer.push_back(Err(LexerError::InvalidTab(
-                                self.lexer.span().start as u64,
-                            )));
+        loop {
+            // Note that this function doesn't always return - a few branches use `continue`
+            // to always go round the loop again.
+            return if let Some(x) = self.buffer.pop_front() {
+                Some(x)
+            } else if self.done {
+                None
+            } else {
+                match self.lexer.next() {
+                    None => {
+                        self.done = true;
+                        let pos = self.lexer.span().end as u64;
+                        for _ in 0..self.indent_levels.len() {
+                            self.buffer.push_back(Ok((pos, Token::Dedent, pos)))
                         }
-                        // Ideally wouldn't be recursive here, should be a tailcall
-                        self.next()
+                        self.indent_levels.clear();
+                        self.wrap(Token::Newline)
                     }
-                    Token::Newline => {
-                        if self.parens == 0 {
-                            let span = self.lexer.span();
-                            if let Err(e) = self.calculate_indent() {
-                                return Some(Err(e));
+                    Some(token) => match token {
+                        Token::Tabs => {
+                            if !self.dialect_allow_tabs {
+                                self.buffer.push_back(Err(LexerError::InvalidTab(
+                                    self.lexer.span().start as u64,
+                                )));
                             }
-                            Some(Ok((span.start as u64, Token::Newline, span.end as u64)))
-                        } else {
-                            // Ideally wouldn't be recursive here, should be a tailcall
-                            self.next()
+                            continue;
                         }
-                    }
-                    Token::Error => Some(Err(LexerError::InvalidCharacter(
-                        self.lexer.span().start as u64,
-                    ))),
-                    Token::RawDoubleQuote => {
-                        let raw = self.lexer.span().len() == 2;
-                        if self.lexer.remainder().starts_with("\"\"") {
-                            let mut qs = 0;
-                            self.string(true, raw, |c| {
-                                if c == '\"' {
-                                    qs += 1;
-                                    qs == 3
-                                } else {
-                                    qs = 0;
-                                    false
+                        Token::Newline => {
+                            if self.parens == 0 {
+                                let span = self.lexer.span();
+                                if let Err(e) = self.calculate_indent() {
+                                    return Some(Err(e));
                                 }
-                            })
-                        } else {
-                            self.string(false, raw, |c| c == '\"')
+                                Some(Ok((span.start as u64, Token::Newline, span.end as u64)))
+                            } else {
+                                continue;
+                            }
                         }
-                    }
-                    Token::RawSingleQuote => {
-                        let raw = self.lexer.span().len() == 2;
-                        if self.lexer.remainder().starts_with("''") {
-                            let mut qs = 0;
-                            self.string(true, raw, |c| {
-                                if c == '\'' {
-                                    qs += 1;
-                                    qs == 3
-                                } else {
-                                    qs = 0;
-                                    false
-                                }
-                            })
-                        } else {
-                            self.string(false, raw, |c| c == '\'')
+                        Token::Error => Some(Err(LexerError::InvalidCharacter(
+                            self.lexer.span().start as u64,
+                        ))),
+                        Token::RawDoubleQuote => {
+                            let raw = self.lexer.span().len() == 2;
+                            if self.lexer.remainder().starts_with("\"\"") {
+                                let mut qs = 0;
+                                self.string(true, raw, |c| {
+                                    if c == '\"' {
+                                        qs += 1;
+                                        qs == 3
+                                    } else {
+                                        qs = 0;
+                                        false
+                                    }
+                                })
+                            } else {
+                                self.string(false, raw, |c| c == '\"')
+                            }
                         }
-                    }
-                    Token::OpeningCurly | Token::OpeningRound | Token::OpeningSquare => {
-                        self.parens += 1;
-                        self.wrap(token)
-                    }
-                    Token::ClosingCurly | Token::ClosingRound | Token::ClosingSquare => {
-                        self.parens -= 1;
-                        self.wrap(token)
-                    }
-                    _ => self.wrap(token),
-                },
-            }
+                        Token::RawSingleQuote => {
+                            let raw = self.lexer.span().len() == 2;
+                            if self.lexer.remainder().starts_with("''") {
+                                let mut qs = 0;
+                                self.string(true, raw, |c| {
+                                    if c == '\'' {
+                                        qs += 1;
+                                        qs == 3
+                                    } else {
+                                        qs = 0;
+                                        false
+                                    }
+                                })
+                            } else {
+                                self.string(false, raw, |c| c == '\'')
+                            }
+                        }
+                        Token::OpeningCurly | Token::OpeningRound | Token::OpeningSquare => {
+                            self.parens += 1;
+                            self.wrap(token)
+                        }
+                        Token::ClosingCurly | Token::ClosingRound | Token::ClosingSquare => {
+                            self.parens -= 1;
+                            self.wrap(token)
+                        }
+                        _ => self.wrap(token),
+                    },
+                }
+            };
         }
     }
 }
