@@ -572,11 +572,11 @@ pub enum Token {
     #[token("/=")]
     SlashEqual,
     #[token("//=")]
-    DoubleSlashEqual,
+    SlashSlashEqual,
     #[token("%=")]
     PercentEqual,
     #[token("==")]
-    DoubleEqual,
+    EqualEqual,
     #[token("!=")]
     BangEqual,
     #[token("<=")]
@@ -584,7 +584,7 @@ pub enum Token {
     #[token(">=")]
     GreaterEqual,
     #[token("**")]
-    DoubleStar,
+    StarStar,
     #[token("->")]
     RightArrow,
     #[token("=")]
@@ -604,7 +604,7 @@ pub enum Token {
     #[token("/")]
     Slash,
     #[token("//")]
-    DoubleSlash,
+    SlashSlash,
     #[token(".")]
     Dot,
     #[token("|")]
@@ -654,13 +654,13 @@ impl Display for Token {
             Token::MinusEqual => write!(f, "symbol '-='"),
             Token::StarEqual => write!(f, "symbol '*='"),
             Token::SlashEqual => write!(f, "symbol '/='"),
-            Token::DoubleSlashEqual => write!(f, "symbol '//='"),
+            Token::SlashSlashEqual => write!(f, "symbol '//='"),
             Token::PercentEqual => write!(f, "symbol '%='"),
-            Token::DoubleEqual => write!(f, "symbol '=='"),
+            Token::EqualEqual => write!(f, "symbol '=='"),
             Token::BangEqual => write!(f, "symbol '!='"),
             Token::LessEqual => write!(f, "symbol '<='"),
             Token::GreaterEqual => write!(f, "symbol '>='"),
-            Token::DoubleStar => write!(f, "symbol '**'"),
+            Token::StarStar => write!(f, "symbol '**'"),
             Token::RightArrow => write!(f, "symbol '->'"),
             Token::Equal => write!(f, "symbol '='"),
             Token::LessThan => write!(f, "symbol '<'"),
@@ -670,7 +670,7 @@ impl Display for Token {
             Token::Star => write!(f, "symbol '*'"),
             Token::Percent => write!(f, "symbol '%'"),
             Token::Slash => write!(f, "symbol '/'"),
-            Token::DoubleSlash => write!(f, "symbol '//'"),
+            Token::SlashSlash => write!(f, "symbol '//'"),
             Token::Dot => write!(f, "symbol '.'"),
             Token::Pipe => write!(f, "symbol '|'"),
             Token::OpeningSquare => write!(f, "symbol '['"),
