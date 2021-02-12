@@ -77,8 +77,6 @@ pub(crate) struct Lexer<'a> {
     indent_start: u64,
     done: bool,
     dialect_allow_tabs: bool,
-    // We've seen an invalid tab
-    invalid_tab: bool,
 }
 
 fn enumerate_chars(x: impl Iterator<Item = char>) -> impl Iterator<Item = (usize, char)> {
@@ -101,7 +99,6 @@ impl<'a> Lexer<'a> {
             indent: 0,
             done: false,
             dialect_allow_tabs: dialect.enable_tabs,
-            invalid_tab: false,
         };
         if let Err(e) = lexer2.calculate_indent() {
             lexer2.buffer.push_back(Err(e));
@@ -158,7 +155,8 @@ impl<'a> Lexer<'a> {
         self.lexer.bump(spaces + tabs + skip);
         let indent = spaces + tabs * 8;
         if tabs > 0 && !self.dialect_allow_tabs {
-            self.invalid_tab = true;
+            self.buffer
+                .push_back(Err(LexerError::InvalidTab(self.lexer.span().start as u64)));
             return Ok(());
         }
         let now = self.indent_levels.last().copied().unwrap_or(0);
@@ -375,8 +373,6 @@ impl<'a> Lexer<'a> {
     pub fn next(&mut self) -> Option<Lexeme> {
         if let Some(x) = self.buffer.pop_front() {
             Some(x)
-        } else if self.invalid_tab {
-            Some(Err(LexerError::InvalidTab(self.lexer.span().start as u64)))
         } else if self.indent > 0 {
             self.indent -= 1;
             let span = self.lexer.span();
@@ -406,7 +402,11 @@ impl<'a> Lexer<'a> {
                 }
                 Some(token) => match token {
                     Token::Tabs => {
-                        self.invalid_tab = !self.dialect_allow_tabs;
+                        if !self.dialect_allow_tabs {
+                            self.buffer.push_back(Err(LexerError::InvalidTab(
+                                self.lexer.span().start as u64,
+                            )));
+                        }
                         // Ideally wouldn't be recursive here, should be a tailcall
                         self.next()
                     }
