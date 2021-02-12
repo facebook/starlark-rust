@@ -106,18 +106,15 @@ pub(crate) fn parse_lexer(
     filename: &str,
     content: &str,
     dialect: &Dialect,
-    lexer: Result<Lexer, LexerError>,
+    lexer: Lexer,
 ) -> anyhow::Result<AstModule> {
     let mut codemap = CodeMap::new();
     let filespan = codemap
         .add_file(filename.to_string(), content.to_string())
         .span;
-    match lexer {
-        Ok(lexer) => match StarlarkParser::new().parse(filespan, dialect, lexer) {
-            Ok(v) => Ok(AstModule::create(codemap, v)?),
-            Err(p) => Err(parse_error_add_span(p, filespan, Arc::new(codemap)).into()),
-        },
-        Err(e) => Err(e.add_span(filespan, Arc::new(codemap)).into()),
+    match StarlarkParser::new().parse(filespan, dialect, lexer) {
+        Ok(v) => Ok(AstModule::create(codemap, v)?),
+        Err(p) => Err(parse_error_add_span(p, filespan, Arc::new(codemap)).into()),
     }
 }
 

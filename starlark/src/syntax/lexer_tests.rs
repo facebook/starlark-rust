@@ -31,18 +31,16 @@ fn collect_result(s: &'static str) -> Vec<Token> {
     let file_span = codemap.add_file("<test>".to_owned(), s.to_owned()).span;
     let mut pos = 0;
     let codemap = Arc::new(codemap);
-    Lexer::new(s, &Dialect::Standard)
-        .unwrap()
-        .for_each(|x| match x {
-            Err(e) => diagnostics.push(e.add_span(file_span, codemap.dupe()).into()),
-            Ok((i, t, j)) => {
-                let span_incorrect = format!("Span of {:?} incorrect", t);
-                assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
-                result.push(t);
-                assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
-                pos = j;
-            }
-        });
+    Lexer::new(s, &Dialect::Standard).for_each(|x| match x {
+        Err(e) => diagnostics.push(e.add_span(file_span, codemap.dupe()).into()),
+        Ok((i, t, j)) => {
+            let span_incorrect = format!("Span of {:?} incorrect", t);
+            assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
+            result.push(t);
+            assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
+            pos = j;
+        }
+    });
     assert_diagnostics(&diagnostics);
     result
 }
@@ -309,17 +307,11 @@ fn test_string_lit() {
 
     // unfinished string literal
     assert_eq!(
-        Lexer::new("'\n'", &Dialect::Standard)
-            .unwrap()
-            .next()
-            .unwrap(),
+        Lexer::new("'\n'", &Dialect::Standard).next().unwrap(),
         Err(LexerError::UnfinishedStringLiteral(0, 1))
     );
     assert_eq!(
-        Lexer::new("\"\n\"", &Dialect::Standard)
-            .unwrap()
-            .next()
-            .unwrap(),
+        Lexer::new("\"\n\"", &Dialect::Standard).next().unwrap(),
         Err(LexerError::UnfinishedStringLiteral(0, 1))
     );
     // Multiline string
@@ -457,7 +449,6 @@ test("abc")
 "#,
         &Dialect::Standard,
     )
-    .unwrap()
     .map(Result::unwrap)
     .collect();
     assert_eq!(expected, actual);
@@ -490,13 +481,11 @@ fn smoke_test() {
             .add_file((*file).to_owned(), (*content).to_owned())
             .span;
         let codemap = Arc::new(codemap);
-        Lexer::new(content, &Dialect::Standard)
-            .unwrap()
-            .for_each(|x| {
-                if x.is_err() {
-                    diagnostics.push(x.err().unwrap().add_span(file_span, codemap.dupe()).into());
-                }
-            });
+        Lexer::new(content, &Dialect::Standard).for_each(|x| {
+            if x.is_err() {
+                diagnostics.push(x.err().unwrap().add_span(file_span, codemap.dupe()).into());
+            }
+        });
     }
     assert_diagnostics(&diagnostics);
 }

@@ -18,7 +18,7 @@
 use crate::{errors::Diagnostic, syntax::dialect::Dialect};
 use codemap::{CodeMap, Span};
 use logos::Logos;
-use std::{char, fmt, fmt::Display, iter::Peekable, sync::Arc};
+use std::{char, collections::VecDeque, fmt, fmt::Display, iter::Peekable, sync::Arc};
 
 /// Errors that can be generated during lexing
 #[derive(Debug, Clone, PartialEq, Copy)]
@@ -68,6 +68,8 @@ type Lexeme = Result<(u64, Token, u64), LexerError>;
 
 pub(crate) struct Lexer<'a> {
     indent_levels: Vec<usize>,
+    /// Lexemes that have been generated but not yet returned
+    buffer: VecDeque<Lexeme>,
     parens: isize, // Number of parens we have seen
     lexer: logos::Lexer<'a, Token>,
     /// When not 0, the number of ident/dedent tokens we need to issue
@@ -87,10 +89,12 @@ fn enumerate_chars(x: impl Iterator<Item = char>) -> impl Iterator<Item = (usize
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str, dialect: &Dialect) -> Result<Self, LexerError> {
+    pub fn new(input: &'a str, dialect: &Dialect) -> Self {
         let lexer = Token::lexer(input);
         let mut lexer2 = Self {
-            indent_levels: Vec::with_capacity(100), // Probably more than is ever needed
+            // Aim to size all the buffers such that they never resize
+            indent_levels: Vec::with_capacity(20),
+            buffer: VecDeque::with_capacity(10),
             lexer,
             parens: 0,
             indent_start: 0,
@@ -99,8 +103,10 @@ impl<'a> Lexer<'a> {
             dialect_allow_tabs: dialect.enable_tabs,
             invalid_tab: false,
         };
-        lexer2.calculate_indent()?;
-        Ok(lexer2)
+        if let Err(e) = lexer2.calculate_indent() {
+            lexer2.buffer.push_back(Err(e));
+        }
+        lexer2
     }
 
     /// We have just seen a newline, read how many indents we have
@@ -367,7 +373,9 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next(&mut self) -> Option<Lexeme> {
-        if self.invalid_tab {
+        if let Some(x) = self.buffer.pop_front() {
+            Some(x)
+        } else if self.invalid_tab {
             Some(Err(LexerError::InvalidTab(self.lexer.span().start as u64)))
         } else if self.indent > 0 {
             self.indent -= 1;
