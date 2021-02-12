@@ -64,6 +64,8 @@ impl LexerError {
     }
 }
 
+type Lexeme = Result<(u64, Token, u64), LexerError>;
+
 pub(crate) struct Lexer<'a> {
     indent_levels: Vec<usize>,
     parens: isize, // Number of parens we have seen
@@ -180,7 +182,7 @@ impl<'a> Lexer<'a> {
         return Ok(());
     }
 
-    fn wrap(&mut self, token: Token) -> Option<Result<(u64, Token, u64), LexerError>> {
+    fn wrap(&mut self, token: Token) -> Option<Lexeme> {
         let span = self.lexer.span();
         Some(Ok((span.start as u64, token, span.end as u64)))
     }
@@ -277,7 +279,7 @@ impl<'a> Lexer<'a> {
         triple: bool,
         raw: bool,
         mut stop: impl FnMut(char) -> bool,
-    ) -> Option<Result<(u64, Token, u64), LexerError>> {
+    ) -> Option<Lexeme> {
         // We have seen an openning quote, which is either ' or "
         // If triple is true, it was a triple quote
         // stop lets us know when a string ends.
@@ -364,7 +366,7 @@ impl<'a> Lexer<'a> {
         Some(Err(LexerError::UnfinishedStringLiteral(start, start + 1)))
     }
 
-    pub fn next(&mut self) -> Option<Result<(u64, Token, u64), LexerError>> {
+    pub fn next(&mut self) -> Option<Lexeme> {
         if self.invalid_tab {
             Some(Err(LexerError::InvalidTab(self.lexer.span().start as u64)))
         } else if self.indent > 0 {
@@ -690,10 +692,8 @@ impl Display for Token {
     }
 }
 
-pub type LexerItem = Result<(u64, Token, u64), LexerError>;
-
 impl<'a> Iterator for Lexer<'a> {
-    type Item = LexerItem;
+    type Item = Lexeme;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next()
