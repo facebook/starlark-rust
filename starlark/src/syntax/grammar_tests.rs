@@ -27,7 +27,7 @@ use gazebo::prelude::*;
 use std::sync::Arc;
 
 fn unwrap_parse(e: &str) -> String {
-    let lexer = super::lexer::Lexer::new(e, &Dialect::Standard);
+    let lexer = super::lexer::Lexer::new(e, &Dialect::Standard).unwrap();
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
     match StarlarkParser::new().parse(filespan, &Dialect::Extended, lexer) {
@@ -43,7 +43,7 @@ fn unwrap_parse(e: &str) -> String {
 }
 
 fn fails_parse(e: &str, dialect: &Dialect) {
-    let lexer = super::lexer::Lexer::new(e, &Dialect::Standard);
+    let lexer = super::lexer::Lexer::new(e, &Dialect::Standard).unwrap();
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
     match StarlarkParser::new().parse(filespan, dialect, lexer) {
@@ -181,7 +181,7 @@ fn(1)
 
 fail(2)
 "#;
-    let lexer = super::lexer::Lexer::new(content, &Dialect::Standard);
+    let lexer = super::lexer::Lexer::new(content, &Dialect::Standard).unwrap();
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap
         .add_file("<test>".to_owned(), content.to_string())
