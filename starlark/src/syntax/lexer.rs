@@ -103,8 +103,7 @@ impl<'a> Lexer<'a> {
 
     /// We have just seen a newline, read how many indents we have
     /// and then set self.indent properly
-    #[allow(clippy::while_let_on_iterator)] // Buggy hint
-    #[allow(clippy::comparison_chain)] // Buggy hint
+    #[allow(clippy::while_let_on_iterator)] // Not possible as it is borrowed mutably
     fn calculate_indent(&mut self) -> Result<(), LexerError> {
         // consume tabs and spaces, output the indentation levels
         let xs = self.lexer.remainder().as_bytes();
