@@ -106,6 +106,7 @@ fn test_indentation() {
             Token::Dedent,
             Token::PlusEqual,
             Token::Newline,
+            Token::Newline,
         ],
         &r[..]
     );
@@ -251,14 +252,21 @@ fn test_reserved() {
 #[test]
 fn test_comment() {
     // Comment should be ignored
-    assert!(collect_result("# a comment\n").is_empty());
-    assert!(collect_result(" # a comment\n").is_empty());
+    assert_eq!(collect_result("# a comment\n"), &[Token::Newline]);
+    assert_eq!(collect_result(" # a comment\n"), &[Token::Newline]);
     let r = collect_result("a # a comment\n");
-    assert_eq!(&[Token::Identifier("a".to_owned()), Token::Newline], &r[..]);
+    assert_eq!(
+        &[
+            Token::Identifier("a".to_owned()),
+            Token::Newline,
+            Token::Newline
+        ],
+        &r[..]
+    );
     // But it should not eat everything
     let r = collect_result("[\n# a comment\n]");
     assert_eq!(
-        &[Token::OpeningSquare, Token::ClosingSquare, Token::Newline],
+        &[Token::OpeningSquare, Token::ClosingSquare, Token::Newline,],
         &r[..]
     );
 }
@@ -374,6 +382,7 @@ def _impl(ctx):
             Token::ClosingRound,
             Token::Newline,
             Token::Dedent,
+            Token::Newline,
         ],
         &r[..]
     );
@@ -437,6 +446,7 @@ fn test_span() {
         (30, Token::StringLiteral("abc".to_owned()), 35),
         (35, Token::ClosingRound, 36),
         (36, Token::Newline, 37),
+        (37, Token::Newline, 37),
     ];
     let actual: Vec<(u64, Token, u64)> = Lexer::new(
         r#"

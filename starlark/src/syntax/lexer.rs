@@ -71,7 +71,6 @@ pub(crate) struct Lexer<'a> {
     /// When not 0, the number of ident/dedent tokens we need to issue
     indent: isize,
     indent_start: u64,
-    last_new_line: bool,
     done: bool,
     dialect_allow_tabs: bool,
     // We've seen an invalid tab
@@ -94,7 +93,6 @@ impl<'a> Lexer<'a> {
             parens: 0,
             indent_start: 0,
             indent: 0,
-            last_new_line: true,
             done: false,
             dialect_allow_tabs: dialect.enable_tabs,
             invalid_tab: false,
@@ -114,16 +112,13 @@ impl<'a> Lexer<'a> {
         let mut tabs = 0;
         let mut skip = 0;
         let mut it = xs.iter();
-        self.last_new_line = true;
         self.indent_start = self.lexer.span().start as u64;
         while let Some(x) = it.next() {
             match *x as char {
                 ' ' => {
-                    self.last_new_line = false;
                     spaces += 1;
                 }
                 '\t' => {
-                    self.last_new_line = false;
                     tabs += 1;
                 }
 
@@ -132,7 +127,6 @@ impl<'a> Lexer<'a> {
                     // we don't consume the subsequent newline character.
                     // (not sure this is necessary)
                     self.lexer.bump(spaces + tabs + skip);
-                    self.last_new_line = true;
                     return Ok(());
                 }
                 '#' => {
@@ -145,10 +139,7 @@ impl<'a> Lexer<'a> {
                     while let Some(x) = it.next() {
                         skip += 1;
                         if *x as char == '\n' {
-                            self.last_new_line = true;
                             break; // only the inner loop
-                        } else {
-                            self.last_new_line = false;
                         }
                     }
                     self.indent_start = self.lexer.span().start as u64 + skip as u64;
@@ -191,9 +182,6 @@ impl<'a> Lexer<'a> {
 
     fn wrap(&mut self, token: Token) -> Option<Result<(u64, Token, u64), LexerError>> {
         let span = self.lexer.span();
-        if token != Token::Newline && token != Token::Dedent {
-            self.last_new_line = false;
-        }
         Some(Ok((span.start as u64, token, span.end as u64)))
     }
 
@@ -290,8 +278,6 @@ impl<'a> Lexer<'a> {
         raw: bool,
         mut stop: impl FnMut(char) -> bool,
     ) -> Option<Result<(u64, Token, u64), LexerError>> {
-        self.last_new_line = false;
-
         // We have seen an openning quote, which is either ' or "
         // If triple is true, it was a triple quote
         // stop lets us know when a string ends.
@@ -384,7 +370,6 @@ impl<'a> Lexer<'a> {
         } else if self.indent > 0 {
             self.indent -= 1;
             let span = self.lexer.span();
-            self.last_new_line = false;
             Some(Ok((
                 self.indent_start as u64 + 1,
                 Token::Indent,
@@ -404,22 +389,12 @@ impl<'a> Lexer<'a> {
             match self.lexer.next() {
                 None => {
                     self.done = true;
-                    if self.last_new_line {
-                        assert!(self.indent_levels.is_empty());
-                        None
-                    } else {
-                        self.indent_start = self.lexer.span().end as u64 - 1;
-                        self.indent = -(self.indent_levels.len() as isize);
-                        self.indent_levels.clear();
-                        self.wrap(Token::Newline)
-                    }
+                    self.indent_start = self.lexer.span().end as u64;
+                    self.indent = -(self.indent_levels.len() as isize);
+                    self.indent_levels.clear();
+                    self.wrap(Token::Newline)
                 }
                 Some(token) => match token {
-                    Token::Comment => {
-                        self.last_new_line = false;
-                        // Ideally wouldn't be recursive here, should be a tailcall
-                        self.next()
-                    }
                     Token::Tabs => {
                         self.invalid_tab = !self.dialect_allow_tabs;
                         // Ideally wouldn't be recursive here, should be a tailcall
@@ -495,15 +470,12 @@ pub enum Token {
     #[regex(" +", logos::skip)] // Whitespace
     #[token("\\\n", logos::skip)] // Escaped newline
     #[token("\\\r\n", logos::skip)] // Escaped newline (Windows line ending)
+    #[regex(r#"#[^\n]*"#, logos::skip)] // Comments
     #[error]
     Error,
 
     #[regex("\t+")] // Tabs (might be an error)
     Tabs,
-
-    // Only included to get the trailing newline correct
-    #[regex(r#"#[^\n]*"#, logos::skip)]
-    Comment,
 
     // Indentation block & meaningfull spaces
     Indent, // New indentation block
@@ -713,7 +685,6 @@ impl Display for Token {
             Token::StringLiteral(s) => write!(f, "string literal '{}'", s),
             Token::RawSingleQuote => write!(f, "starting '"),
             Token::RawDoubleQuote => write!(f, "starting \""),
-            Token::Comment => write!(f, "comment"),
             Token::Tabs => Ok(()),
         }
     }
