@@ -72,9 +72,6 @@ pub(crate) struct Lexer<'a> {
     buffer: VecDeque<Lexeme>,
     parens: isize, // Number of parens we have seen
     lexer: logos::Lexer<'a, Token>,
-    /// When not 0, the number of ident/dedent tokens we need to issue
-    indent: isize,
-    indent_start: u64,
     done: bool,
     dialect_allow_tabs: bool,
 }
@@ -95,8 +92,6 @@ impl<'a> Lexer<'a> {
             buffer: VecDeque::with_capacity(10),
             lexer,
             parens: 0,
-            indent_start: 0,
-            indent: 0,
             done: false,
             dialect_allow_tabs: dialect.enable_tabs,
         };
@@ -117,7 +112,7 @@ impl<'a> Lexer<'a> {
         let mut tabs = 0;
         let mut skip = 0;
         let mut it = xs.iter();
-        self.indent_start = self.lexer.span().start as u64;
+        let mut indent_start = self.lexer.span().start as u64;
         while let Some(x) = it.next() {
             match *x as char {
                 ' ' => {
@@ -147,7 +142,7 @@ impl<'a> Lexer<'a> {
                             break; // only the inner loop
                         }
                     }
-                    self.indent_start = self.lexer.span().start as u64 + skip as u64;
+                    indent_start = self.lexer.span().start as u64 + skip as u64;
                 }
                 _ => break,
             }
@@ -161,12 +156,15 @@ impl<'a> Lexer<'a> {
         }
         let now = self.indent_levels.last().copied().unwrap_or(0);
 
-        self.indent = if now == indent {
-            0
-        } else if indent > now {
+        if indent > now {
             self.indent_levels.push(indent);
-            1
-        } else {
+            let span = self.lexer.span();
+            self.buffer.push_back(Ok((
+                indent_start as u64 + 1,
+                Token::Indent,
+                span.end as u64,
+            )));
+        } else if indent < now {
             let mut dedents = 1;
             self.indent_levels.pop().unwrap();
             loop {
@@ -181,8 +179,15 @@ impl<'a> Lexer<'a> {
                     return Err(LexerError::Indentation(pos.start as u64, pos.end as u64));
                 }
             }
-            -dedents
-        };
+            let span = self.lexer.span();
+            for _ in 0..dedents {
+                self.buffer.push_back(Ok((
+                    indent_start as u64 + 1,
+                    Token::Dedent,
+                    span.end as u64,
+                )))
+            }
+        }
         return Ok(());
     }
 
@@ -373,30 +378,16 @@ impl<'a> Lexer<'a> {
     pub fn next(&mut self) -> Option<Lexeme> {
         if let Some(x) = self.buffer.pop_front() {
             Some(x)
-        } else if self.indent > 0 {
-            self.indent -= 1;
-            let span = self.lexer.span();
-            Some(Ok((
-                self.indent_start as u64 + 1,
-                Token::Indent,
-                span.end as u64,
-            )))
-        } else if self.indent < 0 {
-            self.indent += 1;
-            let span = self.lexer.span();
-            Some(Ok((
-                self.indent_start as u64 + 1,
-                Token::Dedent,
-                span.end as u64,
-            )))
         } else if self.done {
             None
         } else {
             match self.lexer.next() {
                 None => {
                     self.done = true;
-                    self.indent_start = self.lexer.span().end as u64;
-                    self.indent = -(self.indent_levels.len() as isize);
+                    let pos = self.lexer.span().end as u64;
+                    for _ in 0..self.indent_levels.len() {
+                        self.buffer.push_back(Ok((pos, Token::Dedent, pos)))
+                    }
                     self.indent_levels.clear();
                     self.wrap(Token::Newline)
                 }
