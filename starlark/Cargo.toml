@@ -42,6 +42,7 @@ gazebo = { git = "https://github.com/facebookincubator/gazebo", features =  ["st
 structopt = "0.3.0"
 walkdir = "2.3"
 serde = { version = "1.0", features = ["derive"] }
+logos = "0.11.4"
 serde_json = "1.0"
 rustyline = "6.3.0"
 maplit = "1.0.2"
