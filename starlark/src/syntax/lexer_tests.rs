@@ -17,7 +17,7 @@
 
 use crate::syntax::{
     dialect::Dialect,
-    lexer::{Lexer, LexerError, Token, Token::*},
+    lexer::{Lexer, Token, Token::*},
     testing::{assert_diagnostics, testcase_files},
 };
 use codemap::CodeMap;
@@ -257,13 +257,17 @@ fn test_string_lit() {
     );
 
     // unfinished string literal
-    assert_eq!(
-        Lexer::new("'\n'", &Dialect::Standard).next().unwrap(),
-        Err(LexerError::UnfinishedStringLiteral(0, 1))
+    assert!(
+        Lexer::new("'\n'", &Dialect::Standard)
+            .next()
+            .unwrap()
+            .is_err(),
     );
-    assert_eq!(
-        Lexer::new("\"\n\"", &Dialect::Standard).next().unwrap(),
-        Err(LexerError::UnfinishedStringLiteral(0, 1))
+    assert!(
+        Lexer::new("\"\n\"", &Dialect::Standard)
+            .next()
+            .unwrap()
+            .is_err(),
     );
     // Multiline string
     let r = collect_result("'''''' '''\\n''' '''\n''' \"\"\"\"\"\" \"\"\"\\n\"\"\" \"\"\"\n\"\"\"");
