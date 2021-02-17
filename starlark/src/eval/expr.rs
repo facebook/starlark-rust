@@ -285,8 +285,11 @@ impl Compiler<'_> {
                                 let name = name.to_owned();
                                 let codemap = self.codemap.dupe();
                                 let mk_err = move || {
-                                    let e = EnvironmentError::VariableNotFound(name.clone()).into();
-                                    Diagnostic::modify(e, |e| e.set_span(span, codemap.dupe()))
+                                    Diagnostic::add_span(
+                                        EnvironmentError::VariableNotFound(name.clone()),
+                                        span,
+                                        codemap.dupe(),
+                                    )
                                 };
                                 self.errors.push(mk_err());
                                 box move |_| Err(EvalException::Error(mk_err()))

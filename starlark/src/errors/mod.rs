@@ -88,6 +88,17 @@ impl Diagnostic {
         }
     }
 
+    /// Modify an error by attaching a span to it.
+    /// If given an `Error` which is a `Diagnostic`, it will add the information to the
+    /// existing `Diagnostic`. If not, it will wrap the error in `Diagnostic`.
+    pub fn add_span(
+        err: impl Into<anyhow::Error>,
+        span: Span,
+        codemap: Arc<CodeMap>,
+    ) -> anyhow::Error {
+        Self::modify(err.into(), |d| d.set_span(span, codemap))
+    }
+
     /// Modify an error by attaching diagnostic information to it - e.g. span/call_stack.
     /// If given an `Error` which is a `Diagnostic`, it will add the information to the
     /// existing `Diagnostic`. If not, it will wrap the error in `Diagnostic`.
