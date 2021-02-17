@@ -31,13 +31,14 @@ fn unwrap_parse(e: &str) -> String {
     let lexer = Lexer::new(e, &Dialect::Standard);
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
-    match StarlarkParser::new().parse(filespan, &Dialect::Extended, lexer) {
+    let codemap = Arc::new(codemap);
+    match StarlarkParser::new().parse(&codemap, filespan, &Dialect::Extended, lexer) {
         Ok(x) => match x.node {
             Stmt::Statements(bv) => format!("{}", Stmt::Statements(bv)),
             y => panic!("Expected statements, got {:?}", y),
         },
         Err(e) => {
-            assert_diagnostics(&[parse_error_add_span(e, filespan, Arc::new(codemap)).into()]);
+            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap).into()]);
             panic!("Got errors!");
         }
     }
@@ -47,7 +48,8 @@ fn fails_parse(e: &str, dialect: &Dialect) {
     let lexer = Lexer::new(e, &Dialect::Standard);
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
-    match StarlarkParser::new().parse(filespan, dialect, lexer) {
+    let codemap = Arc::new(codemap);
+    match StarlarkParser::new().parse(&codemap, filespan, dialect, lexer) {
         Ok(x) => panic!("Expected failure, got {:?}", x),
         Err(_) => {}
     }
@@ -187,7 +189,8 @@ fail(2)
     let filespan = codemap
         .add_file("<test>".to_owned(), content.to_string())
         .span;
-    match StarlarkParser::new().parse(filespan, &Dialect::Extended, lexer) {
+    let codemap = Arc::new(codemap);
+    match StarlarkParser::new().parse(&codemap, filespan, &Dialect::Extended, lexer) {
         Ok(x) => match x.node {
             Stmt::Statements(bv) => {
                 let lines = bv.map(|x| codemap.look_up_pos(x.span.low()).position.line);
@@ -196,7 +199,7 @@ fail(2)
             y => panic!("Expected statements, got {:?}", y),
         },
         Err(e) => {
-            assert_diagnostics(&[parse_error_add_span(e, filespan, Arc::new(codemap)).into()]);
+            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap).into()]);
             panic!("Got errors!");
         }
     }

@@ -96,16 +96,16 @@ pub(crate) fn parse_error_add_span(
 pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<AstModule> {
     let mut codemap = CodeMap::new();
     let file = codemap.add_file(filename.to_string(), content);
+    let codemap = Arc::new(codemap);
     let lexer = Lexer::new(file.source(), dialect);
-    match StarlarkParser::new().parse(file.span, dialect, lexer) {
+    match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
         Ok(v) => Ok(AstModule::create(codemap, v)?),
-        Err(p) => Err(parse_error_add_span(p, file.span, Arc::new(codemap)).into()),
+        Err(p) => Err(parse_error_add_span(p, file.span, codemap).into()),
     }
 }
 
 impl AstModule {
-    fn create(codemap: CodeMap, statement: AstStmt) -> anyhow::Result<AstModule> {
-        let codemap = Arc::new(codemap);
+    fn create(codemap: Arc<CodeMap>, statement: AstStmt) -> anyhow::Result<AstModule> {
         Stmt::validate_break_continue(&codemap, &statement)?;
         Ok(AstModule { codemap, statement })
     }
