@@ -144,7 +144,7 @@ mod tests {
 
         let r = eval_no_load(
             "test_simple.star",
-            "cc_binary(name='star', srcs=['a.cc', 'b.cc'])",
+            "cc_binary(name='star', srcs=['a.cc', 'b.cc'])".to_owned(),
             &Dialect::Extended,
             &child,
             &globals,

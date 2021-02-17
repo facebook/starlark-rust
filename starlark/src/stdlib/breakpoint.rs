@@ -128,7 +128,7 @@ fn breakpoint_loop(ctx: &mut EvaluationContext) -> anyhow::Result<()> {
                         }
                     }
                 } else {
-                    match debug::evaluate(&line, ctx) {
+                    match debug::evaluate(line, ctx) {
                         Err(e) => eprintln!("{:#}", e),
                         Ok(v) => {
                             if !v.is_none() {

@@ -266,7 +266,7 @@ fn test_nested_def() {
 fn smoke_test() {
     let mut diagnostics = Vec::new();
     for (file, content) in testcase_files() {
-        if let Err(err) = parse(file, content, &Dialect::Extended) {
+        if let Err(err) = parse(file, (*content).to_owned(), &Dialect::Extended) {
             diagnostics.push(err);
         }
     }

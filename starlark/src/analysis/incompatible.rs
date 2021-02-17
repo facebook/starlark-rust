@@ -194,7 +194,7 @@ mod test {
     use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
-        parse("bad.py", x, &Dialect::Extended).unwrap()
+        parse("bad.py", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     #[test]

@@ -93,15 +93,13 @@ pub(crate) fn parse_error_add_span(
 }
 
 /// Parse a Starlark file.
-pub fn parse(filename: &str, content: &str, dialect: &Dialect) -> anyhow::Result<AstModule> {
-    let lexer = Lexer::new(content, dialect);
+pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<AstModule> {
     let mut codemap = CodeMap::new();
-    let filespan = codemap
-        .add_file(filename.to_string(), content.to_string())
-        .span;
-    match StarlarkParser::new().parse(filespan, dialect, lexer) {
+    let file = codemap.add_file(filename.to_string(), content);
+    let lexer = Lexer::new(file.source(), dialect);
+    match StarlarkParser::new().parse(file.span, dialect, lexer) {
         Ok(v) => Ok(AstModule::create(codemap, v)?),
-        Err(p) => Err(parse_error_add_span(p, filespan, Arc::new(codemap)).into()),
+        Err(p) => Err(parse_error_add_span(p, file.span, Arc::new(codemap)).into()),
     }
 }
 
@@ -149,5 +147,5 @@ impl AstModule {
 /// This method unwrap the path to a unicode string, which can panic.
 pub fn parse_file(path: &Path, dialect: &Dialect) -> anyhow::Result<AstModule> {
     let content = fs::read_to_string(path)?;
-    parse(&path.to_string_lossy(), &content, dialect)
+    parse(&path.to_string_lossy(), content, dialect)
 }

@@ -170,7 +170,7 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
                 let mut stats = Stats::default();
-                drain(ctx.expression(&line), false, &mut stats);
+                drain(ctx.expression(line), false, &mut stats);
             }
             // User pressed EOF - disconnected terminal, or similar
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => return Ok(()),
@@ -198,7 +198,7 @@ fn main() -> anyhow::Result<()> {
     let mut stats = Stats::default();
     for e in args.evaluate {
         stats.increment_file();
-        drain(ctx.expression(&e), args.json, &mut stats);
+        drain(ctx.expression(e), args.json, &mut stats);
     }
 
     for file in expand_dirs(ext, expand_args(args.files)?) {

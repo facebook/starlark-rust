@@ -59,7 +59,7 @@ impl Backend {
     async fn validate(&self, uri: Url, version: Option<i64>, text: String) {
         let diags = self
             .starlark
-            .file_with_contents(&uri.to_string(), &text)
+            .file_with_contents(&uri.to_string(), text)
             .map(to_diagnostic)
             .collect();
         self.client.publish_diagnostics(uri, diags, version).await

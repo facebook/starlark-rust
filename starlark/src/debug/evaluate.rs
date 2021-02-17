@@ -27,7 +27,10 @@ use std::{collections::HashMap, mem};
 /// Lots of health warnings on this code. Might not work with frozen modules, unassigned variables,
 /// nested definitions etc. All are solvable, with increasing levels of effort.
 /// It would be a bad idea to rely on the results after evaluating stuff randomly.
-pub fn evaluate<'v>(code: &str, ctx: &mut EvaluationContext<'v, '_>) -> anyhow::Result<Value<'v>> {
+pub fn evaluate<'v>(
+    code: String,
+    ctx: &mut EvaluationContext<'v, '_>,
+) -> anyhow::Result<Value<'v>> {
     let ast = parse("interactive", code, &Dialect::Extended)?;
 
     // Everything must be evaluated with the current heap (or we'll lose memory), which means
@@ -105,7 +108,7 @@ mod tests {
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
-        fn debug_evaluate(code: &str) -> Value<'v> {
+        fn debug_evaluate(code: String) -> Value<'v> {
             evaluate(code, ctx)
         }
     }

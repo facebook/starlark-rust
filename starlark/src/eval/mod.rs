@@ -221,7 +221,7 @@ pub fn eval_function<'v>(
 /// * file_loader: the [`FileLoader`] to react to `load()` statements.
 fn eval<'v, T: FileLoader>(
     path: &str,
-    content: &str,
+    content: String,
     dialect: &Dialect,
     env: &'v Module,
     globals: &Globals,

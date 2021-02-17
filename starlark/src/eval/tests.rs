@@ -743,7 +743,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     let extra = Extra::default();
     ctx.extra_v = Some(&extra);
     eval_module(
-        parse("a", "load_symbol('x', 6*7)", &Dialect::Extended)?,
+        parse("a", "load_symbol('x', 6*7)".to_owned(), &Dialect::Extended)?,
         &mut ctx,
     )?;
 

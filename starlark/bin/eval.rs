@@ -86,7 +86,7 @@ impl Context {
         }
     }
 
-    pub fn expression(&self, content: &str) -> impl Iterator<Item = Message> {
+    pub fn expression(&self, content: String) -> impl Iterator<Item = Message> {
         let file = "expression";
         Self::err(
             file,
@@ -99,7 +99,7 @@ impl Context {
         Self::err(
             filename,
             fs::read_to_string(file)
-                .map(|content| self.file_with_contents(filename, &content))
+                .map(|content| self.file_with_contents(filename, content))
                 .map_err(|e| e.into()),
         )
     }
@@ -107,7 +107,7 @@ impl Context {
     pub fn file_with_contents(
         &self,
         filename: &str,
-        content: &str,
+        content: String,
     ) -> impl Iterator<Item = Message> {
         Self::err(
             filename,

@@ -156,7 +156,14 @@ impl Assert {
         for (k, v) in &self.modules {
             modules.insert(k.clone(), v);
         }
-        eval::eval_with_modules(path, program, &self.dialect, env, &self.globals, &modules)
+        eval::eval_with_modules(
+            path,
+            program.to_owned(),
+            &self.dialect,
+            env,
+            &self.globals,
+            &modules,
+        )
     }
 
     fn execute_fail<'a>(&self, func: &str, program: &str, env: &'a Module) -> anyhow::Error {

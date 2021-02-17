@@ -58,7 +58,7 @@ impl FileLoader for NoLoadFileLoader {
 /// * global: the environment used to resolve type values
 pub fn eval_no_load<'v>(
     path: &str,
-    content: &str,
+    content: String,
     dialect: &Dialect,
     env: &'v Module,
     globals: &Globals,
@@ -85,7 +85,7 @@ impl<'a> FileLoader for ReturnFileLoader<'a> {
 
 pub fn eval_with_modules<'v>(
     path: &str,
-    content: &str,
+    content: String,
     dialect: &Dialect,
     env: &'v Module,
     globals: &Globals,

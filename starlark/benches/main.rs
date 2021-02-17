@@ -25,11 +25,18 @@ use starlark::{
 
 fn benchmark_run(globals: &Globals, code: &str) {
     let env = Module::new("benchmark");
-    eval_no_load("benchmark.sky", code, &Dialect::Standard, &env, globals).unwrap();
+    eval_no_load(
+        "benchmark.sky",
+        code.to_owned(),
+        &Dialect::Standard,
+        &env,
+        globals,
+    )
+    .unwrap();
 }
 
 fn benchmark_pure_parsing(code: &str) {
-    parse("benchmark.sky", code, &Dialect::Standard).unwrap();
+    parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
 }
 
 const EMPTY: &str = r#"
@@ -84,7 +91,7 @@ pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
     c.bench_function("run_tight_loop", |b| {
         let env = Module::new("benchmark");
         let mut context = EvaluationContext::new(&env, globals, &NoLoadFileLoader);
-        let ast = parse("benchmark.sky", TIGHT_LOOP, &Dialect::Standard).unwrap();
+        let ast = parse("benchmark.sky", TIGHT_LOOP.to_owned(), &Dialect::Standard).unwrap();
         let bench_function = eval_module(ast, &mut context).unwrap();
         b.iter(move || eval_function(bench_function, &[], &[], &mut context).unwrap())
     });

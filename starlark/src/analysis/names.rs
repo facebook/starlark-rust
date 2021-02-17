@@ -293,7 +293,7 @@ mod test {
     }
 
     fn module(x: &str) -> AstModule {
-        parse("X", x, &Dialect::Extended).unwrap()
+        parse("X", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     #[test]

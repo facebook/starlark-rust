@@ -275,7 +275,7 @@ mod test {
     fn module(x: &str) -> AstModule {
         parse(
             "X",
-            x,
+            x.to_owned(),
             &Dialect {
                 enable_types: true,
                 ..Dialect::Extended
