@@ -53,7 +53,7 @@ pub(crate) fn parse_error_add_span(
     codemap: Arc<CodeMap>,
 ) -> anyhow::Error {
     if let lu::ParseError::User { error } = err {
-        return error.add_span(span, codemap);
+        return error.anyhow();
     }
 
     let message = match &err {

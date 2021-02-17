@@ -17,53 +17,36 @@
 
 use crate::{errors::Diagnostic, syntax::dialect::Dialect};
 use codemap::{CodeMap, Span};
+use gazebo::dupe::Dupe;
 use logos::Logos;
 use std::{char, collections::VecDeque, fmt, fmt::Display, iter::Peekable, sync::Arc};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum LexemeError {
+    #[error("Parse error: incorrect indentation")]
+    Indentation,
+    #[error("Parse error: Character not valid at present location")]
+    InvalidCharacter,
+    #[error("Parse error: tabs are not allowed in the dialect")]
+    InvalidTab,
+    #[error("Parse error: unfinished string literal")]
+    UnfinishedStringLiteral,
+    #[error("Parse error: invalid string escape sequence")]
+    InvalidEscapeSequence,
+}
 
 /// Errors that can be generated during lexing
 #[derive(Debug)]
 pub enum LexerError {
-    Indentation(u64, u64),
-    InvalidCharacter(u64),
-    InvalidTab(u64),
-    UnfinishedStringLiteral(u64, u64),
-    InvalidEscapeSequence(u64, u64),
     AnyhowError(anyhow::Error),
 }
 
 impl LexerError {
-    /// Convert the error to a codemap diagnostic.
-    ///
-    /// To build this diagnostic, the method needs the file span corresponding
-    /// to the parsed file.
-    pub(crate) fn add_span(self, span: Span, codemap: Arc<CodeMap>) -> anyhow::Error {
-        if let Self::AnyhowError(err) = self {
-            return err;
+    pub fn anyhow(self) -> anyhow::Error {
+        match self {
+            Self::AnyhowError(x) => x,
         }
-        let span = match self {
-            LexerError::Indentation(x, y)
-            | LexerError::UnfinishedStringLiteral(x, y)
-            | LexerError::InvalidEscapeSequence(x, y) => span.subspan(x, y),
-            LexerError::InvalidTab(x) | LexerError::InvalidCharacter(x) => span.subspan(x, x),
-            LexerError::AnyhowError(_) => unreachable!(),
-        };
-        let mut e = Diagnostic::new(
-            match self {
-                LexerError::Indentation(..) => "Parse error: ncorrect indentation",
-                LexerError::InvalidCharacter(..) => {
-                    "Parse error: Character not valid at present location"
-                }
-                LexerError::UnfinishedStringLiteral(..) => "Parse error: unfinished string literal",
-                LexerError::InvalidEscapeSequence(..) => {
-                    "Parse error: invalid string escape sequence"
-                }
-                LexerError::InvalidTab(..) => "Parse error: tabs are not allowed in the dialect",
-                LexerError::AnyhowError(_) => unreachable!(),
-            }
-            .to_owned(),
-        );
-        e.set_span(span, codemap);
-        e.into()
     }
 }
 
@@ -71,9 +54,7 @@ type Lexeme = Result<(u64, Token, u64), LexerError>;
 
 pub(crate) struct Lexer<'a> {
     // Information for spans
-    #[allow(dead_code)]
     codemap: Arc<CodeMap>,
-    #[allow(dead_code)]
     filespan: Span,
     // Other info
     indent_levels: Vec<usize>,
@@ -110,6 +91,18 @@ impl<'a> Lexer<'a> {
             lexer2.buffer.push_back(Err(e));
         }
         lexer2
+    }
+
+    fn err_pos<T>(&self, msg: LexemeError, pos: u64) -> Result<T, LexerError> {
+        self.err_span(msg, pos, pos)
+    }
+
+    fn err_span<T>(&self, msg: LexemeError, start: u64, end: u64) -> Result<T, LexerError> {
+        Err(LexerError::AnyhowError(Diagnostic::add_span(
+            msg,
+            self.filespan.subspan(start, end),
+            self.codemap.dupe(),
+        )))
     }
 
     /// We have just seen a newline, read how many indents we have
@@ -160,7 +153,7 @@ impl<'a> Lexer<'a> {
         self.lexer.bump(spaces + tabs + skip);
         let indent = spaces + tabs * 8;
         if tabs > 0 && !self.dialect_allow_tabs {
-            return Err(LexerError::InvalidTab(self.lexer.span().start as u64));
+            return self.err_pos(LexemeError::InvalidTab, self.lexer.span().start as u64);
         }
         let now = self.indent_levels.last().copied().unwrap_or(0);
 
@@ -184,7 +177,11 @@ impl<'a> Lexer<'a> {
                     self.indent_levels.pop().unwrap();
                 } else {
                     let pos = self.lexer.span();
-                    return Err(LexerError::Indentation(pos.start as u64, pos.end as u64));
+                    return self.err_span(
+                        LexemeError::Indentation,
+                        pos.start as u64,
+                        pos.end as u64,
+                    );
                 }
             }
             let span = self.lexer.span();
@@ -221,6 +218,7 @@ impl<'a> Lexer<'a> {
 
     // We have seen a '\' character, now parse what comes next
     fn escape(
+        &self,
         it: &mut Peekable<impl Iterator<Item = (usize, char)>>,
         pos: usize,
         res: &mut String,
@@ -245,7 +243,11 @@ impl<'a> Lexer<'a> {
                             res.push(char::from_u32(r as u32).unwrap());
                             Ok(())
                         } else {
-                            Err(LexerError::InvalidEscapeSequence(pos as u64, pos2 as u64))
+                            self.err_span(
+                                LexemeError::InvalidEscapeSequence,
+                                pos as u64,
+                                pos2 as u64,
+                            )
                         }
                     } else {
                         res.push('\0');
@@ -257,10 +259,12 @@ impl<'a> Lexer<'a> {
                         res.push(char::from_u32(r as u32).unwrap());
                         Ok(())
                     } else {
-                        Err(LexerError::InvalidEscapeSequence(pos as u64, pos2 as u64))
+                        self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64)
                     }
                 }
-                '1'..='9' => Err(LexerError::InvalidEscapeSequence(pos as u64, pos2 as u64)),
+                '1'..='9' => {
+                    self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64)
+                }
                 'u' => match it.next() {
                     Some((_, '{')) => {
                         if let Ok(r) = Self::consume_int_r(it, 16) {
@@ -269,9 +273,9 @@ impl<'a> Lexer<'a> {
                                 return Ok(());
                             }
                         }
-                        Err(LexerError::InvalidEscapeSequence(pos as u64, pos2 as u64))
+                        self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64)
                     }
-                    _ => Err(LexerError::InvalidEscapeSequence(pos as u64, pos2 as u64)),
+                    _ => self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64),
                 },
                 '"' | '\'' | '\\' => {
                     res.push(c2);
@@ -285,7 +289,7 @@ impl<'a> Lexer<'a> {
                 }
             }
         } else {
-            Err(LexerError::UnfinishedStringLiteral(pos as u64, pos as u64))
+            self.err_pos(LexemeError::UnfinishedStringLiteral, pos as u64)
         }
     }
 
@@ -371,7 +375,7 @@ impl<'a> Lexer<'a> {
                             }
                             _ => break, // Out of chars
                         }
-                    } else if let Err(e) = Self::escape(&mut it, i, &mut res) {
+                    } else if let Err(e) = self.escape(&mut it, i, &mut res) {
                         return Some(Err(e));
                     }
                 }
@@ -380,7 +384,7 @@ impl<'a> Lexer<'a> {
         }
 
         // We ran out of characters
-        Some(Err(LexerError::UnfinishedStringLiteral(start, start + 1)))
+        Some(self.err_span(LexemeError::UnfinishedStringLiteral, start, start + 1))
     }
 
     pub fn next(&mut self) -> Option<Lexeme> {
@@ -405,9 +409,10 @@ impl<'a> Lexer<'a> {
                     Some(token) => match token {
                         Token::Tabs => {
                             if !self.dialect_allow_tabs {
-                                self.buffer.push_back(Err(LexerError::InvalidTab(
+                                self.buffer.push_back(self.err_pos(
+                                    LexemeError::InvalidTab,
                                     self.lexer.span().start as u64,
-                                )));
+                                ));
                             }
                             continue;
                         }
@@ -422,9 +427,10 @@ impl<'a> Lexer<'a> {
                                 continue;
                             }
                         }
-                        Token::Error => Some(Err(LexerError::InvalidCharacter(
+                        Token::Error => Some(self.err_pos(
+                            LexemeError::InvalidCharacter,
                             self.lexer.span().start as u64,
-                        ))),
+                        )),
                         Token::RawDoubleQuote => {
                             let raw = self.lexer.span().len() == 2;
                             if self.lexer.remainder().starts_with("\"\"") {
