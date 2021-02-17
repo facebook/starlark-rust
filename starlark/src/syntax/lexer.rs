@@ -28,7 +28,6 @@ pub enum LexerError {
     InvalidTab(u64),
     UnfinishedStringLiteral(u64, u64),
     InvalidEscapeSequence(u64, u64),
-    WrappedError { span: Span, message: &'static str },
     AnyhowError(anyhow::Error),
 }
 
@@ -46,7 +45,6 @@ impl LexerError {
             | LexerError::UnfinishedStringLiteral(x, y)
             | LexerError::InvalidEscapeSequence(x, y) => span.subspan(x, y),
             LexerError::InvalidTab(x) | LexerError::InvalidCharacter(x) => span.subspan(x, x),
-            LexerError::WrappedError { span, .. } => span,
             LexerError::AnyhowError(_) => unreachable!(),
         };
         let mut e = Diagnostic::new(
@@ -60,7 +58,6 @@ impl LexerError {
                     "Parse error: invalid string escape sequence"
                 }
                 LexerError::InvalidTab(..) => "Parse error: tabs are not allowed in the dialect",
-                LexerError::WrappedError { message, .. } => message,
                 LexerError::AnyhowError(_) => unreachable!(),
             }
             .to_owned(),

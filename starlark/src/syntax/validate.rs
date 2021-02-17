@@ -139,15 +139,31 @@ fn test_param_name<'a, T>(
     argset: &mut HashSet<&'a str>,
     n: &'a Spanned<String>,
     arg: &Spanned<T>,
+    codemap: &Arc<CodeMap>,
 ) -> Result<(), LexerError> {
     if argset.contains(n.node.as_str()) {
-        return Err(LexerError::WrappedError {
-            span: arg.span,
-            message: "duplicated parameter name",
-        });
+        return Err(LexerError::AnyhowError(Diagnostic::add_span(
+            ArgumentUseOrderError::DuplicateParameterName,
+            arg.span,
+            codemap.dupe(),
+        )));
     }
     argset.insert(&n.node);
     Ok(())
+}
+
+#[derive(Error, Debug)]
+enum ArgumentUseOrderError {
+    #[error("duplicated parameter name")]
+    DuplicateParameterName,
+    #[error("positional parameter after non positional")]
+    PositionalThenNonPositional,
+    #[error("Default parameter after args array or kwargs dictionary")]
+    DefaultParameterAfterStars,
+    #[error("Args parameter after another args or kwargs parameter")]
+    ArgsParameterAfterStars,
+    #[error("Multiple kwargs dictionary in parameters")]
+    MultipleKwargs,
 }
 
 impl Stmt {
@@ -156,7 +172,16 @@ impl Stmt {
         parameters: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
         stmts: AstStmt,
+        codemap: &Arc<CodeMap>,
     ) -> Result<Stmt, LexerError> {
+        let err = |span, msg| {
+            Err(LexerError::AnyhowError(Diagnostic::add_span(
+                msg,
+                span,
+                codemap.dupe(),
+            )))
+        };
+
         // you can't repeat argument names
         let mut argset = HashSet::new();
         // You can't have more than one *args/*, **kwargs
@@ -170,51 +195,36 @@ impl Stmt {
             match &arg.node {
                 Parameter::Normal(n, ..) => {
                     if seen_kwargs || seen_optional {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "positional parameter after non positional",
-                        });
+                        return err(arg.span, ArgumentUseOrderError::PositionalThenNonPositional);
                     }
-                    test_param_name(&mut argset, n, arg)?;
+                    test_param_name(&mut argset, n, arg, codemap)?;
                 }
                 Parameter::WithDefaultValue(n, ..) => {
                     if seen_kwargs {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "Default parameter after args array or kwargs dictionary",
-                        });
+                        return err(arg.span, ArgumentUseOrderError::DefaultParameterAfterStars);
                     }
                     seen_optional = true;
-                    test_param_name(&mut argset, n, arg)?;
+                    test_param_name(&mut argset, n, arg, codemap)?;
                 }
                 Parameter::NoArgs => {
                     if seen_args || seen_kwargs {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "Args parameter after another args or kwargs parameter",
-                        });
+                        return err(arg.span, ArgumentUseOrderError::ArgsParameterAfterStars);
                     }
                     seen_args = true;
                 }
                 Parameter::Args(n, ..) => {
                     if seen_args || seen_kwargs {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "Args parameter after another args or kwargs parameter",
-                        });
+                        return err(arg.span, ArgumentUseOrderError::ArgsParameterAfterStars);
                     }
                     seen_args = true;
-                    test_param_name(&mut argset, n, arg)?;
+                    test_param_name(&mut argset, n, arg, codemap)?;
                 }
                 Parameter::KWArgs(n, ..) => {
                     if seen_kwargs {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "Multiple kwargs dictionary in parameters",
-                        });
+                        return err(arg.span, ArgumentUseOrderError::MultipleKwargs);
                     }
                     seen_kwargs = true;
-                    test_param_name(&mut argset, n, arg)?;
+                    test_param_name(&mut argset, n, arg, codemap)?;
                 }
             }
         }

@@ -67,7 +67,7 @@ BuildTopStmt: AstStmt = { AssignStmt, ExprStmt, LoadStmt };
 DefStmt: AstStmt = ASTS<DefStmt_> =>? Ok(dialect.check_def(codemap, <>)?);
 DefStmt_: Stmt =
   "def" <identifier> "(" <COMMA<ParameterTyped>> ")" <ReturnType> ":" <Suite>
-      =>? Ok(Stmt::check_def(<>)?);
+      =>? Ok(Stmt::check_def(<>, codemap)?);
 
 ReturnType: Option<Box<AstExpr>> = {
     "->" <Test> =>? Ok(Some(box dialect.check_type(codemap, <>)?)),
