@@ -122,7 +122,7 @@ pub(crate) struct Compiler<'a> {
     scope: Scope<'a>,
     heap: &'a FrozenHeap,
     globals: &'a Globals,
-    errors: Vec<Diagnostic>,
+    errors: Vec<anyhow::Error>,
     codemap: Arc<CodeMap>,
 }
 
@@ -150,7 +150,7 @@ pub fn eval_module<'v>(
     compiler.errors.truncate(1);
     if let Some(e) = compiler.errors.pop() {
         // Static errors, reported even if the branch is not hit
-        return Err(e.into());
+        return Err(e);
     }
 
     let (module_slots, local_slots) = compiler.scope.exit_module();
