@@ -29,6 +29,15 @@ use crate::{
 use codemap::{CodeMap, Spanned};
 use gazebo::prelude::*;
 use std::{collections::HashSet, sync::Arc};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+enum ValidateError {
+    #[error("`break` cannot be used outside of a `for` loop")]
+    BreakOutsideLoop,
+    #[error("`continue` cannot be used outside of a `for` loop")]
+    ContinueOutsideLoop,
+}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
 enum ArgsStage {
@@ -206,16 +215,16 @@ impl Stmt {
         fn outside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
             match &stmt.node {
                 Stmt::For(box (_, _, body)) => inside_for(codemap, body),
-                Stmt::Break | Stmt::Continue => {
-                    let kw = if let Stmt::Break = stmt.node {
-                        "break"
-                    } else {
-                        "continue"
-                    };
-                    let mut e = Diagnostic::new(format!("{} cannot be used outside of loop", kw));
-                    e.set_span(stmt.span, codemap.dupe());
-                    Err(e.into())
-                }
+                Stmt::Break => Err(Diagnostic::add_span(
+                    ValidateError::BreakOutsideLoop,
+                    stmt.span,
+                    codemap.dupe(),
+                )),
+                Stmt::Continue => Err(Diagnostic::add_span(
+                    ValidateError::ContinueOutsideLoop,
+                    stmt.span,
+                    codemap.dupe(),
+                )),
                 _ => stmt.node.visit_stmt_result(|x| outside_for(codemap, x)),
             }
         }
