@@ -92,22 +92,9 @@ pub(crate) fn parse_error_add_span(
     e
 }
 
-/// Parse a build file (if build is true) or a starlark file provided as a
-/// content using a custom lexer.
-///
-/// # arguments
-///
-/// * codemap: the codemap object used for diagnostics
-/// * filename: the name of the file being parsed, for diagnostics
-/// * content: the content to parse
-/// * dialect: starlark language dialect
-/// * lexer: the lexer to use for parsing
-pub(crate) fn parse_lexer(
-    filename: &str,
-    content: &str,
-    dialect: &Dialect,
-    lexer: Lexer,
-) -> anyhow::Result<AstModule> {
+/// Parse a Starlark file.
+pub fn parse(filename: &str, content: &str, dialect: &Dialect) -> anyhow::Result<AstModule> {
+    let lexer = Lexer::new(content, dialect);
     let mut codemap = CodeMap::new();
     let filespan = codemap
         .add_file(filename.to_string(), content.to_string())
@@ -146,19 +133,6 @@ impl AstModule {
     pub fn look_up_span(&self, x: Span) -> SpanLoc {
         self.codemap.look_up_span(x)
     }
-}
-
-/// Parse a build file (if build is true) or a starlark file provided as a
-/// content.
-///
-/// # arguments
-///
-/// * codemap: the codemap object used for diagnostics
-/// * filename: the name of the file being parsed, for diagnostics
-/// * content: the content to parse
-/// * dialect: starlark language dialect.
-pub fn parse(filename: &str, content: &str, dialect: &Dialect) -> anyhow::Result<AstModule> {
-    parse_lexer(filename, content, dialect, Lexer::new(content, dialect))
 }
 
 /// Parse a build file (if build is true) or a starlark file, reading the
