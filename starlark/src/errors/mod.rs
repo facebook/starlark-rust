@@ -28,11 +28,11 @@ use std::{
 };
 
 /// An error from Starlark, complete with locations, error codes, message etc
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Diagnostic {
     /// Message used as the headline of the error
     /// Must be in an Arc, so we can clone it.
-    pub message: Arc<anyhow::Error>,
+    pub message: anyhow::Error,
 
     /// Location to underline in the code
     // We'd love to make this a SpanLoc, but then we can't use the codemap_diagnostics
@@ -43,7 +43,7 @@ pub struct Diagnostic {
     pub call_stack: Vec<Frame>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Frame {
     pub name: String,
     pub location: Option<SpanLoc>,
@@ -62,7 +62,7 @@ impl Display for Frame {
 impl From<anyhow::Error> for Diagnostic {
     fn from(e: anyhow::Error) -> Self {
         Diagnostic {
-            message: Arc::new(e),
+            message: e,
             span: None,
             call_stack: Vec::new(),
         }
@@ -71,7 +71,7 @@ impl From<anyhow::Error> for Diagnostic {
 
 impl Error for Diagnostic {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&**self.message)
+        Some(&*self.message)
     }
 
     fn backtrace(&self) -> Option<&std::backtrace::Backtrace> {
@@ -82,7 +82,7 @@ impl Error for Diagnostic {
 impl Diagnostic {
     pub fn new(msg: impl Into<String>) -> Self {
         Self {
-            message: Arc::new(anyhow!(msg.into())),
+            message: anyhow!(msg.into()),
             span: None,
             call_stack: Vec::new(),
         }

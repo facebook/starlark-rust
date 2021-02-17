@@ -239,7 +239,7 @@ impl Assert {
         // Therefore, find the internals.
         let inner = original
             .downcast_ref::<Diagnostic>()
-            .map_or(&original, |d| &*d.message);
+            .map_or(&original, |d| &d.message);
         let err_msg = format!("{:#}", inner);
         for msg in msgs {
             if !err_msg.contains(msg) {
