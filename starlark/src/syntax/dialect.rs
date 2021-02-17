@@ -15,10 +15,7 @@
  * limitations under the License.
  */
 
-use crate::{
-    errors::Diagnostic,
-    syntax::{ast::Visibility, lexer::LexerError},
-};
+use crate::{errors::Diagnostic, syntax::ast::Visibility};
 use codemap::{CodeMap, Span, Spanned};
 use gazebo::prelude::*;
 use std::sync::Arc;
@@ -95,12 +92,8 @@ impl Dialect {
     };
 }
 
-fn err<T>(codemap: &Arc<CodeMap>, span: Span, err: DialectError) -> Result<T, LexerError> {
-    Err(LexerError::AnyhowError(Diagnostic::add_span(
-        err,
-        span,
-        codemap.dupe(),
-    )))
+fn err<T>(codemap: &Arc<CodeMap>, span: Span, err: DialectError) -> anyhow::Result<T> {
+    Err(Diagnostic::add_span(err, span, codemap.dupe()))
 }
 
 impl Dialect {
@@ -108,7 +101,7 @@ impl Dialect {
         &self,
         codemap: &Arc<CodeMap>,
         x: Spanned<T>,
-    ) -> Result<Spanned<T>, LexerError> {
+    ) -> anyhow::Result<Spanned<T>> {
         if self.enable_lambda {
             Ok(x)
         } else {
@@ -120,7 +113,7 @@ impl Dialect {
         &self,
         codemap: &Arc<CodeMap>,
         x: Spanned<T>,
-    ) -> Result<Spanned<T>, LexerError> {
+    ) -> anyhow::Result<Spanned<T>> {
         if self.enable_def {
             Ok(x)
         } else {
@@ -132,7 +125,7 @@ impl Dialect {
         &self,
         codemap: &Arc<CodeMap>,
         x: Spanned<T>,
-    ) -> Result<Spanned<T>, LexerError> {
+    ) -> anyhow::Result<Spanned<T>> {
         if self.enable_load {
             Ok(x)
         } else {
@@ -145,7 +138,7 @@ impl Dialect {
         codemap: &Arc<CodeMap>,
         span: Span,
         x: T,
-    ) -> Result<T, LexerError> {
+    ) -> anyhow::Result<T> {
         if self.enable_keyword_only_arguments {
             Ok(x)
         } else {
@@ -157,7 +150,7 @@ impl Dialect {
         &self,
         codemap: &Arc<CodeMap>,
         x: Spanned<T>,
-    ) -> Result<Spanned<T>, LexerError> {
+    ) -> anyhow::Result<Spanned<T>> {
         if self.enable_types {
             Ok(x)
         } else {

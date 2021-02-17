@@ -21,7 +21,7 @@ use crate::{
         ast::{AstModule, AstStmt, Stmt},
         dialect::Dialect,
         grammar::StarlarkParser,
-        lexer::{Lexer, LexerError, Token},
+        lexer::{Lexer, Token},
     },
 };
 use codemap::{CodeMap, Span, SpanLoc};
@@ -48,12 +48,12 @@ fn one_of(expected: &[String]) -> String {
 /// To build this diagnostic, the method needs the file span corresponding
 /// to the parsed file.
 pub(crate) fn parse_error_add_span(
-    err: lu::ParseError<u64, Token, LexerError>,
+    err: lu::ParseError<u64, Token, anyhow::Error>,
     span: Span,
     codemap: Arc<CodeMap>,
 ) -> anyhow::Error {
     if let lu::ParseError::User { error } = err {
-        return error.anyhow();
+        return error;
     }
 
     let message = match &err {

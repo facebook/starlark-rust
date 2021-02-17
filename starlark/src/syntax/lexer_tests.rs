@@ -32,7 +32,7 @@ fn collect_result(s: &'static str) -> Vec<Token> {
     let mut pos = 0;
     let codemap = Arc::new(codemap);
     Lexer::new(s, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
-        Err(e) => diagnostics.push(e.anyhow()),
+        Err(e) => diagnostics.push(e),
         Ok((i, t, j)) => {
             let span_incorrect = format!("Span of {:?} incorrect", t);
             assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
@@ -53,7 +53,7 @@ fn collect_error(s: &'static str) -> Vec<anyhow::Error> {
     let mut pos = 0;
     let codemap = Arc::new(codemap);
     Lexer::new(s, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
-        Err(e) => diagnostics.push(e.anyhow()),
+        Err(e) => diagnostics.push(e),
         Ok((i, t, j)) => {
             let span_incorrect = format!("Span of {:?} incorrect", t);
             assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
@@ -452,7 +452,7 @@ fn smoke_test() {
         let codemap = Arc::new(codemap);
         Lexer::new(content, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| {
             if x.is_err() {
-                diagnostics.push(x.err().unwrap().anyhow());
+                diagnostics.push(x.err().unwrap());
             }
         });
     }

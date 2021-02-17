@@ -19,11 +19,8 @@
 
 use crate::{
     errors::Diagnostic,
-    syntax::{
-        ast::{
-            Argument, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
-        },
-        lexer::LexerError,
+    syntax::ast::{
+        Argument, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
     },
 };
 use codemap::{CodeMap, Spanned};
@@ -78,14 +75,8 @@ impl Expr {
         f: AstExpr,
         args: Vec<AstArgument>,
         codemap: &Arc<CodeMap>,
-    ) -> Result<Expr, LexerError> {
-        let err = |span, msg| {
-            Err(LexerError::AnyhowError(Diagnostic::add_span(
-                msg,
-                span,
-                codemap.dupe(),
-            )))
-        };
+    ) -> anyhow::Result<Expr> {
+        let err = |span, msg| Err(Diagnostic::add_span(msg, span, codemap.dupe()));
 
         let mut stage = ArgsStage::Positional;
         let mut named_args = HashSet::new();
@@ -140,13 +131,13 @@ fn test_param_name<'a, T>(
     n: &'a Spanned<String>,
     arg: &Spanned<T>,
     codemap: &Arc<CodeMap>,
-) -> Result<(), LexerError> {
+) -> anyhow::Result<()> {
     if argset.contains(n.node.as_str()) {
-        return Err(LexerError::AnyhowError(Diagnostic::add_span(
+        return Err(Diagnostic::add_span(
             ArgumentUseOrderError::DuplicateParameterName,
             arg.span,
             codemap.dupe(),
-        )));
+        ));
     }
     argset.insert(&n.node);
     Ok(())
@@ -173,14 +164,8 @@ impl Stmt {
         return_type: Option<Box<AstExpr>>,
         stmts: AstStmt,
         codemap: &Arc<CodeMap>,
-    ) -> Result<Stmt, LexerError> {
-        let err = |span, msg| {
-            Err(LexerError::AnyhowError(Diagnostic::add_span(
-                msg,
-                span,
-                codemap.dupe(),
-            )))
-        };
+    ) -> anyhow::Result<Stmt> {
+        let err = |span, msg| Err(Diagnostic::add_span(msg, span, codemap.dupe()));
 
         // you can't repeat argument names
         let mut argset = HashSet::new();

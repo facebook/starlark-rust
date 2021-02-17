@@ -36,21 +36,7 @@ pub enum LexemeError {
     InvalidEscapeSequence,
 }
 
-/// Errors that can be generated during lexing
-#[derive(Debug)]
-pub enum LexerError {
-    AnyhowError(anyhow::Error),
-}
-
-impl LexerError {
-    pub fn anyhow(self) -> anyhow::Error {
-        match self {
-            Self::AnyhowError(x) => x,
-        }
-    }
-}
-
-type Lexeme = Result<(u64, Token, u64), LexerError>;
+type Lexeme = anyhow::Result<(u64, Token, u64)>;
 
 pub(crate) struct Lexer<'a> {
     // Information for spans
@@ -93,22 +79,22 @@ impl<'a> Lexer<'a> {
         lexer2
     }
 
-    fn err_pos<T>(&self, msg: LexemeError, pos: u64) -> Result<T, LexerError> {
+    fn err_pos<T>(&self, msg: LexemeError, pos: u64) -> anyhow::Result<T> {
         self.err_span(msg, pos, pos)
     }
 
-    fn err_span<T>(&self, msg: LexemeError, start: u64, end: u64) -> Result<T, LexerError> {
-        Err(LexerError::AnyhowError(Diagnostic::add_span(
+    fn err_span<T>(&self, msg: LexemeError, start: u64, end: u64) -> anyhow::Result<T> {
+        Err(Diagnostic::add_span(
             msg,
             self.filespan.subspan(start, end),
             self.codemap.dupe(),
-        )))
+        ))
     }
 
     /// We have just seen a newline, read how many indents we have
     /// and then set self.indent properly
     #[allow(clippy::while_let_on_iterator)] // Not possible as it is borrowed mutably
-    fn calculate_indent(&mut self) -> Result<(), LexerError> {
+    fn calculate_indent(&mut self) -> anyhow::Result<()> {
         // consume tabs and spaces, output the indentation levels
         let xs = self.lexer.remainder().as_bytes();
         let mut spaces = 0;
@@ -222,7 +208,7 @@ impl<'a> Lexer<'a> {
         it: &mut Peekable<impl Iterator<Item = (usize, char)>>,
         pos: usize,
         res: &mut String,
-    ) -> Result<(), LexerError> {
+    ) -> anyhow::Result<()> {
         if let Some((pos2, c2)) = it.next() {
             match c2 {
                 'n' => {

@@ -348,7 +348,7 @@ FactorExpr: AstExpr = {
 
 extern {
     type Location = u64;
-    type Error = lexer::LexerError;
+    type Error = anyhow::Error;
 
     enum lexer::Token {
       "INDENT" => lexer::Token::Indent,
