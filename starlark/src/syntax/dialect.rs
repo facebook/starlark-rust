@@ -15,8 +15,28 @@
  * limitations under the License.
  */
 
-use crate::syntax::{ast::Visibility, lexer::LexerError};
-use codemap::{Span, Spanned};
+use crate::{
+    errors::Diagnostic,
+    syntax::{ast::Visibility, lexer::LexerError},
+};
+use codemap::{CodeMap, Span, Spanned};
+use gazebo::prelude::*;
+use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+enum DialectError {
+    #[error("`def` is not allowed in this dialect")]
+    Def,
+    #[error("`lambda` is not allowed in this dialect")]
+    Lambda,
+    #[error("`load` is not allowed in this dialect")]
+    Load,
+    #[error("* keyword-only-arguments is not allowed in this dialect")]
+    KeywordOnlyArguments,
+    #[error("type annotations are not allowed in this dialect")]
+    Types,
+}
 
 /// Starlark language dialect.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -75,63 +95,73 @@ impl Dialect {
     };
 }
 
+fn err<T>(codemap: &Arc<CodeMap>, span: Span, err: DialectError) -> Result<T, LexerError> {
+    Err(LexerError::AnyhowError(Diagnostic::add_span(
+        err,
+        span,
+        codemap.dupe(),
+    )))
+}
+
 impl Dialect {
-    pub(crate) fn check_lambda<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
+    pub(crate) fn check_lambda<T>(
+        &self,
+        codemap: &Arc<CodeMap>,
+        x: Spanned<T>,
+    ) -> Result<Spanned<T>, LexerError> {
         if self.enable_lambda {
             Ok(x)
         } else {
-            Err(LexerError::WrappedError {
-                span: x.span,
-                message: "lambda is not allowed in this dialect",
-            })
+            err(codemap, x.span, DialectError::Lambda)
         }
     }
 
-    pub(crate) fn check_def<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
+    pub(crate) fn check_def<T>(
+        &self,
+        codemap: &Arc<CodeMap>,
+        x: Spanned<T>,
+    ) -> Result<Spanned<T>, LexerError> {
         if self.enable_def {
             Ok(x)
         } else {
-            Err(LexerError::WrappedError {
-                span: x.span,
-                message: "def is not allowed in this dialect",
-            })
+            err(codemap, x.span, DialectError::Def)
         }
     }
 
-    pub(crate) fn check_load<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
+    pub(crate) fn check_load<T>(
+        &self,
+        codemap: &Arc<CodeMap>,
+        x: Spanned<T>,
+    ) -> Result<Spanned<T>, LexerError> {
         if self.enable_load {
             Ok(x)
         } else {
-            Err(LexerError::WrappedError {
-                span: x.span,
-                message: "load is not allowed in this dialect",
-            })
+            err(codemap, x.span, DialectError::Load)
         }
     }
 
     pub(crate) fn check_keyword_only_arguments<T>(
         &self,
+        codemap: &Arc<CodeMap>,
         span: Span,
         x: T,
     ) -> Result<T, LexerError> {
         if self.enable_keyword_only_arguments {
             Ok(x)
         } else {
-            Err(LexerError::WrappedError {
-                span,
-                message: "* keyword-only-arguments is not allowed in this dialect",
-            })
+            err(codemap, span, DialectError::KeywordOnlyArguments)
         }
     }
 
-    pub(crate) fn check_type<T>(&self, x: Spanned<T>) -> Result<Spanned<T>, LexerError> {
+    pub(crate) fn check_type<T>(
+        &self,
+        codemap: &Arc<CodeMap>,
+        x: Spanned<T>,
+    ) -> Result<Spanned<T>, LexerError> {
         if self.enable_types {
             Ok(x)
         } else {
-            Err(LexerError::WrappedError {
-                span: x.span,
-                message: "type annotations are not allowed in this dialect",
-            })
+            err(codemap, x.span, DialectError::Types)
         }
     }
 

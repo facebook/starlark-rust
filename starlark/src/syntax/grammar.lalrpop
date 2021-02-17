@@ -64,13 +64,13 @@ starlark_: Stmt = "\n"* <(<TopStmt> "\n"*)*>
 TopStmt: AstStmt = { DefStmt, SimpleStmt<BuildTopStmt> };
 BuildTopStmt: AstStmt = { AssignStmt, ExprStmt, LoadStmt };
 
-DefStmt: AstStmt = ASTS<DefStmt_> =>? Ok(dialect.check_def(<>)?);
+DefStmt: AstStmt = ASTS<DefStmt_> =>? Ok(dialect.check_def(codemap, <>)?);
 DefStmt_: Stmt =
   "def" <identifier> "(" <COMMA<ParameterTyped>> ")" <ReturnType> ":" <Suite>
       =>? Ok(Stmt::check_def(<>)?);
 
 ReturnType: Option<Box<AstExpr>> = {
-    "->" <Test> =>? Ok(Some(box dialect.check_type(<>)?)),
+    "->" <Test> =>? Ok(Some(box dialect.check_type(codemap, <>)?)),
     => None,
 }
 
@@ -79,7 +79,7 @@ Parameter_: Parameter = {
     <n:identifier> "=" <e:Test> => Parameter::WithDefaultValue(n, None, box e),
     <identifier>            => Parameter::Normal(<>, None),
     "*" <identifier>        => Parameter::Args(<>, None),
-    <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(file_span.subspan(l, r), Parameter::NoArgs)?),
+    <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l, r), Parameter::NoArgs)?),
     "**" <identifier>       => Parameter::KWArgs(<>, None),
 };
 
@@ -88,12 +88,12 @@ ParameterTyped_: Parameter = {
     <n:identifier> <t:Type> "=" <e:Test> => Parameter::WithDefaultValue(n, t, box e),
     <identifier> <Type>            => Parameter::Normal(<>),
     "*" <identifier> <Type>        => Parameter::Args(<>),
-    <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(file_span.subspan(l, r), Parameter::NoArgs)?),
+    <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l, r), Parameter::NoArgs)?),
     "**" <identifier> <Type>       => Parameter::KWArgs(<>),
 };
 
 Type: Option<Box<AstExpr>> = {
-    ":" <Test> =>? Ok(Some(box dialect.check_type(<>)?)),
+    ":" <Test> =>? Ok(Some(box dialect.check_type(codemap, <>)?)),
     => None,
 }
 
@@ -167,7 +167,7 @@ AssignStmt_: Stmt = <lhs:TestList> <op:AssignOp> <rhs:TestList>
 ExprStmt: AstStmt = ASTS<ExprStmt_>;
 ExprStmt_: Stmt = <Test> => Stmt::Expression(<>);
 
-LoadStmt: AstStmt = ASTS<LoadStmt_> =>? Ok(dialect.check_load(<>)?);
+LoadStmt: AstStmt = ASTS<LoadStmt_> =>? Ok(dialect.check_load(codemap, <>)?);
 LoadStmt_: Stmt = "load" "(" <string> <("," <LoadStmtSyms>)+> ","? ")"
     => Stmt::Load(<>, dialect.load_visibility());
 
@@ -270,7 +270,7 @@ Test: AstExpr = {
 
 LambDef: AstExpr = {
     <l:@L> "lambda" <p:COMMA<Parameter>> ":" <e:Test> <r:@R>
-        =>? Ok(dialect.check_lambda(Expr::Lambda(p, box e).to_ast(file_span.subspan(l, r)))?),
+        =>? Ok(dialect.check_lambda(codemap, Expr::Lambda(p, box e).to_ast(file_span.subspan(l, r)))?),
 }
 
 // Binary operators

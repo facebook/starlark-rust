@@ -29,6 +29,7 @@ pub enum LexerError {
     UnfinishedStringLiteral(u64, u64),
     InvalidEscapeSequence(u64, u64),
     WrappedError { span: Span, message: &'static str },
+    AnyhowError(anyhow::Error),
 }
 
 impl LexerError {
@@ -36,13 +37,17 @@ impl LexerError {
     ///
     /// To build this diagnostic, the method needs the file span corresponding
     /// to the parsed file.
-    pub(crate) fn add_span(self, span: Span, codemap: Arc<CodeMap>) -> Diagnostic {
+    pub(crate) fn add_span(self, span: Span, codemap: Arc<CodeMap>) -> anyhow::Error {
+        if let Self::AnyhowError(err) = self {
+            return err;
+        }
         let span = match self {
             LexerError::Indentation(x, y)
             | LexerError::UnfinishedStringLiteral(x, y)
             | LexerError::InvalidEscapeSequence(x, y) => span.subspan(x, y),
             LexerError::InvalidTab(x) | LexerError::InvalidCharacter(x) => span.subspan(x, x),
             LexerError::WrappedError { span, .. } => span,
+            LexerError::AnyhowError(_) => unreachable!(),
         };
         let mut e = Diagnostic::new(
             match self {
@@ -56,11 +61,12 @@ impl LexerError {
                 }
                 LexerError::InvalidTab(..) => "Parse error: tabs are not allowed in the dialect",
                 LexerError::WrappedError { message, .. } => message,
+                LexerError::AnyhowError(_) => unreachable!(),
             }
             .to_owned(),
         );
         e.set_span(span, codemap);
-        e
+        e.into()
     }
 }
 

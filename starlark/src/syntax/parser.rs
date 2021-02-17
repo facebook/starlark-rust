@@ -50,7 +50,7 @@ pub(crate) fn parse_error_add_span(
     err: lu::ParseError<u64, Token, LexerError>,
     span: Span,
     codemap: Arc<CodeMap>,
-) -> Diagnostic {
+) -> anyhow::Error {
     if let lu::ParseError::User { error } = err {
         return error.add_span(span, codemap);
     }
@@ -93,7 +93,7 @@ pub(crate) fn parse_error_add_span(
 
     let mut e = Diagnostic::new(message);
     e.set_span(span, codemap);
-    e
+    e.into()
 }
 
 /// Parse a Starlark file.
@@ -104,7 +104,7 @@ pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Resu
     let lexer = Lexer::new(file.source(), dialect);
     match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
         Ok(v) => Ok(AstModule::create(codemap, v)?),
-        Err(p) => Err(parse_error_add_span(p, file.span, codemap).into()),
+        Err(p) => Err(parse_error_add_span(p, file.span, codemap)),
     }
 }
 

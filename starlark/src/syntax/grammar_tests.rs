@@ -38,7 +38,7 @@ fn unwrap_parse(e: &str) -> String {
             y => panic!("Expected statements, got {:?}", y),
         },
         Err(e) => {
-            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap).into()]);
+            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap)]);
             panic!("Got errors!");
         }
     }
@@ -199,7 +199,7 @@ fail(2)
             y => panic!("Expected statements, got {:?}", y),
         },
         Err(e) => {
-            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap).into()]);
+            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap)]);
             panic!("Got errors!");
         }
     }
