@@ -59,16 +59,6 @@ impl Display for Frame {
     }
 }
 
-impl From<anyhow::Error> for Diagnostic {
-    fn from(e: anyhow::Error) -> Self {
-        Diagnostic {
-            message: e,
-            span: None,
-            call_stack: Vec::new(),
-        }
-    }
-}
-
 impl Error for Diagnostic {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&*self.message)
@@ -81,16 +71,15 @@ impl Error for Diagnostic {
 
 impl Diagnostic {
     pub fn new(msg: impl Into<String>) -> Self {
-        Self {
-            message: anyhow!(msg.into()),
-            span: None,
-            call_stack: Vec::new(),
-        }
+        Self::anyhow(anyhow!(msg.into()))
     }
 
     pub fn anyhow(msg: impl Into<anyhow::Error>) -> Self {
-        let x: anyhow::Error = msg.into();
-        x.into()
+        Self {
+            message: msg.into(),
+            span: None,
+            call_stack: Vec::new(),
+        }
     }
 
     pub fn set_span(&mut self, span: Span, codemap: Arc<CodeMap>) {
