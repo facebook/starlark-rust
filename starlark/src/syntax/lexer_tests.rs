@@ -15,10 +15,13 @@
  * limitations under the License.
  */
 
-use crate::syntax::{
-    dialect::Dialect,
-    lexer::{Lexer, Token, Token::*},
-    testing::{assert_diagnostics, assert_parse_failure, testcase_files},
+use crate::{
+    assert,
+    syntax::{
+        dialect::Dialect,
+        lexer::{Lexer, Token, Token::*},
+        testing::{assert_diagnostics, testcase_files},
+    },
 };
 use codemap::CodeMap;
 use gazebo::prelude::*;
@@ -257,8 +260,8 @@ fn test_string_lit() {
     );
 
     // unfinished string literal
-    assert_parse_failure("!'!\n'", &Dialect::Standard);
-    assert_parse_failure("!\"!\n\"", &Dialect::Standard);
+    assert::parse_fail("!'!\n'");
+    assert::parse_fail("!\"!\n\"");
 
     // Multiline string
     let r = collect_result("'''''' '''\\n''' '''\n''' \"\"\"\"\"\" \"\"\"\\n\"\"\" \"\"\"\n\"\"\"");

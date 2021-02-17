@@ -15,88 +15,80 @@
  * limitations under the License.
  */
 
-use crate::syntax::{
-    ast::Stmt,
-    dialect::Dialect,
-    grammar::StarlarkParser,
-    lexer::Lexer,
-    parse,
-    parser::parse_error_add_span,
-    testing::{assert_diagnostics, assert_parse_failure, testcase_files},
+use crate::{
+    assert,
+    assert::Assert,
+    syntax::{
+        ast::Stmt,
+        dialect::Dialect,
+        grammar::StarlarkParser,
+        lexer::Lexer,
+        parse,
+        parser::parse_error_add_span,
+        testing::{assert_diagnostics, testcase_files},
+    },
 };
 use gazebo::prelude::*;
 use std::sync::Arc;
 
-fn unwrap_parse(e: &str) -> String {
-    let mut codemap = codemap::CodeMap::new();
-    let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
-    let codemap = Arc::new(codemap);
-    let lexer = Lexer::new(e, &Dialect::Standard, codemap.dupe(), filespan);
-    match StarlarkParser::new().parse(&codemap, filespan, &Dialect::Extended, lexer) {
-        Ok(x) => match x.node {
-            Stmt::Statements(bv) => format!("{}", Stmt::Statements(bv)),
-            y => panic!("Expected statements, got {:?}", y),
-        },
-        Err(e) => {
-            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap)]);
-            panic!("Got errors!");
-        }
-    }
-}
-
 #[test]
 fn test_empty() {
-    assert!(unwrap_parse("\n").is_empty());
+    assert!(assert::parse("\n").is_empty());
 }
 
 #[test]
 fn test_top_level_comment() {
-    assert!(unwrap_parse("# Test").is_empty());
+    assert!(assert::parse("# Test").is_empty());
 }
 
 #[test]
 fn test_top_level_load() {
-    assert!(!unwrap_parse("\nload(\"//top/level/load.bzl\", \"top-level\")\n").is_empty());
-    assert!(!unwrap_parse("\nload(\"//top/level/load.bzl\", \"top-level\")").is_empty());
+    assert!(!assert::parse("\nload(\"//top/level/load.bzl\", \"top-level\")\n").is_empty());
+    assert!(!assert::parse("\nload(\"//top/level/load.bzl\", \"top-level\")").is_empty());
     assert!(
-        !unwrap_parse("\nload(\n  \"//top/level/load.bzl\",\n  \"top-level\",\n)\n").is_empty()
+        !assert::parse("\nload(\n  \"//top/level/load.bzl\",\n  \"top-level\",\n)\n").is_empty()
     );
 }
 
 #[test]
 fn test_top_level_assignation() {
-    assert!(!unwrap_parse("\n_ASSIGNATION = 'top-level'\n").is_empty());
+    assert!(!assert::parse("\n_ASSIGNATION = 'top-level'\n").is_empty());
 }
 
 #[test]
 fn test_top_level_docstring() {
-    assert!(!unwrap_parse("\n\"\"\"Top-level docstring\"\"\"\n").is_empty());
+    assert!(!assert::parse("\n\"\"\"Top-level docstring\"\"\"\n").is_empty());
 }
 
 #[test]
 fn test_top_level_def() {
     assert_eq!(
-        unwrap_parse("def toto():\n  pass\n"),
+        assert::parse("def toto():\n  pass\n"),
         "def toto():\n  pass\n"
     );
-    assert_parse_failure("!def toto():\n  pass\n!", &Dialect::Simple);
+    let mut a = Assert::new();
+    a.dialect(&Dialect::Simple);
+    a.parse_fail("!def toto():\n  pass\n!");
     // no new line at end of file
-    assert_eq!(unwrap_parse("def toto():\n  pass"), "def toto():\n  pass\n");
     assert_eq!(
-        unwrap_parse("def toto():\n  pass\ndef titi(): return 1"),
+        assert::parse("def toto():\n  pass"),
+        "def toto():\n  pass\n"
+    );
+    assert_eq!(
+        assert::parse("def toto():\n  pass\ndef titi(): return 1"),
         "def toto():\n  pass\ndef titi():\n  return 1\n"
     );
     assert_eq!(
-        unwrap_parse("def toto():\n  pass\n\ndef titi(): return 1"),
+        assert::parse("def toto():\n  pass\n\ndef titi(): return 1"),
         "def toto():\n  pass\ndef titi():\n  return 1\n"
     );
-    assert_eq!(unwrap_parse("def t():\n\n  pass"), "def t():\n  pass\n");
+    assert_eq!(assert::parse("def t():\n\n  pass"), "def t():\n  pass\n");
 }
 
 #[test]
 fn test_top_level_def_with_docstring() {
     assert_eq!(
-        unwrap_parse(
+        assert::parse(
             "\"\"\"Top-level docstring\"\"\"
 
 def toto():
@@ -110,7 +102,7 @@ def toto():
 #[test]
 fn test_ifelse() {
     assert_eq!(
-        unwrap_parse("def d():\n  if True:\n    a\n  else:\n    b"),
+        assert::parse("def d():\n  if True:\n    a\n  else:\n    b"),
         "def d():\n  if True:\n    a\n  else:\n    b\n"
     );
 }
@@ -118,50 +110,50 @@ fn test_ifelse() {
 #[test]
 fn test_kwargs_passing() {
     assert_eq!(
-        unwrap_parse("f(x, *a, **b); f(x, *a, **{a:b}); f(x, *[a], **b)"),
+        assert::parse("f(x, *a, **b); f(x, *a, **{a:b}); f(x, *[a], **b)"),
         "f(x, *a, **b)\nf(x, *a, **{a: b})\nf(x, *[a], **b)\n"
     );
 }
 
 #[test]
 fn test_unary_op() {
-    assert_eq!(unwrap_parse("a = -1"), "a = -1\n");
-    assert_eq!(unwrap_parse("a = +1"), "a = +1\n");
-    assert_eq!(unwrap_parse("a = -a"), "a = -a\n");
-    assert_eq!(unwrap_parse("a = +a"), "a = +a\n");
+    assert_eq!(assert::parse("a = -1"), "a = -1\n");
+    assert_eq!(assert::parse("a = +1"), "a = +1\n");
+    assert_eq!(assert::parse("a = -a"), "a = -a\n");
+    assert_eq!(assert::parse("a = +a"), "a = +a\n");
 }
 
 #[test]
 fn test_tuples() {
-    assert_eq!(unwrap_parse("a = (-1)"), "a = -1\n"); // Not a tuple
-    assert_eq!(unwrap_parse("a = (+1,)"), "a = (+1,)\n"); // But this is one
-    assert_eq!(unwrap_parse("a = ()"), "a = ()\n");
+    assert_eq!(assert::parse("a = (-1)"), "a = -1\n"); // Not a tuple
+    assert_eq!(assert::parse("a = (+1,)"), "a = (+1,)\n"); // But this is one
+    assert_eq!(assert::parse("a = ()"), "a = ()\n");
 }
 
 #[test]
 fn test_return() {
     assert_eq!(
-        unwrap_parse("def fn(): return 1"),
+        assert::parse("def fn(): return 1"),
         "def fn():\n  return 1\n"
     );
     assert_eq!(
-        unwrap_parse("def fn(): return a()"),
+        assert::parse("def fn(): return a()"),
         "def fn():\n  return a()\n"
     );
-    assert_eq!(unwrap_parse("def fn(): return"), "def fn():\n  return\n");
+    assert_eq!(assert::parse("def fn(): return"), "def fn():\n  return\n");
 }
 
 // Regression test for https://github.com/google/starlark-rust/issues/44.
 #[test]
 fn test_optional_whitespace() {
-    assert_eq!(unwrap_parse("6 or()"), "(6 or ())\n");
-    assert_eq!(unwrap_parse("6or()"), "(6 or ())\n");
+    assert_eq!(assert::parse("6 or()"), "(6 or ())\n");
+    assert_eq!(assert::parse("6or()"), "(6 or ())\n");
 }
 
 // Regression test for https://github.com/google/starlark-rust/issues/56.
 #[test]
 fn test_optional_whitespace_after_0() {
-    assert_eq!(unwrap_parse("0in[1,2,3]"), "(0 in [1, 2, 3])\n");
+    assert_eq!(assert::parse("0in[1,2,3]"), "(0 in [1, 2, 3])\n");
 }
 
 #[test]
@@ -197,46 +189,48 @@ fail(2)
 #[test]
 fn test_comprehension() {
     assert_eq!(
-        unwrap_parse("[x for x in range(12) if x % 2 == 0 if x % 3 == 0]"),
+        assert::parse("[x for x in range(12) if x % 2 == 0 if x % 3 == 0]"),
         "[x for x in range(12) if ((x % 2) == 0) if ((x % 3) == 0)]\n"
     );
 }
 
 #[test]
 fn test_octal() {
-    assert_eq!(unwrap_parse("0"), "0\n");
-    assert_eq!(unwrap_parse("10"), "10\n");
+    assert_eq!(assert::parse("0"), "0\n");
+    assert_eq!(assert::parse("10"), "10\n");
     // Starlark requires us to ban leading zeros (confusion with implicit octal)
-    assert_parse_failure("!01!", &Dialect::Standard);
+    assert::parse_fail("!01!");
 }
 
 #[test]
 fn test_lambda() {
     assert_eq!(
-        unwrap_parse("x = lambda y: y + 1"),
+        assert::parse("x = lambda y: y + 1"),
         "x = (lambda y: (y + 1))\n"
     );
-    assert_parse_failure("x = !lambda y: y + 1!", &Dialect::Standard);
+    let mut a = Assert::new();
+    a.dialect(&Dialect::Standard);
+    a.parse_fail("x = !lambda y: y + 1!");
     assert_eq!(
-        unwrap_parse("(lambda y: x == 1)(1)"),
+        assert::parse("(lambda y: x == 1)(1)"),
         "(lambda y: (x == 1))(1)\n"
     );
     assert_eq!(
-        unwrap_parse("(lambda x: x or 1)(1)"),
+        assert::parse("(lambda x: x or 1)(1)"),
         "(lambda x: (x or 1))(1)\n"
     );
     assert_eq!(
-        unwrap_parse("f = lambda x, y: x * y"),
+        assert::parse("f = lambda x, y: x * y"),
         "f = (lambda x, y: (x * y))\n"
     );
-    assert_eq!(unwrap_parse("lambda x: True"), "(lambda x: True)\n");
-    assert_eq!(unwrap_parse("lambda: True"), "(lambda : True)\n");
+    assert_eq!(assert::parse("lambda x: True"), "(lambda x: True)\n");
+    assert_eq!(assert::parse("lambda: True"), "(lambda : True)\n");
     assert_eq!(
-        unwrap_parse("f(lambda x, y=1, *args, **kwargs: x + y + z)"),
+        assert::parse("f(lambda x, y=1, *args, **kwargs: x + y + z)"),
         "f((lambda x, y = 1, *args, **kwargs: ((x + y) + z)))\n"
     );
     assert_eq!(
-        unwrap_parse("[x for x in [1, 2] if (lambda : 3 if True else 4)]"),
+        assert::parse("[x for x in [1, 2] if (lambda : 3 if True else 4)]"),
         "[x for x in [1, 2] if (lambda : (3 if True else 4))]\n"
     );
     // Note that Python3 and Go Starlark can both parse the line below,
@@ -249,7 +243,7 @@ fn test_lambda() {
 #[test]
 fn test_nested_def() {
     assert_eq!(
-        unwrap_parse("def foo(x):\n  def bar(y): return y\n  return bar(x)"),
+        assert::parse("def foo(x):\n  def bar(y): return y\n  return bar(x)"),
         "def foo(x):\n  def bar(y):\n    return y\n  return bar(x)\n"
     );
 }

@@ -302,6 +302,53 @@ impl Assert {
             );
         }
     }
+
+    pub fn parse(&self, program: &str) -> String {
+        match crate::syntax::parse("<test>", program.to_owned(), &self.dialect) {
+            Ok(x) => format!("{}", x.statement.node),
+            Err(e) => {
+                panic!(
+                    "starlark::assert::parse, expected parse success but failed\nCode: {}\nError: {}",
+                    program, e
+                );
+            }
+        }
+    }
+
+    pub fn parse_fail(&self, contents: &str) -> anyhow::Error {
+        let rest = contents.replace('!', "");
+        assert!(
+            rest.len() + 2 == contents.len(),
+            "Must be exactly 2 ! marks around the parse error location"
+        );
+
+        let begin = contents.find('!').unwrap();
+        let end = contents[begin + 1..].find('!').unwrap() + begin;
+
+        match crate::syntax::parse("<test>", rest, &self.dialect) {
+            Ok(ast) => panic!(
+                "Expected parse failure, but succeeded:\nContents: {}\nGot: {:?}",
+                contents, ast
+            ),
+            Err(e) => {
+                if let Some(d) = e.downcast_ref::<Diagnostic>() {
+                    if let Some((span, codemap)) = &d.span {
+                        let file = codemap.find_file(span.low());
+                        let want_span = file.span.subspan(begin as u64, end as u64);
+                        if *span == want_span {
+                            return e; // Success
+                        }
+                    }
+                }
+                panic!(
+                    "Expected diagnostic with span information, but didn't get a good span:\nContents: {}\nGot: {:?}\nWanted: {:?}",
+                    contents,
+                    e,
+                    (begin, end)
+                )
+            }
+        }
+    }
 }
 
 /// Two programs that must evaluate to the same (non-error) result.
@@ -400,4 +447,18 @@ pub fn fail_with(module_name: &str, module_contents: &str, program: &str, msg: &
 /// ```
 pub fn pass(program: &str) -> OwnedFrozenValue {
     Assert::new().pass(program)
+}
+
+/// Parse some text and pretty-print it using enough brackets etc. to avoid
+/// ambiguity. Fails if the program does not parse.
+/// The precise form of the pretty-printed output is not necessarily stable
+/// over time.
+pub fn parse(program: &str) -> String {
+    Assert::new().parse(program)
+}
+
+/// Parse some text which must fail to parse. Two exclamation marks should be
+/// placed around the span which is reported by the error.
+pub fn parse_fail(program: &str) -> anyhow::Error {
+    Assert::new().parse_fail(program)
 }
