@@ -47,6 +47,20 @@ enum ArgsStage {
     Kwargs,
 }
 
+#[derive(Error, Debug)]
+enum ArgumentDefinitionOrderError {
+    #[error("positional argument after non positional")]
+    PositionalThenNonPositional,
+    #[error("named argument after *args or **kwargs")]
+    NamedArgumentAfterStars,
+    #[error("repeated named argument")]
+    RepeatedNamed,
+    #[error("Args array after another args or kwargs")]
+    ArgsArrayAfterArgsOrKwargs,
+    #[error("Multiple kwargs dictionary in arguments")]
+    MultipleKwargs,
+}
+
 impl Expr {
     /// We want to check a function call is well-formed.
     /// Our eventual plan is to follow the Python invariants, but for now, we are closer
@@ -60,51 +74,57 @@ impl Expr {
     /// multiple **kwargs.
     ///
     /// We allow at most one **kwargs.
-    pub fn check_call(f: AstExpr, args: Vec<AstArgument>) -> Result<Expr, LexerError> {
+    pub fn check_call(
+        f: AstExpr,
+        args: Vec<AstArgument>,
+        codemap: &Arc<CodeMap>,
+    ) -> Result<Expr, LexerError> {
+        let err = |span, msg| {
+            Err(LexerError::AnyhowError(Diagnostic::add_span(
+                msg,
+                span,
+                codemap.dupe(),
+            )))
+        };
+
         let mut stage = ArgsStage::Positional;
         let mut named_args = HashSet::new();
         for arg in &args {
             match &arg.node {
                 Argument::Positional(_) => {
                     if stage != ArgsStage::Positional {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "positional argument after non positional",
-                        });
+                        return err(
+                            arg.span,
+                            ArgumentDefinitionOrderError::PositionalThenNonPositional,
+                        );
                     }
                 }
                 Argument::Named(n, _) => {
                     if stage > ArgsStage::Named {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "named argument after *args or **kwargs",
-                        });
+                        return err(
+                            arg.span,
+                            ArgumentDefinitionOrderError::NamedArgumentAfterStars,
+                        );
                     } else if !named_args.insert(&n.node) {
                         // Check the names are distinct
-                        return Err(LexerError::WrappedError {
-                            span: n.span,
-                            message: "repeated named argument",
-                        });
+                        return err(n.span, ArgumentDefinitionOrderError::RepeatedNamed);
                     } else {
                         stage = ArgsStage::Named;
                     }
                 }
                 Argument::ArgsArray(_) => {
                     if stage > ArgsStage::Named {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "Args array after another args or kwargs",
-                        });
+                        return err(
+                            arg.span,
+                            ArgumentDefinitionOrderError::ArgsArrayAfterArgsOrKwargs,
+                        );
                     } else {
                         stage = ArgsStage::Args;
                     }
                 }
                 Argument::KWArgsDict(_) => {
                     if stage == ArgsStage::Kwargs {
-                        return Err(LexerError::WrappedError {
-                            span: arg.span,
-                            message: "Multiple kwargs dictionary in arguments",
-                        });
+                        return err(arg.span, ArgumentDefinitionOrderError::MultipleKwargs);
                     } else {
                         stage = ArgsStage::Kwargs;
                     }

@@ -201,7 +201,7 @@ PrimaryExpr: AstExpr = {
     <l:@L> <e:PrimaryExpr> "." <i:identifier> <r:@R>
         => Expr::Dot(box e, i).to_ast(file_span.subspan(l, r)),
     <l:@L> <e:PrimaryExpr> "(" <a:COMMA<Argument>> ")" <r:@R>
-        =>? Ok(Expr::check_call(e, a)?.to_ast(file_span.subspan(l, r))),
+        =>? Ok(Expr::check_call(e, a, codemap)?.to_ast(file_span.subspan(l, r))),
     <l:@L> <e:PrimaryExpr> "[" <i1:Test?> ":" <i2:Test?> <i3:(":" <Test?>)?> "]"
         <r:@R> => {
           Expr::Slice(box e, i1.map(|x| box x), i2.map(|x| box x), i3.unwrap_or(None).map(|x| box x))
