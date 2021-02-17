@@ -31,7 +31,7 @@ fn collect_result(s: &'static str) -> Vec<Token> {
     let file_span = codemap.add_file("<test>".to_owned(), s.to_owned()).span;
     let mut pos = 0;
     let codemap = Arc::new(codemap);
-    Lexer::new(s, &Dialect::Standard).for_each(|x| match x {
+    Lexer::new(s, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
         Err(e) => diagnostics.push(e.add_span(file_span, codemap.dupe())),
         Ok((i, t, j)) => {
             let span_incorrect = format!("Span of {:?} incorrect", t);
@@ -43,6 +43,26 @@ fn collect_result(s: &'static str) -> Vec<Token> {
     });
     assert_diagnostics(&diagnostics);
     result
+}
+
+fn collect_error(s: &'static str) -> Vec<anyhow::Error> {
+    let mut codemap = CodeMap::new();
+    let mut diagnostics = Vec::new();
+    let mut result = Vec::new();
+    let file_span = codemap.add_file("<test>".to_owned(), s.to_owned()).span;
+    let mut pos = 0;
+    let codemap = Arc::new(codemap);
+    Lexer::new(s, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
+        Err(e) => diagnostics.push(e.add_span(file_span, codemap.dupe())),
+        Ok((i, t, j)) => {
+            let span_incorrect = format!("Span of {:?} incorrect", t);
+            assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
+            result.push(t);
+            assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
+            pos = j;
+        }
+    });
+    diagnostics
 }
 
 #[test]
@@ -257,18 +277,8 @@ fn test_string_lit() {
     );
 
     // unfinished string literal
-    assert!(
-        Lexer::new("'\n'", &Dialect::Standard)
-            .next()
-            .unwrap()
-            .is_err(),
-    );
-    assert!(
-        Lexer::new("\"\n\"", &Dialect::Standard)
-            .next()
-            .unwrap()
-            .is_err(),
-    );
+    assert!(!collect_error("'\n'").is_empty());
+    assert!(!collect_error("\"\n\"").is_empty());
     // Multiline string
     let r = collect_result("'''''' '''\\n''' '''\n''' \"\"\"\"\"\" \"\"\"\\n\"\"\" \"\"\"\n\"\"\"");
     assert_eq!(
@@ -395,14 +405,23 @@ fn test_span() {
         (36, Newline, 37),
         (37, Newline, 37),
     ];
-    let actual: Vec<(u64, Token, u64)> = Lexer::new(
+
+    let mut codemap = CodeMap::new();
+    let file = codemap.add_file(
+        "x".to_owned(),
         r#"
 def test(a):
   fail(a)
 
 test("abc")
-"#,
+"#
+        .to_owned(),
+    );
+    let actual: Vec<(u64, Token, u64)> = Lexer::new(
+        file.source(),
         &Dialect::Standard,
+        Arc::new(codemap),
+        file.span,
     )
     .map(Result::unwrap)
     .collect();
@@ -431,7 +450,7 @@ fn smoke_test() {
             .add_file((*file).to_owned(), (*content).to_owned())
             .span;
         let codemap = Arc::new(codemap);
-        Lexer::new(content, &Dialect::Standard).for_each(|x| {
+        Lexer::new(content, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| {
             if x.is_err() {
                 diagnostics.push(x.err().unwrap().add_span(file_span, codemap.dupe()));
             }

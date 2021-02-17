@@ -28,10 +28,10 @@ use gazebo::prelude::*;
 use std::sync::Arc;
 
 fn unwrap_parse(e: &str) -> String {
-    let lexer = Lexer::new(e, &Dialect::Standard);
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
     let codemap = Arc::new(codemap);
+    let lexer = Lexer::new(e, &Dialect::Standard, codemap.dupe(), filespan);
     match StarlarkParser::new().parse(&codemap, filespan, &Dialect::Extended, lexer) {
         Ok(x) => match x.node {
             Stmt::Statements(bv) => format!("{}", Stmt::Statements(bv)),
@@ -45,10 +45,10 @@ fn unwrap_parse(e: &str) -> String {
 }
 
 fn fails_parse(e: &str, dialect: &Dialect) {
-    let lexer = Lexer::new(e, &Dialect::Standard);
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
     let codemap = Arc::new(codemap);
+    let lexer = Lexer::new(e, &Dialect::Standard, codemap.dupe(), filespan);
     match StarlarkParser::new().parse(&codemap, filespan, dialect, lexer) {
         Ok(x) => panic!("Expected failure, got {:?}", x),
         Err(_) => {}
@@ -184,12 +184,12 @@ fn(1)
 
 fail(2)
 "#;
-    let lexer = Lexer::new(content, &Dialect::Standard);
     let mut codemap = codemap::CodeMap::new();
     let filespan = codemap
         .add_file("<test>".to_owned(), content.to_string())
         .span;
     let codemap = Arc::new(codemap);
+    let lexer = Lexer::new(content, &Dialect::Standard, codemap.dupe(), filespan);
     match StarlarkParser::new().parse(&codemap, filespan, &Dialect::Extended, lexer) {
         Ok(x) => match x.node {
             Stmt::Statements(bv) => {

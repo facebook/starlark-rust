@@ -70,6 +70,12 @@ impl LexerError {
 type Lexeme = Result<(u64, Token, u64), LexerError>;
 
 pub(crate) struct Lexer<'a> {
+    // Information for spans
+    #[allow(dead_code)]
+    codemap: Arc<CodeMap>,
+    #[allow(dead_code)]
+    filespan: Span,
+    // Other info
     indent_levels: Vec<usize>,
     /// Lexemes that have been generated but not yet returned
     buffer: VecDeque<Lexeme>,
@@ -87,9 +93,11 @@ fn enumerate_chars(x: impl Iterator<Item = char>) -> impl Iterator<Item = (usize
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str, dialect: &Dialect) -> Self {
+    pub fn new(input: &'a str, dialect: &Dialect, codemap: Arc<CodeMap>, filespan: Span) -> Self {
         let lexer = Token::lexer(input);
         let mut lexer2 = Self {
+            codemap,
+            filespan,
             // Aim to size all the buffers such that they never resize
             indent_levels: Vec::with_capacity(20),
             buffer: VecDeque::with_capacity(10),

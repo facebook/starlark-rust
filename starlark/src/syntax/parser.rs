@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use codemap::{CodeMap, Span, SpanLoc};
+use gazebo::prelude::*;
 use lalrpop_util as lu;
 use std::{fs, path::Path, sync::Arc};
 
@@ -101,7 +102,7 @@ pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Resu
     let mut codemap = CodeMap::new();
     let file = codemap.add_file(filename.to_string(), content);
     let codemap = Arc::new(codemap);
-    let lexer = Lexer::new(file.source(), dialect);
+    let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
     match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
         Ok(v) => Ok(AstModule::create(codemap, v)?),
         Err(p) => Err(parse_error_add_span(p, file.span, codemap)),
