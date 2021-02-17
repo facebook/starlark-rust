@@ -21,7 +21,7 @@ use logos::Logos;
 use std::{char, collections::VecDeque, fmt, fmt::Display, iter::Peekable, sync::Arc};
 
 /// Errors that can be generated during lexing
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, PartialEq)]
 pub enum LexerError {
     Indentation(u64, u64),
     InvalidCharacter(u64),

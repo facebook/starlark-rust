@@ -51,6 +51,10 @@ pub(crate) fn parse_error_add_span(
     span: Span,
     codemap: Arc<CodeMap>,
 ) -> Diagnostic {
+    if let lu::ParseError::User { error } = err {
+        return error.add_span(span, codemap);
+    }
+
     let message = match &err {
         lu::ParseError::InvalidToken { .. } => "Parse error: invalid token".to_owned(),
         lu::ParseError::UnrecognizedToken {
@@ -72,7 +76,7 @@ pub(crate) fn parse_error_add_span(
             format!("Parse error: extraneous token {}", t)
         }
         lu::ParseError::UnrecognizedEOF { .. } => "Parse error: unexpected end of file".to_owned(),
-        lu::ParseError::User { error } => return error.add_span(span, codemap),
+        lu::ParseError::User { .. } => unreachable!(),
     };
     let span = match &err {
         lu::ParseError::InvalidToken { location } => span.subspan(*location, *location),
