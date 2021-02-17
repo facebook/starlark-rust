@@ -95,24 +95,11 @@ fn thrw<'v, T>(
 ) -> Result<T, EvalException<'v>> {
     match r {
         Ok(v) => Ok(v),
-        Err(mut e) => {
-            let set = |d: &mut Diagnostic| {
+        Err(e) => {
+            let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
                 d.set_span(span, context.codemap.dupe());
                 d.set_call_stack(|| context.call_stack.to_diagnostic_frames());
-            };
-
-            // Convert to a diagnostic, either because it already is a diagnostic, or by wrappping it
-            let e = match e.downcast_mut::<Diagnostic>() {
-                Some(diag) => {
-                    set(diag);
-                    e
-                }
-                _ => {
-                    let mut e = Diagnostic::anyhow(e);
-                    set(&mut e);
-                    e.into()
-                }
-            };
+            });
             Err(EvalException::Error(e))
         }
     }

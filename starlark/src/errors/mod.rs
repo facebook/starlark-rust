@@ -82,6 +82,23 @@ impl Diagnostic {
         }
     }
 
+    /// Modify an error by attaching diagnostic information to it - e.g. span/call_stack.
+    /// If given an `Error` which is a `Diagnostic`, it will add the information to the
+    /// existing `Diagnostic`. If not, it will wrap the error in `Diagnostic`.
+    pub fn modify(mut err: anyhow::Error, f: impl FnOnce(&mut Diagnostic)) -> anyhow::Error {
+        match err.downcast_mut::<Diagnostic>() {
+            Some(diag) => {
+                f(diag);
+                err
+            }
+            _ => {
+                let mut err = Diagnostic::anyhow(err);
+                f(&mut err);
+                err.into()
+            }
+        }
+    }
+
     pub fn set_span(&mut self, span: Span, codemap: Arc<CodeMap>) {
         if self.span.is_none() {
             // We want the best span, which is likely the first person to set it
