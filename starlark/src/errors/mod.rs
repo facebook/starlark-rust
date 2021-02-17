@@ -27,7 +27,12 @@ use std::{
     sync::Arc,
 };
 
-/// An error from Starlark, complete with locations, error codes, message etc
+/// An error from Starlark, which is may contain a span (where in the code was responsible)
+/// and a call stack (the code that called this code).
+///
+/// The `message` is an `anyhow:Error`.
+/// This `Diagnostic` structure is itself usually stored within an `anyhow::Error`.
+/// But the inner message is itself _never_ a `Diagnostic`.
 #[derive(Debug)]
 pub struct Diagnostic {
     /// Message used as the headline of the error
@@ -74,9 +79,10 @@ impl Diagnostic {
         Self::anyhow(anyhow!(msg.into()))
     }
 
-    pub fn anyhow(msg: impl Into<anyhow::Error>) -> Self {
+    // Invariant: the `msg` should not be a Diagnostic, ensured by the callers
+    fn anyhow(msg: anyhow::Error) -> Self {
         Self {
-            message: msg.into(),
+            message: msg,
             span: None,
             call_stack: Vec::new(),
         }
