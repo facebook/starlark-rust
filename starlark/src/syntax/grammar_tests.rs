@@ -22,7 +22,7 @@ use crate::syntax::{
     lexer::Lexer,
     parse,
     parser::parse_error_add_span,
-    testing::{assert_diagnostics, testcase_files},
+    testing::{assert_diagnostics, assert_parse_failure, testcase_files},
 };
 use gazebo::prelude::*;
 use std::sync::Arc;
@@ -41,17 +41,6 @@ fn unwrap_parse(e: &str) -> String {
             assert_diagnostics(&[parse_error_add_span(e, filespan, codemap)]);
             panic!("Got errors!");
         }
-    }
-}
-
-fn fails_parse(e: &str, dialect: &Dialect) {
-    let mut codemap = codemap::CodeMap::new();
-    let filespan = codemap.add_file("<test>".to_owned(), e.to_string()).span;
-    let codemap = Arc::new(codemap);
-    let lexer = Lexer::new(e, &Dialect::Standard, codemap.dupe(), filespan);
-    match StarlarkParser::new().parse(&codemap, filespan, dialect, lexer) {
-        Ok(x) => panic!("Expected failure, got {:?}", x),
-        Err(_) => {}
     }
 }
 
@@ -90,7 +79,7 @@ fn test_top_level_def() {
         unwrap_parse("def toto():\n  pass\n"),
         "def toto():\n  pass\n"
     );
-    fails_parse("def toto():\n  pass\n", &Dialect::Simple);
+    assert_parse_failure("!def toto():\n  pass\n!", &Dialect::Simple);
     // no new line at end of file
     assert_eq!(unwrap_parse("def toto():\n  pass"), "def toto():\n  pass\n");
     assert_eq!(
@@ -218,7 +207,7 @@ fn test_octal() {
     assert_eq!(unwrap_parse("0"), "0\n");
     assert_eq!(unwrap_parse("10"), "10\n");
     // Starlark requires us to ban leading zeros (confusion with implicit octal)
-    fails_parse("01", &Dialect::Standard);
+    assert_parse_failure("!01!", &Dialect::Standard);
 }
 
 #[test]
@@ -227,7 +216,7 @@ fn test_lambda() {
         unwrap_parse("x = lambda y: y + 1"),
         "x = (lambda y: (y + 1))\n"
     );
-    fails_parse("x = lambda y: y + 1", &Dialect::Standard);
+    assert_parse_failure("x = !lambda y: y + 1!", &Dialect::Standard);
     assert_eq!(
         unwrap_parse("(lambda y: x == 1)(1)"),
         "(lambda y: (x == 1))(1)\n"

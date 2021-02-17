@@ -413,9 +413,10 @@ impl<'a> Lexer<'a> {
                                 continue;
                             }
                         }
-                        Token::Error => Some(self.err_pos(
+                        Token::Error => Some(self.err_span(
                             LexemeError::InvalidCharacter,
                             self.lexer.span().start as u64,
+                            self.lexer.span().end as u64,
                         )),
                         Token::RawDoubleQuote => {
                             let raw = self.lexer.span().len() == 2;

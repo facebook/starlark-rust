@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-use crate::errors::eprint_error;
+use crate::{
+    errors::{eprint_error, Diagnostic},
+    syntax::{parse, Dialect},
+};
 
 pub fn assert_diagnostics(es: &[anyhow::Error]) {
     if !es.is_empty() {
@@ -23,6 +26,43 @@ pub fn assert_diagnostics(es: &[anyhow::Error]) {
             eprint_error(e);
         }
         panic!("There was {} parse errors", es.len());
+    }
+}
+
+/// Assert that the given string fails at parse time, and that the bit
+/// between !exclamation marks! is the location of the failure.
+pub(crate) fn assert_parse_failure(contents: &str, dialect: &Dialect) {
+    let rest = contents.replace('!', "");
+    assert!(
+        rest.len() + 2 == contents.len(),
+        "Must be exactly 2 ! marks around the parse error location"
+    );
+
+    let begin = contents.find('!').unwrap();
+    let end = contents[begin + 1..].find('!').unwrap() + begin;
+
+    match parse("<test>", rest, dialect) {
+        Ok(ast) => panic!(
+            "Expected parse failure, but succeeded:\nContents: {}\nGot: {:?}",
+            contents, ast
+        ),
+        Err(e) => {
+            if let Some(d) = e.downcast_ref::<Diagnostic>() {
+                if let Some((span, codemap)) = &d.span {
+                    let file = codemap.find_file(span.low());
+                    let want_span = file.span.subspan(begin as u64, end as u64);
+                    if *span == want_span {
+                        return; // Success
+                    }
+                }
+            }
+            panic!(
+                "Expected diagnostic with span information, but didn't get a good span:\nContents: {}\nGot: {:?}\nWanted: {:?}",
+                contents,
+                e,
+                (begin, end)
+            )
+        }
     }
 }
 

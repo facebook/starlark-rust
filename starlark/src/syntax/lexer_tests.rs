@@ -18,7 +18,7 @@
 use crate::syntax::{
     dialect::Dialect,
     lexer::{Lexer, Token, Token::*},
-    testing::{assert_diagnostics, testcase_files},
+    testing::{assert_diagnostics, assert_parse_failure, testcase_files},
 };
 use codemap::CodeMap;
 use gazebo::prelude::*;
@@ -43,26 +43,6 @@ fn collect_result(s: &'static str) -> Vec<Token> {
     });
     assert_diagnostics(&diagnostics);
     result
-}
-
-fn collect_error(s: &'static str) -> Vec<anyhow::Error> {
-    let mut codemap = CodeMap::new();
-    let mut diagnostics = Vec::new();
-    let mut result = Vec::new();
-    let file_span = codemap.add_file("<test>".to_owned(), s.to_owned()).span;
-    let mut pos = 0;
-    let codemap = Arc::new(codemap);
-    Lexer::new(s, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
-        Err(e) => diagnostics.push(e),
-        Ok((i, t, j)) => {
-            let span_incorrect = format!("Span of {:?} incorrect", t);
-            assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
-            result.push(t);
-            assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
-            pos = j;
-        }
-    });
-    diagnostics
 }
 
 #[test]
@@ -277,8 +257,9 @@ fn test_string_lit() {
     );
 
     // unfinished string literal
-    assert!(!collect_error("'\n'").is_empty());
-    assert!(!collect_error("\"\n\"").is_empty());
+    assert_parse_failure("!'!\n'", &Dialect::Standard);
+    assert_parse_failure("!\"!\n\"", &Dialect::Standard);
+
     // Multiline string
     let r = collect_result("'''''' '''\\n''' '''\n''' \"\"\"\"\"\" \"\"\"\\n\"\"\" \"\"\"\n\"\"\"");
     assert_eq!(
