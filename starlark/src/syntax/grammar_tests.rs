@@ -21,15 +21,11 @@ use crate::{
     syntax::{
         ast::Stmt,
         dialect::Dialect,
-        grammar::StarlarkParser,
-        lexer::Lexer,
         parse,
-        parser::parse_error_add_span,
         testing::{assert_diagnostics, testcase_files},
     },
 };
 use gazebo::prelude::*;
-use std::sync::Arc;
 
 #[test]
 fn test_empty() {
@@ -165,24 +161,13 @@ fn(1)
 
 fail(2)
 "#;
-    let mut codemap = codemap::CodeMap::new();
-    let filespan = codemap
-        .add_file("<test>".to_owned(), content.to_string())
-        .span;
-    let codemap = Arc::new(codemap);
-    let lexer = Lexer::new(content, &Dialect::Standard, codemap.dupe(), filespan);
-    match StarlarkParser::new().parse(&codemap, filespan, &Dialect::Extended, lexer) {
-        Ok(x) => match x.node {
-            Stmt::Statements(bv) => {
-                let lines = bv.map(|x| codemap.look_up_pos(x.span.low()).position.line);
-                assert_eq!(lines, vec![0, 3, 5])
-            }
-            y => panic!("Expected statements, got {:?}", y),
-        },
-        Err(e) => {
-            assert_diagnostics(&[parse_error_add_span(e, filespan, codemap)]);
-            panic!("Got errors!");
+    let ast = assert::parse_ast(content);
+    match &ast.statement.node {
+        Stmt::Statements(xs) => {
+            let lines = xs.map(|x| ast.codemap.look_up_pos(x.span.low()).position.line);
+            assert_eq!(lines, vec![0, 3, 5])
         }
+        _ => panic!("Expected to parse as statements"),
     }
 }
 

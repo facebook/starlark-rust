@@ -24,7 +24,7 @@ use crate::{
     errors::{eprint_error, Diagnostic},
     eval,
     stdlib::{add_typing, extended_environment},
-    syntax::Dialect,
+    syntax::{AstModule, Dialect},
     values::{
         none::{NoneType, NONE},
         structs::Struct,
@@ -303,16 +303,20 @@ impl Assert {
         }
     }
 
-    pub fn parse(&self, program: &str) -> String {
+    pub fn parse_ast(&self, program: &str) -> AstModule {
         match crate::syntax::parse("<test>", program.to_owned(), &self.dialect) {
-            Ok(x) => format!("{}", x.statement.node),
+            Ok(x) => x,
             Err(e) => {
                 panic!(
-                    "starlark::assert::parse, expected parse success but failed\nCode: {}\nError: {}",
+                    "starlark::assert::parse_ast, expected parse success but failed\nCode: {}\nError: {}",
                     program, e
                 );
             }
         }
+    }
+
+    pub fn parse(&self, program: &str) -> String {
+        self.parse_ast(program).statement.to_string()
     }
 
     pub fn parse_fail(&self, contents: &str) -> anyhow::Error {
@@ -455,6 +459,11 @@ pub fn pass(program: &str) -> OwnedFrozenValue {
 /// over time.
 pub fn parse(program: &str) -> String {
     Assert::new().parse(program)
+}
+
+/// Parse some text and return the AST. Fails if the program does not parse.
+pub fn parse_ast(program: &str) -> AstModule {
+    Assert::new().parse_ast(program)
 }
 
 /// Parse some text which must fail to parse. Two exclamation marks should be
