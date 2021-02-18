@@ -716,8 +716,8 @@ mod tests {
         assert_eq!(m1.iter().eq(entries1.iter().map(|(k, v)| (k, v))), true);
         assert_eq!(m2.iter().eq(entries2.iter().map(|(k, v)| (k, v))), true);
         assert_eq!(m1.iter().eq(m2.iter()), false);
-        assert_eq!(m1, m1);
-        assert_eq!(m2, m2);
+        assert_eq!(m1.eq(&m1), true);
+        assert_eq!(m2.eq(&m2), true);
         assert_eq!(m1, m2);
 
         assert_eq!(m1.get(&0), Some(&'a'));
@@ -752,8 +752,8 @@ mod tests {
         assert_eq!(m1.clone().into_iter().eq(entries1), true);
         assert_eq!(m2.clone().into_iter().eq(entries2), true);
         assert_eq!(m1.iter().eq(m2.iter()), false);
-        assert_eq!(m1, m1);
-        assert_eq!(m2, m2);
+        assert_eq!(m1.eq(&m1), true);
+        assert_eq!(m2.eq(&m2), true);
         assert_eq!(m1, m2);
 
         assert_eq!(m1.get(&1), Some(&'b'));

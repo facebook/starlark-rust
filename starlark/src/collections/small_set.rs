@@ -195,8 +195,8 @@ mod tests {
         assert_eq!(m1.iter().eq(entries1.iter()), true);
         assert_eq!(m2.iter().eq(entries2.iter()), true);
         assert_eq!(m1.iter().eq(m2.iter()), false);
-        assert_eq!(m1, m1);
-        assert_eq!(m2, m2);
+        assert_eq!(m1.eq(&m1), true);
+        assert_eq!(m2.eq(&m2), true);
         assert_eq!(m1, m2);
 
         assert_ne!(m1, smallset![1])
@@ -226,8 +226,8 @@ mod tests {
         assert_eq!(m1.clone().into_iter().eq(entries1), true);
         assert_eq!(m2.clone().into_iter().eq(entries2), true);
         assert_eq!(m1.iter().eq(m2.iter()), false);
-        assert_eq!(m1, m1);
-        assert_eq!(m2, m2);
+        assert_eq!(m1.eq(&m1), true);
+        assert_eq!(m2.eq(&m2), true);
         assert_eq!(m1, m2);
 
         let not_m1 = {
