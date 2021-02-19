@@ -137,7 +137,7 @@ def _impl(ctx):
   print('Hello, World!')
 "
         ),
-        "\"A docstring.\" \n \n def _impl ( ctx ) : \n \t print ( \"Hello, World!\" ) \n #dedent \n"
+        "\"A docstring.\" \n \n def _impl ( ctx ) : \n \t print ( \"Hello, World!\" ) \n \n #dedent"
     );
 }
 
@@ -222,6 +222,6 @@ def stuff():
   pass
 "#
         ),
-        "\n def stuff ( ) : \n \t if 1 : \n \t if 1 : \n \t pass \n #dedent #dedent pass \n #dedent \n"
+        "\n def stuff ( ) : \n \t if 1 : \n \t if 1 : \n \t pass \n #dedent #dedent pass \n \n #dedent"
     );
 }

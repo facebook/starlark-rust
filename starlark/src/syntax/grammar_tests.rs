@@ -25,6 +25,12 @@ use gazebo::prelude::*;
 #[test]
 fn test_empty() {
     assert_eq!(assert::parse("\n"), "");
+    assert_eq!(assert::parse(""), "");
+    assert_eq!(assert::parse("    "), "");
+    assert_eq!(assert::parse("    \n"), "");
+    // Empty trailing bits
+    assert_eq!(assert::parse("x = 1\n   "), "x = 1\n");
+    assert_eq!(assert::parse("x = 1\n   \n"), "x = 1\n");
 }
 
 #[test]

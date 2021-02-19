@@ -102,38 +102,54 @@ impl<'a> Lexer<'a> {
         let mut skip = 0;
         let mut it = xs.iter();
         let mut indent_start = self.lexer.span().start as u64;
-        while let Some(x) = it.next() {
-            match *x as char {
-                ' ' => {
-                    spaces += 1;
-                }
-                '\t' => {
-                    tabs += 1;
-                }
-
-                '\n' => {
-                    // A line that is entirely blank gets emitted as a newline, and then
-                    // we don't consume the subsequent newline character.
-                    // (not sure this is necessary)
-                    self.lexer.bump(spaces + tabs + skip);
+        loop {
+            match it.next() {
+                None => {
+                    self.lexer.bump(tabs + spaces + skip);
                     return Ok(());
                 }
-                '#' => {
-                    // A line that is all comments doesn't get emitted at all
-                    // Skip until the next newline
-                    // Remove skip now, so we can freely add it on later
-                    skip += 1 + spaces + tabs;
-                    spaces = 0;
-                    tabs = 0;
-                    while let Some(x) = it.next() {
-                        skip += 1;
-                        if *x as char == '\n' {
-                            break; // only the inner loop
+                Some(x) => {
+                    match *x as char {
+                        ' ' => {
+                            spaces += 1;
                         }
+                        '\t' => {
+                            tabs += 1;
+                        }
+
+                        '\n' => {
+                            // A line that is entirely blank gets emitted as a newline, and then
+                            // we don't consume the subsequent newline character.
+                            // (not sure this is necessary)
+                            self.lexer.bump(spaces + tabs + skip);
+                            return Ok(());
+                        }
+                        '#' => {
+                            // A line that is all comments doesn't get emitted at all
+                            // Skip until the next newline
+                            // Remove skip now, so we can freely add it on later
+                            skip += 1 + spaces + tabs;
+                            spaces = 0;
+                            tabs = 0;
+                            loop {
+                                match it.next() {
+                                    None => {
+                                        self.lexer.bump(tabs + spaces + skip);
+                                        return Ok(());
+                                    }
+                                    Some(x) => {
+                                        skip += 1;
+                                        if *x as char == '\n' {
+                                            break; // only the inner loop
+                                        }
+                                    }
+                                }
+                            }
+                            indent_start = self.lexer.span().start as u64 + skip as u64;
+                        }
+                        _ => break,
                     }
-                    indent_start = self.lexer.span().start as u64 + skip as u64;
                 }
-                _ => break,
             }
         }
         self.lexer.bump(spaces + tabs + skip);
