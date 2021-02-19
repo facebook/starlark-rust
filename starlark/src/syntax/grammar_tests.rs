@@ -18,7 +18,7 @@
 use crate::{
     assert,
     assert::Assert,
-    syntax::{ast::Stmt, dialect::Dialect, testing::testcase_files},
+    syntax::{ast::Stmt, dialect::Dialect},
 };
 use gazebo::prelude::*;
 
@@ -226,11 +226,4 @@ fn test_nested_def() {
         assert::parse("def foo(x):\n  def bar(y): return y\n  return bar(x)"),
         "def foo(x):\n  def bar(y):\n    return y\n  return bar(x)\n"
     );
-}
-
-#[test]
-fn smoke_test() {
-    for (_, content) in testcase_files() {
-        assert::parse(content);
-    }
 }

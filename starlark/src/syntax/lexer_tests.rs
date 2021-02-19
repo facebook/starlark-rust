@@ -15,10 +15,7 @@
  * limitations under the License.
  */
 
-use crate::{
-    assert,
-    syntax::{lexer::Token::*, testing::testcase_files},
-};
+use crate::{assert, syntax::lexer::Token::*};
 
 #[test]
 fn test_int_lit() {
@@ -225,11 +222,4 @@ def stuff():
         ),
         "\n def stuff ( ) : \n \t if 1 : \n \t if 1 : \n \t pass \n #dedent #dedent pass \n #dedent \n"
     );
-}
-
-#[test]
-fn smoke_test() {
-    for (_, content) in testcase_files() {
-        assert::lex(content);
-    }
 }

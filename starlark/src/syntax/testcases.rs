@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+use crate::assert;
+
 macro_rules! testcases_parse {
     ($($x:expr)*) => {
         &[
@@ -205,7 +207,11 @@ const TESTCASE_FILES: &[(&str, &str)] = testcases_parse!(
     "zip.star"
 );
 
-/// Get the list of files in the testcase directory which are `.star` (interesting files)
-pub fn testcase_files() -> &'static [(&'static str, &'static str)] {
-    TESTCASE_FILES
+#[test]
+fn parsing_testcases() {
+    for (_, content) in TESTCASE_FILES {
+        // Worth doing the lex and parse as lex checks for additional invariants
+        assert::lex(content);
+        assert::parse(content);
+    }
 }

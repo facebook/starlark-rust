@@ -26,7 +26,7 @@ mod grammar_tests;
 #[cfg(test)]
 mod lexer_tests;
 #[cfg(test)]
-mod testing;
+mod testcases;
 
 pub(crate) mod ast;
 mod dialect;
