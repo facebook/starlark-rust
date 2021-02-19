@@ -24,7 +24,10 @@ use crate::{
     errors::{eprint_error, Diagnostic},
     eval,
     stdlib::{add_typing, extended_environment},
-    syntax::{AstModule, Dialect},
+    syntax::{
+        lexer::{Lexer, Token},
+        AstModule, Dialect,
+    },
     values::{
         none::{NoneType, NONE},
         structs::Struct,
@@ -32,9 +35,10 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use codemap::CodeMap;
 use gazebo::prelude::*;
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 fn mk_environment() -> GlobalsBuilder {
     extended_environment().with(test_methods).with(add_typing)
@@ -319,6 +323,35 @@ impl Assert {
         self.parse_ast(program).statement.to_string()
     }
 
+    /// Restricted to crate because 'Lexeme' isn't a public type.
+    pub(crate) fn lex_tokens(&self, program: &str) -> Vec<(u64, Token, u64)> {
+        let mut codemap = CodeMap::new();
+        let mut result = Vec::new();
+        let file_span = codemap
+            .add_file("<test>".to_owned(), program.to_owned())
+            .span;
+        let mut pos = 0;
+        let codemap = Arc::new(codemap);
+        Lexer::new(program, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
+            Err(e) => panic!(
+                "starlark::assert::lex_tokens, expected lex sucess but failed\nCode: {}\nError: {}",
+                program, e
+            ),
+            Ok((i, t, j)) => {
+                let span_incorrect = format!("Span of {:?} incorrect", t);
+                assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
+                result.push((i, t, j));
+                assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
+                pos = j;
+            }
+        });
+        result
+    }
+
+    pub fn lex(&self, program: &str) -> String {
+        self.lex_tokens(program).map(|x| x.1.unlex()).join(" ")
+    }
+
     pub fn parse_fail(&self, contents: &str) -> anyhow::Error {
         let rest = contents.replace('!', "");
         assert!(
@@ -464,6 +497,21 @@ pub fn parse(program: &str) -> String {
 /// Parse some text and return the AST. Fails if the program does not parse.
 pub fn parse_ast(program: &str) -> AstModule {
     Assert::new().parse_ast(program)
+}
+
+/// Lex some text and return the tokens. Fails if the program does not parse.
+/// Only available inside the crate because the Token type is not exported.
+#[cfg(test)]
+pub(crate) fn lex_tokens(program: &str) -> Vec<(u64, Token, u64)> {
+    Assert::new().lex_tokens(program)
+}
+
+/// Lex some text and pretty-print it using enough whitespace etc. to avoid
+/// ambiguity. Fails if the program does not lex.
+/// The precise form of the pretty-printed output is not necessarily stable
+/// over time.
+pub fn lex(program: &str) -> String {
+    Assert::new().lex(program)
 }
 
 /// Parse some text which must fail to parse. Two exclamation marks should be

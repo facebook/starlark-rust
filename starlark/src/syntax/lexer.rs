@@ -629,6 +629,28 @@ pub enum Token {
     ClosingRound,
 }
 
+impl Token {
+    /// Used for testing
+    pub(crate) fn unlex(&self) -> String {
+        match self {
+            Token::Indent => "\t".to_owned(),
+            Token::Newline => "\n".to_owned(),
+            Token::Dedent => "#dedent".to_owned(),
+            Token::StringLiteral(x) => format!("{:?}", x),
+            _ => {
+                let s = self.to_string();
+                let first = s.find('\'');
+                match first {
+                    Some(first) if s.ends_with('\'') && first != s.len() - 1 => {
+                        s[first + 1..s.len() - 1].to_owned()
+                    }
+                    _ => s,
+                }
+            }
+        }
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

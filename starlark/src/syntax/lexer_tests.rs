@@ -19,57 +19,26 @@ use crate::{
     assert,
     syntax::{
         dialect::Dialect,
-        lexer::{Lexer, Token, Token::*},
+        lexer::{Lexer, Token::*},
         testing::{assert_diagnostics, testcase_files},
     },
 };
-use codemap::CodeMap;
 use gazebo::prelude::*;
 use std::sync::Arc;
 
-fn collect_result(s: &'static str) -> Vec<Token> {
-    let mut codemap = CodeMap::new();
-    let mut diagnostics = Vec::new();
-    let mut result = Vec::new();
-    let file_span = codemap.add_file("<test>".to_owned(), s.to_owned()).span;
-    let mut pos = 0;
-    let codemap = Arc::new(codemap);
-    Lexer::new(s, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
-        Err(e) => diagnostics.push(e),
-        Ok((i, t, j)) => {
-            let span_incorrect = format!("Span of {:?} incorrect", t);
-            assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
-            result.push(t);
-            assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
-            pos = j;
-        }
-    });
-    assert_diagnostics(&diagnostics);
-    result
-}
-
 #[test]
 fn test_int_lit() {
-    let get_result = |s: &'static str| -> Vec<i32> {
-        collect_result(s)
-            .iter()
-            .filter_map(|v| match v {
-                IntegerLiteral(r) => Some(*r),
-                Newline => None,
-                _ => panic!("{:?} is not a integer literal", v),
-            })
-            .collect()
-    };
-    assert_eq!(vec![0, 123], get_result("0 123"));
-    assert_eq!(vec![0x7f, 0x7f], get_result("0x7F 0x7f"));
-    assert_eq!(vec![0b1011, 0b1011], get_result("0B1011 0b1011"));
-    assert_eq!(vec![0o755, 0o755], get_result("0o755 0O755"));
+    assert_eq!(assert::lex("0 123"), "0 123 \n");
+    assert_eq!(assert::lex("0x7F 0x7d"), "127 125 \n");
+    assert_eq!(assert::lex("0B1011 0b1010"), "11 10 \n");
+    assert_eq!(assert::lex("0o755 0O753"), "493 491 \n");
 }
 
 #[test]
 fn test_indentation() {
-    let r = collect_result(
-        "
+    assert_eq!(
+        assert::lex(
+            "
 +
   -
       /
@@ -79,184 +48,73 @@ fn test_indentation() {
       .
 +=
 ",
-    );
-    assert_eq!(
-        &[
-            Newline, Plus, Newline, Indent, Minus, Newline, Indent, Slash, Newline, Star, Newline,
-            Dedent, Equal, Newline, Indent, Percent, Newline, Indent, Dot, Newline, Dedent, Dedent,
-            Dedent, PlusEqual, Newline, Newline,
-        ],
-        &r[..]
+        ),
+        "\n + \n \t - \n \t / \n * \n #dedent = \n \t % \n \t . \n #dedent #dedent #dedent += \n \n"
     );
 }
 
 #[test]
 fn test_symbols() {
-    let r = collect_result(
-        ", ; : += -= *= /= //= %= == != <= >= ** = < > - + * % / // . { } [ ] ( ) |",
-    );
     assert_eq!(
-        &[
-            Comma,
-            Semicolon,
-            Colon,
-            PlusEqual,
-            MinusEqual,
-            StarEqual,
-            SlashEqual,
-            SlashSlashEqual,
-            PercentEqual,
-            EqualEqual,
-            BangEqual,
-            LessEqual,
-            GreaterEqual,
-            StarStar,
-            Equal,
-            LessThan,
-            GreaterThan,
-            Minus,
-            Plus,
-            Star,
-            Percent,
-            Slash,
-            SlashSlash,
-            Dot,
-            OpeningCurly,
-            ClosingCurly,
-            OpeningSquare,
-            ClosingSquare,
-            OpeningRound,
-            ClosingRound,
-            Pipe,
-            Newline,
-        ],
-        &r[..]
+        assert::lex(", ; : += -= *= /= //= %= == != <= >= ** = < > - + * % / // . { } [ ] ( ) |"),
+        ", ; : += -= *= /= //= %= == != <= >= ** = < > - + * % / // . { } [ ] ( ) | \n",
     );
+    assert_eq!(assert::lex(",;:{}[]()|"), ", ; : { } [ ] ( ) | \n",);
 }
 
 #[test]
 fn test_keywords() {
-    let r = collect_result(
-        "and else load break for not not  in continue if or def in pass elif return lambda",
-    );
     assert_eq!(
-        &[
-            And, Else, Load, Break, For, Not, Not, In, Continue, If, Or, Def, In, Pass, Elif,
-            Return, Lambda, Newline,
-        ],
-        &r[..]
+        assert::lex(
+            "and else load break for not not  in continue if or def in pass elif return lambda"
+        ),
+        "and else load break for not not in continue if or def in pass elif return lambda \n"
     );
 }
 
 // Regression test for https://github.com/google/starlark-rust/issues/44.
 #[test]
 fn test_number_collated_with_keywords_or_identifier() {
-    let r =
-        collect_result("0in 1and 2else 3load 4break 5for 6not 7not  in 8continue 10identifier11");
     assert_eq!(
-        &[
-            IntegerLiteral(0),
-            In,
-            IntegerLiteral(1),
-            And,
-            IntegerLiteral(2),
-            Else,
-            IntegerLiteral(3),
-            Load,
-            IntegerLiteral(4),
-            Break,
-            IntegerLiteral(5),
-            For,
-            IntegerLiteral(6),
-            Not,
-            IntegerLiteral(7),
-            Not,
-            In,
-            IntegerLiteral(8),
-            Continue,
-            IntegerLiteral(10),
-            Identifier("identifier11".to_owned()),
-            Newline,
-        ],
-        &r[..]
+        assert::lex("0in 1and 2else 3load 4break 5for 6not 7not  in 8continue 10identifier11"),
+        "0 in 1 and 2 else 3 load 4 break 5 for 6 not 7 not in 8 continue 10 identifier11 \n"
     );
 }
 
 #[test]
 fn test_reserved() {
-    let r = collect_result(
-        "as import is class nonlocal del raise except try finally \
-             while from with global yield",
-    );
     assert_eq!(
-        &[
-            Reserved("as".to_owned()),
-            Reserved("import".to_owned()),
-            Reserved("is".to_owned()),
-            Reserved("class".to_owned()),
-            Reserved("nonlocal".to_owned()),
-            Reserved("del".to_owned()),
-            Reserved("raise".to_owned()),
-            Reserved("except".to_owned()),
-            Reserved("try".to_owned()),
-            Reserved("finally".to_owned()),
-            Reserved("while".to_owned()),
-            Reserved("from".to_owned()),
-            Reserved("with".to_owned()),
-            Reserved("global".to_owned()),
-            Reserved("yield".to_owned()),
-            Newline,
-        ],
-        &r[..]
+        assert::lex(
+            "as import is class nonlocal del raise except try finally \
+             while from with global yield",
+        ),
+        "as import is class nonlocal del raise except try finally while from with global yield \n"
     );
 }
 
 #[test]
 fn test_comment() {
     // Comment should be ignored
-    assert_eq!(collect_result("# a comment\n"), &[Newline]);
-    assert_eq!(collect_result(" # a comment\n"), &[Newline]);
-    let r = collect_result("a # a comment\n");
-    assert_eq!(&[Identifier("a".to_owned()), Newline, Newline], &r[..]);
+    assert_eq!(assert::lex("# a comment\n"), "\n");
+    assert_eq!(assert::lex(" # a comment\n"), "\n");
+    assert_eq!(assert::lex("a # a comment\n"), "a \n \n");
     // But it should not eat everything
-    let r = collect_result("[\n# a comment\n]");
-    assert_eq!(&[OpeningSquare, ClosingSquare, Newline,], &r[..]);
+    assert_eq!(assert::lex("[\n# a comment\n]"), "[ ] \n");
 }
 
 #[test]
 fn test_identifier() {
-    let r = collect_result("a identifier CAPS _CAPS _0123");
     assert_eq!(
-        &[
-            Identifier("a".to_owned()),
-            Identifier("identifier".to_owned()),
-            Identifier("CAPS".to_owned()),
-            Identifier("_CAPS".to_owned()),
-            Identifier("_0123".to_owned()),
-            Newline,
-        ],
-        &r[..]
-    );
+        assert::lex("a identifier CAPS _CAPS _0123"),
+        "a identifier CAPS _CAPS _0123 \n"
+    )
 }
 
 #[test]
 fn test_string_lit() {
-    let r = collect_result("'123' \"123\" '' \"\" '\\'' \"\\\"\" '\"' \"'\" '\\n' '\\w'");
     assert_eq!(
-        &[
-            StringLiteral("123".to_owned()),
-            StringLiteral("123".to_owned()),
-            StringLiteral("".to_owned()),
-            StringLiteral("".to_owned()),
-            StringLiteral("'".to_owned()),
-            StringLiteral("\"".to_owned()),
-            StringLiteral("\"".to_owned()),
-            StringLiteral("'".to_owned()),
-            StringLiteral("\n".to_owned()),
-            StringLiteral("\\w".to_owned()),
-            Newline,
-        ],
-        &r[..]
+        assert::lex("'123' \"123\" '' \"\" '\\'' \"\\\"\" '\"' \"'\" '\\n' '\\w'"),
+        "\"123\" \"123\" \"\" \"\" \"\\\'\" \"\\\"\" \"\\\"\" \"\\\'\" \"\\n\" \"\\\\w\" \n"
     );
 
     // unfinished string literal
@@ -264,102 +122,48 @@ fn test_string_lit() {
     assert::parse_fail("!\"!\n\"");
 
     // Multiline string
-    let r = collect_result("'''''' '''\\n''' '''\n''' \"\"\"\"\"\" \"\"\"\\n\"\"\" \"\"\"\n\"\"\"");
     assert_eq!(
-        &[
-            StringLiteral("".to_owned()),
-            StringLiteral("\n".to_owned()),
-            StringLiteral("\n".to_owned()),
-            StringLiteral("".to_owned()),
-            StringLiteral("\n".to_owned()),
-            StringLiteral("\n".to_owned()),
-            Newline,
-        ],
-        &r[..]
+        assert::lex("'''''' '''\\n''' '''\n''' \"\"\"\"\"\" \"\"\"\\n\"\"\" \"\"\"\n\"\"\""),
+        "\"\" \"\\n\" \"\\n\" \"\" \"\\n\" \"\\n\" \n"
     );
     // Raw string
-    let r = collect_result("r'' r\"\" r'\\'' r\"\\\"\" r'\"' r\"'\" r'\\n'");
     assert_eq!(
-        &[
-            StringLiteral("".to_owned()),
-            StringLiteral("".to_owned()),
-            StringLiteral("'".to_owned()),
-            StringLiteral("\"".to_owned()),
-            StringLiteral("\"".to_owned()),
-            StringLiteral("'".to_owned()),
-            StringLiteral("\\n".to_owned()),
-            Newline,
-        ],
-        &r[..]
+        assert::lex("r'' r\"\" r'\\'' r\"\\\"\" r'\"' r\"'\" r'\\n'"),
+        "\"\" \"\" \"\\\'\" \"\\\"\" \"\\\"\" \"\\\'\" \"\\\\n\" \n"
     );
 }
 
 #[test]
 fn test_simple_example() {
-    let r = collect_result(
-        "\"\"\"A docstring.\"\"\"
+    assert_eq!(
+        assert::lex(
+            "\"\"\"A docstring.\"\"\"
 
 def _impl(ctx):
   # Print Hello, World!
   print('Hello, World!')
-",
-    );
-    assert_eq!(
-        &[
-            StringLiteral("A docstring.".to_owned()),
-            Newline,
-            Newline,
-            Def,
-            Identifier("_impl".to_owned()),
-            OpeningRound,
-            Identifier("ctx".to_owned()),
-            ClosingRound,
-            Colon,
-            Newline,
-            Indent,
-            Identifier("print".to_owned()),
-            OpeningRound,
-            StringLiteral("Hello, World!".to_owned()),
-            ClosingRound,
-            Newline,
-            Dedent,
-            Newline,
-        ],
-        &r[..]
+"
+        ),
+        "\"A docstring.\" \n \n def _impl ( ctx ) : \n \t print ( \"Hello, World!\" ) \n #dedent \n"
     );
 }
 
 #[test]
 fn test_escape_newline() {
-    let r = collect_result("a \\\nb");
-    assert_eq!(
-        &[
-            Identifier("a".to_owned()),
-            Identifier("b".to_owned()),
-            Newline,
-        ],
-        &r[..]
-    );
+    assert_eq!(assert::lex("a \\\nb"), "a b \n");
 }
 
 #[test]
 fn test_lexer_multiline_triple() {
-    let r = collect_result(
-        r#"
+    assert_eq!(
+        assert::lex(
+            r#"
 cmd = """A \
     B \
     C \
     """"#,
-    );
-    assert_eq!(
-        &[
-            Newline,
-            Identifier("cmd".to_owned()),
-            Equal,
-            StringLiteral("A     B     C     ".to_owned()),
-            Newline,
-        ],
-        &r[..]
+        ),
+        "\n cmd = \"A     B     C     \" \n"
     );
 }
 
@@ -390,38 +194,26 @@ fn test_span() {
         (37, Newline, 37),
     ];
 
-    let mut codemap = CodeMap::new();
-    let file = codemap.add_file(
-        "x".to_owned(),
+    let actual = assert::lex_tokens(
         r#"
 def test(a):
   fail(a)
 
 test("abc")
-"#
-        .to_owned(),
+"#,
     );
-    let actual: Vec<(u64, Token, u64)> = Lexer::new(
-        file.source(),
-        &Dialect::Standard,
-        Arc::new(codemap),
-        file.span,
-    )
-    .map(Result::unwrap)
-    .collect();
     assert_eq!(expected, actual);
 }
 
 #[test]
 fn test_lexer_final_comment() {
-    let r = collect_result(
-        r#"
+    assert_eq!(
+        assert::lex(
+            r#"
 x
 # test"#,
-    );
-    assert_eq!(
-        &[Newline, Identifier("x".to_owned()), Newline, Newline],
-        &r[..]
+        ),
+        "\n x \n \n"
     );
 }
 
