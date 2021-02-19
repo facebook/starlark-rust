@@ -175,14 +175,6 @@ fn test_comprehension() {
 }
 
 #[test]
-fn test_octal() {
-    assert_eq!(assert::parse("0"), "0\n");
-    assert_eq!(assert::parse("10"), "10\n");
-    // Starlark requires us to ban leading zeros (confusion with implicit octal)
-    assert::parse_fail("!01!");
-}
-
-#[test]
 fn test_lambda() {
     assert_eq!(
         assert::parse("x = lambda y: y + 1"),

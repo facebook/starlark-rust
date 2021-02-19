@@ -23,6 +23,8 @@ fn test_int_lit() {
     assert_eq!(assert::lex("0x7F 0x7d"), "127 125 \n");
     assert_eq!(assert::lex("0B1011 0b1010"), "11 10 \n");
     assert_eq!(assert::lex("0o755 0O753"), "493 491 \n");
+    // Starlark requires us to ban leading zeros (confusion with implicit octal)
+    assert::parse_fail("x = !01!");
 }
 
 #[test]
