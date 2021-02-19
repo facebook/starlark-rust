@@ -218,6 +218,22 @@ x
 }
 
 #[test]
+fn test_lexer_dedent() {
+    assert_eq!(
+        assert::lex(
+            r#"
+def stuff():
+  if 1:
+    if 1:
+      pass
+  pass
+"#
+        ),
+        "\n def stuff ( ) : \n \t if 1 : \n \t if 1 : \n \t pass \n #dedent #dedent pass \n #dedent \n"
+    );
+}
+
+#[test]
 fn smoke_test() {
     let mut diagnostics = Vec::new();
     for (file, content) in testcase_files() {

@@ -170,12 +170,12 @@ impl<'a> Lexer<'a> {
                     );
                 }
             }
-            let span = self.lexer.span();
             for _ in 0..dedents {
+                // We must declare each dedent is only a position, so multiple adjacent dedents don't overlap
                 self.buffer.push_back(Ok((
                     indent_start as u64 + 1,
                     Token::Dedent,
-                    span.end as u64,
+                    indent_start as u64 + 1,
                 )))
             }
         }
