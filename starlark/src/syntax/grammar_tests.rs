@@ -24,31 +24,45 @@ use gazebo::prelude::*;
 
 #[test]
 fn test_empty() {
-    assert!(assert::parse("\n").is_empty());
+    assert_eq!(assert::parse("\n"), "");
 }
 
 #[test]
 fn test_top_level_comment() {
-    assert!(assert::parse("# Test").is_empty());
+    assert_eq!(assert::parse("# Test"), "");
 }
 
 #[test]
 fn test_top_level_load() {
-    assert!(!assert::parse("\nload(\"//top/level/load.bzl\", \"top-level\")\n").is_empty());
-    assert!(!assert::parse("\nload(\"//top/level/load.bzl\", \"top-level\")").is_empty());
-    assert!(
-        !assert::parse("\nload(\n  \"//top/level/load.bzl\",\n  \"top-level\",\n)\n").is_empty()
+    let want = "load(\"//top/level/load.bzl\"top-level = \"top-level\")\n";
+    assert_eq!(
+        assert::parse("\nload(\"//top/level/load.bzl\", \"top-level\")\n"),
+        want
+    );
+    assert_eq!(
+        assert::parse("\nload(\"//top/level/load.bzl\", \"top-level\")"),
+        want
+    );
+    assert_eq!(
+        assert::parse("\nload(\n  \"//top/level/load.bzl\",\n  \"top-level\",\n)\n"),
+        want
     );
 }
 
 #[test]
 fn test_top_level_assignation() {
-    assert!(!assert::parse("\n_ASSIGNATION = 'top-level'\n").is_empty());
+    assert_eq!(
+        assert::parse("\n_ASSIGNATION = 'top-level'\n"),
+        "_ASSIGNATION = \"top-level\"\n"
+    );
 }
 
 #[test]
 fn test_top_level_docstring() {
-    assert!(!assert::parse("\n\"\"\"Top-level docstring\"\"\"\n").is_empty());
+    assert_eq!(
+        assert::parse("\n\"\"\"Top-level docstring\"\"\"\n"),
+        "\"Top-level docstring\"\n"
+    );
 }
 
 #[test]
