@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use std::slice;
+use std::{slice, str::Chars};
 
 pub(crate) struct CursorBytes<'a>(&'a str, slice::Iter<'a, u8>);
 
@@ -35,5 +35,25 @@ impl<'a> CursorBytes<'a> {
 
     pub fn pos(&self) -> usize {
         self.0.len() - self.1.as_slice().len()
+    }
+}
+
+pub(crate) struct CursorChars<'a>(&'a str, Chars<'a>);
+
+impl<'a> CursorChars<'a> {
+    pub fn new_offset(x: &'a str, offset: usize) -> Self {
+        Self(x, x[offset..].chars())
+    }
+
+    pub fn next(&mut self) -> Option<char> {
+        self.1.next()
+    }
+
+    pub fn peek(&self) -> Option<char> {
+        self.1.as_str().chars().next()
+    }
+
+    pub fn pos(&self) -> usize {
+        self.0.len() - self.1.as_str().len()
     }
 }

@@ -17,12 +17,15 @@
 
 use crate::{
     errors::Diagnostic,
-    syntax::{cursors::CursorBytes, dialect::Dialect},
+    syntax::{
+        cursors::{CursorBytes, CursorChars},
+        dialect::Dialect,
+    },
 };
 use codemap::{CodeMap, Span};
 use gazebo::dupe::Dupe;
 use logos::Logos;
-use std::{char, collections::VecDeque, fmt, fmt::Display, iter::Peekable, sync::Arc};
+use std::{char, collections::VecDeque, fmt, fmt::Display, sync::Arc};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -53,13 +56,6 @@ pub(crate) struct Lexer<'a> {
     lexer: logos::Lexer<'a, Token>,
     done: bool,
     dialect_allow_tabs: bool,
-}
-
-fn enumerate_chars(x: impl Iterator<Item = char>) -> impl Iterator<Item = (usize, char)> {
-    x.scan(0, |state, c| {
-        *state += c.len_utf8();
-        Some((*state, c))
-    })
 }
 
 impl<'a> Lexer<'a> {
@@ -192,13 +188,10 @@ impl<'a> Lexer<'a> {
         Some(Ok((span.start as u64, token, span.end as u64)))
     }
 
-    fn consume_int_r(
-        it: &mut Peekable<impl Iterator<Item = (usize, char)>>,
-        radix: u32,
-    ) -> Result<i32, ()> {
+    fn consume_int_r(it: &mut CursorChars, radix: u32) -> Result<i32, ()> {
         let mut number = String::new();
-        while it.peek().map_or(false, |x| x.1.is_digit(radix)) {
-            number.push(it.next().unwrap().1);
+        while it.peek().map_or(false, |x| x.is_digit(radix)) {
+            number.push(it.next().unwrap());
         }
         let val = i32::from_str_radix(&number, radix);
         match val {
@@ -208,13 +201,8 @@ impl<'a> Lexer<'a> {
     }
 
     // We have seen a '\' character, now parse what comes next
-    fn escape(
-        &self,
-        it: &mut Peekable<impl Iterator<Item = (usize, char)>>,
-        pos: usize,
-        res: &mut String,
-    ) -> anyhow::Result<()> {
-        if let Some((pos2, c2)) = it.next() {
+    fn escape(&self, it: &mut CursorChars, pos: usize, res: &mut String) -> anyhow::Result<()> {
+        if let Some(c2) = it.next() {
             match c2 {
                 'n' => {
                     res.push('\n');
@@ -229,7 +217,7 @@ impl<'a> Lexer<'a> {
                     Ok(())
                 }
                 '0' => {
-                    if it.peek().map_or(false, |x| x.1.is_digit(8)) {
+                    if it.peek().map_or(false, |x| x.is_digit(8)) {
                         if let Ok(r) = Self::consume_int_r(it, 8) {
                             res.push(char::from_u32(r as u32).unwrap());
                             Ok(())
@@ -237,7 +225,7 @@ impl<'a> Lexer<'a> {
                             self.err_span(
                                 LexemeError::InvalidEscapeSequence,
                                 pos as u64,
-                                pos2 as u64,
+                                it.pos() as u64,
                             )
                         }
                     } else {
@@ -250,23 +238,37 @@ impl<'a> Lexer<'a> {
                         res.push(char::from_u32(r as u32).unwrap());
                         Ok(())
                     } else {
-                        self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64)
+                        self.err_span(
+                            LexemeError::InvalidEscapeSequence,
+                            pos as u64,
+                            it.pos() as u64,
+                        )
                     }
                 }
-                '1'..='9' => {
-                    self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64)
-                }
+                '1'..='9' => self.err_span(
+                    LexemeError::InvalidEscapeSequence,
+                    pos as u64,
+                    it.pos() as u64,
+                ),
                 'u' => match it.next() {
-                    Some((_, '{')) => {
+                    Some('{') => {
                         if let Ok(r) = Self::consume_int_r(it, 16) {
-                            if let Some((_, '}')) = it.next() {
+                            if let Some('}') = it.next() {
                                 res.push(char::from_u32(r as u32).unwrap());
                                 return Ok(());
                             }
                         }
-                        self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64)
+                        self.err_span(
+                            LexemeError::InvalidEscapeSequence,
+                            pos as u64,
+                            it.pos() as u64,
+                        )
                     }
-                    _ => self.err_span(LexemeError::InvalidEscapeSequence, pos as u64, pos2 as u64),
+                    _ => self.err_span(
+                        LexemeError::InvalidEscapeSequence,
+                        pos as u64,
+                        it.pos() as u64,
+                    ),
                 },
                 '"' | '\'' | '\\' => {
                     res.push(c2);
@@ -296,59 +298,72 @@ impl<'a> Lexer<'a> {
         // If triple is true, it was a triple quote
         // stop lets us know when a string ends.
 
-        let mut s = self.lexer.remainder().as_bytes();
-        if triple {
-            s = &s[2..];
-        }
+        // Before the first quote character
+        let string_start = self.lexer.span().start;
+        // After the first quote character, but before any contents or it tracked stuff
+        let mut string_end = self.lexer.span().end;
 
-        let mut res = String::new();
-        let mut adjust = 0;
-        let mut s_rest = self.lexer.remainder();
-        let start = self.lexer.span().start as u64 + if raw { 1 } else { 0 };
+        let mut it = CursorBytes::new(self.lexer.remainder());
+        let it2;
+
+        if triple {
+            it.next();
+            it.next();
+        }
+        let contents_start = it.pos();
+
         // Take the fast path as long as the result is a slice of the original, with no changes.
-        for (i, c) in s.iter().map(|c| *c as char).enumerate() {
-            if stop(c) {
-                let str = if triple {
-                    self.lexer.remainder()[2..i].to_owned()
-                } else {
-                    self.lexer.remainder()[..i].to_owned()
-                };
-                self.lexer.bump(i + 1 + if triple { 2 } else { 0 });
-                return Some(Ok((
-                    start,
-                    Token::StringLiteral(str),
-                    start + i as u64 + if triple { 4 } else { 2 },
-                )));
-            } else if c == '\\' || c == '\r' || (c == '\n' && !triple) {
-                res = String::with_capacity(i + 10);
-                res.push_str(
-                    &self.lexer.remainder()
-                        [if triple { 2 } else { 0 }..if triple { 2 } else { 0 } + i],
-                );
-                adjust = i;
-                s_rest = &self.lexer.remainder()[if triple { 2 } else { 0 } + i..];
-                break;
+        let mut res;
+        loop {
+            match it.next_char() {
+                None => {
+                    return Some(self.err_span(
+                        LexemeError::UnfinishedStringLiteral,
+                        string_start as u64,
+                        string_end as u64 + it.pos() as u64,
+                    ));
+                }
+                Some(c) => {
+                    if stop(c) {
+                        let contents_end = it.pos() - if triple { 3 } else { 1 };
+                        let contents = &self.lexer.remainder()[contents_start..contents_end];
+                        self.lexer.bump(it.pos());
+                        return Some(Ok((
+                            string_start as u64,
+                            Token::StringLiteral(contents.to_owned()),
+                            string_end as u64 + it.pos() as u64,
+                        )));
+                    } else if c == '\\' || c == '\r' || (c == '\n' && !triple) {
+                        res = String::with_capacity(it.pos() + 10);
+                        res.push_str(&self.lexer.remainder()[contents_start..it.pos() - 1]);
+                        it2 = CursorChars::new_offset(self.lexer.remainder(), it.pos() - 1);
+                        break;
+                    }
+                }
             }
         }
 
         // We bailed out of the fast path, that means we now accumulate character by character,
-        // might have an error, run out of characters or be dealing with escape characters.
-        let mut it = enumerate_chars(s_rest.chars()).peekable();
-        while let Some((i, c)) = it.next() {
+        // might have an error or be dealing with escape characters.
+        let mut it = it2;
+        while let Some(c) = it.next() {
             if stop(c) {
-                self.lexer.bump(adjust + i + if triple { 2 } else { 0 });
+                self.lexer.bump(it.pos());
                 if triple {
                     res.truncate(res.len() - 2);
                 }
                 return Some(Ok((
-                    start,
+                    string_start as u64,
                     Token::StringLiteral(res),
-                    start + adjust as u64 + i as u64 + if triple { 3 } else { 1 },
+                    string_end as u64 + it.pos() as u64,
                 )));
             }
             match c {
                 '\n' if !triple => {
-                    break; // Will raise an error about out of chars
+                    // Will raise an error about out of chars.
+                    // But don't include the final \n in the count.
+                    string_end -= 1;
+                    break;
                 }
                 '\r' => {
                     // We just ignore these in all modes
@@ -356,7 +371,7 @@ impl<'a> Lexer<'a> {
                 '\\' => {
                     if raw {
                         match it.next() {
-                            Some((_, c)) => {
+                            Some(c) => {
                                 if c == '\'' || c == '"' {
                                     res.push(c);
                                 } else {
@@ -366,8 +381,11 @@ impl<'a> Lexer<'a> {
                             }
                             _ => break, // Out of chars
                         }
-                    } else if let Err(e) = self.escape(&mut it, i, &mut res) {
-                        return Some(Err(e));
+                    } else {
+                        let pos = it.pos();
+                        if let Err(e) = self.escape(&mut it, pos, &mut res) {
+                            return Some(Err(e));
+                        }
                     }
                 }
                 c => res.push(c),
@@ -375,7 +393,11 @@ impl<'a> Lexer<'a> {
         }
 
         // We ran out of characters
-        Some(self.err_span(LexemeError::UnfinishedStringLiteral, start, start + 1))
+        Some(self.err_span(
+            LexemeError::UnfinishedStringLiteral,
+            string_start as u64,
+            string_end as u64 + it.pos() as u64,
+        ))
     }
 
     pub fn next(&mut self) -> Option<Lexeme> {
