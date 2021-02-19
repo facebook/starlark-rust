@@ -15,17 +15,6 @@
  * limitations under the License.
  */
 
-use crate::errors::eprint_error;
-
-pub fn assert_diagnostics(es: &[anyhow::Error]) {
-    if !es.is_empty() {
-        for e in es {
-            eprint_error(e);
-        }
-        panic!("There was {} parse errors", es.len());
-    }
-}
-
 macro_rules! testcases_parse {
     ($($x:expr)*) => {
         &[

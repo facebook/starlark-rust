@@ -18,12 +18,7 @@
 use crate::{
     assert,
     assert::Assert,
-    syntax::{
-        ast::Stmt,
-        dialect::Dialect,
-        parse,
-        testing::{assert_diagnostics, testcase_files},
-    },
+    syntax::{ast::Stmt, dialect::Dialect, testing::testcase_files},
 };
 use gazebo::prelude::*;
 
@@ -235,11 +230,7 @@ fn test_nested_def() {
 
 #[test]
 fn smoke_test() {
-    let mut diagnostics = Vec::new();
-    for (file, content) in testcase_files() {
-        if let Err(err) = parse(file, (*content).to_owned(), &Dialect::Extended) {
-            diagnostics.push(err);
-        }
+    for (_, content) in testcase_files() {
+        assert::parse(content);
     }
-    assert_diagnostics(&diagnostics);
 }

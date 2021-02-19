@@ -17,14 +17,8 @@
 
 use crate::{
     assert,
-    syntax::{
-        dialect::Dialect,
-        lexer::{Lexer, Token::*},
-        testing::{assert_diagnostics, testcase_files},
-    },
+    syntax::{lexer::Token::*, testing::testcase_files},
 };
-use gazebo::prelude::*;
-use std::sync::Arc;
 
 #[test]
 fn test_int_lit() {
@@ -235,18 +229,7 @@ def stuff():
 
 #[test]
 fn smoke_test() {
-    let mut diagnostics = Vec::new();
-    for (file, content) in testcase_files() {
-        let mut codemap = codemap::CodeMap::new();
-        let file_span = codemap
-            .add_file((*file).to_owned(), (*content).to_owned())
-            .span;
-        let codemap = Arc::new(codemap);
-        Lexer::new(content, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| {
-            if x.is_err() {
-                diagnostics.push(x.err().unwrap());
-            }
-        });
+    for (_, content) in testcase_files() {
+        assert::lex(content);
     }
-    assert_diagnostics(&diagnostics);
 }
