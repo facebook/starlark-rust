@@ -49,6 +49,14 @@ impl<'a> CursorChars<'a> {
         self.1.next()
     }
 
+    /// Call `unnext` to put back a character you grabbed with next.
+    /// It is an error if the character isn't what you declared.
+    pub fn unnext(&mut self, c: char) {
+        let pos = self.pos();
+        self.1 = self.0[pos - c.len_utf8()..].chars();
+        debug_assert_eq!(self.peek(), Some(c))
+    }
+
     pub fn peek(&self) -> Option<char> {
         self.1.as_str().chars().next()
     }

@@ -188,102 +188,67 @@ impl<'a> Lexer<'a> {
         Some(Ok((span.start as u64, token, span.end as u64)))
     }
 
-    fn consume_int_r(it: &mut CursorChars, radix: u32) -> Result<i32, ()> {
-        let mut number = String::new();
-        while it.peek().map_or(false, |x| x.is_digit(radix)) {
-            number.push(it.next().unwrap());
+    // We've potentially seen one character, now consume between min and max elements of iterator
+    // and treat it as an int in base radix
+    fn escape_char(it: &mut CursorChars, min: usize, max: usize, radix: u32) -> Result<char, ()> {
+        let mut value = 0u32;
+        let mut count = 0;
+        while count < max {
+            match it.next() {
+                None => {
+                    if count >= min {
+                        break;
+                    } else {
+                        return Err(());
+                    }
+                }
+                Some(c) => match c.to_digit(radix) {
+                    None => {
+                        if count >= min {
+                            it.unnext(c);
+                            break;
+                        }
+                    }
+                    Some(v) => {
+                        count += 1;
+                        value = (value * radix) + v;
+                    }
+                },
+            }
         }
-        let val = i32::from_str_radix(&number, radix);
-        match val {
-            Err(_) => Err(()),
-            Ok(v) => Ok(v),
-        }
+        char::from_u32(value).ok_or(())
     }
 
     // We have seen a '\' character, now parse what comes next
-    fn escape(&self, it: &mut CursorChars, pos: usize, res: &mut String) -> anyhow::Result<()> {
-        if let Some(c2) = it.next() {
-            match c2 {
-                'n' => {
-                    res.push('\n');
-                    Ok(())
+    fn escape(it: &mut CursorChars, res: &mut String) -> Result<(), ()> {
+        match it.next() {
+            Some('n') => res.push('\n'),
+            Some('r') => res.push('\r'),
+            Some('t') => res.push('\t'),
+            Some('a') => res.push('\x07'),
+            Some('b') => res.push('\x08'),
+            Some('f') => res.push('\x0C'),
+            Some('v') => res.push('\x0B'),
+            Some('\n') => {}
+            Some('x') => res.push(Self::escape_char(it, 2, 2, 16)?),
+            Some('u') => res.push(Self::escape_char(it, 4, 4, 16)?),
+            Some('U') => res.push(Self::escape_char(it, 8, 8, 16)?),
+            Some(c) => match c {
+                '0'..='7' => {
+                    it.unnext(c);
+                    res.push(Self::escape_char(it, 1, 3, 8)?)
                 }
-                'r' => {
-                    res.push('\r');
-                    Ok(())
-                }
-                't' => {
-                    res.push('\t');
-                    Ok(())
-                }
-                '0' => {
-                    if it.peek().map_or(false, |x| x.is_digit(8)) {
-                        if let Ok(r) = Self::consume_int_r(it, 8) {
-                            res.push(char::from_u32(r as u32).unwrap());
-                            Ok(())
-                        } else {
-                            self.err_span(
-                                LexemeError::InvalidEscapeSequence,
-                                pos as u64,
-                                it.pos() as u64,
-                            )
-                        }
-                    } else {
-                        res.push('\0');
-                        Ok(())
-                    }
-                }
-                'x' => {
-                    if let Ok(r) = Self::consume_int_r(it, 16) {
-                        res.push(char::from_u32(r as u32).unwrap());
-                        Ok(())
-                    } else {
-                        self.err_span(
-                            LexemeError::InvalidEscapeSequence,
-                            pos as u64,
-                            it.pos() as u64,
-                        )
-                    }
-                }
-                '1'..='9' => self.err_span(
-                    LexemeError::InvalidEscapeSequence,
-                    pos as u64,
-                    it.pos() as u64,
-                ),
-                'u' => match it.next() {
-                    Some('{') => {
-                        if let Ok(r) = Self::consume_int_r(it, 16) {
-                            if let Some('}') = it.next() {
-                                res.push(char::from_u32(r as u32).unwrap());
-                                return Ok(());
-                            }
-                        }
-                        self.err_span(
-                            LexemeError::InvalidEscapeSequence,
-                            pos as u64,
-                            it.pos() as u64,
-                        )
-                    }
-                    _ => self.err_span(
-                        LexemeError::InvalidEscapeSequence,
-                        pos as u64,
-                        it.pos() as u64,
-                    ),
-                },
-                '"' | '\'' | '\\' => {
-                    res.push(c2);
-                    Ok(())
-                }
-                '\n' => Ok(()),
+                '"' | '\'' | '\\' => res.push(c),
                 _ => {
                     res.push('\\');
-                    res.push(c2);
-                    Ok(())
+                    res.push(c);
                 }
+            },
+            None => {
+                return Err(());
             }
-        } else {
-            self.err_pos(LexemeError::UnfinishedStringLiteral, pos as u64)
-        }
+        };
+        Ok(())
     }
 
     // String parsing is a hot-spot, so parameterise by a `stop` function which gets
@@ -378,7 +343,13 @@ impl<'a> Lexer<'a> {
                         }
                     } else {
                         let pos = it.pos();
-                        self.escape(&mut it, pos, &mut res)?;
+                        if Self::escape(&mut it, &mut res).is_err() {
+                            return self.err_span(
+                                LexemeError::InvalidEscapeSequence,
+                                string_end as u64 + pos as u64 - 1,
+                                string_end as u64 + it.pos() as u64,
+                            );
+                        }
                     }
                 }
                 c => res.push(c),
