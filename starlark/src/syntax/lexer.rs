@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-use crate::{errors::Diagnostic, syntax::dialect::Dialect};
+use crate::{
+    errors::Diagnostic,
+    syntax::{cursors::CursorBytes, dialect::Dialect},
+};
 use codemap::{CodeMap, Span};
 use gazebo::dupe::Dupe;
 use logos::Logos;
@@ -93,66 +96,52 @@ impl<'a> Lexer<'a> {
 
     /// We have just seen a newline, read how many indents we have
     /// and then set self.indent properly
-    #[allow(clippy::while_let_on_iterator)] // Not possible as it is borrowed mutably
     fn calculate_indent(&mut self) -> anyhow::Result<()> {
         // consume tabs and spaces, output the indentation levels
-        let xs = self.lexer.remainder().as_bytes();
+        let mut it = CursorBytes::new(self.lexer.remainder());
         let mut spaces = 0;
         let mut tabs = 0;
-        let mut skip = 0;
-        let mut it = xs.iter();
         let mut indent_start = self.lexer.span().start as u64;
         loop {
-            match it.next() {
+            match it.next_char() {
                 None => {
-                    self.lexer.bump(tabs + spaces + skip);
+                    self.lexer.bump(it.pos());
                     return Ok(());
                 }
-                Some(x) => {
-                    match *x as char {
-                        ' ' => {
-                            spaces += 1;
-                        }
-                        '\t' => {
-                            tabs += 1;
-                        }
-
-                        '\n' => {
-                            // A line that is entirely blank gets emitted as a newline, and then
-                            // we don't consume the subsequent newline character.
-                            // (not sure this is necessary)
-                            self.lexer.bump(spaces + tabs + skip);
-                            return Ok(());
-                        }
-                        '#' => {
-                            // A line that is all comments doesn't get emitted at all
-                            // Skip until the next newline
-                            // Remove skip now, so we can freely add it on later
-                            skip += 1 + spaces + tabs;
-                            spaces = 0;
-                            tabs = 0;
-                            loop {
-                                match it.next() {
-                                    None => {
-                                        self.lexer.bump(tabs + spaces + skip);
-                                        return Ok(());
-                                    }
-                                    Some(x) => {
-                                        skip += 1;
-                                        if *x as char == '\n' {
-                                            break; // only the inner loop
-                                        }
-                                    }
-                                }
-                            }
-                            indent_start = self.lexer.span().start as u64 + skip as u64;
-                        }
-                        _ => break,
-                    }
+                Some(' ') => {
+                    spaces += 1;
                 }
+                Some('\t') => {
+                    tabs += 1;
+                }
+                Some('\n') => {
+                    // A line that is entirely blank gets emitted as a newline, and then
+                    // we don't consume the subsequent newline character.
+                    self.lexer.bump(it.pos() - 1);
+                    return Ok(());
+                }
+                Some('#') => {
+                    // A line that is all comments doesn't get emitted at all
+                    // Skip until the next newline
+                    // Remove skip now, so we can freely add it on later
+                    spaces = 0;
+                    tabs = 0;
+                    loop {
+                        match it.next_char() {
+                            None => {
+                                self.lexer.bump(it.pos());
+                                return Ok(());
+                            }
+                            Some('\n') => break, // only the inner loop
+                            Some(_) => {}
+                        }
+                    }
+                    indent_start = self.lexer.span().start as u64 + it.pos() as u64;
+                }
+                _ => break,
             }
         }
-        self.lexer.bump(spaces + tabs + skip);
+        self.lexer.bump(it.pos() - 1); // last character broke us out the loop
         let indent = spaces + tabs * 8;
         if tabs > 0 && !self.dialect_allow_tabs {
             return self.err_pos(LexemeError::InvalidTab, self.lexer.span().start as u64);
@@ -195,7 +184,7 @@ impl<'a> Lexer<'a> {
                 )))
             }
         }
-        return Ok(());
+        Ok(())
     }
 
     fn wrap(&mut self, token: Token) -> Option<Lexeme> {

@@ -29,6 +29,7 @@ mod lexer_tests;
 mod testcases;
 
 pub(crate) mod ast;
+pub(crate) mod cursors;
 mod dialect;
 pub(crate) mod lexer;
 pub(crate) mod validate;
