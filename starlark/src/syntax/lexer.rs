@@ -288,12 +288,7 @@ impl<'a> Lexer<'a> {
 
     // String parsing is a hot-spot, so parameterise by a `stop` function which gets
     // specialised for each variant
-    fn string(
-        &mut self,
-        triple: bool,
-        raw: bool,
-        mut stop: impl FnMut(char) -> bool,
-    ) -> Option<Lexeme> {
+    fn string(&mut self, triple: bool, raw: bool, mut stop: impl FnMut(char) -> bool) -> Lexeme {
         // We have seen an openning quote, which is either ' or "
         // If triple is true, it was a triple quote
         // stop lets us know when a string ends.
@@ -317,22 +312,22 @@ impl<'a> Lexer<'a> {
         loop {
             match it.next_char() {
                 None => {
-                    return Some(self.err_span(
+                    return self.err_span(
                         LexemeError::UnfinishedStringLiteral,
                         string_start as u64,
                         string_end as u64 + it.pos() as u64,
-                    ));
+                    );
                 }
                 Some(c) => {
                     if stop(c) {
                         let contents_end = it.pos() - if triple { 3 } else { 1 };
                         let contents = &self.lexer.remainder()[contents_start..contents_end];
                         self.lexer.bump(it.pos());
-                        return Some(Ok((
+                        return Ok((
                             string_start as u64,
                             Token::StringLiteral(contents.to_owned()),
                             string_end as u64 + it.pos() as u64,
-                        )));
+                        ));
                     } else if c == '\\' || c == '\r' || (c == '\n' && !triple) {
                         res = String::with_capacity(it.pos() + 10);
                         res.push_str(&self.lexer.remainder()[contents_start..it.pos() - 1]);
@@ -352,11 +347,11 @@ impl<'a> Lexer<'a> {
                 if triple {
                     res.truncate(res.len() - 2);
                 }
-                return Some(Ok((
+                return Ok((
                     string_start as u64,
                     Token::StringLiteral(res),
                     string_end as u64 + it.pos() as u64,
-                )));
+                ));
             }
             match c {
                 '\n' if !triple => {
@@ -383,9 +378,7 @@ impl<'a> Lexer<'a> {
                         }
                     } else {
                         let pos = it.pos();
-                        if let Err(e) = self.escape(&mut it, pos, &mut res) {
-                            return Some(Err(e));
-                        }
+                        self.escape(&mut it, pos, &mut res)?;
                     }
                 }
                 c => res.push(c),
@@ -393,11 +386,11 @@ impl<'a> Lexer<'a> {
         }
 
         // We ran out of characters
-        Some(self.err_span(
+        self.err_span(
             LexemeError::UnfinishedStringLiteral,
             string_start as u64,
             string_end as u64 + it.pos() as u64,
-        ))
+        )
     }
 
     pub fn next(&mut self) -> Option<Lexeme> {
@@ -449,7 +442,7 @@ impl<'a> Lexer<'a> {
                             let raw = self.lexer.span().len() == 2;
                             if self.lexer.remainder().starts_with("\"\"") {
                                 let mut qs = 0;
-                                self.string(true, raw, |c| {
+                                Some(self.string(true, raw, |c| {
                                     if c == '\"' {
                                         qs += 1;
                                         qs == 3
@@ -457,16 +450,16 @@ impl<'a> Lexer<'a> {
                                         qs = 0;
                                         false
                                     }
-                                })
+                                }))
                             } else {
-                                self.string(false, raw, |c| c == '\"')
+                                Some(self.string(false, raw, |c| c == '\"'))
                             }
                         }
                         Token::RawSingleQuote => {
                             let raw = self.lexer.span().len() == 2;
                             if self.lexer.remainder().starts_with("''") {
                                 let mut qs = 0;
-                                self.string(true, raw, |c| {
+                                Some(self.string(true, raw, |c| {
                                     if c == '\'' {
                                         qs += 1;
                                         qs == 3
@@ -474,9 +467,9 @@ impl<'a> Lexer<'a> {
                                         qs = 0;
                                         false
                                     }
-                                })
+                                }))
                             } else {
-                                self.string(false, raw, |c| c == '\'')
+                                Some(self.string(false, raw, |c| c == '\''))
                             }
                         }
                         Token::OpeningCurly | Token::OpeningRound | Token::OpeningSquare => {
