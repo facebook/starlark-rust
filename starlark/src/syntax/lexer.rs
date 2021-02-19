@@ -207,6 +207,8 @@ impl<'a> Lexer<'a> {
                         if count >= min {
                             it.unnext(c);
                             break;
+                        } else {
+                            return Err(());
                         }
                     }
                     Some(v) => {

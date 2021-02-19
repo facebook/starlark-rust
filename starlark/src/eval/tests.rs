@@ -1111,6 +1111,10 @@ fn test_escape_characters() {
     // 9 is not an octal digit, so it terminates early
     assert_eq!(assert::pass(r#"'\119'"#).to_string(), "\t9");
     assert_eq!(assert::pass(r#"'\117'"#).to_string(), "O");
+    assert_eq!(assert::pass(r#"'\u0041'"#).to_string(), "A");
+    assert_eq!(assert::pass(r#"'\u0414'"#).to_string(), "Д");
+    assert_eq!(assert::pass(r#"'\u754c'"#).to_string(), "界");
+    assert_eq!(assert::pass(r#"'\U0001F600'"#).to_string(), "😀");
 }
 
 #[test]
