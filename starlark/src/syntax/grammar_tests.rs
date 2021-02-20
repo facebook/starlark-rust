@@ -168,6 +168,21 @@ fn test_optional_whitespace_after_0() {
 }
 
 #[test]
+fn test_blank_line() {
+    assert_eq!(
+        assert::parse(
+            r#"
+def foo():
+  bar
+
+  bar
+"#
+        ),
+        "def foo():\n  bar\n  bar\n"
+    )
+}
+
+#[test]
 fn test_fncall_span() {
     let content = r#"def fn(a):
   fail(a)

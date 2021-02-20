@@ -332,12 +332,13 @@ impl Assert {
             .span;
         let mut pos = 0;
         let codemap = Arc::new(codemap);
-        Lexer::new(program, &Dialect::Standard, codemap.dupe(), file_span).for_each(|x| match x {
+        Lexer::new(program, &self.dialect, codemap.dupe(), file_span).for_each(|x| match x {
             Err(e) => panic!(
                 "starlark::assert::lex_tokens, expected lex sucess but failed\nCode: {}\nError: {}",
                 program, e
             ),
             Ok((i, t, j)) => {
+                // While lexing we assert the invariant that each token position can't be before the previous one
                 let span_incorrect = format!("Span of {:?} incorrect", t);
                 assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
                 result.push((i, t, j));
@@ -345,6 +346,22 @@ impl Assert {
                 pos = j;
             }
         });
+
+        // In Starlark Windows newline characters shouldn't change the lex tokens (only the positions), so run that test too.
+        let with_r = Lexer::new(
+            &program.replace('\n', "\r\n"),
+            &self.dialect,
+            codemap.dupe(),
+            file_span,
+        )
+        .collect::<Vec<_>>();
+        assert_eq!(
+            with_r.into_map(|x| x.unwrap().1),
+            result.map(|x| x.1.clone()),
+            "starlark::assert::lex_tokens, difference using CRLF newlines\nCode: {}",
+            program,
+        );
+
         result
     }
 

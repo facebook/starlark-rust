@@ -116,6 +116,9 @@ impl<'a> Lexer<'a> {
                     self.lexer.bump(it.pos() - 1);
                     return Ok(());
                 }
+                Some('\r') => {
+                    // We just ignore these entirely
+                }
                 Some('#') => {
                     // A line that is all comments doesn't get emitted at all
                     // Skip until the next newline
@@ -232,6 +235,13 @@ impl<'a> Lexer<'a> {
             Some('f') => res.push('\x0C'),
             Some('v') => res.push('\x0B'),
             Some('\n') => {}
+            Some('\r') => {
+                // Windows newline incoming, we expect a \n next, which we can ignore
+                if it.next() != Some('\n') {
+                    // A random \r character happened, let's declare an error, but we're just confused here
+                    return Err(());
+                }
+            }
             Some('x') => res.push(Self::escape_char(it, 2, 2, 16)?),
             Some('u') => res.push(Self::escape_char(it, 4, 4, 16)?),
             Some('U') => res.push(Self::escape_char(it, 8, 8, 16)?),
