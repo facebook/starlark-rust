@@ -63,16 +63,16 @@ impl TypedValue<'_> for bool {
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        if let Some(other) = other.downcast_ref::<Self>() {
-            Ok(*self == *other)
+        if let Some(other) = other.unpack_bool() {
+            Ok(*self == other)
         } else {
             Ok(false)
         }
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
-        if let Some(other) = other.downcast_ref::<Self>() {
-            Ok(self.cmp(&*other))
+        if let Some(other) = other.unpack_bool() {
+            Ok(self.cmp(&other))
         } else {
             unsupported_with(self, "<>", other)
         }
