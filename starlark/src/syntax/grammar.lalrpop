@@ -113,7 +113,9 @@ IfBody_: Stmt = <c:Test> ":" <s:Suite> <el:ElseStmt?> => {
     }
 };
 
-IfStmt: AstStmt = "if" <IfBody>;
+IfStmt: AstStmt = ASTS<IfStmt_>;
+IfStmt_: Stmt = "if" <IfBody_>;
+
 ElseStmt: AstStmt = {
     "elif" <IfBody>,
     "else" ":" <Suite>
