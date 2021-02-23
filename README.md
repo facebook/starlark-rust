@@ -37,7 +37,6 @@ In this section we outline where we don't comply with the [Starlark spec](https:
 * We don't have the common extensions of floats, bit operations, byte strings or sets.
 * Our strings are not compliant in several ways, often returning code points instead of singleton strings, and have poor performance.
 * We follow proper lexical binding for list comprehensions, so each `for` clause introduces a fresh variable (_deliberately_).
-* We allow comparison between `None` values (_deliberately_).
 * In some cases creating circular data structures may lead to stack overflows.
 * We use 32bit fixed size integers. Constructing larger values will result in Starlark failing with an overflow error.
 * There are a number of minor incompatibilities or places where the spec is unclear, many of which are included in our tests.

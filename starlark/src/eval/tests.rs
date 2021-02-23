@@ -850,7 +850,6 @@ x = repr; y = repr; x == y
 fn test_comparison() {
     assert::all_true(
         r#"
-None <= None
 False < True
 1 < 2
 "test" < "x"
@@ -860,6 +859,7 @@ False < True
 (1, 3) < (1, 3, 4)
 "#,
     );
+    assert::fail("None < None", "`compare` not supported");
     assert::fail("x = {}; x < x", "`compare` not supported");
     assert::fail("{} < {1: 2}", "`compare` not supported");
     assert::fail("range(1) < range(2)", "`compare` not supported");
@@ -1196,12 +1196,6 @@ fn test_dict_with_duplicates() {
 }
 
 #[test]
-fn test_none_comparison() {
-    // In Go Starlark this is a runtime error, I disagree.
-    assert::pass("assert_eq(None < None, False)");
-}
-
-#[test]
 fn test_self_assign() {
     // In Go Starlark this works.
     // Doesn't seem unreasonable.
@@ -1314,7 +1308,6 @@ fn test_go() {
             test_case!("misc.star"),
             &[
                 "2.0",                          // We don't support float
-                "None < None", // We don't believe this should be an error, see test_none_comparison
                 "'<built-in function freeze>'", // Different display of functions
             ],
         ),

@@ -18,11 +18,9 @@
 //! Define the None type for Starlark.
 
 use crate::values::{
-    unsupported_with, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, TypedValue,
-    Value,
+    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, TypedValue, Value,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
-use std::cmp::Ordering;
 
 /// Define the NoneType type
 #[derive(Debug, Clone, Dupe, AnyLifetime)]
@@ -42,14 +40,6 @@ impl<'v> TypedValue<'v> for NoneType {
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         Ok(other.is_none())
-    }
-
-    fn compare(&self, _ptr_eq: bool, other: Value) -> anyhow::Result<Ordering> {
-        if other.is_none() {
-            Ok(Ordering::Equal)
-        } else {
-            unsupported_with(self, "cmp()", other)
-        }
     }
 
     fn collect_repr(&self, s: &mut String) {
