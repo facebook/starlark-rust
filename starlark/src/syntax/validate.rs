@@ -34,6 +34,10 @@ enum ValidateError {
     BreakOutsideLoop,
     #[error("`continue` cannot be used outside of a `for` loop")]
     ContinueOutsideLoop,
+    #[error("`return` cannot be used outside of a `def` function")]
+    ReturnOutsideDef,
+    #[error("`load` must only occur at the top of a module")]
+    LoadNotTop,
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
@@ -216,34 +220,36 @@ impl Stmt {
         Ok(Stmt::Def(name, parameters, return_type, box stmts))
     }
 
-    /// Validate `break` and `continue` is only used inside loops
-    pub fn validate_break_continue(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
-        // Inside a for, the only thing that might disallow break/continue is def
-        fn inside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
+    /// Validate all statements only occur where they are allowed to.
+    pub fn validate(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
+        // Inside a for, we allow continue/break, unless we go beneath a def.
+        // Inside a def, we allow return.
+        // All load's must occur at the top-level.
+        fn f(
+            codemap: &Arc<CodeMap>,
+            stmt: &AstStmt,
+            top_level: bool,
+            inside_for: bool,
+            inside_def: bool,
+        ) -> anyhow::Result<()> {
+            let err = |x| Err(Diagnostic::add_span(x, stmt.span, codemap.dupe()));
+
             match &stmt.node {
-                Stmt::Def(_, _, _, body) => outside_for(codemap, body),
-                _ => stmt.node.visit_stmt_result(|x| inside_for(codemap, x)),
+                Stmt::Def(_, _, _, body) => f(codemap, body, false, false, true),
+                Stmt::For(box (_, _, body)) => f(codemap, body, false, true, inside_def),
+                Stmt::If(..) | Stmt::IfElse(..) => stmt
+                    .node
+                    .visit_stmt_result(|x| f(codemap, x, false, inside_for, inside_def)),
+                Stmt::Break if !inside_for => err(ValidateError::BreakOutsideLoop),
+                Stmt::Continue if !inside_for => err(ValidateError::ContinueOutsideLoop),
+                Stmt::Return(_) if !inside_def => err(ValidateError::ReturnOutsideDef),
+                Stmt::Load(..) if !top_level => err(ValidateError::LoadNotTop),
+                _ => stmt
+                    .node
+                    .visit_stmt_result(|x| f(codemap, x, top_level, inside_for, inside_def)),
             }
         }
 
-        // Outside a for, a continue/break is an error
-        fn outside_for(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
-            match &stmt.node {
-                Stmt::For(box (_, _, body)) => inside_for(codemap, body),
-                Stmt::Break => Err(Diagnostic::add_span(
-                    ValidateError::BreakOutsideLoop,
-                    stmt.span,
-                    codemap.dupe(),
-                )),
-                Stmt::Continue => Err(Diagnostic::add_span(
-                    ValidateError::ContinueOutsideLoop,
-                    stmt.span,
-                    codemap.dupe(),
-                )),
-                _ => stmt.node.visit_stmt_result(|x| outside_for(codemap, x)),
-            }
-        }
-
-        outside_for(codemap, stmt)
+        f(codemap, stmt, true, false, false)
     }
 }

@@ -111,7 +111,7 @@ pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Resu
 
 impl AstModule {
     fn create(codemap: Arc<CodeMap>, statement: AstStmt) -> anyhow::Result<AstModule> {
-        Stmt::validate_break_continue(&codemap, &statement)?;
+        Stmt::validate(&codemap, &statement)?;
         Ok(AstModule { codemap, statement })
     }
 
