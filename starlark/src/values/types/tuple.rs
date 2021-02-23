@@ -158,7 +158,10 @@ where
         }
     }
 
-    fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
+    fn compare(&self, ptr_eq: bool, other: Value<'v>) -> anyhow::Result<Ordering> {
+        if ptr_eq {
+            return Ok(Ordering::Equal);
+        }
         match Tuple::from_value(other) {
             None => unsupported_with(self, "cmp()", other),
             Some(other) => compare_slice(&self.content, &other.content, |x, y| x.compare(*y)),

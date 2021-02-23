@@ -191,11 +191,8 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
 
     fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
         let _guard = crate::eval::call_stack::try_inc()?;
-        if self.to_value().ptr_eq(other) {
-            Ok(Ordering::Equal)
-        } else {
-            self.get_aref().compare(other)
-        }
+        self.get_aref()
+            .compare(self.to_value().ptr_eq(other), other)
     }
 
     /// Get a reference to underlying data or `None`

@@ -44,7 +44,7 @@ impl<'v> TypedValue<'v> for NoneType {
         Ok(other.is_none())
     }
 
-    fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
+    fn compare(&self, _ptr_eq: bool, other: Value) -> anyhow::Result<Ordering> {
         if other.is_none() {
             Ok(Ordering::Equal)
         } else {

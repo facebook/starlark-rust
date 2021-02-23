@@ -858,9 +858,9 @@ False < True
 [1, 3] < [1, 3, 4]
 (1, 3) > (1, 2)
 (1, 3) < (1, 3, 4)
-x = {}; x <= x  # Not permitted by the spec, but we do a ptr comparison first
 "#,
     );
+    assert::fail("x = {}; x < x", "`compare` not supported");
     assert::fail("{} < {1: 2}", "`compare` not supported");
     assert::fail("range(1) < range(2)", "`compare` not supported");
     assert::fail("repr < str", "`compare` not supported");

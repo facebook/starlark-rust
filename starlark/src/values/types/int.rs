@@ -150,7 +150,7 @@ impl<'v> TypedValue<'v> for PointerI32 {
         })
     }
 
-    fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
+    fn compare(&self, _ptr_eq: bool, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other) = other.unpack_int() {
             Ok(self.get().cmp(&other))
         } else {
