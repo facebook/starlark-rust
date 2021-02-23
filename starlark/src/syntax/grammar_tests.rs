@@ -78,7 +78,7 @@ fn test_top_level_def() {
         "def toto():\n  pass\n"
     );
     let mut a = Assert::new();
-    a.dialect(&Dialect::Simple);
+    a.dialect_set(|x| x.enable_def = false);
     a.parse_fail("!def toto():\n  pass\n!");
     // no new line at end of file
     assert_eq!(
