@@ -51,14 +51,14 @@ pub struct AstModule {
     pub(crate) statement: AstStmt,
 }
 
+// A trait rather than a function to allow .to_ast() chaining in the parser.
 pub(crate) trait ToAst: Sized {
     fn to_ast(self, span: Span) -> Spanned<Self> {
         Spanned { span, node: self }
     }
 }
 
-impl ToAst for i32 {}
-impl ToAst for String {}
+impl<T> ToAst for T {}
 
 #[derive(Debug)]
 pub enum Argument {
@@ -67,7 +67,6 @@ pub enum Argument {
     ArgsArray(AstExpr),
     KWArgsDict(AstExpr),
 }
-impl ToAst for Argument {}
 
 #[derive(Debug)]
 pub enum Parameter {
@@ -77,7 +76,6 @@ pub enum Parameter {
     Args(AstString, Option<Box<AstExpr>>),
     KWArgs(AstString, Option<Box<AstExpr>>),
 }
-impl ToAst for Parameter {}
 
 #[derive(Debug, Clone)]
 pub enum AstLiteral {
@@ -110,7 +108,6 @@ pub enum Expr {
     ListComprehension(Box<AstExpr>, Vec<AstClause>),
     DictComprehension(Box<(AstExpr, AstExpr)>, Vec<AstClause>),
 }
-impl ToAst for Expr {}
 
 #[derive(Debug)]
 pub struct Clause {
@@ -118,7 +115,6 @@ pub struct Clause {
     pub over: AstExpr,
     pub ifs: Vec<AstExpr>,
 }
-impl ToAst for Clause {}
 
 #[derive(Debug, Clone, Copy, Dupe, Eq, PartialEq)]
 pub enum BinOp {
@@ -177,7 +173,6 @@ pub enum Stmt {
     // The Visibility of a Load is implicit from the Dialect, not written by a user
     Load(AstString, Vec<(AstString, AstString)>, Visibility),
 }
-impl ToAst for Stmt {}
 
 impl Argument {
     pub fn expr(&self) -> &AstExpr {
