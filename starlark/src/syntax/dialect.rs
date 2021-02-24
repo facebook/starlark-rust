@@ -60,18 +60,6 @@ pub struct Dialect {
 // even though they are actually global constants
 #[allow(non_upper_case_globals)]
 impl Dialect {
-    /// Build file dialect which is used to interpret BUILD files - lacks `def`.
-    pub const Simple: Self = Self {
-        enable_def: false,
-        enable_lambda: true,
-        enable_load: true,
-        enable_keyword_only_arguments: false,
-        enable_types: false,
-        enable_tabs: true,
-        enable_load_reexport: false,
-        enable_top_level_stmt: false,
-    };
-
     /// The Starlark language as specified in https://github.com/bazelbuild/starlark/blob/master/spec.md
     pub const Standard: Self = Self {
         enable_def: true,
