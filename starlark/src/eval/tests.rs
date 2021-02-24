@@ -188,7 +188,7 @@ fn test_extra_args_native() {
 
 #[test]
 fn test_bad_break() {
-    assert::fail("break", "Parse error");
+    assert::fails("break", &["break", "outside of", "loop"]);
     assert::fails(
         "def foo(x):\n  if 1:\n    break",
         &["break", "outside of", "loop"],
@@ -205,7 +205,7 @@ def foo(x):
             continue",
         "outside of",
     );
-    assert::fail("return 1", "Parse error");
+    assert::fail("return 1", "outside of a `def`");
     assert::fail("for x in []:\n  return 1", "outside of a `def`");
 }
 

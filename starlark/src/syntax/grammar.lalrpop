@@ -58,11 +58,8 @@ COMMA<E>: Vec<E> =
         => v0.into_iter().chain(e1).collect();
 
 pub(crate) Starlark: AstStmt = ASTS<starlark_>;
-starlark_: Stmt = "\n"* <(<TopStmt> "\n"*)*>
+starlark_: Stmt = "\n"* <(<Stmt> "\n"*)*>
     => Stmt::Statements(<>);
-
-TopStmt: AstStmt = { DefStmt, IfStmt, ForStmt, SimpleStmt<BuildTopStmt> };
-BuildTopStmt: AstStmt = { AssignStmt, ExprStmt, LoadStmt, PassStmt };
 
 DefStmt: AstStmt = ASTS<DefStmt_> =>? Ok(dialect.check_def(codemap, <>)?);
 DefStmt_: Stmt =
@@ -136,9 +133,6 @@ SimpleStmt<S>: AstStmt =
         }
     };
 
-PassStmt: AstStmt = <@L> "pass" <@R>
-    => Stmt::Pass.to_ast(file_span.subspan(<>));
-
 SmallStmt: AstStmt = {
     <l:@L> "return" <e:TestList?> <r:@R>
         => Stmt::Return(e).to_ast(file_span.subspan(l, r)),
@@ -146,9 +140,11 @@ SmallStmt: AstStmt = {
         => Stmt::Break.to_ast(file_span.subspan(<>)),
     <@L> "continue" <@R>
         => Stmt::Continue.to_ast(file_span.subspan(<>)),
-    PassStmt,
+    <@L> "pass" <@R>
+        => Stmt::Pass.to_ast(file_span.subspan(<>)),
     AssignStmt,
-    ExprStmt
+    ExprStmt,
+    LoadStmt,
 };
 
 AssignOp: AssignOp = {
