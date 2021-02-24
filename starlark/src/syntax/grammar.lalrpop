@@ -76,7 +76,7 @@ Parameter_: Parameter = {
     <n:identifier> "=" <e:Test> => Parameter::WithDefaultValue(n, None, box e),
     <identifier>            => Parameter::Normal(<>, None),
     "*" <identifier>        => Parameter::Args(<>, None),
-    <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l, r), Parameter::NoArgs)?),
+    <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l as u64, r as u64), Parameter::NoArgs)?),
     "**" <identifier>       => Parameter::KWArgs(<>, None),
 };
 
@@ -85,7 +85,7 @@ ParameterTyped_: Parameter = {
     <n:identifier> <t:Type> "=" <e:Test> => Parameter::WithDefaultValue(n, t, box e),
     <identifier> <Type>            => Parameter::Normal(<>),
     "*" <identifier> <Type>        => Parameter::Args(<>),
-    <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l, r), Parameter::NoArgs)?),
+    <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l as u64, r as u64), Parameter::NoArgs)?),
     "**" <identifier> <Type>       => Parameter::KWArgs(<>),
 };
 
@@ -347,7 +347,7 @@ FactorExpr: AstExpr = {
 };
 
 extern {
-    type Location = u64;
+    type Location = usize;
     type Error = anyhow::Error;
 
     enum lexer::Token {

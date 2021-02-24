@@ -324,7 +324,7 @@ impl Assert {
     }
 
     /// Restricted to crate because 'Lexeme' isn't a public type.
-    pub(crate) fn lex_tokens(&self, program: &str) -> Vec<(u64, Token, u64)> {
+    pub(crate) fn lex_tokens(&self, program: &str) -> Vec<(usize, Token, usize)> {
         let mut codemap = CodeMap::new();
         let mut result = Vec::new();
         let file_span = codemap
@@ -519,7 +519,7 @@ pub fn parse_ast(program: &str) -> AstModule {
 /// Lex some text and return the tokens. Fails if the program does not parse.
 /// Only available inside the crate because the Token type is not exported.
 #[cfg(test)]
-pub(crate) fn lex_tokens(program: &str) -> Vec<(u64, Token, u64)> {
+pub(crate) fn lex_tokens(program: &str) -> Vec<(usize, Token, usize)> {
     Assert::new().lex_tokens(program)
 }
 

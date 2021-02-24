@@ -48,7 +48,7 @@ fn one_of(expected: &[String]) -> String {
 /// To build this diagnostic, the method needs the file span corresponding
 /// to the parsed file.
 pub(crate) fn parse_error_add_span(
-    err: lu::ParseError<u64, Token, anyhow::Error>,
+    err: lu::ParseError<usize, Token, anyhow::Error>,
     span: Span,
     codemap: Arc<CodeMap>,
 ) -> anyhow::Error {
@@ -80,15 +80,17 @@ pub(crate) fn parse_error_add_span(
         lu::ParseError::User { .. } => unreachable!(),
     };
     let span = match &err {
-        lu::ParseError::InvalidToken { location } => span.subspan(*location, *location),
+        lu::ParseError::InvalidToken { location } => {
+            span.subspan(*location as u64, *location as u64)
+        }
         lu::ParseError::UnrecognizedToken {
             token: (x, .., y), ..
-        } => span.subspan(*x, *y),
+        } => span.subspan(*x as u64, *y as u64),
         lu::ParseError::UnrecognizedEOF { .. } => {
             let x = span.high() - span.low();
             span.subspan(x, x)
         }
-        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x, *y),
+        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x as u64, *y as u64),
         lu::ParseError::User { .. } => unreachable!(),
     };
 

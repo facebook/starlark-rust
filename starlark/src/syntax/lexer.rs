@@ -42,7 +42,7 @@ pub enum LexemeError {
     InvalidEscapeSequence,
 }
 
-type Lexeme = anyhow::Result<(u64, Token, u64)>;
+type Lexeme = anyhow::Result<(usize, Token, usize)>;
 
 pub(crate) struct Lexer<'a> {
     // Information for spans
@@ -78,14 +78,14 @@ impl<'a> Lexer<'a> {
         lexer2
     }
 
-    fn err_pos<T>(&self, msg: LexemeError, pos: u64) -> anyhow::Result<T> {
+    fn err_pos<T>(&self, msg: LexemeError, pos: usize) -> anyhow::Result<T> {
         self.err_span(msg, pos, pos)
     }
 
-    fn err_span<T>(&self, msg: LexemeError, start: u64, end: u64) -> anyhow::Result<T> {
+    fn err_span<T>(&self, msg: LexemeError, start: usize, end: usize) -> anyhow::Result<T> {
         Err(Diagnostic::add_span(
             msg,
-            self.filespan.subspan(start, end),
+            self.filespan.subspan(start as u64, end as u64),
             self.codemap.dupe(),
         ))
     }
@@ -97,7 +97,7 @@ impl<'a> Lexer<'a> {
         let mut it = CursorBytes::new(self.lexer.remainder());
         let mut spaces = 0;
         let mut tabs = 0;
-        let mut indent_start = self.lexer.span().start as u64;
+        let mut indent_start = self.lexer.span().start;
         loop {
             match it.next_char() {
                 None => {
@@ -135,7 +135,7 @@ impl<'a> Lexer<'a> {
                             Some(_) => {}
                         }
                     }
-                    indent_start = self.lexer.span().start as u64 + it.pos() as u64;
+                    indent_start = self.lexer.span().start + it.pos();
                 }
                 _ => break,
             }
@@ -143,18 +143,15 @@ impl<'a> Lexer<'a> {
         self.lexer.bump(it.pos() - 1); // last character broke us out the loop
         let indent = spaces + tabs * 8;
         if tabs > 0 && !self.dialect_allow_tabs {
-            return self.err_pos(LexemeError::InvalidTab, self.lexer.span().start as u64);
+            return self.err_pos(LexemeError::InvalidTab, self.lexer.span().start);
         }
         let now = self.indent_levels.last().copied().unwrap_or(0);
 
         if indent > now {
             self.indent_levels.push(indent);
             let span = self.lexer.span();
-            self.buffer.push_back(Ok((
-                indent_start as u64 + 1,
-                Token::Indent,
-                span.end as u64,
-            )));
+            self.buffer
+                .push_back(Ok((indent_start + 1, Token::Indent, span.end)));
         } else if indent < now {
             let mut dedents = 1;
             self.indent_levels.pop().unwrap();
@@ -167,20 +164,13 @@ impl<'a> Lexer<'a> {
                     self.indent_levels.pop().unwrap();
                 } else {
                     let pos = self.lexer.span();
-                    return self.err_span(
-                        LexemeError::Indentation,
-                        pos.start as u64,
-                        pos.end as u64,
-                    );
+                    return self.err_span(LexemeError::Indentation, pos.start, pos.end);
                 }
             }
             for _ in 0..dedents {
                 // We must declare each dedent is only a position, so multiple adjacent dedents don't overlap
-                self.buffer.push_back(Ok((
-                    indent_start as u64 + 1,
-                    Token::Dedent,
-                    indent_start as u64 + 1,
-                )))
+                self.buffer
+                    .push_back(Ok((indent_start + 1, Token::Dedent, indent_start + 1)))
             }
         }
         Ok(())
@@ -188,7 +178,7 @@ impl<'a> Lexer<'a> {
 
     fn wrap(&mut self, token: Token) -> Option<Lexeme> {
         let span = self.lexer.span();
-        Some(Ok((span.start as u64, token, span.end as u64)))
+        Some(Ok((span.start, token, span.end)))
     }
 
     // We've potentially seen one character, now consume between min and max elements of iterator
@@ -291,8 +281,8 @@ impl<'a> Lexer<'a> {
                 None => {
                     return self.err_span(
                         LexemeError::UnfinishedStringLiteral,
-                        string_start as u64,
-                        string_end as u64 + it.pos() as u64,
+                        string_start,
+                        string_end + it.pos(),
                     );
                 }
                 Some(c) => {
@@ -301,9 +291,9 @@ impl<'a> Lexer<'a> {
                         let contents = &self.lexer.remainder()[contents_start..contents_end];
                         self.lexer.bump(it.pos());
                         return Ok((
-                            string_start as u64,
+                            string_start,
                             Token::StringLiteral(contents.to_owned()),
-                            string_end as u64 + it.pos() as u64,
+                            string_end + it.pos(),
                         ));
                     } else if c == '\\' || c == '\r' || (c == '\n' && !triple) {
                         res = String::with_capacity(it.pos() + 10);
@@ -325,9 +315,9 @@ impl<'a> Lexer<'a> {
                     res.truncate(res.len() - 2);
                 }
                 return Ok((
-                    string_start as u64,
+                    string_start,
                     Token::StringLiteral(res),
-                    string_end as u64 + it.pos() as u64,
+                    string_end + it.pos(),
                 ));
             }
             match c {
@@ -358,8 +348,8 @@ impl<'a> Lexer<'a> {
                         if Self::escape(&mut it, &mut res).is_err() {
                             return self.err_span(
                                 LexemeError::InvalidEscapeSequence,
-                                string_end as u64 + pos as u64 - 1,
-                                string_end as u64 + it.pos() as u64,
+                                string_end + pos - 1,
+                                string_end + it.pos(),
                             );
                         }
                     }
@@ -371,8 +361,8 @@ impl<'a> Lexer<'a> {
         // We ran out of characters
         self.err_span(
             LexemeError::UnfinishedStringLiteral,
-            string_start as u64,
-            string_end as u64 + it.pos() as u64,
+            string_start,
+            string_end + it.pos(),
         )
     }
 
@@ -388,7 +378,7 @@ impl<'a> Lexer<'a> {
                 match self.lexer.next() {
                     None => {
                         self.done = true;
-                        let pos = self.lexer.span().end as u64;
+                        let pos = self.lexer.span().end;
                         for _ in 0..self.indent_levels.len() {
                             self.buffer.push_back(Ok((pos, Token::Dedent, pos)))
                         }
@@ -398,10 +388,9 @@ impl<'a> Lexer<'a> {
                     Some(token) => match token {
                         Token::Tabs => {
                             if !self.dialect_allow_tabs {
-                                self.buffer.push_back(self.err_pos(
-                                    LexemeError::InvalidTab,
-                                    self.lexer.span().start as u64,
-                                ));
+                                self.buffer.push_back(
+                                    self.err_pos(LexemeError::InvalidTab, self.lexer.span().start),
+                                );
                             }
                             continue;
                         }
@@ -411,15 +400,15 @@ impl<'a> Lexer<'a> {
                                 if let Err(e) = self.calculate_indent() {
                                     return Some(Err(e));
                                 }
-                                Some(Ok((span.start as u64, Token::Newline, span.end as u64)))
+                                Some(Ok((span.start, Token::Newline, span.end)))
                             } else {
                                 continue;
                             }
                         }
                         Token::Error => Some(self.err_span(
                             LexemeError::InvalidCharacter,
-                            self.lexer.span().start as u64,
-                            self.lexer.span().end as u64,
+                            self.lexer.span().start,
+                            self.lexer.span().end,
                         )),
                         Token::RawDoubleQuote => {
                             let raw = self.lexer.span().len() == 2;

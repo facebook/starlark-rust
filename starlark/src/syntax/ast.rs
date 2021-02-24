@@ -53,9 +53,9 @@ pub struct AstModule {
 
 // A trait rather than a function to allow .to_ast() chaining in the parser.
 pub(crate) trait ToAst: Sized {
-    fn to_ast(self, file_span: Span, begin: u64, end: u64) -> Spanned<Self> {
+    fn to_ast(self, file_span: Span, begin: usize, end: usize) -> Spanned<Self> {
         Spanned {
-            span: file_span.subspan(begin, end),
+            span: file_span.subspan(begin as u64, end as u64),
             node: self,
         }
     }
