@@ -52,6 +52,8 @@ pub struct Dialect {
     pub enable_tabs: bool,
     /// Do load() statements reexport their definition
     pub enable_load_reexport: bool,
+    /// Are `for`, `if` and other statements allowed at the top-level
+    pub enable_top_level_stmt: bool,
 }
 
 // These are morally enumerations, so give them enumeration-like names
@@ -67,6 +69,7 @@ impl Dialect {
         enable_types: false,
         enable_tabs: true,
         enable_load_reexport: false,
+        enable_top_level_stmt: false,
     };
 
     /// The Starlark language as specified in https://github.com/bazelbuild/starlark/blob/master/spec.md
@@ -78,6 +81,7 @@ impl Dialect {
         enable_types: false,
         enable_tabs: true,
         enable_load_reexport: true, // But they plan to change it
+        enable_top_level_stmt: false,
     };
 
     /// Starlark plus `lambda`, nested `def` and other features.
@@ -89,6 +93,7 @@ impl Dialect {
         enable_types: false,
         enable_tabs: true,
         enable_load_reexport: true,
+        enable_top_level_stmt: true,
     };
 }
 

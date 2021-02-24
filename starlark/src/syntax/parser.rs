@@ -104,14 +104,18 @@ pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Resu
     let codemap = Arc::new(codemap);
     let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
     match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
-        Ok(v) => Ok(AstModule::create(codemap, v)?),
+        Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
         Err(p) => Err(parse_error_add_span(p, file.span, codemap)),
     }
 }
 
 impl AstModule {
-    fn create(codemap: Arc<CodeMap>, statement: AstStmt) -> anyhow::Result<AstModule> {
-        Stmt::validate(&codemap, &statement)?;
+    fn create(
+        codemap: Arc<CodeMap>,
+        statement: AstStmt,
+        dialect: &Dialect,
+    ) -> anyhow::Result<AstModule> {
+        Stmt::validate(&codemap, &statement, dialect)?;
         Ok(AstModule { codemap, statement })
     }
 

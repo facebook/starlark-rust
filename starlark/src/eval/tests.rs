@@ -206,7 +206,7 @@ def foo(x):
         "outside of",
     );
     assert::fail("return 1", "Parse error");
-    assert::fail("for x in []:\n  return 1", "Parse error");
+    assert::fail("for x in []:\n  return 1", "outside of a `def`");
 }
 
 #[test]
@@ -328,6 +328,19 @@ fn test_comprehension() {
 
     // If only comprehensions are parse errors
     assert::fail("[1 if 0 == 0] == [0]", "Parse error");
+}
+
+#[test]
+fn test_top_level_statements() {
+    assert::pass(
+        r#"
+j = 0
+for i in range(10):
+    if i % 2 == 0:
+        j += i
+assert_eq(j, 20)
+"#,
+    );
 }
 
 #[test]

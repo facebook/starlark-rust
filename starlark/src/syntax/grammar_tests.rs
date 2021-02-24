@@ -97,6 +97,25 @@ fn test_top_level_def() {
 }
 
 #[test]
+fn test_top_level_statements() {
+    let mut a = Assert::new();
+    a.dialect_set(|x| x.enable_top_level_stmt = false);
+    a.parse_fail("x = 1\n!if x == 1:\n  x = 2\n!x = 3");
+    a.parse_fail("x = 1\n!for x in []:\n   pass\n!");
+    assert_eq!(a.parse("pass"), "pass\n");
+
+    assert_eq!(
+        assert::parse("if x == 1:\n  x = 2"),
+        "if (x == 1):\n  x = 2\n"
+    );
+    assert_eq!(
+        assert::parse("for x in []:\n   pass\n"),
+        "for x in []:\n  pass\n"
+    );
+    assert_eq!(assert::parse("pass"), "pass\n");
+}
+
+#[test]
 fn test_top_level_def_with_docstring() {
     assert_eq!(
         assert::parse(

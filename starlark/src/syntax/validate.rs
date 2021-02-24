@@ -19,8 +19,11 @@
 
 use crate::{
     errors::Diagnostic,
-    syntax::ast::{
-        Argument, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
+    syntax::{
+        ast::{
+            Argument, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
+        },
+        Dialect,
     },
 };
 use codemap::{CodeMap, Spanned};
@@ -38,6 +41,10 @@ enum ValidateError {
     ReturnOutsideDef,
     #[error("`load` must only occur at the top of a module")]
     LoadNotTop,
+    #[error("`if` cannot be used outside `def` in this dialect")]
+    NoTopLevelIf,
+    #[error("`for` cannot be used outside `def` in this dialect")]
+    NoTopLevelFor,
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
@@ -221,12 +228,18 @@ impl Stmt {
     }
 
     /// Validate all statements only occur where they are allowed to.
-    pub fn validate(codemap: &Arc<CodeMap>, stmt: &AstStmt) -> anyhow::Result<()> {
+    pub fn validate(
+        codemap: &Arc<CodeMap>,
+        stmt: &AstStmt,
+        dialect: &Dialect,
+    ) -> anyhow::Result<()> {
         // Inside a for, we allow continue/break, unless we go beneath a def.
         // Inside a def, we allow return.
         // All load's must occur at the top-level.
+        // At the top-level we only allow for/if when the dialect permits it.
         fn f(
             codemap: &Arc<CodeMap>,
+            dialect: &Dialect,
             stmt: &AstStmt,
             top_level: bool,
             inside_for: bool,
@@ -235,21 +248,33 @@ impl Stmt {
             let err = |x| Err(Diagnostic::add_span(x, stmt.span, codemap.dupe()));
 
             match &stmt.node {
-                Stmt::Def(_, _, _, body) => f(codemap, body, false, false, true),
-                Stmt::For(box (_, _, body)) => f(codemap, body, false, true, inside_def),
-                Stmt::If(..) | Stmt::IfElse(..) => stmt
-                    .node
-                    .visit_stmt_result(|x| f(codemap, x, false, inside_for, inside_def)),
+                Stmt::Def(_, _, _, body) => f(codemap, dialect, body, false, false, true),
+                Stmt::For(box (_, _, body)) => {
+                    if top_level && !dialect.enable_top_level_stmt {
+                        err(ValidateError::NoTopLevelFor)
+                    } else {
+                        f(codemap, dialect, body, false, true, inside_def)
+                    }
+                }
+                Stmt::If(..) | Stmt::IfElse(..) => {
+                    if top_level && !dialect.enable_top_level_stmt {
+                        err(ValidateError::NoTopLevelIf)
+                    } else {
+                        stmt.node.visit_stmt_result(|x| {
+                            f(codemap, dialect, x, false, inside_for, inside_def)
+                        })
+                    }
+                }
                 Stmt::Break if !inside_for => err(ValidateError::BreakOutsideLoop),
                 Stmt::Continue if !inside_for => err(ValidateError::ContinueOutsideLoop),
                 Stmt::Return(_) if !inside_def => err(ValidateError::ReturnOutsideDef),
                 Stmt::Load(..) if !top_level => err(ValidateError::LoadNotTop),
-                _ => stmt
-                    .node
-                    .visit_stmt_result(|x| f(codemap, x, top_level, inside_for, inside_def)),
+                _ => stmt.node.visit_stmt_result(|x| {
+                    f(codemap, dialect, x, top_level, inside_for, inside_def)
+                }),
             }
         }
 
-        f(codemap, stmt, true, false, false)
+        f(codemap, dialect, stmt, true, false, false)
     }
 }
