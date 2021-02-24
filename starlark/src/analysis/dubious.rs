@@ -100,15 +100,7 @@ mod test {
     use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
-        parse(
-            "X",
-            x.to_owned(),
-            &Dialect {
-                enable_types: true,
-                ..Dialect::Extended
-            },
-        )
-        .unwrap()
+        parse("X", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     impl Dubious {

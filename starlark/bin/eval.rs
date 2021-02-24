@@ -158,8 +158,5 @@ pub fn globals() -> Globals {
 }
 
 pub fn dialect() -> Dialect {
-    Dialect {
-        enable_types: true,
-        ..Dialect::Extended
-    }
+    Dialect::Extended
 }

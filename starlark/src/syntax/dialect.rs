@@ -90,7 +90,7 @@ impl Dialect {
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: true,
-        enable_types: false,
+        enable_types: true,
         enable_tabs: true,
         enable_load_reexport: true,
         enable_top_level_stmt: true,

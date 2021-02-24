@@ -146,10 +146,7 @@ pub struct Assert {
 impl Assert {
     pub fn new() -> Self {
         Self {
-            dialect: Dialect {
-                enable_types: true,
-                ..Dialect::Extended
-            },
+            dialect: Dialect::Extended,
             modules: hashmap!["assert.star".to_owned() => Lazy::force(&ASSERT_STAR).dupe()],
             globals: Lazy::force(&GLOBALS).dupe(),
         }
