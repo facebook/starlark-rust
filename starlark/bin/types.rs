@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use gazebo::prelude::*;
 use serde::Serialize;
 use starlark::{
     analysis::{LineColSpan, Lint},
@@ -23,7 +24,7 @@ use starlark::{
 use std::fmt::{self, Display};
 
 /// A standardised set of severities.
-#[derive(Debug, Serialize, Clone, Copy)]
+#[derive(Debug, Serialize, Dupe, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Error,

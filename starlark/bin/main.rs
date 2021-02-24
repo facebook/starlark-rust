@@ -15,6 +15,14 @@
  * limitations under the License.
  */
 
+// Features we use
+#![feature(box_syntax)]
+//
+// Plugins
+#![cfg_attr(feature = "custom_linter", feature(plugin))]
+#![cfg_attr(feature = "custom_linter", allow(deprecated))] // :(
+#![cfg_attr(feature = "custom_linter", plugin(linter))]
+
 use crate::types::{LintMessage, Message, Severity};
 use anyhow::anyhow;
 use eval::Context;
@@ -113,7 +121,7 @@ fn expand_dirs(extension: &str, xs: Vec<PathBuf>) -> impl Iterator<Item = PathBu
                     .map(|e| e.into_path()),
             )
         } else {
-            Either::Right(Box::new(vec![x].into_iter()))
+            Either::Right(box vec![x].into_iter())
         }
     })
 }
