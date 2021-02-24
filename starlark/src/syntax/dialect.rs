@@ -63,7 +63,7 @@ impl Dialect {
     /// The Starlark language as specified in https://github.com/bazelbuild/starlark/blob/master/spec.md
     pub const Standard: Self = Self {
         enable_def: true,
-        enable_lambda: false,
+        enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: false,
         enable_types: false,

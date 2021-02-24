@@ -15,11 +15,7 @@
  * limitations under the License.
  */
 
-use crate::{
-    assert,
-    assert::Assert,
-    syntax::{ast::Stmt, dialect::Dialect},
-};
+use crate::{assert, assert::Assert, syntax::ast::Stmt};
 use gazebo::prelude::*;
 
 #[test]
@@ -235,7 +231,7 @@ fn test_lambda() {
         "x = (lambda y: (y + 1))\n"
     );
     let mut a = Assert::new();
-    a.dialect(&Dialect::Standard);
+    a.dialect_set(|x| x.enable_lambda = false);
     a.parse_fail("x = !lambda y: y + 1!");
     assert_eq!(
         assert::parse("(lambda y: x == 1)(1)"),
