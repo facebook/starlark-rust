@@ -6,9 +6,13 @@ Based on a combination of:
 * Code for the tutorial at https://github.com/microsoft/vscode-extension-samples/tree/master/lsp-sample
 * Syntax files from https://github.com/phgn0/vscode-starlark (which are the Microsoft Python ones with minor tweaks)
 
+## Pre-requisites
+
+You need to have npm v7+ installed. Afterwards, run `npm install` in this folder.
+
 ## Debugging
 
-- Run `npm install` in this folder. This installs all necessary npm modules in both the client and server folder
+- Follow steps in Pre-requisites section.
 - Open VS Code on this folder.
 - Press Ctrl+Shift+B to compile the client and server.
 - Switch to the Debug viewlet.
@@ -17,7 +21,8 @@ Based on a combination of:
 
 ## Installing
 
+- Follow steps in Pre-requisites section.
 - Run `npm install vsce`
 - Run `npm exec vsce package`
-- In VS Code, go to Extensions, ..., Install from VSIX and select `starlark-1.0.0.vsix`
-- Build Starlark binary and put it on your `$PATH`, e.g. `cd buck2 && cargo build --bin=starlark && cp $CARGO_TARGET_DIR/debug/starlark ~/.cargo/bin/starlark`.
+- In VS Code, go to Extensions, click on the "..." button in the Extensions bar, select "Install from VSIX" and then select the `starlark-1.0.0.vsix` file.
+- Build Starlark binary and put it on your `$PATH`, e.g. `cargo build --bin=starlark && cp $CARGO_TARGET_DIR/debug/starlark ~/.cargo/bin/starlark`.
