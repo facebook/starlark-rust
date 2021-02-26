@@ -178,7 +178,7 @@ impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
             AstLiteral::IntLiteral(i) => FrozenValue::new_int(i.node),
-            AstLiteral::StringLiteral(x) => heap.alloc(x.node.to_owned()),
+            AstLiteral::StringLiteral(x) => heap.alloc(x.node.as_str()),
         }
     }
 }
