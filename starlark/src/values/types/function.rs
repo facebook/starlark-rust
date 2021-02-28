@@ -152,9 +152,9 @@ pub trait NativeFunc:
 
 impl<T> NativeFunc for T where
     T: for<'v> Fn(
-        &mut EvaluationContext<'v, '_>,
-        ParameterParser<'v, '_>,
-    ) -> anyhow::Result<Value<'v>>
+            &mut EvaluationContext<'v, '_>,
+            ParameterParser<'v, '_>,
+        ) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -221,9 +221,9 @@ impl<'v, F: NativeFunc> AllocFrozenValue<'v> for NativeFunction<F> {
 // If I switch this to the trait alias then it fails to resolve the usages
 impl<
     F: for<'v> Fn(
-        &mut EvaluationContext<'v, '_>,
-        ParameterParser<'v, '_>,
-    ) -> anyhow::Result<Value<'v>>
+            &mut EvaluationContext<'v, '_>,
+            ParameterParser<'v, '_>,
+        ) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static,

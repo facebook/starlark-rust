@@ -141,7 +141,7 @@ impl Freezer {
     }
 
     pub(crate) fn set_magic(&self, val: impl ImmutableValue<'static>) {
-        let p = self.1 .0.unpack_ptr1().unwrap();
+        let p = self.1.0.unpack_ptr1().unwrap();
         let p = p as *const FrozenValueMem as *mut FrozenValueMem;
         unsafe { ptr::write(p, FrozenValueMem::Immutable(box val)) }
     }

@@ -248,7 +248,7 @@ impl Heap {
                 info.time_rec.as_secs_f64(),
                 info.calls,
                 info.callers.len(),
-                un_ids[callers.0 .0],
+                un_ids[callers.0.0],
                 callers.1,
                 allocs
             )?;

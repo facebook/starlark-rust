@@ -1339,7 +1339,7 @@ fn test_go() {
             &test_case!("tuple.star").replace("\"abc\".elems()", "[\"a\",\"b\",\"c\"]"),
             &[
                 "1000000 * 1000000", // Some tests check that you can't create too large tuples, but that's not principled, so we allow it
-                                     // But it takes approximately forever, so doing it is a bad idea.
+                // But it takes approximately forever, so doing it is a bad idea.
             ],
         ),
     );

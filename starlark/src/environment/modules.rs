@@ -85,9 +85,9 @@ impl FrozenModule {
     /// Get the value of the variable `name`.
     /// Returns None if the variable isn't in the module or hasn't been set.
     pub fn get(&self, name: &str) -> Option<OwnedFrozenValue> {
-        let slot = self.1 .0.names.get_name(name)?;
+        let slot = self.1.0.names.get_name(name)?;
         self.1
-             .0
+            .0
             .slots
             .get_slot(slot)
             .map(|x| OwnedFrozenValue::new(self.0.dupe(), x))
@@ -232,9 +232,9 @@ impl Module {
 
     pub fn import_public_symbols(&self, env: &FrozenModule) {
         self.frozen_heap.add_reference(&env.0);
-        for (k, slot) in env.1 .0.names.symbols() {
+        for (k, slot) in env.1.0.names.symbols() {
             if Self::is_public_symbol(k) {
-                if let Some(value) = env.1 .0.slots.get_slot(*slot) {
+                if let Some(value) = env.1.0.slots.get_slot(*slot) {
                     self.set(k, Value::new_frozen(value))
                 }
             }

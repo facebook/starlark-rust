@@ -123,17 +123,17 @@ fn eval_one_dimensional_comprehension_dict(
     mut clauses: Vec<ClauseCompiled>,
     add: Box<
         dyn for<'v> Fn(
-            &mut SmallMap<Value<'v>, Value<'v>>,
-            &mut EvaluationContext<'v, '_>,
-        ) -> Result<(), EvalException<'v>>
+                &mut SmallMap<Value<'v>, Value<'v>>,
+                &mut EvaluationContext<'v, '_>,
+            ) -> Result<(), EvalException<'v>>
             + Send
             + Sync,
     >,
 ) -> Box<
     dyn for<'v> Fn(
-        &mut SmallMap<Value<'v>, Value<'v>>,
-        &mut EvaluationContext<'v, '_>,
-    ) -> Result<(), EvalException<'v>>
+            &mut SmallMap<Value<'v>, Value<'v>>,
+            &mut EvaluationContext<'v, '_>,
+        ) -> Result<(), EvalException<'v>>
         + Send
         + Sync,
 > {
@@ -164,17 +164,17 @@ fn eval_one_dimensional_comprehension_list(
     mut clauses: Vec<ClauseCompiled>,
     add: Box<
         dyn for<'v> Fn(
-            &mut Vec<Value<'v>>,
-            &mut EvaluationContext<'v, '_>,
-        ) -> Result<(), EvalException<'v>>
+                &mut Vec<Value<'v>>,
+                &mut EvaluationContext<'v, '_>,
+            ) -> Result<(), EvalException<'v>>
             + Send
             + Sync,
     >,
 ) -> Box<
     dyn for<'v> Fn(
-        &mut Vec<Value<'v>>,
-        &mut EvaluationContext<'v, '_>,
-    ) -> Result<(), EvalException<'v>>
+            &mut Vec<Value<'v>>,
+            &mut EvaluationContext<'v, '_>,
+        ) -> Result<(), EvalException<'v>>
         + Send
         + Sync,
 > {
