@@ -327,14 +327,18 @@ impl Display for Expr {
                 comma_separated_fmt(f, v, |x, f| write!(f, "{}: {}", x.0.node, x.1.node), false)?;
                 f.write_str("}")
             }
-            Expr::ListComprehension(e, v) => {
+            Expr::ListComprehension(e, c) => {
                 write!(f, "[{}", e.node)?;
-                comma_separated_fmt(f, v, |x, f| x.fmt(f), false)?;
+                for x in c {
+                    x.fmt(f)?;
+                }
                 f.write_str("]")
             }
             Expr::DictComprehension(box (k, v), c) => {
                 write!(f, "{{{}: {}", k.node, v.node)?;
-                comma_separated_fmt(f, c, |x, f| x.fmt(f), false)?;
+                for x in c {
+                    x.fmt(f)?;
+                }
                 f.write_str("}}")
             }
             Expr::Literal(x) => x.fmt(f),

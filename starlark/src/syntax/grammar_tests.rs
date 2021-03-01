@@ -222,6 +222,10 @@ fn test_comprehension() {
         assert::parse("[x for x in range(12) if x % 2 == 0 if x % 3 == 0]"),
         "[x for x in range(12) if ((x % 2) == 0) if ((x % 3) == 0)]\n"
     );
+    assert_eq!(
+        assert::parse("[x + 7 for x in range(12) for y in range(10)]"),
+        "[(x + 7) for x in range(12) for y in range(10)]\n"
+    );
 }
 
 #[test]
