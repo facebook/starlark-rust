@@ -46,9 +46,11 @@ logos = "0.11.4"
 serde_json = "1.0"
 rustyline = "6.3.0"
 maplit = "1.0.2"
-criterion = "0.3"
 tower-lsp = "0.13.3"
 tokio = {version = "0.2", features = ["io-std"]}
+
+[dev-dependencies]
+criterion = "0.3"
 
 [features]
 # @oss-disable: default = ["custom_linter"]
