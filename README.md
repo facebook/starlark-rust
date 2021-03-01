@@ -37,7 +37,6 @@ In this section we outline where we don't comply with the [Starlark spec](https:
 * We don't yet support later additions to Starlark, such as [floats](https://github.com/facebookexperimental/starlark-rust/issues/3), [bytes](https://github.com/facebookexperimental/starlark-rust/issues/4) or [bit operations](https://github.com/facebookexperimental/starlark-rust/issues/5).
 * We are currently limited to [32 bit integers](https://github.com/facebookexperimental/starlark-rust/issues/6). Constructing larger values will result in Starlark failing with an overflow error.
 * Our strings are not compliant in several ways, often returning code points instead of singleton strings, and have poor performance.
-* We follow proper lexical binding for list comprehensions, so each `for` clause introduces a fresh variable (_deliberately_).
 * In some cases creating circular data structures may lead to stack overflows.
 
 ## License

@@ -16,7 +16,7 @@
  */
 
 use crate::syntax::{
-    ast::{AssignOp, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, Stmt},
+    ast::{AssignOp, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt},
     AstModule,
 };
 use codemap::Span;
@@ -77,19 +77,26 @@ fn opt_expr(x: Option<&AstExpr>, res: &mut Vec<Bind>) {
     }
 }
 
-fn comprehension(clauses: &[Clause], res: &mut Vec<Bind>, end: impl Fn(&mut Vec<Bind>)) {
-    match clauses {
-        [] => end(res),
-        xs => {
-            let x = &xs[0];
-            expr(&x.over, res);
-            let mut inner = Vec::new();
-            expr_lvalue(&x.var, &mut inner);
-            x.ifs.iter().for_each(|i| expr(i, &mut inner));
-            comprehension(&clauses[1..], &mut inner, end);
-            res.push(Bind::Scope(Scope::new(inner)))
+fn comprehension(
+    for_: &ForClause,
+    clauses: &[Clause],
+    res: &mut Vec<Bind>,
+    end: impl Fn(&mut Vec<Bind>),
+) {
+    expr(&for_.over, res);
+    let mut inner = Vec::new();
+    expr_lvalue(&for_.var, &mut inner);
+    for clause in clauses {
+        match clause {
+            Clause::For(ForClause { var, over }) => {
+                expr(over, &mut inner);
+                expr_lvalue(var, &mut inner);
+            }
+            Clause::If(x) => expr(x, &mut inner),
         }
     }
+    end(&mut inner);
+    res.push(Bind::Scope(Scope::new(inner)))
 }
 
 fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
@@ -102,8 +109,10 @@ fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
             res.push(Bind::Scope(Scope::new(inner)));
         }
 
-        Expr::ListComprehension(x, clauses) => comprehension(clauses, res, |res| expr(x, res)),
-        Expr::DictComprehension(x, clauses) => comprehension(clauses, res, |res| {
+        Expr::ListComprehension(x, for_, clauses) => {
+            comprehension(for_, clauses, res, |res| expr(x, res))
+        }
+        Expr::DictComprehension(x, for_, clauses) => comprehension(for_, clauses, res, |res| {
             expr(&x.0, res);
             expr(&x.1, res)
         }),

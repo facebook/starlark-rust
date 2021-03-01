@@ -18,7 +18,7 @@
 // These are more readable for formulaic code like Uniplate
 #![allow(clippy::many_single_char_names)]
 
-use crate::syntax::ast::{AstExpr, AstStmt, AstString, Clause, Expr, Parameter, Stmt};
+use crate::syntax::ast::{AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter, Stmt};
 use either::Either;
 
 impl Stmt {
@@ -157,11 +157,13 @@ impl Expr {
                 f(x);
                 f(y);
             }),
-            Expr::ListComprehension(x, y) => {
+            Expr::ListComprehension(x, for_, y) => {
+                for_.visit_expr(|x| f(x));
                 y.iter().for_each(|x| x.visit_expr(|x| f(x)));
                 f(x);
             }
-            Expr::DictComprehension(x, y) => {
+            Expr::DictComprehension(x, for_, y) => {
+                for_.visit_expr(|x| f(x));
                 y.iter().for_each(|x| x.visit_expr(|x| f(x)));
                 f(&x.0);
                 f(&x.1);
@@ -196,10 +198,18 @@ impl Expr {
     }
 }
 
-impl Clause {
+impl ForClause {
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
         f(&self.var);
         f(&self.over);
-        self.ifs.iter().for_each(|x| f(x));
+    }
+}
+
+impl Clause {
+    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
+        match self {
+            Clause::For(x) => x.visit_expr(f),
+            Clause::If(x) => f(x),
+        }
     }
 }

@@ -244,16 +244,22 @@ DictEntry: (AstExpr, AstExpr) = <Test> ":" <Test> => (<>);
 
 ListComp: AstExpr = ASTE<ListComp_>;
 ListComp_: Expr = "[" <t:Test> <c:CompClause> "]"
-    => Expr::ListComprehension(box t, c);
+    => Expr::ListComprehension(box t, box c.0, c.1);
 
 DictComp: AstExpr = ASTE<DictComp_>;
-DictComp_: Expr = "{" <k:DictEntry> <v:CompClause>"}"
-    => Expr::DictComprehension(box k, v);
+DictComp_: Expr = "{" <k:DictEntry> <c:CompClause>"}"
+    => Expr::DictComprehension(box k, box c.0, c.1);
 
-CompClause: Vec<Clause> = <CompIter+>;
-CompIter: Clause = "for" <var:ExprList> "in" <over:OrTest> <ifs:IfClause*>
-    => Clause {var, over, ifs};
-IfClause: AstExpr = "if" <OrTest>;
+// A comprehension must start with a for, otherwise its an error
+CompClause: (ForClause, Vec<Clause>) = <x:ForClause> <xs:Clause*>
+    => (x, xs);
+
+Clause: Clause = {
+    ForClause => Clause::For(<>),
+    "if" <OrTest> => Clause::If(<>),
+};
+ForClause: ForClause = "for" <var:ExprList> "in" <over:OrTest>
+    => ForClause {var, over};
 
 // Base expression. Priorities are taken from Python 3 grammar.
 Test: AstExpr = {

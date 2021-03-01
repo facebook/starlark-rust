@@ -538,8 +538,12 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::ListComprehension(x, clauses) => self.list_comprehension(*x, clauses),
-            Expr::DictComprehension(box (k, v), clauses) => self.dict_comprehension(k, v, clauses),
+            Expr::ListComprehension(x, box for_, clauses) => {
+                self.list_comprehension(*x, for_, clauses)
+            }
+            Expr::DictComprehension(box (k, v), box for_, clauses) => {
+                self.dict_comprehension(k, v, for_, clauses)
+            }
             Expr::Literal(x) => {
                 let val = x.compile(self.heap);
                 box move |_| Ok(Value::new_frozen(val))

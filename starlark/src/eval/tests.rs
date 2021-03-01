@@ -1178,13 +1178,13 @@ fn test_not_in_unhashable() {
 
 #[test]
 fn test_comprehension_blocks() {
-    assert::pass(
+    assert::fail(
         r#"
 x = [1, 2]
-# Go Starlark gives an unbound variable here (I think that is a mistake)
 res = [x for _ in [3] for x in x]
 assert_eq(res, [1,2])
 "#,
+        "variable `x` referenced before assignment",
     );
 }
 
@@ -1241,8 +1241,7 @@ fn test_go() {
     assert.conformance_except(
         test_case!("assign.star"),
         &[
-            "A comprehension establishes", // test_comprehension_blocks
-            "hasfields()",                 // Not sure what this is, but we don't support
+            "hasfields()", // Not sure what this is, but we don't support
         ],
     );
     // Skip benchmark.star, for benchmarking not testing

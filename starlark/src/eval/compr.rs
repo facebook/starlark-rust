@@ -23,17 +23,21 @@ use crate::{
         context::EvaluationContext, stmt::AssignCompiled, thrw, Compiler, EvalCompiled,
         EvalException,
     },
-    syntax::ast::{AstExpr, Clause},
+    syntax::ast::{AstExpr, Clause, ForClause},
     values::{dict::Dict, Value},
 };
 use codemap::Span;
-use gazebo::prelude::*;
 use std::mem;
 
 impl Compiler<'_> {
-    pub fn list_comprehension(&mut self, x: AstExpr, clauses: Vec<Clause>) -> EvalCompiled {
+    pub fn list_comprehension(
+        &mut self,
+        x: AstExpr,
+        for_: ForClause,
+        clauses: Vec<Clause>,
+    ) -> EvalCompiled {
         self.scope.enter_compr();
-        let clauses = compile_clauses(clauses, self);
+        let clauses = compile_clauses(for_, clauses, self);
         let x = self.expr(x);
         self.scope.exit_compr();
         eval_list(x, clauses)
@@ -43,10 +47,11 @@ impl Compiler<'_> {
         &mut self,
         k: AstExpr,
         v: AstExpr,
+        for_: ForClause,
         clauses: Vec<Clause>,
     ) -> EvalCompiled {
         self.scope.enter_compr();
-        let clauses = compile_clauses(clauses, self);
+        let clauses = compile_clauses(for_, clauses, self);
         let k = self.expr(k);
         let v = self.expr(v);
         self.scope.exit_compr();
@@ -54,30 +59,70 @@ impl Compiler<'_> {
     }
 }
 
-fn compile_clause(clause: Clause, compiler: &mut Compiler) -> ClauseCompiled {
-    let Clause { var, over, ifs } = clause;
-
-    // Must be compiled without the new variables in scope
-    let over_span = over.span;
-    let over = compiler.expr(over);
-    compiler.scope.add_compr(&var);
-
-    // Everything after must be compiled with the new variables in scope
-    let var = compiler.assign(var);
-    let ifs = ifs.into_map(|expr| compiler.expr(expr));
-    ClauseCompiled {
-        var,
-        over,
-        over_span,
-        ifs,
+/// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
+fn compile_ifs(
+    clauses: &mut Vec<Clause>,
+    compiler: &mut Compiler,
+) -> (Option<ForClause>, Vec<EvalCompiled>) {
+    let mut ifs = Vec::new();
+    while let Some(x) = clauses.pop() {
+        match x {
+            Clause::For(f) => {
+                ifs.reverse();
+                return (Some(f), ifs);
+            }
+            Clause::If(x) => {
+                ifs.push(compiler.expr(x));
+            }
+        }
     }
+    ifs.reverse();
+    (None, ifs)
 }
 
-fn compile_clauses(clauses: Vec<Clause>, compiler: &mut Compiler) -> Vec<ClauseCompiled> {
-    let mut res = clauses.into_map(|x| compile_clause(x, compiler));
-    // The evaluator wants to use pop to consume them, so reverse the order
-    res.reverse();
-    res
+fn compile_clauses(
+    for_: ForClause,
+    mut clauses: Vec<Clause>,
+    compiler: &mut Compiler,
+) -> Vec<ClauseCompiled> {
+    // The first for.over is scoped before we enter the list comp
+    let over_span = for_.over.span;
+    let over = compiler.expr(for_.over);
+
+    // Now everything else must be compiled with all the for variables in scope
+    compiler.scope.add_compr(&for_.var);
+    for x in &clauses {
+        if let Clause::For(x) = x {
+            compiler.scope.add_compr(&x.var);
+        }
+    }
+
+    // Now we want to group them into a `for`, followed by any number of `if`.
+    // The evaluator wants to use pop to consume them, so reverse the order.
+    let mut res = Vec::new();
+    loop {
+        let (next_for, ifs) = compile_ifs(&mut clauses, compiler);
+        match next_for {
+            None => {
+                res.push(ClauseCompiled {
+                    var: compiler.assign(for_.var),
+                    over,
+                    over_span,
+                    ifs,
+                });
+                return res;
+            }
+            Some(f) => {
+                let over_span = f.over.span;
+                res.push(ClauseCompiled {
+                    over: compiler.expr(f.over),
+                    var: compiler.assign(f.var),
+                    over_span,
+                    ifs,
+                });
+            }
+        }
+    }
 }
 
 fn eval_list(x: EvalCompiled, clauses: Vec<ClauseCompiled>) -> EvalCompiled {

@@ -107,15 +107,20 @@ pub enum Expr {
     If(Box<(AstExpr, AstExpr, AstExpr)>), // Order: condition, v1, v2 <=> v1 if condition else v2
     List(Vec<AstExpr>),
     Dict(Vec<(AstExpr, AstExpr)>),
-    ListComprehension(Box<AstExpr>, Vec<Clause>),
-    DictComprehension(Box<(AstExpr, AstExpr)>, Vec<Clause>),
+    ListComprehension(Box<AstExpr>, Box<ForClause>, Vec<Clause>),
+    DictComprehension(Box<(AstExpr, AstExpr)>, Box<ForClause>, Vec<Clause>),
 }
 
 #[derive(Debug)]
-pub struct Clause {
+pub struct ForClause {
     pub var: AstExpr,
     pub over: AstExpr,
-    pub ifs: Vec<AstExpr>,
+}
+
+#[derive(Debug)]
+pub enum Clause {
+    For(ForClause),
+    If(AstExpr),
 }
 
 #[derive(Debug, Clone, Copy, Dupe, Eq, PartialEq)]
@@ -327,15 +332,17 @@ impl Display for Expr {
                 comma_separated_fmt(f, v, |x, f| write!(f, "{}: {}", x.0.node, x.1.node), false)?;
                 f.write_str("}")
             }
-            Expr::ListComprehension(e, c) => {
+            Expr::ListComprehension(e, for_, c) => {
                 write!(f, "[{}", e.node)?;
+                for_.fmt(f)?;
                 for x in c {
                     x.fmt(f)?;
                 }
                 f.write_str("]")
             }
-            Expr::DictComprehension(box (k, v), c) => {
+            Expr::DictComprehension(box (k, v), for_, c) => {
                 write!(f, "{{{}: {}", k.node, v.node)?;
+                for_.fmt(f)?;
                 for x in c {
                     x.fmt(f)?;
                 }
@@ -377,13 +384,18 @@ impl Display for Parameter {
     }
 }
 
+impl Display for ForClause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, " for {} in {}", self.var.node, self.over.node)
+    }
+}
+
 impl Display for Clause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, " for {} in {}", self.var.node, self.over.node)?;
-        for x in &self.ifs {
-            write!(f, " if {}", x.node)?;
+        match self {
+            Clause::For(x) => x.fmt(f),
+            Clause::If(x) => write!(f, " if {}", x.node),
         }
-        Ok(())
     }
 }
 
