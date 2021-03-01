@@ -33,7 +33,6 @@ pub type AstExpr = Spanned<Expr>;
 pub type AstArgument = Spanned<Argument>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = Spanned<Parameter>;
-pub type AstClause = Spanned<Clause>;
 pub type AstInt = Spanned<i32>;
 pub type AstStmt = Spanned<Stmt>;
 
@@ -108,8 +107,8 @@ pub enum Expr {
     If(Box<(AstExpr, AstExpr, AstExpr)>), // Order: condition, v1, v2 <=> v1 if condition else v2
     List(Vec<AstExpr>),
     Dict(Vec<(AstExpr, AstExpr)>),
-    ListComprehension(Box<AstExpr>, Vec<AstClause>),
-    DictComprehension(Box<(AstExpr, AstExpr)>, Vec<AstClause>),
+    ListComprehension(Box<AstExpr>, Vec<Clause>),
+    DictComprehension(Box<(AstExpr, AstExpr)>, Vec<Clause>),
 }
 
 #[derive(Debug)]
@@ -330,12 +329,12 @@ impl Display for Expr {
             }
             Expr::ListComprehension(e, v) => {
                 write!(f, "[{}", e.node)?;
-                comma_separated_fmt(f, v, |x, f| x.node.fmt(f), false)?;
+                comma_separated_fmt(f, v, |x, f| x.fmt(f), false)?;
                 f.write_str("]")
             }
             Expr::DictComprehension(box (k, v), c) => {
                 write!(f, "{{{}: {}", k.node, v.node)?;
-                comma_separated_fmt(f, c, |x, f| x.node.fmt(f), false)?;
+                comma_separated_fmt(f, c, |x, f| x.fmt(f), false)?;
                 f.write_str("}}")
             }
             Expr::Literal(x) => x.fmt(f),

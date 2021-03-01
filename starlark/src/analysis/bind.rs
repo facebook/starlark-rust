@@ -16,7 +16,7 @@
  */
 
 use crate::syntax::{
-    ast::{AssignOp, AstClause, AstExpr, AstParameter, AstStmt, AstString, Expr, Stmt},
+    ast::{AssignOp, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, Stmt},
     AstModule,
 };
 use codemap::Span;
@@ -77,7 +77,7 @@ fn opt_expr(x: Option<&AstExpr>, res: &mut Vec<Bind>) {
     }
 }
 
-fn comprehension(clauses: &[AstClause], res: &mut Vec<Bind>, end: impl Fn(&mut Vec<Bind>)) {
+fn comprehension(clauses: &[Clause], res: &mut Vec<Bind>, end: impl Fn(&mut Vec<Bind>)) {
     match clauses {
         [] => end(res),
         xs => {

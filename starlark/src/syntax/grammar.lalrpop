@@ -38,10 +38,6 @@ ASTA<E>: AstArgument = <l:@L> <e:E> <r:@R>
     => e.ast(file_span, l, r);
 
 #[inline]
-ASTC<E>: AstClause = <l:@L> <e:E> <r:@R>
-    => e.ast(file_span, l, r);
-
-#[inline]
 integer: AstInt = <l:@L> <e:"INTEGER"> <r:@R>
     => e.ast(file_span, l, r);
 
@@ -254,9 +250,8 @@ DictComp: AstExpr = ASTE<DictComp_>;
 DictComp_: Expr = "{" <k:DictEntry> <v:CompClause>"}"
     => Expr::DictComprehension(box k, v);
 
-CompClause: Vec<AstClause> = <CompIter+>;
-CompIter: AstClause = ASTC<CompIter_>;
-CompIter_: Clause = "for" <var:ExprList> "in" <over:OrTest> <ifs:IfClause*>
+CompClause: Vec<Clause> = <CompIter+>;
+CompIter: Clause = "for" <var:ExprList> "in" <over:OrTest> <ifs:IfClause*>
     => Clause {var, over, ifs};
 IfClause: AstExpr = "if" <OrTest>;
 
