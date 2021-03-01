@@ -873,6 +873,8 @@ False < True
 "#,
     );
     assert::fail("None < None", "`compare` not supported");
+    assert::fail("(None, ) < (None, )", "`compare` not supported");
+    assert::fail("x = (None,); x < x", "`compare` not supported");
     assert::fail("x = {}; x < x", "`compare` not supported");
     assert::fail("{} < {1: 2}", "`compare` not supported");
     assert::fail("range(1) < range(2)", "`compare` not supported");

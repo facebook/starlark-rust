@@ -139,10 +139,7 @@ impl<'v> TypedValue<'v> for Box<str> {
         }
     }
 
-    fn compare(&self, ptr_eq: bool, other: Value) -> anyhow::Result<Ordering> {
-        if ptr_eq {
-            return Ok(Ordering::Equal);
-        }
+    fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other) = other.unpack_str() {
             Ok(self.as_ref().cmp(other))
         } else {

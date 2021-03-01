@@ -131,10 +131,7 @@ where
         }
     }
 
-    fn compare(&self, ptr_eq: bool, other: Value<'v>) -> anyhow::Result<Ordering> {
-        if ptr_eq {
-            return Ok(Ordering::Equal);
-        }
+    fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match Struct::from_value(other) {
             None => unsupported_with(self, "cmp()", other),
             Some(other) => compare_small_map(&self.fields, &other.fields, |x, y| x.compare(*y)),

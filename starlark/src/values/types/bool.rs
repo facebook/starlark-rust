@@ -70,7 +70,7 @@ impl TypedValue<'_> for bool {
         }
     }
 
-    fn compare(&self, _ptr_eq: bool, other: Value) -> anyhow::Result<Ordering> {
+    fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other) = other.unpack_bool() {
             Ok(self.cmp(&other))
         } else {

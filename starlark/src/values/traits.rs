@@ -192,12 +192,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
 
     /// Compare `self` with `other`.
     /// This method returns a result of type [`Ordering`].
-    /// The argument `ptr_eq` is `true` when the pointers are equal, suggesting an Equal result.
-    /// However, for types that don't implement compare (e.g. dictionaries) even equal pointers
-    /// should return false.
     ///
     /// Default implementation returns error.
-    fn compare(&self, _ptr_eq: bool, other: Value<'v>) -> anyhow::Result<Ordering> {
+    fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         unsupported_with(self, "compare", other)
     }
 

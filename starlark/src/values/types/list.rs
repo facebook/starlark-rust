@@ -199,10 +199,7 @@ where
         }
     }
 
-    fn compare(&self, ptr_eq: bool, other: Value<'v>) -> anyhow::Result<Ordering> {
-        if ptr_eq {
-            return Ok(Ordering::Equal);
-        }
+    fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match List::from_value(other) {
             None => unsupported_with(self, "cmp()", other),
             Some(other) => compare_slice(&self.content, &other.content, |x, y| x.compare(*y)),
