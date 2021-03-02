@@ -252,10 +252,7 @@ fn test_lexer_error_messages() {
         assert::fail(&program.replace('!', ""), msg)
     }
 
-    f(
-        "unknown !&!&%+ operator",
-        "Character not valid at present location",
-    );
+    f("unknown !&!&%+ operator", "invalid input `&`");
     f("an !'incomplete string!\nends", "unfinished string literal");
     f(
         "an + 'invalid escape !\\x3 ! character'",
@@ -263,7 +260,7 @@ fn test_lexer_error_messages() {
     );
     f(
         "large_int = !1238989456723879! + 8",
-        "Character not valid at present location",
+        "invalid input `1238989456723879`",
     );
     f("a + (test!]! + c", "unexpected symbol ']' here");
     f(

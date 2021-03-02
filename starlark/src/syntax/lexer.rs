@@ -32,8 +32,8 @@ use thiserror::Error;
 pub enum LexemeError {
     #[error("Parse error: incorrect indentation")]
     Indentation,
-    #[error("Parse error: Character not valid at present location")]
-    InvalidCharacter,
+    #[error("Parse error: invalid input `{0}`")]
+    InvalidInput(String),
     #[error("Parse error: tabs are not allowed in the dialect")]
     InvalidTab,
     #[error("Parse error: unfinished string literal")]
@@ -415,7 +415,7 @@ impl<'a> Lexer<'a> {
                             self.lexer.span().end,
                         )),
                         Token::Error => Some(self.err_span(
-                            LexemeError::InvalidCharacter,
+                            LexemeError::InvalidInput(self.lexer.slice().to_owned()),
                             self.lexer.span().start,
                             self.lexer.span().end,
                         )),
