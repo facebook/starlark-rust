@@ -260,7 +260,11 @@ fn test_lexer_error_messages() {
     );
     f(
         "large_int = !1238989456723879! + 8",
-        "invalid input `1238989456723879`",
+        "integer overflow, must fit in 32 bits, got `1238989456723879`",
+    );
+    f(
+        "leading_zero = !003! + 8",
+        "integer cannot have leading 0, got `003`",
     );
     f("a + (test!]! + c", "unexpected symbol ']' here");
     f(

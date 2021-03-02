@@ -42,6 +42,10 @@ pub enum LexemeError {
     InvalidEscapeSequence(String),
     #[error("Parse error: cannot use reserved keyword `{0}`")]
     ReservedKeyword(String),
+    #[error("Parse error: integer cannot have leading 0, got `{0}`")]
+    StartsZero(String),
+    #[error("Parse error: integer overflow, must fit in 32 bits, got `{0}`")]
+    IntOverflow(String),
 }
 
 type Lexeme = anyhow::Result<(usize, Token, usize)>;
@@ -419,6 +423,35 @@ impl<'a> Lexer<'a> {
                             self.lexer.span().start,
                             self.lexer.span().end,
                         )),
+                        Token::IntegerLiteral(radix) => {
+                            let mut s = self.lexer.slice();
+                            if radix == 10 {
+                                if s.len() > 1 && &s[0..1] == "0" {
+                                    return Some(self.err_span(
+                                        LexemeError::StartsZero(s.to_owned()),
+                                        self.lexer.span().start,
+                                        self.lexer.span().end,
+                                    ));
+                                }
+                            } else {
+                                // Skip the 0x prefix
+                                s = &s[2..];
+                            }
+                            match i32::from_str_radix(s, radix as u32) {
+                                Ok(i) => {
+                                    let span = self.lexer.span();
+                                    Some(Ok((span.start, Token::IntegerLiteral(i), span.end)))
+                                }
+                                Err(_) => {
+                                    // Because we validated the characters going in, it must have been an overflow
+                                    Some(self.err_span(
+                                        LexemeError::IntOverflow(self.lexer.slice().to_owned()),
+                                        self.lexer.span().start,
+                                        self.lexer.span().end,
+                                    ))
+                                }
+                            }
+                        }
                         Token::RawDoubleQuote => {
                             let raw = self.lexer.span().len() == 2;
                             if self.lexer.remainder().starts_with("\"\"") {
@@ -507,25 +540,10 @@ pub enum Token {
     , |lex| lex.slice().to_owned())]
     Identifier(String), // An identifier
 
-    #[regex(
-        "[0-9]+"
-    , |lex|
-        if lex.slice().len() > 1 && &lex.slice()[0..1] == "0" {
-            // Hack to make it return an error
-            "".parse()
-        } else {
-            lex.slice().parse()
-        }
-    )]
-    #[regex(
-        "0[xX][A-Fa-f0-9]+"
-    , |lex| i32::from_str_radix(&lex.slice()[2..], 16))]
-    #[regex(
-        "0[bB][01]+"
-    , |lex| i32::from_str_radix(&lex.slice()[2..], 2))]
-    #[regex(
-        "0[oO][0-7]+"
-    , |lex| i32::from_str_radix(&lex.slice()[2..], 8))]
+    #[regex("[0-9]+", |_| 10)]
+    #[regex("0[xX][A-Fa-f0-9]+", |_| 16)]
+    #[regex("0[bB][01]+", |_| 2)]
+    #[regex("0[oO][0-7]+", |_| 8)]
     IntegerLiteral(i32), // An integer literal (123, 0x1, 0b1011, 0o755, ...)
 
     StringLiteral(String), // A string literal
