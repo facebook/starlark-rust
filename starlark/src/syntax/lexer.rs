@@ -111,7 +111,7 @@ impl<'a> Lexer<'a> {
         let mut it = CursorBytes::new(self.lexer.remainder());
         let mut spaces = 0;
         let mut tabs = 0;
-        let mut indent_start = self.lexer.span().start;
+        let mut indent_start = self.lexer.span().end;
         loop {
             match it.next_char() {
                 None => {
@@ -149,7 +149,7 @@ impl<'a> Lexer<'a> {
                             Some(_) => {}
                         }
                     }
-                    indent_start = self.lexer.span().start + it.pos();
+                    indent_start = self.lexer.span().end + it.pos();
                 }
                 _ => break,
             }
@@ -165,7 +165,7 @@ impl<'a> Lexer<'a> {
             self.indent_levels.push(indent);
             let span = self.lexer.span();
             self.buffer
-                .push_back(Ok((indent_start + 1, Token::Indent, span.end)));
+                .push_back(Ok((indent_start, Token::Indent, span.end)));
         } else if indent < now {
             let mut dedents = 1;
             self.indent_levels.pop().unwrap();
@@ -184,7 +184,7 @@ impl<'a> Lexer<'a> {
             for _ in 0..dedents {
                 // We must declare each dedent is only a position, so multiple adjacent dedents don't overlap
                 self.buffer
-                    .push_back(Ok((indent_start + 1, Token::Dedent, indent_start + 1)))
+                    .push_back(Ok((indent_start, Token::Dedent, indent_start)))
             }
         }
         Ok(())
