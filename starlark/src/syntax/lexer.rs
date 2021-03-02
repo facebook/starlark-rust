@@ -96,6 +96,14 @@ impl<'a> Lexer<'a> {
         ))
     }
 
+    fn err_now<T>(&self, msg: fn(String) -> LexemeError) -> anyhow::Result<T> {
+        self.err_span(
+            msg(self.lexer.slice().to_owned()),
+            self.lexer.span().start,
+            self.lexer.span().end,
+        )
+    }
+
     /// We have just seen a newline, read how many indents we have
     /// and then set self.indent properly
     fn calculate_indent(&mut self) -> anyhow::Result<()> {
@@ -413,25 +421,13 @@ impl<'a> Lexer<'a> {
                                 continue;
                             }
                         }
-                        Token::Reserved => Some(self.err_span(
-                            LexemeError::ReservedKeyword(self.lexer.slice().to_owned()),
-                            self.lexer.span().start,
-                            self.lexer.span().end,
-                        )),
-                        Token::Error => Some(self.err_span(
-                            LexemeError::InvalidInput(self.lexer.slice().to_owned()),
-                            self.lexer.span().start,
-                            self.lexer.span().end,
-                        )),
+                        Token::Reserved => Some(self.err_now(LexemeError::ReservedKeyword)),
+                        Token::Error => Some(self.err_now(LexemeError::InvalidInput)),
                         Token::IntegerLiteral(radix) => {
                             let mut s = self.lexer.slice();
                             if radix == 10 {
                                 if s.len() > 1 && &s[0..1] == "0" {
-                                    return Some(self.err_span(
-                                        LexemeError::StartsZero(s.to_owned()),
-                                        self.lexer.span().start,
-                                        self.lexer.span().end,
-                                    ));
+                                    return Some(self.err_now(LexemeError::StartsZero));
                                 }
                             } else {
                                 // Skip the 0x prefix
@@ -444,11 +440,7 @@ impl<'a> Lexer<'a> {
                                 }
                                 Err(_) => {
                                     // Because we validated the characters going in, it must have been an overflow
-                                    Some(self.err_span(
-                                        LexemeError::IntOverflow(self.lexer.slice().to_owned()),
-                                        self.lexer.span().start,
-                                        self.lexer.span().end,
-                                    ))
+                                    Some(self.err_now(LexemeError::IntOverflow))
                                 }
                             }
                         }
