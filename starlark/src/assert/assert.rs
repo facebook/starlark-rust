@@ -353,7 +353,11 @@ impl Assert {
         check_spans(&orig);
 
         // In Starlark Windows newline characters shouldn't change the lex tokens (only the positions), so run that test too.
-        let with_r = tokens(&self.dialect, &program.replace('\n', "\r\n"));
+        // First convert \r\n to \n, in case we started with Windows newlines, so we don't get \r\r\n.
+        let with_r = tokens(
+            &self.dialect,
+            &program.replace("\r\n", "\n").replace('\n', "\r\n"),
+        );
         check_spans(&with_r);
         assert_eq!(
             orig.map(|x| &x.1),
