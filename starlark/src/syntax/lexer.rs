@@ -38,8 +38,8 @@ pub enum LexemeError {
     InvalidTab,
     #[error("Parse error: unfinished string literal")]
     UnfinishedStringLiteral,
-    #[error("Parse error: invalid string escape sequence")]
-    InvalidEscapeSequence,
+    #[error("Parse error: invalid string escape sequence `{0}`")]
+    InvalidEscapeSequence(String),
     #[error("Parse error: cannot use reserved keyword `{0}`")]
     ReservedKeyword(String),
 }
@@ -349,7 +349,9 @@ impl<'a> Lexer<'a> {
                         let pos = it.pos();
                         if Self::escape(&mut it, &mut res).is_err() {
                             return self.err_span(
-                                LexemeError::InvalidEscapeSequence,
+                                LexemeError::InvalidEscapeSequence(
+                                    self.lexer.remainder()[pos..it.pos()].to_owned(),
+                                ),
                                 string_end + pos - 1,
                                 string_end + it.pos(),
                             );

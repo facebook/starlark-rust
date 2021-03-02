@@ -259,7 +259,7 @@ fn test_lexer_error_messages() {
     f("an !'incomplete string!\nends", "unfinished string literal");
     f(
         "an + 'invalid escape !\\x3 ! character'",
-        "invalid string escape sequence",
+        "invalid string escape sequence `x3 `",
     );
     f(
         "large_int = !1238989456723879! + 8",
