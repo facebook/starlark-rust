@@ -59,13 +59,6 @@ pub(crate) fn parse_error_add_span(
     let message = match &err {
         lu::ParseError::InvalidToken { .. } => "Parse error: invalid token".to_owned(),
         lu::ParseError::UnrecognizedToken {
-            token: (_x, Token::Reserved(s), _y),
-            expected: _unused,
-        } => format!("Parse error: cannot use reserved keyword `{}`", s),
-        lu::ParseError::ExtraToken {
-            token: (_x, Token::Reserved(s), _y),
-        } => format!("Parse error: cannot use reserved keyword `{}`", s),
-        lu::ParseError::UnrecognizedToken {
             token: (_x, t, ..),
             expected,
         } => format!(

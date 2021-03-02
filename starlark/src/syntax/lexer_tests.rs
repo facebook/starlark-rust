@@ -76,13 +76,12 @@ fn test_number_collated_with_keywords_or_identifier() {
 
 #[test]
 fn test_reserved() {
-    assert_eq!(
-        assert::lex(
-            "as import is class nonlocal del raise except try finally \
-             while from with global yield",
-        ),
-        "as import is class nonlocal del raise except try finally while from with global yield \n"
-    );
+    let reserved =
+        "as import is class nonlocal del raise except try finally while from with global yield"
+            .split_whitespace();
+    for x in reserved {
+        assert::parse_fail(&format!("!{}! = 1", x));
+    }
 }
 
 #[test]

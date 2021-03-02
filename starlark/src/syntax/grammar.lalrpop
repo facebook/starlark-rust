@@ -405,7 +405,6 @@ extern {
       ")" => lexer::Token::ClosingRound,
 
 
-      "RESERVED" => lexer::Token::Reserved(<String>),
       "IDENTIFIER" => lexer::Token::Identifier(<String>),
       "INTEGER" => lexer::Token::IntegerLiteral(<i32>),
       "STRING" => lexer::Token::StringLiteral(<String>)

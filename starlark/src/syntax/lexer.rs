@@ -40,6 +40,8 @@ pub enum LexemeError {
     UnfinishedStringLiteral,
     #[error("Parse error: invalid string escape sequence")]
     InvalidEscapeSequence,
+    #[error("Parse error: cannot use reserved keyword `{0}`")]
+    ReservedKeyword(String),
 }
 
 type Lexeme = anyhow::Result<(usize, Token, usize)>;
@@ -405,6 +407,11 @@ impl<'a> Lexer<'a> {
                                 continue;
                             }
                         }
+                        Token::Reserved => Some(self.err_span(
+                            LexemeError::ReservedKeyword(self.lexer.slice().to_owned()),
+                            self.lexer.span().start,
+                            self.lexer.span().end,
+                        )),
                         Token::Error => Some(self.err_span(
                             LexemeError::InvalidCharacter,
                             self.lexer.span().start,
@@ -490,8 +497,8 @@ pub enum Token {
 
     #[regex(
         "as|import|is|class|nonlocal|del|raise|except|try|finally|while|from|with|global|yield"
-    , |lex| lex.slice().to_owned())]
-    Reserved(String), // One of the reserved keywords
+    )]
+    Reserved, // One of the reserved keywords
 
     #[regex(
         "[a-zA-Z_][a-zA-Z0-9_]*"
@@ -697,7 +704,7 @@ impl Display for Token {
             Token::ClosingSquare => write!(f, "symbol ']'"),
             Token::ClosingCurly => write!(f, "symbol '}}'"),
             Token::ClosingRound => write!(f, "symbol ')'"),
-            Token::Reserved(s) => write!(f, "reserved keyword '{}'", s),
+            Token::Reserved => write!(f, "reserved keyword"),
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
             Token::IntegerLiteral(i) => write!(f, "integer literal '{}'", i),
             Token::StringLiteral(s) => write!(f, "string literal '{}'", s),
