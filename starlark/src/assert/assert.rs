@@ -322,44 +322,46 @@ impl Assert {
 
     /// Restricted to crate because 'Lexeme' isn't a public type.
     pub(crate) fn lex_tokens(&self, program: &str) -> Vec<(usize, Token, usize)> {
-        let mut codemap = CodeMap::new();
-        let mut result = Vec::new();
-        let file_span = codemap
-            .add_file("<test>".to_owned(), program.to_owned())
-            .span;
-        let mut pos = 0;
-        let codemap = Arc::new(codemap);
-        Lexer::new(program, &self.dialect, codemap.dupe(), file_span).for_each(|x| match x {
-            Err(e) => panic!(
-                "starlark::assert::lex_tokens, expected lex sucess but failed\nCode: {}\nError: {}",
-                program, e
-            ),
-            Ok((i, t, j)) => {
-                // While lexing we assert the invariant that each token position can't be before the previous one
+        fn tokens(dialect: &Dialect, program: &str) -> Vec<(usize, Token, usize)> {
+            let mut codemap = CodeMap::new();
+            let file_span = codemap
+                .add_file("<test>".to_owned(), program.to_owned())
+                .span;
+            let codemap = Arc::new(codemap);
+            Lexer::new(program, dialect, codemap.dupe(), file_span)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap_or_else(|e|
+                    panic!(
+                        "starlark::assert::lex_tokens, expected lex sucess but failed\nCode: {}\nError: {}",
+                        program, e
+                    )
+                )
+        }
+
+        // Check the invariant that each token position can't be before the previous one
+        fn check_spans(tokens: &[(usize, Token, usize)]) {
+            let mut pos = 0;
+            for (i, t, j) in tokens {
                 let span_incorrect = format!("Span of {:?} incorrect", t);
-                assert!(pos <= i, "{}: {} > {}", span_incorrect, pos, i);
-                result.push((i, t, j));
+                assert!(pos <= *i, "{}: {} > {}", span_incorrect, pos, i);
                 assert!(i <= j, "{}: {} > {}", span_incorrect, i, j);
-                pos = j;
+                pos = *j;
             }
-        });
+        }
+
+        let orig = tokens(&self.dialect, program);
+        check_spans(&orig);
 
         // In Starlark Windows newline characters shouldn't change the lex tokens (only the positions), so run that test too.
-        let with_r = Lexer::new(
-            &program.replace('\n', "\r\n"),
-            &self.dialect,
-            codemap.dupe(),
-            file_span,
-        )
-        .collect::<Vec<_>>();
+        let with_r = tokens(&self.dialect, &program.replace('\n', "\r\n"));
         assert_eq!(
-            with_r.into_map(|x| x.unwrap().1),
-            result.map(|x| x.1.clone()),
+            orig.map(|x| &x.1),
+            with_r.map(|x| &x.1),
             "starlark::assert::lex_tokens, difference using CRLF newlines\nCode: {}",
             program,
         );
 
-        result
+        orig
     }
 
     pub fn lex(&self, program: &str) -> String {
