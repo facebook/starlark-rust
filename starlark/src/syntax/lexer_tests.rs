@@ -243,3 +243,32 @@ def stuff():
         "\n def stuff ( ) : \n \t if 1 : \n \t if 1 : \n \t pass \n #dedent #dedent pass \n \n #dedent"
     );
 }
+
+#[test]
+fn test_lexer_error_messages() {
+    // What are the common errors people make.
+    // Do they have good error messages and span locations.
+    fn f(program: &str, msg: &str) {
+        assert::parse_fail(program);
+        assert::fail(&program.replace('!', ""), msg)
+    }
+
+    f(
+        "unknown !&!&%+ operator",
+        "Character not valid at present location",
+    );
+    f("an !'incomplete string!\nends", "unfinished string literal");
+    f(
+        "an + 'invalid escape !\\x3 ! character'",
+        "invalid string escape sequence",
+    );
+    f(
+        "large_int = !1238989456723879! + 8",
+        "Character not valid at present location",
+    );
+    f("a + (test!]! + c", "unexpected symbol ']' here");
+    f(
+        "reserved_word = !raise! + 1",
+        "cannot use reserved keyword `raise`",
+    );
+}
