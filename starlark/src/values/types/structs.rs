@@ -104,9 +104,9 @@ where
         s += &self
             .fields
             .iter()
-            .map(|(k, v)| format!("{}: {}", k, v.to_json()))
+            .map(|(k, v)| format!("\"{}\":{}", k, v.to_json()))
             .collect::<Vec<String>>()
-            .join(", ");
+            .join(",");
         s += "}";
         s
     }
@@ -164,5 +164,67 @@ where
 
     fn dir_attr(&self) -> Vec<String> {
         self.fields.keys().cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::assert;
+
+    #[test]
+    fn test_to_json() {
+        assert::eq("struct(key = None).to_json()", r#"'{"key":null}'"#);
+        assert::eq("struct(key = True).to_json()", r#"'{"key":true}'"#);
+        assert::eq("struct(key = False).to_json()", r#"'{"key":false}'"#);
+        assert::eq("struct(key = 42).to_json()", r#"'{"key":42}'"#);
+        assert::eq("struct(key = 'value').to_json()", r#"'{"key":"value"}'"#);
+        assert::eq(
+            r#"struct(key = 'value"').to_json()"#,
+            r#"'{"key":"value\\\""}'"#,
+        );
+        assert::eq(
+            r"struct(key = 'value\\').to_json()",
+            r#"'{"key":"value\\\\"}'"#,
+        );
+        assert::eq(
+            "struct(key = 'value/').to_json()",
+            r#"'{"key":"value\\/"}'"#,
+        );
+        assert::eq(
+            "struct(key = 'value\u{0008}').to_json()",
+            r#"'{"key":"value\\b"}'"#,
+        );
+        assert::eq(
+            "struct(key = 'value\u{000C}').to_json()",
+            r#"'{"key":"value\\f"}'"#,
+        );
+        assert::eq(
+            "struct(key = 'value\\n').to_json()",
+            r#"'{"key":"value\\n"}'"#,
+        );
+        assert::eq(
+            "struct(key = 'value\\r').to_json()",
+            r#"'{"key":"value\\r"}'"#,
+        );
+        assert::eq(
+            "struct(key = 'value\\t').to_json()",
+            r#"'{"key":"value\\t"}'"#,
+        );
+        assert::eq(
+            r#"struct(foo = 42, bar = "some").to_json()"#,
+            r#"'{"foo":42,"bar":"some"}'"#,
+        );
+        assert::eq(
+            r#"struct(foo = struct(bar = "some")).to_json()"#,
+            r#"'{"foo":{"bar":"some"}}'"#,
+        );
+        assert::eq(
+            r#"struct(foo = ["bar/", "some"]).to_json()"#,
+            r#"'{"foo":["bar\\/","some"]}'"#,
+        );
+        assert::eq(
+            r#"struct(foo = [struct(bar = "some")]).to_json()"#,
+            r#"'{"foo":[{"bar":"some"}]}'"#,
+        );
     }
 }

@@ -307,7 +307,7 @@ where
             .fields
             .keys()
             .zip(&self.values)
-            .map(|(k, v)| format!("{}: {}", k, v.to_json()))
+            .map(|(k, v)| format!("\"{}\":{}", k, v.to_json()))
             .collect::<Vec<String>>()
             .join(",");
         s += "}";

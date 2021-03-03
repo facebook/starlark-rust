@@ -47,7 +47,7 @@ impl<'v> TypedValue<'v> for NoneType {
     }
 
     fn to_json(&self) -> String {
-        "None".to_string()
+        "null".to_string()
     }
     fn to_bool(&self) -> bool {
         false

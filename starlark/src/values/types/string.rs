@@ -118,7 +118,17 @@ impl<'v> TypedValue<'v> for Box<str> {
     }
 
     fn to_json(&self) -> String {
-        self.to_repr()
+        let mut escaped = self.as_ref().to_owned();
+        // Escape as per ECMA-404 standard
+        escaped = escaped.replace("\u{005C}", "\\\\");
+        escaped = escaped.replace("\u{0022}", "\\\"");
+        escaped = escaped.replace("\u{002F}", "\\/");
+        escaped = escaped.replace("\u{0008}", "\\b");
+        escaped = escaped.replace("\u{000C}", "\\f");
+        escaped = escaped.replace("\u{000A}", "\\n");
+        escaped = escaped.replace("\u{000D}", "\\r");
+        escaped = escaped.replace("\u{0009}", "\\t");
+        format!("\"{}\"", escaped)
     }
 
     fn to_bool(&self) -> bool {

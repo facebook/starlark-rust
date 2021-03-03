@@ -182,7 +182,7 @@ where
                 |accum, s| if s.0 == 0 {
                     accum + &s.1
                 } else {
-                    accum + ", " + &s.1
+                    accum + "," + &s.1
                 },
             )
         )

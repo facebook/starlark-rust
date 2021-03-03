@@ -50,7 +50,11 @@ impl TypedValue<'_> for bool {
         }
     }
     fn to_json(&self) -> String {
-        self.to_repr()
+        if *self {
+            "true".to_string()
+        } else {
+            "false".to_string()
+        }
     }
     fn to_int(&self) -> anyhow::Result<i32> {
         Ok(if *self { 1 } else { 0 })
