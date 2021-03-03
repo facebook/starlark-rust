@@ -68,7 +68,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn copy(this: RefDict) -> Dict<'v> {
-        Ok(this.0.clone())
+        Ok(this.clone())
     }
 
     /// [dict.get](
@@ -96,7 +96,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// # )"#);
     /// ```
     fn get(this: RefDict, ref key: Value, ref default @ NONE: Value) -> Value<'v> {
-        match this.0.get(key)? {
+        match this.get(key)? {
             None => Ok(default),
             Some(x) => Ok(x),
         }
@@ -119,7 +119,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn items(this: RefDict) -> Vec<(Value<'v>, Value<'v>)> {
-        Ok(this.0.items())
+        Ok(this.items())
     }
 
     /// [dict.keys](
@@ -138,7 +138,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn keys(this: RefDict) -> Vec<Value<'v>> {
-        Ok(this.0.keys())
+        Ok(this.keys())
     }
 
     /// [dict.pop](
@@ -365,7 +365,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn values(this: RefDict) -> Vec<Value<'v>> {
-        Ok(this.0.values())
+        Ok(this.values())
     }
 }
 
