@@ -105,3 +105,41 @@ macro_rules! starlark_value {
         }
     };
 }
+
+#[macro_export]
+macro_rules! starlark_immutable_value {
+    ($v:vis $x:ident) => {
+        paste::item! {
+            any_lifetime!($x);
+
+            impl<'v> $crate::values::AllocValue<'v> for $x {
+                fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
+                    heap.alloc_immutable(self)
+                }
+            }
+
+            impl<'v> $crate::values::AllocFrozenValue<'v> for $x {
+                fn alloc_frozen_value(self, heap: &'v $crate::values::FrozenHeap) -> $crate::values::FrozenValue {
+                    heap.alloc_immutable(self)
+                }
+            }
+
+            impl<'v> ImmutableValue<'v> for $x {}
+
+            impl<'v> $x {
+                pub fn from_value(x: Value<'v>) -> Option<gazebo::cell::ARef<'v, $x>> {
+                    x.downcast_ref::< $x >()
+                }
+            }
+
+            $v struct [< Ref $x >]<'v>(pub gazebo::cell::ARef<'v, $x>);
+
+            impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
+                fn unpack_value(value: Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
+                    $x::from_value(value)
+                        .map([< Ref $x>])
+                }
+            }
+        }
+    };
+}
