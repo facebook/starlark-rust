@@ -93,7 +93,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     /// ```
     fn copy(this: RefList) -> List<'v> {
         Ok(List {
-            content: this.0.content.clone(),
+            content: this.content.clone(),
         })
     }
 
@@ -159,8 +159,8 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.0.content.len() as i32, start, end);
-        for (i, x) in this.0.content[start..end].iter().enumerate() {
+        let (start, end) = convert_indices(this.content.len() as i32, start, end);
+        for (i, x) in this.content[start..end].iter().enumerate() {
             if x.equals(needle)? {
                 return Ok((i + start) as i32);
             }
@@ -168,7 +168,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
         Err(anyhow!(
             "Element '{}' not found in '{}'",
             needle,
-            this.0.to_repr()
+            this.to_repr()
         ))
     }
 
