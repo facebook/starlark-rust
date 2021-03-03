@@ -125,3 +125,11 @@ pub mod eval;
 pub mod stdlib;
 pub mod syntax;
 pub mod values;
+
+/// __macro_refs allows us to reference other crates in macro rules without users needing to be
+///  aware of those dependencies. We make them public here and then can reference them like
+///  `$crate::__macro_refs::foo`.
+#[doc(hidden)]
+pub mod __macro_refs {
+    pub use paste;
+}
