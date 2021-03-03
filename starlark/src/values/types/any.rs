@@ -17,10 +17,11 @@
 
 //! Define the any type for Starlark.
 
-use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, ImmutableValue, TypedValue, Value,
+use crate::{
+    starlark_immutable_value,
+    values::{ImmutableValue, TypedValue, Value},
 };
-use gazebo::{any::AnyLifetime, cell::ARef};
+use gazebo::cell::ARef;
 use std::{
     any::Any,
     fmt::{self, Debug},
@@ -38,12 +39,13 @@ impl<T: Any + Debug + Send + Sync> AnyDebugSendSync for T {
 /// A type that can be passed around as a Starlark `Value`, but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with `new` and
 /// decomposed with `get`.
-#[derive(AnyLifetime)]
 pub struct StarlarkAny(Box<dyn AnyDebugSendSync>);
 
 impl StarlarkAny {
     pub const TYPE: &'static str = "any";
 }
+
+starlark_immutable_value!(pub StarlarkAny);
 
 impl Debug for StarlarkAny {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -71,20 +73,6 @@ impl StarlarkAny {
         }
     }
 }
-
-impl<'v> AllocFrozenValue<'v> for StarlarkAny {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
-        heap.alloc_immutable(self)
-    }
-}
-
-impl<'v> AllocValue<'v> for StarlarkAny {
-    fn alloc_value(self, heap: &'v Heap) -> Value {
-        heap.alloc_immutable(self)
-    }
-}
-
-impl ImmutableValue<'_> for StarlarkAny {}
 
 /// Define the any type
 impl TypedValue<'_> for StarlarkAny {
