@@ -102,6 +102,14 @@ macro_rules! starlark_value {
                         .map([< Ref $x>])
                 }
             }
+
+            impl<'v> std::ops::Deref for [< Ref $x>]<'v> {
+                type Target = $x<'v>;
+
+                fn deref(&self) -> &Self::Target {
+                    &*self.0
+                }
+            }
         }
     };
 }
@@ -138,6 +146,14 @@ macro_rules! starlark_immutable_value {
                 fn unpack_value(value: Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
                     $x::from_value(value)
                         .map([< Ref $x>])
+                }
+            }
+
+            impl<'v> std::ops::Deref for [< Ref $x>]<'v> {
+                type Target = $x;
+
+                fn deref(&self) -> &Self::Target {
+                    &*self.0
                 }
             }
         }
