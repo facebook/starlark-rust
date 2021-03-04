@@ -244,6 +244,14 @@ def stuff():
 }
 
 #[test]
+fn test_lexer_operators() {
+    assert_eq!(assert::lex("1+-2"), "1 + - 2 \n");
+    assert_eq!(assert::lex("1+------2"), "1 + - - - - - - 2 \n");
+    assert::eq("1+------2", "3");
+    assert_eq!(assert::lex("///==/+-"), "// /= = / + - \n");
+}
+
+#[test]
 fn test_lexer_error_messages() {
     // What are the common errors people make.
     // Do they have good error messages and span locations.
