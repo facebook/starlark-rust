@@ -437,10 +437,23 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
         unsupported_with(self, "//", other)
     }
 
-    /// Apply the operator pipe to the current value and `other`.
-    ///
-    /// This is usually the union on set.
-    fn pipe(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn bit_and(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        unsupported_with(self, "&", other)
+    }
+
+    fn bit_or(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "|", other)
+    }
+
+    fn bit_xor(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        unsupported_with(self, "^", other)
+    }
+
+    fn left_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        unsupported_with(self, "<<", other)
+    }
+
+    fn right_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        unsupported_with(self, ">>", other)
     }
 }

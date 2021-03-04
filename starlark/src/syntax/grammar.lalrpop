@@ -187,11 +187,6 @@ ExprList: AstExpr = L<Expr>;
 
 TestList: AstExpr = L<Test>;
 
-PipedExpr: AstExpr = {
-    <l:@L> <e1:ArithExpr> "|" <e2:PipedExpr> <r:@R>
-      => Expr::Op(box e1, BinOp::Pipe, box e2).ast(file_span, l, r),
-    ArithExpr
-};
 
 PrimaryExpr: AstExpr = {
     <l:@L> <e:PrimaryExpr> "." <i:identifier> <r:@R>
@@ -314,9 +309,31 @@ CompTest: AstExpr = {
     Expr
 };
 
-Expr: AstExpr = {
-    <l:@L> <e1:ArithExpr> "|" <e2:Expr> <r:@R>
-        => Expr::Op(box e1, BinOp::Pipe, box e2).ast(file_span, l, r),
+Expr = {BitOrExpr};
+
+BitOrExpr: AstExpr = {
+    <l:@L> <e1:BitOrExpr> "|" <e2:BitXorExpr> <r:@R>
+        => Expr::Op(box e1, BinOp::BitOr, box e2).ast(file_span, l, r),
+    BitXorExpr,
+};
+
+BitXorExpr: AstExpr = {
+    <l:@L> <e1:BitXorExpr> "^" <e2:BitAndExpr> <r:@R>
+        => Expr::Op(box e1, BinOp::BitXor, box e2).ast(file_span, l, r),
+    BitAndExpr,
+};
+
+BitAndExpr: AstExpr = {
+    <l:@L> <e1:BitAndExpr> "&" <e2:ShiftExpr> <r:@R>
+        => Expr::Op(box e1, BinOp::BitAnd, box e2).ast(file_span, l, r),
+    ShiftExpr,
+};
+
+ShiftExpr: AstExpr = {
+    <l:@L> <e1:ShiftExpr> "<<" <e2:ArithExpr> <r:@R>
+        => Expr::Op(box e1, BinOp::LeftShift, box e2).ast(file_span, l, r),
+    <l:@L> <e1:ShiftExpr> ">>" <e2:ArithExpr> <r:@R>
+        => Expr::Op(box e1, BinOp::RightShift, box e2).ast(file_span, l, r),
     ArithExpr,
 };
 
@@ -344,6 +361,8 @@ FactorExpr: AstExpr = {
         => Expr::Plus(box e).ast(file_span, l, r),
     <l:@L> "-" <e:FactorExpr> <r:@R>
         => Expr::Minus(box e).ast(file_span, l, r),
+    <l:@L> "~" <e:FactorExpr> <r:@R>
+        => Expr::BitNot(box e).ast(file_span, l, r),
     PrimaryExpr
 };
 
@@ -395,7 +414,12 @@ extern {
       "%" => lexer::Token::Percent,
       "//" => lexer::Token::SlashSlash,
       "." => lexer::Token::Dot,
+      "&" => lexer::Token::Ampersand,
       "|" => lexer::Token::Pipe,
+      "^" => lexer::Token::Caret,
+      "<<" => lexer::Token::LessLess,
+      ">>" => lexer::Token::GreaterGreater,
+      "~" => lexer::Token::Tilde,
       // Brackets
       "[" => lexer::Token::OpeningSquare,
       "{" => lexer::Token::OpeningCurly,

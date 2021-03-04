@@ -260,7 +260,7 @@ fn test_lexer_error_messages() {
         assert::fail(&program.replace('!', ""), msg)
     }
 
-    f("unknown !&!&%+ operator", "invalid input `&`");
+    f("unknown !$!&%+ operator", "invalid input `$`");
     f("an !'incomplete string!\nends", "unfinished string literal");
     f(
         "an + 'invalid escape !\\x3 ! character'",

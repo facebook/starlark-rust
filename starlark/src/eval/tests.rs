@@ -50,6 +50,27 @@ fn arithmetic_test() {
 }
 
 #[test]
+fn bitwise_test() {
+    assert::eq("3 & 6", "2");
+    assert::eq("-3 & 6", "4");
+    assert::eq("3 | 6", "7");
+    assert::eq("3 | -6", "-5");
+    assert::eq("3 ^ 6", "5");
+    assert::eq("-3 ^ 6", "-5");
+    assert::eq("-3 ^ -6", "7");
+    assert::eq("1 << 2", "4");
+    assert::eq("-1 << 2", "-4");
+    assert::eq("1 >> 0", "1");
+    assert::eq("111 >> 2", "27");
+    assert::eq("~31", "-32");
+    assert::eq("~-31", "30");
+
+    // For now, we report negative shift amounts as integer overflow
+    assert::fail("1 << -13", "overflow");
+    assert::fail("1 >> -13", "overflow");
+}
+
+#[test]
 fn alias_test() {
     assert::is_true(
         r#"

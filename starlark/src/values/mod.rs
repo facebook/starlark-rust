@@ -333,8 +333,20 @@ impl<'v> Value<'v> {
         self.get_aref().floor_div(other, heap)
     }
 
-    pub fn pipe(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().pipe(other)
+    pub fn bit_and(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().bit_and(other)
+    }
+    pub fn bit_or(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().bit_or(other)
+    }
+    pub fn bit_xor(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().bit_xor(other)
+    }
+    pub fn left_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().left_shift(other)
+    }
+    pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().right_shift(other)
     }
 
     pub fn freeze(self, freezer: &Freezer) -> FrozenValue {

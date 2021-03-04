@@ -103,6 +103,7 @@ pub enum Expr {
     Not(Box<AstExpr>),
     Minus(Box<AstExpr>),
     Plus(Box<AstExpr>),
+    BitNot(Box<AstExpr>),
     Op(Box<AstExpr>, BinOp, Box<AstExpr>),
     If(Box<(AstExpr, AstExpr, AstExpr)>), // Order: condition, v1, v2 <=> v1 if condition else v2
     List(Vec<AstExpr>),
@@ -140,7 +141,11 @@ pub enum BinOp {
     Multiplication,
     Percent,
     FloorDivision,
-    Pipe,
+    BitAnd,
+    BitOr,
+    BitXor,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Debug, Clone, Copy, Dupe, PartialEq, Eq)]
@@ -210,7 +215,11 @@ impl Display for BinOp {
             BinOp::Multiplication => f.write_str(" * "),
             BinOp::Percent => f.write_str(" % "),
             BinOp::FloorDivision => f.write_str(" // "),
-            BinOp::Pipe => f.write_str(" | "),
+            BinOp::BitAnd => f.write_str(" & "),
+            BinOp::BitOr => f.write_str(" | "),
+            BinOp::BitXor => f.write_str(" ^ "),
+            BinOp::LeftShift => f.write_str(" << "),
+            BinOp::RightShift => f.write_str(" >> "),
         }
     }
 }
@@ -318,6 +327,7 @@ impl Display for Expr {
             Expr::Not(e) => write!(f, "(not {})", e.node),
             Expr::Minus(e) => write!(f, "-{}", e.node),
             Expr::Plus(e) => write!(f, "+{}", e.node),
+            Expr::BitNot(e) => write!(f, "~{}", e.node),
             Expr::Op(l, op, r) => write!(f, "({}{}{})", l.node, op, r.node),
             Expr::If(box (cond, v1, v2)) => {
                 write!(f, "({} if {} else {})", v1.node, cond.node, v2.node)

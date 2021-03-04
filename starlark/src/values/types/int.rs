@@ -157,6 +157,58 @@ impl<'v> TypedValue<'v> for PointerI32 {
             unsupported_with(self, "==", other)
         }
     }
+
+    fn bit_and(&self, other: Value) -> anyhow::Result<Value<'v>> {
+        if let Some(other) = other.unpack_int() {
+            Ok(Value::new_int(self.get() & other))
+        } else {
+            unsupported_with(self, "&", other)
+        }
+    }
+
+    fn bit_or(&self, other: Value) -> anyhow::Result<Value<'v>> {
+        if let Some(other) = other.unpack_int() {
+            Ok(Value::new_int(self.get() | other))
+        } else {
+            unsupported_with(self, "|", other)
+        }
+    }
+
+    fn bit_xor(&self, other: Value) -> anyhow::Result<Value<'v>> {
+        if let Some(other) = other.unpack_int() {
+            Ok(Value::new_int(self.get() ^ other))
+        } else {
+            unsupported_with(self, "^", other)
+        }
+    }
+
+    fn left_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
+        use std::convert::TryInto;
+        if let Some(other) = other.unpack_int() {
+            other
+                .try_into()
+                .ok()
+                .and_then(|unsigned_other| self.get().checked_shl(unsigned_other))
+                .map(Value::new_int)
+                .ok_or_else(|| ValueError::IntegerOverflow.into())
+        } else {
+            unsupported_with(self, "<<", other)
+        }
+    }
+
+    fn right_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
+        use std::convert::TryInto;
+        if let Some(other) = other.unpack_int() {
+            other
+                .try_into()
+                .ok()
+                .and_then(|unsigned_other| self.get().checked_shr(unsigned_other))
+                .map(Value::new_int)
+                .ok_or_else(|| ValueError::IntegerOverflow.into())
+        } else {
+            unsupported_with(self, ">>", other)
+        }
+    }
 }
 
 #[cfg(test)]

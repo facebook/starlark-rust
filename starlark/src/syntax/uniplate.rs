@@ -143,6 +143,7 @@ impl Expr {
             Expr::Not(x) => f(x),
             Expr::Minus(x) => f(x),
             Expr::Plus(x) => f(x),
+            Expr::BitNot(x) => f(x),
             Expr::Op(x, _, y) => {
                 f(x);
                 f(y);

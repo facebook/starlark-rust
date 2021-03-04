@@ -622,8 +622,18 @@ pub enum Token {
     SlashSlash,
     #[token(".")]
     Dot,
+    #[token("&")]
+    Ampersand,
     #[token("|")]
     Pipe,
+    #[token("^")]
+    Caret,
+    #[token("<<")]
+    LessLess,
+    #[token(">>")]
+    GreaterGreater,
+    #[token("~")]
+    Tilde,
 
     // Brackets
     #[token("[")]
@@ -709,7 +719,12 @@ impl Display for Token {
             Token::Slash => write!(f, "symbol '/'"),
             Token::SlashSlash => write!(f, "symbol '//'"),
             Token::Dot => write!(f, "symbol '.'"),
+            Token::Ampersand => write!(f, "symbol '&'"),
             Token::Pipe => write!(f, "symbol '|'"),
+            Token::Caret => write!(f, "symbol '^'"),
+            Token::LessLess => write!(f, "symbol '<<'"),
+            Token::GreaterGreater => write!(f, "symbol '>>'"),
+            Token::Tilde => write!(f, "symbol '~'"),
             Token::OpeningSquare => write!(f, "symbol '['"),
             Token::OpeningCurly => write!(f, "symbol '{{'"),
             Token::OpeningRound => write!(f, "symbol '('"),

@@ -468,6 +468,10 @@ impl Compiler<'_> {
                     box move |_| Ok(Value::new_frozen(val))
                 }
             },
+            Expr::BitNot(expr) => {
+                let expr = self.expr(*expr);
+                box move |context| Ok(Value::new_int(!expr(context)?.to_int()?))
+            }
             Expr::Op(left, op, right) => {
                 if let Some(x) = Expr::reduces_to_string(op, &left, &right) {
                     let val = self.heap.alloc(x);
@@ -532,9 +536,21 @@ impl Compiler<'_> {
                                 context,
                             )
                         },
-                        BinOp::Pipe => {
-                            box move |context| thrw(l(context)?.pipe(r(context)?), span, context)
+                        BinOp::BitAnd => {
+                            box move |context| thrw(l(context)?.bit_and(r(context)?), span, context)
                         }
+                        BinOp::BitOr => {
+                            box move |context| thrw(l(context)?.bit_or(r(context)?), span, context)
+                        }
+                        BinOp::BitXor => {
+                            box move |context| thrw(l(context)?.bit_xor(r(context)?), span, context)
+                        }
+                        BinOp::LeftShift => box move |context| {
+                            thrw(l(context)?.left_shift(r(context)?), span, context)
+                        },
+                        BinOp::RightShift => box move |context| {
+                            thrw(l(context)?.right_shift(r(context)?), span, context)
+                        },
                     }
                 }
             }
