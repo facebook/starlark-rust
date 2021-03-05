@@ -271,13 +271,13 @@ LambDef: AstExpr = {
 
 // Binary operators
 OrTest: AstExpr = {
-    <l:@L> <e1:AndTest> "or" <e2:OrTest> <r:@R>
+    <l:@L> <e1:OrTest> "or" <e2:AndTest> <r:@R>
         => Expr::Op(box e1, BinOp::Or, box e2).ast(file_span, l, r),
     AndTest,
 };
 
 AndTest: AstExpr =  {
-    <l:@L> <e1:NotTest> "and" <e2:AndTest> <r:@R>
+    <l:@L> <e1:AndTest> "and" <e2:NotTest> <r:@R>
         => Expr::Op(box e1, BinOp::And, box e2).ast(file_span, l, r),
     NotTest,
 };
@@ -289,24 +289,24 @@ NotTest: AstExpr = {
 };
 
 CompTest: AstExpr = {
-    <l:@L> <e1:Expr> "==" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> "==" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::EqualsTo, box e2).ast(file_span, l, r),
-    <l:@L> <e1:Expr> "!=" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> "!=" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::Different, box e2).ast(file_span, l, r),
-    <l:@L> <e1:Expr> "<" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> "<" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::LessThan, box e2).ast(file_span, l, r),
-    <l:@L> <e1:Expr> ">" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> ">" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::GreaterThan, box e2).ast(file_span, l, r),
-    <l:@L> <e1:Expr> "<=" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> "<=" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::LessOrEqual, box e2).ast(file_span, l, r),
-    <l:@L> <e1:Expr> ">=" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> ">=" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::GreaterOrEqual, box e2)
                       .ast(file_span, l, r),
-    <l:@L> <e1:Expr> "in" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> "in" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::In, box e2).ast(file_span, l, r),
-    <l:@L> <e1:Expr> "not" "in" <e2:CompTest> <r:@R>
+    <l:@L> <e1:BitOrExpr> "not" "in" <e2:BitOrExpr> <r:@R>
         => Expr::Op(box e1, BinOp::NotIn, box e2).ast(file_span, l, r),
-    Expr
+    BitOrExpr
 };
 
 Expr = {BitOrExpr};

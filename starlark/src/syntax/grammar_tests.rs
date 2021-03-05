@@ -273,3 +273,22 @@ fn test_nested_def() {
         "def foo(x):\n  def bar(y):\n    return y\n  return bar(x)\n"
     );
 }
+
+#[test]
+fn test_op_associativity() {
+    // Normal operators are left associative
+    assert_eq!(
+        assert::parse("1 or 2 or 3 or 4"),
+        "(((1 or 2) or 3) or 4)\n"
+    );
+    assert_eq!(
+        assert::parse("1 and 2 and 3 and 4"),
+        "(((1 and 2) and 3) and 4)\n"
+    );
+    assert_eq!(assert::parse("1 | 2 | 3"), "((1 | 2) | 3)\n");
+    assert_eq!(assert::parse("1 + 2 + 3"), "((1 + 2) + 3)\n");
+    assert_eq!(assert::parse("1 * 2 * 3"), "((1 * 2) * 3)\n");
+    // Comparisons are not associative
+    // TODO - create a better error message for this case
+    assert::fail("0 <= 1 < 2", "Parse error");
+}
