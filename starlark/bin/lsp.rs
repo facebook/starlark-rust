@@ -67,6 +67,7 @@ impl Backend {
 }
 
 #[tower_lsp::async_trait]
+#[allow(clippy::let_unit_value)] // From the generated code
 impl LanguageServer for Backend {
     async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
         let mut r = InitializeResult::default();
