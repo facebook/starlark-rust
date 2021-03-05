@@ -1278,7 +1278,6 @@ fn test_go() {
         test_case!("builtin.star"),
         &[
             "2.0",                   // Floats, unsupported
-            "<<",                    // Bit shift, unsupported
             "[] not in {123: \"\"}", // We disagree, see test_not_in_unhashable
             // Exponents, unsupported
             "1e15",

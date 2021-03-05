@@ -34,7 +34,7 @@ There are three components:
 In this section we outline where we don't comply with the [Starlark spec](https://github.com/bazelbuild/starlark/blob/master/spec.md). Some of these incompatiblities are because we believe the Starlark spec could be improved - these are marked _deliberately_.
 
 * We have plenty of extensions, e.g. type annotations, recursion, top-level `for`.
-* We don't yet support later additions to Starlark, such as [floats](https://github.com/facebookexperimental/starlark-rust/issues/3), [bytes](https://github.com/facebookexperimental/starlark-rust/issues/4) or [bit operations](https://github.com/facebookexperimental/starlark-rust/issues/5).
+* We don't yet support later additions to Starlark, such as [floats](https://github.com/facebookexperimental/starlark-rust/issues/3) or [bytes](https://github.com/facebookexperimental/starlark-rust/issues/4).
 * We are currently limited to [32 bit integers](https://github.com/facebookexperimental/starlark-rust/issues/6). Constructing larger values will result in Starlark failing with an overflow error.
 * Our strings are not compliant in several ways, often returning code points instead of singleton strings, and have poor performance.
 * In some cases creating circular data structures may lead to stack overflows.
