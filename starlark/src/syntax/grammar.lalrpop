@@ -404,7 +404,7 @@ extern {
       "<=" => lexer::Token::LessEqual,
       ">=" => lexer::Token::GreaterEqual,
       "**" => lexer::Token::StarStar,
-      "->" => lexer::Token::RightArrow,
+      "->" => lexer::Token::MinusGreater,
       "=" => lexer::Token::Equal,
       "<" => lexer::Token::LessThan,
       ">" => lexer::Token::GreaterThan,

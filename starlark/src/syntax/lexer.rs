@@ -601,7 +601,7 @@ pub enum Token {
     #[token("**")]
     StarStar,
     #[token("->")]
-    RightArrow,
+    MinusGreater,
     #[token("=")]
     Equal,
     #[token("<")]
@@ -708,7 +708,7 @@ impl Display for Token {
             Token::LessEqual => write!(f, "symbol '<='"),
             Token::GreaterEqual => write!(f, "symbol '>='"),
             Token::StarStar => write!(f, "symbol '**'"),
-            Token::RightArrow => write!(f, "symbol '->'"),
+            Token::MinusGreater => write!(f, "symbol '->'"),
             Token::Equal => write!(f, "symbol '='"),
             Token::LessThan => write!(f, "symbol '<'"),
             Token::GreaterThan => write!(f, "symbol '>'"),
