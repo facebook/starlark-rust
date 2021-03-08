@@ -43,6 +43,44 @@
                 "scopeName": "source.starlark",
                 "path": "./syntaxes/starlark.tmLanguage.json"
             }
+        ],
+        "breakpoints": [
+            {
+                "language": "starlark"
+            }
+        ],
+        "debuggers": [
+            {
+                "type": "starlark",
+                "label": "Starlark Debug",
+                "program": "/usr/bin/env",
+                "args": [
+                    "starlark",
+                    "--dap"
+                ],
+                "languages": [
+                    "starlark"
+                ],
+                "configurationAttributes": {
+                    "launch": {
+                        "properties": {
+                            "program": {
+                                "type": "string",
+                                "description": "The program to debug.",
+                                "default": "${file}"
+                            }
+                        }
+                    }
+                },
+                "initialConfigurations": [
+                    {
+                        "type": "starlark",
+                        "request": "launch",
+                        "name": "Launch Program",
+                        "program": "${file}"
+                    }
+                ]
+            }
         ]
     },
     "scripts": {

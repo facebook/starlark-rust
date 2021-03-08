@@ -33,6 +33,7 @@ use std::{ffi::OsStr, fmt, fmt::Display, fs, path::PathBuf, sync::Arc};
 use structopt::{clap::AppSettings, StructOpt};
 use walkdir::WalkDir;
 
+mod dap;
 mod eval;
 mod lsp;
 mod types;
@@ -54,6 +55,9 @@ pub struct Args {
 
     #[structopt(long = "lsp", help = "Start an LSP server.")]
     lsp: bool,
+
+    #[structopt(long = "dap", help = "Start a DAP server.")]
+    dap: bool,
 
     #[structopt(long = "check", help = "Run checks and lints.")]
     check: bool,
@@ -225,6 +229,8 @@ fn main() -> anyhow::Result<()> {
         tokio::runtime::Runtime::new()?.block_on(async {
             lsp::server(ctx).await;
         })
+    } else if args.dap {
+        dap::server(ctx)
     }
 
     if !args.json {

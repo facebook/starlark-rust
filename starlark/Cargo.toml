@@ -47,6 +47,7 @@ serde_json = "1.0"
 rustyline = "7.0.0"
 maplit = "1.0.2"
 tower-lsp = "0.13.3"
+debugserver-types = "0.5.0"
 tokio = {version = "0.2", features = ["io-std"]}
 
 [dev-dependencies]
