@@ -103,8 +103,9 @@ impl Backend {
             let fun = |span, ctx: &mut EvaluationContext| {
                 let stop = {
                     let breaks = breakpoints.lock().unwrap();
+                    let span_loc = ctx.look_up_span(span);
                     breaks
-                        .get(ctx.current_module_name())
+                        .get(span_loc.file.name())
                         .map(|set| set.contains(&span))
                         .unwrap_or_default()
                 };
