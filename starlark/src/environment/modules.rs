@@ -160,11 +160,6 @@ impl Module {
         &self.frozen_heap
     }
 
-    /// Return the name of this module
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub(crate) fn names(&self) -> &MutableNames {
         &self.names
     }
