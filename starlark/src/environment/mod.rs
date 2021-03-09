@@ -15,12 +15,30 @@
  * limitations under the License.
  */
 
-mod errors;
 mod globals;
 mod modules;
 pub(crate) mod names;
 pub(crate) mod slots;
 
-pub use errors::*;
 pub use globals::*;
 pub use modules::*;
+
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum EnvironmentError {
+    /// Raised when trying to change a variable on a frozen environment.
+    #[error("Cannot mutate a frozen environment")]
+    TryingToMutateFrozenEnvironment,
+    /// Variables was no found.
+    #[error("Variable `{0}` not found")]
+    VariableNotFound(String),
+    #[error("Local variable `{0}` referenced before assignment")]
+    LocalVariableReferencedBeforeAssignment(String),
+    /// Cannot import private symbol, i.e. underscore prefixed
+    #[error("Cannot import private symbol `{0}`")]
+    CannotImportPrivateSymbol(String),
+    /// Can't set variables unless in the root name
+    #[error("Cannot set variable `{0}` at this point, must be in a non-frozen module context")]
+    CannotSetVariable(String),
+}
