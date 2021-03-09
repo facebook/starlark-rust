@@ -88,9 +88,8 @@ mod tests {
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
         stdlib::macros::UnpackValue,
         values::{
-            none::{NoneType, NONE},
-            AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, ImmutableValue,
-            TypedValue, Value,
+            none::NoneType, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
+            ImmutableValue, TypedValue, Value,
         },
     };
     use gazebo::{any::AnyLifetime, prelude::*};
@@ -100,7 +99,7 @@ mod tests {
         #[starlark_module]
         fn global(builder: &mut GlobalsBuilder) {
             fn nop() -> NoneType {
-                Ok(NONE)
+                Ok(NoneType)
             }
         }
 

@@ -22,11 +22,7 @@ use crate::{
     errors::eprint_error,
     eval::{eval_module, EvaluationContext, NoLoadFileLoader},
     syntax::{parse, Dialect},
-    values::{
-        any::StarlarkAny,
-        none::{NoneType, NONE},
-        Heap, Value,
-    },
+    values::{any::StarlarkAny, none::NoneType, Heap, Value},
 };
 use gazebo::any::AnyLifetime;
 use itertools::Itertools;
@@ -743,7 +739,7 @@ fn test_load_symbols() {
     fn module(builder: &mut GlobalsBuilder) {
         fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
             ctx.set_module_variable_at_some_point(name, value)?;
-            Ok(NONE)
+            Ok(NoneType)
         }
     }
 
@@ -762,7 +758,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
         fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
             let extra = ctx.extra_v.unwrap().downcast_ref::<Extra<'v>>().unwrap();
             extra.0.lock().unwrap().insert(name.to_owned(), value);
-            Ok(NONE)
+            Ok(NoneType)
         }
     }
 

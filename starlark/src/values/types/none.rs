@@ -26,8 +26,6 @@ use gazebo::{any::AnyLifetime, prelude::*};
 #[derive(Debug, Clone, Dupe, AnyLifetime)]
 pub struct NoneType;
 
-pub const NONE: NoneType = NoneType;
-
 impl NoneType {
     pub const TYPE: &'static str = "NoneType";
 }

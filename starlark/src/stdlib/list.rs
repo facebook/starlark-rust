@@ -26,7 +26,7 @@ use crate::{
     },
     values::{
         list::{List, RefList},
-        none::{NoneType, NONE},
+        none::NoneType,
         TypedValue, Value,
     },
 };
@@ -56,7 +56,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     fn append(this: Value, ref el: Value) -> NoneType {
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         this.push(el);
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     /// [list.clear](
@@ -78,7 +78,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     fn clear(this: Value) -> NoneType {
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         this.clear();
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     /// Duplicate a list so modifications don't impact the original.
@@ -121,7 +121,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
         let other: Vec<Value<'v>> = other.iterate(heap)?.iter().collect();
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         this.extend(other);
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     /// [list.index](
@@ -199,7 +199,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         let index = convert_index(this.len() as i32, index);
         this.insert(index, el);
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     /// [list.pop](
@@ -297,7 +297,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
             // now mutate it with no further value calls
             let mut this = List::from_value_mut(this, heap)?.unwrap();
             this.content.remove(position);
-            Ok(NONE)
+            Ok(NoneType)
         }
     }
 }

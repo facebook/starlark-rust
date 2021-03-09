@@ -16,10 +16,8 @@
  */
 
 use crate::{
-    self as starlark, debug,
-    environment::GlobalsBuilder,
-    eval::EvaluationContext,
-    values::none::{NoneType, NONE},
+    self as starlark, debug, environment::GlobalsBuilder, eval::EvaluationContext,
+    values::none::NoneType,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -153,7 +151,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
             eprintln!("BREAKPOINT HIT! :resume to continue, :help for all options");
             breakpoint_loop(ctx)?;
         }
-        Ok(NONE)
+        Ok(NoneType)
     }
 }
 

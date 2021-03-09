@@ -19,17 +19,9 @@ use crate::{
     self as starlark,
     environment::GlobalsBuilder,
     values::{
-        bool::BOOL_VALUE_TYPE_NAME,
-        dict::Dict,
-        function::FUNCTION_VALUE_TYPE_NAME,
-        int::INT_VALUE_TYPE_NAME,
-        list::List,
-        none::{NoneType, NONE},
-        range::Range,
-        string::STRING_VALUE_TYPE_NAME,
-        structs::Struct,
-        tuple::Tuple,
-        Value,
+        bool::BOOL_VALUE_TYPE_NAME, dict::Dict, function::FUNCTION_VALUE_TYPE_NAME,
+        int::INT_VALUE_TYPE_NAME, list::List, none::NoneType, range::Range,
+        string::STRING_VALUE_TYPE_NAME, structs::Struct, tuple::Tuple, Value,
     },
 };
 
@@ -63,7 +55,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 
     fn assert_type(v: Value, ty: Value) -> NoneType {
         v.check_type(ty, Some("v"))?;
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     fn is_type(v: Value, ty: Value) -> bool {

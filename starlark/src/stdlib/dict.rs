@@ -23,7 +23,7 @@ use crate::{
     environment::GlobalsBuilder,
     values::{
         dict::{Dict, RefDict},
-        none::{NoneType, NONE},
+        none::NoneType,
         Value,
     },
 };
@@ -54,7 +54,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     fn clear(this: Value) -> NoneType {
         let mut this = Dict::from_value_mut(this, heap)?.unwrap();
         this.content.clear();
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     /// Duplicate a dictionary so modifications don't impact the original.
@@ -95,7 +95,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x.get("three", 0) == 0
     /// # )"#);
     /// ```
-    fn get(this: RefDict, ref key: Value, ref default @ NONE: Value) -> Value<'v> {
+    fn get(this: RefDict, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
         match this.get(key)? {
             None => Ok(default),
             Some(x) => Ok(x),
@@ -270,7 +270,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x == {"one": 1, "two": 2, "three": 0, "four": None}
     /// # )"#)
     /// ```
-    fn setdefault(this: Value, ref key: Value, ref default @ NONE: Value) -> Value<'v> {
+    fn setdefault(this: Value, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
         let mut this = Dict::from_value_mut(this, heap)?.unwrap();
         let key = key.get_hashed()?;
         if let Some(r) = this.content.get_hashed(key.borrow()) {
@@ -345,7 +345,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
         for (k, v) in kwargs.into_iter() {
             this.set_at(heap.alloc(k), v, heap)?;
         }
-        Ok(NONE)
+        Ok(NoneType)
     }
 
     /// [dict.values](

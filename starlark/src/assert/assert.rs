@@ -29,11 +29,7 @@ use crate::{
         lexer::{Lexer, Token},
         AstModule, Dialect,
     },
-    values::{
-        none::{NoneType, NONE},
-        structs::Struct,
-        OwnedFrozenValue, Value,
-    },
+    values::{none::NoneType, structs::Struct, OwnedFrozenValue, Value},
 };
 use anyhow::anyhow;
 use codemap::CodeMap;
@@ -63,7 +59,7 @@ fn assert_equals<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
     if !a.equals(b)? {
         Err(anyhow!("assert_eq: expected {}, got {}", a, b))
     } else {
-        Ok(NONE)
+        Ok(NoneType)
     }
 }
 
@@ -82,7 +78,7 @@ fn assert_star(builder: &mut GlobalsBuilder) {
                 b
             ))
         } else {
-            Ok(NONE)
+            Ok(NoneType)
         }
     }
 
@@ -90,7 +86,7 @@ fn assert_star(builder: &mut GlobalsBuilder) {
         if !xs.is_in(x)? {
             Err(anyhow!("assert.contains: expected {} to be in {}", x, xs))
         } else {
-            Ok(NONE)
+            Ok(NoneType)
         }
     }
 
@@ -106,7 +102,7 @@ fn assert_star(builder: &mut GlobalsBuilder) {
     fn fails(f: Value, _msg: &str) -> NoneType {
         let invoke = f.new_invoker(heap)?;
         match invoke.invoke(f, None, ctx) {
-            Err(_e) => Ok(NONE), // We don't actually check the message
+            Err(_e) => Ok(NoneType), // We don't actually check the message
             Ok(_) => Err(anyhow!("assert.fails: didn't fail")),
         }
     }
@@ -133,7 +129,7 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 
     fn print(x: Value) -> NoneType {
         println!("{}", x);
-        Ok(NONE)
+        Ok(NoneType)
     }
 }
 
