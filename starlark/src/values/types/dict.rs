@@ -21,8 +21,8 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::TypedIterable,
-        string::hash_string_value, unsupported_with, Freezer, FrozenValue, Heap, ImmutableValue,
-        MutableValue, TypedValue, Value, ValueLike, Walker,
+        string::hash_string_value, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue,
+        TypedValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -256,27 +256,6 @@ where
             .content
             .insert_hashed(index, alloc_value);
         Ok(())
-    }
-
-    fn add(
-        &self,
-        _original: Value<'v>,
-        other: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = Dict::from_value(other) {
-            let mut result = Dict::default();
-            for (k, v) in self.content.iter_hashed() {
-                result
-                    .content
-                    .insert_hashed(k.unborrow_copy().to_hashed_value(), v.to_value());
-            }
-            for (k, v) in other.iter_hashed() {
-                result.content.insert_hashed(k, v);
-            }
-            return Ok(heap.alloc(result));
-        }
-        unsupported_with(self, "+", other)
     }
 }
 

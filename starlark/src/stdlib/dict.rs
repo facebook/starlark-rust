@@ -381,7 +381,6 @@ mod tests {
 
     #[test]
     fn test_dict_add() {
-        assert::eq("{1: 2, 3: 4}", "{1: 2} + {3: 4}");
-        assert::eq("{1: 2, 3: 4}", "{1: 2, 3: 9} + {3: 4}");
+        assert::fail("{1: 2} + {3: 4}", "not supported");
     }
 }
