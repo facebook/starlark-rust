@@ -17,6 +17,7 @@
 
 use crate::{
     collections::SmallMap,
+    stdlib::standard_environment,
     values::{
         structs::FrozenStruct, AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value,
     },
@@ -33,6 +34,12 @@ pub struct Globals(Arc<GlobalsData>);
 struct GlobalsData {
     heap: FrozenHeapRef,
     variables: HashMap<String, FrozenValue>,
+}
+
+impl Default for Globals {
+    fn default() -> Self {
+        standard_environment().build()
+    }
 }
 
 // Why are these things RefCell? Because we need to allocate things from the heap
