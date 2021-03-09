@@ -42,6 +42,7 @@ use std::{
     time::Instant,
 };
 
+#[derive(Default)]
 pub struct Heap {
     // Should really be ValueMem<'v>, where &'v self
     arena: RefCell<Arena<ValueMem<'static>>>,
@@ -58,6 +59,7 @@ impl Debug for Heap {
     }
 }
 
+#[derive(Default)]
 pub struct FrozenHeap {
     arena: Arena<FrozenValueMem>,          // My memory
     refs: RefCell<HashSet<FrozenHeapRef>>, // Memory I depend on
@@ -97,10 +99,7 @@ impl Eq for FrozenHeapRef {}
 
 impl FrozenHeap {
     pub fn new() -> Self {
-        Self {
-            arena: Arena::new(),
-            refs: RefCell::new(HashSet::new()),
-        }
+        Self::default()
     }
 
     pub fn into_ref(self) -> FrozenHeapRef {
@@ -196,9 +195,7 @@ impl Freezer {
 
 impl Heap {
     pub fn new() -> Self {
-        Self {
-            arena: RefCell::new(Arena::new()),
-        }
+        Self::default()
     }
 
     fn arena<'v>(&'v self) -> &'v RefCell<Arena<ValueMem<'v>>> {

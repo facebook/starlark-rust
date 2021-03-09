@@ -16,8 +16,10 @@
  */
 
 use bumpalo::Bump;
+use gazebo::prelude::*;
 use std::{marker::PhantomData, mem::MaybeUninit, ptr};
 
+#[derive(Default_)]
 pub(crate) struct Arena<T> {
     bump: Bump,
     phantom: PhantomData<T>,

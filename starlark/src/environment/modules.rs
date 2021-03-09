@@ -138,6 +138,12 @@ impl FrozenModuleValue {
     }
 }
 
+impl Default for Module {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Module {
     /// Create a new module environment
     pub fn new() -> Self {
