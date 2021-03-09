@@ -77,11 +77,6 @@ pub struct Module {
 }
 
 impl FrozenModule {
-    /// Return the name of this module
-    pub fn name(&self) -> &str {
-        self.1.name()
-    }
-
     /// Get the value of the variable `name`.
     /// Returns None if the variable isn't in the module or hasn't been set.
     pub fn get(&self, name: &str) -> Option<OwnedFrozenValue> {
