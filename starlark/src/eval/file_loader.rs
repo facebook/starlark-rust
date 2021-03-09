@@ -42,30 +42,6 @@ impl FileLoader for NoLoadFileLoader {
     }
 }
 
-/// Evaluate a string content, mutate the environment accordingly and return the
-/// evaluated value.
-///
-/// # Arguments
-///
-/// __This version uses the [`NoLoadFileLoader`] implementation for
-/// the file loader__
-///
-/// * map: the codemap object used for diagnostics
-/// * path: the name of the file being evaluated, for diagnostics
-/// * content: the content to evaluate
-/// * dialect: Starlark language dialect
-/// * env: the environment to mutate during the evaluation
-/// * global: the environment used to resolve type values
-pub fn eval_no_load<'v>(
-    path: &str,
-    content: String,
-    dialect: &Dialect,
-    env: &'v Module,
-    globals: &Globals,
-) -> anyhow::Result<Value<'v>> {
-    eval(path, content, dialect, env, globals, NoLoadFileLoader)
-}
-
 /// FileLoader that looks up modules by name from a map
 pub struct ReturnFileLoader<'a> {
     pub modules: &'a HashMap<&'a str, &'a FrozenModule>,

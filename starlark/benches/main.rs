@@ -18,21 +18,16 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use starlark::{
     environment::{Globals, Module},
-    eval::{eval_function, eval_module, eval_no_load, EvaluationContext, NoLoadFileLoader},
+    eval::{eval_function, eval_module, EvaluationContext, NoLoadFileLoader},
     stdlib::extended_environment,
     syntax::{parse, Dialect},
 };
 
 fn benchmark_run(globals: &Globals, code: &str) {
     let env = Module::new("benchmark");
-    eval_no_load(
-        "benchmark.sky",
-        code.to_owned(),
-        &Dialect::Standard,
-        &env,
-        globals,
-    )
-    .unwrap();
+    let mut ctx = EvaluationContext::new(&env, globals, &NoLoadFileLoader);
+    let ast = parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
+    eval_module(ast, &mut ctx).unwrap();
 }
 
 fn benchmark_pure_parsing(code: &str) {
