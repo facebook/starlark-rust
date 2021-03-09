@@ -22,9 +22,10 @@ use crate::{
     collections::SmallMap,
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::{eprint_error, Diagnostic},
-    eval,
+    eval::{eval_module, EvaluationContext, ReturnFileLoader},
     stdlib::{add_typing, extended_environment},
     syntax::{
+        self,
         lexer::{Lexer, Token},
         AstModule, Dialect,
     },
@@ -157,14 +158,10 @@ impl Assert {
         for (k, v) in &self.modules {
             modules.insert(k.as_str(), v);
         }
-        eval::eval_with_modules(
-            path,
-            program.to_owned(),
-            &self.dialect,
-            env,
-            &self.globals,
-            &modules,
-        )
+        let loader = ReturnFileLoader { modules: &modules };
+        let ast = syntax::parse(path, program.to_owned(), &self.dialect)?;
+        let mut ctx = EvaluationContext::new(env, &self.globals, &loader);
+        eval_module(ast, &mut ctx)
     }
 
     fn execute_fail<'a>(&self, func: &str, program: &str, env: &'a Module) -> anyhow::Error {

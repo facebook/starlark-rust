@@ -23,10 +23,10 @@
 //! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
-    environment::{slots::LocalSlots, Globals, Module},
+    environment::{slots::LocalSlots, Globals},
     errors::Diagnostic,
     eval::scope::Scope,
-    syntax::{ast::AstModule, parser::parse, Dialect},
+    syntax::ast::AstModule,
     values::{FrozenHeap, Value, ValueRef},
 };
 use anyhow::anyhow;
@@ -204,30 +204,4 @@ pub fn eval_function<'v>(
         }
         invoker.invoke(function, None, context)
     })
-}
-
-/// Evaluate a string content, mutate the environment accordingly and return the
-/// evaluated value.
-///
-/// # Arguments
-///
-/// * map: the codemap object used for diagnostics
-/// * path: the name of the file being evaluated, for diagnostics
-/// * content: the content to evaluate
-/// * build: set to true if you want to evaluate a BUILD file or false to
-///   evaluate a .bzl file. More information about the difference can be found
-///   in [this module's documentation](index.html#build_file).
-/// * env: the environment to mutate during the evaluation
-/// * file_loader: the [`FileLoader`] to react to `load()` statements.
-fn eval<'v, T: FileLoader>(
-    path: &str,
-    content: String,
-    dialect: &Dialect,
-    env: &'v Module,
-    globals: &Globals,
-    file_loader: T,
-) -> anyhow::Result<Value<'v>> {
-    let modu = parse(path, content, dialect)?;
-    let mut context = EvaluationContext::new(env, globals, &file_loader);
-    eval_module(modu, &mut context)
 }

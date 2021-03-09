@@ -18,12 +18,7 @@
 //! Define variants of the evaluation function with different support
 //! for the `load(...)` statement.
 
-use crate::{
-    environment::{FrozenModule, Globals, Module},
-    eval::eval,
-    syntax::Dialect,
-    values::Value,
-};
+use crate::environment::FrozenModule;
 use anyhow::anyhow;
 use std::collections::HashMap;
 
@@ -57,22 +52,4 @@ impl<'a> FileLoader for ReturnFileLoader<'a> {
             )),
         }
     }
-}
-
-pub fn eval_with_modules<'v>(
-    path: &str,
-    content: String,
-    dialect: &Dialect,
-    env: &'v Module,
-    globals: &Globals,
-    modules: &HashMap<&str, &FrozenModule>,
-) -> anyhow::Result<Value<'v>> {
-    eval(
-        path,
-        content,
-        dialect,
-        env,
-        globals,
-        ReturnFileLoader { modules },
-    )
 }
