@@ -49,7 +49,7 @@ use std::{
 use void::Void;
 
 // So we can provide &dyn TypedValue's when we need them
-const VALUE_NONE: NoneType = NoneType::None;
+const VALUE_NONE: NoneType = NoneType;
 const VALUE_TRUE: bool = true;
 const VALUE_FALSE: bool = false;
 

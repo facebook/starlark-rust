@@ -93,7 +93,7 @@ impl<'v, T1: UnpackValue<'v>, T2: UnpackValue<'v>> UnpackValue<'v> for (T1, T2) 
     }
 }
 
-// An Option that is encoded in a value using NoneType::None
+// An Option that is encoded in a value using NoneType
 pub enum NoneOr<T> {
     None,
     Other(T),

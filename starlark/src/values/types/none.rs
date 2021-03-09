@@ -24,11 +24,9 @@ use gazebo::{any::AnyLifetime, prelude::*};
 
 /// Define the NoneType type
 #[derive(Debug, Clone, Dupe, AnyLifetime)]
-pub enum NoneType {
-    None,
-}
+pub struct NoneType;
 
-pub const NONE: NoneType = NoneType::None;
+pub const NONE: NoneType = NoneType;
 
 impl NoneType {
     pub const TYPE: &'static str = "NoneType";

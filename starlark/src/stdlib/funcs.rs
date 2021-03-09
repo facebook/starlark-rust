@@ -57,7 +57,7 @@ fn unpack_pair<'v>(it: Value<'v>, heap: &'v Heap) -> anyhow::Result<(Value<'v>, 
 
 #[starlark_module]
 pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
-    const None: NoneType = NoneType::None;
+    const None: NoneType = NoneType;
     const True: bool = true;
     const False: bool = false;
 
