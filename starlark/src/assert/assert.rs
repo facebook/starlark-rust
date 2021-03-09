@@ -161,7 +161,7 @@ impl Assert {
     }
 
     fn execute_fail<'a>(&self, func: &str, program: &str, env: &'a Module) -> anyhow::Error {
-        match self.execute("test.bzl", program, env) {
+        match self.execute("assert.bzl", program, env) {
             Ok(v) => panic!(
                 "starlark::assert::{}, didn't fail!\nCode:\n{}\nResult:\n{}\n",
                 func, program, v
@@ -190,7 +190,7 @@ impl Assert {
     }
 
     fn execute_unwrap_true<'a>(&self, func: &str, program: &str, env: &'a Module) {
-        let v = self.execute_unwrap(func, "test.bzl", program, env);
+        let v = self.execute_unwrap(func, "assert.bzl", program, env);
         match v.unpack_bool() {
             Some(true) => {}
             Some(false) => panic!("starlark::assert::{}, got false!\nCode:\n{}", func, program),
@@ -232,7 +232,7 @@ impl Assert {
     }
 
     fn fails_with_name(&self, func: &str, program: &str, msgs: &[&str]) -> anyhow::Error {
-        let module_env = Module::new(func);
+        let module_env = Module::new("assert");
         let original = self.execute_fail(func, program, &module_env);
         // We really want to check the error message, but if in our doc tests we do:
         // fail("bad") # error: magic
@@ -263,8 +263,8 @@ impl Assert {
     }
 
     pub fn pass(&self, program: &str) -> OwnedFrozenValue {
-        let env = Module::new("pass");
-        let res = self.execute_unwrap("pass", "test.bzl", program, &env);
+        let env = Module::new("assert");
+        let res = self.execute_unwrap("pass", "assert.bzl", program, &env);
         env.set("_", res);
         env.freeze().get("_").unwrap()
     }
@@ -298,7 +298,7 @@ impl Assert {
     }
 
     pub fn parse_ast(&self, program: &str) -> AstModule {
-        match crate::syntax::parse("<test>", program.to_owned(), &self.dialect) {
+        match crate::syntax::parse("assert.bzl", program.to_owned(), &self.dialect) {
             Ok(x) => x,
             Err(e) => {
                 panic!(
@@ -318,7 +318,7 @@ impl Assert {
         fn tokens(dialect: &Dialect, program: &str) -> Vec<(usize, Token, usize)> {
             let mut codemap = CodeMap::new();
             let file_span = codemap
-                .add_file("<test>".to_owned(), program.to_owned())
+                .add_file("assert.bzl".to_owned(), program.to_owned())
                 .span;
             let codemap = Arc::new(codemap);
             Lexer::new(program, dialect, codemap.dupe(), file_span)
@@ -376,7 +376,7 @@ impl Assert {
         let begin = contents.find('!').unwrap();
         let end = contents[begin + 1..].find('!').unwrap() + begin;
 
-        match crate::syntax::parse("<test>", rest, &self.dialect) {
+        match crate::syntax::parse("assert.bzl", rest, &self.dialect) {
             Ok(ast) => panic!(
                 "Expected parse failure, but succeeded:\nContents: {}\nGot: {:?}",
                 contents, ast
