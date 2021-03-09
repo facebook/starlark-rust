@@ -102,10 +102,6 @@ impl FrozenModule {
 }
 
 impl FrozenModuleRef {
-    pub fn name(&self) -> &str {
-        &self.0.name
-    }
-
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.0.names.symbols().map(|x| x.0.as_str())
     }

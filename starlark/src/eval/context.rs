@@ -104,13 +104,6 @@ impl<'v, 'a> EvaluationContext<'v, 'a> {
         &self.call_stack
     }
 
-    pub fn current_module_name(&self) -> &str {
-        match &self.module_variables {
-            None => self.module_env.name(),
-            Some(v) => v.name(),
-        }
-    }
-
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
         self.codemap.look_up_span(span)
     }
