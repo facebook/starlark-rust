@@ -1003,9 +1003,9 @@ add3(8)"#,
     assert_eq!(
         &format!("\n{}", diag),
         r#"
-* assert.add3(z) (called from assert.bzl:5:1: 5:8)
-* imported.add2(z) (called from assert.bzl:4:5: 4:12)
-* imported.add(z) (called from imported.bzl:9:3: 9:9)
+* assert.bzl.add3(z) (called from assert.bzl:5:1: 5:8)
+* imported.bzl.add2(z) (called from assert.bzl:4:5: 4:12)
+* imported.bzl.add(z) (called from imported.bzl:9:3: 9:9)
 error: Immutable
   --> imported.bzl:11:3
    |

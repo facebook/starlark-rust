@@ -133,7 +133,7 @@ pub fn eval_module<'v>(
     let AstModule { codemap, statement } = modu;
     let module_env = context.assert_module_env();
 
-    let scope = Scope::enter_module(module_env.name(), module_env.names(), &statement);
+    let scope = Scope::enter_module(module_env.names(), &statement);
 
     let span = statement.span;
 

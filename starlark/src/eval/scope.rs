@@ -22,7 +22,6 @@ use crate::{
 use std::collections::HashMap;
 
 pub(crate) struct Scope<'a> {
-    module_name: &'a str,
     module: &'a MutableNames,
     // The first locals is the anon-slots for load() and comprehensions at the module-level
     // The rest are anon-slots for functions (which include their comprehensions)
@@ -109,11 +108,7 @@ pub(crate) enum Slot {
 }
 
 impl<'a> Scope<'a> {
-    pub fn module_name(&self) -> &str {
-        self.module_name
-    }
-
-    pub fn enter_module(module_name: &'a str, module: &'a MutableNames, code: &AstStmt) -> Self {
+    pub fn enter_module(module: &'a MutableNames, code: &AstStmt) -> Self {
         let mut locals = HashMap::new();
         Stmt::collect_defines(code, &mut locals);
         let mut module_private = ScopeNames::default();
@@ -124,7 +119,6 @@ impl<'a> Scope<'a> {
             };
         }
         Self {
-            module_name,
             module,
             locals: vec![module_private],
             unscopes: Vec::new(),

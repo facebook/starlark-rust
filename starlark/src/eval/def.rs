@@ -97,7 +97,8 @@ impl Compiler<'_> {
         return_type: Option<Box<AstExpr>>,
         suite: AstStmt,
     ) -> EvalCompiled {
-        let function_name = format!("{}.{}", self.scope.module_name(), name);
+        let file = self.codemap.look_up_span(suite.span);
+        let function_name = format!("{}.{}", file.file.name(), name);
 
         // The parameters run in the scope of the parent, so compile them with the outer
         // scope

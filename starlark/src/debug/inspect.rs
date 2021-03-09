@@ -100,7 +100,7 @@ def assert_stack(want):
 
 assert_stack([])
 
-def f(): assert_stack(["assert.g", "assert.f"])
+def f(): assert_stack(["assert.bzl.g", "assert.bzl.f"])
 def g(): f()
 g()
 "#,
