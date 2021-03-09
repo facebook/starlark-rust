@@ -79,7 +79,7 @@ pub trait MutableValue<'v>: TypedValue<'v> {
     // The naturally_mutable constraint occurs because other variables
     // aren't stored in a RefCell, and thus can't be
     // easily/safely converted to a &mut as this function requires.
-    fn export_as(&mut self, _heap: &'v Heap, _module_name: &str, _variable_name: &str) {
+    fn export_as(&mut self, _heap: &'v Heap, _variable_name: &str) {
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users
     }

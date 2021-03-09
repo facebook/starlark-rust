@@ -167,7 +167,7 @@ impl<'v> MutableValue<'v> for RecordType<'v> {
         self.fields.values_mut().for_each(|v| v.walk(walker));
     }
 
-    fn export_as(&mut self, _heap: &'v Heap, _module_name: &str, variable_name: &str) {
+    fn export_as(&mut self, _heap: &'v Heap, variable_name: &str) {
         if self.typ.is_none() {
             self.typ = Some(variable_name.to_owned())
         }

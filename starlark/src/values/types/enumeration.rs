@@ -75,7 +75,7 @@ impl<'v> MutableValue<'v> for EnumType<'v> {
         })
     }
 
-    fn export_as(&mut self, _heap: &'v Heap, _module_name: &str, variable_name: &str) {
+    fn export_as(&mut self, _heap: &'v Heap, variable_name: &str) {
         if self.typ.is_none() {
             self.typ = Some(variable_name.to_owned())
         }

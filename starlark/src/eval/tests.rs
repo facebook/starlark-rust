@@ -694,8 +694,8 @@ fn test_export_as() {
 
         fn walk(&mut self, _walker: &Walker) {}
 
-        fn export_as(&mut self, _heap: &Heap, module_name: &str, variable_name: &str) {
-            self.named = format!("{}.{}", module_name, variable_name);
+        fn export_as(&mut self, _heap: &Heap, variable_name: &str) {
+            self.named = variable_name.to_owned();
         }
     }
 
@@ -720,8 +720,8 @@ fn test_export_as() {
     );
     // could reasonably be x=1 or y=1 twice, since the order
     // of calls to export_as is not defined
-    let opt1 = "(a.x=1, a.x=1, a.longer_name=2, unnamed=3)".to_owned();
-    let opt2 = opt1.replace("a.x=", "a.y=");
+    let opt1 = "(x=1, x=1, longer_name=2, unnamed=3)".to_owned();
+    let opt2 = opt1.replace("x=", "y=");
 
     a.is_true(&format!(
         r#"
