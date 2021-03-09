@@ -68,7 +68,7 @@ pub fn eval_no_load<'v>(
 
 /// FileLoader that looks up modules by name from a map
 pub struct ReturnFileLoader<'a> {
-    pub modules: &'a HashMap<String, &'a FrozenModule>,
+    pub modules: &'a HashMap<&'a str, &'a FrozenModule>,
 }
 
 impl<'a> FileLoader for ReturnFileLoader<'a> {
@@ -89,7 +89,7 @@ pub fn eval_with_modules<'v>(
     dialect: &Dialect,
     env: &'v Module,
     globals: &Globals,
-    modules: &HashMap<String, &FrozenModule>,
+    modules: &HashMap<&str, &FrozenModule>,
 ) -> anyhow::Result<Value<'v>> {
     eval(
         path,

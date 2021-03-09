@@ -155,7 +155,7 @@ impl Assert {
     fn execute<'a>(&self, path: &str, program: &str, env: &'a Module) -> anyhow::Result<Value<'a>> {
         let mut modules = HashMap::with_capacity(self.modules.len());
         for (k, v) in &self.modules {
-            modules.insert(k.clone(), v);
+            modules.insert(k.as_str(), v);
         }
         eval::eval_with_modules(
             path,
