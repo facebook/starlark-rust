@@ -120,12 +120,7 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for NoneOr<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        environment::{GlobalsBuilder, Module},
-        eval::eval_no_load,
-        stdlib::standard_environment,
-        syntax::Dialect,
-    };
+    use crate::{assert::Assert, environment::GlobalsBuilder};
 
     use crate as starlark;
 
@@ -139,18 +134,12 @@ mod tests {
 
     #[test]
     fn test_simple() {
-        let globals = standard_environment().with(global).build();
-        let child = Module::new("my");
-
-        let r = eval_no_load(
-            "test_simple.star",
-            "cc_binary(name='star', srcs=['a.cc', 'b.cc'])".to_owned(),
-            &Dialect::Extended,
-            &child,
-            &globals,
-        )
-        .unwrap();
-
-        assert_eq!(r#""star" ["a.cc", "b.cc"]"#, r.to_str());
+        let mut a = Assert::new();
+        a.globals_add(global);
+        let v = a.pass("cc_binary(name='star', srcs=['a.cc', 'b.cc'])");
+        assert_eq!(
+            v.unchecked_value().unpack_str().unwrap(),
+            r#""star" ["a.cc", "b.cc"]"#
+        );
     }
 }
