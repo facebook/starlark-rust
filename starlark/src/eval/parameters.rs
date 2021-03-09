@@ -29,7 +29,7 @@ use std::{cmp, mem};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
-pub enum FunctionError {
+pub(crate) enum FunctionError {
     #[error("Missing parameter `{name}` for call to {function}")]
     MissingParameter { name: String, function: String },
     #[error("Found {count} extra positional parameter(s) for call to {function}")]

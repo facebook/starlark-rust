@@ -22,6 +22,7 @@ use thiserror::Error;
 
 /// Error that can be returned by function from the `TypedValue` trait,
 #[derive(Clone, Debug, Error)]
+// FIXME: Would be good if this wasn't public, or only a subset of constructors were public.
 pub enum ValueError {
     /// The operation is not supported for this type.
     #[error("Operation `{op}` not supported on type `{typ}`")]

@@ -26,10 +26,7 @@ pub use modules::*;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum EnvironmentError {
-    /// Raised when trying to change a variable on a frozen environment.
-    #[error("Cannot mutate a frozen environment")]
-    TryingToMutateFrozenEnvironment,
+pub(crate) enum EnvironmentError {
     /// Variables was no found.
     #[error("Variable `{0}` not found")]
     VariableNotFound(String),

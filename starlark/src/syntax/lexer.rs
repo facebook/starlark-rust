@@ -29,7 +29,7 @@ use std::{char, collections::VecDeque, fmt, fmt::Display, sync::Arc};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum LexemeError {
+pub(crate) enum LexemeError {
     #[error("Parse error: incorrect indentation")]
     Indentation,
     #[error("Parse error: invalid input `{0}`")]

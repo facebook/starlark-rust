@@ -34,7 +34,7 @@ use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
-pub enum EvalError {
+pub(crate) enum EvalError {
     #[error("Dictionary key repeated for `{0}`")]
     DuplicateDictionaryKey(String),
 }
