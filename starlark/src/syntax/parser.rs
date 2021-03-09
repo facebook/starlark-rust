@@ -114,7 +114,11 @@ impl AstModule {
         Ok(AstModule { codemap, statement })
     }
 
-    pub fn collect_loads(&self) -> Vec<&str> {
+    /// Return the file names of all the `load` statements in the module.
+    /// If the `Dialect` had `enable_loads` set to `false`, this will be an empty list.
+    pub fn loads(&self) -> Vec<&str> {
+        // We know that `load` statements must be at the top-level, so no need to descend inside `if`, `for`, `def` etc.
+        // There is a suggestion that `load` statements should be at the top of a file, but we tolerate that not being true.
         fn f<'a>(ast: &'a AstStmt, vec: &mut Vec<&'a str>) {
             match &ast.node {
                 Stmt::Load(module, ..) => vec.push(&module.node),
@@ -132,6 +136,7 @@ impl AstModule {
         loads
     }
 
+    /// Look up a span contained in this module.
     pub fn look_up_span(&self, x: Span) -> SpanLoc {
         self.codemap.look_up_span(x)
     }
