@@ -47,7 +47,7 @@ static ASSERT_STAR: Lazy<FrozenModule> = Lazy::new(|| {
     let g = GlobalsBuilder::new()
         .with_struct("assert", assert_star)
         .build();
-    let m = Module::new("assert.star");
+    let m = Module::new();
     m.frozen_heap().add_reference(g.heap());
     let assert = g.get("assert").unwrap();
     m.set("assert", assert);
@@ -214,7 +214,7 @@ impl Assert {
     }
 
     pub fn module(&mut self, name: &str, program: &str) {
-        let module = Module::new(name);
+        let module = Module::new();
         self.execute_unwrap("module", &format!("{}.bzl", name), program, &module);
         self.module_add(name, module.freeze());
     }
@@ -232,7 +232,7 @@ impl Assert {
     }
 
     fn fails_with_name(&self, func: &str, program: &str, msgs: &[&str]) -> anyhow::Error {
-        let module_env = Module::new("assert");
+        let module_env = Module::new();
         let original = self.execute_fail(func, program, &module_env);
         // We really want to check the error message, but if in our doc tests we do:
         // fail("bad") # error: magic
@@ -263,14 +263,14 @@ impl Assert {
     }
 
     pub fn pass(&self, program: &str) -> OwnedFrozenValue {
-        let env = Module::new("assert");
+        let env = Module::new();
         let res = self.execute_unwrap("pass", "assert.bzl", program, &env);
         env.set("_", res);
         env.freeze().get("_").unwrap()
     }
 
     pub fn is_true(&self, program: &str) {
-        let env = Module::new("assert");
+        let env = Module::new();
         self.execute_unwrap_true("is_true", program, &env);
     }
 
@@ -279,14 +279,14 @@ impl Assert {
             if s == "" {
                 continue;
             }
-            let env = Module::new("assert");
+            let env = Module::new();
             self.execute_unwrap_true("all_true", s, &env);
         }
     }
 
     pub fn eq(&self, lhs: &str, rhs: &str) {
-        let lhs_m = Module::new("lhs");
-        let rhs_m = Module::new("rhs");
+        let lhs_m = Module::new();
+        let rhs_m = Module::new();
         let lhs_v = self.execute_unwrap("eq", "lhs.bzl", lhs, &lhs_m);
         let rhs_v = self.execute_unwrap("eq", "rhs.bzl", rhs, &rhs_m);
         if lhs_v != rhs_v {

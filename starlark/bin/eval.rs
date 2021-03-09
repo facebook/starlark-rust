@@ -43,7 +43,7 @@ impl Context {
         let prelude = prelude
             .iter()
             .map(|x| {
-                let env = Module::new("prelude");
+                let env = Module::new();
 
                 let mut context = EvaluationContext::new(&env, &globals, &NoLoadFileLoader);
                 let module = parse_file(x, &dialect())?;
@@ -116,7 +116,7 @@ impl Context {
     }
 
     fn run(&self, file: &str, module: AstModule) -> impl Iterator<Item = Message> {
-        let env = Module::new(file);
+        let env = Module::new();
         for p in &self.prelude {
             env.import_public_symbols(p)
         }

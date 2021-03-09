@@ -46,7 +46,6 @@ pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
 #[derive(Debug)]
 pub(crate) struct FrozenModuleData {
-    name: String,
     pub(crate) names: FrozenNames,
     pub(crate) slots: FrozenSlots,
 }
@@ -67,7 +66,6 @@ pub(crate) struct FrozenModuleValue(FrozenValue); // Must contain a FrozenModule
 pub struct Module {
     heap: Heap,
     frozen_heap: FrozenHeap,
-    name: String,
     names: MutableNames,
     // Should really be MutableSlots<'v>, where &'v self
     // Values are allocated from heap. Because of variance
@@ -142,11 +140,10 @@ impl FrozenModuleValue {
 
 impl Module {
     /// Create a new module environment
-    pub fn new(name: &str) -> Self {
+    pub fn new() -> Self {
         Self {
             heap: Heap::new(),
             frozen_heap: FrozenHeap::new(),
-            name: name.to_owned(),
             names: MutableNames::new(),
             slots: MutableSlots::new(),
         }
@@ -178,7 +175,6 @@ impl Module {
     /// Freeze the environment, all its value will become immutable after that
     pub fn freeze(self) -> FrozenModule {
         let Module {
-            name,
             names,
             slots,
             frozen_heap,
@@ -191,7 +187,6 @@ impl Module {
         let freezer = Freezer::new(frozen_heap);
         let slots = slots.freeze(&freezer);
         let rest = FrozenModuleRef(Arc::new(FrozenModuleData {
-            name,
             names: names.freeze(),
             slots,
         }));

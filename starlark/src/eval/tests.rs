@@ -767,7 +767,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
 
     let mut a = Assert::new();
     a.globals_add(module);
-    let modu = Module::new("a");
+    let modu = Module::new();
     let globals = a.get_globals();
     let mut ctx = EvaluationContext::new(&modu, &globals, &NoLoadFileLoader);
     let extra = Extra::default();

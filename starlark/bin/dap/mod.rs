@@ -97,7 +97,7 @@ impl Backend {
         let go = move || -> anyhow::Result<String> {
             client.log(&format!("EVALUATION PREPARE: {}", path.display()));
             let ast = parse_file(&path, &dialect())?;
-            let module = Module::new(path.to_str().unwrap());
+            let module = Module::new();
             let globals = globals();
             let mut ctx = EvaluationContext::new(&module, &globals, &NoLoadFileLoader);
             let fun = |span, ctx: &mut EvaluationContext| {
