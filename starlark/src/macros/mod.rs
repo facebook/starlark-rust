@@ -73,7 +73,7 @@ macro_rules! starlark_value {
             }
 
             impl<'v> $x<'v> {
-                pub fn from_value(x: Value<'v>) -> Option<gazebo::cell::ARef<'v, $x<'v>>> {
+                pub fn from_value(x: $crate::values::Value<'v>) -> Option<gazebo::cell::ARef<'v, $x<'v>>> {
                     fn promote<'v>(x: & [< Frozen $x >]) -> & $x<'v> {
                         unsafe {
                             // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
@@ -87,7 +87,7 @@ macro_rules! starlark_value {
                 }
 
                 pub fn from_value_mut(
-                    x: Value<'v>,
+                    x: $crate::values::Value<'v>,
                     heap: &'v $crate::values::Heap,
                 ) -> anyhow::Result<Option<std::cell::RefMut<'v, $x<'v>>>> {
                     x.downcast_mut::<$x<'v>>(heap)
@@ -97,7 +97,7 @@ macro_rules! starlark_value {
             $v struct [< Ref $x >]<'v>(pub gazebo::cell::ARef<'v, $x<'v>>);
 
             impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
-                fn unpack_value(value: Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
+                fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
                     $x::from_value(value)
                         .map([< Ref $x>])
                 }
@@ -132,10 +132,10 @@ macro_rules! starlark_immutable_value {
                 }
             }
 
-            impl<'v> ImmutableValue<'v> for $x {}
+            impl<'v> $crate::values::ImmutableValue<'v> for $x {}
 
             impl<'v> $x {
-                pub fn from_value(x: Value<'v>) -> Option<gazebo::cell::ARef<'v, $x>> {
+                pub fn from_value(x: $crate::values::Value<'v>) -> Option<gazebo::cell::ARef<'v, $x>> {
                     x.downcast_ref::< $x >()
                 }
             }
@@ -143,7 +143,7 @@ macro_rules! starlark_immutable_value {
             $v struct [< Ref $x >]<'v>(pub gazebo::cell::ARef<'v, $x>);
 
             impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
-                fn unpack_value(value: Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
+                fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
                     $x::from_value(value)
                         .map([< Ref $x>])
                 }

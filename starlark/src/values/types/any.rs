@@ -19,7 +19,7 @@
 
 use crate::{
     starlark_immutable_value,
-    values::{ImmutableValue, TypedValue, Value},
+    values::{TypedValue, Value},
 };
 use gazebo::cell::ARef;
 use std::{
