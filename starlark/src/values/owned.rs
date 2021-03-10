@@ -76,8 +76,8 @@ impl OwnedFrozenValue {
         self.value
     }
 
-    /// Be VERY careful, potential segfault! See the warnings on `OwnedFrozenValue`.
-    pub fn unchecked_value<'v>(&self) -> Value<'v> {
+    /// Obtain the `Value` stored inside.
+    pub fn value<'v>(&'v self) -> Value<'v> {
         Value::new_frozen(self.value)
     }
 }

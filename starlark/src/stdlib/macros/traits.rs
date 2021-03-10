@@ -138,7 +138,7 @@ mod tests {
         a.globals_add(global);
         let v = a.pass("cc_binary(name='star', srcs=['a.cc', 'b.cc'])");
         assert_eq!(
-            v.unchecked_value().unpack_str().unwrap(),
+            v.value().unpack_str().unwrap(),
             r#""star" ["a.cc", "b.cc"]"#
         );
     }
