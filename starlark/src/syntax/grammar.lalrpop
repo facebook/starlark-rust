@@ -150,6 +150,11 @@ AssignOp: AssignOp = {
     "*=" => AssignOp::Multiplier,
     "//=" => AssignOp::FloorDivider,
     "%=" => AssignOp::Percent,
+    "&=" => AssignOp::BitAnd,
+    "|=" => AssignOp::BitOr,
+    "^=" => AssignOp::BitXor,
+    "<<=" => AssignOp::LeftShift,
+    ">>=" => AssignOp::RightShift,
 };
 
 AssignStmt: AstStmt = ASTS<AssignStmt_>;
@@ -420,6 +425,11 @@ extern {
       "<<" => lexer::Token::LessLess,
       ">>" => lexer::Token::GreaterGreater,
       "~" => lexer::Token::Tilde,
+      "&=" => lexer::Token::AmpersandEqual,
+      "|=" => lexer::Token::PipeEqual,
+      "^=" => lexer::Token::CaretEqual,
+      "<<=" => lexer::Token::LessLessEqual,
+      ">>=" => lexer::Token::GreaterGreaterEqual,
       // Brackets
       "[" => lexer::Token::OpeningSquare,
       "{" => lexer::Token::OpeningCurly,

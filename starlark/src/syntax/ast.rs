@@ -156,6 +156,11 @@ pub enum AssignOp {
     Multiplier,
     FloorDivider,
     Percent,
+    BitAnd,
+    BitOr,
+    BitXor,
+    LeftShift,
+    RightShift,
 }
 
 #[derive(Debug, Copy, Clone, Dupe)]
@@ -233,6 +238,11 @@ impl Display for AssignOp {
             AssignOp::Multiplier => f.write_str(" *= "),
             AssignOp::FloorDivider => f.write_str(" //= "),
             AssignOp::Percent => f.write_str(" %= "),
+            AssignOp::BitAnd => f.write_str(" &= "),
+            AssignOp::BitOr => f.write_str(" |= "),
+            AssignOp::BitXor => f.write_str(" ^= "),
+            AssignOp::LeftShift => f.write_str(" <<= "),
+            AssignOp::RightShift => f.write_str(" >>= "),
         }
     }
 }

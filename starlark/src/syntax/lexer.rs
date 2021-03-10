@@ -634,6 +634,16 @@ pub enum Token {
     GreaterGreater,
     #[token("~")]
     Tilde,
+    #[token("&=")]
+    AmpersandEqual,
+    #[token("|=")]
+    PipeEqual,
+    #[token("^=")]
+    CaretEqual,
+    #[token("<<=")]
+    LessLessEqual,
+    #[token(">>=")]
+    GreaterGreaterEqual,
 
     // Brackets
     #[token("[")]
@@ -725,6 +735,11 @@ impl Display for Token {
             Token::LessLess => write!(f, "symbol '<<'"),
             Token::GreaterGreater => write!(f, "symbol '>>'"),
             Token::Tilde => write!(f, "symbol '~'"),
+            Token::AmpersandEqual => write!(f, "symbol '&='"),
+            Token::PipeEqual => write!(f, "symbol '|='"),
+            Token::CaretEqual => write!(f, "symbol '^='"),
+            Token::LessLessEqual => write!(f, "symbol '<<='"),
+            Token::GreaterGreaterEqual => write!(f, "symbol '>>='"),
             Token::OpeningSquare => write!(f, "symbol '['"),
             Token::OpeningCurly => write!(f, "symbol '{{'"),
             Token::OpeningRound => write!(f, "symbol '('"),

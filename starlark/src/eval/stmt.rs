@@ -413,6 +413,15 @@ impl Compiler<'_> {
                     }
                     AssignOp::Percent => self
                         .assign_modify(span, *lhs, rhs, |l, r, context| l.percent(r, context.heap)),
+                    AssignOp::BitAnd => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_and(r)),
+                    AssignOp::BitOr => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_or(r)),
+                    AssignOp::BitXor => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_xor(r)),
+                    AssignOp::LeftShift => {
+                        self.assign_modify(span, *lhs, rhs, |l, r, _| l.left_shift(r))
+                    }
+                    AssignOp::RightShift => {
+                        self.assign_modify(span, *lhs, rhs, |l, r, _| l.right_shift(r))
+                    }
                 }
             }
             Stmt::Load(name, v, _) => {

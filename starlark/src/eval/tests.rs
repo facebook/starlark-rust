@@ -609,6 +609,22 @@ xs[1] += 1
 }
 
 #[test]
+fn test_compound_assignment() {
+    assert::pass(
+        r#"
+x = 1
+x <<= 8
+assert_eq(x, 256)"#,
+    );
+    assert::pass(
+        r#"
+x = 1
+x ^= 8
+assert_eq(x, 9)"#,
+    );
+}
+
+#[test]
 fn test_self_mutate_list() {
     // Check functions that mutate and access self on lists
     assert::is_true(
