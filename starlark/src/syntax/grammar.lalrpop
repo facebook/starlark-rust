@@ -145,10 +145,10 @@ SmallStmt: AstStmt = {
 
 AssignOp: AssignOp = {
     "=" => AssignOp::Assign,
-    "+=" => AssignOp::Increment,
-    "-=" => AssignOp::Decrement,
-    "*=" => AssignOp::Multiplier,
-    "//=" => AssignOp::FloorDivider,
+    "+=" => AssignOp::Add,
+    "-=" => AssignOp::Subtract,
+    "*=" => AssignOp::Multiply,
+    "//=" => AssignOp::FloorDivide,
     "%=" => AssignOp::Percent,
     "&=" => AssignOp::BitAnd,
     "|=" => AssignOp::BitOr,

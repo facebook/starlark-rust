@@ -151,16 +151,16 @@ pub enum BinOp {
 #[derive(Debug, Clone, Copy, Dupe, PartialEq, Eq)]
 pub enum AssignOp {
     Assign,
-    Increment,
-    Decrement,
-    Multiplier,
-    FloorDivider,
-    Percent,
-    BitAnd,
-    BitOr,
-    BitXor,
-    LeftShift,
-    RightShift,
+    Add,         // +=
+    Subtract,    // -=
+    Multiply,    // *=
+    FloorDivide, // //=
+    Percent,     // %=
+    BitAnd,      // &=
+    BitOr,       // |=
+    BitXor,      // ^=
+    LeftShift,   // <<=
+    RightShift,  // >>=
 }
 
 #[derive(Debug, Copy, Clone, Dupe)]
@@ -233,10 +233,10 @@ impl Display for AssignOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match *self {
             AssignOp::Assign => f.write_str(" = "),
-            AssignOp::Increment => f.write_str(" += "),
-            AssignOp::Decrement => f.write_str(" += "),
-            AssignOp::Multiplier => f.write_str(" *= "),
-            AssignOp::FloorDivider => f.write_str(" //= "),
+            AssignOp::Add => f.write_str(" += "),
+            AssignOp::Subtract => f.write_str(" += "),
+            AssignOp::Multiply => f.write_str(" *= "),
+            AssignOp::FloorDivide => f.write_str(" //= "),
             AssignOp::Percent => f.write_str(" %= "),
             AssignOp::BitAnd => f.write_str(" &= "),
             AssignOp::BitOr => f.write_str(" |= "),

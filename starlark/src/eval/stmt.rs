@@ -397,16 +397,16 @@ impl Compiler<'_> {
                             Ok(Value::new_none())
                         }
                     }
-                    AssignOp::Increment => self.assign_modify(span, *lhs, rhs, |l, r, context| {
+                    AssignOp::Add => self.assign_modify(span, *lhs, rhs, |l, r, context| {
                         l.add_assign(r, context.heap)
                     }),
-                    AssignOp::Decrement => {
+                    AssignOp::Subtract => {
                         self.assign_modify(span, *lhs, rhs, |l, r, context| l.sub(r, context.heap))
                     }
-                    AssignOp::Multiplier => {
+                    AssignOp::Multiply => {
                         self.assign_modify(span, *lhs, rhs, |l, r, context| l.mul(r, context.heap))
                     }
-                    AssignOp::FloorDivider => {
+                    AssignOp::FloorDivide => {
                         self.assign_modify(span, *lhs, rhs, |l, r, context| {
                             l.floor_div(r, context.heap)
                         })
