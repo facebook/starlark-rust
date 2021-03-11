@@ -155,6 +155,38 @@
 //! # }
 //! # fn main(){ run().unwrap(); }
 //! ```
+//!
+//! ## Enable Starlark extensions (e.g. types)
+//!
+//! Our Starlark supports a number of extensions, including type annotations, which are
+//! controlled by the `Dialect` type.
+//!
+//! ```
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::environment::{Globals, Module};
+//! use starlark::eval::Evaluator;
+//! use starlark::syntax::{AstModule, Dialect};
+//!
+//! let content = r#"
+//! def takes_int(x: "int"):
+//!     pass
+//! takes_int("test")
+//! "#;
+//!
+//! // Make the dialect enable types
+//! let dialect = Dialect {enable_types: true, ..Dialect::Standard};
+//! // We could equally have done `dialect = Dialect::Extended`.
+//! let ast = AstModule::parse("json.star", content.to_owned(), &dialect)?;
+//! let globals = Globals::default();
+//! let module = Module::new();
+//! let mut eval = Evaluator::new(&module, &globals);
+//! let res = eval.eval_module(ast);
+//! // We expect this to fail, since it is a type violation
+//! assert!(res.unwrap_err().to_string().contains("Value `test` of type `string` does not match the type annotation `int`"));
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
 
 // Features we use
 #![feature(backtrace)]
