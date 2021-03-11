@@ -32,11 +32,11 @@ macro_rules! starlark_type {
 #[macro_export]
 macro_rules! starlark_value {
     ($v:vis $x:ident) => {
-        $crate::__macro_refs::paste::item! {
+        $crate::__macro_refs::item! {
             $v type $x<'v> = [< $x Gen >]<$crate::values::Value<'v>>;
             $v type [< Frozen $x >] = [< $x Gen >]<$crate::values::FrozenValue>;
-            any_lifetime!($x<'v>);
-            any_lifetime!([< Frozen $x >]);
+            $crate::__macro_refs::any_lifetime!($x<'v>);
+            $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
 
             impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
@@ -117,8 +117,8 @@ macro_rules! starlark_value {
 #[macro_export]
 macro_rules! starlark_immutable_value {
     ($v:vis $x:ident) => {
-        $crate::__macro_refs::paste::item! {
-            any_lifetime!($x);
+        $crate::__macro_refs::item! {
+            $crate::__macro_refs::any_lifetime!($x);
 
             impl<'v> $crate::values::AllocValue<'v> for $x {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {

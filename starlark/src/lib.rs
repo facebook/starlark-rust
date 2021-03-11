@@ -240,5 +240,6 @@ pub mod values;
 ///  `$crate::__macro_refs::foo`.
 #[doc(hidden)]
 pub mod __macro_refs {
-    pub use paste;
+    pub use gazebo::any_lifetime;
+    pub use paste::item;
 }
