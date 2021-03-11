@@ -15,69 +15,46 @@
  * limitations under the License.
  */
 
-//! A Starlark interpreter library in rust.
+//! A [Starlark interpreter in Rust](https://github.com/facebookexperimental/starlark-rust).
+//! Starlark is a deterministic version of Python, with [a specification](https://github.com/bazelbuild/starlark/blob/master/spec.md),
+//! used by (amongst others) the [Buck](https://buck.build) and [Bazel](https://bazel.build) systems.
 //!
-//! Starlark, formerly codenamed Skylark, is a non-Turing complete language
-//! based on Python that was made for the [Bazel build system](https://bazel.build) to define compilation plugin.
+//! To evaluate a simple file:
 //!
-//! Starlark has at least 3 implementations: a [Java one for Bazel](
-//! https://github.com/bazelbuild/bazel/tree/master/src/main/java/com/google/devtools/skylark),
-//! a [go one](https://github.com/google/skylark) and this one.
+//! ```
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::eval::Evaluator;
+//! use starlark::environment::{Module, Globals};
+//! use starlark::values::Value;
+//! use starlark::syntax::{AstModule, Dialect};
 //!
-//! This interpreter was made using the [specification from the go version](
-//! https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md)
-//! and the Python 3 documentation when things were unclear.
+//! let content = r#"
+//! def hello():
+//!    return "hello"
+//! hello() + " world!"
+//! "#;
 //!
-//! This interpreter does not support most of the go extensions (e.g. bitwise
-//! operator or floating point). It does not include the `set()` type either
-//! (the Java implementation use a custom type, `depset`, instead). It uses
-//! signed 64-bit integer.
+//! // We first parse the content, giving a filename and the Starlark
+//! // `Dialect` we'd like to use (we pick standard).
+//! let ast: AstModule = AstModule::parse("hello_world.star", content.to_owned(), &Dialect::Standard)?;
 //!
-//! # Usage
+//! // We create a `Globals`, defining the standard library functions available.
+//! // By default, this uses those defined in the Starlark specification.
+//! let globals: Globals = Globals::default();
 //!
-//! The library can be used to define a dialect of Starlark (e.g. for a build
-//! system).
+//! // We create a `Module`, which stores the global variables for our calculation.
+//! let module: Module = Module::new();
 //!
-//! The methods in the [eval](eval) modules can be used to evaluate Starlark
-//! code:
-//!   * General purpose [eval](eval::eval_module) and function evaluate Starlark code
-//!     and return the result of the last statement. Those are generic purpose
-//!     function to be used when rewiring load statements.
-//!   * A file loader that simply load relative path to the program is provided
-//!     by the simple module. This module also contains version of eval and
-//!     eval_file that use this file loader.
-//!   * Interactive versions of those function are provided in the interactive
-//!     module. Those function are printing the result / diagnostic to the
-//!     stdout / stderr instead of returning an output.
+//! // We create an evaluator, which controls how evaluation occurs.
+//! let mut eval: Evaluator = Evaluator::new(&module, &globals);
 //!
-//! # Defining a Starlark dialect
-//!
-//! To specify a new Starlark dialect, the global Environment can be
-//! edited, adding functions or constants. The
-//! [starlark_module](macro@starlark_module) macro let you define new function with
-//! limited boilerplate.
-//!
-//! Those added function or macros can however return their own type, all of
-//! them should implement the [TypedValue](values::TypedValue) trait. See the
-//! documentation of the [values](values) module.
-//!
-//! # Content of the default global environment
-//!
-//! The default global environment is returned by the
-//! [stdlib::standard_environment] function and add the `True`,
-//! `False` and `None` constants, as well as the functions in the [stdlib]
-//! module.
-//!
-//! # Provided types
-//!
-//! The [values](values) module provide the following types:
-//!
-//! * integer (signed 64bit), bool, and NoneType,
-//! * [string](values::string),
-//! * [dictionary](values::dict),
-//! * [list](values::list),
-//! * [tuple](values::tuple), and
-//! * [function](values::function).
+//! // And finally we evaluate the code using the evaluator.
+//! let res: Value = eval.eval_module(ast)?;
+//! assert_eq!(res.unpack_str(), Some("hello world!"));
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
 
 // Features we use
 #![feature(backtrace)]
