@@ -50,7 +50,7 @@ mod comparison;
 
 // Submodules
 mod error;
-mod fast_string;
+pub(crate) mod fast_string;
 mod index;
 mod interpolation;
 mod iter;

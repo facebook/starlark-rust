@@ -23,7 +23,8 @@ use crate::{
     eval::{context::EvaluationContext, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
-        dict::FrozenDict, function::WrappedMethod, list::FrozenList, FrozenHeap, FrozenValue, *,
+        dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList, FrozenHeap,
+        FrozenValue, *,
     },
 };
 use codemap::{Span, Spanned};
@@ -512,12 +513,23 @@ impl Compiler<'_> {
                             thrw(l(context)?.sub(r(context)?, context.heap), span, context)
                         },
                         BinOp::Addition => box move |context| {
+                            // Addition of string is super common and pretty cheap, so have a special case for it.
+                            let l = l(context)?;
+                            let r = r(context)?;
+                            if let Some(ls) = l.unpack_str() {
+                                if let Some(rs) = r.unpack_str() {
+                                    if ls.is_empty() {
+                                        return Ok(r);
+                                    } else if rs.is_empty() {
+                                        return Ok(l);
+                                    } else {
+                                        return Ok(context.heap.alloc(fast_string::append(ls, rs)));
+                                    }
+                                }
+                            }
+
                             // Written using Value::add so that Rust Analyzer doesn't think it is an error.
-                            thrw(
-                                Value::add(l(context)?, r(context)?, context.heap),
-                                span,
-                                context,
-                            )
+                            thrw(Value::add(l, r, context.heap), span, context)
                         },
                         BinOp::Multiplication => box move |context| {
                             thrw(l(context)?.mul(r(context)?, context.heap), span, context)
