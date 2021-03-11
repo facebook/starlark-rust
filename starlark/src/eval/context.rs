@@ -29,7 +29,7 @@ use std::{mem, sync::Arc};
 
 /// A structure holding all the data about the evaluation context
 /// (scope, load statement resolver, ...)
-pub struct EvaluationContext<'v, 'a> {
+pub struct Evaluator<'v, 'a> {
     // Am I at the root module-level, true until a function call
     pub(crate) is_module_scope: bool,
     // The module that is being used for this evaluation
@@ -62,17 +62,17 @@ pub struct EvaluationContext<'v, 'a> {
     // Should we do runtime checking of types (defaults to true)
     pub(crate) check_types: bool,
     // Callback on every statement
-    pub on_stmt: Option<&'a dyn Fn(Span, &mut EvaluationContext<'v, 'a>)>,
+    pub on_stmt: Option<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     /// Field that can be used for any purpose you want (can store types you define)
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
     /// Field that can be used for any purpose you want (can store heap-resident `Value<'v>`)
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
 }
 
-impl<'v, 'a> EvaluationContext<'v, 'a> {
+impl<'v, 'a> Evaluator<'v, 'a> {
     pub fn new(env: &'v Module, globals: &'a Globals) -> Self {
         env.frozen_heap().add_reference(globals.heap());
-        EvaluationContext {
+        Evaluator {
             call_stack: CallStack::default(),
             is_module_scope: true,
             module_env: env,

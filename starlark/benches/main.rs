@@ -18,14 +18,14 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use starlark::{
     environment::{Globals, Module},
-    eval::{eval_function, eval_module, EvaluationContext},
+    eval::{eval_function, eval_module, Evaluator},
     stdlib::extended_environment,
     syntax::{parse, Dialect},
 };
 
 fn benchmark_run(globals: &Globals, code: &str) {
     let env = Module::new();
-    let mut ctx = EvaluationContext::new(&env, globals);
+    let mut ctx = Evaluator::new(&env, globals);
     let ast = parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
     eval_module(ast, &mut ctx).unwrap();
 }
@@ -85,7 +85,7 @@ pub fn criterion_parsing_benchmark(c: &mut Criterion) {
 pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
     c.bench_function("run_tight_loop", |b| {
         let env = Module::new();
-        let mut context = EvaluationContext::new(&env, globals);
+        let mut context = Evaluator::new(&env, globals);
         let ast = parse("benchmark.sky", TIGHT_LOOP.to_owned(), &Dialect::Standard).unwrap();
         let bench_function = eval_module(ast, &mut context).unwrap();
         b.iter(move || eval_function(bench_function, &[], &[], &mut context).unwrap())

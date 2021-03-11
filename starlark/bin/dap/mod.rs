@@ -24,7 +24,7 @@ use serde_json::{Map, Value};
 use starlark::{
     debug,
     environment::Module,
-    eval::{eval_module, EvaluationContext},
+    eval::{eval_module, Evaluator},
     syntax::parse_file,
 };
 use std::{
@@ -51,8 +51,8 @@ struct Backend {
     // Those values for which we abort the execution.
     breakpoints: Arc<Mutex<HashMap<String, HashSet<Span>>>>,
 
-    sender: Sender<Box<dyn Fn(Span, &mut EvaluationContext) -> Next + Send>>,
-    receiver: Arc<Mutex<Receiver<Box<dyn Fn(Span, &mut EvaluationContext) -> Next + Send>>>>,
+    sender: Sender<Box<dyn Fn(Span, &mut Evaluator) -> Next + Send>>,
+    receiver: Arc<Mutex<Receiver<Box<dyn Fn(Span, &mut Evaluator) -> Next + Send>>>>,
 }
 
 enum Next {
@@ -63,7 +63,7 @@ enum Next {
 impl Backend {
     fn inject<T: 'static + Send>(
         &self,
-        f: Box<dyn Fn(Span, &mut EvaluationContext) -> (Next, T) + Send>,
+        f: Box<dyn Fn(Span, &mut Evaluator) -> (Next, T) + Send>,
     ) -> T {
         let (sender, receiver) = channel();
         self.sender
@@ -80,10 +80,7 @@ impl Backend {
         self.inject(box |_, _| (Next::Continue, ()))
     }
 
-    fn with_ctx<T: 'static + Send>(
-        &self,
-        f: Box<dyn Fn(Span, &mut EvaluationContext) -> T + Send>,
-    ) -> T {
+    fn with_ctx<T: 'static + Send>(&self, f: Box<dyn Fn(Span, &mut Evaluator) -> T + Send>) -> T {
         self.inject(box move |span, ctx| (Next::RemainPaused, f(span, ctx)))
     }
 
@@ -99,8 +96,8 @@ impl Backend {
             let ast = parse_file(&path, &dialect())?;
             let module = Module::new();
             let globals = globals();
-            let mut ctx = EvaluationContext::new(&module, &globals);
-            let fun = |span, ctx: &mut EvaluationContext| {
+            let mut ctx = Evaluator::new(&module, &globals);
+            let fun = |span, ctx: &mut Evaluator| {
                 let stop = {
                     let breaks = breakpoints.lock().unwrap();
                     let span_loc = ctx.look_up_span(span);

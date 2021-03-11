@@ -20,7 +20,7 @@ use crate::{
     collections::{Hashed, SmallMap},
     environment::EnvironmentError,
     errors::Diagnostic,
-    eval::{context::EvaluationContext, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+    eval::{context::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
         dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList, FrozenHeap,
@@ -112,7 +112,7 @@ fn eval_call(
 ) -> impl for<'v> Fn(
     FunctionInvoker<'v, '_>,
     Value<'v>,
-    &mut EvaluationContext<'v, '_>,
+    &mut Evaluator<'v, '_>,
 ) -> Result<Value<'v>, EvalException<'v>> {
     move |mut invoker, function, context| {
         for x in &args {
@@ -136,7 +136,7 @@ fn eval_dot(
     e: EvalCompiled,
     s: String,
 ) -> impl for<'v> Fn(
-    &mut EvaluationContext<'v, '_>,
+    &mut Evaluator<'v, '_>,
 ) -> Result<Either<Value<'v>, WrappedMethod<'v>>, EvalException<'v>> {
     move |context| {
         let left = e(context)?;
@@ -160,7 +160,7 @@ impl Compiler<'_> {
         &mut self,
         v: Vec<AstExpr>,
     ) -> Box<
-        dyn for<'v> Fn(&mut EvaluationContext<'v, '_>) -> Result<Vec<Value<'v>>, EvalException<'v>>
+        dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Vec<Value<'v>>, EvalException<'v>>
             + Send
             + Sync,
     > {

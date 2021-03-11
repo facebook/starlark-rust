@@ -16,8 +16,7 @@
  */
 
 use crate::{
-    self as starlark, debug, environment::GlobalsBuilder, eval::EvaluationContext,
-    values::none::NoneType,
+    self as starlark, debug, environment::GlobalsBuilder, eval::Evaluator, values::none::NoneType,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -35,14 +34,14 @@ enum Next {
     Fail,
 }
 
-fn cmd_help(_ctx: &mut EvaluationContext) -> anyhow::Result<Next> {
+fn cmd_help(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
     for (name, msg, _) in COMMANDS {
         eprintln!("* :{}, {}", name[0], msg)
     }
     Ok(Next::Again)
 }
 
-fn cmd_variables(ctx: &mut EvaluationContext) -> anyhow::Result<Next> {
+fn cmd_variables(ctx: &mut Evaluator) -> anyhow::Result<Next> {
     fn truncate(mut s: String, n: usize) -> String {
         if s.len() > n {
             s.truncate(n);
@@ -57,25 +56,25 @@ fn cmd_variables(ctx: &mut EvaluationContext) -> anyhow::Result<Next> {
     Ok(Next::Again)
 }
 
-fn cmd_stack(ctx: &mut EvaluationContext) -> anyhow::Result<Next> {
+fn cmd_stack(ctx: &mut Evaluator) -> anyhow::Result<Next> {
     for x in debug::inspect_stack(ctx) {
         eprintln!("* {}", x)
     }
     Ok(Next::Again)
 }
 
-fn cmd_resume(_ctx: &mut EvaluationContext) -> anyhow::Result<Next> {
+fn cmd_resume(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
     Ok(Next::Resume)
 }
 
-fn cmd_fail(_ctx: &mut EvaluationContext) -> anyhow::Result<Next> {
+fn cmd_fail(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
     Ok(Next::Fail)
 }
 
 const COMMANDS: &[(
     &[&str], // Possible names
     &str,    // Help text
-    fn(ctx: &mut EvaluationContext) -> anyhow::Result<Next>,
+    fn(ctx: &mut Evaluator) -> anyhow::Result<Next>,
 )] = &[
     (&["help", "?"], "Show this help message", cmd_help),
     (&["vars"], "Show all local variables", cmd_variables),
@@ -84,7 +83,7 @@ const COMMANDS: &[(
     (&["fail"], "Abort with a failure message", cmd_fail),
 ];
 
-fn pick_command(x: &str) -> Option<fn(ctx: &mut EvaluationContext) -> anyhow::Result<Next>> {
+fn pick_command(x: &str) -> Option<fn(ctx: &mut Evaluator) -> anyhow::Result<Next>> {
     // If we can find a command that matches perfectly, do that
     // Otherwise return the longest match, but if they are multiple, show a warning
     let mut poss = Vec::new();
@@ -110,7 +109,7 @@ fn pick_command(x: &str) -> Option<fn(ctx: &mut EvaluationContext) -> anyhow::Re
     None
 }
 
-fn breakpoint_loop(ctx: &mut EvaluationContext) -> anyhow::Result<()> {
+fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<()> {
     let mut rl = Editor::<()>::new();
     loop {
         let readline = rl.readline("$> ");

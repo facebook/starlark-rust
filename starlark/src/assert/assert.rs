@@ -22,7 +22,7 @@ use crate::{
     collections::SmallMap,
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::{eprint_error, Diagnostic},
-    eval::{eval_module, EvaluationContext, ReturnFileLoader},
+    eval::{eval_module, Evaluator, ReturnFileLoader},
     stdlib::{add_typing, extended_environment},
     syntax::{
         self,
@@ -156,7 +156,7 @@ impl Assert {
         }
         let loader = ReturnFileLoader { modules: &modules };
         let ast = syntax::parse(path, program.to_owned(), &self.dialect)?;
-        let mut ctx = EvaluationContext::new(env, &self.globals);
+        let mut ctx = Evaluator::new(env, &self.globals);
         ctx.set_loader(&loader);
         eval_module(ast, &mut ctx)
     }

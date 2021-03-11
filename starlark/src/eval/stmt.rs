@@ -24,7 +24,7 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     eval::{
-        context::EvaluationContext, file_loader::NoLoadFileLoader, scope::Slot, thrw, AssignError,
+        context::Evaluator, file_loader::NoLoadFileLoader, scope::Slot, thrw, AssignError,
         Compiler, EvalCompiled, EvalException,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
@@ -35,7 +35,7 @@ use gazebo::prelude::*;
 use std::{collections::HashMap, mem};
 
 pub(crate) type AssignCompiled = Box<
-    dyn for<'v> Fn(Value<'v>, &mut EvaluationContext<'v, '_>) -> Result<(), EvalException<'v>>
+    dyn for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
         + Send
         + Sync,
 >;
@@ -44,7 +44,7 @@ fn eval_assign_list<'v>(
     lvalues: &[AssignCompiled],
     span: Span,
     value: Value<'v>,
-    context: &mut EvaluationContext<'v, '_>,
+    context: &mut Evaluator<'v, '_>,
 ) -> Result<(), EvalException<'v>> {
     let l = lvalues.len() as i32;
     let nvl = thrw(value.length(), span, context)?;
@@ -117,11 +117,7 @@ impl Compiler<'_> {
         span_op: Span,
         lhs: AstExpr,
         rhs: EvalCompiled,
-        op: for<'v> fn(
-            Value<'v>,
-            Value<'v>,
-            &mut EvaluationContext<'v, '_>,
-        ) -> anyhow::Result<Value<'v>>,
+        op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
     ) -> EvalCompiled {
         let span = lhs.span;
         match lhs.node {
@@ -224,7 +220,7 @@ impl Compiler<'_> {
 //
 // For the moment we only GC when executing a statement at the root of the
 // module, which we know is safe with respect to all three conditions.
-fn before_stmt(span: Span, context: &mut EvaluationContext) {
+fn before_stmt(span: Span, context: &mut Evaluator) {
     if let Some(f) = context.on_stmt {
         f(span, context)
     }

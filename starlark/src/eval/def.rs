@@ -20,7 +20,7 @@
 use crate::{
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
-        context::EvaluationContext,
+        context::Evaluator,
         parameters::{Parameters, ParametersCollect},
         scope::ScopeNames,
         Compiler, EvalCompiled, EvalException,
@@ -114,7 +114,7 @@ impl Compiler<'_> {
 
         fn run<'v>(
             x: &Option<EvalCompiled>,
-            context: &mut EvaluationContext<'v, '_>,
+            context: &mut Evaluator<'v, '_>,
         ) -> Result<(), EvalException<'v>> {
             if let Some(v) = x {
                 v(context)?;
@@ -198,7 +198,7 @@ impl<'v> Def<'v> {
         return_type: Option<Value<'v>>,
         stmt: Arc<DefInfo>,
         codemap: Arc<CodeMap>,
-        context: &mut EvaluationContext<'v, '_>,
+        context: &mut Evaluator<'v, '_>,
     ) -> Value<'v> {
         let captured = stmt
             .scope_names
@@ -351,7 +351,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'v, 'a, V, Re
         }
     }
 
-    pub fn invoke(self, context: &mut EvaluationContext<'v, '_>) -> anyhow::Result<Value<'v>> {
+    pub fn invoke(self, context: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
         let DefInvokerGen { collect, def } = self;
         let slots = collect.done(context.heap)?;

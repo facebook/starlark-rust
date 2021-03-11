@@ -19,7 +19,7 @@
 use crate::{
     eval::{
         def::{DefInvoker, DefInvokerFrozen},
-        EvaluationContext, Parameters, ParametersCollect,
+        Evaluator, Parameters, ParametersCollect,
     },
     stdlib::UnpackValue,
     values::{
@@ -49,7 +49,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         self,
         function: Value<'v>,
         location: Option<Span>,
-        context: &mut EvaluationContext<'v, '_>,
+        context: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let loc = match location {
             None => None,
@@ -143,7 +143,7 @@ impl<'v, 'a> ParameterParser<'v, 'a> {
 
 /// A native function that can be evaluated
 pub trait NativeFunc:
-    for<'v> Fn(&mut EvaluationContext<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -151,10 +151,7 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(
-            &mut EvaluationContext<'v, '_>,
-            ParameterParser<'v, '_>,
-        ) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(&mut Evaluator<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -182,7 +179,7 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
         }
     }
 
-    pub fn invoke(self, context: &mut EvaluationContext<'v, '_>) -> anyhow::Result<Value<'v>> {
+    pub fn invoke(self, context: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         let slots = self.collect.done(context.heap)?;
         let slots = slots.map(|x| x.get());
         let parser = ParameterParser::new(&slots);
@@ -220,10 +217,7 @@ impl<'v, F: NativeFunc> AllocFrozenValue<'v> for NativeFunction<F> {
 
 // If I switch this to the trait alias then it fails to resolve the usages
 impl<
-    F: for<'v> Fn(
-            &mut EvaluationContext<'v, '_>,
-            ParameterParser<'v, '_>,
-        ) -> anyhow::Result<Value<'v>>
+    F: for<'v> Fn(&mut Evaluator<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static,
@@ -282,7 +276,7 @@ impl NativeAttribute {
     pub(crate) fn call<'v>(
         &self,
         value: Value<'v>,
-        context: &mut EvaluationContext<'v, '_>,
+        context: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
         let mut invoker = self.0.get_aref().new_invoker(function, context.heap)?;

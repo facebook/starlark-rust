@@ -36,7 +36,7 @@ use std::{fmt::Debug, mem, sync::Arc};
 use thiserror::Error;
 
 pub use crate::eval::file_loader::*;
-pub use context::EvaluationContext;
+pub use context::Evaluator;
 pub use parameters::{Parameters, ParametersCollect};
 pub(crate) use scope::ScopeNames;
 
@@ -55,9 +55,7 @@ mod context;
 pub(crate) mod def;
 
 pub(crate) type EvalCompiled = Box<
-    dyn for<'v> Fn(&mut EvaluationContext<'v, '_>) -> Result<Value<'v>, EvalException<'v>>
-        + Send
-        + Sync,
+    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
 >;
 
 #[derive(Debug)]
@@ -91,7 +89,7 @@ pub(crate) enum AssignError {
 fn thrw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
-    context: &EvaluationContext<'v, '_>,
+    context: &Evaluator<'v, '_>,
 ) -> Result<T, EvalException<'v>> {
     match r {
         Ok(v) => Ok(v),
@@ -128,7 +126,7 @@ pub(crate) struct Compiler<'a> {
 
 pub fn eval_module<'v>(
     modu: AstModule,
-    context: &mut EvaluationContext<'v, '_>,
+    context: &mut Evaluator<'v, '_>,
 ) -> anyhow::Result<Value<'v>> {
     let AstModule { codemap, statement } = modu;
     let module_env = context.assert_module_env();
@@ -192,7 +190,7 @@ pub fn eval_function<'v>(
     function: Value<'v>,
     positional: &[Value<'v>],
     named: &[(&str, Value<'v>)],
-    context: &mut EvaluationContext<'v, '_>,
+    context: &mut Evaluator<'v, '_>,
 ) -> anyhow::Result<Value<'v>> {
     context.with_call_stack(function, None, |context| {
         let mut invoker = function.new_invoker(context.heap)?;

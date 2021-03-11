@@ -31,11 +31,11 @@ use syn::*;
 // ```
 // pub fn global(globals_builder: &mut GlobalsBuilder) {
 //     fn cc_binary<'v, 'a, 'a2>(
-//         ctx: &mut starlark::eval::EvaluationContext<'v, 'a>,
+//         ctx: &mut starlark::eval::Evaluator<'v, 'a>,
 //         args: starlark::values::function::ParameterParser<'v, 'a2>,
 //     ) -> anyhow::Result<starlark::values::Value<'v>> {
 //         fn inner<'v, 'a, 'a2>(
-//             #[allow(unused_variables)] ctx: &mut starlark::eval::EvaluationContext<'v, 'a>,
+//             #[allow(unused_variables)] ctx: &mut starlark::eval::Evaluator<'v, 'a>,
 //             #[allow(unused_mut)]
 //             #[allow(unused_variables)]
 //             mut args: starlark::values::function::ParameterParser<'v, 'a2>,
@@ -100,11 +100,11 @@ use syn::*;
 ///
 /// During execution there are two local variables injected into scope:
 ///
-/// * `ctx` is the `EvaluationContext`.
+/// * `ctx` is the `Evaluator`.
 /// * `heap` is the `Heap`, obtained from `ctx.heap()`.
 ///
 /// The `starlark_module` attribute can be added to a `Globals` value.
-/// Those `Globals` can be passed to `EvaluationContext` to produce global functions.
+/// Those `Globals` can be passed to `Evaluator` to produce global functions.
 /// Alternatively, you can return `Globals` from `get_members` to _attach_ functions to
 /// a specific type (e.g. the `string` type).
 ///
@@ -222,12 +222,12 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v, 'a, 'a2>(
-            ctx: &mut starlark::eval::EvaluationContext<'v, 'a>,
+            ctx: &mut starlark::eval::Evaluator<'v, 'a>,
             starlark_args: starlark::values::function::ParameterParser<'v, 'a2>,
         ) -> anyhow::Result<starlark::values::Value<'v>> {
              fn inner<'v, 'a, 'a2>(
                 #[allow(unused_variables)]
-                ctx: &mut starlark::eval::EvaluationContext<'v, 'a>,
+                ctx: &mut starlark::eval::Evaluator<'v, 'a>,
                 #[allow(unused_mut)]
                 #[allow(unused_variables)]
                 mut starlark_args: starlark::values::function::ParameterParser<'v, 'a2>,

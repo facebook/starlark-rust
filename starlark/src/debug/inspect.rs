@@ -19,13 +19,13 @@ use crate::{
     collections::SmallMap,
     eval::{
         def::{Def, FrozenDef},
-        EvaluationContext, ScopeNames,
+        Evaluator, ScopeNames,
     },
     values::Value,
 };
 use gazebo::{cell::ARef, prelude::*};
 
-pub fn inspect_stack(ctx: &EvaluationContext) -> Vec<String> {
+pub fn inspect_stack(ctx: &Evaluator) -> Vec<String> {
     ctx.call_stack()
         .to_diagnostic_frames()
         .map(ToString::to_string)
@@ -41,9 +41,7 @@ pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
     }
 }
 
-fn inspect_local_variables<'v>(
-    ctx: &EvaluationContext<'v, '_>,
-) -> Option<SmallMap<String, Value<'v>>> {
+fn inspect_local_variables<'v>(ctx: &Evaluator<'v, '_>) -> Option<SmallMap<String, Value<'v>>> {
     // First we find the first entry on the call_stack which contains a Def (and thus has locals)
     let xs = ctx.call_stack().to_function_values();
     let names = xs.into_iter().rev().find_map(to_scope_names)?;
@@ -56,7 +54,7 @@ fn inspect_local_variables<'v>(
     Some(res)
 }
 
-fn inspect_module_variables<'v>(ctx: &EvaluationContext<'v, '_>) -> SmallMap<String, Value<'v>> {
+fn inspect_module_variables<'v>(ctx: &Evaluator<'v, '_>) -> SmallMap<String, Value<'v>> {
     let mut res = SmallMap::new();
     for (name, slot) in ctx.module_env.names().all_names() {
         if let Some(v) = ctx.module_env.slots().get_slot(slot) {
@@ -66,7 +64,7 @@ fn inspect_module_variables<'v>(ctx: &EvaluationContext<'v, '_>) -> SmallMap<Str
     res
 }
 
-pub fn inspect_variables<'v>(ctx: &EvaluationContext<'v, '_>) -> SmallMap<String, Value<'v>> {
+pub fn inspect_variables<'v>(ctx: &Evaluator<'v, '_>) -> SmallMap<String, Value<'v>> {
     inspect_local_variables(ctx).unwrap_or_else(|| inspect_module_variables(ctx))
 }
 
