@@ -42,7 +42,6 @@ use std::{
     cmp::Ordering,
     fmt,
     fmt::{Debug, Display},
-    mem,
 };
 
 #[macro_use]
@@ -406,19 +405,6 @@ impl<'v> Value<'v> {
             members.get(name)
         } else {
             None
-        }
-    }
-
-    pub fn add_assign(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        let aref = self.get_aref();
-        if aref.naturally_mutable() {
-            let upd = aref.add_assign(self, other)?;
-            mem::drop(aref);
-            // Important we have dropped the aref, since the function might want it mutably
-            upd(heap)?;
-            return Ok(self);
-        } else {
-            aref.add(self, other, heap)
         }
     }
 

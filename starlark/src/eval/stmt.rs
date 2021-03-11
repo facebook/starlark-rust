@@ -28,7 +28,7 @@ use crate::{
         EvalException,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
-    values::Value,
+    values::{Heap, Value},
 };
 use codemap::{Span, Spanned};
 use gazebo::prelude::*;
@@ -247,6 +247,21 @@ fn before_stmt(span: Span, context: &mut EvaluationContext) {
     }
 }
 
+/// Implement lhs += rhs, which is special in Starlark, because lists are mutated,
+/// while all other types are not.
+fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    let aref = lhs.get_aref();
+    if aref.naturally_mutable() {
+        let upd = aref.add_assign(lhs, rhs)?;
+        mem::drop(aref);
+        // Important we have dropped the aref, since the function might want it mutably
+        upd(heap)?;
+        return Ok(lhs);
+    } else {
+        aref.add(lhs, rhs, heap)
+    }
+}
+
 impl Stmt {
     // Collect all the variables that are defined in this scope
     pub(crate) fn collect_defines<'a>(
@@ -398,7 +413,7 @@ impl Compiler<'_> {
                         }
                     }
                     AssignOp::Add => self.assign_modify(span, *lhs, rhs, |l, r, context| {
-                        l.add_assign(r, context.heap)
+                        add_assign(l, r, context.heap)
                     }),
                     AssignOp::Subtract => {
                         self.assign_modify(span, *lhs, rhs, |l, r, context| l.sub(r, context.heap))
