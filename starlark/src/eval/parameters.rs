@@ -180,7 +180,10 @@ impl<V> Parameters<V> {
         self.kwargs = Some(self.names.len() - 1);
     }
 
-    pub fn collect<'v, 'a>(me: ARef<'a, Self>, slots: usize) -> ParametersCollect<'v, 'a, V> {
+    pub(crate) fn collect<'v, 'a>(
+        me: ARef<'a, Self>,
+        slots: usize,
+    ) -> ParametersCollect<'v, 'a, V> {
         let len = me.names.len();
         ParametersCollect {
             params: me,
@@ -200,7 +203,7 @@ impl<V> Parameters<V> {
     }
 
     // Generate a good error message for it
-    pub fn collect_repr(&self, collector: &mut String) {
+    pub(crate) fn collect_repr(&self, collector: &mut String) {
         collector.push_str(&self.function_name);
         collector.push('(');
         for (i, (name, typ)) in self.names.iter().enumerate() {
@@ -242,7 +245,7 @@ impl<'v> Parameters<Value<'v>> {
     }
 }
 
-pub struct ParametersCollect<'v, 'a, V> {
+pub(crate) struct ParametersCollect<'v, 'a, V> {
     params: ARef<'a, Parameters<V>>,
     slots: Vec<ValueRef<'v>>,
 

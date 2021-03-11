@@ -37,7 +37,8 @@ use thiserror::Error;
 
 pub use crate::eval::file_loader::*;
 pub use context::Evaluator;
-pub use parameters::{Parameters, ParametersCollect};
+pub use parameters::Parameters;
+pub(crate) use parameters::ParametersCollect;
 pub(crate) use scope::ScopeNames;
 
 pub(crate) mod call_stack;
