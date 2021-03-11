@@ -17,7 +17,7 @@
 
 use crate::{
     debug::to_scope_names,
-    eval::{eval_module, Evaluator},
+    eval::Evaluator,
     syntax::{parse, Dialect},
     values::Value,
 };
@@ -73,7 +73,7 @@ pub fn evaluate<'v>(code: String, ctx: &mut Evaluator<'v, '_>) -> anyhow::Result
 
     let orig_is_module_scope = mem::replace(&mut ctx.is_module_scope, true);
     let orig_module_variables = mem::replace(&mut ctx.module_variables, None);
-    let res = eval_module(ast, ctx);
+    let res = ctx.eval_module(ast);
     ctx.is_module_scope = orig_is_module_scope;
     ctx.module_variables = orig_module_variables;
 

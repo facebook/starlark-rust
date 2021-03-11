@@ -20,7 +20,7 @@ use itertools::Either;
 use starlark::{
     analysis,
     environment::{FrozenModule, Globals, Module},
-    eval::{eval_module, Evaluator},
+    eval::Evaluator,
     stdlib::{add_typing, extended_environment},
     syntax::{parse, parse_file, AstModule, Dialect},
 };
@@ -47,7 +47,7 @@ impl Context {
 
                 let mut context = Evaluator::new(&env, &globals);
                 let module = parse_file(x, &dialect())?;
-                eval_module(module, &mut context)?;
+                context.eval_module(module)?;
                 Ok(env.freeze())
             })
             .collect::<anyhow::Result<_>>()?;
@@ -122,10 +122,7 @@ impl Context {
         }
         let globals = globals();
         let mut context = Evaluator::new(&env, &globals);
-        Self::err(
-            file,
-            eval_module(module, &mut context).map(|_| iter::empty()),
-        )
+        Self::err(file, context.eval_module(module).map(|_| iter::empty()))
     }
 
     fn info(&self, module: &AstModule) {

@@ -124,82 +124,80 @@ pub(crate) struct Compiler<'a> {
     codemap: Arc<CodeMap>,
 }
 
-pub fn eval_module<'v>(
-    modu: AstModule,
-    context: &mut Evaluator<'v, '_>,
-) -> anyhow::Result<Value<'v>> {
-    let AstModule { codemap, statement } = modu;
-    let module_env = context.assert_module_env();
+impl<'v> Evaluator<'v, '_> {
+    pub fn eval_module(&mut self, modu: AstModule) -> anyhow::Result<Value<'v>> {
+        let AstModule { codemap, statement } = modu;
+        let module_env = self.assert_module_env();
 
-    let scope = Scope::enter_module(module_env.names(), &statement);
+        let scope = Scope::enter_module(module_env.names(), &statement);
 
-    let span = statement.span;
+        let span = statement.span;
 
-    let mut compiler = Compiler {
-        scope,
-        heap: module_env.frozen_heap(),
-        globals: context.globals,
-        errors: Vec::new(),
-        codemap: codemap.dupe(),
-    };
-    let stmt = compiler.stmt(statement);
+        let mut compiler = Compiler {
+            scope,
+            heap: module_env.frozen_heap(),
+            globals: self.globals,
+            errors: Vec::new(),
+            codemap: codemap.dupe(),
+        };
+        let stmt = compiler.stmt(statement);
 
-    // We want to grab the first error only, with ownership, so drop all but the first
-    compiler.errors.truncate(1);
-    if let Some(e) = compiler.errors.pop() {
-        // Static errors, reported even if the branch is not hit
-        return Err(e);
-    }
-
-    let (module_slots, local_slots) = compiler.scope.exit_module();
-    module_env.slots().ensure_slots(module_slots);
-    let old_locals = mem::replace(
-        &mut context.local_variables,
-        LocalSlots::new(vec![ValueRef::new_unassigned(); local_slots]),
-    );
-
-    // Set up the world to allow evaluation (do NOT use ? from now on)
-    let old_codemap = mem::replace(&mut context.codemap, codemap.dupe());
-    context
-        .call_stack
-        .push(Value::new_none(), Some((codemap, span)))
-        .unwrap();
-    if context.profiling {
-        // Make sure we don't GC the excess entries
-        context.disable_gc();
-        context.heap.record_call_enter(Value::new_none());
-    }
-
-    // Evaluation
-    let res = stmt(context);
-
-    // Clean up the world, putting everything back
-    context.call_stack.pop();
-    if context.profiling {
-        context.heap.record_call_exit();
-        context.heap.write_profile("starlark_profile.csv").unwrap();
-    }
-    context.codemap = old_codemap;
-    context.local_variables = old_locals;
-
-    // Return the result of evaluation
-    Ok(res?)
-}
-
-pub fn eval_function<'v>(
-    function: Value<'v>,
-    positional: &[Value<'v>],
-    named: &[(&str, Value<'v>)],
-    context: &mut Evaluator<'v, '_>,
-) -> anyhow::Result<Value<'v>> {
-    context.with_call_stack(function, None, |context| {
-        let mut invoker = function.new_invoker(context.heap)?;
-        for x in positional {
-            invoker.push_pos(*x);
+        // We want to grab the first error only, with ownership, so drop all but the first
+        compiler.errors.truncate(1);
+        if let Some(e) = compiler.errors.pop() {
+            // Static errors, reported even if the branch is not hit
+            return Err(e);
         }
-        for (s, x) in named {
-            invoker.push_named(s, context.heap.alloc(*s).get_hashed()?, *x);
+
+        let (module_slots, local_slots) = compiler.scope.exit_module();
+        module_env.slots().ensure_slots(module_slots);
+        let old_locals = mem::replace(
+            &mut self.local_variables,
+            LocalSlots::new(vec![ValueRef::new_unassigned(); local_slots]),
+        );
+
+        // Set up the world to allow evaluation (do NOT use ? from now on)
+        let old_codemap = mem::replace(&mut self.codemap, codemap.dupe());
+        self.call_stack
+            .push(Value::new_none(), Some((codemap, span)))
+            .unwrap();
+        if self.profiling {
+            // Make sure we don't GC the excess entries
+            self.disable_gc();
+            self.heap.record_call_enter(Value::new_none());
         }
-        invoker.invoke(function, None, context)
-    })
+
+        // Evaluation
+        let res = stmt(self);
+
+        // Clean up the world, putting everything back
+        self.call_stack.pop();
+        if self.profiling {
+            self.heap.record_call_exit();
+            self.heap.write_profile("starlark_profile.csv").unwrap();
+        }
+        self.codemap = old_codemap;
+        self.local_variables = old_locals;
+
+        // Return the result of evaluation
+        Ok(res?)
+    }
+
+    pub fn eval_function(
+        &mut self,
+        function: Value<'v>,
+        positional: &[Value<'v>],
+        named: &[(&str, Value<'v>)],
+    ) -> anyhow::Result<Value<'v>> {
+        self.with_call_stack(function, None, |context| {
+            let mut invoker = function.new_invoker(context.heap)?;
+            for x in positional {
+                invoker.push_pos(*x);
+            }
+            for (s, x) in named {
+                invoker.push_named(s, context.heap.alloc(*s).get_hashed()?, *x);
+            }
+            invoker.invoke(function, None, context)
+        })
+    }
 }

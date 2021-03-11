@@ -20,7 +20,7 @@ use crate::{
     assert::{self, Assert},
     environment::{GlobalsBuilder, Module},
     errors::eprint_error,
-    eval::{eval_module, Evaluator},
+    eval::Evaluator,
     syntax::{parse, Dialect},
     values::{any::StarlarkAny, none::NoneType, Heap, Value},
 };
@@ -788,10 +788,11 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     let mut ctx = Evaluator::new(&modu, &globals);
     let extra = Extra::default();
     ctx.extra_v = Some(&extra);
-    eval_module(
-        parse("a", "load_symbol('x', 6*7)".to_owned(), &Dialect::Extended)?,
-        &mut ctx,
-    )?;
+    ctx.eval_module(parse(
+        "a",
+        "load_symbol('x', 6*7)".to_owned(),
+        &Dialect::Extended,
+    )?)?;
 
     for (name, value) in extra.0.lock().unwrap().iter() {
         modu.set(name, *value);

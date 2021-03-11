@@ -21,12 +21,7 @@ use debugserver_types::*;
 use gazebo::prelude::*;
 pub use library::*;
 use serde_json::{Map, Value};
-use starlark::{
-    debug,
-    environment::Module,
-    eval::{eval_module, Evaluator},
-    syntax::parse_file,
-};
+use starlark::{debug, environment::Module, eval::Evaluator, syntax::parse_file};
 use std::{
     collections::{HashMap, HashSet},
     mem,
@@ -127,7 +122,7 @@ impl Backend {
             ctx.on_stmt = Some(&fun);
             // No way to pass back success/failure to the caller
             client.log(&format!("EVALUATION START: {}", path.display()));
-            let v = eval_module(ast, &mut ctx)?;
+            let v = ctx.eval_module(ast)?;
             let s = v.to_string();
             client.log(&format!("EVALUATION FINISHED: {}", path.display()));
             Ok(s)
