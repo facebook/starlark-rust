@@ -25,7 +25,6 @@ use crate::{
     eval::{Evaluator, ReturnFileLoader},
     stdlib::{add_typing, extended_environment},
     syntax::{
-        self,
         lexer::{Lexer, Token},
         AstModule, Dialect,
     },
@@ -155,7 +154,7 @@ impl Assert {
             modules.insert(k.as_str(), v);
         }
         let loader = ReturnFileLoader { modules: &modules };
-        let ast = syntax::parse(path, program.to_owned(), &self.dialect)?;
+        let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
         let mut ctx = Evaluator::new(env, &self.globals);
         ctx.set_loader(&loader);
         ctx.eval_module(ast)
@@ -299,7 +298,7 @@ impl Assert {
     }
 
     pub fn parse_ast(&self, program: &str) -> AstModule {
-        match crate::syntax::parse("assert.bzl", program.to_owned(), &self.dialect) {
+        match AstModule::parse("assert.bzl", program.to_owned(), &self.dialect) {
             Ok(x) => x,
             Err(e) => {
                 panic!(
@@ -377,7 +376,7 @@ impl Assert {
         let begin = contents.find('!').unwrap();
         let end = contents[begin + 1..].find('!').unwrap() + begin;
 
-        match crate::syntax::parse("assert.bzl", rest, &self.dialect) {
+        match AstModule::parse("assert.bzl", rest, &self.dialect) {
             Ok(ast) => panic!(
                 "Expected parse failure, but succeeded:\nContents: {}\nGot: {:?}",
                 contents, ast

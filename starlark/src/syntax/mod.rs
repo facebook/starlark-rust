@@ -19,7 +19,6 @@
 
 pub use ast::AstModule;
 pub use dialect::Dialect;
-pub use parser::{parse, parse_file};
 
 #[cfg(test)]
 mod grammar_tests;

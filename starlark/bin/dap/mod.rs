@@ -21,7 +21,7 @@ use debugserver_types::*;
 use gazebo::prelude::*;
 pub use library::*;
 use serde_json::{Map, Value};
-use starlark::{debug, environment::Module, eval::Evaluator, syntax::parse_file};
+use starlark::{debug, environment::Module, eval::Evaluator, syntax::AstModule};
 use std::{
     collections::{HashMap, HashSet},
     mem,
@@ -88,7 +88,7 @@ impl Backend {
 
         let go = move || -> anyhow::Result<String> {
             client.log(&format!("EVALUATION PREPARE: {}", path.display()));
-            let ast = parse_file(&path, &dialect())?;
+            let ast = AstModule::parse_file(&path, &dialect())?;
             let module = Module::new();
             let globals = globals();
             let mut ctx = Evaluator::new(&module, &globals);
@@ -189,7 +189,7 @@ impl DebugServer for Backend {
                 breakpoints: Vec::new(),
             })
         } else {
-            match parse_file(Path::new(&source), &dialect()) {
+            match AstModule::parse_file(Path::new(&source), &dialect()) {
                 Err(_) => {
                     self.breakpoints.lock().unwrap().remove(&source);
                     Ok(SetBreakpointsResponseBody {

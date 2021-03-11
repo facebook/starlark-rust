@@ -96,11 +96,11 @@ pub(crate) fn dubious(module: &AstModule) -> Vec<LintT<Dubious>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::syntax::{parse, Dialect};
+    use crate::syntax::Dialect;
     use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
-        parse("X", x.to_owned(), &Dialect::Extended).unwrap()
+        AstModule::parse("X", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     impl Dubious {

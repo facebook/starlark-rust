@@ -21,7 +21,7 @@ use crate::{
     environment::{GlobalsBuilder, Module},
     errors::eprint_error,
     eval::Evaluator,
-    syntax::{parse, Dialect},
+    syntax::{AstModule, Dialect},
     values::{any::StarlarkAny, none::NoneType, Heap, Value},
 };
 use gazebo::any::AnyLifetime;
@@ -788,7 +788,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     let mut ctx = Evaluator::new(&modu, &globals);
     let extra = Extra::default();
     ctx.extra_v = Some(&extra);
-    ctx.eval_module(parse(
+    ctx.eval_module(AstModule::parse(
         "a",
         "load_symbol('x', 6*7)".to_owned(),
         &Dialect::Extended,

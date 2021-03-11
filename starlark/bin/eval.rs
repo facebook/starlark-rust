@@ -22,7 +22,7 @@ use starlark::{
     environment::{FrozenModule, Globals, Module},
     eval::Evaluator,
     stdlib::{add_typing, extended_environment},
-    syntax::{parse, parse_file, AstModule, Dialect},
+    syntax::{AstModule, Dialect},
 };
 use std::{
     fs, iter,
@@ -46,7 +46,7 @@ impl Context {
                 let env = Module::new();
 
                 let mut context = Evaluator::new(&env, &globals);
-                let module = parse_file(x, &dialect())?;
+                let module = AstModule::parse_file(x, &dialect())?;
                 context.eval_module(module)?;
                 Ok(env.freeze())
             })
@@ -90,7 +90,7 @@ impl Context {
         let file = "expression";
         Self::err(
             file,
-            parse(file, content, &dialect()).map(|module| self.go(file, module)),
+            AstModule::parse(file, content, &dialect()).map(|module| self.go(file, module)),
         )
     }
 
@@ -111,7 +111,7 @@ impl Context {
     ) -> impl Iterator<Item = Message> {
         Self::err(
             filename,
-            parse(filename, content, &dialect()).map(|module| self.go(filename, module)),
+            AstModule::parse(filename, content, &dialect()).map(|module| self.go(filename, module)),
         )
     }
 

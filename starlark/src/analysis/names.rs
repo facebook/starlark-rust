@@ -276,7 +276,7 @@ fn use_ignored(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::syntax::{parse, Dialect};
+    use crate::syntax::Dialect;
 
     impl NameWarning {
         fn about(&self) -> &String {
@@ -293,7 +293,7 @@ mod test {
     }
 
     fn module(x: &str) -> AstModule {
-        parse("X", x.to_owned(), &Dialect::Extended).unwrap()
+        AstModule::parse("X", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     #[test]

@@ -20,18 +20,18 @@ use starlark::{
     environment::{Globals, Module},
     eval::Evaluator,
     stdlib::extended_environment,
-    syntax::{parse, Dialect},
+    syntax::{AstModule, Dialect},
 };
 
 fn benchmark_run(globals: &Globals, code: &str) {
     let env = Module::new();
     let mut ctx = Evaluator::new(&env, globals);
-    let ast = parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
+    let ast = AstModule::parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
     ctx.eval_module(ast).unwrap();
 }
 
 fn benchmark_pure_parsing(code: &str) {
-    parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
+    AstModule::parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
 }
 
 const EMPTY: &str = r#"
@@ -86,7 +86,8 @@ pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
     c.bench_function("run_tight_loop", |b| {
         let env = Module::new();
         let mut context = Evaluator::new(&env, globals);
-        let ast = parse("benchmark.sky", TIGHT_LOOP.to_owned(), &Dialect::Standard).unwrap();
+        let ast =
+            AstModule::parse("benchmark.sky", TIGHT_LOOP.to_owned(), &Dialect::Standard).unwrap();
         let bench_function = context.eval_module(ast).unwrap();
         b.iter(move || context.eval_function(bench_function, &[], &[]).unwrap())
     });

@@ -190,11 +190,11 @@ pub(crate) fn incompatibilities(module: &AstModule) -> Vec<LintT<Incompatibility
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::syntax::{parse, Dialect};
+    use crate::syntax::Dialect;
     use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
-        parse("bad.py", x.to_owned(), &Dialect::Extended).unwrap()
+        AstModule::parse("bad.py", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     #[test]

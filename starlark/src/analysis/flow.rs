@@ -269,11 +269,11 @@ pub(crate) fn flow_issues(module: &AstModule) -> Vec<LintT<FlowIssue>> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::syntax::{parse, Dialect};
+    use crate::syntax::Dialect;
     use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
-        parse("X", x.to_owned(), &Dialect::Extended).unwrap()
+        AstModule::parse("X", x.to_owned(), &Dialect::Extended).unwrap()
     }
 
     impl FlowIssue {

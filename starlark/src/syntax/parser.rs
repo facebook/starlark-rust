@@ -92,18 +92,6 @@ pub(crate) fn parse_error_add_span(
     e.into()
 }
 
-/// Parse a Starlark file.
-pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<AstModule> {
-    let mut codemap = CodeMap::new();
-    let file = codemap.add_file(filename.to_string(), content);
-    let codemap = Arc::new(codemap);
-    let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
-    match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
-        Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
-        Err(p) => Err(parse_error_add_span(p, file.span, codemap)),
-    }
-}
-
 impl AstModule {
     fn create(
         codemap: Arc<CodeMap>,
@@ -112,6 +100,25 @@ impl AstModule {
     ) -> anyhow::Result<AstModule> {
         Stmt::validate(&codemap, &statement, dialect)?;
         Ok(AstModule { codemap, statement })
+    }
+
+    /// Parse a file stored on disk.
+    pub fn parse_file(path: &Path, dialect: &Dialect) -> anyhow::Result<Self> {
+        let content = fs::read_to_string(path)?;
+        Self::parse(&path.to_string_lossy(), content, dialect)
+    }
+
+    /// Parse a Starlark module in memory.
+    /// The `filename` is informational for error messages only and does not have to be a valid file.
+    pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
+        let mut codemap = CodeMap::new();
+        let file = codemap.add_file(filename.to_string(), content);
+        let codemap = Arc::new(codemap);
+        let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
+        match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
+            Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
+            Err(p) => Err(parse_error_add_span(p, file.span, codemap)),
+        }
     }
 
     /// Return the file names of all the `load` statements in the module.
@@ -140,21 +147,4 @@ impl AstModule {
     pub fn look_up_span(&self, x: Span) -> SpanLoc {
         self.codemap.look_up_span(x)
     }
-}
-
-/// Parse a build file (if build is true) or a starlark file, reading the
-/// content from the file system.
-///
-/// # arguments
-///
-/// * codemap: the codemap object used for diagnostics
-/// * path: the path to the file to parse
-/// * dialect: starlark language dialect
-///
-/// # Note
-///
-/// This method unwrap the path to a unicode string, which can panic.
-pub fn parse_file(path: &Path, dialect: &Dialect) -> anyhow::Result<AstModule> {
-    let content = fs::read_to_string(path)?;
-    parse(&path.to_string_lossy(), content, dialect)
 }

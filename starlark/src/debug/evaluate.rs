@@ -18,7 +18,7 @@
 use crate::{
     debug::to_scope_names,
     eval::Evaluator,
-    syntax::{parse, Dialect},
+    syntax::{AstModule, Dialect},
     values::Value,
 };
 use std::{collections::HashMap, mem};
@@ -28,7 +28,7 @@ use std::{collections::HashMap, mem};
 /// nested definitions etc. All are solvable, with increasing levels of effort.
 /// It would be a bad idea to rely on the results after evaluating stuff randomly.
 pub fn evaluate<'v>(code: String, ctx: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
-    let ast = parse("interactive", code, &Dialect::Extended)?;
+    let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
 
     // Everything must be evaluated with the current heap (or we'll lose memory), which means
     // the current module (ctx.module_env).
