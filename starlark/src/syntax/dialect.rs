@@ -44,9 +44,9 @@ pub struct Dialect {
     pub enable_lambda: bool,
     /// Are `load` statements permitted
     pub enable_load: bool,
-    /// Are `*` keyword-only arguments allowed (https://www.python.org/dev/peps/pep-3102/)
+    /// Are `*` keyword-only arguments allowed (<https://www.python.org/dev/peps/pep-3102/>)
     pub enable_keyword_only_arguments: bool,
-    /// Are expressions allowed in type positions (https://www.python.org/dev/peps/pep-0484/)
+    /// Are expressions allowed in type positions (<https://www.python.org/dev/peps/pep-0484/>)
     pub enable_types: bool,
     /// Are tabs permitted for indentation. If permitted, tabs are equivalent to 8 spaces.
     pub enable_tabs: bool,
@@ -60,7 +60,7 @@ pub struct Dialect {
 // even though they are actually global constants
 #[allow(non_upper_case_globals)]
 impl Dialect {
-    /// The Starlark language as specified in https://github.com/bazelbuild/starlark/blob/master/spec.md
+    /// The Starlark language as specified in <https://github.com/bazelbuild/starlark/blob/master/spec.md>
     pub const Standard: Self = Self {
         enable_def: true,
         enable_lambda: true,

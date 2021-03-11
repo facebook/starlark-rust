@@ -16,7 +16,7 @@
  */
 
 //! String interpolation-related code.
-//! Based on https://docs.python.org/3/library/stdtypes.html#printf-style-string-formatting
+//! Based on <https://docs.python.org/3/library/stdtypes.html#printf-style-string-formatting>
 
 use crate::values::{tuple::Tuple, Heap, Value, ValueLike};
 use gazebo::prelude::*;
