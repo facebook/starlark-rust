@@ -20,7 +20,7 @@ use crate::{
     assert::{self, Assert},
     environment::{GlobalsBuilder, Module},
     errors::eprint_error,
-    eval::{eval_module, EvaluationContext, NoLoadFileLoader},
+    eval::{eval_module, EvaluationContext},
     syntax::{parse, Dialect},
     values::{any::StarlarkAny, none::NoneType, Heap, Value},
 };
@@ -785,7 +785,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     a.globals_add(module);
     let modu = Module::new();
     let globals = a.get_globals();
-    let mut ctx = EvaluationContext::new(&modu, &globals, &NoLoadFileLoader);
+    let mut ctx = EvaluationContext::new(&modu, &globals);
     let extra = Extra::default();
     ctx.extra_v = Some(&extra);
     eval_module(

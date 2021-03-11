@@ -24,7 +24,7 @@ use serde_json::{Map, Value};
 use starlark::{
     debug,
     environment::Module,
-    eval::{eval_module, EvaluationContext, NoLoadFileLoader},
+    eval::{eval_module, EvaluationContext},
     syntax::parse_file,
 };
 use std::{
@@ -99,7 +99,7 @@ impl Backend {
             let ast = parse_file(&path, &dialect())?;
             let module = Module::new();
             let globals = globals();
-            let mut ctx = EvaluationContext::new(&module, &globals, &NoLoadFileLoader);
+            let mut ctx = EvaluationContext::new(&module, &globals);
             let fun = |span, ctx: &mut EvaluationContext| {
                 let stop = {
                     let breaks = breakpoints.lock().unwrap();

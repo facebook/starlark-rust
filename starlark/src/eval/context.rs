@@ -48,7 +48,7 @@ pub struct EvaluationContext<'v, 'a> {
     // The Starlark-level call-stack of functions.
     pub(crate) call_stack: CallStack<'v>,
     // How we deal with a `load` function.
-    pub(crate) loader: &'a dyn FileLoader,
+    pub(crate) loader: Option<&'a dyn FileLoader>,
     // The codemap that corresponds to this module.
     pub(crate) codemap: Arc<CodeMap>,
     // Should we enable profiling or not
@@ -70,7 +70,7 @@ pub struct EvaluationContext<'v, 'a> {
 }
 
 impl<'v, 'a> EvaluationContext<'v, 'a> {
-    pub fn new(env: &'v Module, globals: &'a Globals, loader: &'a dyn FileLoader) -> Self {
+    pub fn new(env: &'v Module, globals: &'a Globals) -> Self {
         env.frozen_heap().add_reference(globals.heap());
         EvaluationContext {
             call_stack: CallStack::default(),
@@ -80,7 +80,7 @@ impl<'v, 'a> EvaluationContext<'v, 'a> {
             local_variables: LocalSlots::default(),
             local_variables_stack: Vec::new(),
             globals,
-            loader,
+            loader: None,
             codemap: Arc::new(CodeMap::new()), // Will be replaced before it is used
             extra: None,
             extra_v: None,
@@ -98,6 +98,10 @@ impl<'v, 'a> EvaluationContext<'v, 'a> {
     // global variables or the `extra` field.
     pub fn disable_gc(&mut self) {
         self.disable_gc = true;
+    }
+
+    pub fn set_loader(&mut self, loader: &'a dyn FileLoader) {
+        self.loader = Some(loader);
     }
 
     pub fn call_stack(&self) -> &CallStack<'v> {

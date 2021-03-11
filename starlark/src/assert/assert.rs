@@ -156,7 +156,8 @@ impl Assert {
         }
         let loader = ReturnFileLoader { modules: &modules };
         let ast = syntax::parse(path, program.to_owned(), &self.dialect)?;
-        let mut ctx = EvaluationContext::new(env, &self.globals, &loader);
+        let mut ctx = EvaluationContext::new(env, &self.globals);
+        ctx.set_loader(&loader);
         eval_module(ast, &mut ctx)
     }
 

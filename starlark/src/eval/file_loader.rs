@@ -29,7 +29,7 @@ pub trait FileLoader {
 }
 
 /// File loader which returns error unconditionally.
-pub struct NoLoadFileLoader;
+pub(crate) struct NoLoadFileLoader;
 
 impl FileLoader for NoLoadFileLoader {
     fn load(&self, _path: &str) -> anyhow::Result<&FrozenModule> {

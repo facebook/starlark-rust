@@ -24,8 +24,8 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     eval::{
-        context::EvaluationContext, scope::Slot, thrw, AssignError, Compiler, EvalCompiled,
-        EvalException,
+        context::EvaluationContext, file_loader::NoLoadFileLoader, scope::Slot, thrw, AssignError,
+        Compiler, EvalCompiled, EvalException,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
     values::{Heap, Value},
@@ -450,7 +450,11 @@ impl Compiler<'_> {
                 });
                 box move |context| {
                     before_stmt(span, context);
-                    let loadenv = context.loader.load(&name).map_err(EvalException::Error)?;
+                    let loadenv = context
+                        .loader
+                        .unwrap_or(&NoLoadFileLoader)
+                        .load(&name)
+                        .map_err(EvalException::Error)?;
                     let modu = context.assert_module_env();
                     for (new_name, orig_name, span) in &symbols {
                         let value = thrw(modu.load_symbol(loadenv, orig_name), *span, context)?;
