@@ -55,6 +55,106 @@
 //! # }
 //! # fn main(){ run().unwrap(); }
 //! ```
+//!
+//! From this example there are lots of ways to extend it, which we do so below.
+//!
+//! ## Call Rust functions from Starlark
+//!
+//! We want to define a function in Rust (that computes quadratics), and then call it from Starlark.
+//!
+//! ```
+//! #[macro_use]
+//! extern crate starlark_module;
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::environment::{GlobalsBuilder, Module};
+//! use starlark::eval::Evaluator;
+//! use starlark::syntax::{AstModule, Dialect};
+//! use starlark::values::Value;
+//!
+//! let content = r#"
+//! quadratic(4, 2, 1, x = 8)
+//! "#;
+//!
+//! #[starlark_module]
+//! fn starlark_quadratic(builder: &mut GlobalsBuilder) {
+//!     // This defines a function that is visible to Starlark
+//!     fn quadratic(a: i32, b: i32, c: i32, x: i32) -> i32 {
+//!         Ok(a * x * x + b * x + c)
+//!     }
+//! }
+//!
+//! let ast = AstModule::parse("quadratic.star", content.to_owned(), &Dialect::Standard)?;
+//! // We build our globals adding some functions we wrote
+//! let globals = GlobalsBuilder::new().with(starlark_quadratic).build();
+//! let module = Module::new();
+//! let mut eval = Evaluator::new(&module, &globals);
+//! let res = eval.eval_module(ast)?;
+//! assert_eq!(res.unpack_int(), Some(273));
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
+//!
+//! ## Collect Starlark values
+//!
+//! If we want to use Starlark as an enhanced JSON, we can define an `emit` function
+//! to "write out" a JSON value, and use the `Evaluator` extra fields to store it.
+//!
+//! ```
+//! #[macro_use]
+//! extern crate starlark_module;
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::environment::{GlobalsBuilder, Module};
+//! use starlark::eval::Evaluator;
+//! use starlark::syntax::{AstModule, Dialect};
+//! use starlark::values::{none::NoneType, Value, ValueLike};
+//! use gazebo::any::AnyLifetime;
+//! use std::cell::RefCell;
+//!
+//! let content = r#"
+//! emit(1)
+//! emit(["test"])
+//! emit({"x": "y"})
+//! "#;
+//!
+//! // Define a store in which to accumulate JSON strings
+//! #[derive(Debug, AnyLifetime, Default)]
+//! struct Store(RefCell<Vec<String>>);
+//!
+//! impl Store {
+//!     fn add(&self, x: String) {
+//!          self.0.borrow_mut().push(x)
+//!     }
+//! }
+//!
+//! #[starlark_module]
+//! fn starlark_emit(builder: &mut GlobalsBuilder) {
+//!     fn emit(x: Value) -> NoneType {
+//!         // We modify extra (which we know is a Store) and add the JSON of the
+//!         // value the user gave.
+//!         ctx.extra
+//!             .unwrap()
+//!             .downcast_ref::<Store>()
+//!             .unwrap()
+//!             .add(x.to_json());
+//!         Ok(NoneType)
+//!     }
+//! }
+//!
+//! let ast = AstModule::parse("json.star", content.to_owned(), &Dialect::Standard)?;
+//! // We build our globals adding some functions we wrote
+//! let globals = GlobalsBuilder::new().with(starlark_emit).build();
+//! let module = Module::new();
+//! let mut eval = Evaluator::new(&module, &globals);
+//! // We add a reference to our store
+//! let store = Store::default();
+//! eval.extra = Some(&store);
+//! eval.eval_module(ast)?;
+//! assert_eq!(&*store.0.borrow(), &["1", "[\"test\"]", "{\"x\": \"y\"}"]);
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
 
 // Features we use
 #![feature(backtrace)]
