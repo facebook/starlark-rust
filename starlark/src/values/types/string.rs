@@ -265,11 +265,7 @@ impl<'v> TypedValue<'v> for Box<str> {
             } else if other_str.is_empty() {
                 Ok(original)
             } else {
-                // Optimised based on https://github.com/hoodie/concatenation_benchmarks-rs
-                let mut s = String::with_capacity(self.len() + other_str.len());
-                s.push_str(self);
-                s.push_str(other_str);
-                Ok(heap.alloc(s))
+                Ok(heap.alloc(fast_string::append(self, other_str)))
             }
         } else {
             unsupported_with(self, "+", other)
