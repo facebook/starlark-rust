@@ -187,7 +187,14 @@ impl Freezer {
             ValueMem::Mutable(x) => {
                 *fvmem = FrozenValueMem::Immutable(immutable_static(x.into_inner().freeze(self)))
             }
-            _ => v.unexpected("FrozenHeap::freeze case 3"),
+            _ => {
+                // We don't expect Unitialized, because that is not a real value.
+                // We don't expect Forward or ThawOnWrite since they are handled in step 2.
+                // We don't expect Copied or Blackhole because that only happens during GC.
+                // We don't expect CallEnter/CallExit as that is only during profiling on the heap, and not referenced.
+                // We don't expect Ref, because that only occurs inside ValueRef, and that has a custom freeze.
+                v.unexpected("FrozenHeap::freeze case 3")
+            }
         }
         fv
     }
