@@ -306,6 +306,18 @@ f(1)(2)(3) == 6",
 }
 
 #[test]
+fn test_garbage_collect() {
+    assert::pass(
+        r#"
+x = (100, [{"test": None}], True)
+y = str(x)
+garbage_collect()
+assert_eq(y, str(x))
+    "#,
+    );
+}
+
+#[test]
 fn test_def_freeze() {
     let f_bzl = r#"
 def f(g):

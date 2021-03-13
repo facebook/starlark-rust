@@ -130,6 +130,18 @@ fn test_methods(builder: &mut GlobalsBuilder) {
         println!("{}", x);
         Ok(NoneType)
     }
+
+    // This is only safe to call at the top-level of a Starlark module
+    fn garbage_collect() -> NoneType {
+        if ctx.is_module_scope {
+            unsafe {
+                ctx.heap.garbage_collect(|walker| ctx.walk(walker))
+            };
+            Ok(NoneType)
+        } else {
+            panic!("assert::garbage_collect, can only be called from a top-level statement")
+        }
+    }
 }
 
 #[derive(Clone)]
