@@ -18,7 +18,7 @@
 use crate::{
     self as starlark,
     assert::{self, Assert},
-    environment::{GlobalsBuilder, Module},
+    environment::{Globals, GlobalsBuilder, Module},
     errors::eprint_error,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
@@ -253,6 +253,25 @@ xs = [lambda x: x + y for y in [1,2,3]]
 ys = [lambda x: x + y for y in [4,5,6]]
 [xs[1](0),ys[1](0)] == [3,6]",
     );
+}
+
+#[test]
+fn test_eval_function() {
+    let fun = assert::pass(
+        r#"
+def fun(a, y, x = 1):
+    return str((a, y, x))
+fun
+"#,
+    );
+    let env = Module::new();
+    let globals = Globals::default();
+    let mut eval = Evaluator::new(&env, &globals);
+    let hello = env.heap().alloc("hello");
+    let v = eval
+        .eval_function(fun.value(), &[Value::new_int(8)], &[("y", hello)])
+        .unwrap();
+    assert_eq!(v.unpack_str(), Some("(8, \"hello\", 1)"))
 }
 
 #[test]
