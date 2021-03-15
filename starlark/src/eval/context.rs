@@ -48,7 +48,7 @@ pub struct Evaluator<'v, 'a> {
     // The Starlark-level call-stack of functions.
     pub(crate) call_stack: CallStack<'v>,
     // How we deal with a `load` function.
-    pub(crate) loader: Option<&'a dyn FileLoader>,
+    pub(crate) loader: Option<&'a mut dyn FileLoader>,
     // The codemap that corresponds to this module.
     pub(crate) codemap: Arc<CodeMap>,
     // Should we enable profiling or not
@@ -100,7 +100,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.disable_gc = true;
     }
 
-    pub fn set_loader(&mut self, loader: &'a dyn FileLoader) {
+    pub fn set_loader(&mut self, loader: &'a mut dyn FileLoader) {
         self.loader = Some(loader);
     }
 

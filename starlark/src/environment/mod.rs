@@ -38,4 +38,6 @@ pub(crate) enum EnvironmentError {
     /// Can't set variables unless in the root name
     #[error("Cannot set variable `{0}` at this point, must be in a non-frozen module context")]
     CannotSetVariable(String),
+    #[error("No imports are available, you tried `{0}` (no call to `Evaluator.set_loader`)")]
+    NoImportsAvailable(String),
 }
