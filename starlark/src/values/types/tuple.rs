@@ -204,17 +204,6 @@ where
         Ok(self)
     }
 
-    /// Concatenate `other` to the current value.
-    ///
-    /// `other` has to be a tuple.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// (1, 2, 3) + (2, 3) == (1, 2, 3, 2, 3)
-    /// # "#);
-    /// ```
     fn add(&self, _original: Value, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = Tuple::from_value(other) {
             let mut result = Tuple {
@@ -232,17 +221,6 @@ where
         }
     }
 
-    /// Repeat `other` times this tuple.
-    ///
-    /// `other` has to be an int or a boolean.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// (1, 2, 3) * 3 == (1, 2, 3, 1, 2, 3, 1, 2, 3)
-    /// # "#);
-    /// ```
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {

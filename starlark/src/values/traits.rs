@@ -142,6 +142,17 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// Defaults to the `Debug` instance, but most types should override this method.
     /// In many cases the `repr()` representation will also be a Starlark expression
     /// for creating the value.
+    ///
+    /// # Examples:
+    /// ```rust
+    /// # starlark::assert::all_true(r#"
+    /// repr("test") == '"test"'
+    /// repr([1,2,3]) == '[1, 2, 3]'
+    /// repr([1,[2,3]]) == '[1, [2, 3]]'
+    /// repr([1]) == '[1]'
+    /// repr([]) == '[]'
+    /// # "#);
+    /// ```
     fn collect_repr(&self, collector: &mut String) {
         // Rust won't return Err when writing to a String, so safe unwrap
         write!(collector, "{:?}", self).unwrap()
@@ -234,6 +245,15 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// if the value was frozen (but with
     /// `ValueError::OperationNotSupported` if the operation is not supported
     /// on this value, even if the value is immutable, e.g. for numbers).
+    ///
+    /// ```rust
+    /// # starlark::assert::is_true(r#"
+    /// v = [1, 2, 3]
+    /// v[1] = 1
+    /// v[2] = [2,3]
+    /// v == [1, 1, [2, 3]]
+    /// # "#);
+    /// ```
     fn set_at(&mut self, index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
         unsupported_with(self, "[]=", index)
     }
@@ -380,6 +400,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// 1 + 2 == 3
+    /// [1, 2, 3] + [2, 3] == [1, 2, 3, 2, 3]
+    /// 'abc' + 'def' == 'abcdef'
+    /// (1, 2, 3) + (2, 3) == (1, 2, 3, 2, 3)
     /// # "#);
     /// ```
     fn add(&self, _lhs: Value<'v>, rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -415,13 +438,18 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// 2 * 3 == 6
+    /// [1, 2, 3] * 3 == [1, 2, 3, 1, 2, 3, 1, 2, 3]
+    /// 'abc' * 3 == 'abcabcabc'
+    /// (1, 2, 3) * 3 == (1, 2, 3, 1, 2, 3, 1, 2, 3)
     /// # "#);
     /// ```
     fn mul(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "*", other)
     }
 
-    /// Apply the percent operator between the current value and `other`.
+    /// Apply the percent operator between the current value and `other`. Usually used on
+    /// strings, as per [the Starlark spec]
+    /// (https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#string-interpolation).
     ///
     /// # Examples
     ///
@@ -429,6 +457,16 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # starlark::assert::all_true(r#"
     /// 5 % 3 == 2
     /// "a %s c" % 3 == "a 3 c"
+    /// "Hello %s, your score is %d" % ("Bob", 75) == "Hello Bob, your score is 75"
+    /// "%d %o %x %c" % (65, 65, 65, 65) == "65 101 41 A"
+    /// "%(greeting)s, %(audience)s" % {"greeting": "Hello", "audience": "world"} == "Hello, world"
+    /// "Hello %s, welcome" % "Bob" == "Hello Bob, welcome"
+    /// "%s%(a)%" % {"a": 1} == "{\"a\": 1}%" # Copy Python corner-cases
+    /// "%s%(a)s" % {"a": 1} == "{\"a\": 1}1" # Copy Python corner-cases
+    /// "%s" % (1,) == "1"
+    /// "%s" % ((1,),) == "(1,)"
+    /// "%s" % [1] == "[1]"
+    /// "test" % () == "test"
     /// # "#);
     /// ```
     fn percent(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {

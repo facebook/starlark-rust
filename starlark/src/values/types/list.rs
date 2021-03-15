@@ -151,17 +151,6 @@ where
         RES.members(crate::stdlib::list::list_members)
     }
 
-    /// Returns a string representation for the list
-    ///
-    /// # Examples:
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// repr([1,2,3]) == '[1, 2, 3]'
-    /// repr([1,[2,3]]) == '[1, [2, 3]]'
-    /// repr([1]) == '[1]'
-    /// repr([]) == '[]'
-    /// # "#);
-    /// ```
     fn collect_repr(&self, s: &mut String) {
         s.push('[');
         let mut first = true;
@@ -243,17 +232,6 @@ where
         Ok(self)
     }
 
-    /// Concatenate `other` to the current value.
-    ///
-    /// `other` has to be a list.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// [1, 2, 3] + [2, 3] == [1, 2, 3, 2, 3]
-    /// # "#);
-    /// ```
     fn add(&self, _original: Value, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
             let mut result = List {
@@ -298,17 +276,6 @@ where
         }
     }
 
-    /// Repeat `other` times this tuple.
-    ///
-    /// `other` has to be an int or a boolean.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// [1, 2, 3] * 3 == [1, 2, 3, 1, 2, 3, 1, 2, 3]
-    /// # "#);
-    /// ```
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
@@ -326,17 +293,6 @@ where
         }
     }
 
-    /// Set the value at `index` to `alloc_value`
-    ///
-    /// # Example
-    /// ```rust
-    /// # starlark::assert::is_true(r#"
-    /// v = [1, 2, 3]
-    /// v[1] = 1
-    /// v[2] = [2,3]
-    /// v == [1, 1, [2, 3]]
-    /// # "#);
-    /// ```
     fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let i = convert_index(index, self.len() as i32)? as usize;
         self.mutable_list().content[i] = alloc_value;

@@ -192,11 +192,11 @@ impl<'v> TypedValue<'v> for Range {
         let other = match other.unpack_int() {
             Some(other) => other,
             None => {
-                // Go implementation errors here,
-                // Python3 returns `False`.
-                // ```
-                // "a" in range(3)
-                // ```
+                // Consider `"a" in range(3)`
+                //
+                // Should we error or return false?
+                // Go Starlark errors. Python returns false.
+                // Discussion at https://github.com/bazelbuild/starlark/issues/175
                 return Ok(false);
             }
         };

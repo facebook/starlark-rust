@@ -244,17 +244,6 @@ impl<'v> TypedValue<'v> for Box<str> {
         Ok(heap.alloc(v))
     }
 
-    /// Concatenate `other` to the current value.
-    ///
-    /// `other` has to be a string.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// 'abc' + 'def' == 'abcdef'
-    /// # "#);
-    /// ```
     fn add(
         &self,
         original: Value<'v>,
@@ -274,17 +263,6 @@ impl<'v> TypedValue<'v> for Box<str> {
         }
     }
 
-    /// Repeat `other` times this string.
-    ///
-    /// `other` has to be an int.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # starlark::assert::all_true(r#"
-    /// 'abc' * 3 == 'abcabcabc'
-    /// # "#);
-    /// ```
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
@@ -298,28 +276,6 @@ impl<'v> TypedValue<'v> for Box<str> {
         }
     }
 
-    /// Perform string interpolation
-    ///
-    /// Cf. [String interpolation on the Starlark spec](
-    /// https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#string-interpolation
-    /// )
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # starlark::assert::all_true(r#"
-    /// "Hello %s, your score is %d" % ("Bob", 75) == "Hello Bob, your score is 75"
-    /// "%d %o %x %c" % (65, 65, 65, 65) == "65 101 41 A"
-    /// "%(greeting)s, %(audience)s" % {"greeting": "Hello", "audience": "world"} == "Hello, world"
-    /// "Hello %s, welcome" % "Bob" == "Hello Bob, welcome"
-    /// "%s%(a)%" % {"a": 1} == "{\"a\": 1}%" # Copy Python corner-cases
-    /// "%s%(a)s" % {"a": 1} == "{\"a\": 1}1" # Copy Python corner-cases
-    /// "%s" % (1,) == "1"
-    /// "%s" % ((1,),) == "(1,)"
-    /// "%s" % [1] == "[1]"
-    /// "test" % () == "test"
-    /// # "#);
-    /// ```
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(heap.alloc(Interpolation::parse(self)?.apply(other, heap)?))
     }
