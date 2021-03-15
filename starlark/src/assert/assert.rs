@@ -473,20 +473,6 @@ pub fn all_true(expressions: &str) {
     Assert::new().all_true(expressions)
 }
 
-/// A program that must be true, which has access to an external module.
-///
-/// ```
-/// starlark::assert::is_true_with("x", "y = 2", r#"
-/// load("x", "y")
-/// y == 1 + 1
-/// "#);
-/// ```
-pub fn is_true_with(module_name: &str, module_contents: &str, program: &str) {
-    let mut a = Assert::new();
-    a.module(module_name, module_contents);
-    a.is_true(program)
-}
-
 /// A program that must execute successfully without an exception. Often uses
 /// assert_eq. Returns the resulting value.
 ///

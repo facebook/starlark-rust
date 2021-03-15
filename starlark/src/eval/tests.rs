@@ -180,10 +180,10 @@ fn test_repeated_parameters() {
 
 #[test]
 fn test_context_captured() {
-    let f_bzl = "x = 17\ndef f(): return x";
+    let mut a = Assert::new();
+    a.module("f.bzl", "x = 17\ndef f(): return x");
     // Import `f` but do not import `x`
-    let program = "load('f.bzl', 'f')\nf() == 17";
-    assert::is_true_with("f.bzl", f_bzl, program);
+    a.is_true("load('f.bzl', 'f')\nf() == 17");
 }
 
 #[test]
@@ -324,17 +324,22 @@ assert_eq(y, str(x))
 
 #[test]
 fn test_def_freeze() {
-    let f_bzl = r#"
+    let mut a = Assert::new();
+    a.module(
+        "f.bzl",
+        r#"
 def f(g):
-    g(1)"#;
-    let program = r#"
+    g(1)"#,
+    );
+    a.is_true(
+        r#"
 load('f.bzl', 'f')
 x = []
 def g(y):
     x.append(y)
 f(g)
-x == [1]"#;
-    assert::is_true_with("f.bzl", f_bzl, program);
+x == [1]"#,
+    );
 }
 
 #[test]
