@@ -187,6 +187,60 @@
 //! # }
 //! # fn main(){ run().unwrap(); }
 //! ```
+//!
+//! ## Enable the `load` statement
+//!
+//! You can have Starlark load files imported by the user. That requires that the loaded modules are first frozen.
+//! There is no requirement that the files are on disk, but that would be a common pattern.
+//!
+//! ```
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::environment::{FrozenModule, Globals, Module};
+//! use starlark::eval::{Evaluator, ReturnFileLoader};
+//! use starlark::syntax::{AstModule, Dialect};
+//!
+//! // Get the file contents (for the demo), in reality use `AstModule::parse_file`.
+//! fn get_source(file: &str) -> &str {
+//!     match file {
+//!         "a.star" => "a = 7",
+//!         "b.star" => "b = 6",
+//!         _ => { r#"
+//! load('a.star', 'a')
+//! load('b.star', 'b')
+//! ab = a * b
+//! "#
+//!         }
+//!     }
+//! }
+//!
+//! fn get_module(file: &str) -> anyhow::Result<FrozenModule> {
+//!    let ast = AstModule::parse(file, get_source(file).to_owned(), &Dialect::Standard)?;
+//!
+//!    // We can get the loaded modules from `ast.loads`.
+//!    // And ultimately produce a `loader` capable of giving those modules to Starlark.
+//!    let mut loads = Vec::new();
+//!    for load in ast.loads() {
+//!        loads.push((load.to_owned(), get_module(load)?));
+//!    }
+//!    let modules = loads.iter().map(|(a, b)| (a.as_str(), b)).collect();
+//!    let mut loader = ReturnFileLoader { modules: &modules };
+//!
+//!    let globals = Globals::default();
+//!    let module = Module::new();
+//!    let mut eval = Evaluator::new(&module, &globals);
+//!    eval.set_loader(&mut loader);
+//!    eval.eval_module(ast)?;
+//!    // After creating a module we freeze it, preventing further mutation.
+//!    // It can now be used as the input for other Starlark modules.
+//!    Ok(module.freeze())
+//! }
+//!
+//! let ab = get_module("ab.star")?;
+//! assert_eq!(ab.get("ab").unwrap().unpack_int(), Some(42));
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
 
 // Features we use
 #![feature(backtrace)]
