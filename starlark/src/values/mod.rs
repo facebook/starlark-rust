@@ -387,6 +387,14 @@ impl<'v> Value<'v> {
         self.get_ref_mut(heap)?.set_at(index, alloc_value)
     }
 
+    /// Return the contents of this collection, as an owned vector.
+    pub fn iterate_collect(self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
+        // You might reasonably think this is mostly called on lists (I think it is),
+        // and thus that a fast-path here would speed things up. But in my experiments
+        // it's completely irrelevant (you pay a bit for the check, you save a bit on each step).
+        Ok(self.iterate(heap)?.iter().collect())
+    }
+
     pub fn iterate(self, heap: &'v Heap) -> anyhow::Result<RefIterable<'v>> {
         let me: ARef<'v, dyn TypedValue> = self.get_aref();
         me.iterate()?;

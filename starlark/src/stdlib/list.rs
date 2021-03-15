@@ -118,7 +118,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn extend(this: Value, ref other: Value) -> NoneType {
-        let other: Vec<Value<'v>> = other.iterate(heap)?.iter().collect();
+        let other = other.iterate_collect(heap)?;
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         this.extend(other);
         Ok(NoneType)
