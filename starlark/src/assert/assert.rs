@@ -62,6 +62,15 @@ fn assert_equals<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
     }
 }
 
+/// How often we garbage collection _should_ be transparent to the tests,
+/// so we run each test in three configurations.
+#[derive(Clone, Copy, Dupe)]
+enum GcStrategy {
+    Never,  // Disable GC
+    Auto,   // Use the automatic heuristics (in practice, this does almost no GC)
+    Always, // GC as aggressively as we can
+}
+
 /// Definitions to support assert.star as used by the Go test suite
 #[starlark_module]
 fn assert_star(builder: &mut GlobalsBuilder) {
@@ -149,6 +158,7 @@ pub struct Assert {
     dialect: Dialect,
     modules: HashMap<String, FrozenModule>,
     globals: Globals,
+    gc_strategy: Option<GcStrategy>,
 }
 
 impl Assert {
@@ -157,10 +167,34 @@ impl Assert {
             dialect: Dialect::Extended,
             modules: hashmap!["assert.star".to_owned() => Lazy::force(&ASSERT_STAR).dupe()],
             globals: Lazy::force(&GLOBALS).dupe(),
+            gc_strategy: None,
         }
     }
 
-    fn execute<'a>(&self, path: &str, program: &str, env: &'a Module) -> anyhow::Result<Value<'a>> {
+    pub fn disable_gc(&mut self) {
+        self.gc_strategy = Some(GcStrategy::Never)
+    }
+
+    fn with_gc<A>(&self, f: impl Fn(GcStrategy) -> A) -> A {
+        match self.gc_strategy {
+            None => {
+                // We want to run with Auto first, and use that as the result, because that's the default
+                let res = f(GcStrategy::Auto);
+                f(GcStrategy::Never);
+                f(GcStrategy::Always);
+                res
+            }
+            Some(x) => f(x),
+        }
+    }
+
+    fn execute<'a>(
+        &self,
+        path: &str,
+        program: &str,
+        env: &'a Module,
+        gc: GcStrategy,
+    ) -> anyhow::Result<Value<'a>> {
         let mut modules = HashMap::with_capacity(self.modules.len());
         for (k, v) in &self.modules {
             modules.insert(k.as_str(), v);
@@ -168,12 +202,32 @@ impl Assert {
         let loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
         let mut ctx = Evaluator::new(env, &self.globals);
+
+        let gc_always = |_, ctx: &mut Evaluator| {
+            if ctx.is_module_scope && !ctx.disable_gc {
+                unsafe {
+                    ctx.heap.garbage_collect(|walker| ctx.walk(walker))
+                };
+            }
+        };
+
+        match gc {
+            GcStrategy::Never => ctx.disable_gc(),
+            GcStrategy::Auto => {}
+            GcStrategy::Always => ctx.on_stmt = Some(&gc_always),
+        }
         ctx.set_loader(&loader);
         ctx.eval_module(ast)
     }
 
-    fn execute_fail<'a>(&self, func: &str, program: &str, env: &'a Module) -> anyhow::Error {
-        match self.execute("assert.bzl", program, env) {
+    fn execute_fail<'a>(
+        &self,
+        func: &str,
+        program: &str,
+        env: &'a Module,
+        gc: GcStrategy,
+    ) -> anyhow::Error {
+        match self.execute("assert.bzl", program, env, gc) {
             Ok(v) => panic!(
                 "starlark::assert::{}, didn't fail!\nCode:\n{}\nResult:\n{}\n",
                 func, program, v
@@ -188,8 +242,9 @@ impl Assert {
         path: &str,
         program: &str,
         env: &'a Module,
+        gc: GcStrategy,
     ) -> Value<'a> {
-        match self.execute(path, program, env) {
+        match self.execute(path, program, env, gc) {
             Ok(v) => v,
             Err(err) => {
                 eprint_error(&err);
@@ -201,8 +256,8 @@ impl Assert {
         }
     }
 
-    fn execute_unwrap_true<'a>(&self, func: &str, program: &str, env: &'a Module) {
-        let v = self.execute_unwrap(func, "assert.bzl", program, env);
+    fn execute_unwrap_true<'a>(&self, func: &str, program: &str, env: &'a Module, gc: GcStrategy) {
+        let v = self.execute_unwrap(func, "assert.bzl", program, env, gc);
         match v.unpack_bool() {
             Some(true) => {}
             Some(false) => panic!("starlark::assert::{}, got false!\nCode:\n{}", func, program),
@@ -226,9 +281,12 @@ impl Assert {
     }
 
     pub fn module(&mut self, name: &str, program: &str) {
-        let module = Module::new();
-        self.execute_unwrap("module", &format!("{}.bzl", name), program, &module);
-        self.module_add(name, module.freeze());
+        let module = self.with_gc(|gc| {
+            let module = Module::new();
+            self.execute_unwrap("module", &format!("{}.bzl", name), program, &module, gc);
+            module.freeze()
+        });
+        self.module_add(name, module);
     }
 
     pub fn get_globals(&self) -> Globals {
@@ -244,26 +302,28 @@ impl Assert {
     }
 
     fn fails_with_name(&self, func: &str, program: &str, msgs: &[&str]) -> anyhow::Error {
-        let module_env = Module::new();
-        let original = self.execute_fail(func, program, &module_env);
-        // We really want to check the error message, but if in our doc tests we do:
-        // fail("bad") # error: magic
-        // Then when we print the source code, magic is contained in the error message.
-        // Therefore, find the internals.
-        let inner = original
-            .downcast_ref::<Diagnostic>()
-            .map_or(&original, |d| &d.message);
-        let err_msg = format!("{:#}", inner);
-        for msg in msgs {
-            if !err_msg.contains(msg) {
-                eprint_error(&original);
-                panic!(
+        self.with_gc(|gc| {
+            let module_env = Module::new();
+            let original = self.execute_fail(func, program, &module_env, gc);
+            // We really want to check the error message, but if in our doc tests we do:
+            // fail("bad") # error: magic
+            // Then when we print the source code, magic is contained in the error message.
+            // Therefore, find the internals.
+            let inner = original
+                .downcast_ref::<Diagnostic>()
+                .map_or(&original, |d| &d.message);
+            let err_msg = format!("{:#}", inner);
+            for msg in msgs {
+                if !err_msg.contains(msg) {
+                    eprint_error(&original);
+                    panic!(
                     "starlark::assert::{}, failed with the wrong message!\nCode:\n{}\nError:\n{}\nMissing:\n{}\nExpected:\n{:?}",
                     func, program, inner, msg, msgs
                 )
+                }
             }
-        }
-        original
+            original
+        })
     }
 
     pub fn fail(&self, program: &str, msg: &str) -> anyhow::Error {
@@ -275,38 +335,46 @@ impl Assert {
     }
 
     pub fn pass(&self, program: &str) -> OwnedFrozenValue {
-        let env = Module::new();
-        let res = self.execute_unwrap("pass", "assert.bzl", program, &env);
-        env.set("_", res);
-        env.freeze().get("_").unwrap()
+        self.with_gc(|gc| {
+            let env = Module::new();
+            let res = self.execute_unwrap("pass", "assert.bzl", program, &env, gc);
+            env.set("_", res);
+            env.freeze().get("_").unwrap()
+        })
     }
 
     pub fn is_true(&self, program: &str) {
-        let env = Module::new();
-        self.execute_unwrap_true("is_true", program, &env);
+        self.with_gc(|gc| {
+            let env = Module::new();
+            self.execute_unwrap_true("is_true", program, &env, gc);
+        })
     }
 
     pub fn all_true(&self, program: &str) {
-        for s in program.lines() {
-            if s == "" {
-                continue;
+        self.with_gc(|gc| {
+            for s in program.lines() {
+                if s == "" {
+                    continue;
+                }
+                let env = Module::new();
+                self.execute_unwrap_true("all_true", s, &env, gc);
             }
-            let env = Module::new();
-            self.execute_unwrap_true("all_true", s, &env);
-        }
+        })
     }
 
     pub fn eq(&self, lhs: &str, rhs: &str) {
-        let lhs_m = Module::new();
-        let rhs_m = Module::new();
-        let lhs_v = self.execute_unwrap("eq", "lhs.bzl", lhs, &lhs_m);
-        let rhs_v = self.execute_unwrap("eq", "rhs.bzl", rhs, &rhs_m);
-        if lhs_v != rhs_v {
-            panic!(
+        self.with_gc(|gc| {
+            let lhs_m = Module::new();
+            let rhs_m = Module::new();
+            let lhs_v = self.execute_unwrap("eq", "lhs.bzl", lhs, &lhs_m, gc);
+            let rhs_v = self.execute_unwrap("eq", "rhs.bzl", rhs, &rhs_m, gc);
+            if lhs_v != rhs_v {
+                panic!(
                 "starlark::assert::eq, values differ!\nCode 1:\n{}\nCode 2:\n{}\nValue 1:\n{}\nValue 2\n{}",
                 lhs, rhs, lhs_v, rhs_v
             );
-        }
+            }
+        })
     }
 
     pub fn parse_ast(&self, program: &str) -> AstModule {

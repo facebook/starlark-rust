@@ -1251,6 +1251,7 @@ fn test_deallocation() {
 
     COUNT.store(0, Ordering::SeqCst);
     let mut a = Assert::new();
+    a.disable_gc();
     a.globals_add(globals);
     a.module("test", "x = [mk(), mk()]\ndef y(): return mk()");
     a.pass(
