@@ -28,7 +28,7 @@ use crate::{
         none::NoneType,
         range::Range,
         tuple::Tuple,
-        Heap, Value, ValueLike,
+        Heap, Value,
     },
 };
 use anyhow::anyhow;
@@ -361,13 +361,19 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
-    /// hash(1) == hash(1)
-    /// hash(1) != hash(2)
     /// hash("hello") != hash("world")
     /// # "#);
     /// ```
-    fn hash(ref a: Value) -> i32 {
-        Ok(a.get_hash()? as i32)
+    fn hash(ref a: &str) -> i32 {
+        // From the starlark spec:
+        // > the hash function for strings is the same as that implemented by java.lang.String.hashCode,
+        // > a simple polynomial accumulator over the UTF-16 transcoding of the string:
+        // > `s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]`
+        // As per spec the function should only support string and bytes types.
+        // We don't have support for bytes, so parameter is forced to be a string.
+        Ok(a.encode_utf16().fold(0i32, |hash: i32, c: u16| {
+            31i32.wrapping_mul(hash).wrapping_add(c as i32)
+        }))
     }
 
     /// [int](
@@ -955,5 +961,38 @@ mod tests {
     #[test]
     fn test_error_codes() {
         assert::fail("chr(0x110000)", "not a valid UTF-8");
+    }
+
+    #[test]
+    fn test_hash() {
+        assert::eq("0", "hash('')");
+        assert::eq("97", "hash('a')");
+        assert::eq("3105", "hash('ab')");
+        assert::eq("96354", "hash('abc')");
+        assert::eq("2987074", "hash('abcd')");
+        assert::eq("92599395", "hash('abcde')");
+        assert::eq("-1424385949", "hash('abcdef')");
+        assert::all_true(
+            r#"
+hash("te") == hash("te")
+hash("te") != hash("st")
+x = "test"; y = "te" + "st"; hash(y) == hash(y)
+"#,
+        );
+        assert::fail("hash(None)", "doesn't match");
+        assert::fail("hash(True)", "doesn't match");
+        assert::fail("hash(1)", "doesn't match");
+        assert::fail("hash([])", "doesn't match");
+        assert::fail("hash({})", "doesn't match");
+        assert::fail("hash(range(1))", "doesn't match");
+        assert::fail("hash((1, 2))", "doesn't match");
+        assert::fail(
+            r#"
+def foo():
+    pass
+hash(foo)
+"#,
+            "doesn't match",
+        );
     }
 }

@@ -978,47 +978,26 @@ False < True
 }
 
 #[test]
-fn test_hash() {
-    assert::all_true(
-        r#"
-hash(1) == hash(1)
-hash(1) != hash(2)
-hash("test") == hash("test")
-hash("test") != hash("x")
-hash(()) == hash(())
-hash((1,2)) != hash((1,3))
-hash(repr) == hash(repr)
-x = []; y = x.copy; hash(y) == hash(y)
-"#,
-    );
-    assert::fail("hash([])", "not hashable");
-    assert::fail("hash({})", "not hashable");
-    assert::fail("hash(range(1))", "not hashable");
-    assert::fail("hash(([], 1))", "not hashable");
-}
-
-#[test]
 fn test_frozen_hash() {
-    let exprs = &["1", "2", "\"test\"", "\"x\"", "()", "(1,2)", "repr", "foo"];
+    let exprs = &["\"test\"", "\"x\""];
     let mut a = Assert::new();
     a.module(
         "m",
         &format!(
             r#"
-def foo():
-    pass
-values = [{}]
-hashes_unfrozen = [hash(x) for x in values]"#,
+dict = {{x:len(x) for x in [{}]}}
+"#,
             exprs.join(",")
         ),
     );
-    a.pass(
+    a.pass(&format!(
         r#"
-load('m', 'values', 'hashes_unfrozen')
-hashes_frozen = [hash(x) for x in values]
-assert_eq(hashes_unfrozen, hashes_frozen)
+load('m', frozen_dict='dict')
+values = [{}]
+assert_eq(all([frozen_dict[x] != None for x in values]), True)
 "#,
-    );
+        exprs.join(","),
+    ));
 }
 
 #[test]

@@ -177,7 +177,7 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
         unsupported(self, "int()")
     }
 
-    /// Return a hash code for self, as returned by the hash() function, or
+    /// Return a hash code for self to be used when self is placed as a key in a Dict.
     /// OperationNotSupported if there is no hash for this value (e.g. list).
     /// Must be stable between frozen and non-frozen values.
     fn get_hash(&self) -> anyhow::Result<u64> {
