@@ -362,7 +362,13 @@ impl<'v> Walker<'v> {
                 self.arena.alloc(ValueMem::Blackhole)
             )
         };
-        let new_val: Value<'v> = Value(Pointer::new_ptr2(new_mem));
+        let mut new_val: Value<'v> = Value(Pointer::new_ptr2(new_mem));
+        if value.0.get_user_tag() {
+            // SUPER IMPORTANT:
+            // There are invariants around user tags (whether something is a Ref), so make sure they get copied over.
+            new_val = Value(new_val.0.set_user_tag());
+        }
+
         let mut old_mem = unsafe { ptr::replace(old_mem, ValueMem::Copied(new_val)) };
 
         match &mut old_mem {

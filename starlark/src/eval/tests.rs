@@ -261,6 +261,27 @@ ys = [lambda x: x + y for y in [4,5,6]]
 }
 
 #[test]
+fn test_frozen_lambda() {
+    let mut a = Assert::new();
+    a.module(
+        "lam",
+        r#"
+def my_func(a):
+    return lambda b: a + b
+add18 = my_func(18)
+# This test used to fail if a GC happend, so add one
+garbage_collect()
+"#,
+    );
+    a.pass(
+        r#"
+load("lam", "add18")
+assert_eq(add18(24), 42)
+"#,
+    );
+}
+
+#[test]
 fn test_eval_function() {
     let fun = assert::pass(
         r#"
