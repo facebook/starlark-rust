@@ -173,58 +173,26 @@ mod tests {
 
     #[test]
     fn test_to_json() {
-        assert::eq("struct(key = None).to_json()", r#"'{"key":null}'"#);
-        assert::eq("struct(key = True).to_json()", r#"'{"key":true}'"#);
-        assert::eq("struct(key = False).to_json()", r#"'{"key":false}'"#);
-        assert::eq("struct(key = 42).to_json()", r#"'{"key":42}'"#);
-        assert::eq("struct(key = 'value').to_json()", r#"'{"key":"value"}'"#);
-        assert::eq(
-            r#"struct(key = 'value"').to_json()"#,
-            r#"'{"key":"value\\\""}'"#,
-        );
-        assert::eq(
-            r"struct(key = 'value\\').to_json()",
-            r#"'{"key":"value\\\\"}'"#,
-        );
-        assert::eq(
-            "struct(key = 'value/').to_json()",
-            r#"'{"key":"value\\/"}'"#,
-        );
-        assert::eq(
-            "struct(key = 'value\u{0008}').to_json()",
-            r#"'{"key":"value\\b"}'"#,
-        );
-        assert::eq(
-            "struct(key = 'value\u{000C}').to_json()",
-            r#"'{"key":"value\\f"}'"#,
-        );
-        assert::eq(
-            "struct(key = 'value\\n').to_json()",
-            r#"'{"key":"value\\n"}'"#,
-        );
-        assert::eq(
-            "struct(key = 'value\\r').to_json()",
-            r#"'{"key":"value\\r"}'"#,
-        );
-        assert::eq(
-            "struct(key = 'value\\t').to_json()",
-            r#"'{"key":"value\\t"}'"#,
-        );
-        assert::eq(
-            r#"struct(foo = 42, bar = "some").to_json()"#,
-            r#"'{"foo":42,"bar":"some"}'"#,
-        );
-        assert::eq(
-            r#"struct(foo = struct(bar = "some")).to_json()"#,
-            r#"'{"foo":{"bar":"some"}}'"#,
-        );
-        assert::eq(
-            r#"struct(foo = ["bar/", "some"]).to_json()"#,
-            r#"'{"foo":["bar\\/","some"]}'"#,
-        );
-        assert::eq(
-            r#"struct(foo = [struct(bar = "some")]).to_json()"#,
-            r#"'{"foo":[{"bar":"some"}]}'"#,
+        assert::pass(
+            r#"
+struct(key = None).to_json() == '{"key":null}'
+struct(key = True).to_json() == '{"key":true}'
+struct(key = False).to_json() == '{"key":false}'
+struct(key = 42).to_json() == '{"key":42}'
+struct(key = 'value').to_json() == '{"key":"value"}'
+struct(key = 'value"').to_json() == '{"key":"value\\\""}'
+struct(key = 'value\\').to_json() == '{"key":"value\\\\"}'
+struct(key = 'value/').to_json() == '{"key":"value\\/"}'
+struct(key = 'value\u0008').to_json() == '{"key":"value\\b"}'
+struct(key = 'value\u000C').to_json() == '{"key":"value\\f"}'
+struct(key = 'value\\n').to_json() == '{"key":"value\\n"}'
+struct(key = 'value\\r').to_json() == '{"key":"value\\r"}'
+struct(key = 'value\\t').to_json() == '{"key":"value\\t"}'
+struct(foo = 42, bar = "some").to_json() == '{"foo":42,"bar":"some"}'
+struct(foo = struct(bar = "some")).to_json() == '{"foo":{"bar":"some"}}'
+struct(foo = ["bar/", "some"]).to_json() == '{"foo":["bar\\/","some"]}'
+struct(foo = [struct(bar = "some")]).to_json() == '{"foo":[{"bar":"some"}]}'
+"#,
         );
     }
 }
