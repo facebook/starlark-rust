@@ -309,10 +309,10 @@ impl<'v> Value<'v> {
 
     pub fn add(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let me = self.to_value();
-        if let Some(v) = other.get_aref().radd(other, me, heap) {
+        if let Some(v) = other.get_aref().radd(me, heap) {
             v
         } else {
-            self.get_aref().add(me, other, heap)
+            self.get_aref().add(other, heap)
         }
     }
 

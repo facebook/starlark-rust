@@ -244,17 +244,10 @@ impl<'v> TypedValue<'v> for Box<str> {
         Ok(heap.alloc(v))
     }
 
-    fn add(
-        &self,
-        original: Value<'v>,
-        other: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other_str) = other.unpack_str() {
             if self.is_empty() {
                 Ok(other)
-            } else if other_str.is_empty() {
-                Ok(original)
             } else {
                 Ok(heap.alloc(fast_string::append(self, other_str)))
             }

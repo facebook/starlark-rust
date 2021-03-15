@@ -232,7 +232,7 @@ where
         Ok(self)
     }
 
-    fn add(&self, _original: Value, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
             let mut result = List {
                 content: Vec::new(),

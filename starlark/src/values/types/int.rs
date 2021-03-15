@@ -89,7 +89,7 @@ impl<'v> TypedValue<'v> for PointerI32 {
             .map(Value::new_int)
             .ok_or_else(|| ValueError::IntegerOverflow.into())
     }
-    fn add(&self, _original: Value, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             self.get()
                 .checked_add(other)

@@ -383,12 +383,7 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
 
     /// Add with the arguments the other way around. Should return None
     /// to fall through to normal add.
-    fn radd(
-        &self,
-        _rhs: Value<'v>,
-        _lhs: Value<'v>,
-        _heap: &'v Heap,
-    ) -> Option<anyhow::Result<Value<'v>>> {
+    fn radd(&self, _lhs: Value<'v>, _heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         None
     }
 
@@ -405,7 +400,7 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// (1, 2, 3) + (2, 3) == (1, 2, 3, 2, 3)
     /// # "#);
     /// ```
-    fn add(&self, _lhs: Value<'v>, rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "+", rhs)
     }
 
