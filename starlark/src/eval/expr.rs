@@ -122,7 +122,7 @@ fn eval_call(
                     invoker.push_named(k, kk.to_hashed_value(), expr(context)?)
                 }
                 ArgCompiled::Args(expr) => invoker.push_args(expr(context)?, context.heap),
-                ArgCompiled::KWArgs(expr) => invoker.push_kwargs(expr(context)?, context.heap),
+                ArgCompiled::KWArgs(expr) => invoker.push_kwargs(expr(context)?),
             }
         }
 

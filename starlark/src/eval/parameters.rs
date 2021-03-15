@@ -45,8 +45,8 @@ pub(crate) enum FunctionError {
     ArgsValueIsNotString,
     #[error("The argument provided for *args is not iterable")]
     ArgsArrayIsNotIterable,
-    #[error("The argument provided for **kwargs is not mappable")]
-    KWArgsDictIsNotMappable,
+    #[error("The argument provided for **kwargs is not a dictionary")]
+    KWArgsIsNotDict,
 }
 
 #[derive(Debug, Clone)]
@@ -326,11 +326,9 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
         }
     }
 
-    pub fn kwargs(&mut self, val: Value<'v>, heap: &'v Heap) {
+    pub fn kwargs(&mut self, val: Value<'v>) {
         let res = try {
             match Dict::from_value(val) {
-                // Most times (maybe always?) the keyword arguments are a literal dictionary
-                // so we can iterate through that more quickly
                 Some(y) => {
                     // We know that reservation isn't too memory hungry,
                     // mostly because big maps don't actually properly reserve,
@@ -345,21 +343,7 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
                         }
                     }
                 }
-                // Handle the case where it isn't a dictionary (is that legal in Starlark?)
-                None => match val.iterate(heap) {
-                    Err(..) => Err(FunctionError::KWArgsDictIsNotMappable)?,
-                    Ok(y) => {
-                        for n in &y {
-                            match n.unpack_str() {
-                                None => Err(FunctionError::ArgsValueIsNotString)?,
-                                Some(s) => match val.at(n, heap) {
-                                    Err(_) => Err(FunctionError::KWArgsDictIsNotMappable)?,
-                                    Ok(v) => self.named(s, n.get_hashed()?, v),
-                                },
-                            }
-                        }
-                    }
-                },
+                None => Err(FunctionError::KWArgsIsNotDict)?,
             }
         };
         match res {

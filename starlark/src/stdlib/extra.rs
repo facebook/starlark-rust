@@ -157,7 +157,7 @@ where
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
         let mut inv = self.func.new_invoker(heap)?;
         inv.push_args(self.args.to_value(), heap);
-        inv.push_kwargs(self.kwargs.to_value(), heap);
+        inv.push_kwargs(self.kwargs.to_value());
         Ok(inv)
     }
 

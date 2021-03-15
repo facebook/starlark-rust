@@ -86,11 +86,11 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         }
     }
 
-    pub fn push_kwargs(&mut self, v: Value<'v>, heap: &'v Heap) {
+    pub fn push_kwargs(&mut self, v: Value<'v>) {
         match &mut self.0 {
-            FunctionInvokerInner::Native(x) => x.collect().kwargs(v, heap),
-            FunctionInvokerInner::Def(x) => x.collect().kwargs(v, heap),
-            FunctionInvokerInner::DefFrozen(x) => x.collect().kwargs(v, heap),
+            FunctionInvokerInner::Native(x) => x.collect().kwargs(v),
+            FunctionInvokerInner::Def(x) => x.collect().kwargs(v),
+            FunctionInvokerInner::DefFrozen(x) => x.collect().kwargs(v),
         }
     }
 }
