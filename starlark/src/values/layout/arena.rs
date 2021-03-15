@@ -77,7 +77,7 @@ unsafe fn slice_cast<T, U>(e: &[T]) -> &[U] {
     // We check the slice fits exactly into the new type
     assert_eq!(mem::size_of_val(e) % mem::size_of::<U>(), 0);
     // We check the slice has correct alignment
-    assert_eq!((e.as_ptr() as usize) % mem::align_of::<U>(), 0);
+    assert_eq!(e.as_ptr().align_offset(mem::align_of::<U>()), 0);
     // Now convert
     slice::from_raw_parts(
         e.as_ptr() as *const U,
