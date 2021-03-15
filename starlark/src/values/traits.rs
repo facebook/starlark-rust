@@ -409,15 +409,6 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
         unsupported_with(self, "+", rhs)
     }
 
-    // This API is horrible. See list for the only usage, and justification of why it has to be this way.
-    fn add_assign(
-        &self,
-        _lhs: Value<'v>,
-        other: Value<'v>,
-    ) -> anyhow::Result<Box<dyn FnOnce(&'v Heap) -> anyhow::Result<()> + 'v>> {
-        unsupported_with(self, "+=", other)
-    }
-
     /// Substract `other` from the current value.
     ///
     /// # Examples

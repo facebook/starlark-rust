@@ -28,7 +28,11 @@ use crate::{
         context::Evaluator, scope::Slot, thrw, AssignError, Compiler, EvalCompiled, EvalException,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
-    values::{fast_string, Heap, Value},
+    values::{
+        fast_string,
+        list::{FrozenList, List},
+        Heap, Value, ValueError,
+    },
 };
 use codemap::{Span, Spanned};
 use gazebo::prelude::*;
@@ -259,15 +263,22 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
         }
     }
 
-    let aref = lhs.get_aref();
-    if aref.naturally_mutable() {
-        let upd = aref.add_assign(lhs, rhs)?;
-        mem::drop(aref);
-        // Important we have dropped the aref, since the function might want it mutably
-        upd(heap)?;
-        return Ok(lhs);
+    // The Starlark spec says list += mutates, while nothing else does.
+    // When mutating, be careful we collect first, so we don't have `lhs`
+    // mutably borrowed when we iterate over `rhs`, as they might alias.
+    // We also have to carefully prod frozen lists, in case they are
+    // copy-on-write.
+    if lhs.downcast_ref::<List>().is_some() || lhs.downcast_ref::<FrozenList>().is_some() {
+        let xs = rhs.iterate_collect(heap)?;
+        match List::from_value_mut(lhs, heap)? {
+            None => Err(ValueError::CannotMutateImmutableValue.into()),
+            Some(mut list) => {
+                list.extend(xs);
+                Ok(lhs)
+            }
+        }
     } else {
-        aref.add(lhs, rhs, heap)
+        Value::add(lhs, rhs, heap)
     }
 }
 

@@ -249,33 +249,6 @@ where
         }
     }
 
-    fn add_assign(
-        &self,
-        lhs: Value<'v>,
-        other: Value<'v>,
-    ) -> anyhow::Result<Box<dyn FnOnce(&'v Heap) -> anyhow::Result<()> + 'v>> {
-        // This API isn't beautiful :-(
-        //
-        // We need to have a &self to do dynamic dispatch. That requires us borrowing the value.
-        // We can borrow self mutably, but then if other is the same value, we can't access that.
-        // We can borrow self immutably, but then we need to upgrade it to mutable to do the actual write,
-        // and before doing that write, we need to drop the immutable borrow.
-        //
-        // This API does that magic. Borrow immutably, so we can dispatch to the right instance.
-        // Then return a function which runs after the borrow, and that can reconvert to a mutable borrow
-        // and operate on it.
-        if let Some(other) = List::from_value(other) {
-            // Important we have finished using other, so that we can have exclusive access for content_mut
-            let items = other.iter().collect::<Vec<_>>();
-            Ok(box move |heap| {
-                List::from_value_mut(lhs, heap)?.unwrap().extend(items);
-                Ok(())
-            })
-        } else {
-            unsupported_with(self, "+=", other)
-        }
-    }
-
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
