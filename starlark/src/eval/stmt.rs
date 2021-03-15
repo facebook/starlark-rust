@@ -28,7 +28,7 @@ use crate::{
         context::Evaluator, scope::Slot, thrw, AssignError, Compiler, EvalCompiled, EvalException,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
-    values::{Heap, Value},
+    values::{fast_string, Heap, Value},
 };
 use codemap::{Span, Spanned};
 use gazebo::prelude::*;
@@ -246,6 +246,19 @@ fn before_stmt(span: Span, context: &mut Evaluator) {
 /// Implement lhs += rhs, which is special in Starlark, because lists are mutated,
 /// while all other types are not.
 fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    // Addition of strings is super common, so have a special case
+    if let Some(ls) = lhs.unpack_str() {
+        if let Some(rs) = rhs.unpack_str() {
+            if ls.is_empty() {
+                return Ok(rhs);
+            } else if rs.is_empty() {
+                return Ok(lhs);
+            } else {
+                return Ok(heap.alloc(fast_string::append(ls, rs)));
+            }
+        }
+    }
+
     let aref = lhs.get_aref();
     if aref.naturally_mutable() {
         let upd = aref.add_assign(lhs, rhs)?;
