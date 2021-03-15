@@ -66,24 +66,23 @@ impl<T> Arena<T> {
     }
 }
 
-// Copied from https://github.com/FaultyRAM/slice-cast/blob/master/src/lib.rs
+// Originally copied from https://github.com/FaultyRAM/slice-cast/blob/master/src/lib.rs
 // After the author yanked every version in existence :(
 // https://github.com/FaultyRAM/slice-cast/issues/1
-//
-// We added ADDITION to confirm alignment is correct and avoid UB.
 unsafe fn slice_cast<T, U>(e: &[T]) -> &[U] {
     use std::{mem, slice};
-    if mem::size_of_val(e) == 0 {
-        slice::from_raw_parts(e.as_ptr() as *const U, 0)
-    } else {
-        assert_eq!(mem::size_of_val(e) % mem::size_of::<U>(), 0);
-        // ADDITION: Additional test to check for correct alignment
-        assert_eq!((e.as_ptr() as usize) % mem::align_of::<U>(), 0);
-        slice::from_raw_parts(
-            e.as_ptr() as *const U,
-            mem::size_of_val(e) / mem::size_of::<U>(),
-        )
-    }
+    // We could deal with ZST, but we don't need it, so simplify.
+    assert_ne!(mem::size_of::<T>(), 0);
+    assert_ne!(mem::size_of::<U>(), 0);
+    // We check the slice fits exactly into the new type
+    assert_eq!(mem::size_of_val(e) % mem::size_of::<U>(), 0);
+    // We check the slice has correct alignment
+    assert_eq!((e.as_ptr() as usize) % mem::align_of::<U>(), 0);
+    // Now convert
+    slice::from_raw_parts(
+        e.as_ptr() as *const U,
+        mem::size_of_val(e) / mem::size_of::<U>(),
+    )
 }
 
 impl<T> Drop for Arena<T> {
