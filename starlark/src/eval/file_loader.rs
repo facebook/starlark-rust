@@ -20,19 +20,20 @@
 
 use crate::environment::FrozenModule;
 use anyhow::anyhow;
+use gazebo::prelude::*;
 use std::collections::HashMap;
 
 /// A trait for loading file using the load statement path.
 pub trait FileLoader {
     /// Open the file given by the load statement `path`.
-    fn load(&self, path: &str) -> anyhow::Result<&FrozenModule>;
+    fn load(&self, path: &str) -> anyhow::Result<FrozenModule>;
 }
 
 /// File loader which returns error unconditionally.
 pub(crate) struct NoLoadFileLoader;
 
 impl FileLoader for NoLoadFileLoader {
-    fn load(&self, _path: &str) -> anyhow::Result<&FrozenModule> {
+    fn load(&self, _path: &str) -> anyhow::Result<FrozenModule> {
         Err(anyhow!("ErrorFileLoader does not support loading"))
     }
 }
@@ -43,9 +44,9 @@ pub struct ReturnFileLoader<'a> {
 }
 
 impl<'a> FileLoader for ReturnFileLoader<'a> {
-    fn load(&self, path: &str) -> anyhow::Result<&FrozenModule> {
+    fn load(&self, path: &str) -> anyhow::Result<FrozenModule> {
         match self.modules.get(path) {
-            Some(v) => Ok(v),
+            Some(v) => Ok(v.dupe()),
             None => Err(anyhow!(
                 "ReturnFileLoader does not know the module `{}`",
                 path

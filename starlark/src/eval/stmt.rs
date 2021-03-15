@@ -453,7 +453,7 @@ impl Compiler<'_> {
                         .map_err(EvalException::Error)?;
                     let modu = context.assert_module_env();
                     for (new_name, orig_name, span) in &symbols {
-                        let value = thrw(modu.load_symbol(loadenv, orig_name), *span, context)?;
+                        let value = thrw(modu.load_symbol(&loadenv, orig_name), *span, context)?;
                         match new_name {
                             Slot::Local(slot) => context.set_slot_local(*slot, value),
                             Slot::Module(slot) => context.set_slot_module(*slot, value),
