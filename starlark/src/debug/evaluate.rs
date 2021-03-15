@@ -30,6 +30,9 @@ use std::{collections::HashMap, mem};
 pub fn evaluate<'v>(code: String, ctx: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
     let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
 
+    // We are doing a lot of funky stuff here. It's amazing anything works, so let's not push our luck with GC.
+    ctx.disable_gc();
+
     // Everything must be evaluated with the current heap (or we'll lose memory), which means
     // the current module (ctx.module_env).
     // We also want access to the module variables (fine), the locals (need to move them over),
