@@ -251,7 +251,9 @@ impl<'v> TypedValue<'v> for Box<str> {
     /// # Example
     ///
     /// ```rust
-    /// starlark::assert::eq("'abc' + 'def'", "'abcdef'");
+    /// # starlark::assert::all_true(r#"
+    /// 'abc' + 'def' == 'abcdef'
+    /// # "#);
     /// ```
     fn add(
         &self,
@@ -279,7 +281,9 @@ impl<'v> TypedValue<'v> for Box<str> {
     /// # Example
     ///
     /// ```rust
-    /// starlark::assert::eq("'abc' * 3", "'abcabcabc'");
+    /// # starlark::assert::all_true(r#"
+    /// 'abc' * 3 == 'abcabcabc'
+    /// # "#);
     /// ```
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {

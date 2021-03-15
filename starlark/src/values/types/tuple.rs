@@ -211,7 +211,9 @@ where
     /// # Example
     ///
     /// ```rust
-    /// starlark::assert::eq("(1, 2, 3) + (2, 3)", "(1, 2, 3, 2, 3)");
+    /// # starlark::assert::all_true(r#"
+    /// (1, 2, 3) + (2, 3) == (1, 2, 3, 2, 3)
+    /// # "#);
     /// ```
     fn add(&self, _original: Value, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = Tuple::from_value(other) {
@@ -237,7 +239,9 @@ where
     /// # Example
     ///
     /// ```rust
-    /// starlark::assert::eq("(1, 2, 3) * 3", "(1, 2, 3, 1, 2, 3, 1, 2, 3)");
+    /// # starlark::assert::all_true(r#"
+    /// (1, 2, 3) * 3 == (1, 2, 3, 1, 2, 3, 1, 2, 3)
+    /// # "#);
     /// ```
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {

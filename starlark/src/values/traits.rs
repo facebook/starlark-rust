@@ -252,16 +252,13 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// // Remove the first element:
-    /// starlark::assert::eq("'abc'[1:]", "'bc'");
-    /// // Remove the last element:
-    /// starlark::assert::eq("'abc'[:-1]", "'ab'");
-    /// // Remove the first and the last element:
-    /// starlark::assert::eq("'abc'[1:-1]", "'b'");
-    /// // Select one element out of 2, skipping the first
-    /// starlark::assert::eq("'banana'[1::2]", "'aaa'");
-    /// // Select one element out of 2 in reverse order, starting at index 4:
-    /// starlark::assert::eq("'banana'[4::-2]", "'nnb'");
+    /// # starlark::assert::all_true(r#"
+    /// 'abc'[1:] == 'bc'         # Remove the first element
+    /// 'abc'[:-1] == 'ab'        # Remove the last element
+    /// 'abc'[1:-1] == 'b'        # Remove the first and the last element
+    /// 'banana'[1::2] == 'aaa'   # Select one element out of 2, skipping the first
+    /// 'banana'[4::-2] == 'nnb'  # Select one element out of 2 in reverse order, starting at index 4
+    /// # "#);
     /// ```
     fn slice(
         &self,
@@ -328,9 +325,11 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("'a' in 'abc'", "True");
-    /// starlark::assert::eq("'b' in 'abc'", "True");
-    /// starlark::assert::eq("'z' in 'abc'", "False");
+    /// # starlark::assert::all_true(r#"
+    /// ('a' in 'abc') == True
+    /// ('b' in 'abc') == True
+    /// ('z' in 'abc') == False
+    /// # "#);
     /// ```
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
         unsupported_owned(other.get_type(), "in", Some(self.get_type()))
@@ -341,7 +340,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("+1", "1");
+    /// # starlark::assert::all_true(r#"
+    /// +1 == 1
+    /// # "#);
     /// ```
     fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported(self, "+")
@@ -352,7 +353,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("-(1)", "-1");
+    /// # starlark::assert::all_true(r#"
+    /// -(1) == -1
+    /// # "#);
     /// ```
     fn minus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported(self, "-")
@@ -375,7 +378,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("1 + 2", "3");
+    /// # starlark::assert::all_true(r#"
+    /// 1 + 2 == 3
+    /// # "#);
     /// ```
     fn add(&self, _lhs: Value<'v>, rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "+", rhs)
@@ -395,7 +400,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("1 - 2", "-1");
+    /// # starlark::assert::all_true(r#"
+    /// 1 - 2 == -1
+    /// # "#);
     /// ```
     fn sub(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "-", other)
@@ -406,7 +413,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("2 * 3", "6");
+    /// # starlark::assert::all_true(r#"
+    /// 2 * 3 == 6
+    /// # "#);
     /// ```
     fn mul(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "*", other)
@@ -431,7 +440,9 @@ pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
     /// # Examples
     ///
     /// ```rust
-    /// starlark::assert::eq("7 // 2", "3");
+    /// # starlark::assert::all_true(r#"
+    /// 7 // 2 == 3
+    /// # "#);
     /// ```
     fn floor_div(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         unsupported_with(self, "//", other)

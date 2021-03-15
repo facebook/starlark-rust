@@ -155,10 +155,12 @@ where
     ///
     /// # Examples:
     /// ```rust
-    /// starlark::assert::eq("repr([1,2,3])", "'[1, 2, 3]'");
-    /// starlark::assert::eq("repr([1,[2,3]])", "'[1, [2, 3]]'");
-    /// starlark::assert::eq("repr([1])", "'[1]'");
-    /// starlark::assert::eq("repr([])", "'[]'");
+    /// # starlark::assert::all_true(r#"
+    /// repr([1,2,3]) == '[1, 2, 3]'
+    /// repr([1,[2,3]]) == '[1, [2, 3]]'
+    /// repr([1]) == '[1]'
+    /// repr([]) == '[]'
+    /// # "#);
     /// ```
     fn collect_repr(&self, s: &mut String) {
         s.push('[');
@@ -248,7 +250,9 @@ where
     /// # Example
     ///
     /// ```rust
-    /// starlark::assert::eq("[1, 2, 3] + [2, 3]", "[1, 2, 3, 2, 3]");
+    /// # starlark::assert::all_true(r#"
+    /// [1, 2, 3] + [2, 3] == [1, 2, 3, 2, 3]
+    /// # "#);
     /// ```
     fn add(&self, _original: Value, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
@@ -301,7 +305,9 @@ where
     /// # Example
     ///
     /// ```rust
-    /// starlark::assert::eq("[1, 2, 3] * 3", "[1, 2, 3, 1, 2, 3, 1, 2, 3]");
+    /// # starlark::assert::all_true(r#"
+    /// [1, 2, 3] * 3 == [1, 2, 3, 1, 2, 3, 1, 2, 3]
+    /// # "#);
     /// ```
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
@@ -323,12 +329,13 @@ where
     /// Set the value at `index` to `alloc_value`
     ///
     /// # Example
-    /// ```
-    /// starlark::assert::eq("[1, 1, [2, 3]]", r#"
+    /// ```rust
+    /// # starlark::assert::is_true(r#"
     /// v = [1, 2, 3]
     /// v[1] = 1
     /// v[2] = [2,3]
-    /// v"#);
+    /// v == [1, 1, [2, 3]]
+    /// # "#);
     /// ```
     fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let i = convert_index(index, self.len() as i32)? as usize;
