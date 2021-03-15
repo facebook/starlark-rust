@@ -487,21 +487,6 @@ pub fn is_true_with(module_name: &str, module_contents: &str, program: &str) {
     a.is_true(program)
 }
 
-/// A program that must fail with an error message that contains a specific
-/// string, which has access to an external module.
-///
-/// ```
-/// starlark::assert::fail_with("x", "def f():\n    fail('hello')", r#"
-/// load("x", "f")
-/// f()
-/// "#, "hell");
-/// ```
-pub fn fail_with(module_name: &str, module_contents: &str, program: &str, msg: &str) {
-    let mut a = Assert::new();
-    a.module(module_name, module_contents);
-    a.fail(program, msg);
-}
-
 /// A program that must execute successfully without an exception. Often uses
 /// assert_eq. Returns the resulting value.
 ///

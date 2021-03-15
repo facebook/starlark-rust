@@ -355,7 +355,7 @@ impl<'v, T: ValueLike<'v>> TypedIterable<'v> for ListGen<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert;
+    use crate::assert::{self, Assert};
 
     #[test]
     fn test_to_str() {
@@ -404,30 +404,23 @@ v1 == [1, 2, 4] and v2 == [1, 2, 4]
 
     #[test]
     fn test_mutating_imports() {
-        let module = r#"
+        let mut a = Assert::new();
+        a.module(
+            "x",
+            r#"
 frozen_list = [1, 2]
 frozen_list += [4]
 def frozen_list_result():
     return frozen_list
 def list_result():
     return [1, 2, 4]
-"#;
-        assert::fail_with(
-            "x",
-            module,
-            "load('x','frozen_list')\nfrozen_list += [1]",
-            "Immutable",
+"#,
         );
-        assert::fail_with(
-            "x",
-            module,
+        a.fail("load('x','frozen_list')\nfrozen_list += [1]", "Immutable");
+        a.fail(
             "load('x','frozen_list_result')\nx = frozen_list_result()\nx += [1]",
             "Immutable",
         );
-        assert::is_true_with(
-            "x",
-            module,
-            "load('x','list_result')\nx = list_result()\nx += [8]\nx == [1, 2, 4, 8]",
-        );
+        a.is_true("load('x','list_result')\nx = list_result()\nx += [8]\nx == [1, 2, 4, 8]");
     }
 }
