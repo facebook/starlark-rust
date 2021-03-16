@@ -241,6 +241,39 @@
 //! # }
 //! # fn main(){ run().unwrap(); }
 //! ```
+//!
+//! ## Call a Starlark function from Rust
+//!
+//! You can extract functions from Starlark, and call them from Rust, using `eval_function`.
+//!
+//! ```
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::environment::{Globals, Module};
+//! use starlark::eval::Evaluator;
+//! use starlark::syntax::{AstModule, Dialect};
+//! use starlark::values::Value;
+//!
+//! let content = r#"
+//! def quadratic(a, b, c, x):
+//!     return a*x*x + b*x + c
+//! quadratic
+//! "#;
+//!
+//! let ast = AstModule::parse("quadratic.star", content.to_owned(), &Dialect::Extended)?;
+//! let globals = Globals::default();
+//! let module = Module::new();
+//! let mut eval = Evaluator::new(&module, &globals);
+//! let quad = eval.eval_module(ast)?;
+//! let res = eval.eval_function(
+//!     quad,
+//!     &[Value::new_int(4), Value::new_int(2), Value::new_int(1)],
+//!     &[("x", Value::new_int(8))],
+//! )?;
+//! assert_eq!(res.unpack_int(), Some(273));
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
 
 // Features we use
 #![feature(backtrace)]
