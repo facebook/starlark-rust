@@ -761,8 +761,8 @@ pub(crate) fn string_members(builder: &mut GlobalsBuilder) {
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·lstrip
     /// ): trim leading whitespaces.
     ///
-    /// `S.lstrip()` returns a copy of the string S with leading whitespace
-    /// removed.
+    /// `S.lstrip()` returns a copy of the string S with leading whitespace removed.
+    /// In most cases instead of passing an argument you should use `removeprefix`.
     ///
     /// Examples:
     ///
@@ -989,8 +989,8 @@ pub(crate) fn string_members(builder: &mut GlobalsBuilder) {
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·rstrip
     /// ): trim trailing whitespace.
     ///
-    /// `S.rstrip()` returns a copy of the string S with trailing whitespace
-    /// removed.
+    /// `S.rstrip()` returns a copy of the string S with trailing whitespace removed.
+    /// In most cases instead of passing an argument you should use `removesuffix`.
     ///
     /// Examples:
     ///
@@ -1246,6 +1246,56 @@ pub(crate) fn string_members(builder: &mut GlobalsBuilder) {
     /// ```
     fn upper(this: &str) -> String {
         Ok(this.to_uppercase())
+    }
+
+    /// [string.removeprefix](
+    /// https://docs.python.org/3.9/library/stdtypes.html#str.removeprefix
+    /// ): remove a prefix from a string. _Not part of standard Starlark._
+    ///
+    /// If the string starts with the prefix string, return `string[len(prefix):]`.
+    /// Otherwise, return a copy of the original string:
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// # starlark::assert::all_true(r#"
+    /// "Hello, World!".removeprefix("Hello") == ", World!"
+    /// "Hello, World!".removeprefix("Goodbye") == "Hello, World!"
+    /// "Hello".removeprefix("Hello") == ""
+    /// # "#);
+    /// ```
+    fn removeprefix(this: Value<'v>, prefix: &str) -> Value<'v> {
+        let x = this.unpack_str().unwrap();
+        if x.starts_with(prefix) && !prefix.is_empty() {
+            Ok(heap.alloc(&x[prefix.len()..]))
+        } else {
+            Ok(this)
+        }
+    }
+
+    /// [string.removesuffix](
+    /// https://docs.python.org/3.9/library/stdtypes.html#str.removesuffix
+    /// ): remove a prefix from a string. _Not part of standard Starlark._
+    ///
+    /// If the string starts with the prefix string, return `string[len(prefix):]`.
+    /// Otherwise, return a copy of the original string:
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// # starlark::assert::all_true(r#"
+    /// "Hello, World!".removesuffix("World!") == "Hello, "
+    /// "Hello, World!".removesuffix("World") == "Hello, World!"
+    /// "Hello".removesuffix("Hello") == ""
+    /// # "#);
+    /// ```
+    fn removesuffix(this: Value<'v>, suffix: &str) -> Value<'v> {
+        let x = this.unpack_str().unwrap();
+        if x.ends_with(suffix) && !suffix.is_empty() {
+            Ok(heap.alloc(&x[..x.len() - suffix.len()]))
+        } else {
+            Ok(this)
+        }
     }
 }
 
