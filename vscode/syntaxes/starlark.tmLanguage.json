@@ -165,11 +165,11 @@
                 },
                 {
                     "name": "keyword.control.flow.starlark",
-                    "match": "\\b(?<!\\.)(break|continue|elif|else|for|if|pass|return)\\b"
+                    "match": "\\b(?<!\\.)(break|continue|elif|else|for|if|pass|return|lambda)\\b"
                 },
                 {
                     "name": "invalid.illegal.keyword.starlark",
-                    "match": "\\b(?<!\\.)(as|class|del|except|finally|from|global|import|is|lambda|nonlocal|raise|try|while|with|yield)\\b"
+                    "match": "\\b(?<!\\.)(as|class|del|except|finally|from|global|import|is|nonlocal|raise|try|while|with|yield)\\b"
                 }
             ]
         },
