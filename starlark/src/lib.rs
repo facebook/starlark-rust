@@ -274,6 +274,67 @@
 //! # }
 //! # fn main(){ run().unwrap(); }
 //! ```
+//!
+//! ## Defining Rust objects that are used from Starlark
+//!
+//! Finally, we can define our own types in Rust which live in the Starlark heap.
+//! Such types are relatively complex, see the details at `TypedValue`.
+//!
+//! ```
+//! # fn run() -> anyhow::Result<()> {
+//! use starlark::environment::{Globals, Module};
+//! use starlark::eval::Evaluator;
+//! use starlark::syntax::{AstModule, Dialect};
+//! use starlark::values::{unsupported_with, Heap, ImmutableValue, TypedValue, Value};
+//! use starlark::{starlark_type, starlark_immutable_value};
+//!
+//! // Define complex numbers
+//! #[derive(Debug, PartialEq, Eq)]
+//! struct Complex {
+//!     real: i32,
+//!     imaginary: i32,
+//! }
+//! starlark_immutable_value!(Complex);
+//!
+//! impl<'v> TypedValue<'v> for Complex {
+//!     starlark_type!("complex");
+//!
+//!     // How we display them
+//!     fn collect_repr(&self, collector: &mut String) {
+//!         collector.push_str(&format!("{} + {}i", self.real, self.imaginary))
+//!     }
+//!
+//!     // How we add them
+//!     fn add(&self, rhs: Value<'v>, heap: &'v Heap)
+//!             -> anyhow::Result<Value<'v>> {
+//!         if let Some(rhs) = rhs.downcast_ref::<Self>() {
+//!             Ok(heap.alloc(Complex {
+//!                 real: self.real + rhs.real,
+//!                 imaginary: self.imaginary + rhs.imaginary,
+//!             }))
+//!         } else {
+//!             unsupported_with(self, "+", rhs)
+//!         }
+//!     }
+//! }
+//!
+//! let content = "str(a + b)";
+//!
+//! let ast = AstModule::parse("complex.star", content.to_owned(), &Dialect::Standard)?;
+//! let globals = Globals::default();
+//! let module = Module::new();
+//! // We inject some complex numbers into the module before we start.
+//! let a = module.heap().alloc(Complex {real: 1, imaginary: 8});
+//! module.set("a", a);
+//! let b = module.heap().alloc(Complex {real: 4, imaginary: 2});
+//! module.set("b", b);
+//! let mut eval = Evaluator::new(&module, &globals);
+//! let res = eval.eval_module(ast)?;
+//! assert_eq!(res.unpack_str(), Some("5 + 10i"));
+//! # Ok(())
+//! # }
+//! # fn main(){ run().unwrap(); }
+//! ```
 
 // Features we use
 #![feature(backtrace)]
