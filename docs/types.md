@@ -28,8 +28,7 @@ Types match using the following rules:
 * Most constructor functions provide a `.type` property to obtain the type they produce, allowing `int.type`, `bool.type` and `str.type` etc.
 * Any string starting with an underscore `_`, e.g. `"_a"` means anything - but the name is often used as a hint to say where types go in polymorhpic functions.
 * The type `None` means the result must be `None`.
-* The empty list `[]` means any list, regardless of what is inside.
-* The singleton list `[t]` means a list where each element must be of type `t`. The type `[""]` is equivalent to `[]`.
+* The singleton list `[t]` means a list where each element must be of type `t`. If you want a list of any types, use `[""]`.
 * Multiple element lists `[t1,t2]` are OR types, where the value must be either type `t1` OR type `t2`.
 * A tuple `(t1, t2, t3)` matches tuples of the same length (3 in this case), where each element of the value must match the corresponding element of the tuple.
 * A dictionary `{l1: t1, l2: t2}` must contain labels `l1` and `l2` with the corresponding types `t1` and `t2`, but can contain any additional labels with no constraints on their values. As a consequence, `{}` means any dictionary.
