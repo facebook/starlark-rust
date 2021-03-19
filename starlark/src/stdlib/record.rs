@@ -39,7 +39,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
-    /// rec_type = record(host=String, port=Int)
+    /// rec_type = record(host=str.type, port=int.type)
     /// rec = rec_type(host="localhost", port=80)
     /// rec.port == 80
     /// # "#);
@@ -63,7 +63,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
-    /// rec_type = record(host=field(String), port=field(type=Int), mask=field(Int, default=255))
+    /// rec_type = record(host=field(str.type), port=field(type=int.type), mask=field(int.type, default=255))
     /// rec = rec_type(host="localhost", port=80)
     /// rec.port == 80
     /// rec.mask == 255
@@ -82,7 +82,7 @@ mod tests {
     fn test_record() {
         assert::pass(
             r#"
-rec_type = record(host=String, port=Int)
+rec_type = record(host=str.type, port=int.type)
 rec1 = rec_type(host = "test", port=80)
 rec2 = rec_type(host = "test", port=90)
 assert_eq(rec1, rec1)
@@ -94,42 +94,42 @@ assert_eq(dir(rec1), ["host", "port"])
         );
         assert::fails(
             r#"
-rec_type = record(host=String, port=Int)
+rec_type = record(host=str.type, port=int.type)
 rec_type(host=1, port=80)
 "#,
             &["`1`", "`string`", "`host`"],
         );
         assert::fails(
             r#"
-rec_type = record(host=String, port=Int)
+rec_type = record(host=str.type, port=int.type)
 rec_type(port=80)
 "#,
             &["Missing parameter", "`host`"],
         );
         assert::fails(
             r#"
-rec_type = record(host=String, port=Int)
+rec_type = record(host=str.type, port=int.type)
 rec_type(host="localhost", port=80, mask=255)
 "#,
             &["extra named", "mask"],
         );
         assert::pass(
             r#"
-rec_type = record(host=String, port=Int)
+rec_type = record(host=str.type, port=int.type)
 def foo(x: rec_type.type) -> "rec_type":
     return x
 foo(rec_type(host="localhost", port=80))"#,
         );
         assert::pass(
             r#"
-v = [record(host=String, port=Int)]
+v = [record(host=str.type, port=int.type)]
 def foo(x: v[0].type) -> "record":
     return x
 foo(v[0](host="localhost", port=80))"#,
         );
         assert::pass(
             r#"
-rec_type = record(host=String, port=field(Int, 80), mask=Int)
+rec_type = record(host=str.type, port=field(int.type, 80), mask=int.type)
 assert_eq(rec_type(host="localhost", mask=255), rec_type(host="localhost", port=80, mask=255))"#,
         );
     }

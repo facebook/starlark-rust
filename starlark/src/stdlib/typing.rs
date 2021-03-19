@@ -18,41 +18,11 @@
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
-    values::{
-        bool::BOOL_VALUE_TYPE_NAME, dict::Dict, function::FUNCTION_VALUE_TYPE_NAME,
-        int::INT_VALUE_TYPE_NAME, list::List, none::NoneType, range::Range,
-        string::STRING_VALUE_TYPE_NAME, structs::Struct, tuple::Tuple, Value,
-    },
+    values::{none::NoneType, Value},
 };
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    const Any: &str = "";
-    const Void: &str = "void";
-    const Bool: &str = BOOL_VALUE_TYPE_NAME;
-    const Int: &str = INT_VALUE_TYPE_NAME;
-    const String: &str = STRING_VALUE_TYPE_NAME;
-    const Function: &str = FUNCTION_VALUE_TYPE_NAME;
-    const List: &str = List::TYPE;
-    const Tuple: &str = Tuple::TYPE;
-    const Dict: &str = Dict::TYPE;
-    const Struct: &str = Struct::TYPE;
-    const Range: &str = Range::TYPE;
-
-    #[allow(non_snake_case)]
-    fn Union(args: Vec<Value>) -> Value<'v> {
-        match args.len() {
-            0 => Ok(heap.alloc("void")),
-            1 => Ok(args[0]),
-            _ => Ok(heap.alloc(args)),
-        }
-    }
-
-    #[allow(non_snake_case)]
-    fn Nullable(x: Value) -> Vec<Value<'v>> {
-        Ok(vec![x, Value::new_none()])
-    }
-
     fn assert_type(v: Value, ty: Value) -> NoneType {
         v.check_type(ty, Some("v"))?;
         Ok(NoneType)
@@ -72,7 +42,7 @@ mod tests {
         let a = assert::Assert::new();
         a.is_true(
             r#"
-def f(i: Int) -> Bool:
+def f(i: int.type) -> bool.type:
     return i == 3
 f(8) == False"#,
         );
@@ -83,17 +53,17 @@ f(8) == False"#,
 
         // Type errors should be caught in arguments
         a.fails(
-            "def f(i: Bool):\n pass\nf(1)",
+            "def f(i: bool.type):\n pass\nf(1)",
             &["type annotation", "`1`", "`int`", "`bool`", "`i`"],
         );
         // Type errors should be caught in return positions
         a.fails(
-            "def f() -> Bool:\n return 1\nf()",
+            "def f() -> bool.type:\n return 1\nf()",
             &["type annotation", "`1`", "`bool`", "`int`", "return"],
         );
         // And for functions without return
         a.fails(
-            "def f() -> Bool:\n pass\nf()",
+            "def f() -> bool.type:\n pass\nf()",
             &["type annotation", "`None`", "`bool`", "return"],
         );
         // And for functions that return None implicitly or explicitly
@@ -106,31 +76,31 @@ f(8) == False"#,
         // The following are all valid types
         a.all_true(
             r#"
-is_type(1, Int)
-is_type(True, Bool)
-is_type(True, Any)
+is_type(1, int.type)
+is_type(True, bool.type)
+is_type(True, "")
 is_type(None, None)
-is_type(assert_type, Function)
-is_type([], [Int])
-is_type([], [Any])
-is_type([1, 2, 3], [Int])
-is_type(None, Nullable(Int))
-is_type('test', Union(Int, String))
-is_type(('test', None), (String, None))
-is_type({1: 'test'}, {1: String})
-is_type({1: 'test', 2: False}, {1: String})
-is_type({"test": 1, "more": 2}, {"": Int})
+is_type(assert_type, "function")
+is_type([], [int.type])
+is_type([], [""])
+is_type([1, 2, 3], [int.type])
+is_type(None, [None, int.type])
+is_type('test', [int.type, str.type])
+is_type(('test', None), (str.type, None))
+is_type({1: 'test'}, {1: str.type})
+is_type({1: 'test', 2: False}, {1: str.type})
+is_type({"test": 1, "more": 2}, {"": int.type})
 
 not is_type(1, None)
-not is_type((1, 1), String)
-not is_type({1: 'test'}, {2: Bool})
-not is_type({1: 'test'}, {1: Bool})
-not is_type('test', Union(Int, Bool))
-not is_type([1,2,None], [Int])
-not is_type({"test": 1, 8: 2}, {"": Int})
-not is_type({"test": 1, "more": None}, {"": Int})
+not is_type((1, 1), str.type)
+not is_type({1: 'test'}, {2: bool.type})
+not is_type({1: 'test'}, {1: bool.type})
+not is_type('test', [int.type, bool.type])
+not is_type([1,2,None], [int.type])
+not is_type({"test": 1, 8: 2}, {"": int.type})
+not is_type({"test": 1, "more": None}, {"": int.type})
 
-is_type(1, "_")
+is_type(1, "")
 is_type([1,2,"test"], ["_a"])
 "#,
         );

@@ -70,7 +70,7 @@ pub fn add_extra_functions(builder: &mut GlobalsBuilder) {
     extra::global(builder)
 }
 
-/// Add type constants like `String` and `Int` to the global environment.
+/// Add operations to assert type matching.
 pub fn add_typing(builder: &mut GlobalsBuilder) {
     typing::global(builder)
 }
