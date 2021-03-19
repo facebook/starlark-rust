@@ -23,10 +23,14 @@ use crate::{
     collections::SmallMap,
     environment::GlobalsBuilder,
     values::{
+        bool::BOOL_VALUE_TYPE_NAME,
         dict::Dict,
         function::{NativeAttribute, WrappedMethod},
+        int::INT_VALUE_TYPE_NAME,
+        list::List,
         none::NoneType,
         range::Range,
+        string::STRING_VALUE_TYPE_NAME,
         tuple::Tuple,
         Heap, Value,
     },
@@ -151,6 +155,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// bool("1") == True
     /// # "#);
     /// ```
+    #[starlark_type(BOOL_VALUE_TYPE_NAME)]
     fn bool(ref x @ false: Value) -> bool {
         Ok(x.to_bool())
     }
@@ -214,6 +219,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// x == {'a': 1} and y == {'x': 2, 'a': 1}
     /// # "#);
     /// ```
+    #[starlark_type(Dict::TYPE)]
     fn dict(ref a: Option<Value>, kwargs: Value) -> Value<'v> {
         match a {
             // Save to skip regenerating as we know that kwargs will always be a copy
@@ -414,6 +420,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// int("hello")   # error: not a valid number
     /// # "#, "not a valid number");
     /// ```
+    #[starlark_type(INT_VALUE_TYPE_NAME)]
     fn int(ref a: Option<Value>, base: Option<Value>) -> i32 {
         if a.is_none() {
             return Ok(0);
@@ -534,6 +541,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// list("strings are not iterable") # error: not supported
     /// # "#, "not supported");
     /// ```
+    #[starlark_type(List::TYPE)]
     fn list(ref a: Option<Value>) -> Vec<Value<'v>> {
         let mut l = Vec::new();
         if let Some(a) = a {
@@ -730,6 +738,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// list(range(10, 3, -2))                  == [10, 8, 6, 4]
     /// # "#);
     /// ```
+    #[starlark_type(Range::TYPE)]
     fn range(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> Range {
         let start = match a2 {
             None => 0,
@@ -860,6 +869,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// str([1, "x"])                   == "[1, \"x\"]"
     /// # "#);
     /// ```
+    #[starlark_type(STRING_VALUE_TYPE_NAME)]
     fn str(ref a: Value) -> Value<'v> {
         if a.unpack_str().is_some() {
             // Special case that can avoid reallocating, but should be equivalent.
@@ -881,6 +891,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// tuple() == ()
     /// tuple([1,2,3]) == (1, 2, 3)
     /// # "#);
+    #[starlark_type(Tuple::TYPE)]
     fn tuple(ref a: Option<Value>) -> Tuple<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {

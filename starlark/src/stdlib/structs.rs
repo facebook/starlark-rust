@@ -39,6 +39,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
     /// "port" in dir(struct(host='localhost', port=80))
     /// # "#);
     /// ```
+    #[starlark_type(Struct::TYPE)]
     fn r#struct(kwargs: SmallMap<String, Value>) -> Struct<'v> {
         Ok(Struct { fields: kwargs })
     }
