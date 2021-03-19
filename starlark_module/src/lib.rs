@@ -23,7 +23,7 @@ extern crate proc_macro;
 
 use gazebo::prelude::*;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::*;
 
 // The output for the example below should be:
@@ -179,18 +179,45 @@ fn is_attribute_attribute(x: &Attribute) -> bool {
     x.path.is_ident("attribute")
 }
 
+fn is_attribute_type(x: &Attribute) -> Option<impl ToTokens> {
+    if x.path.is_ident("starlark_type") {
+        if let Ok(Meta::List(MetaList { nested, .. })) = x.parse_meta() {
+            if nested.len() == 1 {
+                return Some(nested.first().unwrap().clone());
+            }
+        }
+        panic!(
+            "Couldn't parse attribute `{:?}`. Expected `#[starlark_type(\"my_type\")]`",
+            x
+        )
+    } else {
+        None
+    }
+}
+
+/// (#[attribute], #[starlark_type(x)], rest)
+fn process_attributes(xs: &[Attribute]) -> (bool, Option<impl ToTokens>, Vec<&Attribute>) {
+    let mut rest = Vec::with_capacity(xs.len());
+    let mut attribute = false;
+    let mut typ = None;
+    for x in xs {
+        if is_attribute_attribute(x) {
+            attribute = true;
+        } else if let Some(t) = is_attribute_type(x) {
+            typ = Some(t);
+        } else {
+            rest.push(x);
+        }
+    }
+    (attribute, typ, rest)
+}
+
 // Add a function to the `GlobalsModule` named `globals_builder`.
 fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
     let name = &func.sig.ident;
     let name_string = name.to_string();
     let name_str = name_string.trim_start_match("r#");
-
-    let attrs = &func
-        .attrs
-        .iter()
-        .filter(|x| !is_attribute_attribute(x))
-        .collect::<Vec<_>>();
-    let is_attribute = attrs.len() != func.attrs.len();
+    let (is_attribute, has_type, attrs) = process_attributes(&func.attrs);
 
     let return_type = match &func.sig.output {
         ReturnType::Default => panic!("Function named '{}' must have a return type", name),
@@ -209,6 +236,14 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
                 #name_str,
                 starlark::values::function::NativeAttribute::new(func),
             );
+        }
+    } else if let Some(typ) = has_type {
+        quote! {
+            static TYPE: starlark::values::ConstFrozenValue =
+                starlark::values::ConstFrozenValue::new(#typ);
+            let mut func = starlark::values::function::NativeFunction::new(#name, signature);
+            func.set_type(&TYPE);
+            globals_builder.set(#name_str, func);
         }
     } else {
         quote! {

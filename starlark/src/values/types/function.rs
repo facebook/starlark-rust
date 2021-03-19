@@ -23,8 +23,9 @@ use crate::{
     },
     stdlib::UnpackValue,
     values::{
-        AllocFrozenValue, AllocValue, Freezer, FrozenHeap, FrozenValue, Hashed, Heap,
-        ImmutableValue, MutableValue, TypedValue, Value, ValueError, ValueLike, Walker,
+        unsupported, AllocFrozenValue, AllocValue, ConstFrozenValue, Freezer, FrozenHeap,
+        FrozenValue, Hashed, Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueError,
+        ValueLike, Walker,
     },
 };
 use codemap::Span;
@@ -203,6 +204,7 @@ pub struct NativeFunction<F: NativeFunc> {
     #[derivative(Debug = "ignore")]
     function: F,
     parameters: Parameters<FrozenValue>,
+    typ: Option<FrozenValue>,
 }
 
 unsafe impl<'a, F: NativeFunc> AnyLifetime<'a> for NativeFunction<F> {
@@ -227,7 +229,12 @@ impl<
         NativeFunction {
             function,
             parameters,
+            typ: None,
         }
+    }
+
+    pub fn set_type(&mut self, typ: &'static ConstFrozenValue) {
+        self.typ = Some(typ.unpack())
     }
 }
 
@@ -261,6 +268,23 @@ impl<'v, F: NativeFunc> TypedValue<'v> for NativeFunction<F> {
                 x.as_dyn_any().downcast_ref::<Self>().unwrap()
             })),
         )))
+    }
+
+    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if let Some(s) = &self.typ {
+            if attribute == "type" {
+                return Ok(s.to_value());
+            }
+        }
+        unsupported(self, &format!(".{}", attribute))
+    }
+
+    fn dir_attr(&self) -> Vec<String> {
+        if self.typ.is_some() {
+            vec!["type".to_owned()]
+        } else {
+            Vec::new()
+        }
     }
 }
 
