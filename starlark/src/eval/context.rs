@@ -226,8 +226,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         &mut self,
         name: &str,
         value: Value<'v>,
+        heap: &'v Heap,
     ) -> anyhow::Result<()> {
         if self.is_module_scope {
+            value.export_as(name, heap);
             self.module_env.set(name, value);
             Ok(())
         } else {
