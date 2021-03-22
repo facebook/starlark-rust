@@ -15,5 +15,5 @@ proc-macro = true
 proc-macro2 = "1.0"
 syn = {version = "1.0.33", features = ["full"]}
 # @oss-disable: gazebo = { path = "../../gazebo/gazebo", features =  ["str_pattern_extensions"] }
-gazebo = { git = "https://github.com/facebookincubator/gazebo", features =  ["str_pattern_extensions"] } # @oss-enable
+gazebo = {version = "0.2.0", features =  ["str_pattern_extensions"] } # @oss-enable
 quote = "1.0.3"

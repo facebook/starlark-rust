@@ -37,7 +37,7 @@ static_assertions = "1.1.0"
 thiserror = "1.0.9"
 starlark_module = { path = "../starlark_module" }
 # @oss-disable: gazebo = { path = "../../gazebo/gazebo", features =  ["str_pattern_extensions"] }
-gazebo = { git = "https://github.com/facebookincubator/gazebo", features =  ["str_pattern_extensions"] } # @oss-enable
+gazebo = {version = "0.2.0", features =  ["str_pattern_extensions"] } # @oss-enable
 # @oss-disable: linter = { path = "../../linter/linter" }
 structopt = "0.3.0"
 walkdir = "2.3"
