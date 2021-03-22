@@ -103,9 +103,7 @@ impl Compiler<'_> {
                 },
                 Slot::Module(slot) => box move |value, context| {
                     // Make sure that `MutableValue`s get their name as soon as possible
-                    if let Some(mut mv) = value.get_ref_mut_already() {
-                        mv.export_as(context.heap, &ident.node)
-                    }
+                    value.export_as(&ident.node, context.heap);
                     context.set_slot_module(slot, value);
                     Ok(())
                 },

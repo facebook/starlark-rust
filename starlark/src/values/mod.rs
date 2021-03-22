@@ -466,4 +466,11 @@ impl<'v> Value<'v> {
             format!("# {} = {}", name, self.to_repr())
         }
     }
+
+    /// Call `export_as` on the underlying value, but only if the type is mutable.
+    pub fn export_as(self, name: &str, heap: &'v Heap) {
+        if let Some(mut mv) = self.get_ref_mut_already() {
+            mv.export_as(heap, name)
+        }
+    }
 }
