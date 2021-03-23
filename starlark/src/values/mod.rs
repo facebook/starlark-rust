@@ -217,7 +217,10 @@ impl<'v, V: ValueLike<'v>> Hashed<V> {
 impl<'v> Hashed<Value<'v>> {
     fn freeze(&self, freezer: &Freezer) -> Hashed<FrozenValue> {
         // Safe because we know frozen values have the same hash as non-frozen ones
-        Hashed::new_unchecked(self.hash(), self.key().freeze(freezer))
+        let key = self.key().freeze(freezer);
+        // But it's an easy mistake to make, so actually check it in debug
+        debug_assert_eq!(Some(self.hash()), key.get_hashed().ok().map(|x| x.hash()));
+        Hashed::new_unchecked(self.hash(), key)
     }
 }
 
