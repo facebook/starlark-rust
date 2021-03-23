@@ -124,7 +124,7 @@ impl<'v> MutableValue<'v> for Partial<Value<'v>> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.func);
         walker.walk(&mut self.args);
         walker.walk(&mut self.kwargs);

@@ -362,7 +362,7 @@ impl<'v> MutableValue<'v> for WrappedMethod<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.method);
         walker.walk(&mut self.self_obj);
     }

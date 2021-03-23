@@ -72,7 +72,7 @@ impl<'v> Field<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.typ);
         if let Some(mut d) = self.default {
             walker.walk(&mut d)
@@ -117,7 +117,7 @@ impl<'v> MutableValue<'v> for Field<'v> {
         box (*self).freeze(freezer)
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.walk(walker)
     }
 }
@@ -163,7 +163,7 @@ impl<'v> MutableValue<'v> for RecordType<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.fields.values_mut().for_each(|v| v.walk(walker));
     }
 
@@ -282,7 +282,7 @@ impl<'v> MutableValue<'v> for Record<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.typ);
         self.values.iter_mut().for_each(|v| walker.walk(v));
     }

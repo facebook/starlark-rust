@@ -147,7 +147,7 @@ impl<'v> MutableValue<'v> for Dict<'v> {
         box FrozenDict { content }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.content.iter_mut().for_each(|(k, v)| {
             walker.walk_dictionary_key(k);
             walker.walk(v);

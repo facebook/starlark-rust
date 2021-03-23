@@ -249,7 +249,7 @@ impl<'v> MutableValue<'v> for Def<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.parameters.walk(walker);
         for (_, _, v) in self.parameter_types.iter_mut() {
             walker.walk(v)

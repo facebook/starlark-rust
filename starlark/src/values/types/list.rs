@@ -74,7 +74,7 @@ impl<'v> MutableValue<'v> for List<'v> {
         box FrozenList { content }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.content.iter_mut().for_each(|x| walker.walk(x))
     }
 }

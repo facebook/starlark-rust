@@ -81,7 +81,7 @@ impl<'v> MutableValue<'v> for Struct<'v> {
         box FrozenStruct { fields: frozen }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.fields.values_mut().for_each(|v| walker.walk(v))
     }
 }

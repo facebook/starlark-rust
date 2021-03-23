@@ -92,7 +92,7 @@ impl<'v> MutableValue<'v> for Tuple<'v> {
         box FrozenTuple { content: frozen }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.content.iter_mut().for_each(|x| walker.walk(x))
     }
 }

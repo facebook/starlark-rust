@@ -72,7 +72,7 @@ impl<'v> MutableValue<'v> for EnumType<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.elements.iter_mut().for_each(|(k, v)| {
             walker.walk_dictionary_key(k);
             walker.walk(v);
@@ -95,7 +95,7 @@ impl<'v> MutableValue<'v> for EnumValue<'v> {
         }
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.typ);
         walker.walk(&mut self.value);
     }

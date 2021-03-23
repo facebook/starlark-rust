@@ -71,8 +71,9 @@ impl<'v, T: TypedValue<'v> + AnyLifetime<'v>> AsTypedValue<'v> for T {
 pub trait MutableValue<'v>: TypedValue<'v> {
     fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv>;
 
-    // Must walk over every Value contained in the data structure
-    fn walk(&mut self, walker: &Walker<'v>);
+    /// Called by the garbage collection, and must walk over every contained `Value` in the type.
+    /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
+    unsafe fn walk(&mut self, walker: &Walker<'v>);
 
     // Called when exporting a value under a specific name,
     // only applies to things that are naturally_mutable().

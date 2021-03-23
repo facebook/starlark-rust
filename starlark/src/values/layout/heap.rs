@@ -373,9 +373,13 @@ impl<'v> Walker<'v> {
 
         match &mut old_mem {
             ValueMem::Ref(x) => self.walk_cell(x),
-            ValueMem::Mutable(x) => x.borrow_mut().walk(self),
+            ValueMem::Mutable(x) => unsafe {
+                x.borrow_mut().walk(self)
+            },
             ValueMem::ThawOnWrite(x) => x.walk(self),
-            ValueMem::Pseudo(x) => x.walk(self),
+            ValueMem::Pseudo(x) => unsafe {
+                x.walk(self)
+            },
             _ => {} // Doesn't contain Value pointers
         }
         unsafe {

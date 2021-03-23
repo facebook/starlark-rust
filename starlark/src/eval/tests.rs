@@ -770,7 +770,7 @@ fn test_export_as() {
             self
         }
 
-        fn walk(&mut self, _walker: &Walker) {}
+        unsafe fn walk(&mut self, _walker: &Walker) {}
 
         fn export_as(&mut self, _heap: &Heap, variable_name: &str) {
             self.named = variable_name.to_owned();
