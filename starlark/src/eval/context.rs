@@ -20,6 +20,7 @@ use crate::{
     environment::{
         slots::LocalSlots, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
+    errors::Diagnostic,
     eval::call_stack::CallStack,
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
@@ -124,8 +125,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         if self.profiling {
             self.heap.record_call_enter(function);
         }
-        // Make sure we always call .pop regardless
-        let res = within(self);
+        // Must always call .pop regardless
+        let res = within(self).map_err(|e| {
+            Diagnostic::modify(e, |d: &mut Diagnostic| {
+                // Make sure we capture the call_stack before popping things off it
+                d.set_call_stack(|| self.call_stack.to_diagnostic_frames());
+            })
+        });
         self.call_stack.pop();
         if self.profiling {
             self.heap.record_call_exit();
