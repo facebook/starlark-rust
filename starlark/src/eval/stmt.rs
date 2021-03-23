@@ -222,6 +222,9 @@ impl Compiler<'_> {
 //
 // For the moment we only GC when executing a statement at the root of the
 // module, which we know is safe with respect to all three conditions.
+//
+// We also require that `extra_v` is None, since otherwise the user might have
+// additional values stashed somewhere.
 fn before_stmt(span: Span, context: &mut Evaluator) {
     if let Some(f) = context.on_stmt {
         f(span, context)
@@ -234,6 +237,7 @@ fn before_stmt(span: Span, context: &mut Evaluator) {
     if context.is_module_scope
         && !context.disable_gc
         && context.heap.allocated_bytes() >= context.last_heap_size + GC_THRESHOLD
+        && context.extra_v.is_none()
     {
         // When we are at a module scope (as checked above) the context contains
         // references to all values, so walking covers everything and the unsafe

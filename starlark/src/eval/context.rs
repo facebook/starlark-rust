@@ -66,7 +66,8 @@ pub struct Evaluator<'v, 'a> {
     pub on_stmt: Option<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     /// Field that can be used for any purpose you want (can store types you define)
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
-    /// Field that can be used for any purpose you want (can store heap-resident `Value<'v>`)
+    /// Field that can be used for any purpose you want (can store heap-resident `Value<'v>`).
+    /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
 }
 
