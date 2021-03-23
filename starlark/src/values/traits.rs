@@ -69,17 +69,19 @@ impl<'v, T: TypedValue<'v> + AnyLifetime<'v>> AsTypedValue<'v> for T {
 }
 
 pub trait MutableValue<'v>: TypedValue<'v> {
+    /// Freeze a value. The frozen value _must_ be equal to the original,
+    /// and produce the same hash.
     fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv>;
 
     /// Called by the garbage collection, and must walk over every contained `Value` in the type.
     /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
     unsafe fn walk(&mut self, walker: &Walker<'v>);
 
-    // Called when exporting a value under a specific name,
-    // only applies to things that are naturally_mutable().
-    // The naturally_mutable constraint occurs because other variables
-    // aren't stored in a RefCell, and thus can't be
-    // easily/safely converted to a &mut as this function requires.
+    /// Called when exporting a value under a specific name,
+    /// only applies to things that are naturally_mutable().
+    /// The naturally_mutable constraint occurs because other variables
+    /// aren't stored in a RefCell, and thus can't be
+    /// easily/safely converted to a &mut as this function requires.
     fn export_as(&mut self, _heap: &'v Heap, _variable_name: &str) {
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users
