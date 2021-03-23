@@ -19,7 +19,6 @@
 
 use crate as starlark;
 use crate::{
-    collections::SmallMap,
     environment::GlobalsBuilder,
     values::{
         dict::{Dict, RefDict},
@@ -311,39 +310,32 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x == {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
     /// # "#);
     /// ```
-    fn update(this: Value, ref pairs: Option<Value>, kwargs: SmallMap<&str, Value>) -> NoneType {
+    fn update(this: Value, ref pairs: Option<Value>, kwargs: RefDict) -> NoneType {
+        let mut this = Dict::from_value_mut(this, heap)?.unwrap();
         if let Some(pairs) = pairs {
-            match pairs.get_type() {
-                "list" => {
-                    for v in &pairs.iterate(heap)? {
-                        if v.length()? != 2 {
-                            return Err(anyhow!(
-                                "dict.update expect a list of pairs or a dictionary as first argument, got a list of non-pairs.",
-                            ));
-                        };
-                        this.set_at(
-                            v.at(Value::new_int(0), heap)?,
-                            v.at(Value::new_int(1), heap)?,
-                            heap,
-                        )?;
-                    }
+            if let Some(dict) = Dict::from_value(pairs) {
+                for (k, v) in dict.iter_hashed() {
+                    this.content.insert_hashed(k, v);
                 }
-                "dict" => {
-                    for k in &pairs.iterate(heap)? {
-                        this.set_at(k, pairs.at(k, heap)?, heap)?
-                    }
-                }
-                x => {
-                    return Err(anyhow!(
-                        "dict.update expect a list or a dictionary as first argument, got a value of type {}.",
-                        x
-                    ));
+            } else {
+                for v in &pairs.iterate(heap)? {
+                    let it = v.iterate(heap)?;
+                    let mut it = it.into_iter();
+                    let k = it.next();
+                    let v = if k.is_some() { it.next() } else { None };
+                    if v.is_none() || it.next().is_some() {
+                        return Err(anyhow!(
+                            "dict.update expect a list of pairs or a dictionary as first argument, got a list of non-pairs.",
+                        ));
+                    };
+                    this.content
+                        .insert_hashed(k.unwrap().get_hashed()?, v.unwrap());
                 }
             }
         }
 
-        for (k, v) in kwargs.into_iter() {
-            this.set_at(heap.alloc(k), v, heap)?;
+        for (k, v) in kwargs.content.iter_hashed() {
+            this.content.insert_hashed(k.unborrow_copy(), *v);
         }
         Ok(NoneType)
     }
