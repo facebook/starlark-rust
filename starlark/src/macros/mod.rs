@@ -73,7 +73,7 @@ macro_rules! starlark_value {
             }
 
             impl<'v> $x<'v> {
-                pub fn from_value(x: $crate::values::Value<'v>) -> Option<gazebo::cell::ARef<'v, $x<'v>>> {
+                pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x<'v>>> {
                     fn promote<'v>(x: & [< Frozen $x >]) -> & $x<'v> {
                         unsafe {
                             // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
@@ -82,7 +82,7 @@ macro_rules! starlark_value {
                     }
 
                     x.downcast_ref::< [< Frozen $x >] >()
-                        .map(|o| gazebo::cell::ARef::map(o, |e| promote(e)))
+                        .map(|o| $crate::values::ARef::map(o, |e| promote(e)))
                         .or_else(|| x.downcast_ref::<$x<'v>>())
                 }
 
@@ -94,7 +94,7 @@ macro_rules! starlark_value {
                 }
             }
 
-            $v struct [< Ref $x >]<'v>(pub gazebo::cell::ARef<'v, $x<'v>>);
+            $v struct [< Ref $x >]<'v>(pub $crate::values::ARef<'v, $x<'v>>);
 
             impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
                 fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
@@ -135,12 +135,12 @@ macro_rules! starlark_immutable_value {
             impl<'v> $crate::values::ImmutableValue<'v> for $x {}
 
             impl<'v> $x {
-                pub fn from_value(x: $crate::values::Value<'v>) -> Option<gazebo::cell::ARef<'v, $x>> {
+                pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {
                     x.downcast_ref::< $x >()
                 }
             }
 
-            $v struct [< Ref $x >]<'v>(pub gazebo::cell::ARef<'v, $x>);
+            $v struct [< Ref $x >]<'v>(pub $crate::values::ARef<'v, $x>);
 
             impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
                 fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {

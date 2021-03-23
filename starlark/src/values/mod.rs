@@ -35,7 +35,7 @@ use crate::{
     collections::{Hashed, SmallHashResult},
     values::types::function::FunctionInvoker,
 };
-use gazebo::{any::AnyLifetime, cell::ARef};
+pub use gazebo::{any::AnyLifetime, cell::ARef};
 use indexmap::Equivalent;
 use std::{
     cell::RefMut,
