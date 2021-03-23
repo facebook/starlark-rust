@@ -1251,7 +1251,7 @@ r = [y(), mk()]
 #[test]
 fn test_not_in_unhashable() {
     // Note that [] can't be hashed
-    assert::fail("[] not in {123: 456}", "not hashable")
+    assert::fail("[] not in {123: 456}", "not hashable");
 }
 
 #[test]

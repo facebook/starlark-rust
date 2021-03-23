@@ -257,7 +257,7 @@ fn test_lexer_error_messages() {
     // Do they have good error messages and span locations.
     fn f(program: &str, msg: &str) {
         assert::parse_fail(program);
-        assert::fail(&program.replace('!', ""), msg)
+        assert::fail(&program.replace('!', ""), msg);
     }
 
     f("unknown !$!&%+ operator", "invalid input `$`");

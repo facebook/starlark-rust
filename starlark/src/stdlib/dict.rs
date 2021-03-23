@@ -174,7 +174,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::fail(r#"
     /// {'one': 1}.pop('four')   # error: not found
-    /// # "#, "not found")
+    /// # "#, "not found");
     /// ```
     fn pop(this: Value, ref key: Value, default: Option<Value>) -> Value<'v> {
         let mut me = Dict::from_value_mut(this, heap)?.unwrap();
@@ -223,7 +223,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::fail(r#"
     /// {}.popitem()   # error: empty dict
-    /// # "#, "empty dict")
+    /// # "#, "empty dict");
     /// ```
     fn popitem(this: Value) -> (Value<'v>, Value<'v>) {
         let mut this = Dict::from_value_mut(this, heap)?.unwrap();

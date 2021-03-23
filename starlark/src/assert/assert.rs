@@ -499,8 +499,8 @@ pub fn eq(lhs: &str, rhs: &str) {
 /// ```
 /// starlark::assert::fail("fail('hello')", "ello");
 /// ```
-pub fn fail(program: &str, msg: &str) {
-    Assert::new().fail(program, msg);
+pub fn fail(program: &str, msg: &str) -> anyhow::Error {
+    Assert::new().fail(program, msg)
 }
 
 /// A program that must fail with an error message that contains a specific
@@ -512,8 +512,8 @@ pub fn fail(program: &str, msg: &str) {
 /// ```
 /// starlark::assert::fails("fail('hello')", &["fail", "ello"]);
 /// ```
-pub fn fails(program: &str, msgs: &[&str]) {
-    Assert::new().fails(program, msgs);
+pub fn fails(program: &str, msgs: &[&str]) -> anyhow::Error {
+    Assert::new().fails(program, msgs)
 }
 
 /// A program that must be true.
