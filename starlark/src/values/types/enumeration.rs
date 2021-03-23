@@ -25,6 +25,7 @@ use crate::{
         Freezer, Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueLike, Walker,
     },
 };
+use derivative::Derivative;
 use gazebo::{any::AnyLifetime, cell::ARef};
 use thiserror::Error;
 
@@ -46,9 +47,12 @@ pub struct EnumTypeGen<V> {
     elements: SmallMap<V, V>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct EnumValueGen<V> {
-    typ: V,     // Must be EnumType it points back to (so it can get the type)
+    // Must ignore value.typ or type.elements, since they are circular
+    #[derivative(Debug = "ignore")]
+    typ: V, // Must be EnumType it points back to (so it can get the type)
     value: V,   // The value of this enumeration
     index: i32, // The index in the enumeration
 }

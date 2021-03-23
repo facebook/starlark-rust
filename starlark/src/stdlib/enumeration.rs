@@ -103,5 +103,11 @@ assert_eq(str(enum_type), "enum(\"option1\", \"option2\")")
 assert_eq(str(x), "\"option1\"")
 "#,
         );
+        assert::pass(
+            r#"
+enum_type = enum("option1","option2")
+repr(enum_type) # Check it is finite
+"#,
+        );
     }
 }
