@@ -16,13 +16,13 @@
  */
 
 use crate::{
+    codemap::{CodeMap, Span},
     errors::Diagnostic,
     syntax::{
         cursors::{CursorBytes, CursorChars},
         dialect::Dialect,
     },
 };
-use codemap::{CodeMap, Span};
 use gazebo::dupe::Dupe;
 use logos::Logos;
 use std::{char, collections::VecDeque, fmt, fmt::Display, sync::Arc};

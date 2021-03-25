@@ -19,6 +19,7 @@
 //! All run using the [extended_environment].
 use crate::{
     self as starlark,
+    codemap::CodeMap,
     collections::SmallMap,
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::{eprint_error, Diagnostic},
@@ -31,7 +32,6 @@ use crate::{
     values::{none::NoneType, structs::Struct, OwnedFrozenValue, Value},
 };
 use anyhow::anyhow;
-use codemap::CodeMap;
 use gazebo::prelude::*;
 use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};

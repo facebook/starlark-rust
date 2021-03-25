@@ -18,6 +18,7 @@
 //! Implementation of `def`.
 
 use crate::{
+    codemap::CodeMap,
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
         context::Evaluator,
@@ -32,7 +33,6 @@ use crate::{
         ValueLike, ValueRef, Walker,
     },
 };
-use codemap::CodeMap;
 use derivative::Derivative;
 use gazebo::{cell::ARef, prelude::*};
 use std::sync::Arc;

@@ -368,12 +368,12 @@ extern crate gazebo;
 extern crate starlark_module;
 #[macro_use]
 extern crate maplit;
-
 #[macro_use]
 mod macros;
 
 pub mod analysis;
 pub mod assert;
+pub mod codemap;
 pub mod collections;
 pub mod debug;
 pub mod environment;

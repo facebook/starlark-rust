@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-use crate::syntax::{
-    ast::{AssignOp, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt},
-    AstModule,
+use crate::{
+    codemap::Span,
+    syntax::{
+        ast::{AssignOp, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt},
+        AstModule,
+    },
 };
-use codemap::Span;
 use gazebo::prelude::*;
 use std::collections::HashMap;
 

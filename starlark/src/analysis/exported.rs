@@ -15,8 +15,10 @@
  * limitations under the License.
  */
 
-use crate::syntax::{ast::Stmt, AstModule};
-use codemap::SpanLoc;
+use crate::{
+    codemap::SpanLoc,
+    syntax::{ast::Stmt, AstModule},
+};
 use indexmap::IndexMap;
 
 // Which symbols are exported by a module

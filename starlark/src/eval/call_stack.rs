@@ -25,10 +25,10 @@
 //   up, in eval_call.
 
 use crate::{
+    codemap::{CodeMap, Span, SpanLoc},
     errors::Frame,
     values::{Value, ValueError, Walker},
 };
-use codemap::{CodeMap, Span, SpanLoc};
 use std::{cell::Cell, fmt, fmt::Debug, sync::Arc};
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve

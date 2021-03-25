@@ -17,7 +17,7 @@
 
 //! AST for parsed starlark files.
 
-use codemap::{CodeMap, Span, Spanned};
+use crate::codemap::{CodeMap, Span, Spanned};
 use derivative::Derivative;
 use gazebo::prelude::*;
 use static_assertions::assert_eq_size;

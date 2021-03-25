@@ -17,6 +17,7 @@
 
 pub use crate::eval::file_loader::FileLoader;
 use crate::{
+    codemap::{CodeMap, Span, SpanLoc},
     environment::{
         slots::LocalSlots, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
@@ -24,7 +25,6 @@ use crate::{
     eval::call_stack::CallStack,
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
-use codemap::{CodeMap, Span, SpanLoc};
 use gazebo::any::AnyLifetime;
 use std::{mem, sync::Arc};
 

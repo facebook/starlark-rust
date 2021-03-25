@@ -18,6 +18,7 @@
 //! AST for parsed starlark files.
 
 use crate::{
+    codemap::{CodeMap, Spanned},
     errors::Diagnostic,
     syntax::{
         ast::{
@@ -26,7 +27,6 @@ use crate::{
         Dialect,
     },
 };
-use codemap::{CodeMap, Spanned};
 use gazebo::prelude::*;
 use std::{collections::HashSet, sync::Arc};
 use thiserror::Error;

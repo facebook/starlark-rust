@@ -17,6 +17,7 @@
 
 //! Function as a TypedValue
 use crate::{
+    codemap::Span,
     eval::{
         def::{DefInvoker, DefInvokerFrozen},
         Evaluator, Parameters, ParametersCollect,
@@ -28,7 +29,6 @@ use crate::{
         ValueLike, Walker,
     },
 };
-use codemap::Span;
 use derivative::Derivative;
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use std::slice::Iter;

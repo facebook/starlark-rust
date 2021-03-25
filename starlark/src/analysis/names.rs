@@ -21,12 +21,12 @@ use crate::{
         bind::{Assigner, Bind, Scope},
         types::{LintT, LintWarning},
     },
+    codemap::{CodeMap, Span},
     syntax::{
         ast::{AstStmt, Expr, Stmt},
         AstModule,
     },
 };
-use codemap::{CodeMap, Span};
 use gazebo::{prelude::*, variants::VariantName};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;

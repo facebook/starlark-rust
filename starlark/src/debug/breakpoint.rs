@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-use crate::syntax::{
-    ast::{AstStmt, Stmt},
-    AstModule,
+use crate::{
+    codemap::Span,
+    syntax::{
+        ast::{AstStmt, Stmt},
+        AstModule,
+    },
 };
-use codemap::Span;
 
 fn go(x: &AstStmt, res: &mut Vec<Span>) {
     match &**x {

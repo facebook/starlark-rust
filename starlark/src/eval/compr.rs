@@ -18,12 +18,12 @@
 //! List/dict/set comprenension evaluation.
 
 use crate::{
+    codemap::Span,
     collections::SmallMap,
     eval::{context::Evaluator, stmt::AssignCompiled, thrw, Compiler, EvalCompiled, EvalException},
     syntax::ast::{AstExpr, Clause, ForClause},
     values::{dict::Dict, Value},
 };
-use codemap::Span;
 use std::mem;
 
 impl Compiler<'_> {

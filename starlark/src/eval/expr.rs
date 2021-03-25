@@ -17,6 +17,7 @@
 
 //! Evaluation of an expression.
 use crate::{
+    codemap::{Span, Spanned},
     collections::{Hashed, SmallMap},
     environment::EnvironmentError,
     errors::Diagnostic,
@@ -27,7 +28,6 @@ use crate::{
         FrozenValue, *,
     },
 };
-use codemap::{Span, Spanned};
 use either::Either;
 use function::{FunctionInvoker, NativeAttribute};
 use gazebo::prelude::*;

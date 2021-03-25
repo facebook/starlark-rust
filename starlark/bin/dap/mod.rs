@@ -16,12 +16,17 @@
  */
 
 use crate::eval::{dialect, globals, Context};
-use codemap::{Span, SpanLoc};
 use debugserver_types::*;
 use gazebo::prelude::*;
 pub use library::*;
 use serde_json::{Map, Value};
-use starlark::{debug, environment::Module, eval::Evaluator, syntax::AstModule};
+use starlark::{
+    codemap::{Span, SpanLoc},
+    debug,
+    environment::Module,
+    eval::Evaluator,
+    syntax::AstModule,
+};
 use std::{
     collections::{HashMap, HashSet},
     mem,

@@ -17,12 +17,12 @@
 
 use crate::{
     analysis::types::{FileSpanLoc, LintT, LintWarning},
+    codemap::{CodeMap, Span, Spanned},
     syntax::{
         ast::{AstExpr, AstLiteral, AstStmt, Expr, Stmt},
         AstModule,
     },
 };
-use codemap::{CodeMap, Span, Spanned};
 use gazebo::variants::VariantName;
 use thiserror::Error;
 

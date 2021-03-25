@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
+use crate::codemap::{CodeMap, Span, SpanLoc};
 use annotate_snippets::{
     display_list::{DisplayList, FormatOptions},
     snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
 };
 use anyhow::anyhow;
-use codemap::{CodeMap, Span, SpanLoc};
 use std::{
     error::Error,
     fmt::{self, Display, Formatter},

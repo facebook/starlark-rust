@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use codemap::{CodeMap, LineCol, Span, SpanLoc};
+use crate::codemap::{CodeMap, LineCol, Span, SpanLoc};
 use gazebo::variants::VariantName;
 use std::fmt::{self, Display};
 

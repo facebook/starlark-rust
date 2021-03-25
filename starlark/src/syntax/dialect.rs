@@ -15,8 +15,11 @@
  * limitations under the License.
  */
 
-use crate::{errors::Diagnostic, syntax::ast::Visibility};
-use codemap::{CodeMap, Span, Spanned};
+use crate::{
+    codemap::{CodeMap, Span, Spanned},
+    errors::Diagnostic,
+    syntax::ast::Visibility,
+};
 use gazebo::prelude::*;
 use std::sync::Arc;
 use thiserror::Error;

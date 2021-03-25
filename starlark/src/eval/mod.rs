@@ -23,6 +23,7 @@
 //! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
+    codemap::{CodeMap, Span},
     environment::{slots::LocalSlots, Globals},
     errors::Diagnostic,
     eval::scope::Scope,
@@ -30,7 +31,6 @@ use crate::{
     values::{FrozenHeap, Value, ValueRef},
 };
 use anyhow::anyhow;
-use codemap::{CodeMap, Span};
 use gazebo::prelude::*;
 use std::{fmt::Debug, mem, sync::Arc};
 use thiserror::Error;

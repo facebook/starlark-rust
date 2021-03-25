@@ -16,6 +16,7 @@
  */
 
 use crate::{
+    codemap::{CodeMap, Span, SpanLoc},
     errors::Diagnostic,
     syntax::{
         ast::{AstModule, AstStmt, Stmt},
@@ -24,7 +25,6 @@ use crate::{
         lexer::{Lexer, Token},
     },
 };
-use codemap::{CodeMap, Span, SpanLoc};
 use gazebo::prelude::*;
 use lalrpop_util as lu;
 use std::{fs, path::Path, sync::Arc};

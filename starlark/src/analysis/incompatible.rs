@@ -17,12 +17,12 @@
 
 use crate::{
     analysis::types::{LintT, LintWarning},
+    codemap::{CodeMap, Span, SpanLoc},
     syntax::{
         ast::{AssignOp, AstExpr, AstStmt, AstString, BinOp, Expr, Stmt},
         AstModule,
     },
 };
-use codemap::{CodeMap, Span, SpanLoc};
 use gazebo::variants::VariantName;
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
