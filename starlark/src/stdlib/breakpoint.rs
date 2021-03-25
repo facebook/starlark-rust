@@ -26,12 +26,21 @@ use std::sync::Mutex;
 
 // A breakpoint takes over the console UI, so having two going at once confuses everything.
 // Have a global mutex to ensure one at a time.
-static BREAKPOINT_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static BREAKPOINT_MUTEX: Lazy<Mutex<State>> = Lazy::new(|| Mutex::new(State::Allow));
 
+/// Is debugging allowed or not? After the user hits Ctrl-C they probably
+/// just want to stop hard, so don't keep dropping them into breakpoints.
+#[derive(PartialEq, Eq)]
+enum State {
+    Allow, // More breakpoints are fine
+    Stop,  // No more breakpoints
+}
+
+/// We've run a breakpoint command, what should we do.
 enum Next {
-    Again,
-    Resume,
-    Fail,
+    Again,  // Accept another breakpoint command
+    Resume, // Continue running
+    Fail,   // Stop running
 }
 
 fn cmd_help(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
@@ -109,7 +118,7 @@ fn pick_command(x: &str) -> Option<fn(ctx: &mut Evaluator) -> anyhow::Result<Nex
     None
 }
 
-fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<()> {
+fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<State> {
     let mut rl = Editor::<()>::new();
     loop {
         let readline = rl.readline("$> ");
@@ -120,7 +129,7 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<()> {
                     if let Some(cmd) = pick_command(line.trim_end()) {
                         match cmd(ctx)? {
                             Next::Again => {}
-                            Next::Resume => return Ok(()),
+                            Next::Resume => return Ok(State::Allow),
                             Next::Fail => return Err(anyhow!("Selected :fail at breakpoint()")),
                         }
                     }
@@ -136,7 +145,7 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<()> {
                 }
             }
             // User pressed EOF - disconnected terminal, or similar
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => return Ok(()),
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => return Ok(State::Stop),
             Err(err) => return Err(err.into()),
         }
     }
@@ -146,9 +155,11 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<()> {
 pub fn global(builder: &mut GlobalsBuilder) {
     fn breakpoint() -> NoneType {
         {
-            let _guard = BREAKPOINT_MUTEX.lock().unwrap();
-            eprintln!("BREAKPOINT HIT! :resume to continue, :help for all options");
-            breakpoint_loop(ctx)?;
+            let mut guard = BREAKPOINT_MUTEX.lock().unwrap();
+            if *guard == State::Allow {
+                eprintln!("BREAKPOINT HIT! :resume to continue, :help for all options");
+                *guard = breakpoint_loop(ctx)?;
+            }
         }
         Ok(NoneType)
     }
