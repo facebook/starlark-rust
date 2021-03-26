@@ -115,7 +115,7 @@ impl<'v> AllocValue<'v> for Partial<Value<'v>> {
 }
 
 impl<'v> MutableValue<'v> for Partial<Value<'v>> {
-    fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
         box Partial {
             func: self.func.freeze(freezer),
             args: self.args.freeze(freezer),

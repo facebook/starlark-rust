@@ -762,10 +762,7 @@ fn test_export_as() {
     }
 
     impl MutableValue<'_> for Exporter {
-        fn freeze<'fv>(
-            mut self: Box<Self>,
-            _freezer: &'fv Freezer,
-        ) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+        fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
             self.mutable = false;
             self
         }

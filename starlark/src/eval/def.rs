@@ -231,7 +231,7 @@ impl<'v> AllocValue<'v> for FrozenDef {
 }
 
 impl<'v> MutableValue<'v> for Def<'v> {
-    fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
         let parameters = self.parameters.freeze(freezer);
         let parameter_types = self
             .parameter_types

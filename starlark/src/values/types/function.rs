@@ -355,7 +355,7 @@ impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
 }
 
 impl<'v> MutableValue<'v> for WrappedMethod<'v> {
-    fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
         box WrappedMethodGen {
             method: self.method.freeze(freezer),
             self_obj: self.self_obj.freeze(freezer),

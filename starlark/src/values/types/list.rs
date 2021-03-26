@@ -66,7 +66,7 @@ impl FrozenList {
 }
 
 impl<'v> MutableValue<'v> for List<'v> {
-    fn freeze<'fv>(self: Box<Self>, freezer: &'fv Freezer) -> Box<dyn ImmutableValue<'fv> + 'fv> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
         let mut content = Vec::with_capacity(self.content.len());
         for v in self.content {
             content.push(v.freeze(freezer))
