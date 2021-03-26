@@ -49,8 +49,8 @@ impl<'v, T: AllocValue<'v>> AllocValue<'v> for Vec<T> {
     }
 }
 
-impl<'v, T: AllocFrozenValue<'v>> AllocFrozenValue<'v> for Vec<T> {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
+impl<'v, T: AllocFrozenValue> AllocFrozenValue for Vec<T> {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_immutable(FrozenList {
             content: self.into_map(|x| x.alloc_frozen_value(heap)),
         })

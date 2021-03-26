@@ -119,7 +119,7 @@ impl GlobalsBuilder {
         }))
     }
 
-    pub fn set<'v, V: AllocFrozenValue<'v>>(&'v mut self, name: &str, value: V) {
+    pub fn set<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
         let name = name.to_owned();
         let value = value.alloc_frozen_value(&self.heap);
         match &mut self.struct_fields {
@@ -128,7 +128,7 @@ impl GlobalsBuilder {
         };
     }
 
-    pub fn alloc<'v, V: AllocFrozenValue<'v>>(&'v self, value: V) -> FrozenValue {
+    pub fn alloc<'v, V: AllocFrozenValue>(&'v self, value: V) -> FrozenValue {
         value.alloc_frozen_value(&self.heap)
     }
 }

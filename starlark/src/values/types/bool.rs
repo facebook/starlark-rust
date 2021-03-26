@@ -32,8 +32,8 @@ impl<'v> AllocValue<'v> for bool {
     }
 }
 
-impl<'v> AllocFrozenValue<'v> for bool {
-    fn alloc_frozen_value(self, _heap: &'v FrozenHeap) -> FrozenValue {
+impl AllocFrozenValue for bool {
+    fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
         FrozenValue::new_bool(self)
     }
 }

@@ -275,14 +275,14 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     }
 }
 
-impl<'v> AllocFrozenValue<'v> for String {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
+impl AllocFrozenValue for String {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_str(self.into_boxed_str())
     }
 }
 
-impl<'v, 'a> AllocFrozenValue<'v> for &'a str {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
+impl<'v, 'a> AllocFrozenValue for &'a str {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_str(Box::from(self))
     }
 }

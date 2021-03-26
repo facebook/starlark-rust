@@ -31,8 +31,8 @@ impl<'v> AllocValue<'v> for i32 {
         Value::new_int(self)
     }
 }
-impl<'v> AllocFrozenValue<'v> for i32 {
-    fn alloc_frozen_value(self, _heap: &'v FrozenHeap) -> FrozenValue {
+impl AllocFrozenValue for i32 {
+    fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
         FrozenValue::new_int(self)
     }
 }

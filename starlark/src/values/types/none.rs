@@ -60,8 +60,8 @@ impl<'v> AllocValue<'v> for NoneType {
     }
 }
 
-impl<'v> AllocFrozenValue<'v> for NoneType {
-    fn alloc_frozen_value(self, _heap: &'v FrozenHeap) -> FrozenValue {
+impl AllocFrozenValue for NoneType {
+    fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
         FrozenValue::new_none()
     }
 }

@@ -151,7 +151,7 @@ impl Freezer {
 
     // Not sure if this is a good idea. Let's you create brand-new things while
     // freezing. Only used in two places.
-    pub fn alloc<'v, T: AllocFrozenValue<'v>>(&'v self, val: T) -> FrozenValue {
+    pub fn alloc<'v, T: AllocFrozenValue>(&'v self, val: T) -> FrozenValue {
         val.alloc_frozen_value(&self.0)
     }
 

@@ -44,8 +44,8 @@ macro_rules! starlark_value {
                 }
             }
 
-            impl<'v> $crate::values::AllocFrozenValue<'v> for [< Frozen $x >] {
-                fn alloc_frozen_value(self, heap: &'v $crate::values::FrozenHeap) -> $crate::values::FrozenValue {
+            impl $crate::values::AllocFrozenValue for [< Frozen $x >] {
+                fn alloc_frozen_value(self, heap: &$crate::values::FrozenHeap) -> $crate::values::FrozenValue {
                     heap.alloc_immutable(self)
                 }
             }
@@ -126,8 +126,8 @@ macro_rules! starlark_immutable_value {
                 }
             }
 
-            impl<'v> $crate::values::AllocFrozenValue<'v> for $x {
-                fn alloc_frozen_value(self, heap: &'v $crate::values::FrozenHeap) -> $crate::values::FrozenValue {
+            impl $crate::values::AllocFrozenValue for $x {
+                fn alloc_frozen_value(self, heap: &$crate::values::FrozenHeap) -> $crate::values::FrozenValue {
                     heap.alloc_immutable(self)
                 }
             }

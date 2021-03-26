@@ -133,12 +133,12 @@ impl<'v> AllocValue<'v> for Value<'v> {
     }
 }
 
-pub trait AllocFrozenValue<'v> {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue;
+pub trait AllocFrozenValue {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue;
 }
 
 impl FrozenHeap {
-    pub fn alloc<'v, T: AllocFrozenValue<'v>>(&'v self, val: T) -> FrozenValue {
+    pub fn alloc<T: AllocFrozenValue>(&self, val: T) -> FrozenValue {
         val.alloc_frozen_value(self)
     }
 }

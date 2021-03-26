@@ -211,8 +211,8 @@ unsafe impl<'a, F: NativeFunc> AnyLifetime<'a> for NativeFunction<F> {
     any_lifetime_body!(Self);
 }
 
-impl<'v, F: NativeFunc> AllocFrozenValue<'v> for NativeFunction<F> {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
+impl<'v, F: NativeFunc> AllocFrozenValue for NativeFunction<F> {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_immutable(self)
     }
 }
@@ -315,8 +315,8 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 
 impl SimpleValue for NativeAttribute {}
 
-impl<'v> AllocFrozenValue<'v> for NativeAttribute {
-    fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
+impl AllocFrozenValue for NativeAttribute {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_immutable(self)
     }
 }
