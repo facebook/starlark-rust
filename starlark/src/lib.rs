@@ -286,7 +286,7 @@
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
 //! use starlark::values::{unsupported_with, Heap, SimpleValue, StarlarkValue, Value};
-//! use starlark::{starlark_type, starlark_immutable_value};
+//! use starlark::{starlark_type, starlark_simple_value};
 //!
 //! // Define complex numbers
 //! #[derive(Debug, PartialEq, Eq)]
@@ -294,7 +294,7 @@
 //!     real: i32,
 //!     imaginary: i32,
 //! }
-//! starlark_immutable_value!(Complex);
+//! starlark_simple_value!(Complex);
 //!
 //! impl<'v> StarlarkValue<'v> for Complex {
 //!     starlark_type!("complex");

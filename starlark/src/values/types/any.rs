@@ -18,7 +18,7 @@
 //! Define the any type for Starlark.
 
 use crate::{
-    starlark_immutable_value,
+    starlark_simple_value,
     values::{StarlarkValue, Value},
 };
 use gazebo::cell::ARef;
@@ -45,7 +45,7 @@ impl StarlarkAny {
     pub const TYPE: &'static str = "any";
 }
 
-starlark_immutable_value!(pub StarlarkAny);
+starlark_simple_value!(pub StarlarkAny);
 
 impl Debug for StarlarkAny {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
