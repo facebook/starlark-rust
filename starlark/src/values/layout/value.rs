@@ -178,7 +178,7 @@ impl<'v> ValueMem<'v> {
             },
             Self::ThawOnWrite(state) => match state.get_thawed() {
                 Some(v) => v.get_ref_mut(heap),
-                None => match state.thaw(|fv| heap.alloc_mutable_box(fv.thaw())) {
+                None => match state.thaw(|fv| heap.alloc_complex_box(fv.thaw())) {
                     None => Err(ValueError::MutationDuringIteration.into()),
                     Some(v) => v.get_ref_mut(heap),
                 },

@@ -757,7 +757,7 @@ fn test_export_as() {
 
     impl AllocValue<'_> for Exporter {
         fn alloc_value(self, heap: &Heap) -> Value {
-            heap.alloc_mutable(self)
+            heap.alloc_complex(self)
         }
     }
 

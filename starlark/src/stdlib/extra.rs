@@ -110,7 +110,7 @@ any_lifetime!(Partial<FrozenValue>);
 
 impl<'v> AllocValue<'v> for Partial<Value<'v>> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_mutable(self)
+        heap.alloc_complex(self)
     }
 }
 

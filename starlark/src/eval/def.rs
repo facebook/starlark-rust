@@ -265,7 +265,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
 
 impl<'v> AllocValue<'v> for Def<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_mutable(self)
+        heap.alloc_complex(self)
     }
 }
 

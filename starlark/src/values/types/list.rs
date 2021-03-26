@@ -43,7 +43,7 @@ starlark_value!(pub List);
 
 impl<'v, T: AllocValue<'v>> AllocValue<'v> for Vec<T> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_mutable(List {
+        heap.alloc_complex(List {
             content: self.into_map(|x| x.alloc_value(heap)),
         })
     }

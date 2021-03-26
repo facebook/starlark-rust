@@ -244,7 +244,7 @@ where
                         }
                     }
                 }
-                Ok(context.heap().alloc_mutable(Record { typ: me, values }))
+                Ok(context.heap().alloc_complex(Record { typ: me, values }))
             },
             signature,
         );

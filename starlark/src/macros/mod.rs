@@ -40,7 +40,7 @@ macro_rules! starlark_value {
 
             impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
-                    heap.alloc_mutable(self)
+                    heap.alloc_complex(self)
                 }
             }
 
