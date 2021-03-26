@@ -247,7 +247,7 @@ impl Heap {
     }
 
     pub(crate) fn alloc_complex_box<'v>(&'v self, x: Box<dyn ComplexValue<'v> + 'v>) -> Value<'v> {
-        if x.naturally_mutable() {
+        if x.is_mutable() {
             self.alloc_raw(ValueMem::Mutable(RefCell::new(x)))
         } else {
             self.alloc_raw(ValueMem::Immutable(x))

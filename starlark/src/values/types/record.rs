@@ -152,6 +152,11 @@ where
 }
 
 impl<'v> ComplexValue<'v> for RecordType<'v> {
+    // So we can get the name set
+    fn is_mutable(&self) -> bool {
+        true
+    }
+
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
@@ -182,11 +187,6 @@ where
     FieldGen<T>: AnyLifetime<'v>,
 {
     starlark_type!(FUNCTION_VALUE_TYPE_NAME);
-
-    // So we can get the name set
-    fn naturally_mutable(&self) -> bool {
-        true
-    }
 
     fn collect_repr(&self, collector: &mut String) {
         collect_repr_record(self.fields.iter(), |x, s| x.collect_repr(s), collector);

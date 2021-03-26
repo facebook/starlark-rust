@@ -231,6 +231,10 @@ impl<'v> AllocValue<'v> for FrozenDef {
 }
 
 impl<'v> ComplexValue<'v> for Def<'v> {
+    fn is_mutable(&self) -> bool {
+        false
+    }
+
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let parameters = self.parameters.freeze(freezer);
         let parameter_types = self

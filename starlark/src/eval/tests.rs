@@ -750,9 +750,6 @@ fn test_export_as() {
             collector.push('=');
             collector.push_str(&self.value.to_string());
         }
-        fn naturally_mutable(&self) -> bool {
-            self.mutable
-        }
     }
 
     impl AllocValue<'_> for Exporter {
@@ -762,6 +759,10 @@ fn test_export_as() {
     }
 
     impl ComplexValue<'_> for Exporter {
+        fn is_mutable(&self) -> bool {
+            self.mutable
+        }
+
         fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> Box<dyn SimpleValue> {
             self.mutable = false;
             self

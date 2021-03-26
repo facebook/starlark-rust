@@ -138,6 +138,10 @@ where
 }
 
 impl<'v> ComplexValue<'v> for Dict<'v> {
+    fn is_mutable(&self) -> bool {
+        true
+    }
+
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut content: SmallMap<FrozenValue, FrozenValue> =
             SmallMap::with_capacity(self.content.len());
@@ -175,10 +179,6 @@ where
     Self: MutableDict<'v> + AnyLifetime<'v>,
 {
     starlark_type!(Dict::TYPE);
-
-    fn naturally_mutable(&self) -> bool {
-        true
-    }
 
     fn get_members(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();

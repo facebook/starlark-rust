@@ -61,6 +61,11 @@ starlark_value!(pub EnumType);
 starlark_value!(pub EnumValue);
 
 impl<'v> ComplexValue<'v> for EnumType<'v> {
+    // So we can get the name set and tie the cycle
+    fn is_mutable(&self) -> bool {
+        true
+    }
+
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
@@ -147,11 +152,6 @@ where
     Self: AnyLifetime<'v>,
 {
     starlark_type!(FUNCTION_VALUE_TYPE_NAME);
-
-    // So we can get the name set and tie the cycle
-    fn naturally_mutable(&self) -> bool {
-        true
-    }
 
     fn collect_repr(&self, collector: &mut String) {
         collector.push_str("enum(");

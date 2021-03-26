@@ -66,6 +66,10 @@ impl FrozenList {
 }
 
 impl<'v> ComplexValue<'v> for List<'v> {
+    fn is_mutable(&self) -> bool {
+        true
+    }
+
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut content = Vec::with_capacity(self.content.len());
         for v in self.content {
@@ -144,10 +148,6 @@ where
     Self: MutableList<'v> + AnyLifetime<'v>,
 {
     starlark_type!(List::TYPE);
-
-    fn naturally_mutable(&self) -> bool {
-        true
-    }
 
     fn get_members(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();

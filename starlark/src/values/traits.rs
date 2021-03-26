@@ -71,6 +71,14 @@ impl<'v, T: StarlarkValue<'v> + AnyLifetime<'v>> AsStarlarkValue<'v> for T {
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.
 pub trait ComplexValue<'v>: StarlarkValue<'v> {
+    /// Can this value be mutated using a `&mut self` parameter?
+    /// Defaults to `false`.
+    /// The result of this value should be consistent for the duration of the
+    /// value's life.
+    fn is_mutable(&self) -> bool {
+        false
+    }
+
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue>;
@@ -80,8 +88,8 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     unsafe fn walk(&mut self, walker: &Walker<'v>);
 
     /// Called when exporting a value under a specific name,
-    /// only applies to things that are naturally_mutable().
-    /// The naturally_mutable constraint occurs because other variables
+    /// only applies to things that return `is_mutable()`.
+    /// The `is_mutable` constraint occurs because other variables
     /// aren't stored in a RefCell, and thus can't be
     /// easily/safely converted to a &mut as this function requires.
     fn export_as(&mut self, _heap: &'v Heap, _variable_name: &str) {
@@ -123,10 +131,6 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
 
     fn get_members(&self) -> Option<&'static Globals> {
         None
-    }
-
-    fn naturally_mutable(&self) -> bool {
-        false
     }
 
     // Do not implement this function, it's just syntax sugar over collect_repr

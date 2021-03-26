@@ -122,11 +122,11 @@ pub(crate) enum ValueMem<'v> {
     Str(Box<str>),
     // Things that aren't mutable and don't point to other Value's
     Simple(Box<dyn SimpleValue>),
-    // Mutable things in my heap that aren't naturally_mutable()
+    // Mutable things in my heap that aren't `is_mutable()`
     Immutable(Box<dyn ComplexValue<'v>>),
-    // Mutable things that are in my heap and are naturally_mutable()
+    // Mutable things that are in my heap and are `is_mutable()`
     Mutable(RefCell<Box<dyn ComplexValue<'v>>>),
-    // Thaw on write things that are in my heap and are naturally_mutable()
+    // Thaw on write things that are in my heap and are list or dict
     // They are either frozen pointers (to be thaw'ed) or normal (point at Mutable)
     ThawOnWrite(ThawableCell<'v>),
     // Used references in slots - usually wrapped in ValueRef
@@ -305,7 +305,7 @@ impl<'v> Value<'v> {
         }
     }
 
-    // Get a pointer to a value. Will always be `Some` for `naturally_mutable() == false` things.
+    // Get a pointer to a value. Will always be `Some` unless ``is_mutable() == true`.
     pub fn get_ref(self) -> Option<&'v dyn StarlarkValue<'v>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => Some(x.get_ref()),
