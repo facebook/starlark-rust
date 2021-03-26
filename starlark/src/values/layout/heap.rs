@@ -241,7 +241,7 @@ impl Heap {
         self.alloc_raw(ValueMem::Immutable(box x))
     }
 
-    pub fn alloc_thaw_on_write<'v>(&'v self, x: FrozenValue) -> Value<'v> {
+    pub(crate) fn alloc_thaw_on_write<'v>(&'v self, x: FrozenValue) -> Value<'v> {
         if x.get_ref().naturally_mutable() {
             self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
         } else {
