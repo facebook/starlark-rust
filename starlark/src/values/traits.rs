@@ -88,15 +88,7 @@ pub trait MutableValue<'v>: TypedValue<'v> {
     }
 }
 
-pub trait ImmutableValue<'v>: TypedValue<'v> + Send + Sync {
-    // This is used when a thaw-on-write value becomes mutable.
-    // Requires an expensive shallow-copy in most cases (with a thaw-on-write for
-    // the children). Only called for things that are naturally_mutable.
-    fn thaw(&self, _heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
-        assert!(!self.naturally_mutable());
-        unimplemented!()
-    }
-}
+pub trait ImmutableValue<'v>: TypedValue<'v> + Send + Sync {}
 
 /// A trait for a value with a type that all variable container
 /// will implement.

@@ -79,13 +79,15 @@ impl<'v> MutableValue<'v> for List<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenList {
-    fn thaw(&self, _heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
+impl FrozenList {
+    pub(crate) fn thaw<'v>(&self) -> Box<dyn MutableValue<'v> + 'v> {
         // We know all the contents of the list will themselves be immutable
         let vals = self.content.map(|e| e.to_value());
         box List { content: vals }
     }
 }
+
+impl<'v> ImmutableValue<'v> for FrozenList {}
 
 impl<'v, T: ValueLike<'v>> ListGen<T> {
     pub fn new(content: Vec<T>) -> Self {

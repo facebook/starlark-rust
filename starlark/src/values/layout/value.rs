@@ -190,7 +190,7 @@ impl<'v> ValueMem<'v> {
             },
             Self::ThawOnWrite(state) => match state.get_thawed() {
                 Some(v) => v.get_ref_mut(heap),
-                None => match state.thaw(|fv| heap.alloc_mutable_box(fv.thaw(heap))) {
+                None => match state.thaw(|fv| heap.alloc_mutable_box(fv.thaw())) {
                     None => Err(ValueError::MutationDuringIteration.into()),
                     Some(v) => v.get_ref_mut(heap),
                 },
@@ -424,11 +424,11 @@ impl FrozenValue {
     }
 
     // Invariant: Only list and dict can be frozen/thaw'ed
-    pub(crate) fn thaw<'v>(self, heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
+    pub(crate) fn thaw<'v>(self) -> Box<dyn MutableValue<'v> + 'v> {
         if let Some(x) = crate::values::list::FrozenList::from_value(&self) {
-            x.thaw(heap)
+            x.thaw()
         } else if let Some(x) = crate::values::dict::FrozenDict::from_value(&self) {
-            x.thaw(heap)
+            x.thaw()
         } else {
             panic!(
                 "FrozenValue.thaw called on a type that wasn't List or Dict, type {}",

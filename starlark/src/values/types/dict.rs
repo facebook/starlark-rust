@@ -155,8 +155,8 @@ impl<'v> MutableValue<'v> for Dict<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenDict {
-    fn thaw(&self, _heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
+impl FrozenDict {
+    pub(crate) fn thaw<'v>(&self) -> Box<dyn MutableValue<'v> + 'v> {
         let mut items = SmallMap::with_capacity(self.content.len());
         // We know all the contents of the dictionary will themselves be immutable
         for (k, v) in self.content.iter_hashed() {
@@ -165,6 +165,8 @@ impl<'v> ImmutableValue<'v> for FrozenDict {
         box Dict { content: items }
     }
 }
+
+impl<'v> ImmutableValue<'v> for FrozenDict {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for DictGen<T>
 where
