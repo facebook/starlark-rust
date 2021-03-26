@@ -94,18 +94,6 @@ pub(crate) enum FrozenValueMem {
     Immutable(Box<dyn ImmutableValue<'static>>), // Not really 'static - but I don't care what
 }
 
-pub(crate) fn immutable_static<'v>(
-    x: Box<dyn ImmutableValue<'v> + 'v>,
-) -> Box<dyn ImmutableValue<'static>> {
-    unsafe {
-        transmute!(
-            Box<dyn ImmutableValue<'v>>,
-            Box<dyn ImmutableValue<'static>>,
-            x
-        )
-    }
-}
-
 fn immutable_unstatic<'a, 'v>(x: &'a dyn ImmutableValue<'static>) -> &'a dyn ImmutableValue<'v> {
     unsafe {
         transmute!(
@@ -133,7 +121,7 @@ pub(crate) enum ValueMem<'v> {
     // A literal string
     Str(Box<str>),
     // Frozen things that are in my heap (e.g String)
-    Immutable(Box<dyn ImmutableValue<'v> + 'v>),
+    Immutable(Box<dyn ImmutableValue<'static>>),
     // Mutable things in my heap that aren't naturally_mutable()
     Pseudo(Box<dyn MutableValue<'v>>),
     // Mutable things that are in my heap and are naturally_mutable()
@@ -203,7 +191,7 @@ impl<'v> ValueMem<'v> {
         match self {
             Self::Forward(x) => Some(x.get_ref()),
             Self::Str(x) => Some(x),
-            Self::Immutable(x) => Some(x.as_typed_value()),
+            Self::Immutable(x) => Some(immutable_unstatic(Box::as_ref(x)).as_typed_value()),
             Self::Pseudo(x) => Some(x.as_typed_value()),
             Self::Mutable(_) => None,
             Self::ThawOnWrite(_) => None,
@@ -215,7 +203,7 @@ impl<'v> ValueMem<'v> {
         match self {
             Self::Forward(x) => ARef::Ptr(x.get_ref()),
             Self::Str(x) => ARef::Ptr(x),
-            Self::Immutable(x) => ARef::Ptr(x.as_typed_value()),
+            Self::Immutable(x) => ARef::Ptr(immutable_unstatic(Box::as_ref(x)).as_typed_value()),
             Self::Pseudo(x) => ARef::Ptr(x.as_typed_value()),
             Self::Mutable(x) => ARef::Ref(Ref::map(x.borrow(), |x| x.as_typed_value())),
             Self::ThawOnWrite(state) => match state.get_ref() {

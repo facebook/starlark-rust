@@ -24,7 +24,7 @@ use crate::values::{
         arena::Arena,
         pointer::Pointer,
         thawable_cell::ThawableCell,
-        value::{immutable_static, FrozenValue, FrozenValueMem, Value, ValueMem},
+        value::{FrozenValue, FrozenValueMem, Value, ValueMem},
         ValueRef,
     },
     AllocFrozenValue, ImmutableValue, MutableValue,
@@ -119,8 +119,8 @@ impl FrozenHeap {
         self.alloc_raw(FrozenValueMem::Str(x))
     }
 
-    pub fn alloc_immutable<'v>(&self, val: impl ImmutableValue<'v> + 'v) -> FrozenValue {
-        self.alloc_raw(FrozenValueMem::Immutable(immutable_static(box val)))
+    pub fn alloc_immutable(&self, val: impl ImmutableValue<'static>) -> FrozenValue {
+        self.alloc_raw(FrozenValueMem::Immutable(box val))
     }
 }
 
@@ -181,12 +181,8 @@ impl Freezer {
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
             ValueMem::Immutable(x) => *fvmem = FrozenValueMem::Immutable(x),
-            ValueMem::Pseudo(x) => {
-                *fvmem = FrozenValueMem::Immutable(immutable_static(x.freeze(self)))
-            }
-            ValueMem::Mutable(x) => {
-                *fvmem = FrozenValueMem::Immutable(immutable_static(x.into_inner().freeze(self)))
-            }
+            ValueMem::Pseudo(x) => *fvmem = FrozenValueMem::Immutable(x.freeze(self)),
+            ValueMem::Mutable(x) => *fvmem = FrozenValueMem::Immutable(x.into_inner().freeze(self)),
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
                 // We don't expect Forward or ThawOnWrite since they are handled in step 2.
@@ -237,7 +233,7 @@ impl Heap {
         self.alloc_raw(ValueMem::Str(x))
     }
 
-    pub fn alloc_immutable<'v>(&'v self, x: impl ImmutableValue<'v> + 'v) -> Value<'v> {
+    pub fn alloc_immutable<'v>(&'v self, x: impl ImmutableValue<'static>) -> Value<'v> {
         self.alloc_raw(ValueMem::Immutable(box x))
     }
 
