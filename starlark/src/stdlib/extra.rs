@@ -21,7 +21,7 @@ use crate::{
     eval::Parameters,
     values::{
         function::{FunctionInvoker, FUNCTION_VALUE_TYPE_NAME},
-        AllocValue, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue, TypedValue, Value,
+        AllocValue, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue, StarlarkValue, Value,
         ValueLike, Walker,
     },
 };
@@ -140,7 +140,7 @@ impl<'v> AllocValue<'v> for Partial<FrozenValue> {
 
 impl ImmutableValue for Partial<FrozenValue> {}
 
-impl<'v, V: ValueLike<'v>> TypedValue<'v> for Partial<V>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for Partial<V>
 where
     Self: AnyLifetime<'v>,
 {

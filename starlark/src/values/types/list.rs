@@ -24,7 +24,7 @@ use crate::{
         index::{convert_index, convert_slice_indices},
         iter::TypedIterable,
         tuple, unsupported_with, AllocFrozenValue, AllocValue, Freezer, FrozenHeap, FrozenValue,
-        Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueLike, Walker,
+        Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -139,7 +139,7 @@ impl<'v> List<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for ListGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for ListGen<T>
 where
     Self: MutableList<'v> + AnyLifetime<'v>,
 {

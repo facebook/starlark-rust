@@ -37,7 +37,7 @@ use crate::values::{
         thawable_cell::ThawableCell,
     },
     none::NoneType,
-    ImmutableValue, MutableValue, TypedValue, ValueError,
+    ImmutableValue, MutableValue, StarlarkValue, ValueError,
 };
 use either::Either;
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
@@ -48,7 +48,7 @@ use std::{
 };
 use void::Void;
 
-// So we can provide &dyn TypedValue's when we need them
+// So we can provide &dyn StarlarkValue's when we need them
 const VALUE_NONE: NoneType = NoneType;
 const VALUE_TRUE: bool = true;
 const VALUE_FALSE: bool = false;
@@ -94,12 +94,12 @@ pub(crate) enum FrozenValueMem {
     Immutable(Box<dyn ImmutableValue>), // Not really 'static - but I don't care what
 }
 
-fn immutable_typed_value<'a, 'v>(x: &'a dyn ImmutableValue) -> &'a dyn TypedValue<'v> {
+fn immutable_starlark_value<'a, 'v>(x: &'a dyn ImmutableValue) -> &'a dyn StarlarkValue<'v> {
     unsafe {
         transmute!(
-            &'a dyn TypedValue<'static>,
-            &'a dyn TypedValue<'v>,
-            x.as_typed_value()
+            &'a dyn StarlarkValue<'static>,
+            &'a dyn StarlarkValue<'v>,
+            x.as_starlark_value()
         )
     }
 }
@@ -187,25 +187,25 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref(&self) -> Option<&dyn TypedValue<'v>> {
+    fn get_ref(&self) -> Option<&dyn StarlarkValue<'v>> {
         match self {
             Self::Forward(x) => Some(x.get_ref()),
             Self::Str(x) => Some(x),
-            Self::Immutable(x) => Some(immutable_typed_value(Box::as_ref(x))),
-            Self::Pseudo(x) => Some(x.as_typed_value()),
+            Self::Immutable(x) => Some(immutable_starlark_value(Box::as_ref(x))),
+            Self::Pseudo(x) => Some(x.as_starlark_value()),
             Self::Mutable(_) => None,
             Self::ThawOnWrite(_) => None,
             _ => self.unexpected("get_ref"),
         }
     }
 
-    pub fn get_aref(&'v self) -> ARef<'v, dyn TypedValue<'v>> {
+    pub fn get_aref(&'v self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self {
             Self::Forward(x) => ARef::Ptr(x.get_ref()),
             Self::Str(x) => ARef::Ptr(x),
-            Self::Immutable(x) => ARef::Ptr(immutable_typed_value(Box::as_ref(x))),
-            Self::Pseudo(x) => ARef::Ptr(x.as_typed_value()),
-            Self::Mutable(x) => ARef::Ref(Ref::map(x.borrow(), |x| x.as_typed_value())),
+            Self::Immutable(x) => ARef::Ptr(immutable_starlark_value(Box::as_ref(x))),
+            Self::Pseudo(x) => ARef::Ptr(x.as_starlark_value()),
+            Self::Mutable(x) => ARef::Ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
             Self::ThawOnWrite(state) => match state.get_ref() {
                 Either::Left(fv) => ARef::Ref(Ref::map(fv, |fv| fv.get_ref())),
                 Either::Right(v) => v.get_aref(),
@@ -231,10 +231,10 @@ impl FrozenValueMem {
         }
     }
 
-    fn get_ref<'v>(&self) -> &dyn TypedValue<'v> {
+    fn get_ref<'v>(&self) -> &dyn StarlarkValue<'v> {
         match self {
             Self::Str(x) => x,
-            Self::Immutable(x) => immutable_typed_value(Box::as_ref(x)),
+            Self::Immutable(x) => immutable_starlark_value(Box::as_ref(x)),
             _ => self.unexpected("get_ref"),
         }
     }
@@ -306,7 +306,7 @@ impl<'v> Value<'v> {
     }
 
     // Get a pointer to a value. Will always be `Some` for `naturally_mutable() == false` things.
-    pub fn get_ref(self) -> Option<&'v dyn TypedValue<'v>> {
+    pub fn get_ref(self) -> Option<&'v dyn StarlarkValue<'v>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => Some(x.get_ref()),
             PointerUnpack::Ptr2(x) => x.get_ref(),
@@ -318,7 +318,7 @@ impl<'v> Value<'v> {
         }
     }
 
-    pub(crate) fn get_aref(self) -> ARef<'v, dyn TypedValue<'v>> {
+    pub(crate) fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => ARef::Ptr(x.get_ref()),
             PointerUnpack::Ptr2(x) => x.get_aref(),
@@ -399,7 +399,7 @@ impl FrozenValue {
         }
     }
 
-    pub fn get_ref<'v>(self) -> &'v dyn TypedValue<'v> {
+    pub fn get_ref<'v>(self) -> &'v dyn StarlarkValue<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),

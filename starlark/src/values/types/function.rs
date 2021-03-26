@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-//! Function as a TypedValue
+//! Function as a StarlarkValue
 use crate::{
     codemap::Span,
     eval::{
@@ -25,7 +25,7 @@ use crate::{
     stdlib::UnpackValue,
     values::{
         unsupported, AllocFrozenValue, AllocValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Hashed, Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueError,
+        FrozenValue, Hashed, Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueError,
         ValueLike, Walker,
     },
 };
@@ -247,7 +247,7 @@ impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
 }
 
 /// Define the function type
-impl<'v, F: NativeFunc> TypedValue<'v> for NativeFunction<F> {
+impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
     starlark_type!(FUNCTION_VALUE_TYPE_NAME);
 
     fn is_function(&self) -> bool {
@@ -309,7 +309,7 @@ impl NativeAttribute {
     }
 }
 
-impl<'v> TypedValue<'v> for NativeAttribute {
+impl<'v> StarlarkValue<'v> for NativeAttribute {
     starlark_type!("attribute");
 }
 
@@ -370,7 +370,7 @@ impl<'v> MutableValue<'v> for WrappedMethod<'v> {
 
 impl ImmutableValue for FrozenWrappedMethod {}
 
-impl<'v, V: ValueLike<'v>> TypedValue<'v> for WrappedMethodGen<V>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrappedMethodGen<V>
 where
     Self: AnyLifetime<'v>,
 {

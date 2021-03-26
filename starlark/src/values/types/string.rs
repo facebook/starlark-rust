@@ -20,7 +20,8 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::convert_slice_indices, interpolation::Interpolation, unsupported_with,
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, TypedValue, Value, ValueError,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value,
+        ValueError,
     },
 };
 use std::{
@@ -61,7 +62,7 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
     x.hash(state)
 }
 
-impl<'v> TypedValue<'v> for Box<str> {
+impl<'v> StarlarkValue<'v> for Box<str> {
     starlark_type!(STRING_VALUE_TYPE_NAME);
 
     fn get_members(&self) -> Option<&'static Globals> {

@@ -26,7 +26,7 @@ use crate::{
         comparison::equals_slice,
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
-        Freezer, Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueLike, Walker,
+        Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -124,7 +124,7 @@ impl<'v> MutableValue<'v> for Field<'v> {
 
 impl ImmutableValue for FrozenField {}
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for FieldGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for FieldGen<T>
 where
     Self: AnyLifetime<'v>,
 {
@@ -176,7 +176,7 @@ impl<'v> MutableValue<'v> for RecordType<'v> {
 
 impl ImmutableValue for FrozenRecordType {}
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for RecordTypeGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<T>
 where
     Self: AnyLifetime<'v>,
     FieldGen<T>: AnyLifetime<'v>,
@@ -290,7 +290,7 @@ impl<'v> MutableValue<'v> for Record<'v> {
 
 impl ImmutableValue for FrozenRecord {}
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for RecordGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordGen<T>
 where
     Self: AnyLifetime<'v>,
 {

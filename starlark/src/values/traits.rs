@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-//! The values module define a trait `TypedValue` that defines the attribute of
+//! The values module define a trait `StarlarkValue` that defines the attribute of
 //! any value in Starlark and a few macro to help implementing this trait.
-//! The `Value` struct defines the actual structure holding a TypedValue. It is
-//! mostly used to enable mutable and Rc behavior over a TypedValue.
+//! The `Value` struct defines the actual structure holding a StarlarkValue. It is
+//! mostly used to enable mutable and Rc behavior over a StarlarkValue.
 //! This modules also defines this traits for the basic immutable values: int,
 //! bool and NoneType. Sub-modules implement other common types of all Starlark
 //! dialect.
@@ -41,20 +41,20 @@ use std::{
     fmt::{Debug, Write},
 };
 
-pub trait AsTypedValue<'v> {
+pub trait AsStarlarkValue<'v> {
     fn as_type_name(&self) -> &'static str;
-    fn as_typed_value(&self) -> &dyn TypedValue<'v>;
+    fn as_starlark_value(&self) -> &dyn StarlarkValue<'v>;
     fn as_dyn_any(&self) -> &dyn AnyLifetime<'v>;
     fn as_dyn_any_mut(&mut self) -> &mut dyn AnyLifetime<'v>;
     fn as_debug(&self) -> &dyn Debug;
 }
 
-impl<'v, T: TypedValue<'v> + AnyLifetime<'v>> AsTypedValue<'v> for T {
+impl<'v, T: StarlarkValue<'v> + AnyLifetime<'v>> AsStarlarkValue<'v> for T {
     fn as_type_name(&self) -> &'static str {
         std::any::type_name::<T>()
     }
 
-    fn as_typed_value(&self) -> &dyn TypedValue<'v> {
+    fn as_starlark_value(&self) -> &dyn StarlarkValue<'v> {
         self
     }
     fn as_dyn_any(&self) -> &dyn AnyLifetime<'v> {
@@ -68,7 +68,7 @@ impl<'v, T: TypedValue<'v> + AnyLifetime<'v>> AsTypedValue<'v> for T {
     }
 }
 
-pub trait MutableValue<'v>: TypedValue<'v> {
+pub trait MutableValue<'v>: StarlarkValue<'v> {
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue>;
@@ -88,11 +88,11 @@ pub trait MutableValue<'v>: TypedValue<'v> {
     }
 }
 
-pub trait ImmutableValue: TypedValue<'static> + Send + Sync {}
+pub trait ImmutableValue: StarlarkValue<'static> + Send + Sync {}
 
 /// A trait for a value with a type that all variable container
 /// will implement.
-pub trait TypedValue<'v>: 'v + AsTypedValue<'v> + Debug {
+pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     fn get_type(&self) -> &'static str;

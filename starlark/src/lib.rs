@@ -278,14 +278,14 @@
 //! ## Defining Rust objects that are used from Starlark
 //!
 //! Finally, we can define our own types in Rust which live in the Starlark heap.
-//! Such types are relatively complex, see the details at `TypedValue`.
+//! Such types are relatively complex, see the details at `StarlarkValue`.
 //!
 //! ```
 //! # fn run() -> anyhow::Result<()> {
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
-//! use starlark::values::{unsupported_with, Heap, ImmutableValue, TypedValue, Value};
+//! use starlark::values::{unsupported_with, Heap, ImmutableValue, StarlarkValue, Value};
 //! use starlark::{starlark_type, starlark_immutable_value};
 //!
 //! // Define complex numbers
@@ -296,7 +296,7 @@
 //! }
 //! starlark_immutable_value!(Complex);
 //!
-//! impl<'v> TypedValue<'v> for Complex {
+//! impl<'v> StarlarkValue<'v> for Complex {
 //!     starlark_type!("complex");
 //!
 //!     // How we display them

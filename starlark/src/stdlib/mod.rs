@@ -89,7 +89,7 @@ mod tests {
         stdlib::macros::UnpackValue,
         values::{
             none::NoneType, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
-            ImmutableValue, TypedValue, Value,
+            ImmutableValue, StarlarkValue, Value,
         },
     };
     use gazebo::{any::AnyLifetime, prelude::*};
@@ -111,7 +111,7 @@ mod tests {
     fn test_value_attributes() {
         #[derive(AnyLifetime, Copy, Clone, Debug, Dupe, PartialEq)]
         struct Bool2(bool);
-        impl<'v> TypedValue<'v> for Bool2 {
+        impl<'v> StarlarkValue<'v> for Bool2 {
             starlark_type!("bool2");
 
             fn get_members(&self) -> Option<&'static Globals> {

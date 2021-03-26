@@ -133,7 +133,7 @@ impl GlobalsBuilder {
     }
 }
 
-/// Used to create some static members for a `TypedValue`, usually written as:
+/// Used to create some static members for a `StarlarkValue`, usually written as:
 ///
 /// ```ignore
 /// fn get_members(&self) -> Option<&'static Globals> {

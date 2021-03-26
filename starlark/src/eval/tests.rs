@@ -731,7 +731,7 @@ xs == [1, 2, 3]
 fn test_export_as() {
     use crate as starlark;
     use crate::values::{
-        AllocValue, Freezer, Heap, ImmutableValue, MutableValue, TypedValue, Value, Walker,
+        AllocValue, Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue, Value, Walker,
     };
     use gazebo::any::AnyLifetime;
 
@@ -742,7 +742,7 @@ fn test_export_as() {
         value: i32,
     }
 
-    impl TypedValue<'_> for Exporter {
+    impl StarlarkValue<'_> for Exporter {
         starlark_type!("exporter");
 
         fn collect_repr(&self, collector: &mut String) {

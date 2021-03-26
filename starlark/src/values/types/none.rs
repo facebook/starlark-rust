@@ -18,7 +18,7 @@
 //! Define the None type for Starlark.
 
 use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, TypedValue, Value,
+    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 
@@ -31,7 +31,7 @@ impl NoneType {
 }
 
 /// Define the NoneType type
-impl<'v> TypedValue<'v> for NoneType {
+impl<'v> StarlarkValue<'v> for NoneType {
     starlark_type!(NoneType::TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {

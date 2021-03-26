@@ -25,7 +25,7 @@ use crate::{
         macros::{NoneOr, UnpackValue},
         util::convert_indices,
     },
-    values::{Heap, TypedValue, Value, ValueError},
+    values::{Heap, StarlarkValue, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;

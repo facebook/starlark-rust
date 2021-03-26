@@ -28,7 +28,7 @@ use crate::{
     },
     values::{
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, ImmutableValue, OwnedFrozenValue,
-        TypedValue, Value, ValueLike,
+        StarlarkValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -118,7 +118,7 @@ impl FrozenModuleRef {
     }
 }
 
-impl<'v> TypedValue<'v> for FrozenModuleRef {
+impl<'v> StarlarkValue<'v> for FrozenModuleRef {
     starlark_type!("frozen_module");
 }
 

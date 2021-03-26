@@ -27,7 +27,7 @@ use crate::{
     values::{
         list::{List, RefList},
         none::NoneType,
-        TypedValue, Value,
+        StarlarkValue, Value,
     },
 };
 use anyhow::anyhow;

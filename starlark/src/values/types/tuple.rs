@@ -19,8 +19,8 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    unsupported_with, AllocValue, Freezer, Heap, ImmutableValue, MutableValue, TypedIterable,
-    TypedValue, Value, ValueError, ValueLike, Walker,
+    unsupported_with, AllocValue, Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue,
+    TypedIterable, Value, ValueError, ValueLike, Walker,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -103,7 +103,7 @@ impl<T> TupleGen<T> {
     pub const TYPE: &'static str = "tuple";
 }
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for TupleGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for TupleGen<T>
 where
     Self: AnyLifetime<'v>,
 {

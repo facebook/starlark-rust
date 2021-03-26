@@ -19,7 +19,7 @@
 
 use crate::{
     starlark_immutable_value,
-    values::{TypedValue, Value},
+    values::{StarlarkValue, Value},
 };
 use gazebo::cell::ARef;
 use std::{
@@ -75,6 +75,6 @@ impl StarlarkAny {
 }
 
 /// Define the any type
-impl TypedValue<'_> for StarlarkAny {
+impl StarlarkValue<'_> for StarlarkAny {
     starlark_type!(StarlarkAny::TYPE);
 }

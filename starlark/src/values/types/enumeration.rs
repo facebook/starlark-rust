@@ -22,7 +22,7 @@ use crate::{
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
         index::convert_index,
-        Freezer, Heap, ImmutableValue, MutableValue, TypedValue, Value, ValueLike, Walker,
+        Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use derivative::Derivative;
@@ -142,7 +142,7 @@ impl ImmutableValue for FrozenEnumType {}
 
 impl ImmutableValue for FrozenEnumValue {}
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for EnumTypeGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<T>
 where
     Self: AnyLifetime<'v>,
 {
@@ -226,7 +226,7 @@ where
     }
 }
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for EnumValueGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for EnumValueGen<T>
 where
     Self: AnyLifetime<'v>,
 {

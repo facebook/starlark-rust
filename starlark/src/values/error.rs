@@ -17,10 +17,10 @@
 
 //! Module define the common engine error.
 
-use crate::values::{TypedValue, Value};
+use crate::values::{StarlarkValue, Value};
 use thiserror::Error;
 
-/// Error that can be returned by function from the `TypedValue` trait,
+/// Error that can be returned by function from the `StarlarkValue` trait,
 #[derive(Clone, Debug, Error)]
 // FIXME: Would be good if this wasn't public, or only a subset of constructors were public.
 pub enum ValueError {
@@ -83,11 +83,11 @@ pub(crate) fn unsupported_owned<T>(left: &str, op: &str, right: Option<&str>) ->
     }
 }
 
-pub fn unsupported<'v, T, V: TypedValue<'v> + ?Sized>(left: &V, op: &str) -> anyhow::Result<T> {
+pub fn unsupported<'v, T, V: StarlarkValue<'v> + ?Sized>(left: &V, op: &str) -> anyhow::Result<T> {
     unsupported_owned(left.get_type(), op, None)
 }
 
-pub fn unsupported_with<'v, T, V: TypedValue<'v> + ?Sized>(
+pub fn unsupported_with<'v, T, V: StarlarkValue<'v> + ?Sized>(
     left: &V,
     op: &str,
     right: Value,

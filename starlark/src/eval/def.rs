@@ -29,7 +29,7 @@ use crate::{
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
         function::{FunctionInvoker, FunctionInvokerInner, FUNCTION_VALUE_TYPE_NAME},
-        AllocValue, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue, TypedValue, Value,
+        AllocValue, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue, StarlarkValue, Value,
         ValueLike, ValueRef, Walker,
     },
 };
@@ -170,7 +170,7 @@ impl Compiler<'_> {
 }
 
 /// Starlark function internal representation and implementation of
-/// [`TypedValue`].
+/// [`StarlarkValue`].
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V, RefV> {
@@ -269,7 +269,7 @@ impl<'v> AllocValue<'v> for Def<'v> {
     }
 }
 
-impl<'v> TypedValue<'v> for FrozenDef {
+impl<'v> StarlarkValue<'v> for FrozenDef {
     starlark_type!(FUNCTION_VALUE_TYPE_NAME);
 
     fn is_function(&self) -> bool {
@@ -293,7 +293,7 @@ impl<'v> TypedValue<'v> for FrozenDef {
     }
 }
 
-impl<'v> TypedValue<'v> for Def<'v> {
+impl<'v> StarlarkValue<'v> for Def<'v> {
     starlark_type!(FUNCTION_VALUE_TYPE_NAME);
 
     fn is_function(&self) -> bool {

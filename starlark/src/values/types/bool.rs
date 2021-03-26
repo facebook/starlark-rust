@@ -18,7 +18,7 @@
 //! Define the bool type for Starlark.
 
 use crate::values::{
-    unsupported_with, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, TypedValue,
+    unsupported_with, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
     Value,
 };
 use std::cmp::Ordering;
@@ -39,7 +39,7 @@ impl<'v> AllocFrozenValue<'v> for bool {
 }
 
 /// Define the bool type
-impl TypedValue<'_> for bool {
+impl StarlarkValue<'_> for bool {
     starlark_type!(BOOL_VALUE_TYPE_NAME);
 
     fn collect_repr(&self, s: &mut String) {

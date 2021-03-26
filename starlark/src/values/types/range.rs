@@ -20,7 +20,7 @@
 use crate::values::{
     index::{convert_index, convert_slice_indices},
     iter::TypedIterable,
-    AllocValue, Heap, ImmutableValue, TypedValue, Value, ValueError,
+    AllocValue, Heap, ImmutableValue, StarlarkValue, Value, ValueError,
 };
 use gazebo::any::AnyLifetime;
 use std::{marker::PhantomData, num::NonZeroI32};
@@ -87,7 +87,7 @@ impl<'v> AllocValue<'v> for Range {
     }
 }
 
-impl<'v> TypedValue<'v> for Range {
+impl<'v> StarlarkValue<'v> for Range {
     starlark_type!(Range::TYPE);
 
     fn collect_repr(&self, s: &mut String) {
@@ -241,7 +241,7 @@ impl<'v> TypedIterable<'v> for Range {
 
 #[cfg(test)]
 mod tests {
-    use crate::values::{range::Range, Heap, TypedValue, Value};
+    use crate::values::{range::Range, Heap, StarlarkValue, Value};
     use std::num::NonZeroI32;
 
     fn range(start: i32, stop: i32, range: i32) -> Range {

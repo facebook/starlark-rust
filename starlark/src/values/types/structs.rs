@@ -23,7 +23,7 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        unsupported_with, AllocValue, Freezer, Heap, ImmutableValue, MutableValue, TypedValue,
+        unsupported_with, AllocValue, Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue,
         Value, ValueLike, Walker,
     },
 };
@@ -88,7 +88,7 @@ impl<'v> MutableValue<'v> for Struct<'v> {
 
 impl ImmutableValue for FrozenStruct {}
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for StructGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StructGen<T>
 where
     Self: AnyLifetime<'v>,
 {

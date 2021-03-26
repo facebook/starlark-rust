@@ -19,7 +19,7 @@
 
 use crate::values::{
     error::ValueError, layout::PointerI32, unsupported_owned, unsupported_with, AllocFrozenValue,
-    AllocValue, FrozenHeap, FrozenValue, Heap, TypedValue, Value,
+    AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value,
 };
 use std::cmp::Ordering;
 
@@ -53,7 +53,7 @@ where
 }
 
 /// Define the int type
-impl<'v> TypedValue<'v> for PointerI32 {
+impl<'v> StarlarkValue<'v> for PointerI32 {
     starlark_type!(INT_VALUE_TYPE_NAME);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {

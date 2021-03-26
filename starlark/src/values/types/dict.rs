@@ -22,7 +22,7 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::TypedIterable,
         string::hash_string_value, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue,
-        TypedValue, Value, ValueLike, Walker,
+        StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -168,7 +168,7 @@ impl FrozenDict {
 
 impl ImmutableValue for FrozenDict {}
 
-impl<'v, T: ValueLike<'v>> TypedValue<'v> for DictGen<T>
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for DictGen<T>
 where
     Value<'v>: Equivalent<T>,
     T: Equivalent<Value<'v>>,

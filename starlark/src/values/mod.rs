@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-//! The values module define a trait `TypedValue` that defines the attribute of
+//! The values module define a trait `StarlarkValue` that defines the attribute of
 //! any value in Starlark and a few macro to help implementing this trait.
-//! The `Value` struct defines the actual structure holding a TypedValue. It is
-//! mostly used to enable mutable and Rc behavior over a TypedValue.
+//! The `Value` struct defines the actual structure holding a StarlarkValue. It is
+//! mostly used to enable mutable and Rc behavior over a StarlarkValue.
 //! This modules also defines this traits for the basic immutable values: int,
 //! bool and NoneType. Sub-modules implement other common types of all Starlark
 //! dialect.
@@ -153,7 +153,7 @@ impl Heap {
 pub trait ValueLike<'v>: Eq + Copy + Debug {
     fn to_value(self) -> Value<'v>;
 
-    fn get_aref(self) -> ARef<'v, dyn TypedValue<'v>>;
+    fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
 
     fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>>;
 
@@ -225,7 +225,7 @@ impl<'v> Hashed<Value<'v>> {
 }
 
 impl<'v> ValueLike<'v> for Value<'v> {
-    fn get_aref(self) -> ARef<'v, dyn TypedValue<'v>> {
+    fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
         Value::get_aref(self)
     }
 
@@ -239,7 +239,7 @@ impl<'v> ValueLike<'v> for Value<'v> {
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
-    fn get_aref(self) -> ARef<'v, dyn TypedValue<'v>> {
+    fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
         ARef::Ptr(self.get_ref())
     }
 
@@ -399,7 +399,7 @@ impl<'v> Value<'v> {
     }
 
     pub fn iterate(self, heap: &'v Heap) -> anyhow::Result<RefIterable<'v>> {
-        let me: ARef<'v, dyn TypedValue> = self.get_aref();
+        let me: ARef<'v, dyn StarlarkValue> = self.get_aref();
         me.iterate()?;
         Ok(RefIterable::new(
             heap,
@@ -461,7 +461,7 @@ impl<'v> Value<'v> {
     /// to generate prototypes, help information or whatever other descriptive text
     /// is required.
     /// Plan is to make this return a data type at some point in the future, possibly
-    /// move on to `TypedValue` and include data from members.
+    /// move on to `StarlarkValue` and include data from members.
     pub fn describe(self, name: &str) -> String {
         if self.get_aref().is_function() {
             format!("def {}: pass", self.to_repr().replace(" = ...", " = None"))
