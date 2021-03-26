@@ -122,7 +122,7 @@ impl<'v> TypedValue<'v> for FrozenModuleRef {
     starlark_type!("frozen_module");
 }
 
-impl<'v> ImmutableValue<'v> for FrozenModuleRef {}
+impl ImmutableValue for FrozenModuleRef {}
 
 impl FrozenModuleValue {
     pub fn new(freezer: &Freezer) -> Self {

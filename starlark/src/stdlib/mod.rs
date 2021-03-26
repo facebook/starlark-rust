@@ -127,7 +127,7 @@ mod tests {
             }
         }
 
-        impl<'v> ImmutableValue<'v> for Bool2 {}
+        impl ImmutableValue for Bool2 {}
 
         impl<'v> AllocFrozenValue<'v> for Bool2 {
             fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {

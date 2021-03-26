@@ -71,7 +71,7 @@ impl<'v, T: TypedValue<'v> + AnyLifetime<'v>> AsTypedValue<'v> for T {
 pub trait MutableValue<'v>: TypedValue<'v> {
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>>;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue>;
 
     /// Called by the garbage collection, and must walk over every contained `Value` in the type.
     /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
@@ -88,7 +88,7 @@ pub trait MutableValue<'v>: TypedValue<'v> {
     }
 }
 
-pub trait ImmutableValue<'v>: TypedValue<'v> + Send + Sync {}
+pub trait ImmutableValue: TypedValue<'static> + Send + Sync {}
 
 /// A trait for a value with a type that all variable container
 /// will implement.

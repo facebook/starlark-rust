@@ -119,7 +119,7 @@ impl FrozenHeap {
         self.alloc_raw(FrozenValueMem::Str(x))
     }
 
-    pub fn alloc_immutable(&self, val: impl ImmutableValue<'static>) -> FrozenValue {
+    pub fn alloc_immutable(&self, val: impl ImmutableValue) -> FrozenValue {
         self.alloc_raw(FrozenValueMem::Immutable(box val))
     }
 }
@@ -139,7 +139,7 @@ impl Freezer {
         self.1
     }
 
-    pub(crate) fn set_magic(&self, val: impl ImmutableValue<'static>) {
+    pub(crate) fn set_magic(&self, val: impl ImmutableValue) {
         let p = self.1.0.unpack_ptr1().unwrap();
         let p = p as *const FrozenValueMem as *mut FrozenValueMem;
         unsafe { ptr::write(p, FrozenValueMem::Immutable(box val)) }
@@ -233,7 +233,7 @@ impl Heap {
         self.alloc_raw(ValueMem::Str(x))
     }
 
-    pub fn alloc_immutable<'v>(&'v self, x: impl ImmutableValue<'static>) -> Value<'v> {
+    pub fn alloc_immutable<'v>(&'v self, x: impl ImmutableValue) -> Value<'v> {
         self.alloc_raw(ValueMem::Immutable(box x))
     }
 

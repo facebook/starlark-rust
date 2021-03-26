@@ -238,7 +238,7 @@ impl<
     }
 }
 
-impl<'v, F: NativeFunc> ImmutableValue<'v> for NativeFunction<F> {}
+impl<F: NativeFunc> ImmutableValue for NativeFunction<F> {}
 
 impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
@@ -313,7 +313,7 @@ impl<'v> TypedValue<'v> for NativeAttribute {
     starlark_type!("attribute");
 }
 
-impl<'v> ImmutableValue<'v> for NativeAttribute {}
+impl ImmutableValue for NativeAttribute {}
 
 impl<'v> AllocFrozenValue<'v> for NativeAttribute {
     fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
@@ -355,7 +355,7 @@ impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
 }
 
 impl<'v> MutableValue<'v> for WrappedMethod<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         box WrappedMethodGen {
             method: self.method.freeze(freezer),
             self_obj: self.self_obj.freeze(freezer),
@@ -368,7 +368,7 @@ impl<'v> MutableValue<'v> for WrappedMethod<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenWrappedMethod {}
+impl ImmutableValue for FrozenWrappedMethod {}
 
 impl<'v, V: ValueLike<'v>> TypedValue<'v> for WrappedMethodGen<V>
 where

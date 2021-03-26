@@ -138,7 +138,7 @@ where
 }
 
 impl<'v> MutableValue<'v> for Dict<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         let mut content: SmallMap<FrozenValue, FrozenValue> =
             SmallMap::with_capacity(self.content.len());
         for (k, v) in self.content.into_iter_hashed() {
@@ -166,7 +166,7 @@ impl FrozenDict {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenDict {}
+impl ImmutableValue for FrozenDict {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for DictGen<T>
 where

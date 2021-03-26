@@ -84,7 +84,7 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 }
 
 impl<'v> MutableValue<'v> for Tuple<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         let mut frozen = Vec::with_capacity(self.content.len());
         for v in self.content {
             frozen.push(v.freeze(freezer))
@@ -97,7 +97,7 @@ impl<'v> MutableValue<'v> for Tuple<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenTuple {}
+impl ImmutableValue for FrozenTuple {}
 
 impl<T> TupleGen<T> {
     pub const TYPE: &'static str = "tuple";

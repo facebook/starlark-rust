@@ -113,7 +113,7 @@ impl<'v, T: ValueLike<'v>> RecordGen<T> {
 }
 
 impl<'v> MutableValue<'v> for Field<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         box (*self).freeze(freezer)
     }
 
@@ -122,7 +122,7 @@ impl<'v> MutableValue<'v> for Field<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenField {}
+impl ImmutableValue for FrozenField {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for FieldGen<T>
 where
@@ -152,7 +152,7 @@ where
 }
 
 impl<'v> MutableValue<'v> for RecordType<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
             fields.insert_hashed(k, t.freeze(freezer));
@@ -174,7 +174,7 @@ impl<'v> MutableValue<'v> for RecordType<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenRecordType {}
+impl ImmutableValue for FrozenRecordType {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for RecordTypeGen<T>
 where
@@ -275,7 +275,7 @@ where
 }
 
 impl<'v> MutableValue<'v> for Record<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         box FrozenRecord {
             typ: self.typ.freeze(freezer),
             values: self.values.map(|v| v.freeze(freezer)),
@@ -288,7 +288,7 @@ impl<'v> MutableValue<'v> for Record<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenRecord {}
+impl ImmutableValue for FrozenRecord {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for RecordGen<T>
 where

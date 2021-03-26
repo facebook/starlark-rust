@@ -61,7 +61,7 @@ starlark_value!(pub EnumType);
 starlark_value!(pub EnumValue);
 
 impl<'v> MutableValue<'v> for EnumType<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
             elements.insert_hashed(k.freeze(freezer), t.freeze(freezer));
@@ -87,7 +87,7 @@ impl<'v> MutableValue<'v> for EnumType<'v> {
 }
 
 impl<'v> MutableValue<'v> for EnumValue<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         box FrozenEnumValue {
             typ: self.typ.freeze(freezer),
             value: self.value.freeze(freezer),
@@ -138,9 +138,9 @@ impl<'v, T: ValueLike<'v>> EnumValueGen<T> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenEnumType {}
+impl ImmutableValue for FrozenEnumType {}
 
-impl<'v> ImmutableValue<'v> for FrozenEnumValue {}
+impl ImmutableValue for FrozenEnumValue {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for EnumTypeGen<T>
 where

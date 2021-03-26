@@ -762,7 +762,7 @@ fn test_export_as() {
     }
 
     impl MutableValue<'_> for Exporter {
-        fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+        fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> Box<dyn ImmutableValue> {
             self.mutable = false;
             self
         }
@@ -774,7 +774,7 @@ fn test_export_as() {
         }
     }
 
-    impl<'v> ImmutableValue<'v> for Exporter {}
+    impl ImmutableValue for Exporter {}
 
     #[starlark_module]
     fn exporter(builder: &mut GlobalsBuilder) {

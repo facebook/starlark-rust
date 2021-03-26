@@ -72,7 +72,7 @@ impl<'v> StructBuilder<'v> {
 }
 
 impl<'v> MutableValue<'v> for Struct<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue<'static>> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
 
         for (k, v) in self.fields.into_iter_hashed() {
@@ -86,7 +86,7 @@ impl<'v> MutableValue<'v> for Struct<'v> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for FrozenStruct {}
+impl ImmutableValue for FrozenStruct {}
 
 impl<'v, T: ValueLike<'v>> TypedValue<'v> for StructGen<T>
 where

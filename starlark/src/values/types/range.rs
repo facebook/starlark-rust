@@ -79,7 +79,7 @@ impl<'a> Iterator for RangeIterator<'a> {
     }
 }
 
-impl<'v> ImmutableValue<'v> for Range {}
+impl ImmutableValue for Range {}
 
 impl<'v> AllocValue<'v> for Range {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
