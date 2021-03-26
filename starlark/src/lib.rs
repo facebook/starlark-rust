@@ -285,7 +285,7 @@
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
-//! use starlark::values::{unsupported_with, Heap, ImmutableValue, StarlarkValue, Value};
+//! use starlark::values::{unsupported_with, Heap, SimpleValue, StarlarkValue, Value};
 //! use starlark::{starlark_type, starlark_immutable_value};
 //!
 //! // Define complex numbers

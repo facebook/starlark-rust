@@ -132,7 +132,7 @@ macro_rules! starlark_immutable_value {
                 }
             }
 
-            impl $crate::values::ImmutableValue for $x {}
+            impl $crate::values::SimpleValue for $x {}
 
             impl<'v> $x {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {

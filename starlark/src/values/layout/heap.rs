@@ -27,7 +27,7 @@ use crate::values::{
         value::{FrozenValue, FrozenValueMem, Value, ValueMem},
         ValueRef,
     },
-    AllocFrozenValue, ImmutableValue, MutableValue,
+    AllocFrozenValue, MutableValue, SimpleValue,
 };
 use gazebo::{cast, prelude::*};
 use std::{
@@ -119,8 +119,8 @@ impl FrozenHeap {
         self.alloc_raw(FrozenValueMem::Str(x))
     }
 
-    pub fn alloc_immutable(&self, val: impl ImmutableValue) -> FrozenValue {
-        self.alloc_raw(FrozenValueMem::Immutable(box val))
+    pub fn alloc_immutable(&self, val: impl SimpleValue) -> FrozenValue {
+        self.alloc_raw(FrozenValueMem::Simple(box val))
     }
 }
 
@@ -139,10 +139,10 @@ impl Freezer {
         self.1
     }
 
-    pub(crate) fn set_magic(&self, val: impl ImmutableValue) {
+    pub(crate) fn set_magic(&self, val: impl SimpleValue) {
         let p = self.1.0.unpack_ptr1().unwrap();
         let p = p as *const FrozenValueMem as *mut FrozenValueMem;
-        unsafe { ptr::write(p, FrozenValueMem::Immutable(box val)) }
+        unsafe { ptr::write(p, FrozenValueMem::Simple(box val)) }
     }
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {
@@ -180,9 +180,9 @@ impl Freezer {
 
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
-            ValueMem::Immutable(x) => *fvmem = FrozenValueMem::Immutable(x),
-            ValueMem::Pseudo(x) => *fvmem = FrozenValueMem::Immutable(x.freeze(self)),
-            ValueMem::Mutable(x) => *fvmem = FrozenValueMem::Immutable(x.into_inner().freeze(self)),
+            ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
+            ValueMem::Pseudo(x) => *fvmem = FrozenValueMem::Simple(x.freeze(self)),
+            ValueMem::Mutable(x) => *fvmem = FrozenValueMem::Simple(x.into_inner().freeze(self)),
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
                 // We don't expect Forward or ThawOnWrite since they are handled in step 2.
@@ -233,8 +233,8 @@ impl Heap {
         self.alloc_raw(ValueMem::Str(x))
     }
 
-    pub fn alloc_immutable<'v>(&'v self, x: impl ImmutableValue) -> Value<'v> {
-        self.alloc_raw(ValueMem::Immutable(box x))
+    pub fn alloc_immutable<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
+        self.alloc_raw(ValueMem::Simple(box x))
     }
 
     /// Invariant: Must be called on Dict or List

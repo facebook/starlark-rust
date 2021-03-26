@@ -71,7 +71,7 @@ impl<'v, T: StarlarkValue<'v> + AnyLifetime<'v>> AsStarlarkValue<'v> for T {
 pub trait MutableValue<'v>: StarlarkValue<'v> {
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue>;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue>;
 
     /// Called by the garbage collection, and must walk over every contained `Value` in the type.
     /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
@@ -88,7 +88,9 @@ pub trait MutableValue<'v>: StarlarkValue<'v> {
     }
 }
 
-pub trait ImmutableValue: StarlarkValue<'static> + Send + Sync {}
+/// A trait representing Starlark values which are simple - they
+/// aren't mutable and can't contain other Starlark values.
+pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 
 /// A trait for a value with a type that all variable container
 /// will implement.

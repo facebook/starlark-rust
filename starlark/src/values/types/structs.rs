@@ -23,7 +23,7 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        unsupported_with, AllocValue, Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue,
+        unsupported_with, AllocValue, Freezer, Heap, MutableValue, SimpleValue, StarlarkValue,
         Value, ValueLike, Walker,
     },
 };
@@ -72,7 +72,7 @@ impl<'v> StructBuilder<'v> {
 }
 
 impl<'v> MutableValue<'v> for Struct<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
 
         for (k, v) in self.fields.into_iter_hashed() {
@@ -86,7 +86,7 @@ impl<'v> MutableValue<'v> for Struct<'v> {
     }
 }
 
-impl ImmutableValue for FrozenStruct {}
+impl SimpleValue for FrozenStruct {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StructGen<T>
 where

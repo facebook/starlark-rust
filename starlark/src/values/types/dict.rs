@@ -21,7 +21,7 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::TypedIterable,
-        string::hash_string_value, Freezer, FrozenValue, Heap, ImmutableValue, MutableValue,
+        string::hash_string_value, Freezer, FrozenValue, Heap, MutableValue, SimpleValue,
         StarlarkValue, Value, ValueLike, Walker,
     },
 };
@@ -138,7 +138,7 @@ where
 }
 
 impl<'v> MutableValue<'v> for Dict<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut content: SmallMap<FrozenValue, FrozenValue> =
             SmallMap::with_capacity(self.content.len());
         for (k, v) in self.content.into_iter_hashed() {
@@ -166,7 +166,7 @@ impl FrozenDict {
     }
 }
 
-impl ImmutableValue for FrozenDict {}
+impl SimpleValue for FrozenDict {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for DictGen<T>
 where

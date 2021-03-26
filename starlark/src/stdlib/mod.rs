@@ -89,7 +89,7 @@ mod tests {
         stdlib::macros::UnpackValue,
         values::{
             none::NoneType, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
-            ImmutableValue, StarlarkValue, Value,
+            SimpleValue, StarlarkValue, Value,
         },
     };
     use gazebo::{any::AnyLifetime, prelude::*};
@@ -127,7 +127,7 @@ mod tests {
             }
         }
 
-        impl ImmutableValue for Bool2 {}
+        impl SimpleValue for Bool2 {}
 
         impl<'v> AllocFrozenValue<'v> for Bool2 {
             fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {

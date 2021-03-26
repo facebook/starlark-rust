@@ -20,7 +20,7 @@
 use crate::values::{
     index::{convert_index, convert_slice_indices},
     iter::TypedIterable,
-    AllocValue, Heap, ImmutableValue, StarlarkValue, Value, ValueError,
+    AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueError,
 };
 use gazebo::any::AnyLifetime;
 use std::{marker::PhantomData, num::NonZeroI32};
@@ -79,7 +79,7 @@ impl<'a> Iterator for RangeIterator<'a> {
     }
 }
 
-impl ImmutableValue for Range {}
+impl SimpleValue for Range {}
 
 impl<'v> AllocValue<'v> for Range {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {

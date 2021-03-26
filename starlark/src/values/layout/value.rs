@@ -37,7 +37,7 @@ use crate::values::{
         thawable_cell::ThawableCell,
     },
     none::NoneType,
-    ImmutableValue, MutableValue, StarlarkValue, ValueError,
+    MutableValue, SimpleValue, StarlarkValue, ValueError,
 };
 use either::Either;
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
@@ -91,10 +91,10 @@ pub(crate) enum FrozenValueMem {
     Uninitialized(Void), // Never created (see Value::Uninitialized)
     Blackhole, // Only occurs during a GC
     Str(Box<str>),
-    Immutable(Box<dyn ImmutableValue>), // Not really 'static - but I don't care what
+    Simple(Box<dyn SimpleValue>),
 }
 
-fn immutable_starlark_value<'a, 'v>(x: &'a dyn ImmutableValue) -> &'a dyn StarlarkValue<'v> {
+fn simple_starlark_value<'a, 'v>(x: &'a dyn SimpleValue) -> &'a dyn StarlarkValue<'v> {
     unsafe {
         transmute!(
             &'a dyn StarlarkValue<'static>,
@@ -120,8 +120,8 @@ pub(crate) enum ValueMem<'v> {
     Blackhole,
     // A literal string
     Str(Box<str>),
-    // Frozen things that are in my heap (e.g String)
-    Immutable(Box<dyn ImmutableValue>),
+    // Things that aren't mutable and don't point to other Value's
+    Simple(Box<dyn SimpleValue>),
     // Mutable things in my heap that aren't naturally_mutable()
     Pseudo(Box<dyn MutableValue<'v>>),
     // Mutable things that are in my heap and are naturally_mutable()
@@ -191,7 +191,7 @@ impl<'v> ValueMem<'v> {
         match self {
             Self::Forward(x) => Some(x.get_ref()),
             Self::Str(x) => Some(x),
-            Self::Immutable(x) => Some(immutable_starlark_value(Box::as_ref(x))),
+            Self::Simple(x) => Some(simple_starlark_value(Box::as_ref(x))),
             Self::Pseudo(x) => Some(x.as_starlark_value()),
             Self::Mutable(_) => None,
             Self::ThawOnWrite(_) => None,
@@ -203,7 +203,7 @@ impl<'v> ValueMem<'v> {
         match self {
             Self::Forward(x) => ARef::Ptr(x.get_ref()),
             Self::Str(x) => ARef::Ptr(x),
-            Self::Immutable(x) => ARef::Ptr(immutable_starlark_value(Box::as_ref(x))),
+            Self::Simple(x) => ARef::Ptr(simple_starlark_value(Box::as_ref(x))),
             Self::Pseudo(x) => ARef::Ptr(x.as_starlark_value()),
             Self::Mutable(x) => ARef::Ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
             Self::ThawOnWrite(state) => match state.get_ref() {
@@ -234,7 +234,7 @@ impl FrozenValueMem {
     fn get_ref<'v>(&self) -> &dyn StarlarkValue<'v> {
         match self {
             Self::Str(x) => x,
-            Self::Immutable(x) => immutable_starlark_value(Box::as_ref(x)),
+            Self::Simple(x) => simple_starlark_value(Box::as_ref(x)),
             _ => self.unexpected("get_ref"),
         }
     }

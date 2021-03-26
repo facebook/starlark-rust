@@ -26,7 +26,7 @@ use crate::{
         comparison::equals_slice,
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
-        Freezer, Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueLike, Walker,
+        Freezer, Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -113,7 +113,7 @@ impl<'v, T: ValueLike<'v>> RecordGen<T> {
 }
 
 impl<'v> MutableValue<'v> for Field<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box (*self).freeze(freezer)
     }
 
@@ -122,7 +122,7 @@ impl<'v> MutableValue<'v> for Field<'v> {
     }
 }
 
-impl ImmutableValue for FrozenField {}
+impl SimpleValue for FrozenField {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for FieldGen<T>
 where
@@ -152,7 +152,7 @@ where
 }
 
 impl<'v> MutableValue<'v> for RecordType<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
             fields.insert_hashed(k, t.freeze(freezer));
@@ -174,7 +174,7 @@ impl<'v> MutableValue<'v> for RecordType<'v> {
     }
 }
 
-impl ImmutableValue for FrozenRecordType {}
+impl SimpleValue for FrozenRecordType {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<T>
 where
@@ -275,7 +275,7 @@ where
 }
 
 impl<'v> MutableValue<'v> for Record<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box FrozenRecord {
             typ: self.typ.freeze(freezer),
             values: self.values.map(|v| v.freeze(freezer)),
@@ -288,7 +288,7 @@ impl<'v> MutableValue<'v> for Record<'v> {
     }
 }
 
-impl ImmutableValue for FrozenRecord {}
+impl SimpleValue for FrozenRecord {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordGen<T>
 where

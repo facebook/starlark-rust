@@ -27,7 +27,7 @@ use crate::{
         EnvironmentError,
     },
     values::{
-        Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, ImmutableValue, OwnedFrozenValue,
+        Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
         StarlarkValue, Value, ValueLike,
     },
 };
@@ -122,7 +122,7 @@ impl<'v> StarlarkValue<'v> for FrozenModuleRef {
     starlark_type!("frozen_module");
 }
 
-impl ImmutableValue for FrozenModuleRef {}
+impl SimpleValue for FrozenModuleRef {}
 
 impl FrozenModuleValue {
     pub fn new(freezer: &Freezer) -> Self {

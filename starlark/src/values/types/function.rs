@@ -25,7 +25,7 @@ use crate::{
     stdlib::UnpackValue,
     values::{
         unsupported, AllocFrozenValue, AllocValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Hashed, Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueError,
+        FrozenValue, Hashed, Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueError,
         ValueLike, Walker,
     },
 };
@@ -238,7 +238,7 @@ impl<
     }
 }
 
-impl<F: NativeFunc> ImmutableValue for NativeFunction<F> {}
+impl<F: NativeFunc> SimpleValue for NativeFunction<F> {}
 
 impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
@@ -313,7 +313,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
     starlark_type!("attribute");
 }
 
-impl ImmutableValue for NativeAttribute {}
+impl SimpleValue for NativeAttribute {}
 
 impl<'v> AllocFrozenValue<'v> for NativeAttribute {
     fn alloc_frozen_value(self, heap: &'v FrozenHeap) -> FrozenValue {
@@ -355,7 +355,7 @@ impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
 }
 
 impl<'v> MutableValue<'v> for WrappedMethod<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box WrappedMethodGen {
             method: self.method.freeze(freezer),
             self_obj: self.self_obj.freeze(freezer),
@@ -368,7 +368,7 @@ impl<'v> MutableValue<'v> for WrappedMethod<'v> {
     }
 }
 
-impl ImmutableValue for FrozenWrappedMethod {}
+impl SimpleValue for FrozenWrappedMethod {}
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrappedMethodGen<V>
 where

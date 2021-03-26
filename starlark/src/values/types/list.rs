@@ -24,7 +24,7 @@ use crate::{
         index::{convert_index, convert_slice_indices},
         iter::TypedIterable,
         tuple, unsupported_with, AllocFrozenValue, AllocValue, Freezer, FrozenHeap, FrozenValue,
-        Heap, ImmutableValue, MutableValue, StarlarkValue, Value, ValueLike, Walker,
+        Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -66,7 +66,7 @@ impl FrozenList {
 }
 
 impl<'v> MutableValue<'v> for List<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn ImmutableValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut content = Vec::with_capacity(self.content.len());
         for v in self.content {
             content.push(v.freeze(freezer))
@@ -87,7 +87,7 @@ impl FrozenList {
     }
 }
 
-impl ImmutableValue for FrozenList {}
+impl SimpleValue for FrozenList {}
 
 impl<'v, T: ValueLike<'v>> ListGen<T> {
     pub fn new(content: Vec<T>) -> Self {
