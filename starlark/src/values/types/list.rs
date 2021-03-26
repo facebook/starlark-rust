@@ -80,8 +80,9 @@ impl<'v> MutableValue<'v> for List<'v> {
 }
 
 impl<'v> ImmutableValue<'v> for FrozenList {
-    fn thaw(&self, heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
-        let vals = self.content.map(|e| heap.alloc_thaw_on_write(*e));
+    fn thaw(&self, _heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
+        // We know all the contents of the list will themselves be immutable
+        let vals = self.content.map(|e| e.to_value());
         box List { content: vals }
     }
 }
