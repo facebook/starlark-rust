@@ -241,6 +241,7 @@ impl Heap {
         self.alloc_raw(ValueMem::Immutable(box x))
     }
 
+    /// Invariant: Must be called on Dict or List
     pub(crate) fn alloc_thaw_on_write<'v>(&'v self, x: FrozenValue) -> Value<'v> {
         self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
     }

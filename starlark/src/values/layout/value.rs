@@ -190,12 +190,10 @@ impl<'v> ValueMem<'v> {
             },
             Self::ThawOnWrite(state) => match state.get_thawed() {
                 Some(v) => v.get_ref_mut(heap),
-                None => {
-                    match state.thaw(|fv| heap.alloc_mutable_box(fv.thaw_naturally_mutable(heap))) {
-                        None => Err(ValueError::MutationDuringIteration.into()),
-                        Some(v) => v.get_ref_mut(heap),
-                    }
-                }
+                None => match state.thaw(|fv| heap.alloc_mutable_box(fv.thaw(heap))) {
+                    None => Err(ValueError::MutationDuringIteration.into()),
+                    Some(v) => v.get_ref_mut(heap),
+                },
             },
             _ => Err(ValueError::CannotMutateImmutableValue.into()),
         }
@@ -425,17 +423,17 @@ impl FrozenValue {
         }
     }
 
-    // Invariant: Must be naturally_mutable(), and therefore must be an object
-    pub(crate) fn thaw_naturally_mutable<'v>(
-        self,
-        heap: &'v Heap,
-    ) -> Box<dyn MutableValue<'v> + 'v> {
-        match self.0.unpack_ptr1() {
-            Some(FrozenValueMem::Immutable(x)) => immutable_unstatic(Box::as_ref(x)).thaw(heap),
-            _ => panic!(
-                "FrozenValue.thaw called on type that wasn't an ImmutableValue, type {}",
+    // Invariant: Only list and dict can be frozen/thaw'ed
+    pub(crate) fn thaw<'v>(self, heap: &'v Heap) -> Box<dyn MutableValue<'v> + 'v> {
+        if let Some(x) = crate::values::list::FrozenList::from_value(&self) {
+            x.thaw(heap)
+        } else if let Some(x) = crate::values::dict::FrozenDict::from_value(&self) {
+            x.thaw(heap)
+        } else {
+            panic!(
+                "FrozenValue.thaw called on a type that wasn't List or Dict, type {}",
                 self.get_ref().get_type()
-            ),
+            )
         }
     }
 }
