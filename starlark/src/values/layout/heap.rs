@@ -242,11 +242,7 @@ impl Heap {
     }
 
     pub(crate) fn alloc_thaw_on_write<'v>(&'v self, x: FrozenValue) -> Value<'v> {
-        if x.get_ref().naturally_mutable() {
-            self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
-        } else {
-            Value::new_frozen(x)
-        }
+        self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
     }
 
     pub fn alloc_mutable<'v>(&'v self, x: impl MutableValue<'v>) -> Value<'v> {
