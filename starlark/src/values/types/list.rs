@@ -23,8 +23,8 @@ use crate::{
         error::ValueError,
         index::{convert_index, convert_slice_indices},
         iter::TypedIterable,
-        tuple, unsupported_with, AllocFrozenValue, AllocValue, Freezer, FrozenHeap, FrozenValue,
-        Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        tuple, unsupported_with, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -65,7 +65,7 @@ impl FrozenList {
     }
 }
 
-impl<'v> MutableValue<'v> for List<'v> {
+impl<'v> ComplexValue<'v> for List<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut content = Vec::with_capacity(self.content.len());
         for v in self.content {
@@ -80,7 +80,7 @@ impl<'v> MutableValue<'v> for List<'v> {
 }
 
 impl FrozenList {
-    pub(crate) fn thaw<'v>(&self) -> Box<dyn MutableValue<'v> + 'v> {
+    pub(crate) fn thaw<'v>(&self) -> Box<dyn ComplexValue<'v> + 'v> {
         // We know all the contents of the list will themselves be immutable
         let vals = self.content.map(|e| e.to_value());
         box List { content: vals }

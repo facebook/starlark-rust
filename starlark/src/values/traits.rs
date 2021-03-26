@@ -68,7 +68,9 @@ impl<'v, T: StarlarkValue<'v> + AnyLifetime<'v>> AsStarlarkValue<'v> for T {
     }
 }
 
-pub trait MutableValue<'v>: StarlarkValue<'v> {
+/// A trait for values which are more complex - because they are either mutable,
+/// or contain references to other values.
+pub trait ComplexValue<'v>: StarlarkValue<'v> {
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue>;

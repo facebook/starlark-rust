@@ -29,7 +29,7 @@ use crate::{
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
         function::{FunctionInvoker, FunctionInvokerInner, FUNCTION_VALUE_TYPE_NAME},
-        AllocValue, Freezer, FrozenValue, Heap, MutableValue, SimpleValue, StarlarkValue, Value,
+        AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Value,
         ValueLike, ValueRef, Walker,
     },
 };
@@ -230,7 +230,7 @@ impl<'v> AllocValue<'v> for FrozenDef {
     }
 }
 
-impl<'v> MutableValue<'v> for Def<'v> {
+impl<'v> ComplexValue<'v> for Def<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let parameters = self.parameters.freeze(freezer);
         let parameter_types = self

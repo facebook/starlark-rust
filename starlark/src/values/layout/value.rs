@@ -37,7 +37,7 @@ use crate::values::{
         thawable_cell::ThawableCell,
     },
     none::NoneType,
-    MutableValue, SimpleValue, StarlarkValue, ValueError,
+    ComplexValue, SimpleValue, StarlarkValue, ValueError,
 };
 use either::Either;
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
@@ -123,9 +123,9 @@ pub(crate) enum ValueMem<'v> {
     // Things that aren't mutable and don't point to other Value's
     Simple(Box<dyn SimpleValue>),
     // Mutable things in my heap that aren't naturally_mutable()
-    Pseudo(Box<dyn MutableValue<'v>>),
+    Immutable(Box<dyn ComplexValue<'v>>),
     // Mutable things that are in my heap and are naturally_mutable()
-    Mutable(RefCell<Box<dyn MutableValue<'v>>>),
+    Mutable(RefCell<Box<dyn ComplexValue<'v>>>),
     // Thaw on write things that are in my heap and are naturally_mutable()
     // They are either frozen pointers (to be thaw'ed) or normal (point at Mutable)
     ThawOnWrite(ThawableCell<'v>),
@@ -154,7 +154,7 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref_mut_already(&self) -> Option<RefMut<dyn MutableValue<'v>>> {
+    fn get_ref_mut_already(&self) -> Option<RefMut<dyn ComplexValue<'v>>> {
         match self {
             Self::Mutable(x) => match x.try_borrow_mut() {
                 Err(_) => None,
@@ -168,7 +168,7 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref_mut(&self, heap: &'v Heap) -> anyhow::Result<RefMut<dyn MutableValue<'v>>> {
+    fn get_ref_mut(&self, heap: &'v Heap) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
         match self {
             Self::Mutable(x) => match x.try_borrow_mut() {
                 // Could be called by something else having the ref locked, but iteration is
@@ -192,7 +192,7 @@ impl<'v> ValueMem<'v> {
             Self::Forward(x) => Some(x.get_ref()),
             Self::Str(x) => Some(x),
             Self::Simple(x) => Some(simple_starlark_value(Box::as_ref(x))),
-            Self::Pseudo(x) => Some(x.as_starlark_value()),
+            Self::Immutable(x) => Some(x.as_starlark_value()),
             Self::Mutable(_) => None,
             Self::ThawOnWrite(_) => None,
             _ => self.unexpected("get_ref"),
@@ -204,7 +204,7 @@ impl<'v> ValueMem<'v> {
             Self::Forward(x) => ARef::Ptr(x.get_ref()),
             Self::Str(x) => ARef::Ptr(x),
             Self::Simple(x) => ARef::Ptr(simple_starlark_value(Box::as_ref(x))),
-            Self::Pseudo(x) => ARef::Ptr(x.as_starlark_value()),
+            Self::Immutable(x) => ARef::Ptr(x.as_starlark_value()),
             Self::Mutable(x) => ARef::Ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
             Self::ThawOnWrite(state) => match state.get_ref() {
                 Either::Left(fv) => ARef::Ref(Ref::map(fv, |fv| fv.get_ref())),
@@ -330,14 +330,14 @@ impl<'v> Value<'v> {
     }
 
     // Like get_ref_mut, but only returns a mutable value if it's already mutable
-    pub(crate) fn get_ref_mut_already(self) -> Option<RefMut<'v, dyn MutableValue<'v>>> {
+    pub(crate) fn get_ref_mut_already(self) -> Option<RefMut<'v, dyn ComplexValue<'v>>> {
         self.0.unpack_ptr2().and_then(|x| x.get_ref_mut_already())
     }
 
     pub(crate) fn get_ref_mut(
         self,
         heap: &'v Heap,
-    ) -> anyhow::Result<RefMut<'v, dyn MutableValue<'v>>> {
+    ) -> anyhow::Result<RefMut<'v, dyn ComplexValue<'v>>> {
         if let Some(x) = self.0.unpack_ptr2() {
             return x.get_ref_mut(heap);
         }
@@ -412,7 +412,7 @@ impl FrozenValue {
     }
 
     // Invariant: Only list and dict can be frozen/thaw'ed
-    pub(crate) fn thaw<'v>(self) -> Box<dyn MutableValue<'v> + 'v> {
+    pub(crate) fn thaw<'v>(self) -> Box<dyn ComplexValue<'v> + 'v> {
         if let Some(x) = crate::values::list::FrozenList::from_value(&self) {
             x.thaw()
         } else if let Some(x) = crate::values::dict::FrozenDict::from_value(&self) {

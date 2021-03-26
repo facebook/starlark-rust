@@ -23,7 +23,7 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        unsupported_with, AllocValue, Freezer, Heap, MutableValue, SimpleValue, StarlarkValue,
+        unsupported_with, AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
         Value, ValueLike, Walker,
     },
 };
@@ -71,7 +71,7 @@ impl<'v> StructBuilder<'v> {
     }
 }
 
-impl<'v> MutableValue<'v> for Struct<'v> {
+impl<'v> ComplexValue<'v> for Struct<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
 

@@ -102,7 +102,7 @@ impl Compiler<'_> {
                     Ok(())
                 },
                 Slot::Module(slot) => box move |value, context| {
-                    // Make sure that `MutableValue`s get their name as soon as possible
+                    // Make sure that `ComplexValue`s get their name as soon as possible
                     value.export_as(&ident.node, context.heap);
                     context.set_slot_module(slot, value);
                     Ok(())

@@ -27,7 +27,7 @@ use crate::values::{
         value::{FrozenValue, FrozenValueMem, Value, ValueMem},
         ValueRef,
     },
-    AllocFrozenValue, MutableValue, SimpleValue,
+    AllocFrozenValue, ComplexValue, SimpleValue,
 };
 use gazebo::{cast, prelude::*};
 use std::{
@@ -181,7 +181,7 @@ impl Freezer {
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
             ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
-            ValueMem::Pseudo(x) => *fvmem = FrozenValueMem::Simple(x.freeze(self)),
+            ValueMem::Immutable(x) => *fvmem = FrozenValueMem::Simple(x.freeze(self)),
             ValueMem::Mutable(x) => *fvmem = FrozenValueMem::Simple(x.into_inner().freeze(self)),
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
@@ -242,15 +242,15 @@ impl Heap {
         self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
     }
 
-    pub fn alloc_mutable<'v>(&'v self, x: impl MutableValue<'v>) -> Value<'v> {
+    pub fn alloc_mutable<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
         self.alloc_mutable_box(box x)
     }
 
-    pub(crate) fn alloc_mutable_box<'v>(&'v self, x: Box<dyn MutableValue<'v> + 'v>) -> Value<'v> {
+    pub(crate) fn alloc_mutable_box<'v>(&'v self, x: Box<dyn ComplexValue<'v> + 'v>) -> Value<'v> {
         if x.naturally_mutable() {
             self.alloc_raw(ValueMem::Mutable(RefCell::new(x)))
         } else {
-            self.alloc_raw(ValueMem::Pseudo(x))
+            self.alloc_raw(ValueMem::Immutable(x))
         }
     }
 
@@ -370,7 +370,7 @@ impl<'v> Walker<'v> {
                 x.borrow_mut().walk(self)
             },
             ValueMem::ThawOnWrite(x) => x.walk(self),
-            ValueMem::Pseudo(x) => unsafe {
+            ValueMem::Immutable(x) => unsafe {
                 x.walk(self)
             },
             _ => {} // Doesn't contain Value pointers

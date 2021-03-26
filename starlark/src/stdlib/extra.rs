@@ -21,7 +21,7 @@ use crate::{
     eval::Parameters,
     values::{
         function::{FunctionInvoker, FUNCTION_VALUE_TYPE_NAME},
-        AllocValue, Freezer, FrozenValue, Heap, MutableValue, SimpleValue, StarlarkValue, Value,
+        AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Value,
         ValueLike, Walker,
     },
 };
@@ -114,7 +114,7 @@ impl<'v> AllocValue<'v> for Partial<Value<'v>> {
     }
 }
 
-impl<'v> MutableValue<'v> for Partial<Value<'v>> {
+impl<'v> ComplexValue<'v> for Partial<Value<'v>> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box Partial {
             func: self.func.freeze(freezer),

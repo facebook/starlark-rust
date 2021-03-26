@@ -22,7 +22,7 @@ use crate::{
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
         index::convert_index,
-        Freezer, Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use derivative::Derivative;
@@ -60,7 +60,7 @@ pub struct EnumValueGen<V> {
 starlark_value!(pub EnumType);
 starlark_value!(pub EnumValue);
 
-impl<'v> MutableValue<'v> for EnumType<'v> {
+impl<'v> ComplexValue<'v> for EnumType<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
@@ -86,7 +86,7 @@ impl<'v> MutableValue<'v> for EnumType<'v> {
     }
 }
 
-impl<'v> MutableValue<'v> for EnumValue<'v> {
+impl<'v> ComplexValue<'v> for EnumValue<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box FrozenEnumValue {
             typ: self.typ.freeze(freezer),

@@ -44,17 +44,17 @@ enum FrozenValue {
 
 enum Value {
     Immutable(FrozenValue),
-    Pseudo(Rc<dyn MutableValue>)
+    Pseudo(Rc<dyn ComplexValue>)
     Mutable(Rc<RefCell<Mutable>>),
 }
 
 enum Mutable {
-    Mutable(Box<dyn MutableValue>),
+    Mutable(Box<dyn ComplexValue>),
     ThawOnWrite(Arc<dyn SimpleValue>),
 }
 ```
 
-We have the traits `dyn SimpleValue` `and dyn MutableValue`, both of which let you convert to the other and have shared general value-like methods on. We have four types of value:
+We have the traits `dyn SimpleValue` `and dyn ComplexValue`, both of which let you convert to the other and have shared general value-like methods on. We have four types of value:
 
 * `Immutable` values, which are immutable.
 * `Pseudo` values, which are immutable containers of mutable values.

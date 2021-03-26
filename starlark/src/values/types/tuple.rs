@@ -19,7 +19,7 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    unsupported_with, AllocValue, Freezer, Heap, MutableValue, SimpleValue, StarlarkValue,
+    unsupported_with, AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
     TypedIterable, Value, ValueError, ValueLike, Walker,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -83,7 +83,7 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
     }
 }
 
-impl<'v> MutableValue<'v> for Tuple<'v> {
+impl<'v> ComplexValue<'v> for Tuple<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut frozen = Vec::with_capacity(self.content.len());
         for v in self.content {

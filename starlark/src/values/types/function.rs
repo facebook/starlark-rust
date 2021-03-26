@@ -24,8 +24,8 @@ use crate::{
     },
     stdlib::UnpackValue,
     values::{
-        unsupported, AllocFrozenValue, AllocValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Hashed, Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueError,
+        unsupported, AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer,
+        FrozenHeap, FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError,
         ValueLike, Walker,
     },
 };
@@ -354,7 +354,7 @@ impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
     }
 }
 
-impl<'v> MutableValue<'v> for WrappedMethod<'v> {
+impl<'v> ComplexValue<'v> for WrappedMethod<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box WrappedMethodGen {
             method: self.method.freeze(freezer),

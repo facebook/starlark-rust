@@ -26,7 +26,7 @@ use crate::{
         comparison::equals_slice,
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
-        Freezer, Heap, MutableValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -112,7 +112,7 @@ impl<'v, T: ValueLike<'v>> RecordGen<T> {
     }
 }
 
-impl<'v> MutableValue<'v> for Field<'v> {
+impl<'v> ComplexValue<'v> for Field<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box (*self).freeze(freezer)
     }
@@ -151,7 +151,7 @@ where
     }
 }
 
-impl<'v> MutableValue<'v> for RecordType<'v> {
+impl<'v> ComplexValue<'v> for RecordType<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
@@ -274,7 +274,7 @@ where
     }
 }
 
-impl<'v> MutableValue<'v> for Record<'v> {
+impl<'v> ComplexValue<'v> for Record<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box FrozenRecord {
             typ: self.typ.freeze(freezer),

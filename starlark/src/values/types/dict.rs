@@ -21,7 +21,7 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::TypedIterable,
-        string::hash_string_value, Freezer, FrozenValue, Heap, MutableValue, SimpleValue,
+        string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
         StarlarkValue, Value, ValueLike, Walker,
     },
 };
@@ -137,7 +137,7 @@ where
     }
 }
 
-impl<'v> MutableValue<'v> for Dict<'v> {
+impl<'v> ComplexValue<'v> for Dict<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut content: SmallMap<FrozenValue, FrozenValue> =
             SmallMap::with_capacity(self.content.len());
@@ -156,7 +156,7 @@ impl<'v> MutableValue<'v> for Dict<'v> {
 }
 
 impl FrozenDict {
-    pub(crate) fn thaw<'v>(&self) -> Box<dyn MutableValue<'v> + 'v> {
+    pub(crate) fn thaw<'v>(&self) -> Box<dyn ComplexValue<'v> + 'v> {
         let mut items = SmallMap::with_capacity(self.content.len());
         // We know all the contents of the dictionary will themselves be immutable
         for (k, v) in self.content.iter_hashed() {

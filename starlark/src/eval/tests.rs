@@ -731,7 +731,7 @@ xs == [1, 2, 3]
 fn test_export_as() {
     use crate as starlark;
     use crate::values::{
-        AllocValue, Freezer, Heap, MutableValue, SimpleValue, StarlarkValue, Value, Walker,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, Walker,
     };
     use gazebo::any::AnyLifetime;
 
@@ -761,7 +761,7 @@ fn test_export_as() {
         }
     }
 
-    impl MutableValue<'_> for Exporter {
+    impl ComplexValue<'_> for Exporter {
         fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> Box<dyn SimpleValue> {
             self.mutable = false;
             self
