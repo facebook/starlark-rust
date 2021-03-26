@@ -131,13 +131,13 @@ mod tests {
 
         impl AllocFrozenValue for Bool2 {
             fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-                heap.alloc_immutable(self)
+                heap.alloc_simple(self)
             }
         }
 
         impl<'v> AllocValue<'v> for Bool2 {
             fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-                heap.alloc_immutable(self)
+                heap.alloc_simple(self)
             }
         }
 

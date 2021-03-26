@@ -134,7 +134,7 @@ impl<'v> ComplexValue<'v> for Partial<Value<'v>> {
 
 impl<'v> AllocValue<'v> for Partial<FrozenValue> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 

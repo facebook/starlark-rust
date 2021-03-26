@@ -226,7 +226,7 @@ impl SimpleValue for FrozenDef {}
 
 impl<'v> AllocValue<'v> for FrozenDef {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 

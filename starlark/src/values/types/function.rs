@@ -213,7 +213,7 @@ unsafe impl<'a, F: NativeFunc> AnyLifetime<'a> for NativeFunction<F> {
 
 impl<'v, F: NativeFunc> AllocFrozenValue for NativeFunction<F> {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 
@@ -242,7 +242,7 @@ impl<F: NativeFunc> SimpleValue for NativeFunction<F> {}
 
 impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 
@@ -317,13 +317,13 @@ impl SimpleValue for NativeAttribute {}
 
 impl AllocFrozenValue for NativeAttribute {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 
 impl<'v> AllocValue<'v> for NativeAttribute {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 

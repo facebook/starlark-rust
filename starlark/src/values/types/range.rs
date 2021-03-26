@@ -83,7 +83,7 @@ impl SimpleValue for Range {}
 
 impl<'v> AllocValue<'v> for Range {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_immutable(self)
+        heap.alloc_simple(self)
     }
 }
 

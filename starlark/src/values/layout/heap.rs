@@ -119,7 +119,7 @@ impl FrozenHeap {
         self.alloc_raw(FrozenValueMem::Str(x))
     }
 
-    pub fn alloc_immutable(&self, val: impl SimpleValue) -> FrozenValue {
+    pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
         self.alloc_raw(FrozenValueMem::Simple(box val))
     }
 }
@@ -233,7 +233,7 @@ impl Heap {
         self.alloc_raw(ValueMem::Str(x))
     }
 
-    pub fn alloc_immutable<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
+    pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
         self.alloc_raw(ValueMem::Simple(box x))
     }
 
