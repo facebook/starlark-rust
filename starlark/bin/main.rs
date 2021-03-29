@@ -226,9 +226,7 @@ fn main() -> anyhow::Result<()> {
         ctx.check = true;
         ctx.info = false;
         ctx.run = false;
-        tokio::runtime::Runtime::new()?.block_on(async {
-            lsp::server(ctx).await;
-        })
+        lsp::server(ctx)?;
     } else if args.dap {
         dap::server(ctx)
     }
