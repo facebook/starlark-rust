@@ -35,9 +35,9 @@ impl<'v> Value<'v> {
             x == "" || x.starts_with('_')
         }
 
-        // Dictionary with a single key named ""
-        fn poly_dictionary<'v>(x: &Dict<'v>) -> Option<Value<'v>> {
-            if x.len() != 1 { None } else { x.get_str("") }
+        // Dictionary with a single element
+        fn unpack_singleton_dictionary<'v>(x: &Dict<'v>) -> Option<(Value<'v>, Value<'v>)> {
+            if x.len() == 1 { x.iter().next() } else { None }
         }
 
         if let Some(s) = ty.unpack_str() {
@@ -96,10 +96,10 @@ impl<'v> Value<'v> {
             match Dict::from_value(self) {
                 None => Ok(false),
                 Some(v) => {
-                    if let Some(vt) = poly_dictionary(&t) {
-                        // Dict of the form {"": fields}, so must be string/fields types
+                    if let Some((kt, vt)) = unpack_singleton_dictionary(&t) {
+                        // Dict of the form {k: v} must all match the k/v types
                         for (k, kv) in v.content.iter() {
-                            if k.unpack_str().is_none() || !kv.is_type(vt)? {
+                            if !k.is_type(kt)? || !kv.is_type(vt)? {
                                 return Ok(false);
                             }
                         }
