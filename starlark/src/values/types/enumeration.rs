@@ -22,7 +22,8 @@ use crate::{
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
         index::convert_index,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, TypedIterable, Value, ValueLike,
+        Walker,
     },
 };
 use derivative::Derivative;
@@ -205,6 +206,10 @@ where
         Ok(self.elements.get_index(i).map(|x| *x.1).unwrap().to_value())
     }
 
+    fn iterate(&self) -> anyhow::Result<&(dyn TypedIterable<'v> + 'v)> {
+        Ok(self)
+    }
+
     fn dir_attr(&self) -> Vec<String> {
         vec!["type".to_owned()]
     }
@@ -223,6 +228,15 @@ where
             }
             .into())
         }
+    }
+}
+
+impl<'v, V: ValueLike<'v>> TypedIterable<'v> for EnumTypeGen<V> {
+    fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
+    where
+        'v: 'a,
+    {
+        box self.elements.values().map(|x| x.to_value())
     }
 }
 

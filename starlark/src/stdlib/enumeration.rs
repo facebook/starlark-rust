@@ -93,7 +93,8 @@ foo(v[0]("option1"))"#,
             r#"
 enum_type = enum("option1","option2")
 assert_eq([enum_type[i].value for i in range(len(enum_type))], ["option1","option2"])
-assert_eq(enum_type("option2").index, 1)"#,
+assert_eq(enum_type("option2").index, 1)
+assert_eq([x.value for x in enum_type], ["option1","option2"])"#,
         );
         assert::pass(
             r#"

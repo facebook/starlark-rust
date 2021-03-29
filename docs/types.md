@@ -81,6 +81,6 @@ This statement defines an enumeration `MyEnum` that consists of the three values
 * Create values of this type with `MyEnum("option2")`. It is a runtime error if the argument is not one of the predeclared values of the enumeration.
 * Get the type of the enum suitable for a type annotation with `MyEnum.type`.
 * Given a value of the enum, e.g. `v = MyEnum("option2")`, get the underlying value `v.value == "option2"` or the index in the enumeration `v.index = 1`.
-* Treat `MyEnum` a bit like an array, with `len(MyEnum) == 3` and `MyEnum[1] == MyEnum("option2")`.
+* Treat `MyEnum` a bit like an array, with `len(MyEnum) == 3`, `MyEnum[1] == MyEnum("option2")` and iteration over enums `[x.value for x in MyEnum] == ["option1", "option2", True]`.
 
 Enumeration types store each value once, which are then efficiently referenced by enumeration values.
