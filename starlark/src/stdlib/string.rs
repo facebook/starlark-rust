@@ -95,7 +95,7 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
             ));
         }
         match kwargs.get(n) {
-            None => Err(ValueError::KeyNotFound(n.to_owned().into_boxed_str().to_repr()).into()),
+            None => Err(ValueError::KeyNotFound(Box::<str>::from(n).to_repr()).into()),
             Some(v) => Ok(conv(*v)),
         }
     }

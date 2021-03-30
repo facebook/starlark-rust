@@ -32,7 +32,7 @@ impl ConstFrozenValue {
     pub fn unpack(&'static self) -> FrozenValue {
         let v = self
             .1
-            .get_or_init(|| FrozenValueMem::Str(self.0.to_owned().into_boxed_str()));
+            .get_or_init(|| FrozenValueMem::Str(Box::from(self.0)));
         FrozenValue(Pointer::new_ptr1(v))
     }
 }
