@@ -32,7 +32,7 @@ use crate::{
     values::{
         fast_string,
         list::{FrozenList, List},
-        Heap, Value, ValueError,
+        ControlError, Heap, Value,
     },
 };
 use gazebo::prelude::*;
@@ -273,7 +273,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     if lhs.downcast_ref::<List>().is_some() || lhs.downcast_ref::<FrozenList>().is_some() {
         let xs = rhs.iterate_collect(heap)?;
         match List::from_value_mut(lhs, heap)? {
-            None => Err(ValueError::CannotMutateImmutableValue.into()),
+            None => Err(ControlError::CannotMutateImmutableValue.into()),
             Some(mut list) => {
                 list.extend(xs);
                 Ok(lhs)

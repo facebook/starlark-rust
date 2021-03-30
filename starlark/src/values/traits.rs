@@ -32,7 +32,7 @@ use crate::{
     environment::Globals,
     values::{
         function::FunctionInvoker, unsupported, unsupported_owned, unsupported_with,
-        ConstFrozenValue, Freezer, Heap, StarlarkIterable, Value, ValueError, Walker,
+        ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable, Value, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -224,7 +224,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
             // function. Returning 0 as the hash is valid, as Eq will sort it out.
             Ok(0)
         } else {
-            Err(ValueError::NotHashableValue(self.get_type().to_owned()).into())
+            Err(ControlError::NotHashableValue(self.get_type().to_owned()).into())
         }
     }
 

@@ -37,7 +37,7 @@ use crate::values::{
         thawable_cell::ThawableCell,
     },
     none::NoneType,
-    ComplexValue, SimpleValue, StarlarkValue, ValueError,
+    ComplexValue, ControlError, SimpleValue, StarlarkValue,
 };
 use either::Either;
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
@@ -173,17 +173,17 @@ impl<'v> ValueMem<'v> {
             Self::Mutable(x) => match x.try_borrow_mut() {
                 // Could be called by something else having the ref locked, but iteration is
                 // definitely most likely
-                Err(_) => Err(ValueError::MutationDuringIteration.into()),
+                Err(_) => Err(ControlError::MutationDuringIteration.into()),
                 Ok(state) => Ok(RefMut::map(state, |x| &mut **x)),
             },
             Self::ThawOnWrite(state) => match state.get_thawed() {
                 Some(v) => v.get_ref_mut(heap),
                 None => match state.thaw(|fv| heap.alloc_complex_box(fv.thaw())) {
-                    None => Err(ValueError::MutationDuringIteration.into()),
+                    None => Err(ControlError::MutationDuringIteration.into()),
                     Some(v) => v.get_ref_mut(heap),
                 },
             },
-            _ => Err(ValueError::CannotMutateImmutableValue.into()),
+            _ => Err(ControlError::CannotMutateImmutableValue.into()),
         }
     }
 
@@ -341,7 +341,7 @@ impl<'v> Value<'v> {
         if let Some(x) = self.0.unpack_ptr2() {
             return x.get_ref_mut(heap);
         }
-        Err(ValueError::CannotMutateImmutableValue.into())
+        Err(ControlError::CannotMutateImmutableValue.into())
     }
 
     /// Equality on the underlying pointer.

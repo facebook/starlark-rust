@@ -27,7 +27,7 @@
 use crate::{
     codemap::{CodeMap, Span, SpanLoc},
     errors::Frame,
-    values::{Value, ValueError, Walker},
+    values::{ControlError, Value, Walker},
 };
 use std::{cell::Cell, fmt, fmt::Debug, sync::Arc};
 
@@ -83,7 +83,7 @@ impl<'v> CallStack<'v> {
         location: Option<(Arc<CodeMap>, Span)>,
     ) -> anyhow::Result<()> {
         if self.stack.len() > MAX_CALLSTACK_RECURSION {
-            return Err(ValueError::TooManyRecursionLevel.into());
+            return Err(ControlError::TooManyRecursionLevel.into());
         }
         self.stack.push(CheapFrame { function, location });
         Ok(())
@@ -176,7 +176,7 @@ fn inc() -> StackGuard {
 /// Check stack depth does not exceed configured max stack depth.
 fn check() -> anyhow::Result<()> {
     if STACK_DEPTH.with(Cell::get) >= MAX_RECURSION {
-        return Err(ValueError::TooManyRecursionLevel.into());
+        return Err(ControlError::TooManyRecursionLevel.into());
     }
     Ok(())
 }

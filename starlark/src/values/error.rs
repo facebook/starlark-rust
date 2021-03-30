@@ -22,47 +22,37 @@ use thiserror::Error;
 
 /// Error that can be returned by function from the `StarlarkValue` trait,
 #[derive(Debug, Error)]
-// FIXME: Would be good if this wasn't public, or only a subset of constructors were public.
 pub enum ValueError {
-    /// The operation is not supported for this type.
     #[error("Operation `{op}` not supported on type `{typ}`")]
     OperationNotSupported { op: String, typ: String },
-    /// The operation is not supported for this type.
     #[error("Operation `{op}` not supported for types `{left}` and `{right}`")]
     OperationNotSupportedBinary {
         op: String,
         left: String,
         right: String,
     },
-    /// Division by 0
     #[error("Cannot divide by zero")]
     DivisionByZero,
-    /// Arithmetic operation results in integer overflow.
     #[error("Integer overflow")]
     IntegerOverflow,
-    /// Trying to modify an immutable value.
-    #[error("Immutable")]
-    CannotMutateImmutableValue,
-    /// Trying to apply incorrect parameter type, e.g. for slicing.
     #[error("Type of parameters mismatch")]
     IncorrectParameterType,
-    /// Trying to apply incorrect parameter type, e.g. for slicing.
     #[error("Type of parameter `{0}` doesn't match")]
     IncorrectParameterTypeNamed(String),
-    /// Trying to access an index outside of the value range,
     #[error("Index `{0}` is out of bound")]
     IndexOutOfBound(i32),
-    /// The value is not hashable but was requested for a hash structure (e.g.
-    /// dictionary).
-    #[error("Value of type `{0}` is not hashable")]
-    NotHashableValue(String),
-    /// The key was not found in the collection, stores the repr of the value.
     #[error("Key `{0}` was not found")]
     KeyNotFound(String),
-    /// Too many recursion in internal operation
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum ControlError {
+    #[error("Immutable")]
+    CannotMutateImmutableValue,
+    #[error("Value of type `{0}` is not hashable")]
+    NotHashableValue(String),
     #[error("Too many recursion levels")]
     TooManyRecursionLevel,
-    /// It is not allowed to mutate a structure during iteration.
     #[error("This operation mutate an iterable for an iterator while iterating.")]
     MutationDuringIteration,
 }
