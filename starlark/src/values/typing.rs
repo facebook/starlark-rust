@@ -18,7 +18,7 @@
 use crate::values::{dict::Dict, list::List, tuple::Tuple, Value};
 use thiserror::Error;
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 enum TypingError {
     /// The value does not have the specified type
     #[error("Value `{0}` of type `{1}` does not match the type annotation `{2}` for {3}")]

@@ -21,7 +21,7 @@ use crate::values::{StarlarkValue, Value};
 use thiserror::Error;
 
 /// Error that can be returned by function from the `StarlarkValue` trait,
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 // FIXME: Would be good if this wasn't public, or only a subset of constructors were public.
 pub enum ValueError {
     /// The operation is not supported for this type.
