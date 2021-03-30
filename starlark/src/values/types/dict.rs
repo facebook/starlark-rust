@@ -58,10 +58,6 @@ impl<V> DictGen<V> {
     pub fn new(content: SmallMap<V, V>) -> Self {
         Self { content }
     }
-
-    pub fn get_content(&self) -> &SmallMap<V, V> {
-        &self.content
-    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -271,7 +267,7 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for
     fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
         let dict = Dict::from_value(value)?;
         let mut r = SmallMap::new();
-        for (k, v) in dict.get_content().iter() {
+        for (k, v) in dict.content.iter() {
             r.insert(K::unpack_value(*k, heap)?, V::unpack_value(*v, heap)?);
         }
         Some(r)
