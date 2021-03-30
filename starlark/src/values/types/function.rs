@@ -287,8 +287,10 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
     }
 }
 
-#[derive(AnyLifetime, Debug)]
+#[derive(Debug)]
 pub struct NativeAttribute(FrozenValue); // Must be a NativeFunction
+
+starlark_simple_value!(NativeAttribute);
 
 impl NativeAttribute {
     // x must be a NativeFunction
@@ -310,20 +312,6 @@ impl NativeAttribute {
 
 impl<'v> StarlarkValue<'v> for NativeAttribute {
     starlark_type!("attribute");
-}
-
-impl SimpleValue for NativeAttribute {}
-
-impl AllocFrozenValue for NativeAttribute {
-    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(self)
-    }
-}
-
-impl<'v> AllocValue<'v> for NativeAttribute {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
-    }
 }
 
 // Wrapper for method that have been affected the self object

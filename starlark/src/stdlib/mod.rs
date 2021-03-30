@@ -74,16 +74,13 @@ pub fn add_breakpoint(builder: &mut GlobalsBuilder) {
 
 #[cfg(test)]
 mod tests {
-    use crate as starlark;
     use crate::{
+        self as starlark,
         assert::Assert,
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
-        values::{
-            none::NoneType, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
-            SimpleValue, StarlarkValue, UnpackValue, Value,
-        },
+        values::{none::NoneType, Heap, StarlarkValue, UnpackValue, Value},
     };
-    use gazebo::{any::AnyLifetime, prelude::*};
+    use gazebo::prelude::*;
 
     #[test]
     fn test_no_arg() {
@@ -100,8 +97,10 @@ mod tests {
 
     #[test]
     fn test_value_attributes() {
-        #[derive(AnyLifetime, Copy, Clone, Debug, Dupe, PartialEq)]
+        #[derive(Copy, Clone, Debug, Dupe, PartialEq)]
         struct Bool2(bool);
+        starlark_simple_value!(Bool2);
+
         impl<'v> StarlarkValue<'v> for Bool2 {
             starlark_type!("bool2");
 
@@ -115,20 +114,6 @@ mod tests {
                     None => Ok(false),
                     Some(v) => Ok(*v == *self),
                 }
-            }
-        }
-
-        impl SimpleValue for Bool2 {}
-
-        impl AllocFrozenValue for Bool2 {
-            fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-                heap.alloc_simple(self)
-            }
-        }
-
-        impl<'v> AllocValue<'v> for Bool2 {
-            fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-                heap.alloc_simple(self)
             }
         }
 

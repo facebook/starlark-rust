@@ -70,6 +70,7 @@ macro_rules! starlark_value {
                         .or_else(|| x.downcast_ref::<$x<'v>>())
                 }
 
+                #[allow(dead_code)]
                 pub fn from_value_mut(
                     x: $crate::values::Value<'v>,
                     heap: &'v $crate::values::Heap,

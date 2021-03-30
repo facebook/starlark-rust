@@ -21,8 +21,7 @@ use crate::{
     eval::Parameters,
     values::{
         function::{FunctionInvoker, FUNCTION_VALUE_TYPE_NAME},
-        AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Value,
-        ValueLike, Walker,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -59,7 +58,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
         Ok(res)
     }
 
-    fn partial(func: Value, args: Value, kwargs: Value) -> Partial<Value<'v>> {
+    fn partial(func: Value, args: Value, kwargs: Value) -> Partial<'v> {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
         let mut signature = Parameters::with_capacity(name, 2);
@@ -96,27 +95,18 @@ pub fn global(builder: &mut GlobalsBuilder) {
 }
 
 #[derive(Debug)]
-struct Partial<V> {
+struct PartialGen<V> {
     func: V,
     args: V,
     kwargs: V,
     signature: Parameters<V>,
 }
 
-unsafe impl<'v> AnyLifetime<'v> for Partial<Value<'v>> {
-    any_lifetime_body!(Partial<Value<'static>>);
-}
-any_lifetime!(Partial<FrozenValue>);
+starlark_value!(Partial);
 
-impl<'v> AllocValue<'v> for Partial<Value<'v>> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(self)
-    }
-}
-
-impl<'v> ComplexValue<'v> for Partial<Value<'v>> {
+impl<'v> ComplexValue<'v> for Partial<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box Partial {
+        box FrozenPartial {
             func: self.func.freeze(freezer),
             args: self.args.freeze(freezer),
             kwargs: self.kwargs.freeze(freezer),
@@ -132,15 +122,9 @@ impl<'v> ComplexValue<'v> for Partial<Value<'v>> {
     }
 }
 
-impl<'v> AllocValue<'v> for Partial<FrozenValue> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
-    }
-}
+impl SimpleValue for FrozenPartial {}
 
-impl SimpleValue for Partial<FrozenValue> {}
-
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for Partial<V>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for PartialGen<V>
 where
     Self: AnyLifetime<'v>,
 {

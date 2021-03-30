@@ -20,18 +20,19 @@
 use crate::values::{
     index::{convert_index, convert_slice_indices},
     iter::StarlarkIterable,
-    AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueError,
+    Heap, StarlarkValue, Value, ValueError,
 };
-use gazebo::any::AnyLifetime;
 use std::{marker::PhantomData, num::NonZeroI32};
 
 /// Representation of `range()` type.
-#[derive(Clone, Copy, Debug, AnyLifetime)]
+#[derive(Clone, Copy, Debug)]
 pub struct Range {
     start: i32,
     stop: i32,
     step: NonZeroI32,
 }
+
+starlark_simple_value!(Range);
 
 impl Range {
     pub const TYPE: &'static str = "range";
@@ -76,14 +77,6 @@ impl<'a> Iterator for RangeIterator<'a> {
         let old_start = self.0.start;
         self.0.start = self.0.start.saturating_add(self.0.step.get());
         Some(Value::new_int(old_start))
-    }
-}
-
-impl SimpleValue for Range {}
-
-impl<'v> AllocValue<'v> for Range {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
     }
 }
 
