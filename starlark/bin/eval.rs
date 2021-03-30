@@ -21,7 +21,7 @@ use starlark::{
     analysis,
     environment::{FrozenModule, Globals, Module},
     eval::Evaluator,
-    stdlib::{add_typing, extended_environment},
+    stdlib::extended_environment,
     syntax::{AstModule, Dialect},
 };
 use std::{
@@ -151,7 +151,7 @@ impl Context {
 }
 
 pub fn globals() -> Globals {
-    extended_environment().with(add_typing).build()
+    extended_environment().build()
 }
 
 pub fn dialect() -> Dialect {

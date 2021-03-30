@@ -29,7 +29,6 @@ pub(crate) mod list;
 pub(crate) mod record;
 pub(crate) mod string;
 pub(crate) mod structs;
-mod typing;
 pub(crate) mod util;
 
 /// Return the default global environment, it is not yet frozen so that a caller
@@ -66,11 +65,6 @@ pub fn add_enum(builder: &mut GlobalsBuilder) {
 /// Add functions like `filter` and `partial` to the global environment.
 pub fn add_extra_functions(builder: &mut GlobalsBuilder) {
     extra::global(builder)
-}
-
-/// Add operations to assert type matching.
-pub fn add_typing(builder: &mut GlobalsBuilder) {
-    typing::global(builder)
 }
 
 /// Add the breakpoint function

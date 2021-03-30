@@ -24,7 +24,7 @@ use crate::{
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::{eprint_error, Diagnostic},
     eval::{Evaluator, ReturnFileLoader},
-    stdlib::{add_typing, extended_environment},
+    stdlib::extended_environment,
     syntax::{
         lexer::{Lexer, Token},
         AstModule, Dialect,
@@ -37,7 +37,7 @@ use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};
 
 fn mk_environment() -> GlobalsBuilder {
-    extended_environment().with(test_methods).with(add_typing)
+    extended_environment().with(test_methods)
 }
 
 static GLOBALS: Lazy<Globals> = Lazy::new(|| mk_environment().build());
@@ -150,6 +150,15 @@ fn test_methods(builder: &mut GlobalsBuilder) {
         } else {
             panic!("assert::garbage_collect, can only be called from a top-level statement")
         }
+    }
+
+    fn assert_type(v: Value, ty: Value) -> NoneType {
+        v.check_type(ty, Some("v"))?;
+        Ok(NoneType)
+    }
+
+    fn is_type(v: Value, ty: Value) -> bool {
+        v.is_type(ty)
     }
 }
 
