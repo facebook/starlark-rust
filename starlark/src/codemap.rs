@@ -124,17 +124,6 @@ pub struct Spanned<T> {
     pub span: Span,
 }
 
-impl<T> Spanned<T> {
-    /// Maps a `Spanned<T>` to `Spanned<U>` by applying the function to the node,
-    /// leaving the span untouched.
-    pub fn map_node<U, F: FnOnce(T) -> U>(self, op: F) -> Spanned<U> {
-        Spanned {
-            node: op(self.node),
-            span: self.span,
-        }
-    }
-}
-
 impl<T> Deref for Spanned<T> {
     type Target = T;
 
