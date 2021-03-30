@@ -70,7 +70,7 @@ fn cmd_variables(ctx: &mut Evaluator) -> anyhow::Result<Next> {
 }
 
 fn cmd_stack(ctx: &mut Evaluator) -> anyhow::Result<Next> {
-    for x in ctx.inspect_stack() {
+    for x in ctx.call_stack() {
         eprintln!("* {}", x)
     }
     Ok(Next::Again)

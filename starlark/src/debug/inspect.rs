@@ -23,7 +23,7 @@ use crate::{
     },
     values::Value,
 };
-use gazebo::{cell::ARef, prelude::*};
+use gazebo::cell::ARef;
 
 pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
     if let Some(x) = x.downcast_ref::<Def<'v>>() {
@@ -36,12 +36,6 @@ pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {
-    pub fn inspect_stack(&self) -> Vec<String> {
-        self.call_stack()
-            .to_diagnostic_frames()
-            .map(ToString::to_string)
-    }
-
     pub fn inspect_variables(&self) -> SmallMap<String, Value<'v>> {
         inspect_local_variables(self).unwrap_or_else(|| inspect_module_variables(self))
     }
@@ -49,7 +43,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
 fn inspect_local_variables<'v>(ctx: &Evaluator<'v, '_>) -> Option<SmallMap<String, Value<'v>>> {
     // First we find the first entry on the call_stack which contains a Def (and thus has locals)
-    let xs = ctx.call_stack().to_function_values();
+    let xs = ctx.call_stack.to_function_values();
     let names = xs.into_iter().rev().find_map(to_scope_names)?;
     let mut res = SmallMap::new();
     for (name, slot) in &names.mp {
@@ -73,11 +67,12 @@ fn inspect_module_variables<'v>(ctx: &Evaluator<'v, '_>) -> SmallMap<String, Val
 #[cfg(test)]
 mod tests {
     use crate::{self as starlark, assert, environment::GlobalsBuilder, values::structs::Struct};
+    use gazebo::prelude::*;
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_inspect_stack() -> Vec<String> {
-            Ok(ctx.inspect_stack())
+            Ok(ctx.call_stack().map(ToString::to_string))
         }
 
         fn debug_inspect_variables() -> Struct<'v> {

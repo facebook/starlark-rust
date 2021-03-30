@@ -21,7 +21,7 @@ use crate::{
     environment::{
         slots::LocalSlots, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
-    errors::Diagnostic,
+    errors::{Diagnostic, Frame},
     eval::call_stack::CallStack,
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
@@ -106,8 +106,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.loader = Some(loader);
     }
 
-    pub fn call_stack(&self) -> &CallStack<'v> {
-        &self.call_stack
+    pub fn call_stack(&self) -> Vec<Frame> {
+        self.call_stack.to_diagnostic_frames()
+    }
+
+    pub fn call_stack_top_location(&self) -> Option<SpanLoc> {
+        self.call_stack.top_location()
     }
 
     pub fn look_up_span(&self, span: Span) -> SpanLoc {

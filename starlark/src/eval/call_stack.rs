@@ -66,7 +66,7 @@ impl Debug for CheapFrame<'_> {
 
 /// Starlark call stack.
 #[derive(Debug, Default)]
-pub struct CallStack<'v> {
+pub(crate) struct CallStack<'v> {
     stack: Vec<CheapFrame<'v>>,
 }
 

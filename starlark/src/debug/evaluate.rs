@@ -55,7 +55,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         // Push all local variables into the module
         let locals = self
-            .call_stack()
+            .call_stack
             .to_function_values()
             .into_iter()
             .rev()
