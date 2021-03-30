@@ -31,9 +31,11 @@ fn go(x: &AstStmt, res: &mut Vec<Span>) {
     x.visit_stmt(|x| go(x, res))
 }
 
-/// Locations where statements occur, likely to be passed as the positions to `on_stmt`
-pub fn stmt_locations(x: &AstModule) -> Vec<Span> {
-    let mut res = Vec::new();
-    x.statement.visit_stmt(|x| go(x, &mut res));
-    res
+impl AstModule {
+    /// Locations where statements occur, likely to be passed as the positions to `on_stmt`
+    pub fn stmt_locations(&self) -> Vec<Span> {
+        let mut res = Vec::new();
+        self.statement.visit_stmt(|x| go(x, &mut res));
+        res
+    }
 }

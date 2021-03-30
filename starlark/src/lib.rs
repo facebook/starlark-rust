@@ -378,7 +378,7 @@ pub mod analysis;
 pub mod assert;
 pub mod codemap;
 pub mod collections;
-pub mod debug;
+mod debug;
 pub mod environment;
 pub mod errors;
 pub mod eval;

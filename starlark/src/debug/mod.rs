@@ -18,7 +18,3 @@
 mod breakpoint;
 mod evaluate;
 mod inspect;
-
-pub use breakpoint::*;
-pub use evaluate::*;
-pub use inspect::*;

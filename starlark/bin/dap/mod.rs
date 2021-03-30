@@ -22,7 +22,6 @@ pub use library::*;
 use serde_json::{Map, Value};
 use starlark::{
     codemap::{Span, SpanLoc},
-    debug,
     environment::Module,
     eval::Evaluator,
     syntax::AstModule,
@@ -202,7 +201,8 @@ impl DebugServer for Backend {
                     })
                 }
                 Ok(ast) => {
-                    let poss: HashMap<usize, Span> = debug::stmt_locations(&ast)
+                    let poss: HashMap<usize, Span> = ast
+                        .stmt_locations()
                         .iter()
                         .map(|x| {
                             let span = ast.look_up_span(*x);
@@ -304,7 +304,7 @@ impl DebugServer for Backend {
 
     fn scopes(&self, _: ScopesArguments) -> anyhow::Result<ScopesResponseBody> {
         self.with_ctx(box |_, ctx| {
-            let vars = debug::inspect_variables(ctx);
+            let vars = ctx.inspect_variables();
             Ok(ScopesResponseBody {
                 scopes: vec![Scope {
                     name: "Locals".to_owned(),
@@ -324,7 +324,7 @@ impl DebugServer for Backend {
 
     fn variables(&self, _: VariablesArguments) -> anyhow::Result<VariablesResponseBody> {
         self.with_ctx(box |_, ctx| {
-            let vars = debug::inspect_variables(ctx);
+            let vars = ctx.inspect_variables();
             Ok(VariablesResponseBody {
                 variables: vars
                     .into_iter()
@@ -353,7 +353,7 @@ impl DebugServer for Backend {
             // We don't want to trigger breakpoints during an evaluate,
             // not least because we currently don't allow reenterant evaluate
             let old = mem::take(&mut ctx.on_stmt);
-            let s = match debug::evaluate(x.expression.clone(), ctx) {
+            let s = match ctx.eval_statements(x.expression.clone()) {
                 Err(e) => format!("{:#}", e),
                 Ok(v) => v.to_string(),
             };

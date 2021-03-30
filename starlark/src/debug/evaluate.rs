@@ -16,88 +16,90 @@
  */
 
 use crate::{
-    debug::to_scope_names,
+    debug::inspect::to_scope_names,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
     values::Value,
 };
 use std::{collections::HashMap, mem};
 
-/// Evaluate an expression in a context. Attempt to map variables over and back again.
-/// Lots of health warnings on this code. Might not work with frozen modules, unassigned variables,
-/// nested definitions etc. All are solvable, with increasing levels of effort.
-/// It would be a bad idea to rely on the results after evaluating stuff randomly.
-pub fn evaluate<'v>(code: String, ctx: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
-    let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
+impl<'v, 'a> Evaluator<'v, 'a> {
+    /// Evaluate statements in the existing context. Attempt to map variables over and back again.
+    /// Lots of health warnings on this code. Might not work with frozen modules, unassigned variables,
+    /// nested definitions etc. All are solvable, with increasing levels of effort.
+    /// It would be a bad idea to rely on the results after evaluating stuff randomly.
+    pub fn eval_statements(&mut self, code: String) -> anyhow::Result<Value<'v>> {
+        let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
 
-    // We are doing a lot of funky stuff here. It's amazing anything works, so let's not push our luck with GC.
-    ctx.disable_gc();
+        // We are doing a lot of funky stuff here. It's amazing anything works, so let's not push our luck with GC.
+        self.disable_gc();
 
-    // Everything must be evaluated with the current heap (or we'll lose memory), which means
-    // the current module (ctx.module_env).
-    // We also want access to the module variables (fine), the locals (need to move them over),
-    // and the frozen variables (move them over).
-    // Afterwards, we want to put everything back - locals can move back to locals, modules
-    // can stay where they are, but frozen values are discarded.
+        // Everything must be evaluated with the current heap (or we'll lose memory), which means
+        // the current module (ctx.module_env).
+        // We also want access to the module variables (fine), the locals (need to move them over),
+        // and the frozen variables (move them over).
+        // Afterwards, we want to put everything back - locals can move back to locals, modules
+        // can stay where they are, but frozen values are discarded.
 
-    // We want all the local variables to be available to the module, so we capture
-    // everything before, shove the local variables into the module, and then revert after
-    let original_module: HashMap<String, Option<Value<'v>>> = ctx
-        .module_env
-        .names()
-        .all_names()
-        .iter()
-        .map(|(name, slot)| (name.clone(), ctx.module_env.slots().get_slot(*slot)))
-        .collect();
+        // We want all the local variables to be available to the module, so we capture
+        // everything before, shove the local variables into the module, and then revert after
+        let original_module: HashMap<String, Option<Value<'v>>> = self
+            .module_env
+            .names()
+            .all_names()
+            .iter()
+            .map(|(name, slot)| (name.clone(), self.module_env.slots().get_slot(*slot)))
+            .collect();
 
-    // Push all the frozen variables into the module
-    if let Some(frozen) = &ctx.module_variables {
-        for (name, slot) in frozen.0.names.symbols() {
-            if let Some(value) = frozen.get_slot(*slot) {
-                ctx.module_env.set(name, value.to_value())
+        // Push all the frozen variables into the module
+        if let Some(frozen) = &self.module_variables {
+            for (name, slot) in frozen.0.names.symbols() {
+                if let Some(value) = frozen.get_slot(*slot) {
+                    self.module_env.set(name, value.to_value())
+                }
             }
         }
+
+        // Push all local variables into the module
+        let locals = self
+            .call_stack()
+            .to_function_values()
+            .into_iter()
+            .rev()
+            .find_map(to_scope_names);
+        if let Some(names) = &locals {
+            for (name, slot) in &names.mp {
+                if let Some(value) = self.local_variables.get_slot(*slot) {
+                    self.module_env.set(name, value)
+                }
+            }
+        }
+
+        let orig_is_module_scope = mem::replace(&mut self.is_module_scope, true);
+        let orig_module_variables = mem::replace(&mut self.module_variables, None);
+        let res = self.eval_module(ast);
+        self.is_module_scope = orig_is_module_scope;
+        self.module_variables = orig_module_variables;
+
+        // Now put the Module back how it was before we started, as best we can
+        // and move things into locals if that makes sense
+        if let Some(names) = &locals {
+            for (name, slot) in &names.mp {
+                if let Some(value) = self.module_env.get(name) {
+                    self.local_variables.set_slot(*slot, value)
+                }
+            }
+            for (name, slot) in self.module_env.names().all_names() {
+                match original_module.get(&name) {
+                    None => self.module_env.names().hide_name(&name),
+                    Some(Some(value)) => self.module_env.slots().set_slot(slot, *value),
+                    _ => {} // No way to unassign a previously assigned value yet
+                }
+            }
+        }
+
+        res
     }
-
-    // Push all local variables into the module
-    let locals = ctx
-        .call_stack()
-        .to_function_values()
-        .into_iter()
-        .rev()
-        .find_map(to_scope_names);
-    if let Some(names) = &locals {
-        for (name, slot) in &names.mp {
-            if let Some(value) = ctx.local_variables.get_slot(*slot) {
-                ctx.module_env.set(name, value)
-            }
-        }
-    }
-
-    let orig_is_module_scope = mem::replace(&mut ctx.is_module_scope, true);
-    let orig_module_variables = mem::replace(&mut ctx.module_variables, None);
-    let res = ctx.eval_module(ast);
-    ctx.is_module_scope = orig_is_module_scope;
-    ctx.module_variables = orig_module_variables;
-
-    // Now put the Module back how it was before we started, as best we can
-    // and move things into locals if that makes sense
-    if let Some(names) = &locals {
-        for (name, slot) in &names.mp {
-            if let Some(value) = ctx.module_env.get(name) {
-                ctx.local_variables.set_slot(*slot, value)
-            }
-        }
-        for (name, slot) in ctx.module_env.names().all_names() {
-            match original_module.get(&name) {
-                None => ctx.module_env.names().hide_name(&name),
-                Some(Some(value)) => ctx.module_env.slots().set_slot(slot, *value),
-                _ => {} // No way to unassign a previously assigned value yet
-            }
-        }
-    }
-
-    res
 }
 
 #[cfg(test)]
@@ -109,7 +111,7 @@ mod tests {
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_evaluate(code: String) -> Value<'v> {
-            evaluate(code, ctx)
+            ctx.eval_statements(code)
         }
     }
 

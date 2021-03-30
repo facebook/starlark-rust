@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    self as starlark, debug, environment::GlobalsBuilder, eval::Evaluator, values::none::NoneType,
+    self as starlark, environment::GlobalsBuilder, eval::Evaluator, values::none::NoneType,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -59,14 +59,14 @@ fn cmd_variables(ctx: &mut Evaluator) -> anyhow::Result<Next> {
         s
     }
 
-    for (name, value) in debug::inspect_variables(ctx) {
+    for (name, value) in ctx.inspect_variables() {
         eprintln!("* {} = {}", name, truncate(value.to_string(), 80))
     }
     Ok(Next::Again)
 }
 
 fn cmd_stack(ctx: &mut Evaluator) -> anyhow::Result<Next> {
-    for x in debug::inspect_stack(ctx) {
+    for x in ctx.inspect_stack() {
         eprintln!("* {}", x)
     }
     Ok(Next::Again)
@@ -134,7 +134,7 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<State> {
                         }
                     }
                 } else {
-                    match debug::evaluate(line, ctx) {
+                    match ctx.eval_statements(line) {
                         Err(e) => eprintln!("{:#}", e),
                         Ok(v) => {
                             if !v.is_none() {

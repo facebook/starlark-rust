@@ -25,12 +25,6 @@ use crate::{
 };
 use gazebo::{cell::ARef, prelude::*};
 
-pub fn inspect_stack(ctx: &Evaluator) -> Vec<String> {
-    ctx.call_stack()
-        .to_diagnostic_frames()
-        .map(ToString::to_string)
-}
-
 pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
     if let Some(x) = x.downcast_ref::<Def<'v>>() {
         Some(ARef::map(x, |x| x.scope_names()))
@@ -38,6 +32,18 @@ pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
         Some(ARef::map(x, |x| x.scope_names()))
     } else {
         None
+    }
+}
+
+impl<'v, 'a> Evaluator<'v, 'a> {
+    pub fn inspect_stack(&self) -> Vec<String> {
+        self.call_stack()
+            .to_diagnostic_frames()
+            .map(ToString::to_string)
+    }
+
+    pub fn inspect_variables(&self) -> SmallMap<String, Value<'v>> {
+        inspect_local_variables(self).unwrap_or_else(|| inspect_module_variables(self))
     }
 }
 
@@ -64,24 +70,19 @@ fn inspect_module_variables<'v>(ctx: &Evaluator<'v, '_>) -> SmallMap<String, Val
     res
 }
 
-pub fn inspect_variables<'v>(ctx: &Evaluator<'v, '_>) -> SmallMap<String, Value<'v>> {
-    inspect_local_variables(ctx).unwrap_or_else(|| inspect_module_variables(ctx))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{self as starlark, assert, environment::GlobalsBuilder, values::structs::Struct};
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_inspect_stack() -> Vec<String> {
-            Ok(inspect_stack(ctx))
+            Ok(ctx.inspect_stack())
         }
 
         fn debug_inspect_variables() -> Struct<'v> {
             Ok(Struct {
-                fields: inspect_variables(ctx),
+                fields: ctx.inspect_variables(),
             })
         }
     }
