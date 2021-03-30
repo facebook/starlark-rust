@@ -30,29 +30,3 @@ impl<'v> UnpackValue<'v> for Value<'v> {
         Some(value)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{assert::Assert, environment::GlobalsBuilder};
-
-    use crate as starlark;
-
-    #[starlark_module]
-    fn global(builder: &mut GlobalsBuilder) {
-        fn cc_binary(name: &str, srcs: Vec<&str>) -> String {
-            // real implementation may write it to a global variable
-            Ok(format!("{:?} {:?}", name, srcs))
-        }
-    }
-
-    #[test]
-    fn test_simple() {
-        let mut a = Assert::new();
-        a.globals_add(global);
-        let v = a.pass("cc_binary(name='star', srcs=['a.cc', 'b.cc'])");
-        assert_eq!(
-            v.value().unpack_str().unwrap(),
-            r#""star" ["a.cc", "b.cc"]"#
-        );
-    }
-}

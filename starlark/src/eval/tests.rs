@@ -1280,6 +1280,26 @@ assert_eq(res, [1,2])
     );
 }
 
+// The example from the starlark_module documentation.
+#[test]
+fn test_starlark_module() {
+    #[starlark_module]
+    fn global(builder: &mut GlobalsBuilder) {
+        fn cc_binary(name: &str, srcs: Vec<&str>) -> String {
+            // real implementation may write it to a global variable
+            Ok(format!("{:?} {:?}", name, srcs))
+        }
+    }
+
+    let mut a = Assert::new();
+    a.globals_add(global);
+    let v = a.pass("cc_binary(name='star', srcs=['a.cc', 'b.cc'])");
+    assert_eq!(
+        v.value().unpack_str().unwrap(),
+        r#""star" ["a.cc", "b.cc"]"#
+    );
+}
+
 #[test]
 fn test_in_range() {
     // Go Starlark considers this a type error (I think that is a mistake)
