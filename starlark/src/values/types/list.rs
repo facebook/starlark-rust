@@ -84,7 +84,7 @@ impl<'v> ComplexValue<'v> for List<'v> {
 
     fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let i = convert_index(index, self.len() as i32)? as usize;
-        self.mutable_list().content[i] = alloc_value;
+        self.content[i] = alloc_value;
         Ok(())
     }
 }
@@ -151,7 +151,7 @@ impl<'v> List<'v> {
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for ListGen<T>
 where
-    Self: MutableList<'v> + AnyLifetime<'v>,
+    Self: AnyLifetime<'v>,
 {
     starlark_type!(List::TYPE);
 

@@ -160,13 +160,11 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
 
     fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let index = index.get_hashed()?;
-        if let Some(x) = self.mutable_dict().content.get_mut_hashed(index.borrow()) {
+        if let Some(x) = self.content.get_mut_hashed(index.borrow()) {
             *x = alloc_value;
             return Ok(());
         }
-        self.mutable_dict()
-            .content
-            .insert_hashed(index, alloc_value);
+        self.content.insert_hashed(index, alloc_value);
         Ok(())
     }
 }
@@ -188,7 +186,7 @@ impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for DictGen<T>
 where
     Value<'v>: Equivalent<T>,
     T: Equivalent<Value<'v>>,
-    Self: MutableDict<'v> + AnyLifetime<'v>,
+    Self: AnyLifetime<'v>,
 {
     starlark_type!(Dict::TYPE);
 

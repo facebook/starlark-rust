@@ -56,22 +56,6 @@ macro_rules! starlark_value {
                 }
             }
 
-            $v trait [< Mutable $x >]<'v> {
-                fn [< mutable_ $x:lower >](&mut self) -> &mut $x<'v>;
-            }
-
-            impl<'v> [< Mutable $x >]<'v> for $x<'v> {
-                fn [< mutable_ $x:lower >](&mut self) -> &mut $x<'v> {
-                    self
-                }
-            }
-
-            impl<'v> [< Mutable $x >]<'v> for [< Frozen $x >] {
-                fn [< mutable_ $x:lower >](&mut self) -> &mut $x<'v> {
-                    unreachable!("We only call mutable_ on values which are mutable, and Frozen values should never be in the mutable heap")
-                }
-            }
-
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x<'v>>> {
                     fn promote<'v>(x: & [< Frozen $x >]) -> & $x<'v> {
