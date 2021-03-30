@@ -437,8 +437,8 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     }
 
     /// Apply the percent operator between the current value and `other`. Usually used on
-    /// strings, as per [the Starlark spec]
-    /// (https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#string-interpolation).
+    /// strings, as per
+    /// [the Starlark spec](https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#string-interpolation).
     ///
     /// # Examples
     ///
