@@ -21,7 +21,7 @@ use crate::values::{Heap, Value};
 use gazebo::cell::ARef;
 
 /// Type to be implemented by types which are iterable.
-pub trait TypedIterable<'v> {
+pub trait StarlarkIterable<'v> {
     /// Make an iterator.
     fn to_iter<'a>(&'a self, heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
@@ -31,11 +31,11 @@ pub trait TypedIterable<'v> {
 /// Iterable which contains borrowed reference to a sequence.
 pub struct RefIterable<'v> {
     heap: &'v Heap,
-    r: ARef<'v, dyn TypedIterable<'v>>,
+    r: ARef<'v, dyn StarlarkIterable<'v>>,
 }
 
 impl<'v> RefIterable<'v> {
-    pub fn new(heap: &'v Heap, r: ARef<'v, dyn TypedIterable<'v>>) -> Self {
+    pub fn new(heap: &'v Heap, r: ARef<'v, dyn StarlarkIterable<'v>>) -> Self {
         RefIterable { heap, r }
     }
 

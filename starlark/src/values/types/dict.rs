@@ -20,7 +20,7 @@ use crate::{
     collections::{Hashed, SmallMap},
     environment::{Globals, GlobalsStatic},
     values::{
-        comparison::equals_small_map, error::ValueError, iter::TypedIterable,
+        comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
         string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
         StarlarkValue, Value, ValueLike, Walker,
     },
@@ -251,12 +251,12 @@ where
             .contains_key_hashed(other.get_hashed()?.borrow()))
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn TypedIterable<'v> + 'v)> {
+    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
         Ok(self)
     }
 }
 
-impl<'v, T: ValueLike<'v>> TypedIterable<'v> for DictGen<T> {
+impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for DictGen<T> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,

@@ -19,7 +19,7 @@
 
 use crate::values::{
     index::{convert_index, convert_slice_indices},
-    iter::TypedIterable,
+    iter::StarlarkIterable,
     AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueError,
 };
 use gazebo::any::AnyLifetime;
@@ -184,7 +184,7 @@ impl<'v> StarlarkValue<'v> for Range {
         }));
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn TypedIterable<'v> + 'v)> {
+    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
         Ok(self)
     }
 
@@ -230,7 +230,7 @@ impl PartialEq for Range {
     }
 }
 
-impl<'v> TypedIterable<'v> for Range {
+impl<'v> StarlarkIterable<'v> for Range {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,

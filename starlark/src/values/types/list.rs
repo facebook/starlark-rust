@@ -22,7 +22,7 @@ use crate::{
         comparison::{compare_slice, equals_slice},
         error::ValueError,
         index::{convert_index, convert_slice_indices},
-        iter::TypedIterable,
+        iter::StarlarkIterable,
         tuple, unsupported_with, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap,
         FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
@@ -237,7 +237,7 @@ where
         Ok(heap.alloc(List { content: vec }))
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn TypedIterable<'v> + 'v)> {
+    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
         Ok(self)
     }
 
@@ -276,7 +276,7 @@ where
     }
 }
 
-impl<'v, T: ValueLike<'v>> TypedIterable<'v> for ListGen<T> {
+impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for ListGen<T> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,

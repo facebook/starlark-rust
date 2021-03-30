@@ -19,8 +19,8 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    unsupported_with, AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
-    TypedIterable, Value, ValueError, ValueLike, Walker,
+    unsupported_with, AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable,
+    StarlarkValue, Value, ValueError, ValueLike, Walker,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -200,7 +200,7 @@ where
         ))))
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn TypedIterable<'v> + 'v)> {
+    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
         Ok(self)
     }
 
@@ -239,7 +239,7 @@ where
     }
 }
 
-impl<'v, T: ValueLike<'v> + 'v> TypedIterable<'v> for TupleGen<T> {
+impl<'v, T: ValueLike<'v> + 'v> StarlarkIterable<'v> for TupleGen<T> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,
