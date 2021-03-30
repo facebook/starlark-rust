@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-pub use exported::exported_symbols;
 pub use types::{LineColSpan, Lint};
 
 use crate::{analysis::types::LintT, syntax::AstModule};

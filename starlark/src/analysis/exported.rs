@@ -21,27 +21,29 @@ use crate::{
 };
 use indexmap::IndexMap;
 
-// Which symbols are exported by a module
-pub fn exported_symbols(module: &AstModule) -> Vec<(SpanLoc, &str)> {
-    // Map since we only want to store the first of each export
-    // IndexMap since we want the order to match the order they were defined in
-    let mut result = IndexMap::new();
-    module.statement.visit_stmt(|x| match &**x {
-        Stmt::Assign(dest, _, _) => {
-            dest.visit_expr_lvalue(|name| {
-                result.entry(&name.node).or_insert(name.span);
-            });
-        }
-        Stmt::Def(name, ..) => {
-            result.entry(name).or_insert(name.span);
-        }
-        _ => {}
-    });
-    result
-        .into_iter()
-        .filter(|(name, _)| !name.starts_with('_'))
-        .map(|(name, span)| (module.codemap.look_up_span(span), name.as_str()))
-        .collect()
+impl AstModule {
+    /// Which symbols are exported by this module.
+    pub fn exported_symbols(&self) -> Vec<(SpanLoc, &str)> {
+        // Map since we only want to store the first of each export
+        // IndexMap since we want the order to match the order they were defined in
+        let mut result = IndexMap::new();
+        self.statement.visit_stmt(|x| match &**x {
+            Stmt::Assign(dest, _, _) => {
+                dest.visit_expr_lvalue(|name| {
+                    result.entry(&name.node).or_insert(name.span);
+                });
+            }
+            Stmt::Def(name, ..) => {
+                result.entry(name).or_insert(name.span);
+            }
+            _ => {}
+        });
+        result
+            .into_iter()
+            .filter(|(name, _)| !name.starts_with('_'))
+            .map(|(name, span)| (self.look_up_span(span), name.as_str()))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -65,7 +67,7 @@ def _e(): pass
 d = 2
 "#,
         );
-        let res = exported_symbols(&modu);
+        let res = modu.exported_symbols();
         assert_eq!(
             res.map(|(loc, name)| format!("{} {}", loc, name)),
             &["X:3:5: 3:6 b", "X:4:1: 4:2 d"]

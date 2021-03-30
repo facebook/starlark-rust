@@ -126,7 +126,7 @@ impl Context {
     }
 
     fn info(&self, module: &AstModule) {
-        let exports = analysis::exported_symbols(module);
+        let exports = module.exported_symbols();
         println!("Exports {} symbol(s)", exports.len());
         for (loc, name) in exports {
             println!("* {} {}", loc, name)
