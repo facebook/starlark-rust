@@ -56,6 +56,8 @@ macro_rules! starlark_value {
                 }
             }
 
+            impl $crate::values::SimpleValue for [< Frozen $x >] {}
+
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x<'v>>> {
                     fn promote<'v>(x: & [< Frozen $x >]) -> & $x<'v> {

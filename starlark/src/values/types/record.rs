@@ -122,8 +122,6 @@ impl<'v> ComplexValue<'v> for Field<'v> {
     }
 }
 
-impl SimpleValue for FrozenField {}
-
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for FieldGen<T>
 where
     Self: AnyLifetime<'v>,
@@ -178,8 +176,6 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
         }
     }
 }
-
-impl SimpleValue for FrozenRecordType {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<T>
 where
@@ -287,8 +283,6 @@ impl<'v> ComplexValue<'v> for Record<'v> {
         self.values.iter_mut().for_each(|v| walker.walk(v));
     }
 }
-
-impl SimpleValue for FrozenRecord {}
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordGen<T>
 where

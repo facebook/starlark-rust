@@ -355,8 +355,6 @@ impl<'v> ComplexValue<'v> for WrappedMethod<'v> {
     }
 }
 
-impl SimpleValue for FrozenWrappedMethod {}
-
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrappedMethodGen<V>
 where
     Self: AnyLifetime<'v>,

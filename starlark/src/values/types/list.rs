@@ -97,8 +97,6 @@ impl FrozenList {
     }
 }
 
-impl SimpleValue for FrozenList {}
-
 impl<'v, T: ValueLike<'v>> ListGen<T> {
     pub fn new(content: Vec<T>) -> Self {
         Self { content }

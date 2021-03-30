@@ -97,8 +97,6 @@ impl<'v> ComplexValue<'v> for Tuple<'v> {
     }
 }
 
-impl SimpleValue for FrozenTuple {}
-
 impl<T> TupleGen<T> {
     pub const TYPE: &'static str = "tuple";
 }

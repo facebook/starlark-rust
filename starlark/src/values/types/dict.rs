@@ -184,8 +184,6 @@ impl FrozenDict {
     }
 }
 
-impl SimpleValue for FrozenDict {}
-
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for DictGen<T>
 where
     Value<'v>: Equivalent<T>,

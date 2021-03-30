@@ -86,8 +86,6 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
     }
 }
 
-impl SimpleValue for FrozenStruct {}
-
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StructGen<T>
 where
     Self: AnyLifetime<'v>,

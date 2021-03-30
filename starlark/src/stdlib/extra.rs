@@ -122,8 +122,6 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
     }
 }
 
-impl SimpleValue for FrozenPartial {}
-
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for PartialGen<V>
 where
     Self: AnyLifetime<'v>,

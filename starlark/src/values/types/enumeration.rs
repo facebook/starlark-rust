@@ -144,10 +144,6 @@ impl<'v, T: ValueLike<'v>> EnumValueGen<T> {
     }
 }
 
-impl SimpleValue for FrozenEnumType {}
-
-impl SimpleValue for FrozenEnumValue {}
-
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<T>
 where
     Self: AnyLifetime<'v>,
