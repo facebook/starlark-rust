@@ -17,7 +17,7 @@
 
 //! A [Starlark interpreter in Rust](https://github.com/facebookexperimental/starlark-rust).
 //! Starlark is a deterministic version of Python, with [a specification](https://github.com/bazelbuild/starlark/blob/master/spec.md),
-//! used by (amongst others) the [Buck](https://buck.build) and [Bazel](https://bazel.build) systems.
+//! used by (amongst others) the [Buck](https://buck.build) and [Bazel](https://bazel.build) build systems.
 //!
 //! To evaluate a simple file:
 //!
@@ -61,6 +61,8 @@
 //! ## Call Rust functions from Starlark
 //!
 //! We want to define a function in Rust (that computes quadratics), and then call it from Starlark.
+//! We define the function using the [`#[starlark_module]`](macro@starlark_module) attribute, and add it to
+//! a [`Globals`](environment::Globals) object.
 //!
 //! ```
 //! #[macro_use]
@@ -98,7 +100,7 @@
 //! ## Collect Starlark values
 //!
 //! If we want to use Starlark as an enhanced JSON, we can define an `emit` function
-//! to "write out" a JSON value, and use the `Evaluator` extra fields to store it.
+//! to "write out" a JSON value, and use the [`Evaluator.extra`](eval::Evaluator::extra) field to store it.
 //!
 //! ```
 //! #[macro_use]
@@ -159,7 +161,7 @@
 //! ## Enable Starlark extensions (e.g. types)
 //!
 //! Our Starlark supports a number of extensions, including type annotations, which are
-//! controlled by the `Dialect` type.
+//! controlled by the [`Dialect`](syntax::Dialect) type.
 //!
 //! ```
 //! # fn run() -> anyhow::Result<()> {
@@ -190,7 +192,8 @@
 //!
 //! ## Enable the `load` statement
 //!
-//! You can have Starlark load files imported by the user. That requires that the loaded modules are first frozen.
+//! You can have Starlark load files imported by the user.
+//! That requires that the loaded modules are first frozen with [`Module.freeze`](environment::Module::freeze).
 //! There is no requirement that the files are on disk, but that would be a common pattern.
 //!
 //! ```
@@ -244,7 +247,7 @@
 //!
 //! ## Call a Starlark function from Rust
 //!
-//! You can extract functions from Starlark, and call them from Rust, using `eval_function`.
+//! You can extract functions from Starlark, and call them from Rust, using [`eval_function`](eval::Evaluator::eval_function).
 //!
 //! ```
 //! # fn run() -> anyhow::Result<()> {
@@ -278,7 +281,7 @@
 //! ## Defining Rust objects that are used from Starlark
 //!
 //! Finally, we can define our own types in Rust which live in the Starlark heap.
-//! Such types are relatively complex, see the details at `StarlarkValue`.
+//! Such types are relatively complex, see the details at [`StarlarkValue`](values::StarlarkValue).
 //!
 //! ```
 //! # fn run() -> anyhow::Result<()> {
