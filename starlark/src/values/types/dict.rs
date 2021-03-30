@@ -105,18 +105,20 @@ where
         self.content.keys().map(|e| e.to_value()).collect()
     }
 
-    pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (Value<'v>, Value<'v>)> + 'a> {
-        box self
-            .content
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
+    where
+        'v: 'a,
+    {
+        self.content
             .iter()
             .map(|(l, r)| (l.to_value(), r.to_value()))
     }
 
-    pub fn iter_hashed<'a>(
-        &'a self,
-    ) -> Box<dyn Iterator<Item = (Hashed<Value<'v>>, Value<'v>)> + 'a> {
-        box self
-            .content
+    pub fn iter_hashed<'a>(&'a self) -> impl Iterator<Item = (Hashed<Value<'v>>, Value<'v>)> + 'a
+    where
+        'v: 'a,
+    {
+        self.content
             .iter_hashed()
             .map(|(l, r)| (l.unborrow_copy().to_hashed_value(), r.to_value()))
     }
