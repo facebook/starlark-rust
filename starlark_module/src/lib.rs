@@ -83,13 +83,13 @@ use syn::*;
 /// ```ignore
 /// #[starlark_module]
 /// fn global(registry: &mut GlobalsBuilder) {
-///     cc_binary(name: &str, srcs: Vec<&str>) -> String {
+///     fn cc_binary(name: &str, srcs: Vec<&str>) -> String {
 ///         Ok(format!("{:?} {:?}", name, srcs))
 ///     }
 /// }
 /// ```
 ///
-/// There are five tweaks to the parameters:
+/// Parameters operate as named parameters of a given type, with five possible tweaks:
 ///
 /// * `args` means the argument is the `*args`.
 /// * `kwargs` means the argument is the `**kwargs`.
@@ -103,8 +103,8 @@ use syn::*;
 /// * `ctx` is the `Evaluator`.
 /// * `heap` is the `Heap`, obtained from `ctx.heap()`.
 ///
-/// The `starlark_module` attribute can be added to a `Globals` value.
-/// Those `Globals` can be passed to `Evaluator` to produce global functions.
+/// A function with the `#[starlark_module]` attribute can be added to a `GlobalsBuilder` value
+/// using the `with` function. Those `Globals` can be passed to `Evaluator` to provide global functions.
 /// Alternatively, you can return `Globals` from `get_members` to _attach_ functions to
 /// a specific type (e.g. the `string` type).
 ///
