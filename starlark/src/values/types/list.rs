@@ -81,6 +81,12 @@ impl<'v> ComplexValue<'v> for List<'v> {
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.content.iter_mut().for_each(|x| walker.walk(x))
     }
+
+    fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
+        let i = convert_index(index, self.len() as i32)? as usize;
+        self.mutable_list().content[i] = alloc_value;
+        Ok(())
+    }
 }
 
 impl FrozenList {
@@ -267,12 +273,6 @@ where
             }
             None => Err(ValueError::IncorrectParameterType.into()),
         }
-    }
-
-    fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
-        let i = convert_index(index, self.len() as i32)? as usize;
-        self.mutable_list().content[i] = alloc_value;
-        Ok(())
     }
 }
 

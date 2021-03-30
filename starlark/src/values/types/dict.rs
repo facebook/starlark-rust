@@ -157,6 +157,18 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
             walker.walk(v);
         })
     }
+
+    fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
+        let index = index.get_hashed()?;
+        if let Some(x) = self.mutable_dict().content.get_mut_hashed(index.borrow()) {
+            *x = alloc_value;
+            return Ok(());
+        }
+        self.mutable_dict()
+            .content
+            .insert_hashed(index, alloc_value);
+        Ok(())
+    }
 }
 
 impl FrozenDict {
@@ -243,18 +255,6 @@ where
 
     fn iterate(&self) -> anyhow::Result<&(dyn TypedIterable<'v> + 'v)> {
         Ok(self)
-    }
-
-    fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
-        let index = index.get_hashed()?;
-        if let Some(x) = self.mutable_dict().content.get_mut_hashed(index.borrow()) {
-            *x = alloc_value;
-            return Ok(());
-        }
-        self.mutable_dict()
-            .content
-            .insert_hashed(index, alloc_value);
-        Ok(())
     }
 }
 

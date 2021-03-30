@@ -96,6 +96,37 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users
     }
+
+    /// Set the value at `index` with `alloc_value`.
+    ///
+    /// This method should error with `ValueError::CannotMutateImmutableValue`
+    /// if the value was frozen (but with
+    /// `ValueError::OperationNotSupported` if the operation is not supported
+    /// on this value, even if the value is immutable, e.g. for numbers).
+    ///
+    /// ```rust
+    /// # starlark::assert::is_true(r#"
+    /// v = [1, 2, 3]
+    /// v[1] = 1
+    /// v[2] = [2,3]
+    /// v == [1, 1, [2, 3]]
+    /// # "#);
+    /// ```
+    fn set_at(&mut self, index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
+        unsupported_with(self, "[]=", index)
+    }
+
+    /// Set the attribute named `attribute` of the current value to
+    /// `alloc_value` (e.g. `a.attribute = alloc_value`).
+    ///
+    /// This method should error with `ValueError::CannotMutateImmutableValue`
+    /// if the value was frozen or the attribute is immutable (but with
+    /// `ValueError::OperationNotSupported` if the operation is not
+    /// supported on this value, even if the self is immutable,
+    /// e.g. for numbers).
+    fn set_attr(&mut self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
+        unsupported(self, &format!(".{}=", attribute))
+    }
 }
 
 /// A trait representing Starlark values which are simple - they
@@ -242,25 +273,6 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         unsupported_with(self, "[]", index)
     }
 
-    /// Set the value at `index` with `alloc_value`.
-    ///
-    /// This method should error with `ValueError::CannotMutateImmutableValue`
-    /// if the value was frozen (but with
-    /// `ValueError::OperationNotSupported` if the operation is not supported
-    /// on this value, even if the value is immutable, e.g. for numbers).
-    ///
-    /// ```rust
-    /// # starlark::assert::is_true(r#"
-    /// v = [1, 2, 3]
-    /// v[1] = 1
-    /// v[2] = [2,3]
-    /// v == [1, 1, [2, 3]]
-    /// # "#);
-    /// ```
-    fn set_at(&mut self, index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
-        unsupported_with(self, "[]=", index)
-    }
-
     /// Extract a slice of the underlying object if the object is indexable. The
     /// result will be object between `start` and `stop` (both of them are
     /// added length() if negative and then clamped between 0 and length()).
@@ -320,18 +332,6 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// universe.
     fn has_attr(&self, _attribute: &str) -> bool {
         false
-    }
-
-    /// Set the attribute named `attribute` of the current value to
-    /// `alloc_value` (e.g. `a.attribute = alloc_value`).
-    ///
-    /// This method should error with `ValueError::CannotMutateImmutableValue`
-    /// if the value was frozen or the attribute is immutable (but with
-    /// `ValueError::OperationNotSupported` if the operation is not
-    /// supported on this value, even if the self is immutable,
-    /// e.g. for numbers).
-    fn set_attr(&mut self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
-        unsupported(self, &format!(".{}=", attribute))
     }
 
     /// Return a vector of string listing all attribute of the current value,
