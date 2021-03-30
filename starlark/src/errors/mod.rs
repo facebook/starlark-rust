@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+pub use crate::analysis::Lint;
 use crate::codemap::{CodeMap, Span, SpanLoc};
 use annotate_snippets::{
     display_list::{DisplayList, FormatOptions},

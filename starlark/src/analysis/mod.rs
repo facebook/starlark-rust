@@ -27,19 +27,21 @@ mod incompatible;
 mod names;
 mod types;
 
-pub fn lint(module: &AstModule, globals: Option<&[&str]>) -> Vec<Lint> {
-    let mut res = Vec::new();
-    res.extend(flow::flow_issues(module).into_iter().map(LintT::erase));
-    res.extend(
-        incompatible::incompatibilities(module)
-            .into_iter()
-            .map(LintT::erase),
-    );
-    res.extend(dubious::dubious(module).into_iter().map(LintT::erase));
-    res.extend(
-        names::name_warnings(module, globals)
-            .into_iter()
-            .map(LintT::erase),
-    );
-    res
+impl AstModule {
+    pub fn lint(&self, globals: Option<&[&str]>) -> Vec<Lint> {
+        let mut res = Vec::new();
+        res.extend(flow::flow_issues(self).into_iter().map(LintT::erase));
+        res.extend(
+            incompatible::incompatibilities(self)
+                .into_iter()
+                .map(LintT::erase),
+        );
+        res.extend(dubious::dubious(self).into_iter().map(LintT::erase));
+        res.extend(
+            names::name_warnings(self, globals)
+                .into_iter()
+                .map(LintT::erase),
+        );
+        res
+    }
 }

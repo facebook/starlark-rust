@@ -18,7 +18,6 @@
 use crate::types::Message;
 use itertools::Either;
 use starlark::{
-    analysis,
     environment::{FrozenModule, Globals, Module},
     eval::Evaluator,
     stdlib::extended_environment,
@@ -144,9 +143,7 @@ impl Context {
             Some(globals.as_slice())
         };
 
-        analysis::lint(module, globals)
-            .into_iter()
-            .map(Message::from_lint)
+        module.lint(globals).into_iter().map(Message::from_lint)
     }
 }
 

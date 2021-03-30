@@ -32,6 +32,7 @@ pub struct LineCol1 {
     pub column: usize,
 }
 
+#[doc(hidden)] // Eventually we want CodeMap to gain these features, so this will go away
 #[derive(Debug, Clone, Copy)]
 pub struct LineColSpan {
     pub begin: LineCol1,
