@@ -20,7 +20,7 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::convert_slice_indices, interpolation::Interpolation, AllocFrozenValue,
-        AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value, ValueError,
+        AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError,
     },
 };
 use std::{
@@ -53,6 +53,18 @@ impl<'v> AllocValue<'v> for &'_ String {
 impl<'v> AllocValue<'v> for &'_ str {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_str(Box::from(self))
+    }
+}
+
+impl<'v> UnpackValue<'v> for &'v str {
+    fn unpack_value(value: Value<'v>, _heap: &Heap) -> Option<Self> {
+        value.unpack_str()
+    }
+}
+
+impl<'v> UnpackValue<'v> for String {
+    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+        value.unpack_str().map(ToOwned::to_owned)
     }
 }
 

@@ -22,7 +22,7 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
         string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Value, ValueLike, Walker,
+        StarlarkValue, UnpackValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -262,6 +262,17 @@ impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for DictGen<T> {
         'v: 'a,
     {
         box self.content.iter().map(|x| x.0.to_value())
+    }
+}
+
+impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for SmallMap<K, V> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        let dict = Dict::from_value(value)?;
+        let mut r = SmallMap::new();
+        for (k, v) in dict.get_content().iter() {
+            r.insert(K::unpack_value(*k, heap)?, V::unpack_value(*v, heap)?);
+        }
+        Some(r)
     }
 }
 

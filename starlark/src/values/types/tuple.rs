@@ -19,8 +19,8 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
-    ValueError, ValueLike, Walker,
+    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue,
+    UnpackValue, Value, ValueError, ValueLike, Walker,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -275,6 +275,19 @@ impl<'v, T1: AllocValue<'v>, T2: AllocValue<'v>, T3: AllocValue<'v>> AllocValue<
                 self.2.alloc_value(heap),
             ],
         })
+    }
+}
+
+impl<'v, T1: UnpackValue<'v>, T2: UnpackValue<'v>> UnpackValue<'v> for (T1, T2) {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        let t = Tuple::from_value(value)?;
+        if t.len() != 2 {
+            return None;
+        }
+        Some((
+            T1::unpack_value(t.content[0], heap)?,
+            T2::unpack_value(t.content[1], heap)?,
+        ))
     }
 }
 

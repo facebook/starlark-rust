@@ -24,7 +24,7 @@ use crate::{
         index::{convert_index, convert_slice_indices},
         iter::StarlarkIterable,
         tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -282,6 +282,16 @@ impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for ListGen<T> {
         'v: 'a,
     {
         box self.iter()
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        let mut r = Vec::new();
+        for item in &value.iterate(heap).ok()? {
+            r.push(T::unpack_value(item, heap)?);
+        }
+        Some(r)
     }
 }
 

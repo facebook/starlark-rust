@@ -18,7 +18,8 @@
 //! Define the bool type for Starlark.
 
 use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value, ValueError,
+    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+    ValueError,
 };
 use std::cmp::Ordering;
 
@@ -34,6 +35,12 @@ impl<'v> AllocValue<'v> for bool {
 impl AllocFrozenValue for bool {
     fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
         FrozenValue::new_bool(self)
+    }
+}
+
+impl UnpackValue<'_> for bool {
+    fn unpack_value(value: Value, _heap: &Heap) -> Option<Self> {
+        value.unpack_bool()
     }
 }
 

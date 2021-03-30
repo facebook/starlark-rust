@@ -19,7 +19,7 @@
 
 use crate::values::{
     error::ValueError, layout::PointerI32, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
-    Heap, StarlarkValue, Value,
+    Heap, StarlarkValue, UnpackValue, Value,
 };
 use std::cmp::Ordering;
 
@@ -34,6 +34,12 @@ impl<'v> AllocValue<'v> for i32 {
 impl AllocFrozenValue for i32 {
     fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
         FrozenValue::new_int(self)
+    }
+}
+
+impl UnpackValue<'_> for i32 {
+    fn unpack_value(value: Value, _heap: &Heap) -> Option<Self> {
+        value.unpack_int()
     }
 }
 

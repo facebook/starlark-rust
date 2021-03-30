@@ -17,11 +17,7 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use crate::{
-    collections::SmallMap,
-    values::{dict::Dict, tuple::Tuple, Heap, Value},
-};
-use std::hash::Hash;
+use crate::values::{Heap, Value};
 
 /// Types implementing this type may appear in function parameter types
 /// in `starlark_module` macro function signatures.
@@ -29,67 +25,9 @@ pub trait UnpackValue<'v>: Sized {
     fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self>;
 }
 
-impl<'v> UnpackValue<'v> for &'v str {
-    fn unpack_value(value: Value<'v>, _heap: &Heap) -> Option<Self> {
-        value.unpack_str()
-    }
-}
-
 impl<'v> UnpackValue<'v> for Value<'v> {
     fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
         Some(value)
-    }
-}
-
-impl<'v> UnpackValue<'v> for String {
-    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
-        value.unpack_str().map(ToOwned::to_owned)
-    }
-}
-
-impl UnpackValue<'_> for i32 {
-    fn unpack_value(value: Value, _heap: &Heap) -> Option<Self> {
-        value.unpack_int()
-    }
-}
-
-impl UnpackValue<'_> for bool {
-    fn unpack_value(value: Value, _heap: &Heap) -> Option<Self> {
-        value.unpack_bool()
-    }
-}
-
-impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for SmallMap<K, V> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        let dict = Dict::from_value(value)?;
-        let mut r = SmallMap::new();
-        for (k, v) in dict.get_content().iter() {
-            r.insert(K::unpack_value(*k, heap)?, V::unpack_value(*v, heap)?);
-        }
-        Some(r)
-    }
-}
-
-impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        let mut r = Vec::new();
-        for item in &value.iterate(heap).ok()? {
-            r.push(T::unpack_value(item, heap)?);
-        }
-        Some(r)
-    }
-}
-
-impl<'v, T1: UnpackValue<'v>, T2: UnpackValue<'v>> UnpackValue<'v> for (T1, T2) {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        let t = Tuple::from_value(value)?;
-        if t.len() != 2 {
-            return None;
-        }
-        Some((
-            T1::unpack_value(t.content[0], heap)?,
-            T2::unpack_value(t.content[1], heap)?,
-        ))
     }
 }
 
