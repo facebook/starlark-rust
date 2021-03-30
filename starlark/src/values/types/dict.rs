@@ -27,7 +27,11 @@ use crate::{
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use indexmap::Equivalent;
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+    ops::Deref,
+};
 
 /// Define the Dict type
 #[derive(Clone, Default_, Debug)]
@@ -273,6 +277,53 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for
             r.insert(K::unpack_value(*k, heap)?, V::unpack_value(*v, heap)?);
         }
         Some(r)
+    }
+}
+
+/// Like `ValueOf`, but only validates key and value types; does not construct
+/// or store a map. Use `to_dict` to get a map.
+pub struct DictOf<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> {
+    value: Value<'v>,
+    phantom: PhantomData<(K, V)>,
+}
+
+impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
+    pub fn to_dict(&self, heap: &'v Heap) -> SmallMap<K, V> {
+        Dict::from_value(self.value)
+            .expect("already validated as a dict")
+            .iter()
+            .map(|(k, v)| {
+                (
+                    K::unpack_value(k, heap).expect("already validated key"),
+                    V::unpack_value(v, heap).expect("already validated value"),
+                )
+            })
+            .collect()
+    }
+}
+
+impl<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> UnpackValue<'v> for DictOf<'v, K, V> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        let dict = Dict::from_value(value)?;
+        let all_valid = dict
+            .iter()
+            .all(|(k, v)| K::unpack_value(k, heap).is_some() && V::unpack_value(v, heap).is_some());
+        if all_valid {
+            Some(DictOf {
+                value,
+                phantom: PhantomData {},
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> Deref for DictOf<'v, K, V> {
+    type Target = Value<'v>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
 }
 

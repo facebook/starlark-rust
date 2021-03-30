@@ -28,7 +28,7 @@ use crate::{
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
-use std::cmp::Ordering;
+use std::{cmp::Ordering, marker::PhantomData, ops::Deref};
 
 #[derive(Clone, Default_, Debug)]
 pub struct ListGen<T> {
@@ -292,6 +292,45 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
             r.push(T::unpack_value(item, heap)?);
         }
         Some(r)
+    }
+}
+
+/// Like `ValueOf`, but only validates item types; does not construct or store a
+/// vec. Use `to_vec` to get a Vec.
+pub struct ListOf<'v, T: UnpackValue<'v>> {
+    value: Value<'v>,
+    phantom: PhantomData<T>,
+}
+
+impl<'v, T: UnpackValue<'v>> ListOf<'v, T> {
+    pub fn to_vec(&self, heap: &'v Heap) -> Vec<T> {
+        List::from_value(self.value)
+            .expect("already validated as a list")
+            .iter()
+            .map(|v| T::unpack_value(v, heap).expect("already validated value"))
+            .collect()
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, T> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        let list = List::from_value(value)?;
+        if list.iter().all(|v| T::unpack_value(v, heap).is_some()) {
+            Some(ListOf {
+                value,
+                phantom: PhantomData {},
+            })
+        } else {
+            None
+        }
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> Deref for ListOf<'v, T> {
+    type Target = Value<'v>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
 }
 

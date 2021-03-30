@@ -17,6 +17,8 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
+use std::ops::Deref;
+
 use crate::values::{Heap, Value};
 
 /// Types implementing this type may appear in function parameter types
@@ -28,5 +30,33 @@ pub trait UnpackValue<'v>: Sized {
 impl<'v> UnpackValue<'v> for Value<'v> {
     fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
         Some(value)
+    }
+}
+
+/// A wrapper that keeps the original value on the heap for use elsewhere in the
+/// interpreter, and also, when unpacked, unpacks the value to validate it is of
+/// the correct type.
+///
+/// Two container specializations of this are `ListOf` and `DictOf`, which
+/// validate the types of their containers on unpack, but do not store the
+/// resulting Vec/Map
+#[derive(Debug)]
+pub struct ValueOf<'v, T: UnpackValue<'v>> {
+    pub value: Value<'v>,
+    pub typed: T,
+}
+
+impl<'v, T: UnpackValue<'v>> Deref for ValueOf<'v, T> {
+    type Target = Value<'v>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        let typed = T::unpack_value(value, heap)?;
+        Some(Self { value, typed })
     }
 }

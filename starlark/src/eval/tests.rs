@@ -1300,6 +1300,129 @@ fn test_starlark_module() {
     );
 }
 
+mod value_of {
+    use super::*;
+    use crate::{
+        self as starlark,
+        assert::Assert,
+        environment::GlobalsBuilder,
+        values::{dict::DictOf, list::ListOf, ValueOf},
+    };
+    use itertools::Itertools;
+
+    // TODO(pjameson): Figure out default values here. ValueOf<i32> = 5 should work.
+    #[starlark_module]
+    fn validate_module(builder: &mut GlobalsBuilder) {
+        fn with_int(v: ValueOf<i32>) -> (Value<'v>, String) {
+            Ok((*v, format!("{}", v.typed)))
+        }
+        fn with_int_list(v: ListOf<i32>) -> (Value<'v>, String) {
+            let repr = v.to_vec(heap).iter().join(", ");
+            Ok((*v, repr))
+        }
+        fn with_list_list(v: ListOf<ListOf<i32>>) -> (Value<'v>, String) {
+            let repr = v
+                .to_vec(heap)
+                .iter()
+                .map(|l| l.to_vec(heap).iter().join(", "))
+                .join(" + ");
+            Ok((*v, repr))
+        }
+        fn with_dict_list(v: ListOf<DictOf<i32, i32>>) -> (Value<'v>, String) {
+            let repr = v
+                .to_vec(heap)
+                .iter()
+                .map(|l| {
+                    l.to_dict(heap)
+                        .iter()
+                        .map(|(k, v)| format!("{}: {}", k, v))
+                        .join(", ")
+                })
+                .join(" + ");
+            Ok((*v, repr))
+        }
+        fn with_int_dict(v: DictOf<i32, i32>) -> (Value<'v>, String) {
+            let repr = v
+                .to_dict(heap)
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v))
+                .join(" + ");
+            Ok((*v, repr))
+        }
+        fn with_list_dict(v: DictOf<i32, ListOf<i32>>) -> (Value<'v>, String) {
+            let repr = v
+                .to_dict(heap)
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, v.to_vec(heap).iter().join(", ")))
+                .join(" + ");
+            Ok((*v, repr))
+        }
+        fn with_dict_dict(v: DictOf<i32, DictOf<i32, i32>>) -> (Value<'v>, String) {
+            let repr = v
+                .to_dict(heap)
+                .iter()
+                .map(|(k, v)| {
+                    let inner_repr = v
+                        .to_dict(heap)
+                        .iter()
+                        .map(|(k2, v2)| format!("{}:{}", k2, v2))
+                        .join(", ");
+                    format!("{}: {}", k, inner_repr)
+                })
+                .join(" + ");
+            Ok((*v, repr))
+        }
+    }
+
+    // The standard error these raise on incorrect types
+    const BAD: &str = "Type of parameter";
+
+    #[test]
+    fn test_value_of() {
+        let mut a = Assert::new();
+        a.globals_add(validate_module);
+        a.eq("(1, '1')", "with_int(1)");
+        a.fail("with_int(None)", BAD);
+    }
+
+    #[test]
+    fn test_list_of() {
+        let mut a = Assert::new();
+        a.globals_add(validate_module);
+        a.eq("([1, 2, 3], '1, 2, 3')", "with_int_list([1, 2, 3])");
+        a.fail("with_int_list(1)", BAD);
+        a.fail("with_int_list([1, 'foo'])", BAD);
+        a.fail("with_int_list([[]])", BAD);
+
+        a.eq(
+            "([[1, 2], [3]], '1, 2 + 3')",
+            "with_list_list([[1, 2], [3]])",
+        );
+
+        let expected = r#"([{1: 2, 3: 4}, {5: 6}], "1: 2, 3: 4 + 5: 6")"#;
+        let test = r#"with_dict_list([{1: 2, 3: 4}, {5: 6}])"#;
+        a.eq(expected, test);
+    }
+
+    #[test]
+    fn test_dict_of() {
+        let mut a = Assert::new();
+        a.globals_add(validate_module);
+        a.eq("({1: 2}, '1: 2')", "with_int_dict({1: 2})");
+        a.fail(r#"with_int_dict(1)"#, BAD);
+        a.fail(r#"with_int_dict({1: "str"})"#, BAD);
+        a.fail(r#"with_int_dict({1: {}})"#, BAD);
+
+        let expected = r#"({1: [2, 3], 4: [5]}, "1: 2, 3 + 4: 5")"#;
+        let test = r#"with_list_dict({1: [2, 3], 4: [5]})"#;
+        a.eq(expected, test);
+
+        let expected = r#"({1: {2: 3, 4: 5}, 6: {7: 8}}, "1: 2:3, 4:5 + 6: 7:8")"#;
+        let test = r#"with_dict_dict({1: {2: 3, 4: 5}, 6: {7: 8}})"#;
+        a.eq(expected, test);
+    }
+}
+
 #[test]
 fn test_in_range() {
     // Go Starlark considers this a type error (I think that is a mistake)

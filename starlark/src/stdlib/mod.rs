@@ -19,7 +19,6 @@
 //! dialect of Starlark
 
 use crate::environment::GlobalsBuilder;
-pub use value_of::*;
 
 mod breakpoint;
 pub(crate) mod dict;
@@ -32,7 +31,6 @@ pub(crate) mod string;
 pub(crate) mod structs;
 mod typing;
 pub(crate) mod util;
-mod value_of;
 
 /// Return the default global environment, it is not yet frozen so that a caller
 /// can refine it.
