@@ -22,7 +22,7 @@ use crate::{
 use indexmap::IndexMap;
 
 // Which symbols are exported by a module
-pub fn exported_symbols(module: &AstModule) -> Vec<(SpanLoc, String)> {
+pub fn exported_symbols(module: &AstModule) -> Vec<(SpanLoc, &str)> {
     // Map since we only want to store the first of each export
     // IndexMap since we want the order to match the order they were defined in
     let mut result = IndexMap::new();
@@ -40,7 +40,7 @@ pub fn exported_symbols(module: &AstModule) -> Vec<(SpanLoc, String)> {
     result
         .into_iter()
         .filter(|(name, _)| !name.starts_with('_'))
-        .map(|(name, span)| (module.codemap.look_up_span(span), name.to_owned()))
+        .map(|(name, span)| (module.codemap.look_up_span(span), name.as_str()))
         .collect()
 }
 
@@ -56,7 +56,7 @@ mod test {
 
     #[test]
     fn test_lint_exported() {
-        let res = exported_symbols(&module(
+        let modu = module(
             r#"
 load("test", "a")
 def b(): pass
@@ -64,7 +64,8 @@ d = 1
 def _e(): pass
 d = 2
 "#,
-        ));
+        );
+        let res = exported_symbols(&modu);
         assert_eq!(
             res.map(|(loc, name)| format!("{} {}", loc, name)),
             &["X:3:5: 3:6 b", "X:4:1: 4:2 d"]
