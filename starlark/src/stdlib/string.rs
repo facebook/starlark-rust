@@ -17,15 +17,12 @@
 
 //! Methods for the `string` type.
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     collections::SmallMap,
     environment::GlobalsBuilder,
-    stdlib::{
-        macros::{NoneOr, UnpackValue},
-        util::convert_indices,
-    },
-    values::{Heap, StarlarkValue, Value, ValueError},
+    stdlib::util::convert_indices,
+    values::{none::NoneOr, Heap, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;

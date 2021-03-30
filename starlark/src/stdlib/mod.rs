@@ -19,7 +19,7 @@
 //! dialect of Starlark
 
 use crate::environment::GlobalsBuilder;
-pub use macros::*;
+pub use value_of::*;
 
 mod breakpoint;
 pub(crate) mod dict;
@@ -27,12 +27,12 @@ pub(crate) mod enumeration;
 mod extra;
 mod funcs;
 pub(crate) mod list;
-mod macros;
 pub(crate) mod record;
 pub(crate) mod string;
 pub(crate) mod structs;
 mod typing;
 pub(crate) mod util;
+mod value_of;
 
 /// Return the default global environment, it is not yet frozen so that a caller
 /// can refine it.
@@ -86,10 +86,9 @@ mod tests {
     use crate::{
         assert::Assert,
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
-        stdlib::macros::UnpackValue,
         values::{
             none::NoneType, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
-            SimpleValue, StarlarkValue, Value,
+            SimpleValue, StarlarkValue, UnpackValue, Value,
         },
     };
     use gazebo::{any::AnyLifetime, prelude::*};

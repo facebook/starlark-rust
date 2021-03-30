@@ -18,7 +18,7 @@
 //! Define the None type for Starlark.
 
 use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value,
+    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 
@@ -63,5 +63,30 @@ impl<'v> AllocValue<'v> for NoneType {
 impl AllocFrozenValue for NoneType {
     fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
         FrozenValue::new_none()
+    }
+}
+
+// An Option that is encoded in a value using NoneType
+pub enum NoneOr<T> {
+    None,
+    Other(T),
+}
+
+impl<T> NoneOr<T> {
+    pub fn into_option(self) -> Option<T> {
+        match self {
+            Self::None => None,
+            Self::Other(x) => Some(x),
+        }
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for NoneOr<T> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        if value.is_none() {
+            Some(NoneOr::None)
+        } else {
+            T::unpack_value(value, heap).map(NoneOr::Other)
+        }
     }
 }

@@ -80,7 +80,7 @@ macro_rules! starlark_value {
 
             $v struct [< Ref $x >]<'v>(pub $crate::values::ARef<'v, $x<'v>>);
 
-            impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
+            impl<'v> $crate::values::UnpackValue<'v> for [< Ref $x>]<'v> {
                 fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
                     $x::from_value(value)
                         .map([< Ref $x>])
@@ -126,7 +126,7 @@ macro_rules! starlark_simple_value {
 
             $v struct [< Ref $x >]<'v>(pub $crate::values::ARef<'v, $x>);
 
-            impl<'v> $crate::stdlib::UnpackValue<'v> for [< Ref $x>]<'v> {
+            impl<'v> $crate::values::UnpackValue<'v> for [< Ref $x>]<'v> {
                 fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
                     $x::from_value(value)
                         .map([< Ref $x>])

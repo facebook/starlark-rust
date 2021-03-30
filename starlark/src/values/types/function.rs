@@ -22,11 +22,10 @@ use crate::{
         def::{DefInvoker, DefInvokerFrozen},
         Evaluator, Parameters, ParametersCollect,
     },
-    stdlib::UnpackValue,
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike,
-        Walker,
+        FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueError,
+        ValueLike, Walker,
     },
 };
 use derivative::Derivative;

@@ -93,31 +93,6 @@ impl<'v, T1: UnpackValue<'v>, T2: UnpackValue<'v>> UnpackValue<'v> for (T1, T2) 
     }
 }
 
-// An Option that is encoded in a value using NoneType
-pub enum NoneOr<T> {
-    None,
-    Other(T),
-}
-
-impl<T> NoneOr<T> {
-    pub fn into_option(self) -> Option<T> {
-        match self {
-            Self::None => None,
-            Self::Other(x) => Some(x),
-        }
-    }
-}
-
-impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for NoneOr<T> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        if value.is_none() {
-            Some(NoneOr::None)
-        } else {
-            T::unpack_value(value, heap).map(NoneOr::Other)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{assert::Assert, environment::GlobalsBuilder};

@@ -17,8 +17,7 @@
 
 use crate::{
     collections::SmallMap,
-    stdlib::macros::UnpackValue,
-    values::{dict::Dict, list::List, Heap, Value},
+    values::{dict::Dict, list::List, Heap, UnpackValue, Value},
 };
 use std::{hash::Hash, marker::PhantomData, ops::Deref};
 

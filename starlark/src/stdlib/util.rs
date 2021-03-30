@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::stdlib::macros::NoneOr;
+use crate::values::none::NoneOr;
 
 fn bound(val: i32, limit: i32) -> usize {
     if val < 0 {

@@ -29,7 +29,7 @@
 //! We also use the term _container_ for denoting any of those type that can
 //! hold several values.
 pub use crate::values::{
-    error::*, interpolation::*, iter::*, layout::*, owned::*, traits::*, types::*,
+    error::*, interpolation::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*,
 };
 use crate::{
     collections::{Hashed, SmallHashResult},
@@ -58,6 +58,7 @@ mod owned;
 mod traits;
 mod types;
 mod typing;
+mod unpack;
 
 impl Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

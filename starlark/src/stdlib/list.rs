@@ -20,13 +20,10 @@
 use crate as starlark;
 use crate::{
     environment::GlobalsBuilder,
-    stdlib::{
-        util::{convert_index, convert_indices},
-        NoneOr,
-    },
+    stdlib::util::{convert_index, convert_indices},
     values::{
         list::{List, RefList},
-        none::NoneType,
+        none::{NoneOr, NoneType},
         StarlarkValue, Value,
     },
 };
