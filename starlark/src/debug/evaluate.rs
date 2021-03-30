@@ -15,12 +15,7 @@
  * limitations under the License.
  */
 
-use crate::{
-    debug::inspect::to_scope_names,
-    eval::Evaluator,
-    syntax::{AstModule, Dialect},
-    values::Value,
-};
+use crate::{debug::inspect::to_scope_names, eval::Evaluator, syntax::AstModule, values::Value};
 use std::{collections::HashMap, mem};
 
 impl<'v, 'a> Evaluator<'v, 'a> {
@@ -28,9 +23,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Lots of health warnings on this code. Might not work with frozen modules, unassigned variables,
     /// nested definitions etc. All are solvable, with increasing levels of effort.
     /// It would be a bad idea to rely on the results after evaluating stuff randomly.
-    pub fn eval_statements(&mut self, code: String) -> anyhow::Result<Value<'v>> {
-        let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
-
+    pub fn eval_statements(&mut self, statements: AstModule) -> anyhow::Result<Value<'v>> {
         // We are doing a lot of funky stuff here. It's amazing anything works, so let's not push our luck with GC.
         self.disable_gc();
 
@@ -77,7 +70,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let orig_is_module_scope = mem::replace(&mut self.is_module_scope, true);
         let orig_module_variables = mem::replace(&mut self.module_variables, None);
-        let res = self.eval_module(ast);
+        let res = self.eval_module(statements);
         self.is_module_scope = orig_is_module_scope;
         self.module_variables = orig_module_variables;
 
@@ -105,13 +98,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{self as starlark, assert, environment::GlobalsBuilder};
+    use crate::{self as starlark, assert, environment::GlobalsBuilder, syntax::Dialect};
     use itertools::Itertools;
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_evaluate(code: String) -> Value<'v> {
-            ctx.eval_statements(code)
+            let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
+            ctx.eval_statements(ast)
         }
     }
 

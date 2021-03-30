@@ -16,7 +16,11 @@
  */
 
 use crate::{
-    self as starlark, environment::GlobalsBuilder, eval::Evaluator, values::none::NoneType,
+    self as starlark,
+    environment::GlobalsBuilder,
+    eval::Evaluator,
+    syntax::{AstModule, Dialect},
+    values::none::NoneType,
 };
 use anyhow::anyhow;
 use itertools::Itertools;
@@ -134,7 +138,9 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<State> {
                         }
                     }
                 } else {
-                    match ctx.eval_statements(line) {
+                    let ast = AstModule::parse("interactive", line, &Dialect::Extended);
+                    let res = ast.and_then(|ast| ctx.eval_statements(ast));
+                    match res {
                         Err(e) => eprintln!("{:#}", e),
                         Ok(v) => {
                             if !v.is_none() {

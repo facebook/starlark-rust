@@ -24,7 +24,7 @@ use starlark::{
     codemap::{Span, SpanLoc},
     environment::Module,
     eval::Evaluator,
-    syntax::AstModule,
+    syntax::{AstModule, Dialect},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -353,7 +353,8 @@ impl DebugServer for Backend {
             // We don't want to trigger breakpoints during an evaluate,
             // not least because we currently don't allow reenterant evaluate
             let old = mem::take(&mut ctx.on_stmt);
-            let s = match ctx.eval_statements(x.expression.clone()) {
+            let ast = AstModule::parse("interactive", x.expression.clone(), &Dialect::Extended);
+            let s = match ast.and_then(|ast| ctx.eval_statements(ast)) {
                 Err(e) => format!("{:#}", e),
                 Ok(v) => v.to_string(),
             };
