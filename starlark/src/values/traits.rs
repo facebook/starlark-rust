@@ -31,8 +31,8 @@
 use crate::{
     environment::Globals,
     values::{
-        function::FunctionInvoker, unsupported, unsupported_owned, unsupported_with,
-        ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable, Value, Walker,
+        function::FunctionInvoker, ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable,
+        Value, ValueError, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -113,7 +113,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     /// # "#);
     /// ```
     fn set_at(&mut self, index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
-        unsupported_with(self, "[]=", index)
+        ValueError::unsupported_with(self, "[]=", index)
     }
 
     /// Set the attribute named `attribute` of the current value to
@@ -125,7 +125,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     /// supported on this value, even if the self is immutable,
     /// e.g. for numbers).
     fn set_attr(&mut self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
-        unsupported(self, &format!(".{}=", attribute))
+        ValueError::unsupported(self, &format!(".{}=", attribute))
     }
 }
 
@@ -208,7 +208,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// the type is numeric (not for string).
     /// Works for int and bool (0 = false, 1 = true).
     fn to_int(&self) -> anyhow::Result<i32> {
-        unsupported(self, "int()")
+        ValueError::unsupported(self, "int()")
     }
 
     /// Return a hash code for self to be used when self is placed as a key in a Dict.
@@ -240,7 +240,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     ///
     /// Default implementation returns error.
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
-        unsupported_with(self, "compare", other)
+        ValueError::unsupported_with(self, "compare", other)
     }
 
     /// Perform a call on the object, only meaningfull for function object.
@@ -263,14 +263,14 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         _me: Value<'v>,
         _heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
-        unsupported(self, "call()")
+        ValueError::unsupported(self, "call()")
     }
 
     /// Perform an array or dictionary indirection.
     ///
     /// This returns the result of `a[index]` if `a` is indexable.
     fn at(&self, index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "[]", index)
+        ValueError::unsupported_with(self, "[]", index)
     }
 
     /// Extract a slice of the underlying object if the object is indexable. The
@@ -302,18 +302,18 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         _stride: Option<Value<'v>>,
         _heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        unsupported(self, "[::]")
+        ValueError::unsupported(self, "[::]")
     }
 
     /// Returns an iterable over the value of this container if this value hold
     /// an iterable container.
     fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
-        unsupported(self, "(iter)")
+        ValueError::unsupported(self, "(iter)")
     }
 
     /// Returns the length of the value, if this value is a sequence.
     fn length(&self) -> anyhow::Result<i32> {
-        unsupported(self, "len()")
+        ValueError::unsupported(self, "len()")
     }
 
     /// Get an attribute for the current value as would be returned by dotted
@@ -322,7 +322,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// __Note__: this does not handle native methods which are handled through
     /// universe.
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported(self, &format!(".{}", attribute))
+        ValueError::unsupported(self, &format!(".{}", attribute))
     }
 
     /// Return true if an attribute of name `attribute` exists for the current
@@ -355,7 +355,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        unsupported_owned(other.get_type(), "in", Some(self.get_type()))
+        ValueError::unsupported_owned(other.get_type(), "in", Some(self.get_type()))
     }
 
     /// Apply the `+` unary operator to the current value.
@@ -368,7 +368,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported(self, "+")
+        ValueError::unsupported(self, "+")
     }
 
     /// Apply the `-` unary operator to the current value.
@@ -381,7 +381,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn minus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported(self, "-")
+        ValueError::unsupported(self, "-")
     }
 
     /// Add with the arguments the other way around. Should return None
@@ -404,7 +404,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn add(&self, rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "+", rhs)
+        ValueError::unsupported_with(self, "+", rhs)
     }
 
     /// Substract `other` from the current value.
@@ -417,7 +417,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn sub(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "-", other)
+        ValueError::unsupported_with(self, "-", other)
     }
 
     /// Multiply the current value with `other`.
@@ -433,7 +433,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn mul(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "*", other)
+        ValueError::unsupported_with(self, "*", other)
     }
 
     /// Apply the percent operator between the current value and `other`. Usually used on
@@ -459,7 +459,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn percent(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "%", other)
+        ValueError::unsupported_with(self, "%", other)
     }
 
     /// Floor division between the current value and `other`.
@@ -472,26 +472,26 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// # "#);
     /// ```
     fn floor_div(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "//", other)
+        ValueError::unsupported_with(self, "//", other)
     }
 
     fn bit_and(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "&", other)
+        ValueError::unsupported_with(self, "&", other)
     }
 
     fn bit_or(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "|", other)
+        ValueError::unsupported_with(self, "|", other)
     }
 
     fn bit_xor(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "^", other)
+        ValueError::unsupported_with(self, "^", other)
     }
 
     fn left_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, "<<", other)
+        ValueError::unsupported_with(self, "<<", other)
     }
 
     fn right_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        unsupported_with(self, ">>", other)
+        ValueError::unsupported_with(self, ">>", other)
     }
 }

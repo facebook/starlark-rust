@@ -19,9 +19,8 @@
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
-        fast_string, index::convert_slice_indices, interpolation::Interpolation, unsupported_with,
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value,
-        ValueError,
+        fast_string, index::convert_slice_indices, interpolation::Interpolation, AllocFrozenValue,
+        AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value, ValueError,
     },
 };
 use std::{
@@ -154,7 +153,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
         if let Some(other) = other.unpack_str() {
             Ok(self.as_ref().cmp(other))
         } else {
-            unsupported_with(self, "cmp()", other)
+            ValueError::unsupported_with(self, "cmp()", other)
         }
     }
 
@@ -253,7 +252,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
                 Ok(heap.alloc(fast_string::append(self, other_str)))
             }
         } else {
-            unsupported_with(self, "+", other)
+            ValueError::unsupported_with(self, "+", other)
         }
     }
 

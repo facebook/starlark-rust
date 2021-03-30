@@ -23,8 +23,8 @@ use crate::{
         error::ValueError,
         index::{convert_index, convert_slice_indices},
         iter::StarlarkIterable,
-        tuple, unsupported_with, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
+        SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -201,7 +201,7 @@ where
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match List::from_value(other) {
-            None => unsupported_with(self, "cmp()", other),
+            None => ValueError::unsupported_with(self, "cmp()", other),
             Some(other) => compare_slice(&self.content, &other.content, |x, y| x.compare(*y)),
         }
     }
@@ -254,7 +254,7 @@ where
             }
             Ok(heap.alloc(result))
         } else {
-            unsupported_with(self, "+", other)
+            ValueError::unsupported_with(self, "+", other)
         }
     }
 

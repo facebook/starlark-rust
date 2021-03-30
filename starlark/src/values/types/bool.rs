@@ -18,8 +18,7 @@
 //! Define the bool type for Starlark.
 
 use crate::values::{
-    unsupported_with, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
-    Value,
+    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value, ValueError,
 };
 use std::cmp::Ordering;
 
@@ -78,7 +77,7 @@ impl StarlarkValue<'_> for bool {
         if let Some(other) = other.unpack_bool() {
             Ok(self.cmp(&other))
         } else {
-            unsupported_with(self, "<>", other)
+            ValueError::unsupported_with(self, "<>", other)
         }
     }
 }

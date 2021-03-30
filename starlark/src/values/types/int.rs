@@ -18,8 +18,8 @@
 //! Define the int type for Starlark.
 
 use crate::values::{
-    error::ValueError, layout::PointerI32, unsupported_owned, unsupported_with, AllocFrozenValue,
-    AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, Value,
+    error::ValueError, layout::PointerI32, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
+    Heap, StarlarkValue, Value,
 };
 use std::cmp::Ordering;
 
@@ -48,7 +48,7 @@ where
 {
     match right.unpack_int() {
         Some(right) => Ok(Value::new_int(f(left, right)?)),
-        None => unsupported_owned(INT_VALUE_TYPE_NAME, op, Some(INT_VALUE_TYPE_NAME)),
+        None => ValueError::unsupported_owned(INT_VALUE_TYPE_NAME, op, Some(INT_VALUE_TYPE_NAME)),
     }
 }
 
@@ -96,7 +96,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
                 .map(Value::new_int)
                 .ok_or_else(|| ValueError::IntegerOverflow.into())
         } else {
-            unsupported_with(self, "+", other)
+            ValueError::unsupported_with(self, "+", other)
         }
     }
     fn sub(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -106,7 +106,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
                 .map(Value::new_int)
                 .ok_or_else(|| ValueError::IntegerOverflow.into())
         } else {
-            unsupported_with(self, "-", other)
+            ValueError::unsupported_with(self, "-", other)
         }
     }
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -154,7 +154,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         if let Some(other) = other.unpack_int() {
             Ok(self.get().cmp(&other))
         } else {
-            unsupported_with(self, "==", other)
+            ValueError::unsupported_with(self, "==", other)
         }
     }
 
@@ -162,7 +162,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         if let Some(other) = other.unpack_int() {
             Ok(Value::new_int(self.get() & other))
         } else {
-            unsupported_with(self, "&", other)
+            ValueError::unsupported_with(self, "&", other)
         }
     }
 
@@ -170,7 +170,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         if let Some(other) = other.unpack_int() {
             Ok(Value::new_int(self.get() | other))
         } else {
-            unsupported_with(self, "|", other)
+            ValueError::unsupported_with(self, "|", other)
         }
     }
 
@@ -178,7 +178,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         if let Some(other) = other.unpack_int() {
             Ok(Value::new_int(self.get() ^ other))
         } else {
-            unsupported_with(self, "^", other)
+            ValueError::unsupported_with(self, "^", other)
         }
     }
 
@@ -192,7 +192,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
                 .map(Value::new_int)
                 .ok_or_else(|| ValueError::IntegerOverflow.into())
         } else {
-            unsupported_with(self, "<<", other)
+            ValueError::unsupported_with(self, "<<", other)
         }
     }
 
@@ -206,7 +206,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
                 .map(Value::new_int)
                 .ok_or_else(|| ValueError::IntegerOverflow.into())
         } else {
-            unsupported_with(self, ">>", other)
+            ValueError::unsupported_with(self, ">>", other)
         }
     }
 }

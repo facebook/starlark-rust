@@ -19,8 +19,8 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    unsupported_with, AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable,
-    StarlarkValue, Value, ValueError, ValueLike, Walker,
+    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
+    ValueError, ValueLike, Walker,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -160,7 +160,7 @@ where
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match Tuple::from_value(other) {
-            None => unsupported_with(self, "cmp()", other),
+            None => ValueError::unsupported_with(self, "cmp()", other),
             Some(other) => compare_slice(&self.content, &other.content, |x, y| x.compare(*y)),
         }
     }
@@ -217,7 +217,7 @@ where
             }
             Ok(heap.alloc(result))
         } else {
-            unsupported_with(self, "a", other)
+            ValueError::unsupported_with(self, "a", other)
         }
     }
 

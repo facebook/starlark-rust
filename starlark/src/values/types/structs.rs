@@ -23,8 +23,8 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        unsupported_with, AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
-        Value, ValueLike, Walker,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike,
+        Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -133,7 +133,7 @@ where
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match Struct::from_value(other) {
-            None => unsupported_with(self, "cmp()", other),
+            None => ValueError::unsupported_with(self, "cmp()", other),
             Some(other) => compare_small_map(&self.fields, &other.fields, |x, y| x.compare(*y)),
         }
     }

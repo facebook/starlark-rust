@@ -57,30 +57,39 @@ pub(crate) enum ControlError {
     MutationDuringIteration,
 }
 
-pub(crate) fn unsupported_owned<T>(left: &str, op: &str, right: Option<&str>) -> anyhow::Result<T> {
-    match right {
-        None => Err(ValueError::OperationNotSupported {
-            op: op.to_owned(),
-            typ: left.to_owned(),
+impl ValueError {
+    pub(crate) fn unsupported_owned<T>(
+        left: &str,
+        op: &str,
+        right: Option<&str>,
+    ) -> anyhow::Result<T> {
+        match right {
+            None => Err(ValueError::OperationNotSupported {
+                op: op.to_owned(),
+                typ: left.to_owned(),
+            }
+            .into()),
+            Some(right) => Err(ValueError::OperationNotSupportedBinary {
+                op: op.to_owned(),
+                left: left.to_owned(),
+                right: right.to_owned(),
+            }
+            .into()),
         }
-        .into()),
-        Some(right) => Err(ValueError::OperationNotSupportedBinary {
-            op: op.to_owned(),
-            left: left.to_owned(),
-            right: right.to_owned(),
-        }
-        .into()),
     }
-}
 
-pub fn unsupported<'v, T, V: StarlarkValue<'v> + ?Sized>(left: &V, op: &str) -> anyhow::Result<T> {
-    unsupported_owned(left.get_type(), op, None)
-}
+    pub fn unsupported<'v, T, V: StarlarkValue<'v> + ?Sized>(
+        left: &V,
+        op: &str,
+    ) -> anyhow::Result<T> {
+        Self::unsupported_owned(left.get_type(), op, None)
+    }
 
-pub fn unsupported_with<'v, T, V: StarlarkValue<'v> + ?Sized>(
-    left: &V,
-    op: &str,
-    right: Value,
-) -> anyhow::Result<T> {
-    unsupported_owned(left.get_type(), op, Some(right.get_type()))
+    pub fn unsupported_with<'v, T, V: StarlarkValue<'v> + ?Sized>(
+        left: &V,
+        op: &str,
+        right: Value,
+    ) -> anyhow::Result<T> {
+        Self::unsupported_owned(left.get_type(), op, Some(right.get_type()))
+    }
 }

@@ -288,7 +288,7 @@
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
-//! use starlark::values::{unsupported_with, Heap, SimpleValue, StarlarkValue, Value};
+//! use starlark::values::{Heap, SimpleValue, StarlarkValue, Value, ValueError};
 //! use starlark::{starlark_type, starlark_simple_value};
 //!
 //! // Define complex numbers
@@ -316,7 +316,7 @@
 //!                 imaginary: self.imaginary + rhs.imaginary,
 //!             }))
 //!         } else {
-//!             unsupported_with(self, "+", rhs)
+//!             ValueError::unsupported_with(self, "+", rhs)
 //!         }
 //!     }
 //! }

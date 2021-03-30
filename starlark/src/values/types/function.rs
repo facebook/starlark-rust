@@ -24,9 +24,9 @@ use crate::{
     },
     stdlib::UnpackValue,
     values::{
-        unsupported, AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer,
-        FrozenHeap, FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError,
-        ValueLike, Walker,
+        AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
+        FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike,
+        Walker,
     },
 };
 use derivative::Derivative;
@@ -276,7 +276,7 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
                 return Ok(s.to_value());
             }
         }
-        unsupported(self, &format!(".{}", attribute))
+        ValueError::unsupported(self, &format!(".{}", attribute))
     }
 
     fn dir_attr(&self) -> Vec<String> {
