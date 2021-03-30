@@ -28,9 +28,7 @@
 //! https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#sequence-types).
 //! We also use the term _container_ for denoting any of those type that can
 //! hold several values.
-pub use crate::values::{
-    error::*, interpolation::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*,
-};
+pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
     collections::{Hashed, SmallHashResult},
     values::types::function::FunctionInvoker,
