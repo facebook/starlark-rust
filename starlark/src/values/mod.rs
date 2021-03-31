@@ -154,7 +154,9 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
 
     fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
 
-    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>>;
+    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
+        self.to_value().new_invoker(heap)
+    }
 
     fn as_any_ref(self) -> ARef<'v, dyn AnyLifetime<'v>> {
         ARef::map(self.get_aref(), |e| e.as_dyn_any())
@@ -231,10 +233,6 @@ impl<'v> ValueLike<'v> for Value<'v> {
     fn to_value(self) -> Value<'v> {
         self
     }
-
-    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
-        self.new_invoker(heap)
-    }
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
@@ -244,10 +242,6 @@ impl<'v> ValueLike<'v> for FrozenValue {
 
     fn to_value(self) -> Value<'v> {
         Value::new_frozen(self)
-    }
-
-    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
-        self.get_ref().new_invoker(self.to_value(), heap)
     }
 }
 
