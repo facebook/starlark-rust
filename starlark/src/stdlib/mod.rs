@@ -47,6 +47,7 @@ pub(crate) fn extended_environment() -> GlobalsBuilder {
         .with(add_record)
         .with(add_enum)
         .with(add_extra_functions)
+        .with(add_breakpoint)
 }
 
 /// Add the `struct` function and type to the global environment.
