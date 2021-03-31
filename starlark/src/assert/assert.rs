@@ -291,10 +291,6 @@ impl Assert {
         self.module_add(name, module);
     }
 
-    pub fn get_globals(&self) -> Globals {
-        self.globals.dupe()
-    }
-
     pub fn globals(&mut self, x: Globals) {
         self.globals = x;
     }

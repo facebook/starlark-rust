@@ -841,10 +841,8 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     #[derive(AnyLifetime, Default)]
     struct Extra<'v>(Arc<Mutex<HashMap<String, Value<'v>>>>);
 
-    let mut a = Assert::new();
-    a.globals_add(module);
     let modu = Module::new();
-    let globals = a.get_globals();
+    let globals = GlobalsBuilder::extended().with(module).build();
     let mut ctx = Evaluator::new(&modu, &globals);
     let extra = Extra::default();
     ctx.extra_v = Some(&extra);
@@ -857,6 +855,8 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     for (name, value) in extra.0.lock().unwrap().iter() {
         modu.set(name, *value);
     }
+    let mut a = Assert::new();
+    a.globals(globals);
     a.module_add("a", modu.freeze());
     a.is_true("load('a', 'x'); x == 42");
     Ok(())
