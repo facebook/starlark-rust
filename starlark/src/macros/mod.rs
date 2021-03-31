@@ -86,9 +86,6 @@ macro_rules! starlark_value {
                     $x::from_value(x)
                 }
             }
-
-            #[allow(dead_code)]
-            $v type [< Ref $x >]<'v> = $crate::values::ARef<'v, $x<'v>>;
         }
     };
 }
@@ -124,9 +121,6 @@ macro_rules! starlark_simple_value {
                     $x::from_value(x)
                 }
             }
-
-            #[allow(dead_code)]
-            $v type [< Ref $x >]<'v> = $crate::values::ARef<'v, $x>;
         }
     };
 }

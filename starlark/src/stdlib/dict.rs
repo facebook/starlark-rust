@@ -20,13 +20,10 @@
 use crate as starlark;
 use crate::{
     environment::GlobalsBuilder,
-    values::{
-        dict::{Dict, RefDict},
-        none::NoneType,
-        Value,
-    },
+    values::{dict::Dict, none::NoneType, Value},
 };
 use anyhow::anyhow;
+use gazebo::cell::ARef;
 use std::mem;
 
 #[starlark_module]
@@ -66,7 +63,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x["one"] == 1
     /// # "#);
     /// ```
-    fn copy(this: RefDict) -> Dict<'v> {
+    fn copy(this: ARef<Dict>) -> Dict<'v> {
         Ok(this.clone())
     }
 
@@ -94,7 +91,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x.get("three", 0) == 0
     /// # )"#);
     /// ```
-    fn get(this: RefDict, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
+    fn get(this: ARef<Dict>, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
         match this.get(key)? {
             None => Ok(default),
             Some(x) => Ok(x),
@@ -117,7 +114,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x.items() == [("one", 1), ("two", 2)]
     /// # "#);
     /// ```
-    fn items(this: RefDict) -> Vec<(Value<'v>, Value<'v>)> {
+    fn items(this: ARef<Dict>) -> Vec<(Value<'v>, Value<'v>)> {
         Ok(this.items())
     }
 
@@ -136,7 +133,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x.keys() == ["one", "two"]
     /// # "#);
     /// ```
-    fn keys(this: RefDict) -> Vec<Value<'v>> {
+    fn keys(this: ARef<Dict>) -> Vec<Value<'v>> {
         Ok(this.keys())
     }
 
@@ -310,7 +307,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x == {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
     /// # "#);
     /// ```
-    fn update(this: Value, ref pairs: Option<Value>, kwargs: RefDict) -> NoneType {
+    fn update(this: Value, ref pairs: Option<Value>, kwargs: ARef<Dict>) -> NoneType {
         let mut this = Dict::from_value_mut(this, heap)?.unwrap();
         if let Some(pairs) = pairs {
             if let Some(dict) = Dict::from_value(pairs) {
@@ -356,7 +353,7 @@ pub(crate) fn dict_members(registry: &mut GlobalsBuilder) {
     /// x.values() == [1, 2]
     /// # "#);
     /// ```
-    fn values(this: RefDict) -> Vec<Value<'v>> {
+    fn values(this: ARef<Dict>) -> Vec<Value<'v>> {
         Ok(this.values())
     }
 }

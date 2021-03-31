@@ -22,12 +22,13 @@ use crate::{
     environment::GlobalsBuilder,
     stdlib::util::{convert_index, convert_indices},
     values::{
-        list::{List, RefList},
+        list::List,
         none::{NoneOr, NoneType},
         StarlarkValue, Value,
     },
 };
 use anyhow::anyhow;
+use gazebo::cell::ARef;
 
 #[starlark_module]
 pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
@@ -88,7 +89,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     /// len(x) == 2
     /// # "#);
     /// ```
-    fn copy(this: RefList) -> List<'v> {
+    fn copy(this: ARef<List>) -> List<'v> {
         Ok(List {
             content: this.content.clone(),
         })
@@ -151,7 +152,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     /// # )"#);
     /// ```
     fn index(
-        this: RefList,
+        this: ARef<List>,
         ref needle: Value,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
