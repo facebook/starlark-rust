@@ -37,7 +37,7 @@ pub struct ReturnFileLoader<'a> {
 impl<'a> FileLoader for ReturnFileLoader<'a> {
     fn load(&mut self, path: &str) -> anyhow::Result<FrozenModule> {
         match self.modules.get(path) {
-            Some(v) => Ok(v.dupe()),
+            Some(v) => Ok((*v).dupe()),
             None => Err(anyhow!(
                 "ReturnFileLoader does not know the module `{}`",
                 path
