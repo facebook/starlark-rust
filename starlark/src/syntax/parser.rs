@@ -111,8 +111,8 @@ impl AstModule {
     /// The `filename` is for error messages only, and does not have to be a valid file.
     /// The [`Dialect`] selects which Starlark constructs are valid.
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
-        let mut codemap = CodeMap::new();
-        let file = codemap.add_file(filename.to_string(), content);
+        let codemap = CodeMap::new(filename.to_owned(), content);
+        let file = codemap.get_file().dupe();
         let codemap = Arc::new(codemap);
         let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
         match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {

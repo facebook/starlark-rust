@@ -72,7 +72,6 @@ pub struct Evaluator<'v, 'a> {
     /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
 }
-
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Crate a new [`Evaluator`] specifying the [`Module`] used for module variables,
     /// and the [`Globals`] used to resolve global variables.
@@ -89,8 +88,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             local_variables: LocalSlots::default(),
             local_variables_stack: Vec::new(),
             globals,
-            loader: None,
-            codemap: Arc::new(CodeMap::new()), // Will be replaced before it is used
+            loader: None, // TODO: Implement Default for CodeMap
+            codemap: Arc::new(CodeMap::new(String::new(), String::new())), // Will be replaced before it is used
             extra: None,
             extra_v: None,
             last_heap_size: 0,

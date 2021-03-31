@@ -25,8 +25,8 @@
 //! # Example
 //! ```
 //! use starlark::codemap::CodeMap;
-//! let mut codemap = CodeMap::new();
-//! let file = codemap.add_file("test.rs".to_string(), "fn test(){\n    println!(\"Hello\");\n}\n".to_string());
+//! let mut codemap = CodeMap::new("test.rs".to_owned(), "fn test(){\n    println!(\"Hello\");\n}\n".to_owned());
+//! let file = codemap.get_file();
 //! let string_literal_span = file.span.subspan(24, 31);
 //!
 //! let location = codemap.look_up_span(string_literal_span);
@@ -38,8 +38,7 @@
 //! ```
 use gazebo::prelude::*;
 use std::{
-    cmp::{self, Ordering},
-    fmt,
+    cmp, fmt,
     hash::{Hash, Hasher},
     ops::{Add, Deref, Sub},
     sync::Arc,
@@ -132,67 +131,42 @@ impl<T> Deref for Spanned<T> {
     }
 }
 
-/// A data structure recording source code files for position lookup.
-#[derive(Default, Debug)]
+/// A data structure recording a source code file for position lookup.
+#[derive(Debug)]
 pub struct CodeMap {
-    files: Vec<Arc<File>>,
+    file: Arc<File>,
 }
 
 impl CodeMap {
-    /// Creates an empty `CodeMap`.
-    pub fn new() -> CodeMap {
-        Default::default()
-    }
-
-    /// Adds a file with the given name and contents.
-    ///
-    /// Use the returned `File` and its `.span` property to create `Spans`
-    /// representing substrings of the file.
-    pub fn add_file(&mut self, name: String, source: String) -> Arc<File> {
-        let low = self.end_pos() + 1;
-        let high = low + source.len() as u64;
+    /// Creates an new `CodeMap`.
+    pub fn new(filename: String, contents: String) -> CodeMap {
+        let low = Pos(1);
+        let high = low + contents.len() as u64;
         let mut lines = vec![low];
         lines.extend(
-            source
+            contents
                 .match_indices('\n')
                 .map(|(p, _)| low + (p + 1) as u64),
         );
 
-        let file = Arc::new(File {
-            span: Span { low, high },
-            name,
-            source,
-            lines,
-        });
-
-        self.files.push(file.dupe());
-        file
+        CodeMap {
+            file: Arc::new(File {
+                span: Span { low, high },
+                name: filename,
+                source: contents,
+                lines,
+            }),
+        }
     }
 
-    fn end_pos(&self) -> Pos {
-        self.files.last().map_or(Pos(0), |x| x.span.high)
-    }
-
-    /// Looks up the `File` that contains the specified position.
-    pub fn find_file(&self, pos: Pos) -> &Arc<File> {
-        self.files
-            .binary_search_by(|file| {
-                if file.span.high < pos {
-                    Ordering::Less
-                } else if file.span.low > pos {
-                    Ordering::Greater
-                } else {
-                    Ordering::Equal
-                }
-            })
-            .ok()
-            .map(|i| &self.files[i])
-            .expect("Mapping unknown source location")
+    /// Looks up a `File`
+    pub fn get_file(&self) -> &Arc<File> {
+        &self.file
     }
 
     /// Gets the file, line, and column represented by a `Pos`.
     pub fn look_up_pos(&self, pos: Pos) -> Loc {
-        let file = self.find_file(pos);
+        let file = self.get_file();
         let position = file.find_line_col(pos);
         Loc {
             file: file.dupe(),
@@ -202,7 +176,7 @@ impl CodeMap {
 
     /// Gets the file and its line and column ranges represented by a `Span`.
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
-        let file = self.find_file(span.low);
+        let file = self.get_file();
         let begin = file.find_line_col(span.low);
         let end = file.find_line_col(span.high);
         SpanLoc {
@@ -404,17 +378,12 @@ impl fmt::Display for SpanLoc {
 
 #[test]
 fn test_codemap() {
-    let mut codemap = CodeMap::new();
-    let f1 = codemap.add_file("test1.rs".to_string(), "abcd\nefghij\nqwerty".to_string());
-    let f2 = codemap.add_file("test2.rs".to_string(), "foo\nbar".to_string());
+    let codemap = CodeMap::new("test1.rs".to_owned(), "abcd\nefghij\nqwerty".to_owned());
 
-    assert_eq!(codemap.find_file(f1.span.low()).name(), "test1.rs");
-    assert_eq!(codemap.find_file(f1.span.high()).name(), "test1.rs");
-    assert_eq!(codemap.find_file(f2.span.low()).name(), "test2.rs");
-    assert_eq!(codemap.find_file(f2.span.high()).name(), "test2.rs");
+    assert_eq!(codemap.get_file().name(), "test1.rs");
+    assert_eq!(codemap.get_file().name(), "test1.rs");
 
-    let x = f1.span.subspan(5, 10);
-    let f = codemap.find_file(x.low);
+    let f = codemap.get_file();
     assert_eq!(f.name, "test1.rs");
     assert_eq!(
         f.find_line_col(f.span.low()),
@@ -432,17 +401,13 @@ fn test_codemap() {
         f.find_line_col(f.span.low() + 16),
         LineCol { line: 2, column: 4 }
     );
-
-    let x = f2.span.subspan(4, 7);
-    assert_eq!(codemap.find_file(x.low()).name(), "test2.rs");
-    assert_eq!(codemap.find_file(x.high()).name(), "test2.rs");
 }
 
 #[test]
 fn test_issue2() {
-    let mut codemap = CodeMap::new();
     let content = "a \nxyz\r\n";
-    let file = codemap.add_file("<test>".to_owned(), content.to_owned());
+    let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
+    let file = codemap.get_file();
 
     let span = file.span.subspan(2, 3);
     assert_eq!(
@@ -461,9 +426,9 @@ fn test_issue2() {
 
 #[test]
 fn test_multibyte() {
-    let mut codemap = CodeMap::new();
     let content = "65°00′N 18°00′W 汉语\n🔬";
-    let file = codemap.add_file("<test>".to_owned(), content.to_owned());
+    let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
+    let file = codemap.get_file();
 
     assert_eq!(
         codemap.look_up_pos(file.span.low() + 21),

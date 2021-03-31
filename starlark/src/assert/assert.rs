@@ -476,10 +476,8 @@ impl Assert {
     /// Restricted to crate because 'Lexeme' isn't a public type.
     pub(crate) fn lex_tokens(&self, program: &str) -> Vec<(usize, Token, usize)> {
         fn tokens(dialect: &Dialect, program: &str) -> Vec<(usize, Token, usize)> {
-            let mut codemap = CodeMap::new();
-            let file_span = codemap
-                .add_file("assert.bzl".to_owned(), program.to_owned())
-                .span;
+            let codemap = CodeMap::new("assert.bzl".to_owned(), program.to_owned());
+            let file_span = codemap.get_file().span;
             let codemap = Arc::new(codemap);
             Lexer::new(program, dialect, codemap.dupe(), file_span)
                 .collect::<Result<Vec<_>, _>>()
@@ -554,7 +552,7 @@ impl Assert {
             Err(e) => {
                 if let Some(d) = e.downcast_ref::<Diagnostic>() {
                     if let Some((span, codemap)) = &d.span {
-                        let file = codemap.find_file(span.low());
+                        let file = codemap.get_file();
                         let want_span = file.span.subspan(begin as u64, end as u64);
                         if *span == want_span {
                             return e; // Success

@@ -166,7 +166,7 @@ fn get_display_list_for_diagnostic<'a>(
     }
 
     fn convert_span_to_slice<'a>(diagnostic_span: Span, codemap: &'a CodeMap) -> Slice<'a> {
-        let file = codemap.find_file(diagnostic_span.low());
+        let file = codemap.get_file();
         let first_line_col = file.find_line_col(diagnostic_span.low());
         let last_line_col = file.find_line_col(diagnostic_span.high());
 
