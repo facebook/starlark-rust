@@ -89,7 +89,7 @@ impl Dialect {
 }
 
 fn err<T>(codemap: &Arc<CodeMap>, span: Span, err: DialectError) -> anyhow::Result<T> {
-    Err(Diagnostic::add_span(err, span, codemap.dupe()))
+    Err(Diagnostic::new(err, span, codemap.dupe()))
 }
 
 impl Dialect {

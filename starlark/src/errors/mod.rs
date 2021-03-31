@@ -21,7 +21,6 @@ use annotate_snippets::{
     display_list::{DisplayList, FormatOptions},
     snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
 };
-use anyhow::anyhow;
 use std::{
     error::Error,
     fmt::{self, Display, Formatter},
@@ -76,27 +75,10 @@ impl Error for Diagnostic {
 }
 
 impl Diagnostic {
-    pub fn new(msg: impl Into<String>) -> Self {
-        Self::anyhow(anyhow!(msg.into()))
-    }
-
-    // Invariant: the `msg` should not be a Diagnostic, ensured by the callers
-    fn anyhow(msg: anyhow::Error) -> Self {
-        Self {
-            message: msg,
-            span: None,
-            call_stack: Vec::new(),
-        }
-    }
-
     /// Modify an error by attaching a span to it.
     /// If given an `Error` which is a `Diagnostic`, it will add the information to the
     /// existing `Diagnostic`. If not, it will wrap the error in `Diagnostic`.
-    pub fn add_span(
-        err: impl Into<anyhow::Error>,
-        span: Span,
-        codemap: Arc<CodeMap>,
-    ) -> anyhow::Error {
+    pub fn new(err: impl Into<anyhow::Error>, span: Span, codemap: Arc<CodeMap>) -> anyhow::Error {
         Self::modify(err.into(), |d| d.set_span(span, codemap))
     }
 
@@ -110,7 +92,11 @@ impl Diagnostic {
                 err
             }
             _ => {
-                let mut err = Diagnostic::anyhow(err);
+                let mut err = Self {
+                    message: err,
+                    span: None,
+                    call_stack: Vec::new(),
+                };
                 f(&mut err);
                 err.into()
             }

@@ -87,7 +87,7 @@ impl Expr {
         args: Vec<AstArgument>,
         codemap: &Arc<CodeMap>,
     ) -> anyhow::Result<Expr> {
-        let err = |span, msg| Err(Diagnostic::add_span(msg, span, codemap.dupe()));
+        let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
 
         let mut stage = ArgsStage::Positional;
         let mut named_args = HashSet::new();
@@ -144,7 +144,7 @@ fn test_param_name<'a, T>(
     codemap: &Arc<CodeMap>,
 ) -> anyhow::Result<()> {
     if argset.contains(n.node.as_str()) {
-        return Err(Diagnostic::add_span(
+        return Err(Diagnostic::new(
             ArgumentUseOrderError::DuplicateParameterName,
             arg.span,
             codemap.dupe(),
@@ -176,7 +176,7 @@ impl Stmt {
         stmts: AstStmt,
         codemap: &Arc<CodeMap>,
     ) -> anyhow::Result<Stmt> {
-        let err = |span, msg| Err(Diagnostic::add_span(msg, span, codemap.dupe()));
+        let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
 
         // you can't repeat argument names
         let mut argset = HashSet::new();
@@ -245,7 +245,7 @@ impl Stmt {
             inside_for: bool,
             inside_def: bool,
         ) -> anyhow::Result<()> {
-            let err = |x| Err(Diagnostic::add_span(x, stmt.span, codemap.dupe()));
+            let err = |x| Err(Diagnostic::new(x, stmt.span, codemap.dupe()));
 
             match &stmt.node {
                 Stmt::Def(_, _, _, body) => f(codemap, dialect, body, false, false, true),

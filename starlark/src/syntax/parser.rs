@@ -25,6 +25,7 @@ use crate::{
         lexer::{Lexer, Token},
     },
 };
+use anyhow::anyhow;
 use gazebo::prelude::*;
 use lalrpop_util as lu;
 use std::{fs, path::Path, sync::Arc};
@@ -87,9 +88,7 @@ pub(crate) fn parse_error_add_span(
         lu::ParseError::User { .. } => unreachable!(),
     };
 
-    let mut e = Diagnostic::new(message);
-    e.set_span(span, codemap);
-    e.into()
+    Diagnostic::new(anyhow!(message), span, codemap)
 }
 
 impl AstModule {

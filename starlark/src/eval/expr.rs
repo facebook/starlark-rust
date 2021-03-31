@@ -286,7 +286,7 @@ impl Compiler<'_> {
                                 let name = name.to_owned();
                                 let codemap = self.codemap.dupe();
                                 let mk_err = move || {
-                                    Diagnostic::add_span(
+                                    Diagnostic::new(
                                         EnvironmentError::VariableNotFound(name.clone()),
                                         span,
                                         codemap.dupe(),
