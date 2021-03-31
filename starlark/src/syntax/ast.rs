@@ -41,7 +41,13 @@ pub type AstStmt = Spanned<Stmt>;
 assert_eq_size!(AstStmt, [usize; 11]);
 assert_eq_size!(AstExpr, [usize; 7]);
 
-// Wrapper around an AstModule. Must have been compiled.
+/// A representation of a Starlark module abstract syntax tree.
+///
+/// Created with either [`parse`](AstModule::parse) or [`parse_file`](AstModule::parse_file),
+/// and evaluated with [`eval_module`](crate::eval::Evaluator::eval_module).
+///
+/// The internal details (statements/expressions) are deliberately omitted, as they change
+/// more regularly. A few methods to obtain information about the AST are provided.
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct AstModule {

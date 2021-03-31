@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-//! The syntax module that handle lexing and parsing
+//! The AST of Starlark as [`AstModule`], along with a [`parse`](AstModule::parse) function.
 
 pub use ast::AstModule;
 pub use dialect::Dialect;

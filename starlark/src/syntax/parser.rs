@@ -101,14 +101,15 @@ impl AstModule {
         Ok(AstModule { codemap, statement })
     }
 
-    /// Parse a file stored on disk.
+    /// Parse a file stored on disk. For details see [`parse`](AstModule::parse).
     pub fn parse_file(path: &Path, dialect: &Dialect) -> anyhow::Result<Self> {
         let content = fs::read_to_string(path)?;
         Self::parse(&path.to_string_lossy(), content, dialect)
     }
 
-    /// Parse a Starlark module in memory.
-    /// The `filename` is informational for error messages only and does not have to be a valid file.
+    /// Parse a Starlark module to produce an [`AstModule`], or an error if there are syntax errors.
+    /// The `filename` is for error messages only, and does not have to be a valid file.
+    /// The [`Dialect`] selects which Starlark constructs are valid.
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
         let mut codemap = CodeMap::new();
         let file = codemap.add_file(filename.to_string(), content);
@@ -121,7 +122,7 @@ impl AstModule {
     }
 
     /// Return the file names of all the `load` statements in the module.
-    /// If the `Dialect` had `enable_loads` set to `false`, this will be an empty list.
+    /// If the [`Dialect`] had [`enable_load`](Dialect::enable_load) set to [`false`] this will be an empty list.
     pub fn loads(&self) -> Vec<&str> {
         // We know that `load` statements must be at the top-level, so no need to descend inside `if`, `for`, `def` etc.
         // There is a suggestion that `load` statements should be at the top of a file, but we tolerate that not being true.
@@ -142,7 +143,7 @@ impl AstModule {
         loads
     }
 
-    /// Look up a span contained in this module.
+    /// Look up a [`Span`] contained in this module to a [`SpanLoc`].
     pub fn look_up_span(&self, x: Span) -> SpanLoc {
         self.codemap.look_up_span(x)
     }

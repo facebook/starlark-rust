@@ -38,24 +38,33 @@ enum DialectError {
     Types,
 }
 
-/// Starlark language dialect.
+/// Starlark language features to enable, e.g. [`Standard`](Dialect::Standard) to follow the Starlark standard.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Dialect {
-    /// Are `def` statements permitted
+    /// Are `def` statements permitted.
+    /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended).
     pub enable_def: bool,
-    /// Are `lambda` expressions permitted
+    /// Are `lambda` expressions permitted.
+    /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended).
     pub enable_lambda: bool,
-    /// Are `load` statements permitted
+    /// Are `load` statements permitted.
+    /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended).
     pub enable_load: bool,
-    /// Are `*` keyword-only arguments allowed (<https://www.python.org/dev/peps/pep-3102/>)
+    /// Are `*` keyword-only arguments allowed as per [PEP 3102](https://www.python.org/dev/peps/pep-3102/).
+    /// Only enabled in [`Extended`](Dialect::Extended).
     pub enable_keyword_only_arguments: bool,
-    /// Are expressions allowed in type positions (<https://www.python.org/dev/peps/pep-0484/>)
+    /// Are expressions allowed in type positions as per [PEP 484](https://www.python.org/dev/peps/pep-0484/).
+    /// Only enabled in [`Extended`](Dialect::Extended).
     pub enable_types: bool,
     /// Are tabs permitted for indentation. If permitted, tabs are equivalent to 8 spaces.
+    /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended).
     pub enable_tabs: bool,
-    /// Do load() statements reexport their definition
+    /// Do `load()` statements reexport their definition.
+    /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended),
+    /// but may change in future definitions of the standard.
     pub enable_load_reexport: bool,
-    /// Are `for`, `if` and other statements allowed at the top-level
+    /// Are `for`, `if` and other statements allowed at the top level.
+    /// Only enabled in [`Extended`](Dialect::Extended).
     pub enable_top_level_stmt: bool,
 }
 
@@ -63,7 +72,7 @@ pub struct Dialect {
 // even though they are actually global constants
 #[allow(non_upper_case_globals)]
 impl Dialect {
-    /// The Starlark language as specified in <https://github.com/bazelbuild/starlark/blob/master/spec.md>
+    /// Follow the [Starlark language standard](https://github.com/bazelbuild/starlark/blob/master/spec.md) as much as possible.
     pub const Standard: Self = Self {
         enable_def: true,
         enable_lambda: true,
@@ -75,7 +84,7 @@ impl Dialect {
         enable_top_level_stmt: false,
     };
 
-    /// Starlark plus `lambda`, nested `def` and other features.
+    /// A superset of [`Standard`](Dialect::Standard), including extra features (types, top-level statements etc).
     pub const Extended: Self = Self {
         enable_def: true,
         enable_lambda: true,
