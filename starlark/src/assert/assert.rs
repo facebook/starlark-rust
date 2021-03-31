@@ -16,7 +16,6 @@
  */
 
 //! Utilities to test Starlark code execution.
-//! All run using the [extended_environment].
 use crate::{
     self as starlark,
     codemap::CodeMap,
@@ -24,7 +23,6 @@ use crate::{
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::{eprint_error, Diagnostic},
     eval::{Evaluator, ReturnFileLoader},
-    stdlib::extended_environment,
     syntax::{
         lexer::{Lexer, Token},
         AstModule, Dialect,
@@ -37,7 +35,7 @@ use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};
 
 fn mk_environment() -> GlobalsBuilder {
-    extended_environment().with(test_methods)
+    GlobalsBuilder::extended().with(test_methods)
 }
 
 static GLOBALS: Lazy<Globals> = Lazy::new(|| mk_environment().build());

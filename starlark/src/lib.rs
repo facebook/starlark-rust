@@ -386,7 +386,7 @@ mod debug;
 pub mod environment;
 pub mod errors;
 pub mod eval;
-pub mod stdlib;
+mod stdlib;
 pub mod syntax;
 pub mod values;
 

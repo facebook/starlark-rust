@@ -27,6 +27,8 @@ use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use std::{collections::HashMap, mem, sync::Arc};
 
+pub use crate::stdlib::LibraryExtension;
+
 #[derive(Clone, Dupe, Debug)]
 pub struct Globals(Arc<GlobalsData>);
 
@@ -61,6 +63,10 @@ impl Globals {
 
     pub fn extended() -> Self {
         GlobalsBuilder::extended().build()
+    }
+
+    pub fn extended_by(extensions: &[LibraryExtension]) -> Self {
+        GlobalsBuilder::extended_by(extensions).build()
     }
 
     /// This function is only safe if you first call `heap` and keep a reference to it.
@@ -106,7 +112,15 @@ impl GlobalsBuilder {
     }
 
     pub fn extended() -> Self {
-        stdlib::extended_environment()
+        Self::extended_by(LibraryExtension::all())
+    }
+
+    pub fn extended_by(extensions: &[LibraryExtension]) -> Self {
+        let mut res = Self::standard();
+        for x in extensions {
+            x.add(&mut res);
+        }
+        res
     }
 
     pub fn struct_(&mut self, name: &str, f: impl Fn(&mut GlobalsBuilder)) {

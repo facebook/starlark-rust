@@ -28,7 +28,7 @@ use gazebo::any::AnyLifetime;
 use std::collections::HashSet;
 
 #[starlark_module]
-pub fn global(builder: &mut GlobalsBuilder) {
+pub fn filter(builder: &mut GlobalsBuilder) {
     fn filter(func: Value, seq: Value) -> Vec<Value<'v>> {
         let mut res = Vec::new();
 
@@ -47,7 +47,10 @@ pub fn global(builder: &mut GlobalsBuilder) {
         }
         Ok(res)
     }
+}
 
+#[starlark_module]
+pub fn map(builder: &mut GlobalsBuilder) {
     fn map(func: Value, seq: Value) -> Vec<Value<'v>> {
         let mut res = Vec::new();
         for v in &seq.iterate(heap)? {
@@ -57,7 +60,10 @@ pub fn global(builder: &mut GlobalsBuilder) {
         }
         Ok(res)
     }
+}
 
+#[starlark_module]
+pub fn partial(builder: &mut GlobalsBuilder) {
     fn partial(func: Value, args: Value, kwargs: Value) -> Partial<'v> {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
@@ -71,13 +77,19 @@ pub fn global(builder: &mut GlobalsBuilder) {
             signature,
         })
     }
+}
 
+#[starlark_module]
+pub fn debug(builder: &mut GlobalsBuilder) {
     /// Print the value with full debug formatting. The result may not be stable over time,
     /// mostly intended for debugging purposes.
     fn debug(val: Value) -> String {
         Ok(format!("{:?}", val))
     }
+}
 
+#[starlark_module]
+pub fn dedupe(builder: &mut GlobalsBuilder) {
     /// Remove duplicates in a list. Uses identity of value (pointer),
     /// rather than by equality.
     fn dedupe(val: Value) -> Value<'v> {

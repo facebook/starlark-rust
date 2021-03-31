@@ -25,6 +25,7 @@ pub(crate) mod dict;
 pub(crate) mod enumeration;
 mod extra;
 mod funcs;
+use gazebo::prelude::*;
 pub(crate) mod list;
 pub(crate) mod record;
 pub(crate) mod string;
@@ -39,38 +40,42 @@ pub(crate) mod util;
 pub(crate) fn standard_environment() -> GlobalsBuilder {
     GlobalsBuilder::new().with(funcs::global_functions)
 }
-
-/// Default global environment with extensions, namely `add_struct`, `add_extra_functions`
-pub(crate) fn extended_environment() -> GlobalsBuilder {
-    standard_environment()
-        .with(add_struct)
-        .with(add_record)
-        .with(add_enum)
-        .with(add_extra_functions)
-        .with(add_breakpoint)
+#[derive(PartialEq, Eq, Copy, Clone, Dupe)]
+pub enum LibraryExtension {
+    StructType,
+    RecordType,
+    EnumType,
+    Map,
+    Filter,
+    Partial,
+    Dedupe,
+    Debug,
+    Breakpoint,
+    // Make sure if you add anything new, you add it to `all` below.
 }
 
-/// Add the `struct` function and type to the global environment.
-pub fn add_struct(builder: &mut GlobalsBuilder) {
-    structs::global(builder)
-}
+impl LibraryExtension {
+    pub fn all() -> &'static [Self] {
+        use LibraryExtension::*;
+        &[
+            StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Breakpoint,
+        ]
+    }
 
-pub fn add_record(builder: &mut GlobalsBuilder) {
-    record::global(builder)
-}
-
-pub fn add_enum(builder: &mut GlobalsBuilder) {
-    enumeration::global(builder)
-}
-
-/// Add functions like `filter` and `partial` to the global environment.
-pub fn add_extra_functions(builder: &mut GlobalsBuilder) {
-    extra::global(builder)
-}
-
-/// Add the breakpoint function
-pub fn add_breakpoint(builder: &mut GlobalsBuilder) {
-    breakpoint::global(builder)
+    pub fn add(self, builder: &mut GlobalsBuilder) {
+        use LibraryExtension::*;
+        match self {
+            StructType => structs::global(builder),
+            RecordType => record::global(builder),
+            EnumType => enumeration::global(builder),
+            Map => extra::map(builder),
+            Filter => extra::filter(builder),
+            Partial => extra::partial(builder),
+            Dedupe => extra::dedupe(builder),
+            Debug => extra::debug(builder),
+            Breakpoint => breakpoint::global(builder),
+        }
+    }
 }
 
 #[cfg(test)]
