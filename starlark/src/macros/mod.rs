@@ -92,7 +92,7 @@ macro_rules! starlark_value {
 
 #[macro_export]
 macro_rules! starlark_simple_value {
-    ($v:vis $x:ident) => {
+    ($x:ident) => {
         $crate::__macro_refs::item! {
             $crate::__macro_refs::any_lifetime!($x);
 

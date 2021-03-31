@@ -45,7 +45,7 @@ impl StarlarkAny {
     pub const TYPE: &'static str = "any";
 }
 
-starlark_simple_value!(pub StarlarkAny);
+starlark_simple_value!(StarlarkAny);
 
 impl Debug for StarlarkAny {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
