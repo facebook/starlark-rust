@@ -158,10 +158,6 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
         self.to_value().new_invoker(heap)
     }
 
-    fn as_any_ref(self) -> ARef<'v, dyn AnyLifetime<'v>> {
-        ARef::map(self.get_aref(), |e| e.as_dyn_any())
-    }
-
     fn get_hash(self) -> anyhow::Result<u64> {
         self.get_aref().get_hash()
     }
@@ -199,7 +195,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
     ///
     /// This function panics if the `Value` is borrowed mutably.
     fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        let any = self.as_any_ref();
+        let any = ARef::map(self.get_aref(), |e| e.as_dyn_any());
         if any.is::<T>() {
             Some(ARef::map(any, |any| any.downcast_ref::<T>().unwrap()))
         } else {
