@@ -20,7 +20,7 @@ use crate::{
     eval::ParametersSpec,
     values::{
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, NativeFunction, ParametersParser, FUNCTION_VALUE_TYPE_NAME},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
         ValueLike, Walker,
@@ -174,7 +174,7 @@ where
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.
         let fun = NativeFunction::new(
-            move |context, mut param_parser: ParameterParser| {
+            move |context, mut param_parser: ParametersParser| {
                 let typ_val = param_parser.next("me", context.heap())?;
                 let val: Value = param_parser.next("value", context.heap())?;
                 let typ = EnumType::from_value(typ_val).unwrap();

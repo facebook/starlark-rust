@@ -25,7 +25,7 @@ use crate::{
     values::{
         comparison::equals_slice,
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, NativeFunction, ParametersParser, FUNCTION_VALUE_TYPE_NAME},
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
@@ -217,7 +217,7 @@ where
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.
         let fun = NativeFunction::new(
-            move |context, mut param_parser: ParameterParser| {
+            move |context, mut param_parser: ParametersParser| {
                 let me = param_parser.next("me", context.heap())?;
                 let info = RecordType::from_value(me).unwrap();
                 let mut values = Vec::with_capacity(info.fields.len());

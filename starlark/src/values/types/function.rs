@@ -96,11 +96,11 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
 }
 
 /// Parse a series of parameters from a list of slots
-pub struct ParameterParser<'v, 'a> {
+pub struct ParametersParser<'v, 'a> {
     slots: Iter<'a, Option<Value<'v>>>,
 }
 
-impl<'v, 'a> ParameterParser<'v, 'a> {
+impl<'v, 'a> ParametersParser<'v, 'a> {
     fn new(slots: &'a [Option<Value<'v>>]) -> Self {
         Self {
             slots: slots.iter(),
@@ -143,7 +143,7 @@ impl<'v, 'a> ParameterParser<'v, 'a> {
 
 /// A native function that can be evaluated
 pub trait NativeFunc:
-    for<'v> Fn(&mut Evaluator<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -151,7 +151,7 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(&mut Evaluator<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -182,7 +182,7 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
     pub fn invoke(self, context: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         let slots = self.collect.done(context.heap)?;
         let slots = slots.map(|x| x.get());
-        let parser = ParameterParser::new(&slots);
+        let parser = ParametersParser::new(&slots);
         (*self.function)(context, parser)
     }
 
@@ -218,7 +218,7 @@ impl<'v, F: NativeFunc> AllocFrozenValue for NativeFunction<F> {
 
 // If I switch this to the trait alias then it fails to resolve the usages
 impl<
-    F: for<'v> Fn(&mut Evaluator<'v, '_>, ParameterParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    F: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static,
