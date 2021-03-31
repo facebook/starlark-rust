@@ -81,22 +81,14 @@ macro_rules! starlark_value {
                 }
             }
 
-            $v struct [< Ref $x >]<'v>(pub $crate::values::ARef<'v, $x<'v>>);
-
-            impl<'v> $crate::values::UnpackValue<'v> for [< Ref $x>]<'v> {
-                fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
-                    $x::from_value(value)
-                        .map([< Ref $x>])
+            impl<'v> $crate::values::FromValue<'v> for $x<'v> {
+                fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x<'v>>> {
+                    $x::from_value(x)
                 }
             }
 
-            impl<'v> std::ops::Deref for [< Ref $x>]<'v> {
-                type Target = $x<'v>;
-
-                fn deref(&self) -> &Self::Target {
-                    &*self.0
-                }
-            }
+            #[allow(dead_code)]
+            $v type [< Ref $x >]<'v> = $crate::values::ARef<'v, $x<'v>>;
         }
     };
 }
@@ -121,28 +113,20 @@ macro_rules! starlark_simple_value {
 
             impl $crate::values::SimpleValue for $x {}
 
-            impl<'v> $x {
-                pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {
+            impl $x {
+                pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {
                     x.downcast_ref::< $x >()
                 }
             }
 
-            $v struct [< Ref $x >]<'v>(pub $crate::values::ARef<'v, $x>);
-
-            impl<'v> $crate::values::UnpackValue<'v> for [< Ref $x>]<'v> {
-                fn unpack_value(value: $crate::values::Value<'v>, _heap: &'v $crate::values::Heap) -> Option<Self> {
-                    $x::from_value(value)
-                        .map([< Ref $x>])
+            impl<'v> $crate::values::FromValue<'v> for $x {
+                fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {
+                    $x::from_value(x)
                 }
             }
 
-            impl<'v> std::ops::Deref for [< Ref $x>]<'v> {
-                type Target = $x;
-
-                fn deref(&self) -> &Self::Target {
-                    &*self.0
-                }
-            }
+            #[allow(dead_code)]
+            $v type [< Ref $x >]<'v> = $crate::values::ARef<'v, $x>;
         }
     };
 }

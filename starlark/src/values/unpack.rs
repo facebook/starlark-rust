@@ -17,9 +17,9 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use std::ops::Deref;
-
 use crate::values::{Heap, Value};
+use gazebo::cell::ARef;
+use std::ops::Deref;
 
 /// Types implementing this type may appear in function parameter types
 /// in `starlark_module` macro function signatures.
@@ -58,5 +58,15 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
     fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
         let typed = T::unpack_value(value, heap)?;
         Some(Self { value, typed })
+    }
+}
+
+pub trait FromValue<'v>: Sized {
+    fn from_value(value: Value<'v>) -> Option<ARef<'v, Self>>;
+}
+
+impl<'v, T: FromValue<'v>> UnpackValue<'v> for ARef<'v, T> {
+    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+        T::from_value(value)
     }
 }
