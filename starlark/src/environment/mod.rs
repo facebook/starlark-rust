@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+//! Types representing Starlark modules ([`Module`] and [`FrozenModule`]) and global variables ([`Globals`]).
+//!
+//! Global functions and values are stored in [`Globals`], which are typically
+//! built using [`GlobalsBuilder`].
+//! User executions store their values in a [`Module`], which have to be converted to a
+//! [`FrozenModule`] using [`freeze`](Module::freeze) before they can be `load()`'d as a dependency.
+
 mod globals;
 mod modules;
 pub(crate) mod names;

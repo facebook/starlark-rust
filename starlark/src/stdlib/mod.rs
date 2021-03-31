@@ -40,22 +40,38 @@ pub(crate) mod util;
 pub(crate) fn standard_environment() -> GlobalsBuilder {
     GlobalsBuilder::new().with(funcs::global_functions)
 }
+
+/// The extra library definitions available in this Starlark implementation, but not in the standard.
 #[derive(PartialEq, Eq, Copy, Clone, Dupe)]
 pub enum LibraryExtension {
+    /// Definitions to support the `struct` type, the `struct()` constructor.
     StructType,
+    /// Definitions to support the `record` type, the `record()` constructor and `field()` function.
     RecordType,
+    /// Definitions to support the `enum` type, the `enum()` constructor.
     EnumType,
+    /// A function `map(f, xs)` which applies `f` to each element of `xs` and returns the result.
     Map,
+    /// A function `filter(f, xs)` which applies `f` to each element of `xs` and returns those for which `f` returns `True`.
+    /// As a special case, `filter(None, xs)` removes all `None` values.
     Filter,
+    /// Partially apply a function, `partial(f, *args, **kwargs)` will create a function where those `args` `kwargs`
+    /// are already applied to `f`.
     Partial,
+    /// Remove duplicate entries in the list, using pointer-based equality always.
     Dedupe,
+    /// Add a function `debug(x)` which shows the Rust [`Debug`](std::fmt::Debug) representation of a value.
+    /// Useful when debugging, but the output should not be considered stable.
     Debug,
+    /// Add a function `print(x)` which prints to stdout.
     Print,
+    /// Add a function `breakpoint()` which will drop into a console-module evaluation prompt.
     Breakpoint,
     // Make sure if you add anything new, you add it to `all` below.
 }
 
 impl LibraryExtension {
+    /// A list of all extensions that will be updated as new methods are added.
     pub fn all() -> &'static [Self] {
         use LibraryExtension::*;
         &[
@@ -64,6 +80,7 @@ impl LibraryExtension {
         ]
     }
 
+    /// Add a specific extension to a [`GlobalsBuilder`].
     pub fn add(self, builder: &mut GlobalsBuilder) {
         use LibraryExtension::*;
         match self {

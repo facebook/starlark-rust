@@ -35,10 +35,16 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
 use std::{mem, sync::Arc};
 
+/// The result of freezing a [`Module`], making it and its contained values immutable.
+///
+/// The values of this [`FrozenModule`] are stored on a frozen heap, a reference to which
+/// can be obtained using [`frozen_heap`](FrozenModule::frozen_heap). Be careful not to use
+/// these values after the [`FrozenModule`] has been released unless you obtain a reference
+/// to the frozen heap.
+#[derive(Debug, Clone, Dupe)]
 // We store the two elements separately since the FrozenHeapRef contains
 // a copy of the FrozenModuleData inside it.
 // Two Arc's should still be plenty cheap enough to qualify for `Dupe`.
-#[derive(Debug, Clone, Dupe)]
 pub struct FrozenModule(FrozenHeapRef, FrozenModuleRef);
 
 #[derive(Debug, Clone, Dupe, AnyLifetime)]
@@ -62,6 +68,12 @@ pub(crate) struct FrozenModuleData {
 // and Debug printing of that would be bad.
 pub(crate) struct FrozenModuleValue(FrozenValue); // Must contain a FrozenModuleRef inside it
 
+/// A container for user values, used during execution.
+///
+/// A module contains both a [`FrozenHeap`] and [`Heap`] on which different values are allocated.
+/// You can get references to these heaps with [`frozen_heap`](Module::frozen_heap) and
+/// [`heap`](Module::heap). Be careful not to use these values after the [`Module`] has been
+/// released unless you obtain a reference to the frozen heap.
 #[derive(Debug)]
 pub struct Module {
     heap: Heap,
@@ -76,7 +88,7 @@ pub struct Module {
 
 impl FrozenModule {
     /// Get the value of the variable `name`.
-    /// Returns None if the variable isn't in the module or hasn't been set.
+    /// Returns [`None`] if the variable isn't defined in the module or hasn't been set.
     pub fn get(&self, name: &str) -> Option<OwnedFrozenValue> {
         let slot = self.1.0.names.get_name(name)?;
         self.1
@@ -86,14 +98,17 @@ impl FrozenModule {
             .map(|x| OwnedFrozenValue::new(self.0.dupe(), x))
     }
 
+    /// Iterate through all the names defined in this module.
     pub fn names(&self) -> impl Iterator<Item = &str> {
         self.1.names()
     }
 
+    /// Obtain the [`FrozenHeapRef`] which owns the storage of all values defined in this module.
     pub fn frozen_heap(&self) -> &FrozenHeapRef {
         &self.0
     }
 
+    /// Print out some approximation of the module definitions.
     pub fn describe(&self) -> String {
         self.1.describe()
     }
@@ -145,7 +160,7 @@ impl Default for Module {
 }
 
 impl Module {
-    /// Create a new module environment
+    /// Create a new module environment with no contents.
     pub fn new() -> Self {
         Self {
             heap: Heap::new(),
@@ -155,10 +170,12 @@ impl Module {
         }
     }
 
+    /// Get the heap on which values are allocated by this module.
     pub fn heap(&self) -> &Heap {
         &self.heap
     }
 
+    /// Get the frozen heap on which frozen values are allocated by this module.
     pub fn frozen_heap(&self) -> &FrozenHeap {
         &self.frozen_heap
     }
@@ -172,13 +189,13 @@ impl Module {
         unsafe { transmute!(&'v MutableSlots<'static>, &'v MutableSlots<'v>, &self.slots) }
     }
 
-    /// Get the value of the variable `name`
+    /// Get the value of the variable `name`, or [`None`] if the variable is not defined.
     pub fn get<'v>(&'v self, name: &str) -> Option<Value<'v>> {
         let slot = self.names.get_name(name)?;
         self.slots().get_slot(slot)
     }
 
-    /// Freeze the environment, all its value will become immutable after that
+    /// Freeze the environment, all its value will become immutable afterwards.
     pub fn freeze(self) -> FrozenModule {
         let Module {
             names,
@@ -204,9 +221,10 @@ impl Module {
         FrozenModule(freezer.into_ref(), rest)
     }
 
-    /// Set the value of a variable in that environment.
+    /// Set the value of a variable in the environment.
+    /// Modifying these variables while executing is ongoing can have
+    /// surprising effects.
     pub fn set<'v>(&'v self, name: &str, value: Value<'v>) {
-        // Doesn't technically require &mut, but does morally
         let slot = self.names.add_name(name);
         let slots = self.slots();
         slots.ensure_slots(slot + 1);
@@ -217,6 +235,7 @@ impl Module {
         !symbol.starts_with('_')
     }
 
+    /// Import symbols from a module, similar to what is done during `load()`.
     pub fn import_public_symbols(&self, env: &FrozenModule) {
         self.frozen_heap.add_reference(&env.0);
         for (k, slot) in env.1.0.names.symbols() {
