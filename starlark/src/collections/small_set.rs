@@ -150,6 +150,20 @@ impl<T> SmallSet<T> {
     }
 }
 
+/// Create a [`SmallSet`](SmallSet) from a list of values.
+///
+/// ## Example
+///
+/// ```
+/// #[macro_use] extern crate starlark;
+/// # fn main() {
+///
+/// let set = smallset!{"a", "b"};
+/// assert_eq!(set.contains("a"), true);
+/// assert_eq!(set.len(), 2);
+/// assert_eq!(set.contains("c"), false);
+/// # }
+/// ```
 #[macro_export]
 macro_rules! smallset {
     (@single $($x:tt)*) => (());

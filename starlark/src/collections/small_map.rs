@@ -671,6 +671,23 @@ impl<K: Ord, V: Ord> Ord for SmallMap<K, V> {
     }
 }
 
+/// Create a [`SmallMap`](SmallMap) from a list of key-value pairs.
+///
+/// ## Example
+///
+/// ```
+/// #[macro_use] extern crate starlark;
+/// # fn main() {
+///
+/// let map = smallmap!{
+///     "a" => 1,
+///     "b" => 2,
+/// };
+/// assert_eq!(map.get("a"), Some(&1));
+/// assert_eq!(map.get("b"), Some(&2));
+/// assert_eq!(map.get("c"), None);
+/// # }
+/// ```
 #[macro_export]
 macro_rules! smallmap {
     (@single $($x:tt)*) => (());

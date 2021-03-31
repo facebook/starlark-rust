@@ -15,6 +15,9 @@
  * limitations under the License.
  */
 
+/// Define the [`get_type`](crate::values::StarlarkValue::get_type) and
+/// [`get_type_value`](crate::values::StarlarkValue::get_type_value) fields of
+/// [`StarlarkValue`](crate::values::StarlarkValue).
 #[macro_export]
 macro_rules! starlark_type {
     ($typ:expr) => {
@@ -29,6 +32,8 @@ macro_rules! starlark_type {
     };
 }
 
+/// Reduce boilerplate when making types instances of [`ComplexValue`](crate::values::ComplexValue)
+/// - see the [`ComplexValue`](crate::values::ComplexValue) docs for an example.
 #[macro_export]
 macro_rules! starlark_complex_value {
     ($v:vis $x:ident) => {
@@ -90,6 +95,8 @@ macro_rules! starlark_complex_value {
     };
 }
 
+/// Reduce boilerplate when making types instances of [`SimpleValue`](crate::values::SimpleValue)
+/// - see the [`SimpleValue`](crate::values::SimpleValue) docs for an example.
 #[macro_export]
 macro_rules! starlark_simple_value {
     ($x:ident) => {
