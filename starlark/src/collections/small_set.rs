@@ -24,6 +24,7 @@ use std::{
     iter::FromIterator,
 };
 
+/// An memory-efficient set with determinstic order, based on [`SmallMap`].
 #[derive(Debug, Clone, Default_)]
 pub struct SmallSet<T>(SmallMap<T, ()>);
 

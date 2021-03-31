@@ -22,15 +22,18 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+/// A hash result.
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default)]
 pub struct SmallHashResult(u32);
 
+/// A key and its hash.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct Hashed<K> {
     hash: SmallHashResult,
     key: K,
 }
 
+/// A borrowed key and its hash.
 #[derive(Copy, Clone)]
 pub struct BorrowHashed<'a, Q: ?Sized> {
     hash: SmallHashResult,
@@ -38,12 +41,17 @@ pub struct BorrowHashed<'a, Q: ?Sized> {
 }
 
 impl SmallHashResult {
+    /// Create a new [`SmallHashResult`] using the [`Hash`] trait
+    /// for given key.
     pub fn new<K: Hash + ?Sized>(key: &K) -> Self {
         let mut hasher = DefaultHasher::new();
         key.hash(&mut hasher);
         Self::new_unchecked(hasher.finish())
     }
 
+    /// Directly create a new [`SmallHashResult`] using a hash.
+    /// The expectation is that the key will be well-swizzled,
+    /// or there may be many hash collisions.
     pub fn new_unchecked(hash: u64) -> Self {
         // NOTE: Here we throw away half the key material we are given,
         // taking only the lower 32 bits.
@@ -53,6 +61,8 @@ impl SmallHashResult {
 }
 
 impl<'a, Q: ?Sized> BorrowHashed<'a, Q> {
+    /// Create a new [`BorrowHashed`] using the [`Hash`] trait
+    /// for given key.
     pub fn new(key: &'a Q) -> Self
     where
         Q: Hash,
@@ -60,26 +70,32 @@ impl<'a, Q: ?Sized> BorrowHashed<'a, Q> {
         Self::new_unchecked(SmallHashResult::new(key), key)
     }
 
+    /// Directly create a new [`BorrowHashed`] using a given hash value.
+    /// If the hash does not correspond to the key, its will cause issues.
     pub fn new_unchecked(hash: SmallHashResult, key: &'a Q) -> Self {
         Self { hash, key }
     }
 
+    /// Get the underlying hash.
     pub fn hash(&self) -> SmallHashResult {
         self.hash
     }
 
+    /// Get the underlying key.
     pub fn key(&self) -> &'a Q {
         self.key
     }
 }
 
 impl<'a, Q: Clone> BorrowHashed<'a, Q> {
+    /// Convert a borrowed hashed back to an unborrowed hashed using [`Clone`].
     pub fn unborrow_clone(&self) -> Hashed<Q> {
         Hashed::new_unchecked(self.hash, self.key.clone())
     }
 }
 
 impl<'a, Q: Copy> BorrowHashed<'a, Q> {
+    /// Convert a borrowed hashed back to an unborrowed hashed using [`Copy`].
     pub fn unborrow_copy(&self) -> Hashed<Q> {
         Hashed::new_unchecked(self.hash, *self.key)
     }
@@ -109,6 +125,7 @@ impl<K> Hash for Hashed<K> {
 }
 
 impl<K> Hashed<K> {
+    /// Create a new [`Hashed`] value using the [`Hash`] of the key.
     pub fn new(key: K) -> Self
     where
         K: Hash,
@@ -116,22 +133,28 @@ impl<K> Hashed<K> {
         Self::new_unchecked(SmallHashResult::new(&key), key)
     }
 
+    /// Directly create a new [`Hashed`] using a given hash value.
+    /// If the hash does not correspond to the key, its will cause issues.
     pub fn new_unchecked(hash: SmallHashResult, key: K) -> Self {
         Self { hash, key }
     }
 
+    /// Get the underlying key.
     pub fn key(&self) -> &K {
         &self.key
     }
 
+    /// Get the underlying key taking ownership.
     pub fn into_key(self) -> K {
         self.key
     }
 
+    /// Get the underlying hash.
     pub fn hash(&self) -> SmallHashResult {
         self.hash
     }
 
+    /// Borrow this value, creating a [`BorrowHashed`].
     pub fn borrow(&self) -> BorrowHashed<K> {
         BorrowHashed::new_unchecked(self.hash, &self.key)
     }

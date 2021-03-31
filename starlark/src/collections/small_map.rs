@@ -269,6 +269,13 @@ impl<K, V> Default for MapHolder<K, V> {
     }
 }
 
+/// An memory-efficient key-value map with determinstic order.
+///
+/// Provides the standard container operations, modelled most closely on [`IndexMap`](indexmap::IndexMap), plus:
+///
+/// * Variants which take an already hashed value, e.g. [`get_hashed`](SmallMap::get_hashed).
+///
+/// * Functions which work with the position, e.g. [`get_index_of`](SmallMap::get_index_of).
 #[derive(Debug, Clone, Default_)]
 pub struct SmallMap<K, V> {
     state: MapHolder<K, V>,

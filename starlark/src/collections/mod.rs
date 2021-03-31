@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-//! A Map with deterministic iteration order that specializes its storage based on the number of
-//! entries to optimize memory. The Map uses a vector backed storage for few number of entries
-//! and the ['IndexMap'](indexmap::IndexMap) crate for larger number of entries
+//! Defines [`SmallMap`] and [`SmallSet`] - collections with deterministic iteration and small memory footprint.
 //!
+//! These structures use vector backed storage if there are only a few elements, and [`IndexMap`](indexmap::IndexMap)
+//! for larger collections. The API mirrors standard Rust collections.
 
 pub use crate::collections::{
     hash::{BorrowHashed, Hashed, SmallHashResult},
