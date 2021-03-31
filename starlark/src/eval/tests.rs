@@ -291,7 +291,7 @@ fun
 "#,
     );
     let env = Module::new();
-    let globals = Globals::default();
+    let globals = Globals::standard();
     let mut eval = Evaluator::new(&env, &globals);
     let hello = env.heap().alloc("hello");
     let v = eval

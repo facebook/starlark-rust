@@ -20,7 +20,6 @@ use itertools::Either;
 use starlark::{
     environment::{FrozenModule, Globals, Module},
     eval::Evaluator,
-    stdlib::extended_environment,
     syntax::{AstModule, Dialect},
 };
 use std::{
@@ -148,7 +147,7 @@ impl Context {
 }
 
 pub fn globals() -> Globals {
-    extended_environment().build()
+    Globals::extended()
 }
 
 pub fn dialect() -> Dialect {

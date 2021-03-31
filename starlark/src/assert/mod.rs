@@ -16,7 +16,6 @@
  */
 
 //! Utilities to test Starlark code execution.
-//! All run using the [crate::stdlib::extended_environment].
 
 #[allow(clippy::module_inception)] // This seems a perfectly reasonable thing to do
 mod assert;

@@ -36,12 +36,12 @@ pub(crate) mod util;
 ///
 /// For example `stdlib::standard_environment().freeze().child("test")` create a
 /// child environment of this global environment that have been frozen.
-pub fn standard_environment() -> GlobalsBuilder {
+pub(crate) fn standard_environment() -> GlobalsBuilder {
     GlobalsBuilder::new().with(funcs::global_functions)
 }
 
 /// Default global environment with extensions, namely `add_struct`, `add_extra_functions`
-pub fn extended_environment() -> GlobalsBuilder {
+pub(crate) fn extended_environment() -> GlobalsBuilder {
     standard_environment()
         .with(add_struct)
         .with(add_record)

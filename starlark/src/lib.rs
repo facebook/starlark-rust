@@ -39,8 +39,8 @@
 //! let ast: AstModule = AstModule::parse("hello_world.star", content.to_owned(), &Dialect::Standard)?;
 //!
 //! // We create a `Globals`, defining the standard library functions available.
-//! // By default, this uses those defined in the Starlark specification.
-//! let globals: Globals = Globals::default();
+//! // The `standard` function uses those defined in the Starlark specification.
+//! let globals: Globals = Globals::standard();
 //!
 //! // We create a `Module`, which stores the global variables for our calculation.
 //! let module: Module = Module::new();
@@ -179,7 +179,7 @@
 //! let dialect = Dialect {enable_types: true, ..Dialect::Standard};
 //! // We could equally have done `dialect = Dialect::Extended`.
 //! let ast = AstModule::parse("json.star", content.to_owned(), &dialect)?;
-//! let globals = Globals::default();
+//! let globals = Globals::standard();
 //! let module = Module::new();
 //! let mut eval = Evaluator::new(&module, &globals);
 //! let res = eval.eval_module(ast);
@@ -228,7 +228,7 @@
 //!    let modules = loads.iter().map(|(a, b)| (a.as_str(), b)).collect();
 //!    let mut loader = ReturnFileLoader { modules: &modules };
 //!
-//!    let globals = Globals::default();
+//!    let globals = Globals::standard();
 //!    let module = Module::new();
 //!    let mut eval = Evaluator::new(&module, &globals);
 //!    eval.set_loader(&mut loader);
@@ -263,7 +263,7 @@
 //! "#;
 //!
 //! let ast = AstModule::parse("quadratic.star", content.to_owned(), &Dialect::Extended)?;
-//! let globals = Globals::default();
+//! let globals = Globals::standard();
 //! let module = Module::new();
 //! let mut eval = Evaluator::new(&module, &globals);
 //! let quad = eval.eval_module(ast)?;
@@ -324,7 +324,7 @@
 //! let content = "str(a + b)";
 //!
 //! let ast = AstModule::parse("complex.star", content.to_owned(), &Dialect::Standard)?;
-//! let globals = Globals::default();
+//! let globals = Globals::standard();
 //! let module = Module::new();
 //! // We inject some complex numbers into the module before we start.
 //! let a = module.heap().alloc(Complex {real: 1, imaginary: 8});

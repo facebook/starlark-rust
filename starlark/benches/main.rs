@@ -19,7 +19,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use starlark::{
     environment::{Globals, Module},
     eval::Evaluator,
-    stdlib::extended_environment,
     syntax::{AstModule, Dialect},
 };
 
@@ -94,7 +93,7 @@ pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    let g = extended_environment().build();
+    let g = Globals::extended();
     criterion_general_benchmark(c, &g);
     criterion_parsing_benchmark(c);
     criterion_eval_benchmark(c, &g);

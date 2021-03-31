@@ -17,7 +17,7 @@
 
 use crate::{
     collections::SmallMap,
-    stdlib::standard_environment,
+    stdlib,
     values::{
         structs::FrozenStruct, AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value,
     },
@@ -36,12 +36,6 @@ struct GlobalsData {
     variables: HashMap<String, FrozenValue>,
 }
 
-impl Default for Globals {
-    fn default() -> Self {
-        standard_environment().build()
-    }
-}
-
 // Why are these things RefCell? Because we need to allocate things from the heap
 // which returns values pointing at the heap, and thus are an immutable borrow.
 // Once you have that, you can't mutably borrow at the same time, so have to use
@@ -57,6 +51,18 @@ pub struct GlobalsBuilder {
 }
 
 impl Globals {
+    pub fn new() -> Self {
+        GlobalsBuilder::new().build()
+    }
+
+    pub fn standard() -> Self {
+        GlobalsBuilder::standard().build()
+    }
+
+    pub fn extended() -> Self {
+        GlobalsBuilder::extended().build()
+    }
+
     pub fn get<'v>(&self, name: &str) -> Option<Value<'v>> {
         self.get_frozen(name).map(FrozenValue::to_value)
     }
@@ -89,6 +95,14 @@ impl GlobalsBuilder {
             variables: HashMap::new(),
             struct_fields: None,
         }
+    }
+
+    pub fn standard() -> Self {
+        stdlib::standard_environment()
+    }
+
+    pub fn extended() -> Self {
+        stdlib::extended_environment()
     }
 
     pub fn struct_(&mut self, name: &str, f: impl Fn(&mut GlobalsBuilder)) {
