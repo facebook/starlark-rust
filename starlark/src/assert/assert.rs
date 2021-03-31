@@ -155,6 +155,7 @@ fn test_methods(builder: &mut GlobalsBuilder) {
     }
 }
 
+/// Environment in which to run assertion tests.
 #[derive(Clone)]
 pub struct Assert {
     dialect: Dialect,
@@ -163,7 +164,13 @@ pub struct Assert {
     gc_strategy: Option<GcStrategy>,
 }
 
+/// Construction and state management.
 impl Assert {
+    /// Create a new assert object, which will by default use
+    /// [`Dialect::Extended`] and [`Globals::extended()`],
+    /// plus some additional global functions like `assert_eq`.
+    /// The usual pattern is to create a `mut` `Assert`, modify some properties
+    /// and then execute some tests.
     pub fn new() -> Self {
         Self {
             dialect: Dialect::Extended,
@@ -173,6 +180,7 @@ impl Assert {
         }
     }
 
+    /// Disable garbage collection on the tests.
     pub fn disable_gc(&mut self) {
         self.gc_strategy = Some(GcStrategy::Never)
     }
@@ -270,18 +278,30 @@ impl Assert {
         }
     }
 
+    /// Set the [`Dialect`] that future tests will use.
     pub fn dialect(&mut self, x: &Dialect) {
         self.dialect = x.clone();
     }
 
+    /// Set specific fields in the [`Dialect`] that future tests will use.
     pub fn dialect_set(&mut self, f: impl FnOnce(&mut Dialect)) {
         f(&mut self.dialect)
     }
 
+    /// Add a [`FrozenModule`] to the environment that future tests can access via
+    /// `load`. To construct the [`FrozenModule`] automatically use [`module`](Assert::module).
     pub fn module_add(&mut self, name: &str, module: FrozenModule) {
         self.modules.insert(name.to_owned(), module);
     }
 
+    /// Add a module to the environment that future tests can access.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// let mut a = Assert::new();
+    /// a.module("hello.star", "hello = 'world'");
+    /// a.is_true("load('hello.star', 'hello'); hello == 'world'");
+    /// ```
     pub fn module(&mut self, name: &str, program: &str) {
         let module = self.with_gc(|gc| {
             let module = Module::new();
@@ -291,10 +311,14 @@ impl Assert {
         self.module_add(name, module);
     }
 
+    /// Set the [`Globals`] that future tests have access to.
     pub fn globals(&mut self, x: Globals) {
         self.globals = x;
     }
 
+    /// Modify the [`Globals`] that future tests have access to.
+    /// Note that this method will start from the default environment for [`Assert`],
+    /// ignoring any previous [`globals`](Assert::globals) or [`globals_add`](Assert::globals_add) calls.
     pub fn globals_add(&mut self, f: impl FnOnce(&mut GlobalsBuilder)) {
         self.globals(mk_environment().with(f).build())
     }
@@ -323,15 +347,44 @@ impl Assert {
             original
         })
     }
+}
 
+/// Execution tests.
+impl Assert {
+    /// A program that must fail with an error message that contains a specific
+    /// string. Remember that the purpose of `fail` is to ensure you get
+    /// the right error, not to fully specify the error - usually only one or
+    /// two words will be sufficient to ensure that.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().fail("fail('hello')", "ello");
+    /// ```
     pub fn fail(&self, program: &str, msg: &str) -> anyhow::Error {
         self.fails_with_name("fail", program, &[msg])
     }
 
+    /// A program that must fail with an error message that contains a specific
+    /// set of strings. Remember that the purpose of `fail` is to ensure you get
+    /// the right error, not to fully specify the error - usually only one or
+    /// two words will be sufficient to ensure that. The words do not have to be
+    /// in order.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().fails("fail('hello')", &["fail", "ello"]);
+    /// ```
     pub fn fails(&self, program: &str, msgs: &[&str]) -> anyhow::Error {
         self.fails_with_name("fails", program, msgs)
     }
 
+    /// A program that must execute successfully without an exception. Often uses
+    /// assert_eq. Returns the resulting value.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().pass("assert_eq(1, 1)");
+    /// ```
     pub fn pass(&self, program: &str) -> OwnedFrozenValue {
         self.with_gc(|gc| {
             let env = Module::new();
@@ -341,6 +394,15 @@ impl Assert {
         })
     }
 
+    /// A program that must evaluate to `True`.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().is_true(r#"
+    /// x = 1 + 1
+    /// x == 2
+    /// "#);
+    /// ```
     pub fn is_true(&self, program: &str) {
         self.with_gc(|gc| {
             let env = Module::new();
@@ -348,6 +410,16 @@ impl Assert {
         })
     }
 
+    /// Many lines, each of which must individually evaluate to `True` (or be blank lines).
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().all_true(r#"
+    /// 1 == 1
+    ///
+    /// 2 == 1 + 1
+    /// "#);
+    /// ```
     pub fn all_true(&self, program: &str) {
         self.with_gc(|gc| {
             for s in program.lines() {
@@ -360,6 +432,12 @@ impl Assert {
         })
     }
 
+    /// Two programs that must evaluate to the same (non-error) result.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().eq("1 + 1", "2");
+    /// ```
     pub fn eq(&self, lhs: &str, rhs: &str) {
         self.with_gc(|gc| {
             let lhs_m = Module::new();
@@ -375,6 +453,7 @@ impl Assert {
         })
     }
 
+    /// Parse some text and return the AST. Fails if the program does not parse.
     pub fn parse_ast(&self, program: &str) -> AstModule {
         match AstModule::parse("assert.bzl", program.to_owned(), &self.dialect) {
             Ok(x) => x,
@@ -387,6 +466,9 @@ impl Assert {
         }
     }
 
+    /// Parse some text and pretty-print it using enough brackets etc. to avoid
+    /// ambiguity. Fails if the program does not parse.
+    /// The precise form of the pretty-printed output is not stable over time.
     pub fn parse(&self, program: &str) -> String {
         self.parse_ast(program).statement.to_string()
     }
@@ -440,10 +522,20 @@ impl Assert {
         orig
     }
 
+    /// Lex some text and pretty-print it using enough whitespace etc. to avoid
+    /// ambiguity. Fails if the program does not lex.
+    /// The precise form of the pretty-printed output is not stable over time.
     pub fn lex(&self, program: &str) -> String {
         self.lex_tokens(program).map(|x| x.1.unlex()).join(" ")
     }
 
+    /// Parse some text which must fail to parse. Two exclamation marks should be
+    /// placed around the span which is reported by the error.
+    ///
+    /// ```
+    /// # use starlark::assert::Assert;
+    /// Assert::new().parse_fail("!nonlocal! = 1");
+    /// ```
     pub fn parse_fail(&self, contents: &str) -> anyhow::Error {
         let rest = contents.replace('!', "");
         assert!(
@@ -480,84 +572,42 @@ impl Assert {
     }
 }
 
-/// Two programs that must evaluate to the same (non-error) result.
-///
-/// ```
-/// starlark::assert::eq("1 + 1", "2");
-/// ```
+/// See [`Assert::eq`].
 pub fn eq(lhs: &str, rhs: &str) {
     Assert::new().eq(lhs, rhs)
 }
 
-/// A program that must fail with an error message that contains a specific
-/// string. Remember that the purpose of `fail` is to ensure you get
-/// the right error, not to fully specify the error - usually only one or
-/// two words will be sufficient to ensure that.
-///
-/// ```
-/// starlark::assert::fail("fail('hello')", "ello");
-/// ```
+/// See [`Assert::fail`].
 pub fn fail(program: &str, msg: &str) -> anyhow::Error {
     Assert::new().fail(program, msg)
 }
 
-/// A program that must fail with an error message that contains a specific
-/// set of strings. Remember that the purpose of `fail` is to ensure you get
-/// the right error, not to fully specify the error - usually only one or
-/// two words will be sufficient to ensure that. The words do not have to be
-/// in order.
-///
-/// ```
-/// starlark::assert::fails("fail('hello')", &["fail", "ello"]);
-/// ```
+/// See [`Assert::fails`].
 pub fn fails(program: &str, msgs: &[&str]) -> anyhow::Error {
     Assert::new().fails(program, msgs)
 }
 
-/// A program that must be true.
-///
-/// ```
-/// starlark::assert::is_true(r#"
-/// x = 1 + 1
-/// x == 2
-/// "#);
-/// ```
+/// See [`Assert::is_true`].
 pub fn is_true(program: &str) {
     Assert::new().is_true(program)
 }
 
-/// Many lines, each of which must be individually true (or blank).
-///
-/// ```
-/// starlark::assert::all_true(r#"
-/// 1 == 1
-///
-/// 2 == 1 + 1
-/// "#);
-/// ```
+/// See [`Assert::all_true`].
 pub fn all_true(expressions: &str) {
     Assert::new().all_true(expressions)
 }
 
-/// A program that must execute successfully without an exception. Often uses
-/// assert_eq. Returns the resulting value.
-///
-/// ```
-/// starlark::assert::pass("assert_eq(1, 1)");
-/// ```
+/// See [`Assert::pass`].
 pub fn pass(program: &str) -> OwnedFrozenValue {
     Assert::new().pass(program)
 }
 
-/// Parse some text and pretty-print it using enough brackets etc. to avoid
-/// ambiguity. Fails if the program does not parse.
-/// The precise form of the pretty-printed output is not necessarily stable
-/// over time.
+/// See [`Assert::parse`].
 pub fn parse(program: &str) -> String {
     Assert::new().parse(program)
 }
 
-/// Parse some text and return the AST. Fails if the program does not parse.
+/// See [`Assert::parse_ast`].
 pub fn parse_ast(program: &str) -> AstModule {
     Assert::new().parse_ast(program)
 }
@@ -569,16 +619,12 @@ pub(crate) fn lex_tokens(program: &str) -> Vec<(usize, Token, usize)> {
     Assert::new().lex_tokens(program)
 }
 
-/// Lex some text and pretty-print it using enough whitespace etc. to avoid
-/// ambiguity. Fails if the program does not lex.
-/// The precise form of the pretty-printed output is not necessarily stable
-/// over time.
+/// See [`Assert::lex`].
 pub fn lex(program: &str) -> String {
     Assert::new().lex(program)
 }
 
-/// Parse some text which must fail to parse. Two exclamation marks should be
-/// placed around the span which is reported by the error.
+/// See [`Assert::parse_fail`].
 pub fn parse_fail(program: &str) -> anyhow::Error {
     Assert::new().parse_fail(program)
 }

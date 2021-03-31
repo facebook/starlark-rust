@@ -15,7 +15,30 @@
  * limitations under the License.
  */
 
-//! Utilities to test Starlark code execution.
+//! Utilities to test Starlark code execution, using the [`Assert`] type and top-level functions.
+//!
+//! There are two general approaches. You can either use the functions in this module directly, e.g.:
+//!
+//! ```
+//! use starlark::assert;
+//! assert::eq("1+2", "3");
+//! ```
+//!
+//! Or create an [`Assert`] object, which supports the same assertions, but also let's you modify the
+//! environment in which the tests are run, e.g.:
+//!
+//! ```
+//! use starlark::assert::Assert;
+//! use starlark::syntax::Dialect;
+//!
+//! let mut a = Assert::new();
+//! a.dialect(&Dialect::Standard); // Use standard Starlark
+//! a.eq("1+2", "3");
+//! ```
+//!
+//! The tests in question may be run multiple times, in different modes, to maximise test coverage.
+//! For example, execution tests are run at different garbage collection settings. Parsing tests are run
+//! with both Unix and Windows newlines.
 
 #[allow(clippy::module_inception)] // This seems a perfectly reasonable thing to do
 mod assert;
