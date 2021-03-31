@@ -54,9 +54,9 @@ pub struct RecordGen<T> {
     values: Vec<T>,
 }
 
-starlark_value!(pub(crate) Field);
-starlark_value!(pub RecordType);
-starlark_value!(pub Record);
+starlark_complex_value!(pub(crate) Field);
+starlark_complex_value!(pub RecordType);
+starlark_complex_value!(pub Record);
 
 impl<T> FieldGen<T> {
     pub(crate) fn new(typ: T, default: Option<T>) -> Self {

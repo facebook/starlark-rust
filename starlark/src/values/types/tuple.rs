@@ -64,7 +64,7 @@ pub struct TupleGen<T> {
     pub content: Vec<T>,
 }
 
-starlark_value!(pub Tuple);
+starlark_complex_value!(pub Tuple);
 
 impl<'v, V: ValueLike<'v>> TupleGen<V> {
     pub fn new(content: Vec<V>) -> Self {

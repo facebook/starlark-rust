@@ -30,7 +30,7 @@ macro_rules! starlark_type {
 }
 
 #[macro_export]
-macro_rules! starlark_value {
+macro_rules! starlark_complex_value {
     ($v:vis $x:ident) => {
         $crate::__macro_refs::item! {
             $v type $x<'v> = [< $x Gen >]<$crate::values::Value<'v>>;

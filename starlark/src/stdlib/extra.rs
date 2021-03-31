@@ -102,7 +102,7 @@ struct PartialGen<V> {
     signature: Parameters<V>,
 }
 
-starlark_value!(Partial);
+starlark_complex_value!(Partial);
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {

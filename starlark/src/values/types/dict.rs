@@ -43,7 +43,7 @@ impl<T> DictGen<T> {
     pub const TYPE: &'static str = "dict";
 }
 
-starlark_value!(pub Dict);
+starlark_complex_value!(pub Dict);
 
 impl FrozenDict {
     // We need a lifetime because FrozenValue doesn't contain the right lifetime

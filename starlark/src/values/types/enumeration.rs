@@ -58,8 +58,8 @@ pub struct EnumValueGen<V> {
     index: i32, // The index in the enumeration
 }
 
-starlark_value!(pub EnumType);
-starlark_value!(pub EnumValue);
+starlark_complex_value!(pub EnumType);
+starlark_complex_value!(pub EnumValue);
 
 impl<'v> ComplexValue<'v> for EnumType<'v> {
     // So we can get the name set and tie the cycle

@@ -39,7 +39,7 @@ impl<T> ListGen<T> {
     pub const TYPE: &'static str = "list";
 }
 
-starlark_value!(pub List);
+starlark_complex_value!(pub List);
 
 impl<'v, T: AllocValue<'v>> AllocValue<'v> for Vec<T> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {

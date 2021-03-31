@@ -44,7 +44,7 @@ impl<T> StructGen<T> {
     }
 }
 
-starlark_value!(pub Struct);
+starlark_complex_value!(pub Struct);
 
 #[derive(Clone, Default, Debug)]
 pub struct StructGen<T> {

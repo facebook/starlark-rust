@@ -321,7 +321,7 @@ pub struct WrappedMethodGen<V> {
     self_obj: V,
 }
 
-starlark_value!(pub WrappedMethod);
+starlark_complex_value!(pub WrappedMethod);
 
 impl<'v> WrappedMethod<'v> {
     pub fn new(self_obj: Value<'v>, method: Value<'v>) -> Self {
