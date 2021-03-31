@@ -17,10 +17,10 @@
 
 use crate::{
     collections::SmallMap,
-    eval::ParametersSpec,
+    eval::{ParametersParser, ParametersSpec},
     values::{
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, ParametersParser, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, NativeFunction, FUNCTION_VALUE_TYPE_NAME},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
         ValueLike, Walker,

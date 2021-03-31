@@ -21,11 +21,11 @@
 
 use crate::{
     collections::SmallMap,
-    eval::ParametersSpec,
+    eval::{ParametersParser, ParametersSpec},
     values::{
         comparison::equals_slice,
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, ParametersParser, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, NativeFunction, FUNCTION_VALUE_TYPE_NAME},
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };

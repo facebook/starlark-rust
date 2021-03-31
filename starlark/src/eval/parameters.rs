@@ -21,11 +21,12 @@
 use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Value, ValueLike, ValueRef, Walker,
+        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, UnpackValue, Value, ValueError,
+        ValueLike, ValueRef, Walker,
     },
 };
 use gazebo::{cell::ARef, prelude::*};
-use std::{cmp, mem};
+use std::{cmp, mem, slice::Iter};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -405,5 +406,51 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
             .into());
         }
         Ok(slots)
+    }
+}
+
+/// Parse a series of parameters from a list of slots
+pub struct ParametersParser<'v, 'a> {
+    slots: Iter<'a, Option<Value<'v>>>,
+}
+
+impl<'v, 'a> ParametersParser<'v, 'a> {
+    pub(crate) fn new(slots: &'a [Option<Value<'v>>]) -> Self {
+        Self {
+            slots: slots.iter(),
+        }
+    }
+
+    // Utility for improving the error message with more information
+    fn named_err<T>(name: &str, x: Option<T>) -> anyhow::Result<T> {
+        x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
+    }
+
+    // The next parameter, corresponding to ParametersSpec.optional()
+    pub fn next_opt<T: UnpackValue<'v>>(
+        &mut self,
+        name: &str,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Option<T>> {
+        // This unwrap is safe because we only call next one time per ParametersSpec.count()
+        // and slots starts out with that many entries.
+        let v = self.slots.next().unwrap();
+        match v {
+            None => Ok(None),
+            Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(*v, heap))?)),
+        }
+    }
+
+    // After ParametersCollect.done() all variables will be Some,
+    // apart from those where we called ParametersSpec.optional(),
+    // and for those we chould call next_opt()
+    pub fn next<T: UnpackValue<'v>>(&mut self, name: &str, heap: &'v Heap) -> anyhow::Result<T> {
+        // This unwrap is safe because we only call next one time per ParametersSpec.count()
+        // and slots starts out with that many entries.
+        let v = self.slots.next().unwrap();
+        // This is definitely not unassigned because ParametersCollect.done checked
+        // that.
+        let v = v.as_ref().unwrap();
+        Self::named_err(name, T::unpack_value(*v, heap))
     }
 }
