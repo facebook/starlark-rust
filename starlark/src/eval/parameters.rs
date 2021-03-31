@@ -78,8 +78,10 @@ impl<'v> ParameterDefault<Value<'v>> {
     }
 }
 
-// V = Value, or FrozenValue
+/// Define a list of parameters. This code assumes that all names are distinct and that
+/// `*args`/`**kwargs` occur in well-formed locations.
 #[derive(Debug, Clone)]
+// V = Value, or FrozenValue
 pub struct ParametersSpec<V> {
     function_name: String, // Only for error messages
     // FIXME: I want to use &'ast str where I use String below
@@ -92,11 +94,8 @@ pub struct ParametersSpec<V> {
     kwargs: Option<usize>,
 }
 
-/// This class assumes that parameters are well-formed, specifically that:
-///
-/// 1) All names are distinct
-/// 2) args/kwargs occur at most once, in well-formed locations
 impl<V> ParametersSpec<V> {
+    /// Create a new [`ParametersSpec`] with the given function name.
     pub fn new(function_name: String) -> Self {
         Self {
             function_name,
@@ -109,6 +108,7 @@ impl<V> ParametersSpec<V> {
         }
     }
 
+    /// Create a new [`ParametersSpec`] with the given function name and an advance capacity hint.
     pub fn with_capacity(function_name: String, capacity: usize) -> Self {
         Self {
             function_name,
@@ -154,27 +154,31 @@ impl<V> ParametersSpec<V> {
         self.add(name, ParameterDefault::Defaulted(val));
     }
 
-    /// Add an *args parameter which will be an iterable list of parameters,
-    /// recorded into a `Vec`. A function can only have one `args`
-    /// parameter. After this call, any subsequent `required`, `optional` or
-    /// `defaulted` parameters can _only_ be supplied by name.
+    /// Add an `*args` parameter which will be an iterable sequence of parameters,
+    /// recorded into a [`Vec`]. A function can only have one `args`
+    /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
+    /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
+    /// parameters can _only_ be supplied by name.
     pub fn args(&mut self, name: &str) {
         assert!(self.args.is_none() && !self.no_args);
         self.names.push((name.to_owned(), ParameterDefault::Args));
         self.args = Some(self.names.len() - 1);
     }
 
-    /// This function has no `args` parameters.
-    /// After this call, any subsequent `required`, `optional` or `defaulted`
+    /// This function has no `*args` parameter, corresponds to the Python parameter `*`.
+    /// After this call, any subsequent [`required`](ParametersSpec::required),
+    /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn no_args(&mut self) {
         assert!(self.args.is_none() && !self.no_args);
         self.no_args = true;
     }
 
-    /// This function has no `args` parameters.
-    /// After this call, any subsequent `required`, `optional` or `defaulted`
-    /// parameters can _only_ be supplied by name.
+    /// Add a `**kwargs` parameter which will be a dictionary, recorded into a [`SmallMap`].
+    /// A function can only have one `kwargs` parameter.
+    /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
+    /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
+    /// parameters can _only_ be supplied by position.
     pub fn kwargs(&mut self, name: &str) {
         assert!(self.kwargs.is_none());
         self.names.push((name.to_owned(), ParameterDefault::KWargs));
@@ -197,6 +201,7 @@ impl<V> ParametersSpec<V> {
         }
     }
 
+    /// Produce an approximate signature for the function, combining the name and arguments.
     pub fn signature(&self) -> String {
         let mut collector = String::new();
         self.collect_repr(&mut collector);
@@ -229,6 +234,7 @@ impl<V> ParametersSpec<V> {
 }
 
 impl<'v> ParametersSpec<Value<'v>> {
+    /// Used to freeze a [`ParametersSpec`].
     pub fn freeze(self, freezer: &Freezer) -> ParametersSpec<FrozenValue> {
         ParametersSpec {
             function_name: self.function_name,
@@ -241,6 +247,7 @@ impl<'v> ParametersSpec<Value<'v>> {
         }
     }
 
+    /// Used when performing garbage collection over a [`ParametersSpec`].
     pub fn walk(&mut self, walker: &Walker<'v>) {
         self.names.iter_mut().for_each(|x| x.1.walk(walker))
     }
@@ -409,7 +416,7 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
     }
 }
 
-/// Parse a series of parameters from a list of slots
+/// Parse a series of parameters which were specified by [`ParametersSpec`].
 pub struct ParametersParser<'v, 'a> {
     slots: Iter<'a, Option<Value<'v>>>,
 }
@@ -426,7 +433,9 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
     }
 
-    // The next parameter, corresponding to ParametersSpec.optional()
+    /// Obtain the next parameter, corresponding to [`ParametersSpec::optional`].
+    /// It is an error to request more parameters than were specified.
+    /// The `name` is only used for error messages.
     pub fn next_opt<T: UnpackValue<'v>>(
         &mut self,
         name: &str,
@@ -441,10 +450,14 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         }
     }
 
-    // After ParametersCollect.done() all variables will be Some,
-    // apart from those where we called ParametersSpec.optional(),
-    // and for those we chould call next_opt()
+    /// Obtain the next parameter, which can't be defined by [`ParametersSpec::optional`].
+    /// It is an error to request more parameters than were specified.
+    /// The `name` is only used for error messages.
     pub fn next<T: UnpackValue<'v>>(&mut self, name: &str, heap: &'v Heap) -> anyhow::Result<T> {
+        // After ParametersCollect.done() all variables will be Some,
+        // apart from those where we called ParametersSpec.optional(),
+        // and for those we chould call next_opt()
+
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
         let v = self.slots.next().unwrap();

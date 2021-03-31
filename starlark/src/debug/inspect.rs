@@ -36,7 +36,10 @@ pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {
-    pub fn inspect_variables(&self) -> SmallMap<String, Value<'v>> {
+    /// Obtain the local variables currently in scope. When at top-level these will be
+    /// [`Module`](crate::environment::Module) variables, otherwise local definitions. The precise number of variables
+    /// may change over time due to optimisation. The only legitimate use of this function is for debugging.
+    pub fn local_variables(&self) -> SmallMap<String, Value<'v>> {
         inspect_local_variables(self).unwrap_or_else(|| inspect_module_variables(self))
     }
 }
@@ -77,7 +80,7 @@ mod tests {
 
         fn debug_inspect_variables() -> Struct<'v> {
             Ok(Struct {
-                fields: ctx.inspect_variables(),
+                fields: ctx.local_variables(),
             })
         }
     }

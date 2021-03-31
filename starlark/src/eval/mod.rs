@@ -15,13 +15,9 @@
  * limitations under the License.
  */
 
-//! Evaluation environment, provide converters from Ast* element to value.
-//!
-//! # <a name="build_file"></a>Starlark and BUILD dialect
-//!
-//! All evaluation function can evaluate the full Starlark language (i.e.
-//! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
-//! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
+//! Evaluate some code, typically done by creating an [`Evaluator`], then calling
+//! [`eval_module`](Evaluator::eval_module).
+
 use crate::{
     codemap::{CodeMap, Span},
     environment::{slots::LocalSlots, Globals},
@@ -125,9 +121,11 @@ pub(crate) struct Compiler<'a> {
     codemap: Arc<CodeMap>,
 }
 
-impl<'v> Evaluator<'v, '_> {
-    pub fn eval_module(&mut self, modu: AstModule) -> anyhow::Result<Value<'v>> {
-        let AstModule { codemap, statement } = modu;
+impl<'v, 'a> Evaluator<'v, 'a> {
+    /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
+    /// [`Module`](crate::environment::Module) as appropriate.
+    pub fn eval_module(&mut self, module: AstModule) -> anyhow::Result<Value<'v>> {
+        let AstModule { codemap, statement } = module;
         let module_env = self.assert_module_env();
 
         let scope = Scope::enter_module(module_env.names(), &statement);
@@ -184,6 +182,7 @@ impl<'v> Evaluator<'v, '_> {
         Ok(res?)
     }
 
+    /// Evaluate a function stored in a [`Value`], passing in `positional` and `named` arguments.
     pub fn eval_function(
         &mut self,
         function: Value<'v>,

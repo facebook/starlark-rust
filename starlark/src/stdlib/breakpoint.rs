@@ -63,7 +63,7 @@ fn cmd_variables(ctx: &mut Evaluator) -> anyhow::Result<Next> {
         s
     }
 
-    for (name, value) in ctx.inspect_variables() {
+    for (name, value) in ctx.local_variables() {
         eprintln!("* {} = {}", name, truncate(value.to_string(), 80))
     }
     Ok(Next::Again)

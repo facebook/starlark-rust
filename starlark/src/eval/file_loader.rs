@@ -23,13 +23,17 @@ use anyhow::anyhow;
 use gazebo::prelude::*;
 use std::collections::HashMap;
 
-/// A trait for loading file using the load statement path.
+/// A trait for turning a `path` given by a `load()` statement into a [`FrozenModule`].
 pub trait FileLoader {
     /// Open the file given by the load statement `path`.
     fn load(&mut self, path: &str) -> anyhow::Result<FrozenModule>;
 }
 
-/// FileLoader that looks up modules by name from a map
+/// [`FileLoader`] that looks up modules by name from a [`HashMap`].
+///
+/// A list of all load statements can be obtained through
+/// [`AstModule::loads`](crate::syntax::AstModule::loads).
+/// This struct will raise an error if any requested files are not available.
 pub struct ReturnFileLoader<'a> {
     pub modules: &'a HashMap<&'a str, &'a FrozenModule>,
 }

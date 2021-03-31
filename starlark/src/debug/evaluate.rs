@@ -19,10 +19,12 @@ use crate::{debug::inspect::to_scope_names, eval::Evaluator, syntax::AstModule, 
 use std::{collections::HashMap, mem};
 
 impl<'v, 'a> Evaluator<'v, 'a> {
-    /// Evaluate statements in the existing context. Attempt to map variables over and back again.
-    /// Lots of health warnings on this code. Might not work with frozen modules, unassigned variables,
-    /// nested definitions etc. All are solvable, with increasing levels of effort.
-    /// It would be a bad idea to rely on the results after evaluating stuff randomly.
+    /// Evaluate statements in the existing context. This function is designed for debugging,
+    /// not production use.
+    ///
+    /// There are lots of health warnings on this code. Might not work with frozen modules, unassigned variables,
+    /// nested definitions etc. It would be a bad idea to rely on the results of continued execution
+    /// after evaluating stuff randomly.
     pub fn eval_statements(&mut self, statements: AstModule) -> anyhow::Result<Value<'v>> {
         // We are doing a lot of funky stuff here. It's amazing anything works, so let's not push our luck with GC.
         self.disable_gc();

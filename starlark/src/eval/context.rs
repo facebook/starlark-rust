@@ -28,8 +28,7 @@ use crate::{
 use gazebo::any::AnyLifetime;
 use std::{mem, sync::Arc};
 
-/// A structure holding all the data about the evaluation context
-/// (scope, load statement resolver, ...)
+/// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a> {
     // Am I at the root module-level, true until a function call
     pub(crate) is_module_scope: bool,
@@ -62,16 +61,24 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) heap: &'v Heap,
     // Should we do runtime checking of types (defaults to true)
     pub(crate) check_types: bool,
-    // Callback on every statement
+    /// Called on every statement with the [`Span`] and a reference to the containing [`Evaluator`].
+    /// A list of all possible statements can be obtained in advance by
+    /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
     pub on_stmt: Option<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
-    /// Field that can be used for any purpose you want (can store types you define)
+    /// Field that can be used for any purpose you want (can store types you define).
+    /// Typically accessed via native functions you also define.
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
-    /// Field that can be used for any purpose you want (can store heap-resident `Value<'v>`).
+    /// Field that can be used for any purpose you want (can store heap-resident [`Value<'v>`]).
     /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {
+    /// Crate a new [`Evaluator`] specifying the [`Module`] used for module variables,
+    /// and the [`Globals`] used to resolve global variables.
+    ///
+    /// If your program contains `load()` statements, you also need to call
+    /// [`set_loader`](Evaluator::set_loader).
     pub fn new(env: &'v Module, globals: &'a Globals) -> Self {
         env.frozen_heap().add_reference(globals.heap());
         Evaluator {
@@ -95,25 +102,34 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
     }
 
-    // Disables garbage collection from now onwards. Cannot be re-enabled.
-    // Usually called because you have captured `Value`'s unsafely, either in
-    // global variables or the `extra` field.
+    /// Disables garbage collection from now onwards. Cannot be re-enabled.
+    /// Usually called because you have captured [`Value`]'s unsafely, either in
+    /// global variables or the [`extra`](Evaluator::extra) field.
     pub fn disable_gc(&mut self) {
         self.disable_gc = true;
     }
 
+    /// Set the [`FileLoader`] used to resolve `load()` statements.
+    /// A list of all load statements can be obtained through
+    /// [`AstModule::loads`](crate::syntax::AstModule::loads).
     pub fn set_loader(&mut self, loader: &'a mut dyn FileLoader) {
         self.loader = Some(loader);
     }
 
+    /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
     pub fn call_stack(&self) -> Vec<Frame> {
         self.call_stack.to_diagnostic_frames()
     }
 
+    /// Obtain the top location on the call-stack. May be [`None`] if the
+    /// call happened via native functions.
     pub fn call_stack_top_location(&self) -> Option<SpanLoc> {
         self.call_stack.top_location()
     }
 
+    /// Given a [`Span`] resolve it to a concrete [`SpanLoc`] using
+    /// whatever module is currently at the top of the stack.
+    /// This function can be used in conjunction with [`on_stmt`](Evaluator::on_stmt).
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
         self.codemap.look_up_span(span)
     }
@@ -193,15 +209,16 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack.walk(walker);
     }
 
-    /// The active heap where `Value`s are allocated.
+    /// The active heap where [`Value`]s are allocated.
     pub fn heap(&self) -> &'v Heap {
         self.heap
     }
 
-    /// The frozen heap. It's possible to allocate `FrozenValue`s here,
+    /// The frozen heap. It's possible to allocate [`FrozenValue`](crate::values::FrozenValue)s here,
     /// but often not a great idea, as they will remain allocated as long
     /// as the results of this execution are required.
-    /// Useful for `add_reference` and `OwnedFrozenValue::owned_frozen_value`.
+    /// Suitable for use with [`add_reference`](FrozenHeap::add_reference)
+    /// and [`OwnedFrozenValue::owned_frozen_value`](crate::values::OwnedFrozenValue::owned_frozen_value).
     pub fn frozen_heap(&self) -> &FrozenHeap {
         self.module_env.frozen_heap()
     }
@@ -229,9 +246,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Set a variable in the module. Raises an error if called from a frozen module
     /// or not from the top-level.
     ///
-    /// Any variables which have `set` called will be available in the `Module` after evaluation returns.
+    /// Any variables which are set will be available in the [`Module`] after evaluation returns.
     /// If those variables are _also_ existing top-level variables, then the program from that point on
     /// will incorporate those values. If they aren't existing top-level variables, they will be ignored.
+    /// These details are subject to change.
     /// As such, use this API with a healthy dose of caution and in limited settings.
     pub fn set_module_variable_at_some_point(
         &mut self,

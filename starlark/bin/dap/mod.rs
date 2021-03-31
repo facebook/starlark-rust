@@ -304,7 +304,7 @@ impl DebugServer for Backend {
 
     fn scopes(&self, _: ScopesArguments) -> anyhow::Result<ScopesResponseBody> {
         self.with_ctx(box |_, ctx| {
-            let vars = ctx.inspect_variables();
+            let vars = ctx.local_variables();
             Ok(ScopesResponseBody {
                 scopes: vec![Scope {
                     name: "Locals".to_owned(),
@@ -324,7 +324,7 @@ impl DebugServer for Backend {
 
     fn variables(&self, _: VariablesArguments) -> anyhow::Result<VariablesResponseBody> {
         self.with_ctx(box |_, ctx| {
-            let vars = ctx.inspect_variables();
+            let vars = ctx.local_variables();
             Ok(VariablesResponseBody {
                 variables: vars
                     .into_iter()
