@@ -161,8 +161,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             .push(Value::new_none(), Some((codemap, span)))
             .unwrap();
         if self.profiling {
-            // Make sure we don't GC the excess entries
-            self.disable_gc();
             self.heap.record_call_enter(Value::new_none());
         }
 
@@ -173,7 +171,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack.pop();
         if self.profiling {
             self.heap.record_call_exit();
-            self.heap.write_profile("starlark_profile.csv").unwrap();
         }
         self.codemap = old_codemap;
         self.local_variables = old_locals;

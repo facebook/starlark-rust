@@ -116,6 +116,15 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.loader = Some(loader);
     }
 
+    /// Enable profiling, allowing [`Heap::write_profile`] to be used.
+    /// Has the side effect of disabling garbage-collection.
+    pub fn enable_profiling(&mut self) {
+        self.profiling = true;
+        // Disable GC because otherwise why lose the profile records, as we use the heap
+        // to store a complete list of what happened in linear order.
+        self.disable_gc = true;
+    }
+
     /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
     pub fn call_stack(&self) -> Vec<Frame> {
         self.call_stack.to_diagnostic_frames()
