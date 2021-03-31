@@ -133,11 +133,6 @@ fn test_methods(builder: &mut GlobalsBuilder) {
         assert_equals(a, b)
     }
 
-    fn print(x: Value) -> NoneType {
-        println!("{}", x);
-        Ok(NoneType)
-    }
-
     // This is only safe to call at the top-level of a Starlark module
     fn garbage_collect() -> NoneType {
         if ctx.is_module_scope {

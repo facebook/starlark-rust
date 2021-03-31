@@ -21,10 +21,12 @@ use crate::{
     eval::Parameters,
     values::{
         function::{FunctionInvoker, FUNCTION_VALUE_TYPE_NAME},
+        none::NoneType,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
+use itertools::Itertools;
 use std::collections::HashSet;
 
 #[starlark_module]
@@ -103,6 +105,15 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
             }
         }
         Ok(heap.alloc(res))
+    }
+}
+
+#[starlark_module]
+pub fn print(builder: &mut GlobalsBuilder) {
+    fn print(args: Vec<Value>) -> NoneType {
+        // In practice most users should want to put the print somewhere else, but this does for now
+        println!("{}", args.iter().join(" "));
+        Ok(NoneType)
     }
 }
 

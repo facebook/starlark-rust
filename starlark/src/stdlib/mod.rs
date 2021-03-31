@@ -50,6 +50,7 @@ pub enum LibraryExtension {
     Partial,
     Dedupe,
     Debug,
+    Print,
     Breakpoint,
     // Make sure if you add anything new, you add it to `all` below.
 }
@@ -58,7 +59,8 @@ impl LibraryExtension {
     pub fn all() -> &'static [Self] {
         use LibraryExtension::*;
         &[
-            StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Breakpoint,
+            StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Print,
+            Breakpoint,
         ]
     }
 
@@ -73,6 +75,7 @@ impl LibraryExtension {
             Partial => extra::partial(builder),
             Dedupe => extra::dedupe(builder),
             Debug => extra::debug(builder),
+            Print => extra::print(builder),
             Breakpoint => breakpoint::global(builder),
         }
     }
