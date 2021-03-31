@@ -79,7 +79,7 @@ impl<'v> ParameterDefault<Value<'v>> {
 
 // V = Value, or FrozenValue
 #[derive(Debug, Clone)]
-pub struct Parameters<V> {
+pub struct ParametersSpec<V> {
     function_name: String, // Only for error messages
     // FIXME: I want to use &'ast str where I use String below
     names: Vec<(String, ParameterDefault<V>)>,
@@ -95,7 +95,7 @@ pub struct Parameters<V> {
 ///
 /// 1) All names are distinct
 /// 2) args/kwargs occur at most once, in well-formed locations
-impl<V> Parameters<V> {
+impl<V> ParametersSpec<V> {
     pub fn new(function_name: String) -> Self {
         Self {
             function_name,
@@ -227,9 +227,9 @@ impl<V> Parameters<V> {
     }
 }
 
-impl<'v> Parameters<Value<'v>> {
-    pub fn freeze(self, freezer: &Freezer) -> Parameters<FrozenValue> {
-        Parameters {
+impl<'v> ParametersSpec<Value<'v>> {
+    pub fn freeze(self, freezer: &Freezer) -> ParametersSpec<FrozenValue> {
+        ParametersSpec {
             function_name: self.function_name,
             names: self.names.into_map(|(s, v)| (s, v.freeze(freezer))),
             indices: self.indices,
@@ -246,7 +246,7 @@ impl<'v> Parameters<Value<'v>> {
 }
 
 pub(crate) struct ParametersCollect<'v, 'a, V> {
-    params: ARef<'a, Parameters<V>>,
+    params: ARef<'a, ParametersSpec<V>>,
     slots: Vec<ValueRef<'v>>,
 
     /// Initially true, becomes false once we see something not-positional.

@@ -21,7 +21,7 @@
 
 use crate::{
     collections::SmallMap,
-    eval::Parameters,
+    eval::ParametersSpec,
     values::{
         comparison::equals_slice,
         error::ValueError,
@@ -203,7 +203,7 @@ where
         heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
         let name = self.typ.as_deref().unwrap_or("record").to_owned();
-        let mut signature = Parameters::with_capacity(name, self.fields.len());
+        let mut signature = ParametersSpec::with_capacity(name, self.fields.len());
         signature.required("me"); // Hidden first argument
         signature.no_args();
         for (name, field) in &self.fields {

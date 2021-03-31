@@ -64,7 +64,7 @@ use syn::*;
 //     }
 //     {
 //         #[allow(unused_mut)]
-//         let mut signature = starlark::eval::Parameters::new("cc_binary".to_owned());
+//         let mut signature = starlark::eval::ParametersSpec::new("cc_binary".to_owned());
 //         signature.required("name");
 //         signature.required("srcs");
 //         globals_builder.set(
@@ -279,7 +279,7 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
         }
         {
             #[allow(unused_mut)]
-            let mut signature = starlark::eval::Parameters::new(#name_str.to_owned());
+            let mut signature = starlark::eval::ParametersSpec::new(#name_str.to_owned());
             #( #signature )*
             #setter
         }

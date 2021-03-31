@@ -20,7 +20,7 @@ use crate::{
     codemap::Span,
     eval::{
         def::{DefInvoker, DefInvokerFrozen},
-        Evaluator, Parameters, ParametersCollect,
+        Evaluator, ParametersCollect, ParametersSpec,
     },
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
@@ -112,13 +112,13 @@ impl<'v, 'a> ParameterParser<'v, 'a> {
         x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
     }
 
-    // The next parameter, corresponding to Parameters.optional()
+    // The next parameter, corresponding to ParametersSpec.optional()
     pub fn next_opt<T: UnpackValue<'v>>(
         &mut self,
         name: &str,
         heap: &'v Heap,
     ) -> anyhow::Result<Option<T>> {
-        // This unwrap is safe because we only call next one time per Parameters.count()
+        // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
         let v = self.slots.next().unwrap();
         match v {
@@ -128,10 +128,10 @@ impl<'v, 'a> ParameterParser<'v, 'a> {
     }
 
     // After ParametersCollect.done() all variables will be Some,
-    // apart from those where we called Parameters.optional(),
+    // apart from those where we called ParametersSpec.optional(),
     // and for those we chould call next_opt()
     pub fn next<T: UnpackValue<'v>>(&mut self, name: &str, heap: &'v Heap) -> anyhow::Result<T> {
-        // This unwrap is safe because we only call next one time per Parameters.count()
+        // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
         let v = self.slots.next().unwrap();
         // This is definitely not unassigned because ParametersCollect.done checked
@@ -175,7 +175,7 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
             ARef::map_split(func, |x| (convert(&x.function), &x.parameters));
         Self {
             function,
-            collect: Parameters::collect(parameters, 0),
+            collect: ParametersSpec::collect(parameters, 0),
         }
     }
 
@@ -202,7 +202,7 @@ pub struct NativeFunction<F: NativeFunc> {
     /// to avoid generic instantiation and allocation for each native function.
     #[derivative(Debug = "ignore")]
     function: F,
-    parameters: Parameters<FrozenValue>,
+    parameters: ParametersSpec<FrozenValue>,
     typ: Option<FrozenValue>,
 }
 
@@ -224,7 +224,7 @@ impl<
         + 'static,
 > NativeFunction<F>
 {
-    pub fn new(function: F, parameters: Parameters<FrozenValue>) -> Self {
+    pub fn new(function: F, parameters: ParametersSpec<FrozenValue>) -> Self {
         NativeFunction {
             function,
             parameters,

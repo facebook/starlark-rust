@@ -17,7 +17,7 @@
 
 use crate::{
     collections::SmallMap,
-    eval::Parameters,
+    eval::ParametersSpec,
     values::{
         error::ValueError,
         function::{FunctionInvoker, NativeFunction, ParameterParser, FUNCTION_VALUE_TYPE_NAME},
@@ -167,7 +167,7 @@ where
         heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
         let name = self.typ.as_deref().unwrap_or("enum").to_owned();
-        let mut signature = Parameters::with_capacity(name, 2);
+        let mut signature = ParametersSpec::with_capacity(name, 2);
         signature.required("me"); // Hidden first argument
         signature.required("value");
 

@@ -22,7 +22,7 @@ use crate::{
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
         context::Evaluator,
-        parameters::{Parameters, ParametersCollect},
+        parameters::{ParametersCollect, ParametersSpec},
         scope::ScopeNames,
         Compiler, EvalCompiled, EvalException,
     },
@@ -123,7 +123,8 @@ impl Compiler<'_> {
         }
 
         box move |context| {
-            let mut parameters = Parameters::with_capacity(function_name.to_owned(), params.len());
+            let mut parameters =
+                ParametersSpec::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
 
             for (i, x) in params.iter().enumerate() {
@@ -174,7 +175,7 @@ impl Compiler<'_> {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V, RefV> {
-    parameters: Parameters<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
+    parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
     parameter_types: Vec<(usize, String, V)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<V>,                   // The return type annotation for the function
     codemap: Arc<CodeMap>,                    // Codemap that was active during this module
@@ -193,7 +194,7 @@ any_lifetime!(FrozenDef);
 
 impl<'v> Def<'v> {
     fn new(
-        parameters: Parameters<Value<'v>>,
+        parameters: ParametersSpec<Value<'v>>,
         parameter_types: Vec<(usize, String, Value<'v>)>,
         return_type: Option<Value<'v>>,
         stmt: Arc<DefInfo>,
@@ -351,7 +352,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'v, 'a, V, Re
         let (def, params) = ARef::map_split(def, |x| (x, &x.parameters));
         Self {
             def,
-            collect: Parameters::collect(params, slots),
+            collect: ParametersSpec::collect(params, slots),
         }
     }
 
