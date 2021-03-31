@@ -63,10 +63,14 @@ impl Globals {
         GlobalsBuilder::extended().build()
     }
 
-    pub fn get<'v>(&self, name: &str) -> Option<Value<'v>> {
+    /// This function is only safe if you first call `heap` and keep a reference to it.
+    /// Therefore, don't expose it on the public API.
+    pub(crate) fn get<'v>(&'v self, name: &str) -> Option<Value<'v>> {
         self.get_frozen(name).map(FrozenValue::to_value)
     }
 
+    /// This function is only safe if you first call `heap` and keep a reference to it.
+    /// Therefore, don't expose it on the public API.
     pub(crate) fn get_frozen(&self, name: &str) -> Option<FrozenValue> {
         self.0.variables.get(name).copied()
     }
