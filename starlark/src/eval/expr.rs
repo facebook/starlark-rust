@@ -140,17 +140,16 @@ fn eval_dot(
 ) -> Result<Either<Value<'v>, WrappedMethod<'v>>, EvalException<'v>> {
     move |context| {
         let left = e(context)?;
-        if let Some(v) = left.get_member(&s) {
-            if v.get_aref().is_function() {
-                // Insert self so the method see the object it is acting on
-                Ok(Either::Right(WrappedMethod::new(left, v)))
-            } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                thrw(v_attr.call(left, context), span, context).map(Either::Left)
-            } else {
-                Ok(Either::Left(v))
-            }
+        let (member, v) = thrw(left.get_attr(&s, context.heap), span, context)?;
+        if !member {
+            Ok(Either::Left(v))
+        } else if v.get_aref().is_function() {
+            // Insert self so the method see the object it is acting on
+            Ok(Either::Right(WrappedMethod::new(left, v)))
+        } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
+            thrw(v_attr.call(left, context), span, context).map(Either::Left)
         } else {
-            thrw(left.get_attr(&s, context.heap), span, context).map(Either::Left)
+            Ok(Either::Left(v))
         }
     }
 }

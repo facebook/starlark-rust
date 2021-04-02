@@ -48,7 +48,7 @@ static ASSERT_STAR: Lazy<FrozenModule> = Lazy::new(|| {
     m.frozen_heap().add_reference(g.heap());
     let assert = g.get("assert").unwrap();
     m.set("assert", assert);
-    m.set("freeze", assert.get_attr("freeze", m.heap()).unwrap());
+    m.set("freeze", assert.get_attr("freeze", m.heap()).unwrap().1);
     m.freeze()
 });
 

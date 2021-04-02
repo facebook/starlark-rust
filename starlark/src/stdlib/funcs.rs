@@ -263,16 +263,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn dir(ref x: Value) -> Vec<String> {
-        let o = x.get_aref();
-        let mut result;
-        if let Some(members) = o.get_members() {
-            result = members.names();
-            result.extend(o.dir_attr())
-        } else {
-            result = o.dir_attr();
-        };
-        result.sort();
-        Ok(result)
+        Ok(x.dir_attr())
     }
 
     /// [enumerate](
@@ -319,10 +310,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn getattr(ref a: Value, ref attr: &str, ref default: Option<Value>) -> Value<'v> {
-        // Make sure we check get_type_value first, to be consistent with a.f
-        match a.get_member(attr) {
-            Some(v) => {
-                if v.get_aref().is_function() {
+        // Make sure we check if its a function first, to be consistent with `a.f`
+        match a.get_attr(attr, heap) {
+            Ok((member, v)) => {
+                if !member {
+                    Ok(v)
+                } else if v.get_aref().is_function() {
                     // Insert self so the method see the object it is acting on
                     Ok(heap.alloc(WrappedMethod::new(a, v)))
                 } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
@@ -331,13 +324,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     Ok(v)
                 }
             }
-            None => match (default, a.get_attr(attr, heap)) {
+            Err(e) => {
                 // A bit unfortunate we replace Err with a default value, potentially giving up
                 // a valid error. But the error here is actually a well-formatted type-dependent
                 // value that gives good information about why the lookup failed.
-                (Some(default), Err(_)) => Ok(default),
-                (_, res) => res,
-            },
+                default.ok_or(e)
+            }
         }
     }
 
@@ -348,11 +340,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// `hasattr(x, name)` reports whether x has an attribute (field or method)
     /// named `name`.
     fn hasattr(ref a: Value, ref attr: &str) -> bool {
-        if a.get_member(attr).is_some() {
-            Ok(true)
-        } else {
-            Ok(a.has_attr(attr))
-        }
+        Ok(a.has_attr(attr))
     }
 
     /// [hash](

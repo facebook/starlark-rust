@@ -129,7 +129,7 @@ impl Compiler<'_> {
                 box move |context| {
                     before_stmt(span, context);
                     let e: Value = e(context)?;
-                    let v = thrw(e.get_attr(&s, context.heap), span, context)?;
+                    let (_, v) = thrw(e.get_attr(&s, context.heap), span, context)?;
                     let rhs = rhs(context)?;
                     thrw(
                         e.set_attr(

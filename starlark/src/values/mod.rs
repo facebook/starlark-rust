@@ -275,16 +275,43 @@ impl<'v> Value<'v> {
         self.get_aref().length()
     }
 
-    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().get_attr(attribute, heap)
+    /// Return the attribute with the given name. Returns a pair of a boolean and the value.
+    ///
+    /// The boolean is [`true`] if the attribute was defined via [`StarlarkValue::get_members`]
+    /// and should be used as a signal that if the attribute is subsequently called,
+    /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
+    /// argument to the function, e.g. `object.attribute(object, argument)`.
+    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<(bool, Value<'v>)> {
+        let aref = self.get_aref();
+        if let Some(members) = aref.get_members() {
+            if let Some(v) = members.get(attribute) {
+                return Ok((true, v));
+            }
+        }
+        aref.get_attr(attribute, heap).map(|v| (false, v))
     }
 
     pub fn has_attr(self, attribute: &str) -> bool {
-        self.get_aref().has_attr(attribute)
+        let aref = self.get_aref();
+        if let Some(members) = aref.get_members() {
+            if members.get(attribute).is_some() {
+                return true;
+            }
+        }
+        aref.has_attr(attribute)
     }
 
     pub fn dir_attr(self) -> Vec<String> {
-        self.get_aref().dir_attr()
+        let aref = self.get_aref();
+        let mut result = if let Some(members) = self.get_aref().get_members() {
+            let mut res = members.names();
+            res.extend(aref.dir_attr());
+            res
+        } else {
+            aref.dir_attr()
+        };
+        result.sort();
+        result
     }
 
     pub fn is_in(self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -398,14 +425,6 @@ impl<'v> Value<'v> {
 
     pub fn get_type_value(self) -> &'static ConstFrozenValue {
         self.get_aref().get_type_value()
-    }
-
-    pub fn get_member(self, name: &str) -> Option<Value<'v>> {
-        if let Some(members) = self.get_aref().get_members() {
-            members.get(name)
-        } else {
-            None
-        }
     }
 
     pub fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
