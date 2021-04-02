@@ -71,9 +71,112 @@ impl<'v, T: StarlarkValue<'v> + AnyLifetime<'v>> AsStarlarkValue<'v> for T {
 
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.
+///
+/// For values that contain nested [`Value`] types (mutable or not) there are a bunch of helpers
+/// and macros.
+///
+/// ## Types containing [`Value`]
+///
+/// A Starlark type containing values will need to exist in two states: one containing [`Value`]
+/// and one containing [`FrozenValue`](crate::values::FrozenValue). To deal with that, if we are defining the type
+/// containing a single value, let's call it `One`, we'd define `OneGen`
+/// (for the general version), and then have the [`starlark_complex_value!`] macro
+/// generate `One` and `FrozenOne` aliases.
+///
+/// ```
+/// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker};
+/// use starlark::{starlark_complex_value, starlark_type};
+///
+/// #[derive(Debug)]
+/// struct OneGen<V>(V);
+/// starlark_complex_value!(One);
+///
+/// impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for OneGen<V>
+///     where Self: AnyLifetime<'v>
+/// {
+///     starlark_type!("one");
+///
+///     // To implement methods which are work for both `One` and `FrozenOne`,
+///     // use the `ValueLike` trait.
+/// }
+///
+/// impl<'v> ComplexValue<'v> for One<'v> {
+///     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+///         Box::new(OneGen(self.0.freeze(freezer)))
+///     }
+///
+///     unsafe fn walk(&mut self, walker: &Walker<'v>) {
+///         // If there are any `Value`s we don't call `walk` on, its segfault time!
+///         walker.walk(&mut self.0);
+///     }
+/// }
+/// ```
+///
+/// The [`starlark_complex_value!`] macro defines two type aliases.
+///
+/// ```
+/// # use crate::starlark::values::*;
+/// # struct OneGen<V>(V);
+/// type One<'v> = OneGen<Value<'v>>;
+/// type FrozenOne = OneGen<FrozenValue>;
+/// ```
+///
+/// To make these aliases public (or public to the crate) pass a visibility
+/// to the macro, e.g. `starlark_complex_value!(pub One)`.
+///
+/// The macro also defines instances of [`AnyLifetime`] for both,
+/// [`AllocValue`](crate::values::AllocValue) for both,
+/// [`AllocFrozenValue`](crate::values::AllocFrozenValue) for the frozen one,
+/// [`SimpleValue`] for the frozen one and
+/// [`FromValue`](crate::values::FromValue) for the non-frozen one.
+/// It also defines the methods:
+///
+/// ```
+/// # use crate::starlark::values::*;
+/// # use std::cell::RefMut;
+/// # struct OneGen<V>(V);
+/// # type One<'v> = OneGen<Value<'v>>;
+/// impl<'v> One<'v> {
+///     // Obtain a reference to `One` from a `Value`, regardless
+///     // of whether the underlying `Value` is a `One` or `FrozenOne`.
+///     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+/// # unimplemented!(
+/// # r#"
+///         ...
+/// # "#);
+///     }
+///
+///     // Obtain a mutable reference to `One` from a `Value`,
+///     // but only works if the object returns `true` from `is_mutable`.
+///     pub fn from_value_mut(x: Value<'v>, heap: &'v Heap) -> anyhow::Result<Option<RefMut<'v, Self>>> {
+/// # unimplemented!(
+/// # r#"
+///         ...
+/// # "#);
+///     }
+/// }
+/// ```
+///
+/// ## Mutable types containing [`Value`]
+///
+/// If a container is mutable, [`starlark_complex_value!`] still works.
+/// To enable mutability return [`true`] from [`is_mutable`](ComplexValue::is_mutable),
+/// then the `from_value_mut` function will work.
+///
+/// ## Other types
+///
+/// The macro [`starlark_complex_value!`] is applicable when there is a single base type,
+/// `FooGen<V>`, with specialisations `FooGen<Value<'v>>` and `FooGen<FrozenValue>`.
+/// If you have a type where the difference between frozen and non-frozen does not follow this
+/// pattern then you will have to write instances of the traits you need manually.
+/// Examples of cases where the macro doesn't work include:
+///
+/// * If your type doesn't contain any [`Value`] types, but instead implements this trait for mutability.
+/// * If the difference between frozen and non-frozen is more complex, e.g. a [`Cell`](std::cell::Cell)
+///   when non-frozen and a direct value when frozen.
 pub trait ComplexValue<'v>: StarlarkValue<'v> {
     /// Can this value be mutated using a `&mut self` parameter?
-    /// Defaults to `false`.
+    /// Defaults to [`false`].
     /// The result of this value should be consistent for the duration of the
     /// value's life.
     fn is_mutable(&self) -> bool {
@@ -89,21 +192,13 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     unsafe fn walk(&mut self, walker: &Walker<'v>);
 
     /// Called when exporting a value under a specific name,
-    /// only applies to things that return `is_mutable()`.
-    /// The `is_mutable` constraint occurs because other variables
-    /// aren't stored in a RefCell, and thus can't be
-    /// easily/safely converted to a &mut as this function requires.
+    /// only applies to things that return [`true`] for [`is_mutable()`](ComplexValue::is_mutable).
     fn export_as(&mut self, _heap: &'v Heap, _variable_name: &str) {
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users
     }
 
-    /// Set the value at `index` with `alloc_value`.
-    ///
-    /// This method should error with `ValueError::CannotMutateImmutableValue`
-    /// if the value was frozen (but with
-    /// `ValueError::OperationNotSupported` if the operation is not supported
-    /// on this value, even if the value is immutable, e.g. for numbers).
+    /// Set the value at `index` with the new value.
     ///
     /// ```rust
     /// # starlark::assert::is_true(r#"
@@ -118,13 +213,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     }
 
     /// Set the attribute named `attribute` of the current value to
-    /// `alloc_value` (e.g. `a.attribute = alloc_value`).
-    ///
-    /// This method should error with `ValueError::CannotMutateImmutableValue`
-    /// if the value was frozen or the attribute is immutable (but with
-    /// `ValueError::OperationNotSupported` if the operation is not
-    /// supported on this value, even if the self is immutable,
-    /// e.g. for numbers).
+    /// `value` (e.g. `a.attribute = value`).
     fn set_attr(&mut self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
         ValueError::unsupported(self, &format!(".{}=", attribute))
     }
@@ -132,9 +221,78 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 
 /// A trait representing Starlark values which are simple - they
 /// aren't mutable and can't contain other Starlark values.
+///
+/// Let's define a simple object, where `+x` makes the string uppercase:
+///
+/// ```
+/// use starlark::values::{Heap, StarlarkValue, Value};
+/// use starlark::{starlark_simple_value, starlark_type};
+///
+/// #[derive(Debug)]
+/// struct MyObject(String);
+/// starlark_simple_value!(MyObject);
+/// impl<'v> StarlarkValue<'v> for MyObject {
+///     starlark_type!("my_object");
+///
+///     // We can choose to implement whichever methods we want.
+///     // All other operations will result in runtime errors.
+///     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+///         Ok(heap.alloc(MyObject(self.0.to_uppercase())))
+///     }
+/// }
+/// ```
+///
+/// The [`starlark_simple_value!`] macro defines instances of [`AnyLifetime`],
+/// [`AllocValue`](crate::values::AllocValue),
+/// [`AllocFrozenValue`](crate::values::AllocFrozenValue), [`SimpleValue`] and
+/// [`FromValue`](crate::values::FromValue). It also defines a method:
+///
+/// ```
+/// # use crate::starlark::values::*;
+/// # struct MyObject;
+/// impl MyObject {
+///     pub fn from_value<'v>(x: Value<'v>) -> Option<ARef<'v, MyObject>> {
+/// # unimplemented!(
+/// # r#"
+///         ...
+/// # "#);
+///     }
+/// }
+/// ```
+///
+/// All users defining [`SimpleValue`] should use this macro.
 pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 
 /// How to put a Rust values into [`Value`]s.
+///
+/// Every Rust value stored in a [`Value`] must implement this trait, along with
+/// either [`SimpleValue`] or [`ComplexValue`]. You _must_ implement [`ComplexValue`] if:
+///
+/// * A type is _mutable_, if you ever need to get a `&mut self` reference to it.
+/// * A type _contains_ nested Starlark [`Value`]s.
+///
+/// Otherwise you should implement [`SimpleValue`].
+/// See those two traits for examples of how to implement them.
+///
+/// There are only two required methods of [`StarlarkValue`], namely
+/// [`get_type`](StarlarkValue::get_type) and [`get_type_value`](StarlarkValue::get_type_value).
+/// Both these should be implemented with the [`starlark_type!`] macro:
+///
+/// ```
+/// use starlark::values::StarlarkValue;
+/// # use starlark::starlark_simple_value;
+/// use starlark::starlark_type;
+///
+/// #[derive(Debug)]
+/// struct Foo;
+/// # starlark_simple_value!(Foo);
+/// impl<'v> StarlarkValue<'v> for Foo {
+///     starlark_type!("foo");
+/// }
+/// ```
+///
+/// Every additional field enables further features in Starlark. In most cases the default
+/// implementation returns an "unimplemented" [`Err`].
 pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
@@ -143,7 +301,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Like get_type, but returns a reusable Value pointer to it.
     fn get_type_value(&self) -> &'static ConstFrozenValue;
 
-    /// Is this a function type. Function types behave in two specific ways:
+    /// Is this a function type. Defaults to [`false`]. Function types behave in two specific ways:
     ///
     /// `a.b(c)` is treated as `b(a, c)` and more generally `a.b` is treated
     /// as `b(a, ...)` - even if there are no arguments immediately following.
@@ -160,11 +318,17 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         self.get_type() == ty
     }
 
+    /// Get the members associated with this type, accessible via `this_type.x`.
+    /// These members will have `dir`/`getattr`/`hasattr` properly implemented,
+    /// so it is the preferred way to go if possible. See
+    /// [`GlobalsStatic`](crate::environment::GlobalsStatic) for an example of how
+    /// to define this method.
     fn get_members(&self) -> Option<&'static Globals> {
         None
     }
 
-    // Do not implement this function, it's just syntax sugar over collect_repr
+    /// Helper to use [`collect_repr`](StarlarkValue::collect_repr),
+    /// do not implement it (the default value always works).
     fn to_repr(&self) -> String {
         let mut s = String::new();
         self.collect_repr(&mut s);
@@ -192,12 +356,13 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         write!(collector, "{:?}", self).unwrap()
     }
 
+    /// Convert the type to a JSON string.
     fn to_json(&self) -> String {
         panic!("unsupported for type {}", self.get_type())
     }
 
-    /// Convert self to a Boolean truth value, as returned by the bool()
-    /// function.
+    /// Convert self to a boolean, as returned by the bool() function.
+    /// The default implementation returns [`true`].
     fn to_bool(&self) -> bool {
         // Return `true` by default, because this is default when implementing
         // custom types in Python: https://docs.python.org/release/2.5.2/lib/truth.html
@@ -212,7 +377,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     }
 
     /// Return a hash code for self to be used when self is placed as a key in a Dict.
-    /// OperationNotSupported if there is no hash for this value (e.g. list).
+    /// Return an [`Err`] if there is no hash for this value (e.g. list).
     /// Must be stable between frozen and non-frozen values.
     fn get_hash(&self) -> anyhow::Result<u64> {
         if self.is_function() {
@@ -236,28 +401,13 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     }
 
     /// Compare `self` with `other`.
-    /// This method returns a result of type [`Ordering`].
-    ///
-    /// Default implementation returns error.
+    /// This method returns a result of type [`Ordering`], or an [`Err`]
+    /// if the two types differ.
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         ValueError::unsupported_with(self, "compare", other)
     }
 
-    /// Perform a call on the object, only meaningfull for function object.
-    ///
-    /// For instance, if this object is a callable (i.e. a function or a method)
-    /// that adds 2 integers then `self.call(vec![Value::new(1),
-    /// Value::new(2)], HashMap::new(), None, None)` would return
-    /// `Ok(Value::new(3))`.
-    ///
-    /// # Parameters
-    ///
-    /// * call_stack: the calling stack, to detect recursion
-    /// * type_values: environment used to resolve type fields.
-    /// * positional: the list of arguments passed positionally.
-    /// * named: the list of argument that were named.
-    /// * args: if provided, the `*args` argument.
-    /// * kwargs: if provided, the `**kwargs` argument.
+    /// Create a [`FunctionInvoker`] for this object, allowing it to be invoked.
     fn new_invoker<'a>(
         &self,
         _me: Value<'v>,
@@ -266,9 +416,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         ValueError::unsupported(self, "call()")
     }
 
-    /// Perform an array or dictionary indirection.
-    ///
-    /// This returns the result of `a[index]` if `a` is indexable.
+    /// Return the result of `a[index]` if `a` is indexable.
     fn at(&self, index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "[]", index)
     }
@@ -305,7 +453,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         ValueError::unsupported(self, "[::]")
     }
 
-    /// Returns an iterable over the value of this container if this value hold
+    /// Returns an iterable over the value of this container if this value holds
     /// an iterable container.
     fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
         ValueError::unsupported(self, "(iter)")
@@ -319,8 +467,9 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Get an attribute for the current value as would be returned by dotted
     /// expression (i.e. `a.attribute`).
     ///
-    /// __Note__: this does not handle native methods which are handled through
-    /// universe.
+    /// The three methods [`get_attr`](StarlarkValue::get_attr),
+    /// [`has_attr`](StarlarkValue::has_attr) and [`dir_attr`](StarlarkValue::dir_attr)
+    /// must be consistent - if you implement one, you should probably implement all three.
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported(self, &format!(".{}", attribute))
     }
@@ -328,22 +477,23 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Return true if an attribute of name `attribute` exists for the current
     /// value.
     ///
-    /// __Note__: this does not handle native methods which are handled through
-    /// universe.
+    /// The three methods [`get_attr`](StarlarkValue::get_attr),
+    /// [`has_attr`](StarlarkValue::has_attr) and [`dir_attr`](StarlarkValue::dir_attr)
+    /// must be consistent - if you implement one, you should probably implement all three.
     fn has_attr(&self, _attribute: &str) -> bool {
         false
     }
 
-    /// Return a vector of string listing all attribute of the current value,
-    /// excluding native methods.
+    /// Return a vector of string listing all attribute of the current value.
+    ///
+    /// The three methods [`get_attr`](StarlarkValue::get_attr),
+    /// [`has_attr`](StarlarkValue::has_attr) and [`dir_attr`](StarlarkValue::dir_attr)
+    /// must be consistent - if you implement one, you should probably implement all three.
     fn dir_attr(&self) -> Vec<String> {
         Vec::new()
     }
 
     /// Tell wether `other` is in the current value, if it is a container.
-    ///
-    /// Non container value should return an error
-    /// `ValueError::OperationNotSupported`.
     ///
     /// # Examples
     ///
@@ -384,7 +534,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         ValueError::unsupported(self, "-")
     }
 
-    /// Add with the arguments the other way around. Should return None
+    /// Add with the arguments the other way around. Should return [`None`]
     /// to fall through to normal add.
     fn radd(&self, _lhs: Value<'v>, _heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         None
@@ -475,22 +625,27 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
         ValueError::unsupported_with(self, "//", other)
     }
 
+    /// Bitwise `&` operator.
     fn bit_and(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "&", other)
     }
 
+    /// Bitwise `|` operator.
     fn bit_or(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "|", other)
     }
 
+    /// Bitwise `^` operator.
     fn bit_xor(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "^", other)
     }
 
+    /// Bitwise `<<` operator.
     fn left_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "<<", other)
     }
 
+    /// Bitwise `>>` operator.
     fn right_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, ">>", other)
     }

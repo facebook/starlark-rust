@@ -64,7 +64,7 @@ macro_rules! starlark_complex_value {
             impl $crate::values::SimpleValue for [< Frozen $x >] {}
 
             impl<'v> $x<'v> {
-                pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x<'v>>> {
+                pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
                     fn promote<'v>(x: & [< Frozen $x >]) -> & $x<'v> {
                         unsafe {
                             // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
@@ -81,13 +81,13 @@ macro_rules! starlark_complex_value {
                 pub fn from_value_mut(
                     x: $crate::values::Value<'v>,
                     heap: &'v $crate::values::Heap,
-                ) -> anyhow::Result<Option<std::cell::RefMut<'v, $x<'v>>>> {
+                ) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
                     x.downcast_mut::<$x<'v>>(heap)
                 }
             }
 
             impl<'v> $crate::values::FromValue<'v> for $x<'v> {
-                fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x<'v>>> {
+                fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
                     $x::from_value(x)
                 }
             }
@@ -118,13 +118,13 @@ macro_rules! starlark_simple_value {
             impl $crate::values::SimpleValue for $x {}
 
             impl $x {
-                pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {
+                pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
                     x.downcast_ref::< $x >()
                 }
             }
 
             impl<'v> $crate::values::FromValue<'v> for $x {
-                fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, $x>> {
+                fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
                     $x::from_value(x)
                 }
             }
