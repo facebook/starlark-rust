@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 
-//! Define the string type for Starlark.
+//! The string type. All strings must be valid UTF8.
+
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
@@ -29,7 +30,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-// We'd love to put this on a type, but we use String directly
+/// The result of calling `type()` on strings.
 pub const STRING_VALUE_TYPE_NAME: &str = "string";
 
 impl<'v> AllocValue<'v> for String {

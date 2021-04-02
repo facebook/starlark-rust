@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 
-//! Define the tuple type for Starlark.
+//! The list type, an immutable sequence of values.
+
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
@@ -25,6 +26,7 @@ use crate::values::{
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
 
+/// Used by both list and tuple to implement the slice function
 pub(crate) fn slice_vector<'a, 'v, V: ValueLike<'v> + 'a, I: Iterator<Item = &'a V>>(
     start: i32,
     stop: i32,
@@ -59,22 +61,27 @@ pub(crate) fn slice_vector<'a, 'v, V: ValueLike<'v> + 'a, I: Iterator<Item = &'a
         .collect()
 }
 
+/// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
 pub struct TupleGen<T> {
+    /// The data stored by the tuple.
     pub content: Vec<T>,
 }
 
 starlark_complex_value!(pub Tuple);
 
 impl<'v, V: ValueLike<'v>> TupleGen<V> {
+    /// Create a new tuple.
     pub fn new(content: Vec<V>) -> Self {
         Self { content }
     }
 
+    /// Get the length of the tuple.
     pub fn len(&self) -> usize {
         self.content.len()
     }
 
+    /// Iterate over the elements of the tuple.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
     where
         'v: 'a,

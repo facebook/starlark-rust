@@ -15,7 +15,24 @@
  * limitations under the License.
  */
 
-//! Implementation of `struct` function.
+//! The struct type, an associative-map created with `struct()`.
+//!
+//! This struct type is related to both the [dictionary](crate::values::dict) and the
+//! [record](crate::values::record) types, all being associative maps.
+//!
+//! * Like a record, a struct is immutable, fields can be referred to with `struct.field`, and
+//!   it uses strings for keys.
+//! * Like a dictionary, the struct is untyped, and manipulating structs from Rust is ergonomic.
+//!
+//! The `struct()` function creates a struct. It accepts keyword arguments, keys become
+//! struct field names, and values become field values.
+//!
+//! ```
+//! # starlark::assert::is_true(r#"
+//! ip_address = struct(host='localhost', port=80)
+//! ip_address.port == 80
+//! # "#);
+//! ```
 
 use crate::{
     collections::SmallMap,
@@ -34,11 +51,11 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-/// `struct()` implementation.
-
 impl<T> StructGen<T> {
+    /// The result of calling `type()` on a struct.
     pub const TYPE: &'static str = "struct";
 
+    /// Create a new [`Struct`].
     pub fn new(fields: SmallMap<String, T>) -> Self {
         Self { fields }
     }
@@ -46,26 +63,33 @@ impl<T> StructGen<T> {
 
 starlark_complex_value!(pub Struct);
 
+/// The result of calling `struct()`.
 #[derive(Clone, Default, Debug)]
 pub struct StructGen<T> {
+    /// The fields in a struct.
     pub fields: SmallMap<String, T>,
 }
 
+/// A builder to create a `Struct` easily.
 pub struct StructBuilder<'v>(&'v Heap, SmallMap<String, Value<'v>>);
 
 impl<'v> StructBuilder<'v> {
+    /// Create a new [`StructBuilder`] with a given capacity.
     pub fn with_capacity(heap: &'v Heap, capacity: usize) -> Self {
         Self(heap, SmallMap::with_capacity(capacity))
     }
 
+    /// Create a new [`StructBuilder`].
     pub fn new(heap: &'v Heap) -> Self {
         Self(heap, SmallMap::new())
     }
 
+    /// Add an element to the underlying [`Struct`].
     pub fn add(&mut self, key: impl Into<String>, val: impl AllocValue<'v>) {
         self.1.insert(key.into(), self.0.alloc(val));
     }
 
+    /// Finish building and produce a [`Struct`].
     pub fn build(self) -> Struct<'v> {
         Struct { fields: self.1 }
     }

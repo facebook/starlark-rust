@@ -25,20 +25,6 @@ use crate::{
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    /// Creates a struct.
-    ///
-    /// `struct` creates a struct. It accepts keyword arguments, keys become
-    /// struct field names, and values become field values.
-    ///
-    /// Examples:
-    ///
-    /// ```
-    /// # starlark::assert::all_true(r#"
-    /// struct(host='localhost', port=80).port == 80
-    /// "host" in dir(struct(host='localhost', port=80))
-    /// "port" in dir(struct(host='localhost', port=80))
-    /// # "#);
-    /// ```
     #[starlark_type(Struct::TYPE)]
     fn r#struct(kwargs: SmallMap<String, Value>) -> Struct<'v> {
         Ok(Struct { fields: kwargs })

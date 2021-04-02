@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-//! `range()` builtin implementation
+//! The range type, constructed with `range()`.
 
 use crate::values::{
     index::{convert_index, convert_slice_indices},
@@ -35,8 +35,10 @@ pub struct Range {
 starlark_simple_value!(Range);
 
 impl Range {
+    /// The result of calling `type()` on a range.
     pub const TYPE: &'static str = "range";
 
+    /// Create a new [`Range`].
     pub fn new(start: i32, stop: i32, step: NonZeroI32) -> Range {
         Range { start, stop, step }
     }
@@ -63,7 +65,7 @@ impl Range {
     }
 }
 
-/// Implementation of iterator over range.
+/// Implementation of an iterator over [`Range`].
 struct RangeIterator<'a>(Range, PhantomData<&'a ()>);
 
 impl<'a> Iterator for RangeIterator<'a> {

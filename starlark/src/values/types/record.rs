@@ -15,9 +15,31 @@
  * limitations under the License.
  */
 
-//! Implementation of `record` type.
-//! We have `RecordType` which is the function you use to define a record type,
-//! and `Record` which is the created record. A `Record` points at its `RecordType`.
+//! A `record` type, comprising of a fixed set of fields.
+//!
+//! Calling `record()` produces a [`RecordType`]. Calling [`RecordType`] produces a [`Record`].
+//! The field names of the record are only stored once, potentially reducing memory usage.
+//! Created in Starlark using the `record()` function, which accepts keyword arguments.
+//! The keys become field names, and values are the types. Calling the resulting
+//! function produces an actual record.
+//!
+//! ```
+//! # starlark::assert::is_true(r#"
+//! IpAddress = record(host=str.type, port=int.type)
+//! rec = IpAddress(host="localhost", port=80)
+//! rec.port == 80
+//! # "#);
+//! ```
+//!
+//! It is also possible to use `field(type, default)` type to give defaults:
+//!
+//! ```
+//! # starlark::assert::is_true(r#"
+//! IpAddress = record(host=str.type, port=field(int.type, 80))
+//! rec = IpAddress(host="localhost")
+//! rec.port == 80
+//! # "#);
+//! ```
 
 use crate::{
     collections::SmallMap,
@@ -35,12 +57,14 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+/// The result of `field()`.
 #[derive(Clone, Debug, Dupe)]
 pub struct FieldGen<V> {
     typ: V,
     default: Option<V>,
 }
 
+/// The result of `record()`, being the type of records.
 #[derive(Clone, Default, Debug)]
 pub struct RecordTypeGen<V> {
     typ: Option<String>,
@@ -48,6 +72,7 @@ pub struct RecordTypeGen<V> {
     fields: SmallMap<String, FieldGen<V>>,
 }
 
+/// An actual record.
 #[derive(Clone, Debug)]
 pub struct RecordGen<T> {
     typ: T, // Must be RecordType

@@ -326,7 +326,9 @@ pub struct Walker<'v> {
 }
 
 impl<'v> Walker<'v> {
-    // Walk over a dictionary key that is immutable
+    /// Walk over a dictionary key that is immutable, but that we want to mutate anyway.
+    /// Safe because the [`Value`] has an identical [`Hash`]/[`Eq`] etc after garbage collection,
+    /// but where possible, prefer [`walk`](Walker::walk).
     #[allow(clippy::trivially_copy_pass_by_ref)] // we unsafely make it a mut pointer, so the pointer matters
     pub fn walk_dictionary_key(&self, value: &Value<'v>) {
         let new_value = self.adjust(*value);
@@ -348,6 +350,7 @@ impl<'v> Walker<'v> {
         value.set(self.adjust(value.get()))
     }
 
+    /// Walk over a value during garbage collection.
     pub fn walk(&self, value: &mut Value<'v>) {
         *value = self.adjust(*value)
     }

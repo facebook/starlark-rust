@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 
-//! Define the list type of Starlark
+//! The list type, a mutable sequence of values.
+
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
@@ -30,12 +31,15 @@ use crate::{
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use std::{cmp::Ordering, marker::PhantomData, ops::Deref};
 
+/// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
 pub struct ListGen<T> {
+    /// The data stored by the list.
     pub content: Vec<T>,
 }
 
 impl<T> ListGen<T> {
+    /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 }
 
@@ -58,8 +62,9 @@ impl<'v, T: AllocFrozenValue> AllocFrozenValue for Vec<T> {
 }
 
 impl FrozenList {
-    // We need a lifetime because FrozenValue doesn't contain the right lifetime
+    /// Obtain the [`FrozenList`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
+    // We need a lifetime because FrozenValue doesn't contain the right lifetime
     pub fn from_value(x: &FrozenValue) -> Option<ARef<FrozenList>> {
         x.downcast_ref::<FrozenList>()
     }
@@ -98,14 +103,17 @@ impl FrozenList {
 }
 
 impl<'v, T: ValueLike<'v>> ListGen<T> {
+    /// Create a new list.
     pub fn new(content: Vec<T>) -> Self {
         Self { content }
     }
 
+    /// Obtain the length of the list.
     pub fn len(&self) -> usize {
         self.content.len()
     }
 
+    /// Iterate over the elements in the list.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
     where
         'v: 'a,
@@ -115,22 +123,27 @@ impl<'v, T: ValueLike<'v>> ListGen<T> {
 }
 
 impl<'v> List<'v> {
+    /// Append a single element to the end of the list.
     pub fn push(&mut self, value: Value<'v>) {
         self.content.push(value);
     }
 
+    /// Append a series of elements to the end of the list.
     pub fn extend(&mut self, other: Vec<Value<'v>>) {
         self.content.extend(other);
     }
 
+    /// Clear all elements in the list.
     pub fn clear(&mut self) {
         self.content.clear();
     }
 
+    /// Insert an element at a specific index.
     pub fn insert(&mut self, index: usize, value: Value<'v>) {
         self.content.insert(index, value);
     }
 
+    /// Pop an element from the index.
     pub fn pop(&mut self, index: i32) -> anyhow::Result<Value<'v>> {
         if index < 0 || index >= self.content.len() as i32 {
             return Err(ValueError::IndexOutOfBound(index).into());
@@ -138,10 +151,12 @@ impl<'v> List<'v> {
         Ok(self.content.remove(index as usize))
     }
 
+    /// Find the position of a given element in the list.
     pub fn position(&self, needle: Value<'v>) -> Option<usize> {
         self.content.iter().position(|v| v == &needle)
     }
 
+    /// Remove the element at a given position.
     pub fn remove(&mut self, position: usize) {
         self.content.remove(position);
     }

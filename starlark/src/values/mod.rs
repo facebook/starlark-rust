@@ -152,7 +152,13 @@ impl Heap {
 }
 
 /// Abstract over [`Value`] and [`FrozenValue`].
+///
+/// The methods on this trait are those required to implement containers,
+/// allowing implementations of [`ComplexValue`] to be agnostic of their contained type.
+/// For details about each function, see the documentation for [`Value`],
+/// which provides the same functions (and more).
 pub trait ValueLike<'v>: Eq + Copy + Debug {
+    /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
     fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
@@ -335,23 +341,26 @@ impl<'v> Value<'v> {
         ValueLike::downcast_ref(self)
     }
 
+    /// Are two values equal. If the values are of different types it will
+    /// return [`false`]. It will only error if there is excessive recursion.
     pub fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
         ValueLike::equals(self, other)
     }
 
+    /// How are two values comparable. For values of different types will return [`Err`].
     pub fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
         ValueLike::compare(self, other)
     }
 
-    /// Get a mutable reference to underlying data or `None`
+    /// Get a mutable reference to underlying data or [`None`]
     /// if contained object has different type than requested.
     ///
-    /// This function returns an `Err` if the `Value` is already borrowed, is frozen,
+    /// This function returns an [`Err`] if the [`Value`] is already borrowed, is frozen,
     /// or frozen for iteration.
     ///
-    /// While this reference is active, any `get_aref` or similar on the value will
+    /// While this reference is active, any [`get_aref`](Value::get_aref) or similar on the value will
     /// _cause a panic_. Therefore, it's super important not to call any Starlark operations,
-    /// even as simple as equality, while holding the `RefMut`.
+    /// even as simple as equality, while holding the [`RefMut`].
     pub fn downcast_mut<T: AnyLifetime<'v>>(
         self,
         heap: &'v Heap,
@@ -379,6 +388,7 @@ impl<'v> Value<'v> {
     }
 
     /// Call `export_as` on the underlying value, but only if the type is mutable.
+    /// Otherwise, does nothing.
     pub fn export_as(self, name: &str, heap: &'v Heap) {
         if let Some(mut mv) = self.get_ref_mut_already() {
             mv.export_as(heap, name)
@@ -401,6 +411,8 @@ impl<'v> Value<'v> {
         aref.get_attr(attribute, heap).map(|v| (false, v))
     }
 
+    /// Query whether an attribute exists on a type. Should be equivalent to whether
+    /// [`get_attr`](Value::get_attr) succeeds, but potentially more efficient.
     pub fn has_attr(self, attribute: &str) -> bool {
         let aref = self.get_aref();
         if let Some(members) = aref.get_members() {
@@ -411,6 +423,8 @@ impl<'v> Value<'v> {
         aref.has_attr(attribute)
     }
 
+    /// Get a list of all the attributes this function supports, used to implement the
+    /// `dir()` function.
     pub fn dir_attr(self) -> Vec<String> {
         let aref = self.get_aref();
         let mut result = if let Some(members) = self.get_aref().get_members() {

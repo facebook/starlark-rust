@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 
-//! Module define the Starlark type Dict
+//! The dictionary type, a mutable associative-map, which iterates in insertion order.
+
 use crate::{
     collections::{Hashed, SmallMap},
     environment::{Globals, GlobalsStatic},
@@ -33,33 +34,37 @@ use std::{
     ops::Deref,
 };
 
-/// Define the Dict type
+/// Define the dictionary type. See [`Dict`] and [`FrozenDict`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
 pub struct DictGen<T> {
+    /// The data stored by the dictionary. The keys must all be hashable values.
     pub content: SmallMap<T, T>,
 }
 
 impl<T> DictGen<T> {
+    /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
 }
 
 starlark_complex_value!(pub Dict);
 
 impl FrozenDict {
-    // We need a lifetime because FrozenValue doesn't contain the right lifetime
+    /// Obtain the [`FrozenDict`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
+    // We need a lifetime because FrozenValue doesn't contain the right lifetime
     pub fn from_value(x: &FrozenValue) -> Option<ARef<FrozenDict>> {
         x.downcast_ref::<FrozenDict>()
     }
 }
 
-/// The Dict type
 impl<V> DictGen<V> {
+    /// Create a new [`DictGen`].
     pub fn new(content: SmallMap<V, V>) -> Self {
         Self { content }
     }
 }
 
+/// Helper type for lookups, not useful.
 #[derive(Eq, PartialEq)]
 pub struct ValueStr<'a>(&'a str);
 
@@ -86,10 +91,12 @@ where
     Value<'v>: Equivalent<T>,
     for<'a> ValueStr<'a>: Equivalent<T>,
 {
+    /// The number of elements in the dictionary.
     pub fn len(&self) -> usize {
         self.content.len()
     }
 
+    /// The list of key/value pairs in the dictionary.
     pub fn items(&self) -> Vec<(Value<'v>, Value<'v>)> {
         self.content
             .iter()
@@ -97,14 +104,17 @@ where
             .collect()
     }
 
+    /// The list of values in the dictionary.
     pub fn values(&self) -> Vec<Value<'v>> {
         self.content.values().map(|e| e.to_value()).collect()
     }
 
+    /// The list of keys in the dictionary.
     pub fn keys(&self) -> Vec<Value<'v>> {
         self.content.keys().map(|e| e.to_value()).collect()
     }
 
+    /// Iterate through the key/value pairs in the dictionary.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
     where
         'v: 'a,
@@ -114,6 +124,7 @@ where
             .map(|(l, r)| (l.to_value(), r.to_value()))
     }
 
+    /// Iterate through the key/value pairs in the dictionary, but retaining the hash of the keys.
     pub fn iter_hashed<'a>(&'a self) -> impl Iterator<Item = (Hashed<Value<'v>>, Value<'v>)> + 'a
     where
         'v: 'a,
@@ -123,6 +134,8 @@ where
             .map(|(l, r)| (l.unborrow_copy().to_hashed_value(), r.to_value()))
     }
 
+    /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
+    /// and otherwise [`Some`] if the key exists in the dictionary and [`None`] otherwise.
     pub fn get(&self, key: Value<'v>) -> anyhow::Result<Option<Value<'v>>> {
         Ok(self
             .content
@@ -131,6 +144,8 @@ where
             .map(ValueLike::to_value))
     }
 
+    /// Get the value associated with a particular string. Equivalent to allocating the
+    /// string on the heap, turning it into a value, and looking up using that.
     pub fn get_str(&self, key: &str) -> Option<Value<'v>> {
         self.content
             .get(&ValueStr(key))
@@ -276,8 +291,8 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for
     }
 }
 
-/// Like `ValueOf`, but only validates key and value types; does not construct
-/// or store a map. Use `to_dict` to get a map.
+/// Like [`ValueOf`](crate::values::ValueOf), but only validates key and value types; does not construct
+/// or store a map. Use `to_dict` to get at the map.
 pub struct DictOf<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> {
     value: Value<'v>,
     phantom: PhantomData<(K, V)>,

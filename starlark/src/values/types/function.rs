@@ -15,7 +15,8 @@
  * limitations under the License.
  */
 
-//! Function as a StarlarkValue
+//! Function types, including native functions and `object.member` functions.
+
 use crate::{
     codemap::Span,
     eval::{
@@ -33,7 +34,7 @@ use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 
 pub const FUNCTION_VALUE_TYPE_NAME: &str = "function";
 
-/// Invoke any type of function (native, def)
+/// Function that can be invoked. Accumulates arguments before being called.
 pub struct FunctionInvoker<'v, 'a>(pub(crate) FunctionInvokerInner<'v, 'a>);
 
 // Wrap to avoid exposing the enum alterantives
@@ -44,6 +45,9 @@ pub(crate) enum FunctionInvokerInner<'v, 'a> {
 }
 
 impl<'v, 'a> FunctionInvoker<'v, 'a> {
+    /// Actually invoke the underlying function, giving call-stack information.
+    /// If provided, the `location` must use the currently active [`CodeMap`](crate::codemap::CodeMap)
+    /// from the [`Evaluator`].
     pub fn invoke(
         self,
         function: Value<'v>,
@@ -61,6 +65,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         })
     }
 
+    /// Add a positional argument.
     pub fn push_pos(&mut self, v: Value<'v>) {
         match &mut self.0 {
             FunctionInvokerInner::Native(x) => x.collect().positional(v),
@@ -69,6 +74,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         }
     }
 
+    /// Add a `*args` argument.
     pub fn push_args(&mut self, v: Value<'v>, heap: &'v Heap) {
         match &mut self.0 {
             FunctionInvokerInner::Native(x) => x.collect().args(v, heap),
@@ -77,6 +83,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         }
     }
 
+    /// Add a named argument.
     pub fn push_named(&mut self, name: &str, name_value: Hashed<Value<'v>>, v: Value<'v>) {
         match &mut self.0 {
             FunctionInvokerInner::Native(x) => x.collect().named(name, name_value, v),
@@ -85,6 +92,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         }
     }
 
+    /// Add a `**kargs` argument.
     pub fn push_kwargs(&mut self, v: Value<'v>) {
         match &mut self.0 {
             FunctionInvokerInner::Native(x) => x.collect().kwargs(v),
@@ -94,7 +102,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
     }
 }
 
-/// A native function that can be evaluated
+/// A native function that can be evaluated.
 pub trait NativeFunc:
     for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
@@ -144,9 +152,9 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
     }
 }
 
-/// Function implementation for native (written in Rust) functions.
+/// Starlark representation of native (Rust) functions.
 ///
-/// Public to be referenced in macros.
+/// Almost always created with [`#[starlark_module]`](macro@starlark_module).
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct NativeFunction<F: NativeFunc> {
@@ -177,6 +185,7 @@ impl<
         + 'static,
 > NativeFunction<F>
 {
+    /// Create a new [`NativeFunction`] from the Rust function, plus the parameter specification.
     pub fn new(function: F, parameters: ParametersSpec<FrozenValue>) -> Self {
         NativeFunction {
             function,
@@ -185,6 +194,7 @@ impl<
         }
     }
 
+    /// A `.type` value, if one exists. Specified using `#[starlark_type("the_type")]`.
     pub fn set_type(&mut self, typ: &'static ConstFrozenValue) {
         self.typ = Some(typ.unpack())
     }
@@ -240,13 +250,15 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
     }
 }
 
+/// Used by the `#[attribute]` tag of [`#[starlark_module]`](macro@starlark_module)
+/// to define a function that pretends to be an attribute.
 #[derive(Debug)]
 pub struct NativeAttribute(FrozenValue); // Must be a NativeFunction
 
 starlark_simple_value!(NativeAttribute);
 
 impl NativeAttribute {
-    // x must be a NativeFunction
+    /// Argument _must_ be a [`NativeFunction`] which takes one argument.
     pub fn new(x: FrozenValue) -> Self {
         NativeAttribute(x)
     }
@@ -267,7 +279,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
     starlark_type!("attribute");
 }
 
-// Wrapper for method that have been affected the self object
+/// A wrapper for a method with a self object already bound.
 #[derive(Clone, Debug)]
 pub struct WrappedMethodGen<V> {
     method: V,
@@ -277,6 +289,8 @@ pub struct WrappedMethodGen<V> {
 starlark_complex_value!(pub WrappedMethod);
 
 impl<'v> WrappedMethod<'v> {
+    /// Create a new [`WrappedMethod`]. Given the expression `object.function`,
+    /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
     pub fn new(self_obj: Value<'v>, method: Value<'v>) -> Self {
         WrappedMethod { method, self_obj }
     }

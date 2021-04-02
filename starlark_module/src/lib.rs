@@ -113,6 +113,7 @@ use syn::*;
 /// * When attached, you can annotate the functions with `#[attribute]` to turn the name into
 ///   an attribute on the value. Such a function must take exactly one argument, namely a value
 ///   of the type you have attached it to.
+/// * The attribute `#[starlark_type("test")]` causes `f.type` to return `"test"`.
 ///
 /// All these functions interoperate properly with `dir()`, `getattr()` and `hasattr()`.
 ///

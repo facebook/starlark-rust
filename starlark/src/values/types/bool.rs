@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-//! Define the bool type for Starlark.
+//! The boolean type (`False` and `True`).
+//!
+//! Can be created with [`new_bool`](Value::new_bool) and unwrapped with [`unpack_bool`](Value::unpack_bool).
+//! Unlike most Starlark values, these aren't actually represented on the [`Heap`], but as special values.
 
 use crate::values::{
     AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
@@ -23,7 +26,7 @@ use crate::values::{
 };
 use std::cmp::Ordering;
 
-// We'd love to put this on a type, but we use bool directly
+/// The result of calling `type()` on booleans.
 pub const BOOL_VALUE_TYPE_NAME: &str = "bool";
 
 impl<'v> AllocValue<'v> for bool {

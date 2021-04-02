@@ -15,7 +15,13 @@
  * limitations under the License.
  */
 
-//! Define the int type for Starlark.
+//! The integer type. Currently limited to 32 bit.
+//!
+//! Can be created with [`new_int`](Value::new_int) and unwrapped with [`unpack_int`](Value::unpack_int).
+//! Unlike most Starlark values, these aren't actually represented on the [`Heap`], but as special values.
+//! At some point in the future we plan to support arbitrary sized integers (as required by the
+//! [Starlark spec](https://github.com/bazelbuild/starlark/blob/master/spec.md#integers)), and those larger
+//! integer values will be stored on the heap.
 
 use crate::values::{
     error::ValueError, layout::PointerI32, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
@@ -23,7 +29,7 @@ use crate::values::{
 };
 use std::cmp::Ordering;
 
-// We'd love to put this on a type, but we use i32 directly
+/// The result of calling `type()` on integers.
 pub const INT_VALUE_TYPE_NAME: &str = "int";
 
 impl<'v> AllocValue<'v> for i32 {

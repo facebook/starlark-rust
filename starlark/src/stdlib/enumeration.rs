@@ -24,19 +24,6 @@ use crate::{
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    /// Creates a enumeration.
-    ///
-    /// `enum` creates an enumeration type, listing the possible values.
-    ///
-    /// Examples:
-    ///
-    /// ```
-    /// # starlark::assert::is_true(r#"
-    /// enum_type = enum("Red", "Green", "Blue")
-    /// val = enum_type("Red")
-    /// val.value == "Red"
-    /// # "#);
-    /// ```
     fn r#enum(args: Vec<Value>) -> Value<'v> {
         // Every Value must either be a field or a value (the type)
         EnumType::new(args, heap)

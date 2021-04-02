@@ -15,18 +15,19 @@
  * limitations under the License.
  */
 
-//! Define the None type for Starlark.
+//! The `None` type.
 
 use crate::values::{
     AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 
-/// Define the NoneType type
+/// Define the None type, use [`NoneType`] in Rust.
 #[derive(Debug, Clone, Dupe, AnyLifetime)]
 pub struct NoneType;
 
 impl NoneType {
+    /// The result of `type(None)`.
     pub const TYPE: &'static str = "NoneType";
 }
 
@@ -66,13 +67,14 @@ impl AllocFrozenValue for NoneType {
     }
 }
 
-// An Option that is encoded in a value using NoneType
+/// Equivalent of a Rust [`Option`], where [`None`] is encoded as [`NoneType`]. Useful for its [`UnpackValue`] instance.
 pub enum NoneOr<T> {
     None,
     Other(T),
 }
 
 impl<T> NoneOr<T> {
+    /// Convert the [`NoneOr`] to a real Rust [`Option`].
     pub fn into_option(self) -> Option<T> {
         match self {
             Self::None => None,

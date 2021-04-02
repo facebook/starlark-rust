@@ -29,21 +29,6 @@ use gazebo::prelude::*;
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    /// Creates a record.
-    ///
-    /// `record` creates a record type. It accepts keyword arguments, keys become
-    /// struct field names, and values are the types. Calling the resulting
-    /// function produces an actual record.
-    ///
-    /// Examples:
-    ///
-    /// ```
-    /// # starlark::assert::is_true(r#"
-    /// rec_type = record(host=str.type, port=int.type)
-    /// rec = rec_type(host="localhost", port=80)
-    /// rec.port == 80
-    /// # "#);
-    /// ```
     fn record(kwargs: SmallMap<String, Value>) -> RecordType<'v> {
         // Every Value must either be a field or a value (the type)
         let mut mp = SmallMap::with_capacity(kwargs.len());

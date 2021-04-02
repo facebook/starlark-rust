@@ -22,7 +22,7 @@ use gazebo::cell::ARef;
 
 /// Used in the definition of [`StarlarkValue::iterate`](crate::values::StarlarkValue::iterate).
 pub trait StarlarkIterable<'v> {
-    /// Make an iterator.
+    /// Create an iterator from the current value.
     fn to_iter<'a>(&'a self, heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a;

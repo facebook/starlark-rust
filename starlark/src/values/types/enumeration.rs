@@ -15,6 +15,25 @@
  * limitations under the License.
  */
 
+//! Fixed set enumerations, with runtime checking of validity.
+//!
+//! Calling `enum()` produces an [`EnumType`]. Calling the [`EnumType`] creates an [`EnumValue`].
+//!
+//! The implementation ensures that each value of the enumeration is only stored once,
+//! so they may also provide (modest) memory savings. Created in starlark with the
+//! `enum` function:
+//!
+//! ```
+//! # starlark::assert::pass(r#"
+//! Colors = enum("Red", "Green", "Blue")
+//! val = Colors("Red")
+//! assert_eq(val.value, "Red")
+//! assert_eq(val.index, 0)
+//! assert_eq(Colors[0], val)
+//! assert_eq(Colors.type, "Colors")
+//! assert_eq([v.value for v in Colors], ["Red", "Green", "Blue"])
+//! # "#);
+//! ```
 use crate::{
     collections::SmallMap,
     eval::{ParametersParser, ParametersSpec},
@@ -38,9 +57,10 @@ enum EnumError {
     InvalidElement(String, String),
 }
 
-// The type of an enum. Deliberately store fully populated values
-// for each entry, so we can produce enum values with zero allocation.
+/// The type of an enumeration, created by `enum()`.
 #[derive(Clone, Debug)]
+// Deliberately store fully populated values
+// for each entry, so we can produce enum values with zero allocation.
 pub struct EnumTypeGen<V> {
     typ: Option<String>,
     // The key is the value of the enumeration
@@ -48,6 +68,7 @@ pub struct EnumTypeGen<V> {
     elements: SmallMap<V, V>,
 }
 
+/// A value from an enumeration.
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub struct EnumValueGen<V> {
@@ -136,6 +157,7 @@ impl<'v> EnumType<'v> {
 }
 
 impl<'v, T: ValueLike<'v>> EnumValueGen<T> {
+    /// The result of calling `type()` on an enum value.
     pub const TYPE: &'static str = "enum";
 
     fn get_enum_type(&self) -> ARef<'v, EnumType<'v>> {
