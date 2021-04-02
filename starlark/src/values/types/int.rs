@@ -30,7 +30,7 @@ use crate::values::{
 use std::cmp::Ordering;
 
 /// The result of calling `type()` on integers.
-pub const INT_VALUE_TYPE_NAME: &str = "int";
+pub const INT_TYPE: &str = "int";
 
 impl<'v> AllocValue<'v> for i32 {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
@@ -60,13 +60,13 @@ where
 {
     match right.unpack_int() {
         Some(right) => Ok(Value::new_int(f(left, right)?)),
-        None => ValueError::unsupported_owned(INT_VALUE_TYPE_NAME, op, Some(INT_VALUE_TYPE_NAME)),
+        None => ValueError::unsupported_owned(INT_TYPE, op, Some(INT_TYPE)),
     }
 }
 
 /// Define the int type
 impl<'v> StarlarkValue<'v> for PointerI32 {
-    starlark_type!(INT_VALUE_TYPE_NAME);
+    starlark_type!(INT_TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if let Some(other) = other.unpack_int() {

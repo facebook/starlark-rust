@@ -32,7 +32,7 @@ use crate::{
 use derivative::Derivative;
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 
-pub const FUNCTION_VALUE_TYPE_NAME: &str = "function";
+pub const FUNCTION_TYPE: &str = "function";
 
 /// Function that can be invoked. Accumulates arguments before being called.
 pub struct FunctionInvoker<'v, 'a>(pub(crate) FunctionInvokerInner<'v, 'a>);
@@ -210,7 +210,7 @@ impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
 
 /// Define the function type
 impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn is_function(&self) -> bool {
         true
@@ -326,7 +326,7 @@ impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrappedMethodGen<V>
 where
     Self: AnyLifetime<'v>,
 {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn is_function(&self) -> bool {
         true

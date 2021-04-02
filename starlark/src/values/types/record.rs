@@ -47,7 +47,7 @@ use crate::{
     values::{
         comparison::equals_slice,
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
@@ -207,7 +207,7 @@ where
     Self: AnyLifetime<'v>,
     FieldGen<T>: AnyLifetime<'v>,
 {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
         collect_repr_record(self.fields.iter(), |x, s| x.collect_repr(s), collector);

@@ -27,7 +27,7 @@ use crate::values::{
 use std::cmp::Ordering;
 
 /// The result of calling `type()` on booleans.
-pub const BOOL_VALUE_TYPE_NAME: &str = "bool";
+pub const BOOL_TYPE: &str = "bool";
 
 impl<'v> AllocValue<'v> for bool {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
@@ -49,7 +49,7 @@ impl UnpackValue<'_> for bool {
 
 /// Define the bool type
 impl StarlarkValue<'_> for bool {
-    starlark_type!(BOOL_VALUE_TYPE_NAME);
+    starlark_type!(BOOL_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
         if *self {

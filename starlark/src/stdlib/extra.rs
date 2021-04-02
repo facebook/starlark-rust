@@ -20,7 +20,7 @@ use crate::{
     environment::GlobalsBuilder,
     eval::ParametersSpec,
     values::{
-        function::{FunctionInvoker, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, FUNCTION_TYPE},
         none::NoneType,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
@@ -149,7 +149,7 @@ impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for PartialGen<V>
 where
     Self: AnyLifetime<'v>,
 {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn is_function(&self) -> bool {
         true

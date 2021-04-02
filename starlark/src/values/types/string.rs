@@ -31,7 +31,7 @@ use std::{
 };
 
 /// The result of calling `type()` on strings.
-pub const STRING_VALUE_TYPE_NAME: &str = "string";
+pub const STRING_TYPE: &str = "string";
 
 impl<'v> AllocValue<'v> for String {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
@@ -75,7 +75,7 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
 }
 
 impl<'v> StarlarkValue<'v> for Box<str> {
-    starlark_type!(STRING_VALUE_TYPE_NAME);
+    starlark_type!(STRING_TYPE);
 
     fn get_members(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();

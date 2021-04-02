@@ -39,7 +39,7 @@ use crate::{
     eval::{ParametersParser, ParametersSpec},
     values::{
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
         ValueLike, Walker,
@@ -170,7 +170,7 @@ impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<T>
 where
     Self: AnyLifetime<'v>,
 {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
         collector.push_str("enum(");

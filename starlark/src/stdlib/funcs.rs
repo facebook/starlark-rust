@@ -23,14 +23,14 @@ use crate::{
     collections::SmallMap,
     environment::GlobalsBuilder,
     values::{
-        bool::BOOL_VALUE_TYPE_NAME,
+        bool::BOOL_TYPE,
         dict::Dict,
         function::{NativeAttribute, WrappedMethod},
-        int::INT_VALUE_TYPE_NAME,
+        int::INT_TYPE,
         list::List,
         none::NoneType,
         range::Range,
-        string::STRING_VALUE_TYPE_NAME,
+        string::STRING_TYPE,
         tuple::Tuple,
         Heap, Value,
     },
@@ -155,7 +155,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// bool("1") == True
     /// # "#);
     /// ```
-    #[starlark_type(BOOL_VALUE_TYPE_NAME)]
+    #[starlark_type(BOOL_TYPE)]
     fn bool(ref x @ false: Value) -> bool {
         Ok(x.to_bool())
     }
@@ -408,7 +408,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// int("hello")   # error: not a valid number
     /// # "#, "not a valid number");
     /// ```
-    #[starlark_type(INT_VALUE_TYPE_NAME)]
+    #[starlark_type(INT_TYPE)]
     fn int(ref a: Option<Value>, base: Option<Value>) -> i32 {
         if a.is_none() {
             return Ok(0);
@@ -857,7 +857,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// str([1, "x"])                   == "[1, \"x\"]"
     /// # "#);
     /// ```
-    #[starlark_type(STRING_VALUE_TYPE_NAME)]
+    #[starlark_type(STRING_TYPE)]
     fn str(ref a: Value) -> Value<'v> {
         if a.unpack_str().is_some() {
             // Special case that can avoid reallocating, but should be equivalent.

@@ -28,7 +28,7 @@ use crate::{
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
-        function::{FunctionInvoker, FunctionInvokerInner, FUNCTION_VALUE_TYPE_NAME},
+        function::{FunctionInvoker, FunctionInvokerInner, FUNCTION_TYPE},
         AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Value,
         ValueLike, ValueRef, Walker,
     },
@@ -275,7 +275,7 @@ impl<'v> AllocValue<'v> for Def<'v> {
 }
 
 impl<'v> StarlarkValue<'v> for FrozenDef {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn is_function(&self) -> bool {
         true
@@ -299,7 +299,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
 }
 
 impl<'v> StarlarkValue<'v> for Def<'v> {
-    starlark_type!(FUNCTION_VALUE_TYPE_NAME);
+    starlark_type!(FUNCTION_TYPE);
 
     fn is_function(&self) -> bool {
         true
