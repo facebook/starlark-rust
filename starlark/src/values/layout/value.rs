@@ -445,9 +445,9 @@ impl FrozenValue {
 
     // Invariant: Only list and dict can be frozen/thaw'ed
     pub(crate) fn thaw<'v>(self) -> Box<dyn ComplexValue<'v> + 'v> {
-        if let Some(x) = crate::values::list::FrozenList::from_value(&self) {
+        if let Some(x) = crate::values::list::FrozenList::from_frozen_value(&self) {
             x.thaw()
-        } else if let Some(x) = crate::values::dict::FrozenDict::from_value(&self) {
+        } else if let Some(x) = crate::values::dict::FrozenDict::from_frozen_value(&self) {
             x.thaw()
         } else {
             panic!(
