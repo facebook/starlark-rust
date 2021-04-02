@@ -138,27 +138,9 @@ impl<'v> List<'v> {
         self.content.clear();
     }
 
-    /// Insert an element at a specific index.
-    pub fn insert(&mut self, index: usize, value: Value<'v>) {
-        self.content.insert(index, value);
-    }
-
-    /// Pop an element from the index.
-    pub fn pop(&mut self, index: i32) -> anyhow::Result<Value<'v>> {
-        if index < 0 || index >= self.content.len() as i32 {
-            return Err(ValueError::IndexOutOfBound(index).into());
-        }
-        Ok(self.content.remove(index as usize))
-    }
-
     /// Find the position of a given element in the list.
     pub fn position(&self, needle: Value<'v>) -> Option<usize> {
         self.content.iter().position(|v| v == &needle)
-    }
-
-    /// Remove the element at a given position.
-    pub fn remove(&mut self, position: usize) {
-        self.content.remove(position);
     }
 }
 

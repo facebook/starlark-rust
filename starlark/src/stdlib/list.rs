@@ -17,14 +17,14 @@
 
 //! Methods for the `list` type.
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     environment::GlobalsBuilder,
     stdlib::util::{convert_index, convert_indices},
     values::{
         list::List,
         none::{NoneOr, NoneType},
-        StarlarkValue, Value,
+        StarlarkValue, Value, ValueError,
     },
 };
 use anyhow::anyhow;
@@ -196,7 +196,7 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
     fn insert(this: Value, ref index: i32, ref el: Value) -> NoneType {
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         let index = convert_index(this.len() as i32, index);
-        this.insert(index, el);
+        this.content.insert(index, el);
         Ok(NoneType)
     }
 
@@ -231,7 +231,10 @@ pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
 
         let mut this = List::from_value_mut(this, heap)?.unwrap();
         let index = index.unwrap_or_else(|| (this.len() as i32) - 1);
-        Ok(this.pop(index)?)
+        if index < 0 || index >= this.len() as i32 {
+            return Err(ValueError::IndexOutOfBound(index).into());
+        }
+        Ok(this.content.remove(index as usize))
     }
 
     /// [list.remove](
