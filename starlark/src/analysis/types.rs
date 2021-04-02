@@ -118,19 +118,19 @@ pub(crate) struct LintT<T> {
     pub problem: T,
 }
 
-/// A lint produced by the Starlark linter.
+/// A lint produced by [`AstModule::lint`](crate::syntax::AstModule::lint).
 #[derive(Debug)]
 pub struct Lint {
     /// Which code location does this lint refer to.
     pub location: SpanLoc,
-    /// kebab-case constant describing this issue.
+    /// kebab-case constant describing this issue, e.g. `missing-return`.
     pub short_name: String,
     /// Is this code highly-likely to be wrong, rather
     /// than merely stylistically non-ideal.
     pub serious: bool,
-    /// The underlying problem.
+    /// A description of the underlying problem.
     pub problem: String,
-    /// The source at SpanLoc
+    /// The source code at [`location`](Lint::location).
     pub original: String,
 }
 

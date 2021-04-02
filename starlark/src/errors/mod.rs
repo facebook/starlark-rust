@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+//! Error types used by Starlark, mostly [`Diagnostic`].
+
 pub use crate::analysis::Lint;
 use crate::codemap::{CodeMap, Span, SpanLoc};
 use annotate_snippets::{
@@ -27,30 +29,29 @@ use std::{
     sync::Arc,
 };
 
-/// An error from Starlark, which is may contain a span (where in the code was responsible)
-/// and a call stack (the code that called this code).
+/// An error plus its origination location and call stack.
 ///
-/// The `message` is an `anyhow:Error`.
-/// This `Diagnostic` structure is itself usually stored within an `anyhow::Error`.
-/// But the inner message is itself _never_ a `Diagnostic`.
+/// The underlying [`message`](Diagnostic::message) is an [`anyhow::Error`].
+/// The [`Diagnostic`] structure itself usually stored within an [`anyhow::Error`].
 #[derive(Debug)]
 pub struct Diagnostic {
-    /// Message used as the headline of the error
-    /// Must be in an Arc, so we can clone it.
+    /// Underlying error for the [`Diagnostic`].
+    /// Should _never_ be of type [`Diagnostic`] itself.
     pub message: anyhow::Error,
 
-    /// Location to underline in the code
-    // We'd love to make this a SpanLoc, but then we can't use the codemap_diagnostics
-    // printing, as there's no way to reverse the transformation
+    /// Location where the error originated.
     pub span: Option<(Span, Arc<CodeMap>)>,
 
-    /// Call stack of what called what. Newest frames are at the end.
+    /// Call stack of what called what. Most recent frames are at the end.
     pub call_stack: Vec<Frame>,
 }
 
+/// A frame of the call-stack.
 #[derive(Debug)]
 pub struct Frame {
+    /// The name of the entry on the call-stack.
     pub name: String,
+    /// The location of the definition, or [`None`] for native Rust functions.
     pub location: Option<SpanLoc>,
 }
 
@@ -75,16 +76,20 @@ impl Error for Diagnostic {
 }
 
 impl Diagnostic {
-    /// Modify an error by attaching a span to it.
-    /// If given an `Error` which is a `Diagnostic`, it will add the information to the
-    /// existing `Diagnostic`. If not, it will wrap the error in `Diagnostic`.
-    pub fn new(err: impl Into<anyhow::Error>, span: Span, codemap: Arc<CodeMap>) -> anyhow::Error {
-        Self::modify(err.into(), |d| d.set_span(span, codemap))
+    /// Create a new [`Diagnostic`] containing an underlying error and span.
+    /// If the given `message` is already a [`Diagnostic`] with a [`Span`],
+    /// the new span will be ignored and the original `message` returned.
+    pub fn new(
+        message: impl Into<anyhow::Error>,
+        span: Span,
+        codemap: Arc<CodeMap>,
+    ) -> anyhow::Error {
+        Self::modify(message.into(), |d| d.set_span(span, codemap))
     }
 
-    /// Modify an error by attaching diagnostic information to it - e.g. span/call_stack.
-    /// If given an `Error` which is a `Diagnostic`, it will add the information to the
-    /// existing `Diagnostic`. If not, it will wrap the error in `Diagnostic`.
+    /// Modify an error by attaching diagnostic information to it - e.g. `span`/`call_stack`.
+    /// If given an [`anyhow::Error`] which is a [`Diagnostic`], it will add the information to the
+    /// existing [`Diagnostic`]. If not, it will wrap the error in [`Diagnostic`].
     pub fn modify(mut err: anyhow::Error, f: impl FnOnce(&mut Diagnostic)) -> anyhow::Error {
         match err.downcast_mut::<Diagnostic>() {
             Some(diag) => {
@@ -103,6 +108,7 @@ impl Diagnostic {
         }
     }
 
+    /// Set the [`Diagnostic::span`] field, unless it's already been set.
     pub fn set_span(&mut self, span: Span, codemap: Arc<CodeMap>) {
         if self.span.is_none() {
             // We want the best span, which is likely the first person to set it
@@ -110,6 +116,7 @@ impl Diagnostic {
         }
     }
 
+    /// Set the [`Diagnostic::call_stack`] field, unless it's already been set.
     pub fn set_call_stack(&mut self, call_stack: impl FnOnce() -> Vec<Frame>) {
         if self.call_stack.is_empty() {
             // We want the best call stack, which is likely the first person to set it
@@ -117,11 +124,15 @@ impl Diagnostic {
         }
     }
 
+    /// Print an error to the stderr stream. If the error is a [`Diagnostic`] it will use
+    /// color-codes when printing.
     pub fn emit_stderr(&self) {
         diagnostic_stderr(self);
     }
 }
 
+/// Print an error to the stderr stream. If the error is a [`Diagnostic`] it will use
+/// color-codes when printing.
 pub fn eprint_error(diagnostic: &anyhow::Error) {
     match diagnostic.downcast_ref::<Diagnostic>() {
         None => eprint!("{:#}", diagnostic),
