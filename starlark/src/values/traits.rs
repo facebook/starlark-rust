@@ -41,6 +41,7 @@ use std::{
     fmt::{Debug, Write},
 };
 
+/// Helper trait used in [`StarlarkValue`] - has a single global implementation.
 pub trait AsStarlarkValue<'v> {
     fn as_type_name(&self) -> &'static str;
     fn as_starlark_value(&self) -> &dyn StarlarkValue<'v>;
@@ -133,8 +134,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 /// aren't mutable and can't contain other Starlark values.
 pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 
-/// A trait for a value with a type that all variable container
-/// will implement.
+/// How to put a Rust values into [`Value`]s.
 pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.

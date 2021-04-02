@@ -21,8 +21,7 @@ use crate::values::{Heap, Value};
 use gazebo::cell::ARef;
 use std::ops::Deref;
 
-/// Types implementing this type may appear in function parameter types
-/// in `starlark_module` macro function signatures.
+/// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {
     fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self>;
 }
@@ -61,7 +60,8 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
     }
 }
 
-pub trait FromValue<'v>: Sized {
+/// Unpack a [`Value`] which is a reference to an underlying type.
+pub trait FromValue<'v> {
     fn from_value(value: Value<'v>) -> Option<ARef<'v, Self>>;
 }
 

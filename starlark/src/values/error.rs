@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-//! Module define the common engine error.
+//! Define a common set of errors.
 
 use crate::values::{StarlarkValue, Value};
 use thiserror::Error;
 
-/// Error that can be returned by function from the `StarlarkValue` trait,
+/// Common errors returned by Starlark evaluation.
 #[derive(Debug, Error)]
 pub enum ValueError {
     #[error("Operation `{op}` not supported on type `{typ}`")]
@@ -78,6 +78,7 @@ impl ValueError {
         }
     }
 
+    /// Helper to create an [`OperationNotSupported`](ValueError::OperationNotSupported) error.
     pub fn unsupported<'v, T, V: StarlarkValue<'v> + ?Sized>(
         left: &V,
         op: &str,
@@ -85,6 +86,7 @@ impl ValueError {
         Self::unsupported_owned(left.get_type(), op, None)
     }
 
+    /// Helper to create an [`OperationNotSupported`](ValueError::OperationNotSupportedBinary) error.
     pub fn unsupported_with<'v, T, V: StarlarkValue<'v> + ?Sized>(
         left: &V,
         op: &str,

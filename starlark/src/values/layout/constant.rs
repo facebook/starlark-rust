@@ -21,14 +21,27 @@ use crate::values::layout::{
 };
 use once_cell::sync::OnceCell;
 
-/// These values will be declared globally at the top-level
+/// Define a `&'static` [`str`] that can be converted to a [`FrozenValue`].
+///
+/// Usually used as:
+///
+/// ```
+/// use starlark::values::{ConstFrozenValue, FrozenValue};
+///
+/// fn return_magic() -> FrozenValue {
+///     static RES: ConstFrozenValue = ConstFrozenValue::new("magic");
+///     RES.unpack()
+/// }
+/// ```
 pub struct ConstFrozenValue(&'static str, OnceCell<FrozenValueMem>);
 
 impl ConstFrozenValue {
+    /// Create a new [`ConstFrozenValue`].
     pub const fn new(name: &'static str) -> Self {
         ConstFrozenValue(name, OnceCell::new())
     }
 
+    /// Obtain the underlying [`FrozenValue`]. Will only allocate on the first call.
     pub fn unpack(&'static self) -> FrozenValue {
         let v = self
             .1

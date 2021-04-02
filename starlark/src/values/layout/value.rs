@@ -53,10 +53,12 @@ const VALUE_NONE: NoneType = NoneType;
 const VALUE_TRUE: bool = true;
 const VALUE_FALSE: bool = false;
 
-/// A value that can never be changed, but might have interior mutability.
-/// One possible change: moving to Forward during GC.
-/// Will not be a `ValueMem::Ref` (see `ValueRef` for that).
+/// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`] it is stored on.
+///
+/// Many of the methods simply forward to the underlying [`StarlarkValue`].
 #[derive(Clone_, Copy_, Dupe_)]
+// One possible change: moving to Forward during GC.
+// Will not be a `ValueMem::Ref` (see `ValueRef` for that).
 pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 
 /// A value that might have reference semantics.
@@ -70,9 +72,15 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 #[derive(Clone, Dupe, Debug)]
 pub(crate) struct ValueRef<'v>(pub(crate) Cell<Value<'v>>);
 
-// A value that can never be changed
-// One possible change: moving from Blackhole during GC
+/// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
+///
+/// A [`FrozenValue`] exists on a [`FrozenHeap`](crate::values::FrozenHeap), which in turn can be kept
+/// alive by a [`FrozenHeapRef`](crate::values::FrozenHeapRef). If the frozen heap gets dropped
+/// while a [`FrozenValue`] from it still exists, the program will probably segfault, so be careful
+/// when working directly with [`FrozenValue`]s. See the type [`OwnedFrozenValue`](crate::values::OwnedFrozenValue)
+/// for a little bit more safety.
 #[derive(Clone, Copy, Dupe)]
+// One possible change: moving from Blackhole during GC
 pub struct FrozenValue(pub(crate) Pointer<'static, 'static, FrozenValueMem, Void>);
 
 // These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
@@ -241,22 +249,28 @@ impl FrozenValueMem {
 }
 
 impl<'v> Value<'v> {
+    /// Create a new `None` value.
     pub fn new_none() -> Self {
         Self(Pointer::new_none())
     }
 
+    /// Create a new boolean.
     pub fn new_bool(x: bool) -> Self {
         Self(Pointer::new_bool(x))
     }
 
+    /// Create a new integer.
     pub fn new_int(x: i32) -> Self {
         Self(Pointer::new_int(x))
     }
 
+    /// Create a new unassigned value. Will mostly throw errors when used.
     pub fn new_unassigned() -> Self {
         Self(Pointer::new_unassigned())
     }
 
+    /// Turn a [`FrozenValue`] into a [`Value`]. See the safety warnings on
+    /// [`OwnedFrozenValue`](crate::values::OwnedFrozenValue).
     pub fn new_frozen(x: FrozenValue) -> Self {
         // Safe if every FrozenValue must have had a reference added to its heap first.
         // That property is NOT statically checked.
@@ -270,6 +284,7 @@ impl<'v> Value<'v> {
         Self(p.coerce())
     }
 
+    /// Obtain the underlying [`FrozenValue`] from inside the [`Value`], if it is one.
     pub fn unpack_frozen(self) -> Option<FrozenValue> {
         unsafe {
             transmute!(
@@ -281,22 +296,27 @@ impl<'v> Value<'v> {
         }
     }
 
+    /// Is this value `None`.
     pub fn is_none(self) -> bool {
         self.0.is_none()
     }
 
+    /// Is this value unassigned.
     pub fn is_unassigned(self) -> bool {
         self.0.is_unassigned()
     }
 
+    /// Obtain the underlying `bool` if it is a boolean.
     pub fn unpack_bool(self) -> Option<bool> {
         self.0.unpack_bool()
     }
 
+    /// Obtain the underlying `int` if it is an integer.
     pub fn unpack_int(self) -> Option<i32> {
         self.0.unpack_int()
     }
 
+    /// Obtain the underlying `str` if it is a string.
     pub fn unpack_str(self) -> Option<&'v str> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack_str(),
@@ -305,7 +325,10 @@ impl<'v> Value<'v> {
         }
     }
 
-    // Get a pointer to a value. Will always be `Some` unless ``is_mutable() == true`.
+    /// Get a pointer to a [`StarlarkValue`]. Will be [`None`] only when
+    /// the underlying value is a [`ComplexValue`] which is marked
+    /// [`is_mutable`](ComplexValue::is_mutable). If you want it to always
+    /// produce a value, see [`get_aref`](Value::get_aref).
     pub fn get_ref(self) -> Option<&'v dyn StarlarkValue<'v>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => Some(x.get_ref()),
@@ -318,7 +341,8 @@ impl<'v> Value<'v> {
         }
     }
 
-    pub(crate) fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
+    /// Get a pointer to a [`StarlarkValue`].
+    pub fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => ARef::Ptr(x.get_ref()),
             PointerUnpack::Ptr2(x) => x.get_aref(),
@@ -359,30 +383,37 @@ impl<'v> Value<'v> {
 }
 
 impl FrozenValue {
+    /// Create a new value representing `None` in Starlark.
     pub fn new_none() -> Self {
         Self(Pointer::new_none())
     }
 
+    /// Create a new boolean in Starlark.
     pub fn new_bool(x: bool) -> Self {
         Self(Pointer::new_bool(x))
     }
 
+    /// Create a new int in Starlark.
     pub fn new_int(x: i32) -> Self {
         Self(Pointer::new_int(x))
     }
 
+    /// Is a value a Starlark `None`.
     pub fn is_none(self) -> bool {
         self.0.is_none()
     }
 
+    /// Is a value currently unassigned, e.g. in `f(x); x = 1` the first `x` would be unassigned.
     pub fn is_unassigned(self) -> bool {
         self.0.is_unassigned()
     }
 
+    /// Return the [`bool`] if the value is a boolean, otherwise [`None`].
     pub fn unpack_bool(self) -> Option<bool> {
         self.0.unpack_bool()
     }
 
+    /// Return the int if the value is an integer, otherwise [`None`].
     pub fn unpack_int(self) -> Option<i32> {
         self.0.unpack_int()
     }
@@ -399,6 +430,7 @@ impl FrozenValue {
         }
     }
 
+    /// Get a pointer to the [`StarlarkValue`] object this value represents.
     pub fn get_ref<'v>(self) -> &'v dyn StarlarkValue<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),

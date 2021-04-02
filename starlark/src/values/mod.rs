@@ -15,19 +15,19 @@
  * limitations under the License.
  */
 
-//! The values module define a trait `StarlarkValue` that defines the attribute of
-//! any value in Starlark and a few macro to help implementing this trait.
-//! The `Value` struct defines the actual structure holding a StarlarkValue. It is
-//! mostly used to enable mutable and Rc behavior over a StarlarkValue.
-//! This modules also defines this traits for the basic immutable values: int,
-//! bool and NoneType. Sub-modules implement other common types of all Starlark
-//! dialect.
+//! Defines a runtime Starlark value ([`Value`]) and traits for defining custom values ([`StarlarkValue`]).
 //!
-//! __Note__: we use _sequence_, _iterable_ and _indexable_ according to the
-//! definition in the [Starlark specification](
-//! https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#sequence-types).
-//! We also use the term _container_ for denoting any of those type that can
-//! hold several values.
+//! This module contains code for working with Starlark values:
+//!
+//! * Most code dealing with Starlark will use [`Value`], as it represents the fundamental values used in
+//!   Starlark. When frozen, they become [`FrozenValue`].
+//! * Values are garbage-collected, so a given [`Value`] lives on a [`Heap`].
+//! * Rust values (e.g. [`String`], [`Vec`]) can be added to the [`Heap`] with [`AllocValue`],
+//!   and deconstructed from a [`Value`] with
+//! * To define your own Rust data type that can live in a [`Value`] it must implement the [`StarlarkValue`]
+//!   trait.
+//! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
+//!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
 pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
     collections::{Hashed, SmallHashResult},
@@ -121,8 +121,8 @@ impl Equivalent<Value<'_>> for FrozenValue {
     }
 }
 
+/// Trait for things that can be allocated on a [`Heap`] producing a [`Value`].
 pub trait AllocValue<'v> {
-    /// Everything can either be a literal, mutable or immutable.
     fn alloc_value(self, heap: &'v Heap) -> Value<'v>;
 }
 
@@ -132,23 +132,26 @@ impl<'v> AllocValue<'v> for Value<'v> {
     }
 }
 
+/// Trait for things that can be allocated on a [`FrozenHeap`] producing a [`FrozenValue`].
 pub trait AllocFrozenValue {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue;
 }
 
 impl FrozenHeap {
+    /// Allocate a new value on a [`FrozenHeap`].
     pub fn alloc<T: AllocFrozenValue>(&self, val: T) -> FrozenValue {
         val.alloc_frozen_value(self)
     }
 }
 
 impl Heap {
+    /// Allocate a new value on a [`Heap`].
     pub fn alloc<'v, T: AllocValue<'v>>(&'v self, x: T) -> Value<'v> {
         x.alloc_value(self)
     }
 }
 
-/// Implemented for `Value` and `FrozenValue`.
+/// Abstract over [`Value`] and [`FrozenValue`].
 pub trait ValueLike<'v>: Eq + Copy + Debug {
     fn to_value(self) -> Value<'v>;
 
@@ -172,6 +175,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
     fn collect_repr(self, collector: &mut String) {
         self.get_aref().collect_repr(collector);
     }
+
     fn to_json(self) -> String {
         self.get_aref().to_json()
     }
@@ -190,10 +194,6 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
         self.get_aref().compare(other)
     }
 
-    /// Get a reference to underlying data or `None`
-    /// if contained object has different type than requested.
-    ///
-    /// This function panics if the `Value` is borrowed mutably.
     fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
         let any = ARef::map(self.get_aref(), |e| e.as_dyn_any());
         if any.is::<T>() {
@@ -242,90 +242,15 @@ impl<'v> ValueLike<'v> for FrozenValue {
 }
 
 impl FrozenValue {
+    /// Convert a [`FrozenValue`] back to a [`Value`].
     pub fn to_value<'v>(self) -> Value<'v> {
         Value::new_frozen(self)
     }
 }
 
 impl<'v> Value<'v> {
-    pub fn get_type(self) -> &'static str {
-        self.get_aref().get_type()
-    }
-    pub fn to_bool(self) -> bool {
-        self.get_aref().to_bool()
-    }
-    pub fn to_int(self) -> anyhow::Result<i32> {
-        self.get_aref().to_int()
-    }
-    pub fn at(self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().at(index, heap)
-    }
-
-    pub fn slice(
-        self,
-        start: Option<Value<'v>>,
-        stop: Option<Value<'v>>,
-        stride: Option<Value<'v>>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
-        self.get_aref().slice(start, stop, stride, heap)
-    }
-
-    pub fn length(self) -> anyhow::Result<i32> {
-        self.get_aref().length()
-    }
-
-    /// Return the attribute with the given name. Returns a pair of a boolean and the value.
-    ///
-    /// The boolean is [`true`] if the attribute was defined via [`StarlarkValue::get_members`]
-    /// and should be used as a signal that if the attribute is subsequently called,
-    /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
-    /// argument to the function, e.g. `object.attribute(object, argument)`.
-    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<(bool, Value<'v>)> {
-        let aref = self.get_aref();
-        if let Some(members) = aref.get_members() {
-            if let Some(v) = members.get(attribute) {
-                return Ok((true, v));
-            }
-        }
-        aref.get_attr(attribute, heap).map(|v| (false, v))
-    }
-
-    pub fn has_attr(self, attribute: &str) -> bool {
-        let aref = self.get_aref();
-        if let Some(members) = aref.get_members() {
-            if members.get(attribute).is_some() {
-                return true;
-            }
-        }
-        aref.has_attr(attribute)
-    }
-
-    pub fn dir_attr(self) -> Vec<String> {
-        let aref = self.get_aref();
-        let mut result = if let Some(members) = self.get_aref().get_members() {
-            let mut res = members.names();
-            res.extend(aref.dir_attr());
-            res
-        } else {
-            aref.dir_attr()
-        };
-        result.sort();
-        result
-    }
-
-    pub fn is_in(self, other: Value<'v>) -> anyhow::Result<bool> {
-        self.get_aref().is_in(other)
-    }
-
-    pub fn plus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().plus(heap)
-    }
-
-    pub fn minus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().minus(heap)
-    }
-
+    /// Add two [`Value`]s together. Will first try using [`radd`](StarlarkValue::radd),
+    /// before falling back to [`add`](StarlarkValue::add).
     pub fn add(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let me = self.to_value();
         if let Some(v) = other.get_aref().radd(me, heap) {
@@ -335,42 +260,13 @@ impl<'v> Value<'v> {
         }
     }
 
-    pub fn sub(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().sub(other, heap)
-    }
-
-    pub fn mul(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().mul(other, heap)
-    }
-
-    pub fn percent(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().percent(other, heap)
-    }
-
-    pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().floor_div(other, heap)
-    }
-
-    pub fn bit_and(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().bit_and(other)
-    }
-    pub fn bit_or(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().bit_or(other)
-    }
-    pub fn bit_xor(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().bit_xor(other)
-    }
-    pub fn left_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().left_shift(other)
-    }
-    pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().right_shift(other)
-    }
-
+    /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
     pub fn freeze(self, freezer: &Freezer) -> FrozenValue {
         freezer.freeze(self)
     }
 
+    /// Implement the `str()` function - converts a string value to itself,
+    /// otherwise uses `repr()`.
     pub fn to_str(self) -> String {
         match self.unpack_str() {
             None => self.to_repr(),
@@ -378,6 +274,14 @@ impl<'v> Value<'v> {
         }
     }
 
+    /// Implement the `repr()` function.
+    pub fn to_repr(self) -> String {
+        let mut s = String::new();
+        self.collect_repr(&mut s);
+        s
+    }
+
+    /// Forwards to [`ComplexValue::set_attr`].
     pub fn set_attr(
         self,
         attribute: &str,
@@ -387,16 +291,7 @@ impl<'v> Value<'v> {
         self.get_ref_mut(heap)?.set_attr(attribute, alloc_value)
     }
 
-    pub fn to_repr(self) -> String {
-        let mut s = String::new();
-        self.collect_repr(&mut s);
-        s
-    }
-
-    pub fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
-        self.get_aref().new_invoker(self, heap)
-    }
-
+    /// Forwards to [`ComplexValue::set_at`].
     pub fn set_at(
         self,
         index: Value<'v>,
@@ -406,7 +301,7 @@ impl<'v> Value<'v> {
         self.get_ref_mut(heap)?.set_at(index, alloc_value)
     }
 
-    /// Return the contents of this collection, as an owned vector.
+    /// Return the contents of an iterable collection, as an owned vector.
     pub fn iterate_collect(self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
         // You might reasonably think this is mostly called on lists (I think it is),
         // and thus that a fast-path here would speed things up. But in my experiments
@@ -414,6 +309,7 @@ impl<'v> Value<'v> {
         Ok(self.iterate(heap)?.iter().collect())
     }
 
+    /// Produce an iterable from a value.
     pub fn iterate(self, heap: &'v Heap) -> anyhow::Result<RefIterable<'v>> {
         let me: ARef<'v, dyn StarlarkValue> = self.get_aref();
         me.iterate()?;
@@ -423,14 +319,18 @@ impl<'v> Value<'v> {
         ))
     }
 
-    pub fn get_type_value(self) -> &'static ConstFrozenValue {
-        self.get_aref().get_type_value()
-    }
-
+    /// Get the [`Hashed`] version of this [`Value`].
     pub fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         ValueLike::get_hashed(self)
     }
 
+    /// Get a reference to underlying data or [`None`]
+    /// if contained object has different type than requested.
+    ///
+    /// This function panics if the [`Value`] is borrowed mutably.
+    ///
+    /// In many cases you may wish to call [`FromValue`] instead, as that can
+    /// get a non-frozen value from an underlying frozen value.
     pub fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
         ValueLike::downcast_ref(self)
     }
@@ -483,5 +383,126 @@ impl<'v> Value<'v> {
         if let Some(mut mv) = self.get_ref_mut_already() {
             mv.export_as(heap, name)
         }
+    }
+
+    /// Return the attribute with the given name. Returns a pair of a boolean and the value.
+    ///
+    /// The boolean is [`true`] if the attribute was defined via [`StarlarkValue::get_members`]
+    /// and should be used as a signal that if the attribute is subsequently called,
+    /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
+    /// argument to the function, e.g. `object.attribute(object, argument)`.
+    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<(bool, Value<'v>)> {
+        let aref = self.get_aref();
+        if let Some(members) = aref.get_members() {
+            if let Some(v) = members.get(attribute) {
+                return Ok((true, v));
+            }
+        }
+        aref.get_attr(attribute, heap).map(|v| (false, v))
+    }
+
+    pub fn has_attr(self, attribute: &str) -> bool {
+        let aref = self.get_aref();
+        if let Some(members) = aref.get_members() {
+            if members.get(attribute).is_some() {
+                return true;
+            }
+        }
+        aref.has_attr(attribute)
+    }
+
+    pub fn dir_attr(self) -> Vec<String> {
+        let aref = self.get_aref();
+        let mut result = if let Some(members) = self.get_aref().get_members() {
+            let mut res = members.names();
+            res.extend(aref.dir_attr());
+            res
+        } else {
+            aref.dir_attr()
+        };
+        result.sort();
+        result
+    }
+}
+
+/// Methods that just forward to the underlying [`StarlarkValue`].
+impl<'v> Value<'v> {
+    pub fn get_type(self) -> &'static str {
+        self.get_aref().get_type()
+    }
+    pub fn to_bool(self) -> bool {
+        self.get_aref().to_bool()
+    }
+    pub fn to_int(self) -> anyhow::Result<i32> {
+        self.get_aref().to_int()
+    }
+    pub fn at(self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().at(index, heap)
+    }
+
+    pub fn slice(
+        self,
+        start: Option<Value<'v>>,
+        stop: Option<Value<'v>>,
+        stride: Option<Value<'v>>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Value<'v>> {
+        self.get_aref().slice(start, stop, stride, heap)
+    }
+
+    pub fn length(self) -> anyhow::Result<i32> {
+        self.get_aref().length()
+    }
+
+    pub fn is_in(self, other: Value<'v>) -> anyhow::Result<bool> {
+        self.get_aref().is_in(other)
+    }
+
+    pub fn plus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().plus(heap)
+    }
+
+    pub fn minus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().minus(heap)
+    }
+
+    pub fn sub(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().sub(other, heap)
+    }
+
+    pub fn mul(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().mul(other, heap)
+    }
+
+    pub fn percent(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().percent(other, heap)
+    }
+
+    pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_aref().floor_div(other, heap)
+    }
+
+    pub fn bit_and(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().bit_and(other)
+    }
+    pub fn bit_or(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().bit_or(other)
+    }
+    pub fn bit_xor(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().bit_xor(other)
+    }
+    pub fn left_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().left_shift(other)
+    }
+    pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        self.get_aref().right_shift(other)
+    }
+
+    pub fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
+        self.get_aref().new_invoker(self, heap)
+    }
+
+    pub fn get_type_value(self) -> &'static ConstFrozenValue {
+        self.get_aref().get_type_value()
     }
 }

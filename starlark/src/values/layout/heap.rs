@@ -42,6 +42,7 @@ use std::{
     time::Instant,
 };
 
+/// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
 #[derive(Default)]
 pub struct Heap {
     // Should really be ValueMem<'v>, where &'v self
@@ -59,6 +60,8 @@ impl Debug for Heap {
     }
 }
 
+/// A heap on which [`FrozenValue`]s can be allocated.
+/// Can be kept alive by a [`FrozenHeapRef`].
 #[derive(Default)]
 pub struct FrozenHeap {
     arena: Arena<FrozenValueMem>,          // My memory
@@ -78,8 +81,12 @@ impl Debug for FrozenHeap {
 unsafe impl Sync for FrozenHeapRef {}
 unsafe impl Send for FrozenHeapRef {}
 
-/// The Eq/Hash are by pointer rather than value
+/// A reference to a [`FrozenHeap`] that keeps alive all values on the underlying heap.
+/// Note that the [`Hash`] is consistent for a single [`FrozenHeapRef`], but non-deterministic
+/// across executions and distinct but observably identical [`FrozenHeapRef`] values.
 #[derive(Clone, Dupe, Debug)]
+// The Eq/Hash are by pointer rather than value, since we produce unique values
+// given an underlying FrozenHeap.
 pub struct FrozenHeapRef(Arc<FrozenHeap>);
 
 impl Hash for FrozenHeapRef {
@@ -98,14 +105,21 @@ impl PartialEq<FrozenHeapRef> for FrozenHeapRef {
 impl Eq for FrozenHeapRef {}
 
 impl FrozenHeap {
+    /// Create a new [`FrozenHeap`].
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// After all values have been allocated, convert the [`FrozenHeap`] into a
+    /// [`FrozenHeapRef`] which can be [`clone`](Clone::clone)d, shared between threads,
+    /// and ensures the underlying values allocated on the [`FrozenHeap`] remain valid.
     pub fn into_ref(self) -> FrozenHeapRef {
         FrozenHeapRef(Arc::new(self))
     }
 
+    /// Keep the argument [`FrozenHeapRef`] alive as long as this [`FrozenHeap`]
+    /// is kept alive. Used if a [`FrozenValue`] in this heap points at values in another
+    /// [`FrozenHeap`].
     pub fn add_reference(&self, heap: &FrozenHeapRef) {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
@@ -119,11 +133,14 @@ impl FrozenHeap {
         self.alloc_raw(FrozenValueMem::Str(x))
     }
 
+    /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
+    /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
         self.alloc_raw(FrozenValueMem::Simple(box val))
     }
 }
 
+/// Used to `freeze` values by [`ComplexValue::freeze`].
 // A freezer is a pair of the FrozenHeap and a "magic" value,
 // which we happen to use for the slots (see `FrozenSlotsRef`)
 // but could be used for anything.
@@ -149,12 +166,12 @@ impl Freezer {
         self.0.into_ref()
     }
 
-    // Not sure if this is a good idea. Let's you create brand-new things while
-    // freezing. Only used in two places.
+    /// Allocate a new value while freezing. Usually not a great idea.
     pub fn alloc<'v, T: AllocFrozenValue>(&'v self, val: T) -> FrozenValue {
         val.alloc_frozen_value(&self.0)
     }
 
+    /// Freeze a nested value while freezing yourself.
     pub fn freeze(&self, value: Value) -> FrozenValue {
         // Case 1: We have our value encoded in our pointer
         if let Some(x) = value.unpack_frozen() {
@@ -197,6 +214,7 @@ impl Freezer {
 }
 
 impl Heap {
+    /// Create a new [`Heap`].
     pub fn new() -> Self {
         Self::default()
     }
@@ -233,6 +251,7 @@ impl Heap {
         self.alloc_raw(ValueMem::Str(x))
     }
 
+    /// Allocate a [`SimpleValue`] on the [`Heap`].
     pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
         self.alloc_raw(ValueMem::Simple(box x))
     }
@@ -242,6 +261,7 @@ impl Heap {
         self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
     }
 
+    /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
         self.alloc_complex_box(box x)
     }
@@ -300,6 +320,7 @@ impl Heap {
     }
 }
 
+/// Used to perform garbage collection by [`ComplexValue::walk`].
 pub struct Walker<'v> {
     arena: Arena<ValueMem<'v>>,
 }

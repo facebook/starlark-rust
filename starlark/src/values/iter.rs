@@ -20,7 +20,7 @@
 use crate::values::{Heap, Value};
 use gazebo::cell::ARef;
 
-/// Type to be implemented by types which are iterable.
+/// Used in the definition of [`StarlarkValue::iterate`](crate::values::StarlarkValue::iterate).
 pub trait StarlarkIterable<'v> {
     /// Make an iterator.
     fn to_iter<'a>(&'a self, heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
@@ -28,17 +28,18 @@ pub trait StarlarkIterable<'v> {
         'v: 'a;
 }
 
-/// Iterable which contains borrowed reference to a sequence.
+/// Used in the definition of [`StarlarkValue::iterate`](crate::values::StarlarkValue::iterate).
 pub struct RefIterable<'v> {
     heap: &'v Heap,
     r: ARef<'v, dyn StarlarkIterable<'v>>,
 }
 
 impl<'v> RefIterable<'v> {
-    pub fn new(heap: &'v Heap, r: ARef<'v, dyn StarlarkIterable<'v>>) -> Self {
+    pub(crate) fn new(heap: &'v Heap, r: ARef<'v, dyn StarlarkIterable<'v>>) -> Self {
         RefIterable { heap, r }
     }
 
+    /// Convert a [`RefIterable`] into an actual [`Iterator`].
     pub fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,

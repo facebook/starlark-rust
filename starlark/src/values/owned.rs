@@ -22,12 +22,13 @@ use crate::{
 use gazebo::prelude::*;
 use std::{fmt, fmt::Display};
 
-/// A `FrozenHeapRef` and `FrozenValue`, such that the `FrozenHeapRef` causes the
-/// `FrozenValue` to be kept alive. You can extract the value using the
+/// A [`FrozenValue`] along with a [`FrozenHeapRef`] that ensures it is kept alive.
+///
+/// You can extract the value using the
 /// `owned_` methods, which require a reference to the heap which should keep the value
 /// alive. Or you can use the `unchecked_` methods which require that you know the value
 /// remains alive as long as it is used, perhaps because you keep a reference to the
-/// containing `OwnedFrozenValue`.
+/// containing [`OwnedFrozenValue`].
 #[derive(Debug, Clone, Dupe)]
 pub struct OwnedFrozenValue {
     owner: FrozenHeapRef,
@@ -41,8 +42,8 @@ impl Display for OwnedFrozenValue {
 }
 
 impl OwnedFrozenValue {
-    /// Create an `OwnedFrozenValue` - generally `OwnedFrozenValue`'s are obtained
-    /// from `FrozenModule.get`.
+    /// Create an [`OwnedFrozenValue`] - generally [`OwnedFrozenValue`]s are obtained
+    /// from [`FrozenModule::get`](crate::environment::FrozenModule::get).
     pub fn new(owner: FrozenHeapRef, value: FrozenValue) -> Self {
         Self { owner, value }
     }
@@ -54,23 +55,30 @@ impl OwnedFrozenValue {
         Self::new(heap.into_ref(), val)
     }
 
-    /// Extract a `FrozenValue` by passing the heap which will use it.
+    /// Extract a [`FrozenValue`] by passing the heap which will use it.
     /// Unsafe if you pass the wrong heap.
     pub fn owned_frozen_value(&self, heap: &FrozenHeap) -> FrozenValue {
         heap.add_reference(&self.owner);
         self.value
     }
 
-    /// Extract a `Value` by passing the module which will use it.
+    /// Extract a [`Value`] by passing the module which will use it.
     pub fn owned_value<'v>(&self, module: &'v Module) -> Value<'v> {
         self.owned_frozen_value(module.frozen_heap()).to_value()
     }
 
+    /// Unpack the boolean contained in the underlying value, or [`None`] if it is not a boolean.
+    pub fn unpack_bool(&self) -> Option<bool> {
+        self.value.unpack_bool()
+    }
+
+    /// Unpack the int contained in the underlying value, or [`None`] if it is not an int.
     pub fn unpack_int(&self) -> Option<i32> {
         self.value.unpack_int()
     }
 
-    // Safe provided you don't store the FrozenValue after the closure has returned.
+    /// Operate on the [`FrozenValue`] stored inside.
+    /// Safe provided you don't store the [`FrozenValue`] after the closure has returned.
     pub fn map(&self, f: impl FnOnce(FrozenValue) -> FrozenValue) -> Self {
         Self {
             owner: self.owner.dupe(),
@@ -79,11 +87,12 @@ impl OwnedFrozenValue {
     }
 
     /// Be VERY careful, potential segfault! See the warnings on `OwnedFrozenValue`.
+    /// This function is highly likely to gain an `unsafe` in the future.
     pub fn unchecked_frozen_value(&self) -> FrozenValue {
         self.value
     }
 
-    /// Obtain the `Value` stored inside.
+    /// Obtain the [`Value`] stored inside.
     pub fn value<'v>(&'v self) -> Value<'v> {
         Value::new_frozen(self.value)
     }
