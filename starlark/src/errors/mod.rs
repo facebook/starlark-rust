@@ -126,17 +126,15 @@ impl Diagnostic {
 
     /// Print an error to the stderr stream. If the error is a [`Diagnostic`] it will use
     /// color-codes when printing.
-    pub fn emit_stderr(&self) {
-        diagnostic_stderr(self);
-    }
-}
-
-/// Print an error to the stderr stream. If the error is a [`Diagnostic`] it will use
-/// color-codes when printing.
-pub fn eprint_error(diagnostic: &anyhow::Error) {
-    match diagnostic.downcast_ref::<Diagnostic>() {
-        None => eprint!("{:#}", diagnostic),
-        Some(diag) => diag.emit_stderr(),
+    ///
+    /// Note that this function doesn't print any context information if the error is a
+    /// [`Diagnostic`], so you might prefer to use `eprintln!("{:#}"), err)`
+    /// if you suspect there is useful context (although you won't get pretty colors).
+    pub fn eprint(err: &anyhow::Error) {
+        match err.downcast_ref::<Diagnostic>() {
+            None => eprintln!("{:#}", err),
+            Some(diag) => diagnostic_stderr(diag),
+        }
     }
 }
 

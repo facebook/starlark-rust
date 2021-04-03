@@ -19,7 +19,7 @@ use crate::{
     self as starlark,
     assert::{self, Assert},
     environment::{Globals, GlobalsBuilder, Module},
-    errors::eprint_error,
+    errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
     values::{any::StarlarkAny, none::NoneType, Heap, Value},
@@ -1054,7 +1054,7 @@ add3(8)"#,
         "Immutable",
     );
     if display {
-        eprint_error(&diag)
+        Diagnostic::eprint(&diag)
     }
     assert_eq!(
         &format!("\n{}", diag),

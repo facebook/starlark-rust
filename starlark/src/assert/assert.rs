@@ -21,7 +21,7 @@ use crate::{
     codemap::CodeMap,
     collections::SmallMap,
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
-    errors::{eprint_error, Diagnostic},
+    errors::Diagnostic,
     eval::{Evaluator, ReturnFileLoader},
     syntax::{
         lexer::{Lexer, Token},
@@ -257,7 +257,7 @@ impl Assert {
         match self.execute(path, program, env, gc) {
             Ok(v) => v,
             Err(err) => {
-                eprint_error(&err);
+                Diagnostic::eprint(&err);
                 panic!(
                     "starlark::assert::{}, failed to execute!\nCode:\n{}\nGot error: {}",
                     func, program, err
@@ -337,7 +337,7 @@ impl Assert {
             let err_msg = format!("{:#}", inner);
             for msg in msgs {
                 if !err_msg.contains(msg) {
-                    eprint_error(&original);
+                    Diagnostic::eprint(&original);
                     panic!(
                     "starlark::assert::{}, failed with the wrong message!\nCode:\n{}\nError:\n{}\nMissing:\n{}\nExpected:\n{:?}",
                     func, program, inner, msg, msgs
