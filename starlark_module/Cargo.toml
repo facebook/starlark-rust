@@ -1,6 +1,6 @@
 [package]
 name = "starlark_module"
-version = "0.4.0-pre"
+version = "0.4.0"
 edition = "2018"
 license = "Apache-2.0"
 description = "Derive helpers for the starlark package."

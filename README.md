@@ -5,16 +5,18 @@
 [![docs.rs availability](https://img.shields.io/docsrs/starlark?label=docs.rs)](https://docs.rs/starlark/)
 [![Build status](https://img.shields.io/github/workflow/status/facebookexperimental/starlark-rust/ci.svg)](https://github.com/facebookexperimental/starlark-rust/actions)
 
+_**NOTE:** Version 0.4.0 of this library changes maintainer from [Google](https://github.com/google/starlark-rust) to Facebook._
+
 This project provides a Rust implementation of the [Starlark language](https://github.com/bazelbuild/starlark/blob/master/spec.md). Starlark (formerly codenamed Skylark) is a deterministic language inspired by Python3, used for configuration in the build systems [Bazel](https://bazel.build) and [Buck](https://buck.build). This project was originally developed [in this repo](https://github.com/google/starlark-rust), which contains a more extensive history.
 
-There are at least three implementations of Starlark, [one in Java](https://github.com/bazelbuild/starlark), [one in Go](https://github.com/google/starlark-go), and this one in Rust. We mostly follow the Starlark standard, but don't support most of the Go extensions (e.g. floating point numbers, bit operations, a set type).
+There are at least three implementations of Starlark, [one in Java](https://github.com/bazelbuild/starlark), [one in Go](https://github.com/google/starlark-go), and this one in Rust. We mostly follow the Starlark standard.
 
 ## Features
 
 This project features:
 
 * Easy interoperability between Rust types and Starlark.
-* Rust-friendly types, so frozen values are `Send`/`Sync`, which non-frozen values aren't.
+* Rust-friendly types, so frozen values are `Send`/`Sync`, while non-frozen values aren't.
 * [Garbage collected](docs/gc.md) values allocated on [a heap](docs/heap.md).
 * Optional runtime-checked [types](docs/types.md).
 * A linter, to detect code issues in Starlark.
@@ -36,13 +38,22 @@ There are three components:
 
 ## Compatibility
 
-In this section we outline where we don't comply with the [Starlark spec](https://github.com/bazelbuild/starlark/blob/master/spec.md). Some of these incompatiblities are because we believe the Starlark spec could be improved - these are marked _deliberately_.
+In this section we outline where we don't comply with the [Starlark spec](https://github.com/bazelbuild/starlark/blob/master/spec.md).
 
 * We have plenty of extensions, e.g. type annotations, recursion, top-level `for`.
 * We don't yet support later additions to Starlark, such as [floats](https://github.com/facebookexperimental/starlark-rust/issues/3) or [bytes](https://github.com/facebookexperimental/starlark-rust/issues/4).
 * We are currently limited to [32 bit integers](https://github.com/facebookexperimental/starlark-rust/issues/6). Constructing larger values will result in Starlark failing with an overflow error.
-* Our strings are not compliant in several ways, often returning code points instead of singleton strings, and have poor performance.
+* Our strings are [not compliant in several ways](https://github.com/facebookexperimental/starlark-rust/issues/16), often returning code points instead of singleton strings, and have poor performance.
 * In some cases creating circular data structures may lead to stack overflows.
+
+## Making a release
+
+1. Check the [GitHub Actions](https://github.com/facebookexperimental/starlark-rust/actions) are green.
+2. Update `CHANGELOG.md` with the changes since the last release. [This link](https://github.com/facebookexperimental/starlark-rust/compare/v0.4.0...master) can help (update to compare against the last release).
+3. Update the version numbers of the two `Cargo.toml` files. Bump them by 0.0.1 if there are no incompatible changes, or 0.1.0 if there are. Bump the dependency in `starlark` to point at the latest `starlark_module` version.
+4. Copy the files `CHANGELOG.md`, `LICENSE` and `README.md` into each `starlark` and `starlark_module` subdirectory.
+5. Run `cargo publish --dry-run --allow-dirty`, then without the `--dry-run`, first in `starlark_module` and then `starlark` directories.
+6. Create a [GitHub release](https://github.com/facebookexperimental/starlark-rust/releases/new) with `v0.X.Y`, using the `starlark` version as the name.
 
 ## License
 
