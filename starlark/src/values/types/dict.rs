@@ -230,7 +230,7 @@ where
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k.to_json(), v.to_json()))
                 .enumerate()
-                .fold("".to_string(), |accum, s| if s.0 == 0 {
+                .fold(String::new(), |accum, s| if s.0 == 0 {
                     accum + &s.1
                 } else {
                     accum + ", " + &s.1

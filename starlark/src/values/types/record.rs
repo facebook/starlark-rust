@@ -320,7 +320,7 @@ where
     }
 
     fn to_json(&self) -> String {
-        let mut s = "{".to_string();
+        let mut s = "{".to_owned();
         s += &self
             .get_record_type()
             .fields

@@ -306,6 +306,6 @@ where
     }
 
     fn dir_attr(&self) -> Vec<String> {
-        vec!["index".to_string(), "value".to_owned()]
+        vec!["index".to_owned(), "value".to_owned()]
     }
 }

@@ -245,7 +245,7 @@ impl DebugServer for Backend {
         Ok(ThreadsResponseBody {
             threads: vec![Thread {
                 id: 0,
-                name: "main".to_string(),
+                name: "main".to_owned(),
             }],
         })
     }

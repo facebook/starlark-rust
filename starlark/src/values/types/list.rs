@@ -172,14 +172,15 @@ where
     fn to_json(&self) -> String {
         format!(
             "[{}]",
-            self.content.iter().map(|e| e.to_json()).enumerate().fold(
-                "".to_string(),
-                |accum, s| if s.0 == 0 {
+            self.content
+                .iter()
+                .map(|e| e.to_json())
+                .enumerate()
+                .fold(String::new(), |accum, s| if s.0 == 0 {
                     accum + &s.1
                 } else {
                     accum + "," + &s.1
-                },
-            )
+                },)
         )
     }
 

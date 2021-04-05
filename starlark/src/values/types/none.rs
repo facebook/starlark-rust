@@ -44,7 +44,7 @@ impl<'v> StarlarkValue<'v> for NoneType {
     }
 
     fn to_json(&self) -> String {
-        "null".to_string()
+        "null".to_owned()
     }
     fn to_bool(&self) -> bool {
         false

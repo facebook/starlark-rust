@@ -60,9 +60,9 @@ impl StarlarkValue<'_> for bool {
     }
     fn to_json(&self) -> String {
         if *self {
-            "true".to_string()
+            "true".to_owned()
         } else {
-            "false".to_string()
+            "false".to_owned()
         }
     }
     fn to_int(&self) -> anyhow::Result<i32> {
