@@ -240,7 +240,7 @@ where
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
             let mut result = List {
-                content: Vec::new(),
+                content: Vec::with_capacity(self.len() + other.len()),
             };
             for x in &self.content {
                 result.content.push(x.to_value());
