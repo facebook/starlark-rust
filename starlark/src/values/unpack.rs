@@ -17,9 +17,9 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use crate::values::{Heap, Value};
-use gazebo::cell::ARef;
-use std::ops::Deref;
+use crate::values::{ComplexValue, Heap, Value};
+use gazebo::{any::AnyLifetime, cell::ARef};
+use std::{cell::RefMut, ops::Deref};
 
 /// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {
@@ -80,5 +80,11 @@ pub trait FromValue<'v> {
 impl<'v, T: FromValue<'v>> UnpackValue<'v> for ARef<'v, T> {
     fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
         T::from_value(value)
+    }
+}
+
+impl<'v, T: ComplexValue<'v> + AnyLifetime<'v>> UnpackValue<'v> for RefMut<'v, T> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        value.downcast_mut(heap).ok()?
     }
 }
