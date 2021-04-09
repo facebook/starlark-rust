@@ -186,6 +186,7 @@ pub(crate) struct DefGen<V, RefV> {
     module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
 }
 
+// We can't use the `starlark_complex_value!` macro because we have two type arguments.
 pub(crate) type Def<'v> = DefGen<Value<'v>, ValueRef<'v>>;
 pub(crate) type FrozenDef = DefGen<FrozenValue, FrozenValue>;
 
@@ -225,17 +226,7 @@ impl<T1, T2> DefGen<T1, T2> {
 
 impl SimpleValue for FrozenDef {}
 
-impl<'v> AllocValue<'v> for FrozenDef {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
-    }
-}
-
 impl<'v> ComplexValue<'v> for Def<'v> {
-    fn is_mutable(&self) -> bool {
-        false
-    }
-
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let parameters = self.parameters.freeze(freezer);
         let parameter_types = self
@@ -274,6 +265,8 @@ impl<'v> AllocValue<'v> for Def<'v> {
     }
 }
 
+// We define two different StarlarkValue instances because
+// the invoker uses different types for both of them.
 impl<'v> StarlarkValue<'v> for FrozenDef {
     starlark_type!(FUNCTION_TYPE);
 
