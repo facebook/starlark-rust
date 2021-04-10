@@ -80,8 +80,8 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         s.push_str(&self.get().to_string());
     }
 
-    fn to_json(&self) -> String {
-        self.get().to_string()
+    fn to_json(&self) -> anyhow::Result<String> {
+        Ok(self.get().to_string())
     }
     fn to_int(&self) -> anyhow::Result<i32> {
         Ok(self.get())

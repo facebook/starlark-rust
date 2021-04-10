@@ -319,18 +319,18 @@ where
         ty == Record::TYPE || Some(ty) == self.get_record_type().typ.as_deref()
     }
 
-    fn to_json(&self) -> String {
+    fn to_json(&self) -> anyhow::Result<String> {
         let mut s = "{".to_owned();
         s += &self
             .get_record_type()
             .fields
             .keys()
             .zip(&self.values)
-            .map(|(k, v)| format!("\"{}\":{}", k, v.to_json()))
-            .collect::<Vec<String>>()
+            .map(|(k, v)| Ok(format!("\"{}\":{}", k, v.to_json()?)))
+            .collect::<anyhow::Result<Vec<String>>>()?
             .join(",");
         s += "}";
-        s
+        Ok(s)
     }
 
     fn collect_repr(&self, collector: &mut String) {

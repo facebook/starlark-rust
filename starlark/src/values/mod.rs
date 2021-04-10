@@ -182,7 +182,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
         self.get_aref().collect_repr(collector);
     }
 
-    fn to_json(self) -> String {
+    fn to_json(self) -> anyhow::Result<String> {
         self.get_aref().to_json()
     }
 

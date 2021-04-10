@@ -121,16 +121,16 @@ where
         RES.members(crate::stdlib::structs::struct_members)
     }
 
-    fn to_json(&self) -> String {
+    fn to_json(&self) -> anyhow::Result<String> {
         let mut s = "{".to_owned();
         s += &self
             .fields
             .iter()
-            .map(|(k, v)| format!("\"{}\":{}", k, v.to_json()))
-            .collect::<Vec<String>>()
+            .map(|(k, v)| Ok(format!("\"{}\":{}", k, v.to_json()?)))
+            .collect::<anyhow::Result<Vec<String>>>()?
             .join(",");
         s += "}";
-        s
+        Ok(s)
     }
 
     fn collect_repr(&self, r: &mut String) {

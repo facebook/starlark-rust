@@ -169,19 +169,17 @@ where
         s.push(']');
     }
 
-    fn to_json(&self) -> String {
-        format!(
-            "[{}]",
-            self.content
-                .iter()
-                .map(|e| e.to_json())
-                .enumerate()
-                .fold(String::new(), |accum, s| if s.0 == 0 {
-                    accum + &s.1
-                } else {
-                    accum + "," + &s.1
-                },)
-        )
+    fn to_json(&self) -> anyhow::Result<String> {
+        let mut res = String::new();
+        res.push('[');
+        for (i, e) in self.content.iter().enumerate() {
+            if i != 0 {
+                res.push_str(", ");
+            }
+            res.push_str(&e.to_json()?);
+        }
+        res.push(']');
+        Ok(res)
     }
 
     fn to_bool(&self) -> bool {

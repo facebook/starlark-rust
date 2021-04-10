@@ -357,8 +357,8 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     }
 
     /// Convert the type to a JSON string.
-    fn to_json(&self) -> String {
-        panic!("unsupported for type {}", self.get_type())
+    fn to_json(&self) -> anyhow::Result<String> {
+        ValueError::unsupported(self, "to_json()")
     }
 
     /// Convert self to a boolean, as returned by the bool() function.

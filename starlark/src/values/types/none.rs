@@ -43,8 +43,8 @@ impl<'v> StarlarkValue<'v> for NoneType {
         s.push_str("None");
     }
 
-    fn to_json(&self) -> String {
-        "null".to_owned()
+    fn to_json(&self) -> anyhow::Result<String> {
+        Ok("null".to_owned())
     }
     fn to_bool(&self) -> bool {
         false

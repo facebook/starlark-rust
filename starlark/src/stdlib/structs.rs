@@ -34,6 +34,6 @@ pub fn global(builder: &mut GlobalsBuilder) {
 #[starlark_module]
 pub(crate) fn struct_members(builder: &mut GlobalsBuilder) {
     fn to_json(this: Value) -> String {
-        Ok(this.to_json())
+        this.to_json()
     }
 }

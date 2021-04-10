@@ -130,7 +130,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
         buffer.push('"');
     }
 
-    fn to_json(&self) -> String {
+    fn to_json(&self) -> anyhow::Result<String> {
         let mut escaped = self.as_ref().to_owned();
         // Escape as per ECMA-404 standard
         escaped = escaped.replace("\u{005C}", "\\\\");
@@ -141,7 +141,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
         escaped = escaped.replace("\u{000A}", "\\n");
         escaped = escaped.replace("\u{000D}", "\\r");
         escaped = escaped.replace("\u{0009}", "\\t");
-        format!("\"{}\"", escaped)
+        Ok(format!("\"{}\"", escaped))
     }
 
     fn to_bool(&self) -> bool {

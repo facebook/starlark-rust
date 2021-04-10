@@ -138,7 +138,7 @@
 //!             .unwrap()
 //!             .downcast_ref::<Store>()
 //!             .unwrap()
-//!             .add(x.to_json());
+//!             .add(x.to_json()?);
 //!         Ok(NoneType)
 //!     }
 //! }

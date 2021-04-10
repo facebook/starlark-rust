@@ -268,7 +268,7 @@ where
         ty == EnumValue::TYPE || Some(ty) == self.get_enum_type().typ.as_deref()
     }
 
-    fn to_json(&self) -> String {
+    fn to_json(&self) -> anyhow::Result<String> {
         self.value.to_json()
     }
 
