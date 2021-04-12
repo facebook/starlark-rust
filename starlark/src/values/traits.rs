@@ -31,8 +31,8 @@
 use crate::{
     environment::Globals,
     values::{
-        function::FunctionInvoker, ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable,
-        Value, ValueError, Walker,
+        function::{FunctionInvoker, FUNCTION_TYPE},
+        ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable, Value, ValueError, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -380,8 +380,8 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Return an [`Err`] if there is no hash for this value (e.g. list).
     /// Must be stable between frozen and non-frozen values.
     fn get_hash(&self) -> anyhow::Result<u64> {
-        if self.is_function() {
-            // The Starlark spec says functions must be hashable.
+        if self.get_type() == FUNCTION_TYPE {
+            // The Starlark spec says values of type "function" must be hashable.
             // We could return the address of the function, but that changes
             // with frozen/non-frozen which breaks freeze for Dict.
             // We could create an atomic counter and use that, but it takes memory,
