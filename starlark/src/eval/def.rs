@@ -270,10 +270,6 @@ impl<'v> AllocValue<'v> for Def<'v> {
 impl<'v> StarlarkValue<'v> for FrozenDef {
     starlark_type!(FUNCTION_TYPE);
 
-    fn is_function(&self) -> bool {
-        true
-    }
-
     fn collect_repr(&self, collector: &mut String) {
         collector.push_str(&self.parameters.signature());
     }
@@ -293,10 +289,6 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
 
 impl<'v> StarlarkValue<'v> for Def<'v> {
     starlark_type!(FUNCTION_TYPE);
-
-    fn is_function(&self) -> bool {
-        true
-    }
 
     fn collect_repr(&self, collector: &mut String) {
         collector.push_str(&self.parameters.signature());

@@ -212,10 +212,6 @@ impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
 impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
     starlark_type!(FUNCTION_TYPE);
 
-    fn is_function(&self) -> bool {
-        true
-    }
-
     fn collect_repr(&self, s: &mut String) {
         self.parameters.collect_repr(s)
     }
@@ -327,10 +323,6 @@ where
     Self: AnyLifetime<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
-
-    fn is_function(&self) -> bool {
-        true
-    }
 
     fn collect_repr(&self, s: &mut String) {
         self.method.collect_repr(s);

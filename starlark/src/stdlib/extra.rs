@@ -151,10 +151,6 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
-    fn is_function(&self) -> bool {
-        true
-    }
-
     fn new_invoker<'a>(
         &self,
         _me: Value<'v>,

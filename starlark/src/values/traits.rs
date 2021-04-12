@@ -301,17 +301,6 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// Like get_type, but returns a reusable Value pointer to it.
     fn get_type_value(&self) -> &'static ConstFrozenValue;
 
-    /// Is this a function type. Defaults to [`false`]. Function types behave in two specific ways:
-    ///
-    /// `a.b(c)` is treated as `b(a, c)` and more generally `a.b` is treated
-    /// as `b(a, ...)` - even if there are no arguments immediately following.
-    ///
-    /// The equality/hash of a function is based on its identity - namely
-    /// its address in memory.
-    fn is_function(&self) -> bool {
-        false
-    }
-
     /// Is this value a match for a named type. Usually returns `true` for
     /// values matching `get_type`, but might also work for subtypes it implements.
     fn matches_type(&self, ty: &str) -> bool {
