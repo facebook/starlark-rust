@@ -140,8 +140,8 @@ fn eval_dot(
 ) -> Result<Either<Value<'v>, WrappedMethod<'v>>, EvalException<'v>> {
     move |context| {
         let left = e(context)?;
-        let (member, v) = thrw(left.get_attr(&s, context.heap), span, context)?;
-        if !member {
+        let (attr_type, v) = thrw(left.get_attr(&s, context.heap), span, context)?;
+        if attr_type == AttrType::Field {
             Ok(Either::Left(v))
         } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
             thrw(v_attr.call(left, context), span, context).map(Either::Left)

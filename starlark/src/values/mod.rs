@@ -33,7 +33,7 @@ use crate::{
     collections::{Hashed, SmallHashResult},
     values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
 };
-pub use gazebo::{any::AnyLifetime, cell::ARef};
+pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use indexmap::Equivalent;
 use std::{
     cell::RefMut,
@@ -254,6 +254,19 @@ impl FrozenValue {
     }
 }
 
+/// How an attribute (e.g. `x.f`) should behave.
+#[derive(Clone, Copy, Dupe, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum AttrType {
+    /// The attribute is a field, a direct value with no special behaviour.
+    Field,
+    /// The attribute is a method, which should be called passing the `x` value
+    /// as its first argument. It will either be a function (which is transformed
+    /// into a [`WrappedMethod`](crate::values::function::WrappedMethod)) or a
+    /// [`NativeAttribute`](crate::values::function::NativeAttribute)
+    /// (which is evaluated immediately).
+    Method,
+}
+
 impl<'v> Value<'v> {
     /// Add two [`Value`]s together. Will first try using [`radd`](StarlarkValue::radd),
     /// before falling back to [`add`](StarlarkValue::add).
@@ -397,18 +410,22 @@ impl<'v> Value<'v> {
 
     /// Return the attribute with the given name. Returns a pair of a boolean and the value.
     ///
-    /// The boolean is [`true`] if the attribute was defined via [`StarlarkValue::get_members`]
+    /// The type is [`AttrType::Method`] if the attribute was defined via [`StarlarkValue::get_members`]
     /// and should be used as a signal that if the attribute is subsequently called,
     /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
     /// argument to the function, e.g. `object.attribute(object, argument)`.
-    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<(bool, Value<'v>)> {
+    pub fn get_attr(
+        self,
+        attribute: &str,
+        heap: &'v Heap,
+    ) -> anyhow::Result<(AttrType, Value<'v>)> {
         let aref = self.get_aref();
         if let Some(members) = aref.get_members() {
             if let Some(v) = members.get(attribute) {
-                return Ok((true, v));
+                return Ok((AttrType::Method, v));
             }
         }
-        aref.get_attr(attribute, heap).map(|v| (false, v))
+        aref.get_attr(attribute, heap).map(|v| (AttrType::Field, v))
     }
 
     /// Query whether an attribute exists on a type. Should be equivalent to whether

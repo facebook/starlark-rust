@@ -32,7 +32,7 @@ use crate::{
         range::Range,
         string::STRING_TYPE,
         tuple::Tuple,
-        Heap, Value,
+        AttrType, Heap, Value,
     },
 };
 use anyhow::anyhow;
@@ -312,8 +312,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn getattr(ref a: Value, ref attr: &str, ref default: Option<Value>) -> Value<'v> {
         // Make sure we check if its a function first, to be consistent with `a.f`
         match a.get_attr(attr, heap) {
-            Ok((member, v)) => {
-                if !member {
+            Ok((attr_type, v)) => {
+                if attr_type == AttrType::Field {
                     Ok(v)
                 } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
                     v_attr.call(a, ctx)
