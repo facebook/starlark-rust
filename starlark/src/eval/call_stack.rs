@@ -41,10 +41,9 @@ struct CheapFrame<'v> {
 
 impl CheapFrame<'_> {
     fn resolve_location(&self) -> Option<SpanLoc> {
-        match &self.location {
-            None => None,
-            Some((codemap, span)) => Some(codemap.look_up_span(*span)),
-        }
+        self.location
+            .as_ref()
+            .map(|(codemap, span)| codemap.look_up_span(*span))
     }
 
     fn to_frame(&self) -> Frame {

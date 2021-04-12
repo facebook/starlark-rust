@@ -24,7 +24,6 @@
 
 // We group our bytes based on the tag info, not traditional alignment.
 // This lint is fairly new, so have to also enable unknown-clippy-lints.
-#![allow(clippy::unknown_clippy_lints)]
 #![allow(clippy::unusual_byte_groupings)]
 
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};

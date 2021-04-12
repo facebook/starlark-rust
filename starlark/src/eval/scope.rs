@@ -190,10 +190,7 @@ impl<'a> Scope<'a> {
                 return Some(Slot::Local(v));
             }
         }
-        match self.module.get_name(name) {
-            None => None,
-            Some(v) => Some(Slot::Module(v)),
-        }
+        self.module.get_name(name).map(Slot::Module)
     }
 
     pub fn get_name_or_panic(&mut self, name: &str) -> Slot {

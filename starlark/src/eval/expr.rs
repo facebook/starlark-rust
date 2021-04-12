@@ -251,10 +251,7 @@ impl Expr {
 
 impl Compiler<'_> {
     pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<EvalCompiled> {
-        match expr {
-            None => None,
-            Some(v) => Some(self.expr(*v)),
-        }
+        expr.map(|v| self.expr(*v))
     }
 
     pub fn expr(&mut self, expr: AstExpr) -> EvalCompiled {

@@ -28,10 +28,9 @@ use gazebo::cell::ARef;
 pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
     if let Some(x) = x.downcast_ref::<Def<'v>>() {
         Some(ARef::map(x, |x| x.scope_names()))
-    } else if let Some(x) = x.downcast_ref::<FrozenDef>() {
-        Some(ARef::map(x, |x| x.scope_names()))
     } else {
-        None
+        x.downcast_ref::<FrozenDef>()
+            .map(|x| ARef::map(x, |x| x.scope_names()))
     }
 }
 
