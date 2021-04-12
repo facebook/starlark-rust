@@ -130,9 +130,9 @@ mod tests {
         impl<'v> StarlarkValue<'v> for Bool2 {
             starlark_type!("bool2");
 
-            fn get_members(&self) -> Option<&'static Globals> {
+            fn get_methods(&self) -> Option<&'static Globals> {
                 static RES: GlobalsStatic = GlobalsStatic::new();
-                RES.members(members)
+                RES.methods(methods)
             }
 
             fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -156,7 +156,7 @@ mod tests {
         }
 
         #[starlark_module]
-        fn members(builder: &mut GlobalsBuilder) {
+        fn methods(builder: &mut GlobalsBuilder) {
             #[attribute]
             fn invert1(x: Bool2) -> Bool2 {
                 Ok(Bool2(!x.0))
@@ -168,7 +168,6 @@ mod tests {
         }
 
         let mut a = Assert::new();
-        a.globals_add(members);
         a.globals_add(globals);
         a.all_true(
             r#"

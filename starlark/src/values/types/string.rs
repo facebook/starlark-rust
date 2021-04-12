@@ -77,9 +77,9 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
 impl<'v> StarlarkValue<'v> for Box<str> {
     starlark_type!(STRING_TYPE);
 
-    fn get_members(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();
-        RES.members(crate::stdlib::string::string_members)
+        RES.methods(crate::stdlib::string::string_methods)
     }
 
     fn collect_repr(&self, buffer: &mut String) {

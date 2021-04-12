@@ -32,7 +32,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 }
 
 #[starlark_module]
-pub(crate) fn struct_members(builder: &mut GlobalsBuilder) {
+pub(crate) fn struct_methods(builder: &mut GlobalsBuilder) {
     fn to_json(this: Value) -> String {
         this.to_json()
     }

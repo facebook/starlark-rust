@@ -31,7 +31,7 @@ use anyhow::anyhow;
 use gazebo::cell::ARef;
 
 #[starlark_module]
-pub(crate) fn list_members(builder: &mut GlobalsBuilder) {
+pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// [list.append](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#list·append
     /// ): append an element to a list.

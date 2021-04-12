@@ -410,7 +410,7 @@ impl<'v> Value<'v> {
 
     /// Return the attribute with the given name. Returns a pair of a boolean and the value.
     ///
-    /// The type is [`AttrType::Method`] if the attribute was defined via [`StarlarkValue::get_members`]
+    /// The type is [`AttrType::Method`] if the attribute was defined via [`StarlarkValue::get_methods`]
     /// and should be used as a signal that if the attribute is subsequently called,
     /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
     /// argument to the function, e.g. `object.attribute(object, argument)`.
@@ -420,8 +420,8 @@ impl<'v> Value<'v> {
         heap: &'v Heap,
     ) -> anyhow::Result<(AttrType, Value<'v>)> {
         let aref = self.get_aref();
-        if let Some(members) = aref.get_members() {
-            if let Some(v) = members.get(attribute) {
+        if let Some(methods) = aref.get_methods() {
+            if let Some(v) = methods.get(attribute) {
                 return Ok((AttrType::Method, v));
             }
         }
@@ -432,8 +432,8 @@ impl<'v> Value<'v> {
     /// [`get_attr`](Value::get_attr) succeeds, but potentially more efficient.
     pub fn has_attr(self, attribute: &str) -> bool {
         let aref = self.get_aref();
-        if let Some(members) = aref.get_members() {
-            if members.get(attribute).is_some() {
+        if let Some(methods) = aref.get_methods() {
+            if methods.get(attribute).is_some() {
                 return true;
             }
         }
@@ -444,8 +444,8 @@ impl<'v> Value<'v> {
     /// `dir()` function.
     pub fn dir_attr(self) -> Vec<String> {
         let aref = self.get_aref();
-        let mut result = if let Some(members) = self.get_aref().get_members() {
-            let mut res = members.names();
+        let mut result = if let Some(methods) = self.get_aref().get_methods() {
+            let mut res = methods.names();
             res.extend(aref.dir_attr());
             res
         } else {

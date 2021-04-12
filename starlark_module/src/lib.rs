@@ -105,7 +105,7 @@ use syn::*;
 ///
 /// A function with the `#[starlark_module]` attribute can be added to a `GlobalsBuilder` value
 /// using the `with` function. Those `Globals` can be passed to `Evaluator` to provide global functions.
-/// Alternatively, you can return `Globals` from `get_members` to _attach_ functions to
+/// Alternatively, you can return `Globals` from `get_methods` to _attach_ functions to
 /// a specific type (e.g. the `string` type).
 ///
 /// * When unattached, you can define constants with `const`. We define `True`, `False` and

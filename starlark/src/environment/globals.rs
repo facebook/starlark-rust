@@ -189,13 +189,13 @@ impl GlobalsBuilder {
     }
 }
 
-/// Used to create static members for a [`StarlarkValue`](crate::values::StarlarkValue).
+/// Used to create methods for a [`StarlarkValue`](crate::values::StarlarkValue).
 ///
 /// To define a method `foo()` on your type, define
 ///  usually written as:
 ///
 /// ```ignore
-/// fn my_members(builder: &mut GlobalsBuilder) {
+/// fn my_methods(builder: &mut GlobalsBuilder) {
 ///     fn foo(me: ARef<Foo>) -> NoneType {
 ///         ...
 ///     }
@@ -203,9 +203,9 @@ impl GlobalsBuilder {
 ///
 /// impl StarlarkValue<'_> for Foo {
 ///     ...
-///     fn get_members(&self) -> Option<&'static Globals> {
+///     fn get_methods(&self) -> Option<&'static Globals> {
 ///         static RES: GlobalsStatic = GlobalsStatic::new();
-///         RES.members(module_creator)
+///         RES.methods(module_creator)
 ///     }
 ///     ...
 /// }
@@ -223,8 +223,8 @@ impl GlobalsStatic {
     }
 
     /// Populate the globals with a builder function. Always returns `Some`, but using this API
-    /// to be a better fit for [`StarlarkValue.get_members`](crate::values::StarlarkValue::get_members).
-    pub fn members(&'static self, x: impl FnOnce(&mut GlobalsBuilder)) -> Option<&'static Globals> {
+    /// to be a better fit for [`StarlarkValue.get_methods`](crate::values::StarlarkValue::get_methods).
+    pub fn methods(&'static self, x: impl FnOnce(&mut GlobalsBuilder)) -> Option<&'static Globals> {
         Some(self.globals(x))
     }
 

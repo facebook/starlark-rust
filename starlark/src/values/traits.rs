@@ -312,7 +312,7 @@ pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
     /// so it is the preferred way to go if possible. See
     /// [`GlobalsStatic`](crate::environment::GlobalsStatic) for an example of how
     /// to define this method.
-    fn get_members(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Globals> {
         None
     }
 

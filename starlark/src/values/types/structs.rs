@@ -116,9 +116,9 @@ where
 {
     starlark_type!(Struct::TYPE);
 
-    fn get_members(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();
-        RES.members(crate::stdlib::structs::struct_members)
+        RES.methods(crate::stdlib::structs::struct_methods)
     }
 
     fn to_json(&self) -> anyhow::Result<String> {

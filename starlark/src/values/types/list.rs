@@ -150,9 +150,9 @@ where
 {
     starlark_type!(List::TYPE);
 
-    fn get_members(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();
-        RES.members(crate::stdlib::list::list_members)
+        RES.methods(crate::stdlib::list::list_methods)
     }
 
     fn collect_repr(&self, s: &mut String) {

@@ -205,9 +205,9 @@ where
 {
     starlark_type!(Dict::TYPE);
 
-    fn get_members(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Globals> {
         static RES: GlobalsStatic = GlobalsStatic::new();
-        RES.members(crate::stdlib::dict::dict_members)
+        RES.methods(crate::stdlib::dict::dict_methods)
     }
 
     fn collect_repr(&self, r: &mut String) {
