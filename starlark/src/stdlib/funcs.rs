@@ -315,13 +315,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Ok((member, v)) => {
                 if !member {
                     Ok(v)
-                } else if v.get_aref().is_function() {
-                    // Insert self so the method see the object it is acting on
-                    Ok(heap.alloc(WrappedMethod::new(a, v)))
                 } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
                     v_attr.call(a, ctx)
                 } else {
-                    Ok(v)
+                    // Insert self so the method see the object it is acting on
+                    Ok(heap.alloc(WrappedMethod::new(a, v)))
                 }
             }
             Err(e) => {

@@ -143,13 +143,11 @@ fn eval_dot(
         let (member, v) = thrw(left.get_attr(&s, context.heap), span, context)?;
         if !member {
             Ok(Either::Left(v))
-        } else if v.get_aref().is_function() {
-            // Insert self so the method see the object it is acting on
-            Ok(Either::Right(WrappedMethod::new(left, v)))
         } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
             thrw(v_attr.call(left, context), span, context).map(Either::Left)
         } else {
-            Ok(Either::Left(v))
+            // Insert self so the method see the object it is acting on
+            Ok(Either::Right(WrappedMethod::new(left, v)))
         }
     }
 }
