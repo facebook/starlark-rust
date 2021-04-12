@@ -31,7 +31,7 @@
 pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
     collections::{Hashed, SmallHashResult},
-    values::types::function::FunctionInvoker,
+    values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
 };
 pub use gazebo::{any::AnyLifetime, cell::ARef};
 use indexmap::Equivalent;
@@ -380,7 +380,7 @@ impl<'v> Value<'v> {
     /// Plan is to make this return a data type at some point in the future, possibly
     /// move on to `StarlarkValue` and include data from members.
     pub fn describe(self, name: &str) -> String {
-        if self.get_aref().is_function() {
+        if self.get_type() == FUNCTION_TYPE {
             format!("def {}: pass", self.to_repr().replace(" = ...", " = None"))
         } else {
             format!("# {} = {}", name, self.to_repr())
