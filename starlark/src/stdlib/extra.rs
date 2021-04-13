@@ -117,6 +117,13 @@ pub fn print(builder: &mut GlobalsBuilder) {
     }
 }
 
+#[starlark_module]
+pub fn json(builder: &mut GlobalsBuilder) {
+    fn json(x: Value) -> String {
+        x.to_json()
+    }
+}
+
 #[derive(Debug)]
 struct PartialGen<V> {
     func: V,

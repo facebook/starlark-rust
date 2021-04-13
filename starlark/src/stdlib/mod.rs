@@ -67,6 +67,8 @@ pub enum LibraryExtension {
     Print,
     /// Add a function `breakpoint()` which will drop into a console-module evaluation prompt.
     Breakpoint,
+    /// Add a function `json()` which will generate JSON for a module.
+    Json,
     // Make sure if you add anything new, you add it to `all` below.
 }
 
@@ -76,7 +78,7 @@ impl LibraryExtension {
         use LibraryExtension::*;
         &[
             StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Print,
-            Breakpoint,
+            Breakpoint, Json,
         ]
     }
 
@@ -94,6 +96,7 @@ impl LibraryExtension {
             Debug => extra::debug(builder),
             Print => extra::print(builder),
             Breakpoint => breakpoint::global(builder),
+            Json => extra::json(builder),
         }
     }
 }
