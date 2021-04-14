@@ -106,7 +106,7 @@ fn test_identifier() {
 fn test_string_lit() {
     assert_eq!(
         assert::lex("'123' \"123\" '' \"\" '\\'' \"\\\"\" '\"' \"'\" '\\n' '\\w'"),
-        "\"123\" \"123\" \"\" \"\" \"\\\'\" \"\\\"\" \"\\\"\" \"\\\'\" \"\\n\" \"\\\\w\" \n"
+        "\"123\" \"123\" \"\" \"\" \"\'\" \"\\\"\" \"\\\"\" \"\'\" \"\\n\" \"\\\\w\" \n"
     );
 
     // unfinished string literal
@@ -124,18 +124,18 @@ fn test_string_lit() {
     // Raw string
     assert_eq!(
         assert::lex("r'' r\"\" r'\\'' r\"\\\"\" r'\"' r\"'\" r'\\n'"),
-        "\"\" \"\" \"\\\'\" \"\\\"\" \"\\\"\" \"\\\'\" \"\\\\n\" \n"
+        "\"\" \"\" \"\'\" \"\\\"\" \"\\\"\" \"\'\" \"\\\\n\" \n"
     );
 }
 
 #[test]
 fn test_string_escape() {
-    assert_eq!(assert::lex("'\\0\\0\\1n'"), "\"\\u{0}\\u{0}\\u{1}n\" \n");
+    assert_eq!(assert::lex("'\\0\\0\\1n'"), "\"\u{0}\u{0}\u{1}n\" \n");
     assert_eq!(
         assert::lex("'\\0\\00\\000\\0000'"),
-        "\"\\u{0}\\u{0}\\u{0}\\u{0}0\" \n"
+        "\"\u{0}\u{0}\u{0}\u{0}0\" \n"
     );
-    assert_eq!(assert::lex("'\\x000'"), "\"\\u{0}0\" \n");
+    assert_eq!(assert::lex("'\\x000'"), "\"\u{0}0\" \n");
     assert_eq!(assert::lex("'\\372x'"), "\"úx\" \n");
     assert::parse_fail("test 'more !\\xT!Z");
     assert::parse_fail("test + 'more !\\UFFFFFFFF! overflows'");

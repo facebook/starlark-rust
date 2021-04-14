@@ -667,9 +667,16 @@ impl Token {
             Token::Indent => "\t".to_owned(),
             Token::Newline => "\n".to_owned(),
             Token::Dedent => "#dedent".to_owned(),
-            Token::StringLiteral(x) => format!("{:?}", x),
+            Token::StringLiteral(x) => {
+                // The Rust {:?} is unstable, so changes between versions,
+                // instead use the JSON standard for string escapes.
+                // Reuse the StarlarkValue implementation since it's close to hand.
+                crate::values::StarlarkValue::to_json(&Box::from(x.as_str())).unwrap()
+            }
             _ => {
                 let s = self.to_string();
+                // Out display is often: keyword 'lambda'
+                // so strip out the bit in single quotes
                 let first = s.find('\'');
                 match first {
                     Some(first) if s.ends_with('\'') && first != s.len() - 1 => {
