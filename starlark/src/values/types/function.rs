@@ -278,8 +278,8 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 /// A wrapper for a method with a self object already bound.
 #[derive(Clone, Debug)]
 pub struct WrappedMethodGen<V> {
-    method: V,
-    self_obj: V,
+    pub(crate) method: V,
+    pub(crate) self_obj: V,
 }
 
 starlark_complex_value!(pub WrappedMethod);
@@ -289,10 +289,6 @@ impl<'v> WrappedMethod<'v> {
     /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
     pub fn new(self_obj: Value<'v>, method: Value<'v>) -> Self {
         WrappedMethod { method, self_obj }
-    }
-
-    pub(crate) fn get_method(&self) -> Value<'v> {
-        self.method
     }
 }
 

@@ -407,7 +407,7 @@ impl Compiler<'_> {
                             }
                             Either::Right(wrapper) => {
                                 let invoker = thrw(wrapper.invoke(context.heap), span, context)?;
-                                call(invoker, wrapper.get_method(), context)
+                                call(invoker, wrapper.method, context)
                             }
                         }
                     }
