@@ -187,10 +187,10 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
     }
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
-        let _guard = crate::eval::call_stack::try_inc()?;
         if self.to_value().ptr_eq(other) {
             Ok(true)
         } else {
+            let _guard = crate::eval::call_stack::try_inc()?;
             self.get_aref().equals(other)
         }
     }
