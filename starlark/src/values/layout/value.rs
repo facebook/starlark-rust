@@ -368,9 +368,16 @@ impl<'v> Value<'v> {
         Err(ControlError::CannotMutateImmutableValue.into())
     }
 
-    /// Equality on the underlying pointer.
-    /// Should be done sparingly as it slightly breaks the abstraction.
-    pub(crate) fn ptr_eq(self, other: Self) -> bool {
+    /// Are two [`Value`]s equal, looking at only their underlying pointer. This function is
+    /// low-level and provides two guarantees.
+    ///
+    /// 1. It is _reflexive_, the same [`Value`] passed as both arguments will result in [`true`].
+    /// 2. If this function is [`true`], then [`Value::equals`] will also consider them equal.
+    ///
+    /// Note that other properties are not guaranteed, and the result is not considered part of the API.
+    /// The result can be impacted by optimisations such as hash-consing, copy-on-write, partial
+    /// evaluation etc.
+    pub fn ptr_eq(self, other: Self) -> bool {
         self.0.ptr_eq(other.0)
     }
 
