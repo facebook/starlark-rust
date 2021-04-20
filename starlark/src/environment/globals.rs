@@ -16,10 +16,13 @@
  */
 
 use crate::{
+    self as starlark,
     collections::SmallMap,
     stdlib,
     values::{
-        structs::FrozenStruct, AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value,
+        function::{FrozenWrappedMethod, NativeAttribute},
+        structs::FrozenStruct,
+        AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value,
     },
 };
 use gazebo::prelude::*;
@@ -181,6 +184,35 @@ impl GlobalsBuilder {
         };
     }
 
+    /// Set a constant value in the [`GlobalsBuilder`] that will be suitable for use with
+    /// [`StarlarkValue::get_methods`](crate::values::StarlarkValue::get_methods).
+    pub fn set_attribute<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
+        // We want to build an attribute, that ignores its self argument, and does no subsequent allocation.
+        // To fake that, we put a constant function in a WrapperMethod with the value of interest.
+
+        #[starlark_module]
+        fn constant_function(builder: &mut GlobalsBuilder) {
+            // Used by set_attribute
+            fn f(outer: Value<'v>, _self: Value) -> Value<'v> {
+                Ok(outer)
+            }
+        }
+        static CONSTANT: GlobalsStatic = GlobalsStatic::new();
+        let constant = CONSTANT.function(constant_function);
+
+        let name = name.to_owned();
+        let value = value.alloc_frozen_value(&self.heap);
+        let val = self.heap.alloc(FrozenWrappedMethod {
+            self_obj: value,
+            method: constant,
+        });
+        let x = self.heap.alloc(NativeAttribute::new(val));
+        match &mut self.struct_fields {
+            None => self.variables.insert(name, x),
+            Some(fields) => fields.insert(name, x),
+        };
+    }
+
     /// Allocate a value using the same underlying heap as the [`GlobalsBuilder`],
     /// only intended for values that are referred to by those which are passed
     /// to [`set`](GlobalsBuilder::set).
@@ -242,9 +274,40 @@ impl GlobalsStatic {
     }
 }
 
-#[test]
-fn test_send_sync()
-where
-    Globals: Send + Sync,
-{
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{assert::Assert, starlark_type, values::StarlarkValue};
+
+    #[test]
+    fn test_send_sync()
+    where
+        Globals: Send + Sync,
+    {
+    }
+
+    #[test]
+    fn test_set_attribute() {
+        #[derive(Debug)]
+        struct Magic;
+        starlark_simple_value!(Magic);
+        impl<'v> StarlarkValue<'v> for Magic {
+            starlark_type!("magic");
+            fn get_methods(&self) -> Option<&'static Globals> {
+                static RES: GlobalsStatic = GlobalsStatic::new();
+                RES.methods(|x| {
+                    x.set_attribute("my_type", "magic");
+                    x.set_attribute("my_value", 42);
+                })
+            }
+        }
+
+        let mut a = Assert::new();
+        a.globals_add(|x| x.set("magic", Magic));
+        a.pass(
+            r#"
+assert_eq(magic.my_type, "magic")
+assert_eq(magic.my_value, 42)"#,
+        );
+    }
 }
