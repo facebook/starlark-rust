@@ -66,7 +66,7 @@ impl ConformanceTest {
             .collect::<Vec<_>>()
             .split(|x| *x == "---")
             .map(|xs| Self {
-                code: xs.iter().join("\n"),
+                code: xs.join("\n"),
                 error: xs
                     .iter()
                     .find_position(|x| x.contains("###"))
