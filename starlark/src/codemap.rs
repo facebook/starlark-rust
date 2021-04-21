@@ -63,7 +63,7 @@ impl Sub<Pos> for Pos {
 }
 
 /// A range of text within a CodeMap.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct Span {
     /// The position in the codemap representing the first byte of the span.
     low: Pos,
@@ -312,7 +312,7 @@ impl Hash for File {
 }
 
 /// A line and column.
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Debug)]
 pub struct LineCol {
     /// The line number within the file (0-indexed).
     pub line: usize,

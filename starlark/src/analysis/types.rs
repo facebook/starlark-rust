@@ -16,14 +16,14 @@
  */
 
 use crate::codemap::{CodeMap, LineCol, Span, SpanLoc};
-use gazebo::variants::VariantName;
+use gazebo::{prelude::*, variants::VariantName};
 use std::fmt::{self, Display};
 
 pub(crate) trait LintWarning: Display + VariantName {
     fn is_serious(&self) -> bool;
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct LineCol1 {
     /// The line number within the file (1-indexed).
     pub line: usize,
@@ -33,7 +33,7 @@ pub struct LineCol1 {
 }
 
 #[doc(hidden)] // Eventually we want CodeMap to gain these features, so this will go away
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Dupe, Clone, Copy)]
 pub struct LineColSpan {
     pub begin: LineCol1,
     pub end: LineCol1,

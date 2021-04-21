@@ -22,10 +22,11 @@ use crate::values::{
     iter::StarlarkIterable,
     Heap, StarlarkValue, Value, ValueError,
 };
+use gazebo::prelude::*;
 use std::{marker::PhantomData, num::NonZeroI32};
 
 /// Representation of `range()` type.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Dupe, Debug)]
 pub struct Range {
     start: i32,
     stop: i32,
