@@ -50,7 +50,7 @@ pub trait AsStarlarkValue<'v> {
     fn as_debug(&self) -> &dyn Debug;
 }
 
-impl<'v, T: StarlarkValue<'v> + AnyLifetime<'v>> AsStarlarkValue<'v> for T {
+impl<'v, T: StarlarkValue<'v>> AsStarlarkValue<'v> for T {
     fn as_type_name(&self) -> &'static str {
         std::any::type_name::<T>()
     }
@@ -293,7 +293,7 @@ pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 ///
 /// Every additional field enables further features in Starlark. In most cases the default
 /// implementation returns an "unimplemented" [`Err`].
-pub trait StarlarkValue<'v>: 'v + AsStarlarkValue<'v> + Debug {
+pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     fn get_type(&self) -> &'static str;
