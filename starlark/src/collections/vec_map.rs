@@ -316,7 +316,7 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
-    pub fn remove_hashed<Q>(&mut self, key: BorrowHashed<Q>) -> Option<V>
+    pub fn remove_hashed_entry<Q>(&mut self, key: BorrowHashed<Q>) -> Option<(K, V)>
     where
         Q: ?Sized + Equivalent<K>,
     {
@@ -330,10 +330,17 @@ impl<K, V> VecMap<K, V> {
                 for j in i..len - 1 {
                     self.hashes[j] = self.hashes[j + 1];
                 }
-                return Some(self.values.remove(i).1);
+                return Some(self.values.remove(i));
             }
         }
         None
+    }
+
+    pub fn remove_hashed<Q>(&mut self, key: BorrowHashed<Q>) -> Option<V>
+    where
+        Q: ?Sized + Equivalent<K>,
+    {
+        self.remove_hashed_entry(key).map(|(_, v)| v)
     }
 
     pub fn drain_to<S>(&mut self, map: &mut IndexMap<Hashed<K>, V, S>)

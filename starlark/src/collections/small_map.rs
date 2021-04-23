@@ -549,12 +549,32 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    pub fn remove_hashed_entry<Q>(&mut self, key: BorrowHashed<Q>) -> Option<(K, V)>
+    where
+        Q: ?Sized + Equivalent<K>,
+        K: Eq,
+    {
+        match self.state {
+            MapHolder::Empty => None,
+            MapHolder::Vec(ref mut v) => v.remove_hashed_entry(key),
+            MapHolder::Map(ref mut m) => m.shift_remove_entry(&key).map(|(k, v)| (k.into_key(), v)),
+        }
+    }
+
     pub fn remove<Q>(&mut self, key: &Q) -> Option<V>
     where
         Q: ?Sized + Hash + Equivalent<K>,
         K: Eq,
     {
         self.remove_hashed(BorrowHashed::new(key))
+    }
+
+    pub fn remove_entry<Q>(&mut self, key: &Q) -> Option<(K, V)>
+    where
+        Q: ?Sized + Hash + Equivalent<K>,
+        K: Eq,
+    {
+        self.remove_hashed_entry(BorrowHashed::new(key))
     }
 
     pub fn is_empty(&self) -> bool {

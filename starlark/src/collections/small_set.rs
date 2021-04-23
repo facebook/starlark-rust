@@ -130,6 +130,14 @@ impl<T> SmallSet<T> {
         self.0.remove(key);
     }
 
+    pub fn take<Q>(&mut self, key: &Q) -> Option<T>
+    where
+        Q: ?Sized + Hash + Equivalent<T>,
+        T: Eq,
+    {
+        self.0.remove_entry(key).map(|(k, _)| k)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
