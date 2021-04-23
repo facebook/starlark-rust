@@ -134,9 +134,3 @@ impl<'v, T: ComplexValue<'v>> ValueOfMut<'v, T> {
         }))
     }
 }
-
-impl<'v, T: ComplexValue<'v>> UnpackValue<'v> for RefMut<'v, T> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        value.downcast_mut(heap).ok()?
-    }
-}
