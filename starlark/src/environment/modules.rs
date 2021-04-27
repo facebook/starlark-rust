@@ -91,11 +91,12 @@ impl FrozenModule {
     /// Returns [`None`] if the variable isn't defined in the module or hasn't been set.
     pub fn get(&self, name: &str) -> Option<OwnedFrozenValue> {
         let slot = self.1.0.names.get_name(name)?;
+        // This code is safe because we know the frozen module ref keeps the values alive
         self.1
             .0
             .slots
             .get_slot(slot)
-            .map(|x| OwnedFrozenValue::new(self.0.dupe(), x))
+            .map(|x| unsafe { OwnedFrozenValue::new(self.0.dupe(), x) })
     }
 
     /// Iterate through all the names defined in this module.

@@ -23,6 +23,8 @@ use gazebo::prelude::*;
 use std::{fmt, fmt::Display};
 
 /// A [`FrozenValue`] along with a [`FrozenHeapRef`] that ensures it is kept alive.
+/// Obtained from [`FrozenModule::get`](crate::environment::FrozenModule::get) or
+/// [`OwnedFrozenValue::alloc`].
 ///
 /// You can extract the value using the
 /// `owned_` methods, which require a reference to the heap which should keep the value
@@ -32,6 +34,7 @@ use std::{fmt, fmt::Display};
 #[derive(Debug, Clone, Dupe)]
 pub struct OwnedFrozenValue {
     owner: FrozenHeapRef,
+    // Invariant: this FrozenValue must be kept alive by the `owner` field.
     value: FrozenValue,
 }
 
@@ -44,7 +47,8 @@ impl Display for OwnedFrozenValue {
 impl OwnedFrozenValue {
     /// Create an [`OwnedFrozenValue`] - generally [`OwnedFrozenValue`]s are obtained
     /// from [`FrozenModule::get`](crate::environment::FrozenModule::get).
-    pub fn new(owner: FrozenHeapRef, value: FrozenValue) -> Self {
+    /// Marked unsafe because the owner must be correct.
+    pub(crate) unsafe fn new(owner: FrozenHeapRef, value: FrozenValue) -> Self {
         Self { owner, value }
     }
 
@@ -52,7 +56,8 @@ impl OwnedFrozenValue {
     pub fn alloc(x: impl AllocFrozenValue) -> Self {
         let heap = FrozenHeap::new();
         let val = heap.alloc(x);
-        Self::new(heap.into_ref(), val)
+        // Safe because we just created the value on the heap
+        unsafe { Self::new(heap.into_ref(), val) }
     }
 
     /// Extract a [`FrozenValue`] by passing the heap which will use it.
