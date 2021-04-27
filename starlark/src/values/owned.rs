@@ -81,7 +81,8 @@ impl OwnedFrozenValue {
     /// see the [`frozen_heap`](crate::environment::Module::frozen_heap) function.
     /// If you don't care about the resulting lifetime the [`value`](OwnedFrozenValue::value) method is easier.
     pub fn owned_value<'v>(&self, heap: &'v FrozenHeap) -> Value<'v> {
-        self.owned_frozen_value(heap).to_value()
+        // Safe because we convert it to a value which is tied to the owning heap
+        unsafe { self.owned_frozen_value(heap).to_value() }
     }
 
     /// Operate on the [`FrozenValue`] stored inside.
@@ -94,26 +95,20 @@ impl OwnedFrozenValue {
         }
     }
 
-    /// Be VERY careful, potential segfault! See the warnings on `OwnedFrozenValue`.
-    /// This function is highly likely to gain an `unsafe` in the future.
-    ///
     /// Obtain direct access to the [`FrozenValue`] that lives inside. If you drop all
     /// references to the [`FrozenHeap`] keeping it alive, any code using the [`FrozenValue`]
     /// is likely to segfault. If possible use [`value`](OwnedFrozenValue::value) or
     /// [`owned_frozen_value`](OwnedFrozenValue::owned_frozen_value).
-    pub fn unchecked_frozen_value(&self) -> FrozenValue {
+    pub unsafe fn unchecked_frozen_value(&self) -> FrozenValue {
         self.value
     }
 
-    /// Be VERY careful, potential segfault! See the warnings on `OwnedFrozenValue`.
-    /// This function is highly likely to gain an `unsafe` in the future.
-    ///
     /// Extract a [`FrozenValue`] by passing the [`FrozenHeap`] which will keep it alive.
     /// Provided the argument heap does indeed stay alive for the lifetime of the result,
     /// all will be fine. Unsafe if you pass the wrong heap, or don't keep the heap alive
     /// long enough. Where possible, use [`value`](OwnedFrozenValue::value) or
     /// [`owned_value`](OwnedFrozenValue::owned_value).
-    pub fn owned_frozen_value(&self, heap: &FrozenHeap) -> FrozenValue {
+    pub unsafe fn owned_frozen_value(&self, heap: &FrozenHeap) -> FrozenValue {
         heap.add_reference(&self.owner);
         self.value
     }
