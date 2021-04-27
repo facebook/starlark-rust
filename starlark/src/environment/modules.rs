@@ -258,7 +258,7 @@ impl Module {
         }
         match env.get(symbol) {
             None => Err(EnvironmentError::VariableNotFound(symbol.to_owned()).into()),
-            Some(v) => Ok(v.owned_value(self)),
+            Some(v) => Ok(v.owned_value(self.frozen_heap())),
         }
     }
 }

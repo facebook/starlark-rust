@@ -15,10 +15,7 @@
  * limitations under the License.
  */
 
-use crate::{
-    environment::Module,
-    values::{AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value},
-};
+use crate::values::{AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value};
 use gazebo::prelude::*;
 use std::{fmt, fmt::Display};
 
@@ -67,9 +64,11 @@ impl OwnedFrozenValue {
         self.value
     }
 
-    /// Extract a [`Value`] by passing the module which will use it.
-    pub fn owned_value<'v>(&self, module: &'v Module) -> Value<'v> {
-        self.owned_frozen_value(module.frozen_heap()).to_value()
+    /// Extract a [`Value`] by passing the [`FrozenHeap`] which will promise to keep it alive.
+    /// When using with a [`Module`](crate::environment::Module),
+    /// see the [`frozen_heap`](crate::environment::Module::frozen_heap) function.
+    pub fn owned_value<'v>(&self, heap: &'v FrozenHeap) -> Value<'v> {
+        self.owned_frozen_value(heap).to_value()
     }
 
     /// Unpack the boolean contained in the underlying value, or [`None`] if it is not a boolean.
