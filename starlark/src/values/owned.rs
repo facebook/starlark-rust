@@ -82,6 +82,11 @@ impl OwnedFrozenValue {
         self.value.unpack_int()
     }
 
+    /// Unpack the string contained in the underlying value, or [`None`] if it is not an string.
+    pub fn unpack_str(&self) -> Option<&str> {
+        self.value.unpack_str()
+    }
+
     /// Operate on the [`FrozenValue`] stored inside.
     /// Safe provided you don't store the [`FrozenValue`] after the closure has returned.
     pub fn map(&self, f: impl FnOnce(FrozenValue) -> FrozenValue) -> Self {
