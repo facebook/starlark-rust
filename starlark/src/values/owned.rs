@@ -23,11 +23,10 @@ use std::{fmt, fmt::Display};
 /// Obtained from [`FrozenModule::get`](crate::environment::FrozenModule::get) or
 /// [`OwnedFrozenValue::alloc`].
 ///
-/// You can extract the value using the
-/// `owned_` methods, which require a reference to the heap which should keep the value
-/// alive. Or you can use the `unchecked_` methods which require that you know the value
-/// remains alive as long as it is used, perhaps because you keep a reference to the
-/// containing [`OwnedFrozenValue`].
+/// While it is possible to obtain the underlying [`FrozenValue`] with
+/// [`unchecked_frozen_value`](OwnedFrozenValue::unchecked_frozen_value), that approach
+/// is strongly discouraged. See the other methods which unpack the code, access it as a
+/// [`Value`] (which has a suitable lifetime) or add references to other heaps.
 #[derive(Debug, Clone, Dupe)]
 pub struct OwnedFrozenValue {
     owner: FrozenHeapRef,
@@ -49,26 +48,12 @@ impl OwnedFrozenValue {
         Self { owner, value }
     }
 
-    /// Create an [`OwnedFrozenValue`] pointing at a new heap.
+    /// Create an [`OwnedFrozenValue`] in a new heap.
     pub fn alloc(x: impl AllocFrozenValue) -> Self {
         let heap = FrozenHeap::new();
         let val = heap.alloc(x);
         // Safe because we just created the value on the heap
         unsafe { Self::new(heap.into_ref(), val) }
-    }
-
-    /// Extract a [`FrozenValue`] by passing the heap which will use it.
-    /// Unsafe if you pass the wrong heap.
-    pub fn owned_frozen_value(&self, heap: &FrozenHeap) -> FrozenValue {
-        heap.add_reference(&self.owner);
-        self.value
-    }
-
-    /// Extract a [`Value`] by passing the [`FrozenHeap`] which will promise to keep it alive.
-    /// When using with a [`Module`](crate::environment::Module),
-    /// see the [`frozen_heap`](crate::environment::Module::frozen_heap) function.
-    pub fn owned_value<'v>(&self, heap: &'v FrozenHeap) -> Value<'v> {
-        self.owned_frozen_value(heap).to_value()
     }
 
     /// Unpack the boolean contained in the underlying value, or [`None`] if it is not a boolean.
@@ -86,8 +71,22 @@ impl OwnedFrozenValue {
         self.value.unpack_str()
     }
 
+    /// Obtain the [`Value`] stored inside.
+    pub fn value<'v>(&'v self) -> Value<'v> {
+        Value::new_frozen(self.value)
+    }
+
+    /// Extract a [`Value`] by passing the [`FrozenHeap`] which will promise to keep it alive.
+    /// When using with a [`Module`](crate::environment::Module),
+    /// see the [`frozen_heap`](crate::environment::Module::frozen_heap) function.
+    /// If you don't care about the resulting lifetime the [`value`](OwnedFrozenValue::value) method is easier.
+    pub fn owned_value<'v>(&self, heap: &'v FrozenHeap) -> Value<'v> {
+        self.owned_frozen_value(heap).to_value()
+    }
+
     /// Operate on the [`FrozenValue`] stored inside.
-    /// Safe provided you don't store the [`FrozenValue`] after the closure has returned.
+    /// Safe provided you don't store the argument [`FrozenValue`] after the closure has returned.
+    /// Using this function is discouraged when possible.
     pub fn map(&self, f: impl FnOnce(FrozenValue) -> FrozenValue) -> Self {
         Self {
             owner: self.owner.dupe(),
@@ -97,12 +96,25 @@ impl OwnedFrozenValue {
 
     /// Be VERY careful, potential segfault! See the warnings on `OwnedFrozenValue`.
     /// This function is highly likely to gain an `unsafe` in the future.
+    ///
+    /// Obtain direct access to the [`FrozenValue`] that lives inside. If you drop all
+    /// references to the [`FrozenHeap`] keeping it alive, any code using the [`FrozenValue`]
+    /// is likely to segfault. If possible use [`value`](OwnedFrozenValue::value) or
+    /// [`owned_frozen_value`](OwnedFrozenValue::owned_frozen_value).
     pub fn unchecked_frozen_value(&self) -> FrozenValue {
         self.value
     }
 
-    /// Obtain the [`Value`] stored inside.
-    pub fn value<'v>(&'v self) -> Value<'v> {
-        Value::new_frozen(self.value)
+    /// Be VERY careful, potential segfault! See the warnings on `OwnedFrozenValue`.
+    /// This function is highly likely to gain an `unsafe` in the future.
+    ///
+    /// Extract a [`FrozenValue`] by passing the [`FrozenHeap`] which will keep it alive.
+    /// Provided the argument heap does indeed stay alive for the lifetime of the result,
+    /// all will be fine. Unsafe if you pass the wrong heap, or don't keep the heap alive
+    /// long enough. Where possible, use [`value`](OwnedFrozenValue::value) or
+    /// [`owned_value`](OwnedFrozenValue::owned_value).
+    pub fn owned_frozen_value(&self, heap: &FrozenHeap) -> FrozenValue {
+        heap.add_reference(&self.owner);
+        self.value
     }
 }
