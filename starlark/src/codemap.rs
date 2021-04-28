@@ -137,6 +137,12 @@ pub struct CodeMap {
     file: Arc<File>,
 }
 
+impl Default for CodeMap {
+    fn default() -> Self {
+        Self::new("".to_owned(), "".to_owned())
+    }
+}
+
 impl CodeMap {
     /// Creates an new `CodeMap`.
     pub fn new(filename: String, contents: String) -> CodeMap {

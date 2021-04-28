@@ -88,8 +88,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             local_variables: LocalSlots::default(),
             local_variables_stack: Vec::new(),
             globals,
-            loader: None, // TODO: Implement Default for CodeMap
-            codemap: CodeMap::new(String::new(), String::new()), // Will be replaced before it is used
+            loader: None,
+            codemap: CodeMap::default(), // Will be replaced before it is used
             extra: None,
             extra_v: None,
             last_heap_size: 0,
