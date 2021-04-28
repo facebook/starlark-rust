@@ -132,7 +132,7 @@ impl<T> Deref for Spanned<T> {
 }
 
 /// A data structure recording a source code file for position lookup.
-#[derive(Debug)]
+#[derive(Debug, Clone, Dupe)]
 pub struct CodeMap {
     file: Arc<File>,
 }
