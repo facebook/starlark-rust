@@ -28,7 +28,7 @@ use crate::{
 use anyhow::anyhow;
 use gazebo::prelude::*;
 use lalrpop_util as lu;
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, path::Path};
 
 fn one_of(expected: &[String]) -> String {
     let mut result = String::new();
@@ -51,7 +51,7 @@ fn one_of(expected: &[String]) -> String {
 pub(crate) fn parse_error_add_span(
     err: lu::ParseError<usize, Token, anyhow::Error>,
     span: Span,
-    codemap: Arc<CodeMap>,
+    codemap: CodeMap,
 ) -> anyhow::Error {
     if let lu::ParseError::User { error } = err {
         return error;
@@ -93,7 +93,7 @@ pub(crate) fn parse_error_add_span(
 
 impl AstModule {
     fn create(
-        codemap: Arc<CodeMap>,
+        codemap: CodeMap,
         statement: AstStmt,
         dialect: &Dialect,
     ) -> anyhow::Result<AstModule> {
@@ -113,7 +113,6 @@ impl AstModule {
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
         let codemap = CodeMap::new(filename.to_owned(), content);
         let file = codemap.get_file().dupe();
-        let codemap = Arc::new(codemap);
         let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
         match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
             Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),

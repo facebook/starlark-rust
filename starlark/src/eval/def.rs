@@ -178,7 +178,7 @@ pub(crate) struct DefGen<V, RefV> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
     parameter_types: Vec<(usize, String, V)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<V>,                   // The return type annotation for the function
-    codemap: Arc<CodeMap>,                    // Codemap that was active during this module
+    codemap: CodeMap,                         // Codemap that was active during this module
     stmt: Arc<DefInfo>,                       // The source code and metadata for this function
     captured: Vec<RefV>, // Any variables captured from the outer scope (nested def/lambda), see stmt.parent
     // Important to ignore these field as it probably references DefGen in a cycle
@@ -199,7 +199,7 @@ impl<'v> Def<'v> {
         parameter_types: Vec<(usize, String, Value<'v>)>,
         return_type: Option<Value<'v>>,
         stmt: Arc<DefInfo>,
-        codemap: Arc<CodeMap>,
+        codemap: CodeMap,
         context: &mut Evaluator<'v, '_>,
     ) -> Value<'v> {
         let captured = stmt

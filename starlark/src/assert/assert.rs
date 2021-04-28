@@ -32,7 +32,7 @@ use crate::{
 use anyhow::anyhow;
 use gazebo::prelude::*;
 use once_cell::sync::Lazy;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 fn mk_environment() -> GlobalsBuilder {
     GlobalsBuilder::extended().with(test_methods)
@@ -478,7 +478,6 @@ impl Assert {
         fn tokens(dialect: &Dialect, program: &str) -> Vec<(usize, Token, usize)> {
             let codemap = CodeMap::new("assert.bzl".to_owned(), program.to_owned());
             let file_span = codemap.get_file().span;
-            let codemap = Arc::new(codemap);
             Lexer::new(program, dialect, codemap.dupe(), file_span)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap_or_else(|e|

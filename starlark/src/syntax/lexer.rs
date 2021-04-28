@@ -25,7 +25,7 @@ use crate::{
 };
 use gazebo::dupe::Dupe;
 use logos::Logos;
-use std::{char, collections::VecDeque, fmt, fmt::Display, sync::Arc};
+use std::{char, collections::VecDeque, fmt, fmt::Display};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -52,7 +52,7 @@ type Lexeme = anyhow::Result<(usize, Token, usize)>;
 
 pub(crate) struct Lexer<'a> {
     // Information for spans
-    codemap: Arc<CodeMap>,
+    codemap: CodeMap,
     filespan: Span,
     // Other info
     indent_levels: Vec<usize>,
@@ -65,7 +65,7 @@ pub(crate) struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str, dialect: &Dialect, codemap: Arc<CodeMap>, filespan: Span) -> Self {
+    pub fn new(input: &'a str, dialect: &Dialect, codemap: CodeMap, filespan: Span) -> Self {
         let lexer = Token::lexer(input);
         let mut lexer2 = Self {
             codemap,

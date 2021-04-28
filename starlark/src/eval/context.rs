@@ -26,7 +26,7 @@ use crate::{
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
 use gazebo::any::AnyLifetime;
-use std::{mem, sync::Arc};
+use std::mem;
 
 /// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a> {
@@ -50,7 +50,7 @@ pub struct Evaluator<'v, 'a> {
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a mut dyn FileLoader>,
     // The codemap that corresponds to this module.
-    pub(crate) codemap: Arc<CodeMap>,
+    pub(crate) codemap: CodeMap,
     // Should we enable profiling or not
     pub(crate) profiling: bool,
     // Is GC disabled for some reason
@@ -89,7 +89,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             local_variables_stack: Vec::new(),
             globals,
             loader: None, // TODO: Implement Default for CodeMap
-            codemap: Arc::new(CodeMap::new(String::new(), String::new())), // Will be replaced before it is used
+            codemap: CodeMap::new(String::new(), String::new()), // Will be replaced before it is used
             extra: None,
             extra_v: None,
             last_heap_size: 0,
@@ -147,7 +147,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
-        location: Option<(Arc<CodeMap>, Span)>,
+        location: Option<(CodeMap, Span)>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.call_stack.push(function, location)?;
@@ -174,7 +174,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         &mut self,
         module: Option<FrozenModuleValue>, // None == use module_env
         locals: LocalSlots<'v>,
-        codemap: Arc<CodeMap>,
+        codemap: CodeMap,
         within: impl FnOnce(&mut Self) -> Result<R, E>,
     ) -> Result<R, E>
     where

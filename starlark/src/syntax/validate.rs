@@ -28,7 +28,7 @@ use crate::{
     },
 };
 use gazebo::prelude::*;
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -85,7 +85,7 @@ impl Expr {
     pub fn check_call(
         f: AstExpr,
         args: Vec<AstArgument>,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
     ) -> anyhow::Result<Expr> {
         let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
 
@@ -141,7 +141,7 @@ fn test_param_name<'a, T>(
     argset: &mut HashSet<&'a str>,
     n: &'a Spanned<String>,
     arg: &Spanned<T>,
-    codemap: &Arc<CodeMap>,
+    codemap: &CodeMap,
 ) -> anyhow::Result<()> {
     if argset.contains(n.node.as_str()) {
         return Err(Diagnostic::new(
@@ -174,7 +174,7 @@ impl Stmt {
         parameters: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
         stmts: AstStmt,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
     ) -> anyhow::Result<Stmt> {
         let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
 
@@ -228,17 +228,13 @@ impl Stmt {
     }
 
     /// Validate all statements only occur where they are allowed to.
-    pub fn validate(
-        codemap: &Arc<CodeMap>,
-        stmt: &AstStmt,
-        dialect: &Dialect,
-    ) -> anyhow::Result<()> {
+    pub fn validate(codemap: &CodeMap, stmt: &AstStmt, dialect: &Dialect) -> anyhow::Result<()> {
         // Inside a for, we allow continue/break, unless we go beneath a def.
         // Inside a def, we allow return.
         // All load's must occur at the top-level.
         // At the top-level we only allow for/if when the dialect permits it.
         fn f(
-            codemap: &Arc<CodeMap>,
+            codemap: &CodeMap,
             dialect: &Dialect,
             stmt: &AstStmt,
             top_level: bool,

@@ -29,14 +29,14 @@ use crate::{
     errors::Frame,
     values::{ControlError, Value, Walker},
 };
-use std::{cell::Cell, fmt, fmt::Debug, sync::Arc};
+use std::{cell::Cell, fmt, fmt::Debug};
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
 // anything in advance.
 // The downside is it has a lifetime on 'v and keeps alive the whole CodeMap.
 struct CheapFrame<'v> {
     function: Value<'v>,
-    location: Option<(Arc<CodeMap>, Span)>,
+    location: Option<(CodeMap, Span)>,
 }
 
 impl CheapFrame<'_> {
@@ -79,7 +79,7 @@ impl<'v> CallStack<'v> {
     pub(crate) fn push(
         &mut self,
         function: Value<'v>,
-        location: Option<(Arc<CodeMap>, Span)>,
+        location: Option<(CodeMap, Span)>,
     ) -> anyhow::Result<()> {
         if self.stack.len() > MAX_CALLSTACK_RECURSION {
             return Err(ControlError::TooManyRecursionLevel.into());

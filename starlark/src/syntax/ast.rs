@@ -24,7 +24,6 @@ use static_assertions::assert_eq_size;
 use std::{
     fmt,
     fmt::{Display, Formatter},
-    sync::Arc,
 };
 
 // Boxed types used for storing information from the parsing will be used
@@ -52,7 +51,7 @@ assert_eq_size!(AstExpr, [usize; 7]);
 #[derivative(Debug)]
 pub struct AstModule {
     #[derivative(Debug = "ignore")]
-    pub(crate) codemap: Arc<CodeMap>,
+    pub(crate) codemap: CodeMap,
     pub(crate) statement: AstStmt,
 }
 

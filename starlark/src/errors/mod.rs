@@ -26,7 +26,6 @@ use annotate_snippets::{
 use std::{
     error::Error,
     fmt::{self, Display, Formatter},
-    sync::Arc,
 };
 
 /// An error plus its origination location and call stack.
@@ -40,7 +39,7 @@ pub struct Diagnostic {
     pub message: anyhow::Error,
 
     /// Location where the error originated.
-    pub span: Option<(Span, Arc<CodeMap>)>,
+    pub span: Option<(Span, CodeMap)>,
 
     /// Call stack of what called what. Most recent frames are at the end.
     pub call_stack: Vec<Frame>,
@@ -79,11 +78,7 @@ impl Diagnostic {
     /// Create a new [`Diagnostic`] containing an underlying error and span.
     /// If the given `message` is already a [`Diagnostic`] with a [`Span`],
     /// the new span will be ignored and the original `message` returned.
-    pub fn new(
-        message: impl Into<anyhow::Error>,
-        span: Span,
-        codemap: Arc<CodeMap>,
-    ) -> anyhow::Error {
+    pub fn new(message: impl Into<anyhow::Error>, span: Span, codemap: CodeMap) -> anyhow::Error {
         Self::modify(message.into(), |d| d.set_span(span, codemap))
     }
 
@@ -109,7 +104,7 @@ impl Diagnostic {
     }
 
     /// Set the [`Diagnostic::span`] field, unless it's already been set.
-    pub fn set_span(&mut self, span: Span, codemap: Arc<CodeMap>) {
+    pub fn set_span(&mut self, span: Span, codemap: CodeMap) {
         if self.span.is_none() {
             // We want the best span, which is likely the first person to set it
             self.span = Some((span, codemap));

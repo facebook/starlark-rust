@@ -21,7 +21,6 @@ use crate::{
     syntax::ast::Visibility,
 };
 use gazebo::prelude::*;
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -97,14 +96,14 @@ impl Dialect {
     };
 }
 
-fn err<T>(codemap: &Arc<CodeMap>, span: Span, err: DialectError) -> anyhow::Result<T> {
+fn err<T>(codemap: &CodeMap, span: Span, err: DialectError) -> anyhow::Result<T> {
     Err(Diagnostic::new(err, span, codemap.dupe()))
 }
 
 impl Dialect {
     pub(crate) fn check_lambda<T>(
         &self,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
         x: Spanned<T>,
     ) -> anyhow::Result<Spanned<T>> {
         if self.enable_lambda {
@@ -116,7 +115,7 @@ impl Dialect {
 
     pub(crate) fn check_def<T>(
         &self,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
         x: Spanned<T>,
     ) -> anyhow::Result<Spanned<T>> {
         if self.enable_def {
@@ -128,7 +127,7 @@ impl Dialect {
 
     pub(crate) fn check_load<T>(
         &self,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
         x: Spanned<T>,
     ) -> anyhow::Result<Spanned<T>> {
         if self.enable_load {
@@ -140,7 +139,7 @@ impl Dialect {
 
     pub(crate) fn check_keyword_only_arguments<T>(
         &self,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
         span: Span,
         x: T,
     ) -> anyhow::Result<T> {
@@ -153,7 +152,7 @@ impl Dialect {
 
     pub(crate) fn check_type<T>(
         &self,
-        codemap: &Arc<CodeMap>,
+        codemap: &CodeMap,
         x: Spanned<T>,
     ) -> anyhow::Result<Spanned<T>> {
         if self.enable_types {

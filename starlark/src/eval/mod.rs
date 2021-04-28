@@ -28,7 +28,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::{fmt::Debug, mem, sync::Arc};
+use std::{fmt::Debug, mem};
 use thiserror::Error;
 
 pub use crate::eval::file_loader::*;
@@ -118,7 +118,7 @@ pub(crate) struct Compiler<'a> {
     heap: &'a FrozenHeap,
     globals: &'a Globals,
     errors: Vec<anyhow::Error>,
-    codemap: Arc<CodeMap>,
+    codemap: CodeMap,
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {

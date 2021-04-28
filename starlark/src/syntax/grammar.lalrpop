@@ -14,12 +14,11 @@
 // limitations under the License.
 
 use crate::codemap::{Span, CodeMap};
-use std::sync::Arc;
 use crate::syntax::lexer;
 use crate::syntax::dialect::Dialect;
 use crate::syntax::ast::*;
 
-grammar(codemap: &Arc<CodeMap>, file_span: Span, dialect: &Dialect);
+grammar(codemap: &CodeMap, file_span: Span, dialect: &Dialect);
 
 #[inline]
 ASTS<E>: AstStmt = <l:@L> <e:E> <r:@R>
