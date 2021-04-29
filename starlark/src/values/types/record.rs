@@ -228,7 +228,7 @@ where
         heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
         let name = self.typ.as_deref().unwrap_or("record").to_owned();
-        let mut signature = ParametersSpec::with_capacity(name, self.fields.len());
+        let mut signature = ParametersSpec::with_capacity(name, self.fields.len() + 1);
         signature.required("me"); // Hidden first argument
         signature.no_args();
         for (name, field) in &self.fields {
