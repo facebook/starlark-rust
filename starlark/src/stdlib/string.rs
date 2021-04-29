@@ -257,8 +257,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     fn codepoints(this: &str) -> Vec<i32> {
         // Note that we return a list here... Which is not equivalent to the go
         // implementation.
-        let v: Vec<i32> = this.chars().map(|x| u32::from(x) as i32).collect();
-        Ok(v)
+        Ok(this.chars().map(|x| u32::from(x) as i32).collect())
     }
 
     /// [string.count](
