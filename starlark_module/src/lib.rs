@@ -64,7 +64,7 @@ use syn::*;
 //     }
 //     {
 //         #[allow(unused_mut)]
-//         let mut signature = starlark::eval::ParametersSpec::new("cc_binary".to_owned());
+//         let mut signature = starlark::eval::ParametersSpec::with_capcity("cc_binary".to_owned(), 2);
 //         signature.required("name");
 //         signature.required("srcs");
 //         globals_builder.set(
@@ -226,6 +226,7 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
     };
     let body = &func.block;
     let args = func.sig.inputs.iter().map(Arg::new).collect::<Vec<_>>();
+    let args_count = args.len();
     let bind_args = args.map(bind_argument);
     let signature = args.map(record_argument);
     let setter = if is_attribute {
@@ -280,7 +281,7 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
         }
         {
             #[allow(unused_mut)]
-            let mut signature = starlark::eval::ParametersSpec::new(#name_str.to_owned());
+            let mut signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
             #( #signature )*
             #setter
         }
