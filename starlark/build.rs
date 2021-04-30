@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-extern crate lalrpop;
-
 fn main() {
     lalrpop();
 }
