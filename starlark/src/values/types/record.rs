@@ -65,7 +65,7 @@ pub struct FieldGen<V> {
 }
 
 /// The result of `record()`, being the type of records.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug)]
 pub struct RecordTypeGen<V> {
     /// The name of this type, e.g. MyRecord
     typ: Option<String>,
