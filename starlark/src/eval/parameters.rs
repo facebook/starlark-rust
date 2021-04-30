@@ -91,7 +91,7 @@ pub struct ParametersSpec<V> {
     /// The `names` gives a mapping from name to index where the argument lives.
     /// The only entries in `kinds` which are not in `names` are Args/KWargs,
     /// and the iteration order of `names` is the same order as `types`.
-    kinds: Vec<(String, ParameterKind<V>)>,
+    kinds: Vec<ParameterKind<V>>,
     names: SmallMap<String, usize>,
 
     /// Number of arguments that can be filled positionally.
@@ -135,7 +135,7 @@ impl<V> ParametersSpec<V> {
 
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
         let i = self.kinds.len();
-        self.kinds.push((name.to_owned(), val));
+        self.kinds.push(val);
         let old = self.names.insert(name.to_owned(), i);
         if self.args.is_none() && !self.no_args {
             // If you've already seen `args` or `no_args`, you can't enter these
@@ -171,9 +171,9 @@ impl<V> ParametersSpec<V> {
     /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
-    pub fn args(&mut self, name: &str) {
+    pub fn args(&mut self, _name: &str) {
         assert!(self.args.is_none() && !self.no_args);
-        self.kinds.push((name.to_owned(), ParameterKind::Args));
+        self.kinds.push(ParameterKind::Args);
         self.args = Some(self.kinds.len() - 1);
     }
 
@@ -191,9 +191,9 @@ impl<V> ParametersSpec<V> {
     /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by position.
-    pub fn kwargs(&mut self, name: &str) {
+    pub fn kwargs(&mut self, _name: &str) {
         assert!(self.kwargs.is_none());
-        self.kinds.push((name.to_owned(), ParameterKind::KWargs));
+        self.kinds.push(ParameterKind::KWargs);
         self.kwargs = Some(self.kinds.len() - 1);
     }
 
@@ -220,21 +220,48 @@ impl<V> ParametersSpec<V> {
         collector
     }
 
+    /// Figure out the argument name at an index in kinds.
+    /// Only called in the error path, so is not optimised.
+    pub(crate) fn param_name_at(&self, index: usize) -> String {
+        match self.kinds[index] {
+            ParameterKind::Args => return "args".to_owned(),
+            ParameterKind::KWargs => return "kwargs".to_owned(),
+            _ => {}
+        }
+        // We want names[#index], ignoring all the args/kwargs up until this position
+        let mut new_index = index;
+        for k in self.kinds.iter().take(index) {
+            match k {
+                ParameterKind::Args | ParameterKind::KWargs => new_index -= 1,
+                _ => {}
+            }
+        }
+        self.names.get_index(new_index).unwrap().0.clone()
+    }
+
     // Generate a good error message for it
     pub(crate) fn collect_repr(&self, collector: &mut String) {
         collector.push_str(&self.function_name);
         collector.push('(');
-        for (i, (name, typ)) in self.kinds.iter().enumerate() {
-            if i != 0 {
-                collector.push_str(", ");
-            }
+
+        let mut names = self.names.keys();
+        let mut next_name = || {
             // We prepend '$' on the front of variable names that are positional-only
             // arguments to the native functions. We rip those off when
             // displaying the signature.
+            // The `unwrap` is safe because we must have a names entry for each
+            // non-Args/KWargs kind.
+            names.next().unwrap().trim_start_match('$')
+        };
+
+        for (i, typ) in self.kinds.iter().enumerate() {
+            if i != 0 {
+                collector.push_str(", ");
+            }
             match typ {
-                ParameterKind::Required => collector.push_str(name.trim_start_matches('$')),
+                ParameterKind::Required => collector.push_str(next_name()),
                 ParameterKind::Optional | ParameterKind::Defaulted(_) => {
-                    collector.push_str(name.trim_start_matches('$'));
+                    collector.push_str(next_name());
                     collector.push_str(" = ...");
                 }
                 ParameterKind::Args => collector.push_str("*args"),
@@ -250,7 +277,7 @@ impl<'v> ParametersSpec<Value<'v>> {
     pub fn freeze(self, freezer: &Freezer) -> ParametersSpec<FrozenValue> {
         ParametersSpec {
             function_name: self.function_name,
-            kinds: self.kinds.into_map(|(s, v)| (s, v.freeze(freezer))),
+            kinds: self.kinds.into_map(|v| v.freeze(freezer)),
             names: self.names,
             positional: self.positional,
             no_args: self.no_args,
@@ -261,7 +288,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 
     /// Used when performing garbage collection over a [`ParametersSpec`].
     pub fn walk(&mut self, walker: &Walker<'v>) {
-        self.kinds.iter_mut().for_each(|x| x.1.walk(walker))
+        self.kinds.iter_mut().for_each(|x| x.walk(walker))
     }
 }
 
@@ -297,7 +324,7 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
                 // Occurs if we have def f(a), then a=1, *[2]
                 self.set_err(
                     FunctionError::RepeatedParameter {
-                        name: self.params.kinds[self.next_position].0.clone(),
+                        name: self.params.param_name_at(self.next_position),
                     }
                     .into(),
                 );
@@ -384,14 +411,14 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
         if let Some(err) = err {
             return Err(err);
         }
-        for ((name, def), ref slot) in params.kinds.iter().zip(slots.iter_mut()) {
+        for ((index, def), ref slot) in params.kinds.iter().enumerate().zip(slots.iter_mut()) {
             if !slot.is_unassigned() {
                 continue;
             }
             match def {
                 ParameterKind::Required => {
                     return Err(FunctionError::MissingParameter {
-                        name: (*name).to_owned(),
+                        name: params.param_name_at(index),
                         function: params.signature(),
                     }
                     .into());
