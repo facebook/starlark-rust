@@ -70,8 +70,8 @@ pub fn partial(builder: &mut GlobalsBuilder) {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
         let mut signature = ParametersSpec::with_capacity(name, 2);
-        signature.args("args");
-        signature.kwargs("kwargs");
+        signature.args();
+        signature.kwargs();
         Ok(Partial {
             func,
             args,

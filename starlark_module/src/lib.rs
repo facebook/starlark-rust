@@ -326,11 +326,11 @@ fn record_argument(arg: &Arg) -> proc_macro2::TokenStream {
     match name_str_full.as_str() {
         "args" => {
             assert!(default.is_none(), "Can't have *args with a default");
-            quote! {signature.args("args");}
+            quote! {signature.args();}
         }
         "kwargs" => {
             assert!(default.is_none(), "Can't have **kwargs with a default");
-            quote! {signature.kwargs("kwargs");}
+            quote! {signature.kwargs();}
         }
         _ if is_type_option(arg.ty) => {
             quote! {signature.optional(#name_str);}

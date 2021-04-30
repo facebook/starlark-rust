@@ -144,13 +144,13 @@ impl Compiler<'_> {
                         parameters.defaulted(n, v(context)?);
                     }
                     ParameterCompiled::NoArgs => parameters.no_args(),
-                    ParameterCompiled::Args(n, t) => {
+                    ParameterCompiled::Args(_, t) => {
                         run(t, context)?;
-                        parameters.args(n)
+                        parameters.args()
                     }
-                    ParameterCompiled::KWArgs(n, t) => {
+                    ParameterCompiled::KWArgs(_, t) => {
                         run(t, context)?;
-                        parameters.kwargs(n)
+                        parameters.kwargs()
                     }
                 }
             }

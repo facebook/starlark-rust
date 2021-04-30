@@ -171,7 +171,7 @@ impl<V> ParametersSpec<V> {
     /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
-    pub fn args(&mut self, _name: &str) {
+    pub fn args(&mut self) {
         assert!(self.args.is_none() && !self.no_args);
         self.kinds.push(ParameterKind::Args);
         self.args = Some(self.kinds.len() - 1);
@@ -191,7 +191,7 @@ impl<V> ParametersSpec<V> {
     /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by position.
-    pub fn kwargs(&mut self, _name: &str) {
+    pub fn kwargs(&mut self) {
         assert!(self.kwargs.is_none());
         self.kinds.push(ParameterKind::KWargs);
         self.kwargs = Some(self.kinds.len() - 1);
