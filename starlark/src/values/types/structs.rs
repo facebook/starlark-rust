@@ -51,12 +51,12 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-impl<T> StructGen<T> {
+impl<V> StructGen<V> {
     /// The result of calling `type()` on a struct.
     pub const TYPE: &'static str = "struct";
 
     /// Create a new [`Struct`].
-    pub fn new(fields: SmallMap<String, T>) -> Self {
+    pub fn new(fields: SmallMap<String, V>) -> Self {
         Self { fields }
     }
 }
@@ -65,9 +65,9 @@ starlark_complex_value!(pub Struct);
 
 /// The result of calling `struct()`.
 #[derive(Clone, Default, Debug)]
-pub struct StructGen<T> {
+pub struct StructGen<V> {
     /// The fields in a struct.
-    pub fields: SmallMap<String, T>,
+    pub fields: SmallMap<String, V>,
 }
 
 /// A builder to create a `Struct` easily.
@@ -110,7 +110,7 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StructGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for StructGen<V>
 where
     Self: AnyLifetime<'v>,
 {

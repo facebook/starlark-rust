@@ -63,9 +63,9 @@ pub(crate) fn slice_vector<'a, 'v, V: ValueLike<'v> + 'a, I: Iterator<Item = &'a
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
-pub struct TupleGen<T> {
+pub struct TupleGen<V> {
     /// The data stored by the tuple.
-    pub content: Vec<T>,
+    pub content: Vec<V>,
 }
 
 starlark_complex_value!(pub Tuple);
@@ -104,11 +104,11 @@ impl<'v> ComplexValue<'v> for Tuple<'v> {
     }
 }
 
-impl<T> TupleGen<T> {
+impl<V> TupleGen<V> {
     pub const TYPE: &'static str = "tuple";
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for TupleGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for TupleGen<V>
 where
     Self: AnyLifetime<'v>,
 {
@@ -243,7 +243,7 @@ where
     }
 }
 
-impl<'v, T: ValueLike<'v> + 'v> StarlarkIterable<'v> for TupleGen<T> {
+impl<'v, V: ValueLike<'v> + 'v> StarlarkIterable<'v> for TupleGen<V> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,

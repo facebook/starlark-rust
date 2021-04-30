@@ -36,12 +36,12 @@ use std::{
 
 /// Define the dictionary type. See [`Dict`] and [`FrozenDict`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
-pub struct DictGen<T> {
+pub struct DictGen<V> {
     /// The data stored by the dictionary. The keys must all be hashable values.
-    pub content: SmallMap<T, T>,
+    pub content: SmallMap<V, V>,
 }
 
-impl<T> DictGen<T> {
+impl<V> DictGen<V> {
     /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
 }
@@ -86,10 +86,10 @@ impl Equivalent<FrozenValue> for ValueStr<'_> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> DictGen<T>
+impl<'v, V: ValueLike<'v>> DictGen<V>
 where
-    Value<'v>: Equivalent<T>,
-    for<'a> ValueStr<'a>: Equivalent<T>,
+    Value<'v>: Equivalent<V>,
+    for<'a> ValueStr<'a>: Equivalent<V>,
 {
     /// The number of elements in the dictionary.
     pub fn len(&self) -> usize {
@@ -197,10 +197,10 @@ impl FrozenDict {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for DictGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DictGen<V>
 where
-    Value<'v>: Equivalent<T>,
-    T: Equivalent<Value<'v>>,
+    Value<'v>: Equivalent<V>,
+    V: Equivalent<Value<'v>>,
     Self: AnyLifetime<'v>,
 {
     starlark_type!(Dict::TYPE);
@@ -271,7 +271,7 @@ where
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for DictGen<T> {
+impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for DictGen<V> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,

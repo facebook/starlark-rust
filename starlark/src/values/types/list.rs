@@ -33,19 +33,19 @@ use std::{cmp::Ordering, marker::PhantomData, ops::Deref};
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
-pub struct ListGen<T> {
+pub struct ListGen<V> {
     /// The data stored by the list.
-    pub content: Vec<T>,
+    pub content: Vec<V>,
 }
 
-impl<T> ListGen<T> {
+impl<V> ListGen<V> {
     /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 }
 
 starlark_complex_value!(pub List);
 
-impl<'v, T: AllocValue<'v>> AllocValue<'v> for Vec<T> {
+impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_complex(List {
             content: self.into_map(|x| x.alloc_value(heap)),
@@ -53,7 +53,7 @@ impl<'v, T: AllocValue<'v>> AllocValue<'v> for Vec<T> {
     }
 }
 
-impl<'v, T: AllocFrozenValue> AllocFrozenValue for Vec<T> {
+impl<'v, V: AllocFrozenValue> AllocFrozenValue for Vec<V> {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_simple(FrozenList {
             content: self.into_map(|x| x.alloc_frozen_value(heap)),
@@ -102,9 +102,9 @@ impl FrozenList {
     }
 }
 
-impl<'v, T: ValueLike<'v>> ListGen<T> {
+impl<'v, V: ValueLike<'v>> ListGen<V> {
     /// Create a new list.
-    pub fn new(content: Vec<T>) -> Self {
+    pub fn new(content: Vec<V>) -> Self {
         Self { content }
     }
 
@@ -144,7 +144,7 @@ impl<'v> List<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for ListGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for ListGen<V>
 where
     Self: AnyLifetime<'v>,
 {
@@ -270,7 +270,7 @@ where
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for ListGen<T> {
+impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for ListGen<V> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,
@@ -279,11 +279,11 @@ impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for ListGen<T> {
     }
 }
 
-impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
+impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for Vec<V> {
     fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
         let mut r = Vec::new();
         for item in &value.iterate(heap).ok()? {
-            r.push(T::unpack_value(item, heap)?);
+            r.push(V::unpack_value(item, heap)?);
         }
         Some(r)
     }
@@ -291,25 +291,25 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
 
 /// Like `ValueOf`, but only validates item types; does not construct or store a
 /// vec. Use `to_vec` to get a Vec.
-pub struct ListOf<'v, T: UnpackValue<'v>> {
+pub struct ListOf<'v, V: UnpackValue<'v>> {
     value: Value<'v>,
-    phantom: PhantomData<T>,
+    phantom: PhantomData<V>,
 }
 
-impl<'v, T: UnpackValue<'v>> ListOf<'v, T> {
-    pub fn to_vec(&self, heap: &'v Heap) -> Vec<T> {
+impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
+    pub fn to_vec(&self, heap: &'v Heap) -> Vec<V> {
         List::from_value(self.value)
             .expect("already validated as a list")
             .iter()
-            .map(|v| T::unpack_value(v, heap).expect("already validated value"))
+            .map(|v| V::unpack_value(v, heap).expect("already validated value"))
             .collect()
     }
 }
 
-impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, T> {
+impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, V> {
     fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
         let list = List::from_value(value)?;
-        if list.iter().all(|v| T::unpack_value(v, heap).is_some()) {
+        if list.iter().all(|v| V::unpack_value(v, heap).is_some()) {
             Some(ListOf {
                 value,
                 phantom: PhantomData {},
@@ -320,7 +320,7 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, T> {
     }
 }
 
-impl<'v, T: UnpackValue<'v>> Deref for ListOf<'v, T> {
+impl<'v, V: UnpackValue<'v>> Deref for ListOf<'v, V> {
     type Target = Value<'v>;
 
     fn deref(&self) -> &Self::Target {
