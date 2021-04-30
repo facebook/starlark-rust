@@ -39,7 +39,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
             };
             mp.insert_hashed(k, field);
         }
-        Ok(RecordType::new(mp))
+        Ok(RecordType::new(mp, heap))
     }
 
     /// Creates a field record.

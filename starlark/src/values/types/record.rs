@@ -123,8 +123,8 @@ fn collect_repr_record<'s, 't, V: 't>(
     collector.push(')');
 }
 
-impl<V> RecordTypeGen<V> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<V>>) -> Self {
+impl<'v> RecordType<'v> {
+    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, _heap: &'v Heap) -> Self {
         Self { typ: None, fields }
     }
 }
