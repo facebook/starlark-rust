@@ -67,24 +67,25 @@ pub struct FieldGen<V> {
 /// The result of `record()`, being the type of records.
 #[derive(Clone, Default, Debug)]
 pub struct RecordTypeGen<V> {
+    /// The name of this type, e.g. MyRecord
     typ: Option<String>,
-    // The V is the type
+    /// The V is the type the field must satisfy (e.g. `"string"`)
     fields: SmallMap<String, FieldGen<V>>,
 }
 
 /// An actual record.
 #[derive(Clone, Debug)]
-pub struct RecordGen<T> {
-    typ: T, // Must be RecordType
-    values: Vec<T>,
+pub struct RecordGen<V> {
+    typ: V, // Must be RecordType
+    values: Vec<V>,
 }
 
 starlark_complex_value!(pub(crate) Field);
 starlark_complex_value!(pub RecordType);
 starlark_complex_value!(pub Record);
 
-impl<T> FieldGen<T> {
-    pub(crate) fn new(typ: T, default: Option<T>) -> Self {
+impl<V> FieldGen<V> {
+    pub(crate) fn new(typ: V, default: Option<V>) -> Self {
         Self { typ, default }
     }
 }
@@ -105,9 +106,9 @@ impl<'v> Field<'v> {
     }
 }
 
-fn collect_repr_record<'s, 't, T: 't>(
-    items: impl Iterator<Item = (&'s String, &'t T)>,
-    add: impl Fn(&'t T, &mut String),
+fn collect_repr_record<'s, 't, V: 't>(
+    items: impl Iterator<Item = (&'s String, &'t V)>,
+    add: impl Fn(&'t V, &mut String),
     collector: &mut String,
 ) {
     collector.push_str("record(");
@@ -122,13 +123,13 @@ fn collect_repr_record<'s, 't, T: 't>(
     collector.push(')');
 }
 
-impl<T> RecordTypeGen<T> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<T>>) -> Self {
+impl<V> RecordTypeGen<V> {
+    pub(crate) fn new(fields: SmallMap<String, FieldGen<V>>) -> Self {
         Self { typ: None, fields }
     }
 }
 
-impl<'v, T: ValueLike<'v>> RecordGen<T> {
+impl<'v, V: ValueLike<'v>> RecordGen<V> {
     pub const TYPE: &'static str = "record";
 
     fn get_record_type(&self) -> ARef<'v, RecordType<'v>> {
@@ -147,7 +148,7 @@ impl<'v> ComplexValue<'v> for Field<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for FieldGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for FieldGen<V>
 where
     Self: AnyLifetime<'v>,
 {
@@ -202,10 +203,10 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<V>
 where
     Self: AnyLifetime<'v>,
-    FieldGen<T>: AnyLifetime<'v>,
+    FieldGen<V>: AnyLifetime<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
 
@@ -309,7 +310,7 @@ impl<'v> ComplexValue<'v> for Record<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for RecordGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for RecordGen<V>
 where
     Self: AnyLifetime<'v>,
 {
