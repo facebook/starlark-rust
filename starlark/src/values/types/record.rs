@@ -47,7 +47,7 @@ use crate::{
     values::{
         comparison::equals_slice,
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
+        function::{FunctionInvoker, NativeFunc, NativeFunction, FUNCTION_TYPE},
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
@@ -71,6 +71,11 @@ pub struct RecordTypeGen<V> {
     typ: Option<String>,
     /// The V is the type the field must satisfy (e.g. `"string"`)
     fields: SmallMap<String, FieldGen<V>>,
+    /// The construction function, which takes a hidden parameter (this type)
+    /// followed by the arguments of the field.
+    /// Creating these on every invoke is pretty expensive (profiling shows)
+    /// so compute them in advance and cache.
+    constructor: V,
 }
 
 /// An actual record.
@@ -124,8 +129,59 @@ fn collect_repr_record<'s, 't, V: 't>(
 }
 
 impl<'v> RecordType<'v> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, _heap: &'v Heap) -> Self {
-        Self { typ: None, fields }
+    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, heap: &'v Heap) -> Self {
+        let constructor = heap.alloc(Self::make_constructor(&fields));
+        Self {
+            typ: None,
+            fields,
+            constructor,
+        }
+    }
+
+    fn make_constructor(
+        fields: &SmallMap<String, FieldGen<Value<'v>>>,
+    ) -> NativeFunction<impl NativeFunc> {
+        let mut parameters = ParametersSpec::with_capacity("record".to_owned(), fields.len() + 1);
+        parameters.required("me"); // Hidden first argument
+        parameters.no_args();
+        for (name, field) in fields {
+            if field.default.is_some() {
+                parameters.optional(name);
+            } else {
+                parameters.required(name);
+            }
+        }
+
+        // We want to get the value of `me` into the function, but that doesn't work since it
+        // might move between threads - so we create the NativeFunction and apply it later.
+        NativeFunction::new(
+            move |context, mut param_parser: ParametersParser| {
+                let me = param_parser.next("me", context.heap())?;
+                let info = RecordType::from_value(me).unwrap();
+                let mut values = Vec::with_capacity(info.fields.len());
+                for (name, field) in &info.fields {
+                    match field.default {
+                        None => {
+                            let v: Value = param_parser.next(name, context.heap())?;
+                            v.check_type(field.typ, Some(name))?;
+                            values.push(v);
+                        }
+                        Some(default) => {
+                            let v: Option<Value> = param_parser.next_opt(name, context.heap())?;
+                            match v {
+                                None => values.push(default),
+                                Some(v) => {
+                                    v.check_type(field.typ, Some(name))?;
+                                    values.push(v);
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(context.heap().alloc_complex(Record { typ: me, values }))
+            },
+            parameters,
+        )
     }
 }
 
@@ -189,11 +245,13 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
         box FrozenRecordType {
             typ: self.typ,
             fields,
+            constructor: self.constructor.freeze(freezer),
         }
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.fields.values_mut().for_each(|v| v.walk(walker));
+        walker.walk(&mut self.constructor);
     }
 
     fn export_as(&mut self, _heap: &'v Heap, variable_name: &str) {
@@ -228,49 +286,7 @@ where
         me: Value<'v>,
         heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
-        let name = self.typ.as_deref().unwrap_or("record").to_owned();
-        let mut signature = ParametersSpec::with_capacity(name, self.fields.len() + 1);
-        signature.required("me"); // Hidden first argument
-        signature.no_args();
-        for (name, field) in &self.fields {
-            if field.default.is_some() {
-                signature.optional(name);
-            } else {
-                signature.required(name);
-            }
-        }
-
-        // We want to get the value of `me` into the function, but that doesn't work since it
-        // might move between threads - so we create the NativeFunction and apply it later.
-        let fun = NativeFunction::new(
-            move |context, mut param_parser: ParametersParser| {
-                let me = param_parser.next("me", context.heap())?;
-                let info = RecordType::from_value(me).unwrap();
-                let mut values = Vec::with_capacity(info.fields.len());
-                for (name, field) in &info.fields {
-                    match field.default {
-                        None => {
-                            let v: Value = param_parser.next(name, context.heap())?;
-                            v.check_type(field.typ, Some(name))?;
-                            values.push(v);
-                        }
-                        Some(default) => {
-                            let v: Option<Value> = param_parser.next_opt(name, context.heap())?;
-                            match v {
-                                None => values.push(default),
-                                Some(v) => {
-                                    v.check_type(field.typ, Some(name))?;
-                                    values.push(v);
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(context.heap().alloc_complex(Record { typ: me, values }))
-            },
-            signature,
-        );
-        let mut f = heap.alloc(fun).new_invoker(heap)?;
+        let mut f = self.constructor.new_invoker(heap)?;
         f.push_pos(me);
         Ok(f)
     }
