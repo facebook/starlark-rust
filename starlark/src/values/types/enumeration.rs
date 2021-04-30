@@ -39,7 +39,7 @@ use crate::{
     eval::{ParametersParser, ParametersSpec},
     values::{
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
+        function::{FunctionInvoker, NativeFunc, NativeFunction, FUNCTION_TYPE},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
         ValueLike, Walker,
@@ -66,6 +66,8 @@ pub struct EnumTypeGen<V> {
     // The key is the value of the enumeration
     // The value is a value of type EnumValue
     elements: SmallMap<V, V>,
+    // Function to construct an enumeration, cached, so we don't recreate it on each invoke.
+    constructor: V,
 }
 
 /// A value from an enumeration.
@@ -96,6 +98,7 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         box FrozenEnumType {
             typ: self.typ,
             elements,
+            constructor: self.constructor.freeze(freezer),
         }
     }
 
@@ -103,7 +106,8 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         self.elements.iter_mut().for_each(|(k, v)| {
             walker.walk_dictionary_key(k);
             walker.walk(v);
-        })
+        });
+        walker.walk(&mut self.constructor);
     }
 
     fn export_as(&mut self, _heap: &'v Heap, variable_name: &str) {
@@ -135,6 +139,7 @@ impl<'v> EnumType<'v> {
         let typ = heap.alloc(EnumType {
             typ: None,
             elements: SmallMap::new(),
+            constructor: heap.alloc(Self::make_constructor()),
         });
 
         let mut res = SmallMap::with_capacity(elements.len());
@@ -153,6 +158,31 @@ impl<'v> EnumType<'v> {
         let mut t = EnumType::from_value_mut(typ, heap)?.unwrap();
         t.elements = res;
         Ok(typ)
+    }
+
+    // The constructor is actually invariant in the enum type it works for, so we could try and allocate it
+    // once for all enumerations. But that seems like a lot of work for not much benefit.
+    fn make_constructor() -> NativeFunction<impl NativeFunc> {
+        let mut signature = ParametersSpec::with_capacity("enum".to_owned(), 2);
+        signature.required("me"); // Hidden first argument
+        signature.required("value");
+
+        // We want to get the value of `me` into the function, but that doesn't work since it
+        // might move between threads - so we create the NativeFunction and apply it later.
+        NativeFunction::new(
+            move |context, mut param_parser: ParametersParser| {
+                let typ_val = param_parser.next("me", context.heap())?;
+                let val: Value = param_parser.next("value", context.heap())?;
+                let typ = EnumType::from_value(typ_val).unwrap();
+                match typ.elements.get_hashed(val.get_hashed()?.borrow()) {
+                    Some(v) => Ok(*v),
+                    None => {
+                        Err(EnumError::InvalidElement(val.to_string(), typ_val.to_string()).into())
+                    }
+                }
+            },
+            signature,
+        )
     }
 }
 
@@ -188,28 +218,7 @@ where
         me: Value<'v>,
         heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
-        let name = self.typ.as_deref().unwrap_or("enum").to_owned();
-        let mut signature = ParametersSpec::with_capacity(name, 2);
-        signature.required("me"); // Hidden first argument
-        signature.required("value");
-
-        // We want to get the value of `me` into the function, but that doesn't work since it
-        // might move between threads - so we create the NativeFunction and apply it later.
-        let fun = NativeFunction::new(
-            move |context, mut param_parser: ParametersParser| {
-                let typ_val = param_parser.next("me", context.heap())?;
-                let val: Value = param_parser.next("value", context.heap())?;
-                let typ = EnumType::from_value(typ_val).unwrap();
-                match typ.elements.get_hashed(val.get_hashed()?.borrow()) {
-                    Some(v) => Ok(*v),
-                    None => {
-                        Err(EnumError::InvalidElement(val.to_string(), typ_val.to_string()).into())
-                    }
-                }
-            },
-            signature,
-        );
-        let mut f = heap.alloc(fun).new_invoker(heap)?;
+        let mut f = self.constructor.new_invoker(heap)?;
         f.push_pos(me);
         Ok(f)
     }
