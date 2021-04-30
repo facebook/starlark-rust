@@ -156,7 +156,7 @@ impl<'v> EnumType<'v> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> EnumValueGen<T> {
+impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
     /// The result of calling `type()` on an enum value.
     pub const TYPE: &'static str = "enum";
 
@@ -166,7 +166,7 @@ impl<'v, T: ValueLike<'v>> EnumValueGen<T> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<V>
 where
     Self: AnyLifetime<'v>,
 {
@@ -258,7 +258,7 @@ impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for EnumTypeGen<V> {
     }
 }
 
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for EnumValueGen<T>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for EnumValueGen<V>
 where
     Self: AnyLifetime<'v>,
 {
