@@ -51,7 +51,7 @@ pub(crate) enum FunctionError {
 }
 
 #[derive(Debug, Clone)]
-enum ParameterDefault<V> {
+enum ParameterKind<V> {
     Required,
     Optional,
     Defaulted(V),
@@ -59,14 +59,14 @@ enum ParameterDefault<V> {
     KWargs,
 }
 
-impl<'v> ParameterDefault<Value<'v>> {
-    fn freeze(&self, freezer: &Freezer) -> ParameterDefault<FrozenValue> {
+impl<'v> ParameterKind<Value<'v>> {
+    fn freeze(&self, freezer: &Freezer) -> ParameterKind<FrozenValue> {
         match self {
-            Self::Defaulted(v) => ParameterDefault::Defaulted(v.freeze(freezer)),
-            Self::Required => ParameterDefault::Required,
-            Self::Optional => ParameterDefault::Optional,
-            Self::Args => ParameterDefault::Args,
-            Self::KWargs => ParameterDefault::KWargs,
+            Self::Defaulted(v) => ParameterKind::Defaulted(v.freeze(freezer)),
+            Self::Required => ParameterKind::Required,
+            Self::Optional => ParameterKind::Optional,
+            Self::Args => ParameterKind::Args,
+            Self::KWargs => ParameterKind::KWargs,
         }
     }
 
@@ -83,14 +83,26 @@ impl<'v> ParameterDefault<Value<'v>> {
 #[derive(Debug, Clone)]
 // V = Value, or FrozenValue
 pub struct ParametersSpec<V> {
-    function_name: String, // Only for error messages
-    // FIXME: I want to use &'ast str where I use String below
-    names: Vec<(String, ParameterDefault<V>)>,
-    indices: SmallMap<String, usize>,
-    positional: usize, /* Number of arguments that can be filled positionally (exclude
-                        * args/kwargs, *args k=1 etc) */
+    /// Only used in error messages
+    function_name: String,
+
+    /// These two fields describe everything about the signature.
+    /// The `kinds` lists all the arguments in the order they occur.
+    /// The `names` gives a mapping from name to index where the argument lives.
+    /// The only entries in `kinds` which are not in `names` are Args/KWargs,
+    /// and the iteration order of `names` is the same order as `types`.
+    kinds: Vec<(String, ParameterKind<V>)>,
+    names: SmallMap<String, usize>,
+
+    /// Number of arguments that can be filled positionally.
+    /// Excludes *args/**kwargs, keyword arguments after *args
+    positional: usize,
+
+    /// Has the no_args been passed
     no_args: bool,
+    /// The index at which *args should go
     args: Option<usize>,
+    /// The index at which **kwargs should go
     kwargs: Option<usize>,
 }
 
@@ -99,8 +111,8 @@ impl<V> ParametersSpec<V> {
     pub fn new(function_name: String) -> Self {
         Self {
             function_name,
-            names: Vec::new(),
-            indices: SmallMap::new(),
+            kinds: Vec::new(),
+            names: SmallMap::new(),
             positional: 0,
             no_args: false,
             args: None,
@@ -112,8 +124,8 @@ impl<V> ParametersSpec<V> {
     pub fn with_capacity(function_name: String, capacity: usize) -> Self {
         Self {
             function_name,
-            names: Vec::with_capacity(capacity),
-            indices: SmallMap::with_capacity(capacity),
+            kinds: Vec::with_capacity(capacity),
+            names: SmallMap::with_capacity(capacity),
             positional: 0,
             no_args: false,
             args: None,
@@ -121,10 +133,10 @@ impl<V> ParametersSpec<V> {
         }
     }
 
-    fn add(&mut self, name: &str, val: ParameterDefault<V>) {
-        let i = self.names.len();
-        self.names.push((name.to_owned(), val));
-        let old = self.indices.insert(name.to_owned(), i);
+    fn add(&mut self, name: &str, val: ParameterKind<V>) {
+        let i = self.kinds.len();
+        self.kinds.push((name.to_owned(), val));
+        let old = self.names.insert(name.to_owned(), i);
         if self.args.is_none() && !self.no_args {
             // If you've already seen `args` or `no_args`, you can't enter these
             // positionally
@@ -137,21 +149,21 @@ impl<V> ParametersSpec<V> {
     /// it. If you want to supply a position-only argument, prepend a `$` to
     /// the name.
     pub fn required(&mut self, name: &str) {
-        self.add(name, ParameterDefault::Required);
+        self.add(name, ParameterKind::Required);
     }
 
     /// Add an optional parameter. Will be None if the caller doesn't supply it.
     /// If you want to supply a position-only argument, prepend a `$` to the
     /// name.
     pub fn optional(&mut self, name: &str) {
-        self.add(name, ParameterDefault::Optional);
+        self.add(name, ParameterKind::Optional);
     }
 
     /// Add an optional parameter. Will be the edefault value if the caller
     /// doesn't supply it. If you want to supply a position-only argument,
     /// prepend a `$` to the name.
     pub fn defaulted(&mut self, name: &str, val: V) {
-        self.add(name, ParameterDefault::Defaulted(val));
+        self.add(name, ParameterKind::Defaulted(val));
     }
 
     /// Add an `*args` parameter which will be an iterable sequence of parameters,
@@ -161,8 +173,8 @@ impl<V> ParametersSpec<V> {
     /// parameters can _only_ be supplied by name.
     pub fn args(&mut self, name: &str) {
         assert!(self.args.is_none() && !self.no_args);
-        self.names.push((name.to_owned(), ParameterDefault::Args));
-        self.args = Some(self.names.len() - 1);
+        self.kinds.push((name.to_owned(), ParameterKind::Args));
+        self.args = Some(self.kinds.len() - 1);
     }
 
     /// This function has no `*args` parameter, corresponds to the Python parameter `*`.
@@ -181,15 +193,15 @@ impl<V> ParametersSpec<V> {
     /// parameters can _only_ be supplied by position.
     pub fn kwargs(&mut self, name: &str) {
         assert!(self.kwargs.is_none());
-        self.names.push((name.to_owned(), ParameterDefault::KWargs));
-        self.kwargs = Some(self.names.len() - 1);
+        self.kinds.push((name.to_owned(), ParameterKind::KWargs));
+        self.kwargs = Some(self.kinds.len() - 1);
     }
 
     pub(crate) fn collect<'v, 'a>(
         me: ARef<'a, Self>,
         slots: usize,
     ) -> ParametersCollect<'v, 'a, V> {
-        let len = me.names.len();
+        let len = me.kinds.len();
         ParametersCollect {
             params: me,
             slots: vec![ValueRef::new_unassigned(); cmp::max(slots, len)],
@@ -212,7 +224,7 @@ impl<V> ParametersSpec<V> {
     pub(crate) fn collect_repr(&self, collector: &mut String) {
         collector.push_str(&self.function_name);
         collector.push('(');
-        for (i, (name, typ)) in self.names.iter().enumerate() {
+        for (i, (name, typ)) in self.kinds.iter().enumerate() {
             if i != 0 {
                 collector.push_str(", ");
             }
@@ -220,13 +232,13 @@ impl<V> ParametersSpec<V> {
             // arguments to the native functions. We rip those off when
             // displaying the signature.
             match typ {
-                ParameterDefault::Required => collector.push_str(name.trim_start_matches('$')),
-                ParameterDefault::Optional | ParameterDefault::Defaulted(_) => {
+                ParameterKind::Required => collector.push_str(name.trim_start_matches('$')),
+                ParameterKind::Optional | ParameterKind::Defaulted(_) => {
                     collector.push_str(name.trim_start_matches('$'));
                     collector.push_str(" = ...");
                 }
-                ParameterDefault::Args => collector.push_str("*args"),
-                ParameterDefault::KWargs => collector.push_str("**kwargs"),
+                ParameterKind::Args => collector.push_str("*args"),
+                ParameterKind::KWargs => collector.push_str("**kwargs"),
             }
         }
         collector.push(')');
@@ -238,8 +250,8 @@ impl<'v> ParametersSpec<Value<'v>> {
     pub fn freeze(self, freezer: &Freezer) -> ParametersSpec<FrozenValue> {
         ParametersSpec {
             function_name: self.function_name,
-            names: self.names.into_map(|(s, v)| (s, v.freeze(freezer))),
-            indices: self.indices,
+            kinds: self.kinds.into_map(|(s, v)| (s, v.freeze(freezer))),
+            names: self.names,
             positional: self.positional,
             no_args: self.no_args,
             args: self.args,
@@ -249,7 +261,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 
     /// Used when performing garbage collection over a [`ParametersSpec`].
     pub fn walk(&mut self, walker: &Walker<'v>) {
-        self.names.iter_mut().for_each(|x| x.1.walk(walker))
+        self.kinds.iter_mut().for_each(|x| x.1.walk(walker))
     }
 }
 
@@ -285,7 +297,7 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
                 // Occurs if we have def f(a), then a=1, *[2]
                 self.set_err(
                     FunctionError::RepeatedParameter {
-                        name: self.params.names[self.next_position].0.clone(),
+                        name: self.params.kinds[self.next_position].0.clone(),
                     }
                     .into(),
                 );
@@ -299,7 +311,7 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
         self.only_positional = false;
         // Safe to use new_unchecked because hash for the Value and str are the same
         let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
-        let repeated = match self.params.indices.get_hashed(name_hash) {
+        let repeated = match self.params.names.get_hashed(name_hash) {
             None => {
                 let old = self.kwargs.insert_hashed(name_value, val);
                 old.is_some()
@@ -372,27 +384,27 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
         if let Some(err) = err {
             return Err(err);
         }
-        for ((name, def), ref slot) in params.names.iter().zip(slots.iter_mut()) {
+        for ((name, def), ref slot) in params.kinds.iter().zip(slots.iter_mut()) {
             if !slot.is_unassigned() {
                 continue;
             }
             match def {
-                ParameterDefault::Required => {
+                ParameterKind::Required => {
                     return Err(FunctionError::MissingParameter {
                         name: (*name).to_owned(),
                         function: params.signature(),
                     }
                     .into());
                 }
-                ParameterDefault::Optional => {}
-                ParameterDefault::Defaulted(x) => {
+                ParameterKind::Optional => {}
+                ParameterKind::Defaulted(x) => {
                     slot.set(x.to_value());
                 }
-                ParameterDefault::Args => {
+                ParameterKind::Args => {
                     let args = mem::take(&mut args);
                     slot.set(heap.alloc(Tuple::new(args)));
                 }
-                ParameterDefault::KWargs => {
+                ParameterKind::KWargs => {
                     let kwargs = mem::take(&mut kwargs);
                     slot.set(heap.alloc(Dict::new(kwargs)))
                 }
