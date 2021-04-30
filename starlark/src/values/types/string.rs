@@ -17,11 +17,14 @@
 
 //! The string type. All strings must be valid UTF8.
 
+use gazebo::any::AnyLifetime;
+
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::convert_slice_indices, interpolation::Interpolation, AllocFrozenValue,
-        AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError,
+        AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue,
+        StarlarkIterable, StarlarkValue, UnpackValue, Value, ValueError, ValueLike, Walker,
     },
 };
 use std::{
@@ -296,6 +299,67 @@ impl AllocFrozenValue for String {
 impl<'v, 'a> AllocFrozenValue for &'a str {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_str(Box::from(self))
+    }
+}
+
+/// An opaque iterator over a string, produced by elems/codepoints
+#[derive(Debug)]
+struct StringIteratorGen<V> {
+    string: V,
+    produce_char: bool, // if not char, then int
+}
+
+pub(crate) fn iterate_chars<'v>(string: Value<'v>, heap: &'v Heap) -> Value<'v> {
+    heap.alloc(StringIterator {
+        string,
+        produce_char: true,
+    })
+}
+
+pub(crate) fn iterate_codepoints<'v>(string: Value<'v>, heap: &'v Heap) -> Value<'v> {
+    heap.alloc(StringIterator {
+        string,
+        produce_char: false,
+    })
+}
+
+starlark_complex_value!(StringIterator);
+
+impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StringIteratorGen<T>
+where
+    Self: AnyLifetime<'v>,
+{
+    starlark_type!("iterator");
+
+    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
+        Ok(self)
+    }
+}
+
+impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for StringIteratorGen<T> {
+    fn to_iter<'a>(&'a self, heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
+    where
+        'v: 'a,
+    {
+        let s = self.string.to_value().unpack_str().unwrap().chars();
+        if self.produce_char {
+            box s.map(move |x| heap.alloc(x))
+        } else {
+            box s.map(|x| Value::new_int(u32::from(x) as i32))
+        }
+    }
+}
+
+impl<'v> ComplexValue<'v> for StringIterator<'v> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+        box FrozenStringIterator {
+            string: freezer.freeze(self.string),
+            produce_char: self.produce_char,
+        }
+    }
+
+    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+        walker.walk(&mut self.string);
     }
 }
 

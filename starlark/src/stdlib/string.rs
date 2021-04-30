@@ -22,7 +22,7 @@ use crate::{
     collections::SmallMap,
     environment::GlobalsBuilder,
     stdlib::util::convert_indices,
-    values::{none::NoneOr, Heap, StarlarkValue, UnpackValue, Value, ValueError},
+    values::{none::NoneOr, string, Heap, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -190,10 +190,8 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     ///     "H", "e", "l", "l", "o", ",", " ", "世", "界"]
     /// # "#);
     /// ```
-    fn elems(this: &str) -> Vec<char> {
-        // Note that we return a list here... Which is not equivalent to the go
-        // implementation.
-        Ok(this.chars().collect())
+    fn elems(this: Value<'v>) -> Value<'v> {
+        Ok(string::iterate_chars(this, heap))
     }
 
     /// [string.capitalize](
@@ -254,10 +252,8 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// list("Hello, 世界".codepoints()) == [72, 101, 108, 108, 111, 44, 32, 19990, 30028]
     /// # "#);
     /// ```
-    fn codepoints(this: &str) -> Vec<i32> {
-        // Note that we return a list here... Which is not equivalent to the go
-        // implementation.
-        Ok(this.chars().map(|x| u32::from(x) as i32).collect())
+    fn codepoints(this: Value<'v>) -> Value<'v> {
+        Ok(string::iterate_codepoints(this, heap))
     }
 
     /// [string.count](
@@ -1419,5 +1415,11 @@ mod tests {
         assert::fail(r#""bonbon".index("on", 2, 5)"#, "not found in");
         assert::fail(r#"("banana".replace("a", "o", -2))"#, "negative");
         assert::fail(r#""bonbon".rindex("on", 2, 5)"#, "not found in");
+    }
+
+    #[test]
+    fn test_opaque_iterator() {
+        assert::is_true("type('foo'.elems()) != type([])");
+        assert::is_true("type('foo'.codepoints()) != type([])");
     }
 }
