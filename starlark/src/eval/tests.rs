@@ -1508,11 +1508,6 @@ fn test_go() {
             // test_in_range
             "True in range(3)",
             "\"one\" in range(10)",
-            // Starlark spec demands elems() return a list of int, Go returns list of string
-            "\"abc\".elems()",
-            "\"def\".elems()",
-            "\"hijk\".elems()",
-            "(\"a\", \"d\", \"h\")", // end of a multiline that tests elems()
             // We added copy, which throws off the assert
             "dir({})[:3]",
             "dir([])[:3]",
@@ -1566,14 +1561,11 @@ fn test_go() {
     // Skip recursion.star, we don't support `while` loops, which is what this mostly tests
     // Skip set.star, we don't support set
     // Skip string.star, our String's are fundamentally different
-    assert.conformance(
-        // Our elems() works differently
-        &ignore_bad_lines(
-            &test_case!("tuple.star").replace("\"abc\".elems()", "[\"a\",\"b\",\"c\"]"),
-            &[
-                "1000000 * 1000000", // Some tests check that you can't create too large tuples, but that's not principled, so we allow it
-                // But it takes approximately forever, so doing it is a bad idea.
-            ],
-        ),
-    );
+    assert.conformance(&ignore_bad_lines(
+        test_case!("tuple.star"),
+        &[
+            "1000000 * 1000000", // Some tests check that you can't create too large tuples, but that's not principled, so we allow it
+            // But it takes approximately forever, so doing it is a bad idea.
+        ],
+    ));
 }

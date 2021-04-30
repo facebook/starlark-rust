@@ -187,13 +187,13 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::is_true(r#"
     /// list("Hello, 世界".elems()) == [
-    ///     72, 101, 108, 108, 111, 44, 32, 228, 184, 150, 231, 149, 140]
+    ///     "H", "e", "l", "l", "o", ",", " ", "世", "界"]
     /// # "#);
     /// ```
-    fn elems(this: &str) -> Vec<i32> {
+    fn elems(this: &str) -> Vec<char> {
         // Note that we return a list here... Which is not equivalent to the go
         // implementation.
-        Ok(this.as_bytes().map(|x| *x as i32))
+        Ok(this.chars().collect())
     }
 
     /// [string.capitalize](
