@@ -267,3 +267,54 @@ impl Heap {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        environment::{Globals, Module},
+        eval::Evaluator,
+        syntax::{AstModule, Dialect},
+        values::Value,
+    };
+
+    #[test]
+    fn test_profiling() -> anyhow::Result<()> {
+        // We don't test that the profile looks any particular way, but we do test it doesn't crash
+        let ast = AstModule::parse(
+            "foo.bzl",
+            r#"
+def f(x):
+    return (x * 5) + 3
+y = 8 * 9 + 2
+f
+"#
+            .to_owned(),
+            &Dialect::Extended,
+        )?;
+        let globals = Globals::standard();
+        let module = Module::new();
+        let mut eval = Evaluator::new(&module, &globals);
+        eval.enable_profiling();
+        let f = eval.eval_module(ast)?;
+        // first check module profiling works
+        module.heap().write_profile_to(&mut Vec::new())?;
+
+        // second check function profiling works
+        let module = Module::new();
+        let mut eval = Evaluator::new(&module, &globals);
+        eval.enable_profiling();
+        eval.eval_function(f, &[Value::new_int(100)], &[])?;
+        module.heap().write_profile_to(&mut Vec::new())?;
+
+        // finally, check a user can add values into the heap before/after
+        let module = Module::new();
+        let mut eval = Evaluator::new(&module, &globals);
+        module.heap().alloc("Thing that goes before");
+        eval.enable_profiling();
+        eval.eval_function(f, &[Value::new_int(100)], &[])?;
+        module.heap().alloc("Thing that goes after");
+        module.heap().write_profile_to(&mut Vec::new())?;
+
+        Ok(())
+    }
+}
