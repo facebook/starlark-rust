@@ -73,25 +73,27 @@
 //! use starlark::syntax::{AstModule, Dialect};
 //! use starlark::values::Value;
 //!
-//! let content = r#"
-//! quadratic(4, 2, 1, x = 8)
-//! "#;
-//!
+//! // This defines the function that is visible to Starlark
 //! #[starlark_module]
 //! fn starlark_quadratic(builder: &mut GlobalsBuilder) {
-//!     // This defines a function that is visible to Starlark
 //!     fn quadratic(a: i32, b: i32, c: i32, x: i32) -> i32 {
 //!         Ok(a * x * x + b * x + c)
 //!     }
 //! }
 //!
-//! let ast = AstModule::parse("quadratic.star", content.to_owned(), &Dialect::Standard)?;
-//! // We build our globals adding some functions we wrote
+//! // We build our globals to make the function available in Starlark
 //! let globals = GlobalsBuilder::new().with(starlark_quadratic).build();
 //! let module = Module::new();
 //! let mut eval = Evaluator::new(&module, &globals);
+//!
+//! // Let's test calling the function from Starlark code
+//! let starlark_code = r#"
+//! quadratic(4, 2, 1, x = 8)
+//! "#;
+//!
+//! let ast = AstModule::parse("quadratic.star", starlark_code.to_owned(), &Dialect::Standard)?;
 //! let res = eval.eval_module(ast)?;
-//! assert_eq!(res.unpack_int(), Some(273));
+//! assert_eq!(res.unpack_int(), Some(273)); // Verify that we got an `int` return value of 4 * 8^2 + 2 * 8 + 1 = 273
 //! # Ok(())
 //! # }
 //! # fn main(){ run().unwrap(); }
