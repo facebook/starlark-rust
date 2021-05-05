@@ -42,7 +42,7 @@ impl AllocFrozenValue for bool {
 }
 
 impl UnpackValue<'_> for bool {
-    fn unpack_value(value: Value, _heap: &Heap) -> Option<Self> {
+    fn unpack_value(value: Value) -> Option<Self> {
         value.unpack_bool()
     }
 }

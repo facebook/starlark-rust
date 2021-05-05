@@ -44,7 +44,7 @@ impl AllocFrozenValue for i32 {
 }
 
 impl UnpackValue<'_> for i32 {
-    fn unpack_value(value: Value, _heap: &Heap) -> Option<Self> {
+    fn unpack_value(value: Value) -> Option<Self> {
         value.unpack_int()
     }
 }

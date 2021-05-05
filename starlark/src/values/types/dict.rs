@@ -281,11 +281,11 @@ impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for DictGen<V> {
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for SmallMap<K, V> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         let dict = Dict::from_value(value)?;
         let mut r = SmallMap::new();
         for (k, v) in dict.content.iter() {
-            r.insert(K::unpack_value(*k, heap)?, V::unpack_value(*v, heap)?);
+            r.insert(K::unpack_value(*k)?, V::unpack_value(*v)?);
         }
         Some(r)
     }
@@ -299,14 +299,15 @@ pub struct DictOf<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> {
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
-    pub fn to_dict(&self, heap: &'v Heap) -> SmallMap<K, V> {
+    // TODO(bobyf) remove unused arg
+    pub fn to_dict(&self, _heap: &'v Heap) -> SmallMap<K, V> {
         Dict::from_value(self.value)
             .expect("already validated as a dict")
             .iter()
             .map(|(k, v)| {
                 (
-                    K::unpack_value(k, heap).expect("already validated key"),
-                    V::unpack_value(v, heap).expect("already validated value"),
+                    K::unpack_value(k).expect("already validated key"),
+                    V::unpack_value(v).expect("already validated value"),
                 )
             })
             .collect()
@@ -314,11 +315,11 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
 }
 
 impl<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> UnpackValue<'v> for DictOf<'v, K, V> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         let dict = Dict::from_value(value)?;
         let all_valid = dict
             .iter()
-            .all(|(k, v)| K::unpack_value(k, heap).is_some() && V::unpack_value(v, heap).is_some());
+            .all(|(k, v)| K::unpack_value(k).is_some() && V::unpack_value(v).is_some());
         if all_valid {
             Some(DictOf {
                 value,

@@ -107,7 +107,7 @@ mod tests {
         self as starlark,
         assert::Assert,
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
-        values::{none::NoneType, Heap, StarlarkValue, UnpackValue, Value},
+        values::{none::NoneType, StarlarkValue, UnpackValue, Value},
     };
     use gazebo::prelude::*;
 
@@ -147,7 +147,7 @@ mod tests {
         }
 
         impl<'v> UnpackValue<'v> for Bool2 {
-            fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+            fn unpack_value(value: Value<'v>) -> Option<Self> {
                 Some(*value.downcast_ref::<Bool2>().unwrap())
             }
         }

@@ -84,11 +84,11 @@ impl<T> NoneOr<T> {
 }
 
 impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for NoneOr<T> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         if value.is_none() {
             Some(NoneOr::None)
         } else {
-            T::unpack_value(value, heap).map(NoneOr::Other)
+            T::unpack_value(value).map(NoneOr::Other)
         }
     }
 }

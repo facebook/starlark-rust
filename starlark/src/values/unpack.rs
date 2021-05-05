@@ -25,11 +25,11 @@ use std::{cell::RefMut, marker::PhantomData, ops::Deref};
 pub trait UnpackValue<'v>: Sized {
     /// Given a [`Value`], try and unpack it into the given type, which may involve some element of conversion.
     /// The `heap` argument is _usually_ not required.
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self>;
+    fn unpack_value(value: Value<'v>) -> Option<Self>;
 }
 
 impl<'v> UnpackValue<'v> for Value<'v> {
-    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         Some(value)
     }
 }
@@ -61,8 +61,8 @@ impl<'v, T: UnpackValue<'v>> Deref for ValueOf<'v, T> {
 }
 
 impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        let typed = T::unpack_value(value, heap)?;
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        let typed = T::unpack_value(value)?;
         Some(Self { value, typed })
     }
 }
@@ -78,7 +78,7 @@ pub trait FromValue<'v> {
 }
 
 impl<'v, T: FromValue<'v>> UnpackValue<'v> for ARef<'v, T> {
-    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         T::from_value(value)
     }
 }
@@ -99,7 +99,7 @@ pub struct ValueOfMut<'v, T: ComplexValue<'v>> {
 }
 
 impl<'v, T: ComplexValue<'v>> UnpackValue<'v> for ValueOfMut<'v, T> {
-    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         if value.get_aref().as_dyn_any().is::<T>() {
             Some(ValueOfMut {
                 value,
@@ -136,15 +136,11 @@ impl<'v, T: ComplexValue<'v>> ValueOfMut<'v, T> {
 }
 
 impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         if let Some(o) = List::from_value(value) {
-            o.iter()
-                .map(|v| T::unpack_value(v, heap))
-                .collect::<Option<Vec<_>>>()
+            o.iter().map(T::unpack_value).collect::<Option<Vec<_>>>()
         } else if let Some(o) = Tuple::from_value(value) {
-            o.iter()
-                .map(|v| T::unpack_value(v, heap))
-                .collect::<Option<Vec<_>>>()
+            o.iter().map(T::unpack_value).collect::<Option<Vec<_>>>()
         } else {
             None
         }

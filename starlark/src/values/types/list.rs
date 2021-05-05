@@ -287,19 +287,19 @@ pub struct ListOf<'v, V: UnpackValue<'v>> {
 }
 
 impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
-    pub fn to_vec(&self, heap: &'v Heap) -> Vec<V> {
+    pub fn to_vec(&self, _heap: &'v Heap) -> Vec<V> {
         List::from_value(self.value)
             .expect("already validated as a list")
             .iter()
-            .map(|v| V::unpack_value(v, heap).expect("already validated value"))
+            .map(|v| V::unpack_value(v).expect("already validated value"))
             .collect()
     }
 }
 
 impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, V> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         let list = List::from_value(value)?;
-        if list.iter().all(|v| V::unpack_value(v, heap).is_some()) {
+        if list.iter().all(|v| V::unpack_value(v).is_some()) {
             Some(ListOf {
                 value,
                 phantom: PhantomData {},

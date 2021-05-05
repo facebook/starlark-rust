@@ -22,7 +22,7 @@ use crate::{
     collections::SmallMap,
     environment::GlobalsBuilder,
     stdlib::util::convert_indices,
-    values::{none::NoneOr, string, Heap, StarlarkValue, UnpackValue, Value, ValueError},
+    values::{none::NoneOr, string, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -159,11 +159,11 @@ fn rsplitn_whitespace(s: &str, maxsplit: usize) -> Vec<String> {
 struct StringOrTuple<'v>(Vec<&'v str>);
 
 impl<'v> UnpackValue<'v> for StringOrTuple<'v> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         if let Some(s) = value.unpack_str() {
             Some(Self(vec![s]))
         } else {
-            Some(Self(UnpackValue::unpack_value(value, heap)?))
+            Some(Self(UnpackValue::unpack_value(value)?))
         }
     }
 }
@@ -1294,7 +1294,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::assert;
+    use crate::{assert, values::Heap};
 
     #[test]
     fn test_format_capture() {

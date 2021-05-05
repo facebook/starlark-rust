@@ -61,13 +61,13 @@ impl<'v> AllocValue<'v> for &'_ str {
 }
 
 impl<'v> UnpackValue<'v> for &'v str {
-    fn unpack_value(value: Value<'v>, _heap: &Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         value.unpack_str()
     }
 }
 
 impl<'v> UnpackValue<'v> for String {
-    fn unpack_value(value: Value<'v>, _heap: &'v Heap) -> Option<Self> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
         value.unpack_str().map(ToOwned::to_owned)
     }
 }

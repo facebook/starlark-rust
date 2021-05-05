@@ -483,21 +483,22 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     pub fn next_opt<T: UnpackValue<'v>>(
         &mut self,
         name: &str,
-        heap: &'v Heap,
+        _heap: &'v Heap, // TODO(bobyf): remove heap arg
     ) -> anyhow::Result<Option<T>> {
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
         let v = self.slots.next().unwrap();
         match v {
             None => Ok(None),
-            Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(*v, heap))?)),
+            Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(*v))?)),
         }
     }
 
     /// Obtain the next parameter, which can't be defined by [`ParametersSpec::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next<T: UnpackValue<'v>>(&mut self, name: &str, heap: &'v Heap) -> anyhow::Result<T> {
+    // TODO(bobyf) remove unused arg
+    pub fn next<T: UnpackValue<'v>>(&mut self, name: &str, _heap: &'v Heap) -> anyhow::Result<T> {
         // After ParametersCollect.done() all variables will be Some,
         // apart from those where we called ParametersSpec.optional(),
         // and for those we chould call next_opt()
@@ -508,6 +509,6 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
         let v = v.as_ref().unwrap();
-        Self::named_err(name, T::unpack_value(*v, heap))
+        Self::named_err(name, T::unpack_value(*v))
     }
 }
