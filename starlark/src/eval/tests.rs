@@ -1317,20 +1317,20 @@ mod value_of {
             Ok((*v, format!("{}", v.typed)))
         }
         fn with_int_list(v: ListOf<i32>) -> (Value<'v>, String) {
-            let repr = v.to_vec(heap).iter().join(", ");
+            let repr = v.to_vec().iter().join(", ");
             Ok((*v, repr))
         }
         fn with_list_list(v: ListOf<ListOf<i32>>) -> (Value<'v>, String) {
             let repr = v
-                .to_vec(heap)
+                .to_vec()
                 .iter()
-                .map(|l| l.to_vec(heap).iter().join(", "))
+                .map(|l| l.to_vec().iter().join(", "))
                 .join(" + ");
             Ok((*v, repr))
         }
         fn with_dict_list(v: ListOf<DictOf<i32, i32>>) -> (Value<'v>, String) {
             let repr = v
-                .to_vec(heap)
+                .to_vec()
                 .iter()
                 .map(|l| {
                     l.to_dict()
@@ -1353,7 +1353,7 @@ mod value_of {
             let repr = v
                 .to_dict()
                 .iter()
-                .map(|(k, v)| format!("{}: {}", k, v.to_vec(heap).iter().join(", ")))
+                .map(|(k, v)| format!("{}: {}", k, v.to_vec().iter().join(", ")))
                 .join(" + ");
             Ok((*v, repr))
         }

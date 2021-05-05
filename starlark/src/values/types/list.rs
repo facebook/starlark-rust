@@ -287,7 +287,7 @@ pub struct ListOf<'v, V: UnpackValue<'v>> {
 }
 
 impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
-    pub fn to_vec(&self, _heap: &'v Heap) -> Vec<V> {
+    pub fn to_vec(&self) -> Vec<V> {
         List::from_value(self.value)
             .expect("already validated as a list")
             .iter()
