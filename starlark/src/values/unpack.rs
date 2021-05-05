@@ -17,7 +17,7 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use crate::values::{ComplexValue, Heap, Value};
+use crate::values::{list::List, tuple::Tuple, ComplexValue, Heap, Value};
 use gazebo::cell::ARef;
 use std::{cell::RefMut, marker::PhantomData, ops::Deref};
 
@@ -132,5 +132,21 @@ impl<'v, T: ComplexValue<'v>> ValueOfMut<'v, T> {
             // The `unwrap` won't fail because we checked at construction time.
             any.as_dyn_any_mut().downcast_mut::<T>().unwrap()
         }))
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
+    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
+        if let Some(o) = List::from_value(value) {
+            o.iter()
+                .map(|v| T::unpack_value(v, heap))
+                .collect::<Option<Vec<_>>>()
+        } else if let Some(o) = Tuple::from_value(value) {
+            o.iter()
+                .map(|v| T::unpack_value(v, heap))
+                .collect::<Option<Vec<_>>>()
+        } else {
+            None
+        }
     }
 }

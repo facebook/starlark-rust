@@ -279,16 +279,6 @@ impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for ListGen<V> {
     }
 }
 
-impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for Vec<V> {
-    fn unpack_value(value: Value<'v>, heap: &'v Heap) -> Option<Self> {
-        let mut r = Vec::new();
-        for item in &value.iterate(heap).ok()? {
-            r.push(V::unpack_value(item, heap)?);
-        }
-        Some(r)
-    }
-}
-
 /// Like `ValueOf`, but only validates item types; does not construct or store a
 /// vec. Use `to_vec` to get a Vec.
 pub struct ListOf<'v, V: UnpackValue<'v>> {
