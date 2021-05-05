@@ -1333,7 +1333,7 @@ mod value_of {
                 .to_vec(heap)
                 .iter()
                 .map(|l| {
-                    l.to_dict(heap)
+                    l.to_dict()
                         .iter()
                         .map(|(k, v)| format!("{}: {}", k, v))
                         .join(", ")
@@ -1343,7 +1343,7 @@ mod value_of {
         }
         fn with_int_dict(v: DictOf<i32, i32>) -> (Value<'v>, String) {
             let repr = v
-                .to_dict(heap)
+                .to_dict()
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .join(" + ");
@@ -1351,7 +1351,7 @@ mod value_of {
         }
         fn with_list_dict(v: DictOf<i32, ListOf<i32>>) -> (Value<'v>, String) {
             let repr = v
-                .to_dict(heap)
+                .to_dict()
                 .iter()
                 .map(|(k, v)| format!("{}: {}", k, v.to_vec(heap).iter().join(", ")))
                 .join(" + ");
@@ -1359,11 +1359,11 @@ mod value_of {
         }
         fn with_dict_dict(v: DictOf<i32, DictOf<i32, i32>>) -> (Value<'v>, String) {
             let repr = v
-                .to_dict(heap)
+                .to_dict()
                 .iter()
                 .map(|(k, v)| {
                     let inner_repr = v
-                        .to_dict(heap)
+                        .to_dict()
                         .iter()
                         .map(|(k2, v2)| format!("{}:{}", k2, v2))
                         .join(", ");

@@ -170,9 +170,9 @@ impl<'v> EnumType<'v> {
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.
         NativeFunction::new(
-            move |context, mut param_parser: ParametersParser| {
-                let typ_val = param_parser.next("me", context.heap())?;
-                let val: Value = param_parser.next("value", context.heap())?;
+            move |_context, mut param_parser: ParametersParser| {
+                let typ_val = param_parser.next("me")?;
+                let val: Value = param_parser.next("value")?;
                 let typ = EnumType::from_value(typ_val).unwrap();
                 match typ.elements.get_hashed(val.get_hashed()?.borrow()) {
                     Some(v) => Ok(*v),

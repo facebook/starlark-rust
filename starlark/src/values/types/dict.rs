@@ -299,8 +299,7 @@ pub struct DictOf<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> {
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
-    // TODO(bobyf) remove unused arg
-    pub fn to_dict(&self, _heap: &'v Heap) -> SmallMap<K, V> {
+    pub fn to_dict(&self) -> SmallMap<K, V> {
         Dict::from_value(self.value)
             .expect("already validated as a dict")
             .iter()
