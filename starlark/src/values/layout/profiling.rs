@@ -202,6 +202,7 @@ impl Heap {
             last_changed: start,
             call_stack: vec![(root, Duration::default(), start)],
         };
+        info.ensure(root);
         self.for_each(|x| info.process(x));
         // Just has root left on it
         assert!(info.call_stack.len() == 1);
