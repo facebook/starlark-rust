@@ -193,6 +193,11 @@ impl Heap {
     /// Write a profile (as a `.csv` file) to a file.
     /// Only works if [`enable_profiling`](crate::eval::Evaluator::enable_profiling) was called before execution began.
     pub fn write_profile<P: AsRef<Path>>(&self, file: P) -> io::Result<()> {
+        let file = File::create(file)?;
+        self.write_profile_to(file)
+    }
+
+    fn write_profile_to(&self, mut file: impl Write) -> io::Result<()> {
         let mut ids = FunctionIds::default();
         let root = ids.get_string("(root)".to_owned());
         let start = Instant::now();
@@ -222,7 +227,6 @@ impl Heap {
         columns.sort_by_key(|x| -(x.1 as isize));
         info.sort_by_key(|x| -(x.1.time.as_nanos() as i128));
 
-        let mut file = File::create(file)?;
         write!(
             file,
             "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Allocs"
