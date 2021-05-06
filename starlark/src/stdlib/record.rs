@@ -117,5 +117,12 @@ foo(v[0](host="localhost", port=80))"#,
 rec_type = record(host=str.type, port=field(int.type, 80), mask=int.type)
 assert_eq(rec_type(host="localhost", mask=255), rec_type(host="localhost", port=80, mask=255))"#,
         );
+        // Make sure the default value is heap allocated (used to fail with a GC issue)
+        assert::pass(
+            r#"
+heap_string = "test{}".format(42)
+rec_type = record(test_gc=field(str.type, heap_string))
+assert_eq(rec_type().test_gc, "test42")"#,
+        );
     }
 }
