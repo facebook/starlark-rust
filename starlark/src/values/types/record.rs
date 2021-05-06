@@ -105,8 +105,8 @@ impl<'v> Field<'v> {
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.typ);
-        if let Some(mut d) = self.default {
-            walker.walk(&mut d)
+        if let Some(d) = &mut self.default {
+            walker.walk(d)
         }
     }
 }
