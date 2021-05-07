@@ -32,7 +32,7 @@ use std::{fmt::Debug, mem};
 use thiserror::Error;
 
 pub use crate::eval::file_loader::*;
-pub use context::Evaluator;
+pub use evaluator::Evaluator;
 pub(crate) use parameters::ParametersCollect;
 pub use parameters::{ParametersParser, ParametersSpec};
 pub(crate) use scope::ScopeNames;
@@ -48,8 +48,8 @@ mod stmt;
 mod tests;
 
 pub(crate) mod compr;
-mod context;
 pub(crate) mod def;
+mod evaluator;
 
 pub(crate) type EvalCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,

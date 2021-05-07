@@ -21,7 +21,7 @@ use crate::{
     collections::{Hashed, SmallMap},
     environment::EnvironmentError,
     errors::Diagnostic,
-    eval::{context::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+    eval::{evaluator::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
         dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList, FrozenHeap,

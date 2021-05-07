@@ -21,7 +21,7 @@ use crate::{
     codemap::CodeMap,
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
-        context::Evaluator,
+        evaluator::Evaluator,
         parameters::{ParametersCollect, ParametersSpec},
         scope::ScopeNames,
         Compiler, EvalCompiled, EvalException,

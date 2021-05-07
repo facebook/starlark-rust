@@ -20,7 +20,9 @@
 use crate::{
     codemap::Span,
     collections::SmallMap,
-    eval::{context::Evaluator, stmt::AssignCompiled, thrw, Compiler, EvalCompiled, EvalException},
+    eval::{
+        evaluator::Evaluator, stmt::AssignCompiled, thrw, Compiler, EvalCompiled, EvalException,
+    },
     syntax::ast::{AstExpr, Clause, ForClause},
     values::{dict::Dict, Value},
 };

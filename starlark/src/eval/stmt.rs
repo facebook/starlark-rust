@@ -26,7 +26,7 @@ use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
     eval::{
-        context::Evaluator, scope::Slot, thrw, AssignError, Compiler, EvalCompiled, EvalException,
+        evaluator::Evaluator, scope::Slot, thrw, AssignError, Compiler, EvalCompiled, EvalException,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
     values::{
