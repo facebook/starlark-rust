@@ -19,6 +19,7 @@ use crate::values::{
     layout::{heap::Heap, value::ValueMem},
     Value,
 };
+use anyhow::Context;
 use gazebo::prelude::*;
 use regex::Regex;
 use std::{
@@ -192,9 +193,17 @@ impl Info {
 impl Heap {
     /// Write a profile (as a `.csv` file) to a file.
     /// Only works if [`enable_profiling`](crate::eval::Evaluator::enable_profiling) was called before execution began.
-    pub fn write_profile<P: AsRef<Path>>(&self, file: P) -> io::Result<()> {
-        let file = File::create(file)?;
-        self.write_profile_to(file)
+    pub fn write_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        let filename = filename.as_ref();
+        let file = File::create(filename).with_context(|| {
+            format!("When creating profile output file `{}`", filename.display())
+        })?;
+        self.write_profile_to(file).with_context(|| {
+            format!(
+                "When writing to profile output file `{}`",
+                filename.display()
+            )
+        })
     }
 
     fn write_profile_to(&self, mut file: impl Write) -> io::Result<()> {
