@@ -34,8 +34,12 @@ pub(crate) struct StmtProfile(Option<Box<StmtProfileData>>);
 // A cheap unowned unique identifier per file/CodeMap,
 // somewhat delving into internal details.
 // Remains unique because we take a reference to the CodeMap.
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Dupe)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 struct FileId(*const crate::codemap::File);
+
+// FIXME(ndmitchell): Release Gazebo 0.2.2 and use a derive.
+// Can't derive Dupe until Gazebo 0.2.2 which gives a Dupe instance to pointers
+impl Dupe for FileId {}
 
 impl FileId {
     const EMPTY: FileId = FileId(ptr::null());
