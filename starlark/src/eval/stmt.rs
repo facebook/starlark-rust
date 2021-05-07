@@ -227,16 +227,16 @@ impl Compiler<'_> {
 // additional values stashed somewhere.
 fn before_stmt(span: Span, context: &mut Evaluator) {
     // Almost always will be empty, especially in high-perf use cases
-    if !context.on_stmt.is_empty() {
-        // The user could inject more on_stmt values during iteration (although that sounds like a bad plan!)
+    if !context.before_stmt.is_empty() {
+        // The user could inject more before_stmt values during iteration (although that sounds like a bad plan!)
         // so grab the values at the start, and add any additional at the end.
-        let fs = mem::take(&mut context.on_stmt);
+        let fs = mem::take(&mut context.before_stmt);
         for f in &fs {
             f(span, context)
         }
-        let added = mem::replace(&mut context.on_stmt, fs);
+        let added = mem::replace(&mut context.before_stmt, fs);
         for x in added {
-            context.on_stmt.push(x)
+            context.before_stmt.push(x)
         }
     }
 

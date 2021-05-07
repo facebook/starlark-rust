@@ -46,7 +46,7 @@ struct Backend {
 
     file: Mutex<Option<String>>,
 
-    // These breakpoints must all match statements as per on_stmt.
+    // These breakpoints must all match statements as per before_stmt.
     // Those values for which we abort the execution.
     breakpoints: Arc<Mutex<HashMap<String, HashSet<Span>>>>,
     // Set while we are doing evaluate calls (>= 1 means disable)
@@ -128,7 +128,7 @@ impl Backend {
                     }
                 }
             };
-            ctx.on_stmt(&fun);
+            ctx.before_stmt(&fun);
             // No way to pass back success/failure to the caller
             client.log(&format!("EVALUATION START: {}", path.display()));
             let v = ctx.eval_module(ast)?;

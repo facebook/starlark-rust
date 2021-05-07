@@ -62,7 +62,7 @@ pub struct Evaluator<'v, 'a> {
     // Should we do runtime checking of types (defaults to true)
     pub(crate) check_types: bool,
     // Extra functions to run on each statement, usually empty
-    pub(crate) on_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
+    pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     /// Field that can be used for any purpose you want (can store types you define).
     /// Typically accessed via native functions you also define.
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
@@ -95,7 +95,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             profiling: false,
             check_types: true,
             heap: module.heap(),
-            on_stmt: Vec::new(),
+            before_stmt: Vec::new(),
         }
     }
 
@@ -140,16 +140,16 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack.top_location()
     }
 
-    /// Called on every statement with the [`Span`] and a reference to the containing [`Evaluator`].
+    /// Called before every statement is run with the [`Span`] and a reference to the containing [`Evaluator`].
     /// A list of all possible statements can be obtained in advance by
     /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
-    pub fn on_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
-        self.on_stmt.push(f)
+    pub fn before_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
+        self.before_stmt.push(f)
     }
 
     /// Given a [`Span`] resolve it to a concrete [`SpanLoc`] using
     /// whatever module is currently at the top of the stack.
-    /// This function can be used in conjunction with [`on_stmt`](Evaluator::on_stmt).
+    /// This function can be used in conjunction with [`before_stmt`](Evaluator::before_stmt).
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
         self.codemap.look_up_span(span)
     }

@@ -33,7 +33,7 @@ fn go(x: &AstStmt, res: &mut Vec<Span>) {
 
 impl AstModule {
     /// Locations where statements occur, likely to be passed as the positions
-    /// to [`on_stmt`](crate::eval::Evaluator::on_stmt).
+    /// to [`before_stmt`](crate::eval::Evaluator::before_stmt).
     pub fn stmt_locations(&self) -> Vec<Span> {
         let mut res = Vec::new();
         self.statement.visit_stmt(|x| go(x, &mut res));

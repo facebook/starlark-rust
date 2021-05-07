@@ -224,7 +224,7 @@ impl Assert {
         match gc {
             GcStrategy::Never => ctx.disable_gc(),
             GcStrategy::Auto => {}
-            GcStrategy::Always => ctx.on_stmt(&gc_always),
+            GcStrategy::Always => ctx.before_stmt(&gc_always),
         }
         ctx.set_loader(&mut loader);
         ctx.eval_module(ast)
