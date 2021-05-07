@@ -43,6 +43,7 @@ mod file_loader;
 mod parameters;
 mod scope;
 mod stmt;
+mod stmt_profile;
 
 #[cfg(test)]
 mod tests;
