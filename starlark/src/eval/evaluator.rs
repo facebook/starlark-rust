@@ -27,6 +27,13 @@ use crate::{
 };
 use gazebo::any::AnyLifetime;
 use std::{mem, path::Path};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+enum EvaluatorError {
+    #[error("Can't call `write_profile` unless you first call `enable_profiling`.")]
+    ProfilingNotEnabled,
+}
 
 /// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a> {
@@ -124,8 +131,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Write a profile (as a `.csv` file) to a file.
     /// Contains information about time spent in each function and allocations by each function.
-    /// Only works if [`enable_profiling`](Evaluator::enable_profiling) was called before execution began.
+    /// Only valid if [`enable_profiling`](Evaluator::enable_profiling) was called before execution began.
     pub fn write_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        if !self.profiling {
+            return Err(EvaluatorError::ProfilingNotEnabled.into());
+        }
         self.heap.write_profile(filename.as_ref())
     }
 
