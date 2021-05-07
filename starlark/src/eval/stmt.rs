@@ -226,8 +226,18 @@ impl Compiler<'_> {
 // We also require that `extra_v` is None, since otherwise the user might have
 // additional values stashed somewhere.
 fn before_stmt(span: Span, context: &mut Evaluator) {
-    if let Some(f) = context.on_stmt {
-        f(span, context)
+    // Almost always will be empty, especially in high-perf use cases
+    if !context.on_stmt.is_empty() {
+        // The user could inject more on_stmt values during iteration (although that sounds like a bad plan!)
+        // so grab the values at the start, and add any additional at the end.
+        let fs = mem::take(&mut context.on_stmt);
+        for f in &fs {
+            f(span, context)
+        }
+        let added = mem::replace(&mut context.on_stmt, fs);
+        for x in added {
+            context.on_stmt.push(x)
+        }
     }
 
     // We only actually GC if there have been GC_THRESHOLD bytes allocated since the

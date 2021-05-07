@@ -61,10 +61,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) heap: &'v Heap,
     // Should we do runtime checking of types (defaults to true)
     pub(crate) check_types: bool,
-    /// Called on every statement with the [`Span`] and a reference to the containing [`Evaluator`].
-    /// A list of all possible statements can be obtained in advance by
-    /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
-    pub on_stmt: Option<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
+    // Extra functions to run on each statement, usually empty
+    pub(crate) on_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     /// Field that can be used for any purpose you want (can store types you define).
     /// Typically accessed via native functions you also define.
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
@@ -97,7 +95,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             profiling: false,
             check_types: true,
             heap: module.heap(),
-            on_stmt: None,
+            on_stmt: Vec::new(),
         }
     }
 
@@ -140,6 +138,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// call happened via native functions.
     pub fn call_stack_top_location(&self) -> Option<SpanLoc> {
         self.call_stack.top_location()
+    }
+
+    /// Called on every statement with the [`Span`] and a reference to the containing [`Evaluator`].
+    /// A list of all possible statements can be obtained in advance by
+    /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
+    pub fn on_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
+        self.on_stmt.push(f)
     }
 
     /// Given a [`Span`] resolve it to a concrete [`SpanLoc`] using

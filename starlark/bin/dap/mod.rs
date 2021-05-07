@@ -128,7 +128,7 @@ impl Backend {
                     }
                 }
             };
-            ctx.on_stmt = Some(&fun);
+            ctx.on_stmt(&fun);
             // No way to pass back success/failure to the caller
             client.log(&format!("EVALUATION START: {}", path.display()));
             let v = ctx.eval_module(ast)?;
