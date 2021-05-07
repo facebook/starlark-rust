@@ -156,14 +156,17 @@ fn rsplitn_whitespace(s: &str, maxsplit: usize) -> Vec<String> {
     v
 }
 
-struct StringOrTuple<'v>(Vec<&'v str>);
+enum StringOrTuple<'v> {
+    String(&'v str),
+    Tuple(Vec<&'v str>),
+}
 
 impl<'v> UnpackValue<'v> for StringOrTuple<'v> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         if let Some(s) = value.unpack_str() {
-            Some(Self(vec![s]))
+            Some(Self::String(s))
         } else {
-            Some(Self(UnpackValue::unpack_value(value)?))
+            Some(Self::Tuple(UnpackValue::unpack_value(value)?))
         }
     }
 }
@@ -312,13 +315,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn endswith(this: &str, ref suffix: StringOrTuple) -> bool {
-        for p in suffix.0.iter() {
-            let p: &str = p;
-            if this.ends_with(p) {
-                return Ok(true);
-            }
+        match suffix {
+            StringOrTuple::String(x) => Ok(this.ends_with(x)),
+            StringOrTuple::Tuple(xs) => Ok(xs.iter().any(|x| this.ends_with(x))),
         }
-        Ok(false)
     }
 
     /// [string.find](
@@ -1149,13 +1149,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn startswith(this: &str, ref prefix: StringOrTuple) -> bool {
-        for p in prefix.0.iter() {
-            let p: &str = p;
-            if this.starts_with(p) {
-                return Ok(true);
-            }
+        match prefix {
+            StringOrTuple::String(x) => Ok(this.starts_with(x)),
+            StringOrTuple::Tuple(xs) => Ok(xs.iter().any(|x| this.starts_with(x))),
         }
-        Ok(false)
     }
 
     /// [string.strip](
