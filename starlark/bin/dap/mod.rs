@@ -28,9 +28,9 @@ use starlark::{
 };
 use std::{
     collections::{HashMap, HashSet},
-    mem,
     path::{Path, PathBuf},
     sync::{
+        atomic::{AtomicUsize, Ordering},
         mpsc::{channel, Receiver, Sender},
         Arc, Mutex,
     },
@@ -49,6 +49,8 @@ struct Backend {
     // These breakpoints must all match statements as per on_stmt.
     // Those values for which we abort the execution.
     breakpoints: Arc<Mutex<HashMap<String, HashSet<Span>>>>,
+    // Set while we are doing evaluate calls (>= 1 means disable)
+    disable_breakpoints: Arc<AtomicUsize>,
 
     sender: Sender<Box<dyn Fn(Span, &mut Evaluator) -> Next + Send>>,
     receiver: Arc<Mutex<Receiver<Box<dyn Fn(Span, &mut Evaluator) -> Next + Send>>>>,
@@ -88,6 +90,7 @@ impl Backend {
         let client2 = self.client.dupe();
         let path = PathBuf::from(path);
         let breakpoints = self.breakpoints.dupe();
+        let disable_breakpoints = self.disable_breakpoints.dupe();
         let receiver = self.receiver.dupe();
 
         let go = move || -> anyhow::Result<String> {
@@ -97,7 +100,9 @@ impl Backend {
             let globals = globals();
             let mut ctx = Evaluator::new(&module, &globals);
             let fun = |span, ctx: &mut Evaluator| {
-                let stop = {
+                let stop = if disable_breakpoints.load(Ordering::SeqCst) > 0 {
+                    false
+                } else {
                     let breaks = breakpoints.lock().unwrap();
                     let span_loc = ctx.look_up_span(span);
                     breaks
@@ -349,16 +354,17 @@ impl DebugServer for Backend {
     }
 
     fn evaluate(&self, x: EvaluateArguments) -> anyhow::Result<EvaluateResponseBody> {
+        let disable_breakpoints = self.disable_breakpoints.dupe();
         self.with_ctx(box move |_, ctx| {
             // We don't want to trigger breakpoints during an evaluate,
             // not least because we currently don't allow reenterant evaluate
-            let old = mem::take(&mut ctx.on_stmt);
+            disable_breakpoints.fetch_add(1, Ordering::SeqCst);
             let ast = AstModule::parse("interactive", x.expression.clone(), &Dialect::Extended);
             let s = match ast.and_then(|ast| ctx.eval_statements(ast)) {
                 Err(e) => format!("{:#}", e),
                 Ok(v) => v.to_string(),
             };
-            ctx.on_stmt = old;
+            disable_breakpoints.fetch_sub(1, Ordering::SeqCst);
             Ok(EvaluateResponseBody {
                 indexed_variables: None,
                 named_variables: None,
@@ -377,6 +383,7 @@ pub fn server(starlark: Context) {
         client,
         starlark,
         breakpoints: Default::default(),
+        disable_breakpoints: Default::default(),
         file: Default::default(),
         sender,
         receiver: Arc::new(Mutex::new(receiver)),
