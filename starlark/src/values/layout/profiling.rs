@@ -191,10 +191,8 @@ impl Info {
 }
 
 impl Heap {
-    /// Write a profile (as a `.csv` file) to a file.
-    /// Only works if [`enable_profiling`](crate::eval::Evaluator::enable_profiling) was called before execution began.
-    pub fn write_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        let filename = filename.as_ref();
+    // We could expose profile on the Heap, but it's an implementation detail that it works here.
+    pub(crate) fn write_profile(&self, filename: &Path) -> anyhow::Result<()> {
         let file = File::create(filename).with_context(|| {
             format!("When creating profile output file `{}`", filename.display())
         })?;

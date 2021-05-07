@@ -26,7 +26,7 @@ use crate::{
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
 use gazebo::any::AnyLifetime;
-use std::mem;
+use std::{mem, path::Path};
 
 /// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a> {
@@ -115,13 +115,20 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.loader = Some(loader);
     }
 
-    /// Enable profiling, allowing [`Heap::write_profile`] to be used.
+    /// Enable profiling, allowing [`Evaluator::write_profile`] to be used.
     /// Has the side effect of disabling garbage-collection.
     pub fn enable_profiling(&mut self) {
         self.profiling = true;
         // Disable GC because otherwise why lose the profile records, as we use the heap
         // to store a complete list of what happened in linear order.
         self.disable_gc = true;
+    }
+
+    /// Write a profile (as a `.csv` file) to a file.
+    /// Contains information about time spent in each function and allocations by each function.
+    /// Only works if [`enable_profiling`](Evaluator::enable_profiling) was called before execution began.
+    pub fn write_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        self.heap.write_profile(filename.as_ref())
     }
 
     /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
