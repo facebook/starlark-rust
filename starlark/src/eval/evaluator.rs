@@ -180,6 +180,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         res
     }
 
+    pub(crate) fn set_codemap(&mut self, codemap: CodeMap) -> CodeMap {
+        mem::replace(&mut self.codemap, codemap)
+    }
+
     /// Called to change the local variables, from the callee.
     /// Only called for user written functions.
     pub(crate) fn with_function_context<R, E>(
@@ -194,7 +198,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     {
         // Capture the variables we will be mutating
         let old_is_module_scope = self.is_module_scope;
-        let old_codemap = mem::replace(&mut self.codemap, codemap);
+        let old_codemap = self.set_codemap(codemap);
 
         // Set up for the new function call
         let old_module_variables =
@@ -207,7 +211,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let res = within(self);
 
         // Restore them all back
-        self.codemap = old_codemap;
+        self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
         self.local_variables = self.local_variables_stack.pop().unwrap();
         self.is_module_scope = old_is_module_scope;

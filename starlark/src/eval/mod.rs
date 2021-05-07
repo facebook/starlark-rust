@@ -156,7 +156,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         );
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
-        let old_codemap = mem::replace(&mut self.codemap, codemap.dupe());
+        let old_codemap = self.set_codemap(codemap.dupe());
         self.call_stack
             .push(Value::new_none(), Some((codemap, span)))
             .unwrap();
@@ -172,7 +172,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         if self.profiling {
             self.heap.record_call_exit();
         }
-        self.codemap = old_codemap;
+        self.set_codemap(old_codemap);
         self.local_variables = old_locals;
 
         // Return the result of evaluation
