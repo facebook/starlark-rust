@@ -45,7 +45,7 @@ use std::{
 };
 
 /// A small, `Copy`, value representing a position in a `CodeMap`'s file.
-#[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Ord, PartialOrd, Debug)]
+#[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
 pub struct Pos(u32);
 
 impl Add<u64> for Pos {
@@ -63,7 +63,7 @@ impl Sub<Pos> for Pos {
 }
 
 /// A range of text within a CodeMap.
-#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug, Default)]
 pub struct Span {
     /// The position in the codemap representing the first byte of the span.
     low: Pos,
