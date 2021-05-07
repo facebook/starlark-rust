@@ -124,8 +124,8 @@ pub(crate) struct Compiler<'a> {
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
     /// [`Module`](crate::environment::Module) as appropriate.
-    pub fn eval_module(&mut self, module: AstModule) -> anyhow::Result<Value<'v>> {
-        let AstModule { codemap, statement } = module;
+    pub fn eval_module(&mut self, ast: AstModule) -> anyhow::Result<Value<'v>> {
+        let AstModule { codemap, statement } = ast;
         let module_env = self.assert_module_env();
 
         let scope = Scope::enter_module(module_env.names(), &statement);

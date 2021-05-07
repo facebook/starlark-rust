@@ -58,17 +58,17 @@ impl Context {
         })
     }
 
-    fn go(&self, file: &str, module: AstModule) -> impl Iterator<Item = Message> {
+    fn go(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
         if self.info {
-            self.info(&module);
+            self.info(&ast);
         }
         if self.check {
-            warnings = Either::Right(self.check(&module));
+            warnings = Either::Right(self.check(&ast));
         }
         if self.run {
-            errors = Either::Right(self.run(file, module));
+            errors = Either::Right(self.run(file, ast));
         }
         warnings.chain(errors)
     }
@@ -113,14 +113,14 @@ impl Context {
         )
     }
 
-    fn run(&self, file: &str, module: AstModule) -> impl Iterator<Item = Message> {
+    fn run(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
         let env = Module::new();
         for p in &self.prelude {
             env.import_public_symbols(p)
         }
         let globals = globals();
         let mut context = Evaluator::new(&env, &globals);
-        Self::err(file, context.eval_module(module).map(|_| iter::empty()))
+        Self::err(file, context.eval_module(ast).map(|_| iter::empty()))
     }
 
     fn info(&self, module: &AstModule) {
