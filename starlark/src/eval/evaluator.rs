@@ -31,7 +31,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum EvaluatorError {
-    #[error("Can't call `write_profile` unless you first call `enable_profiling`.")]
+    #[error("Can't call `write_profile` unless you first call `enable_profile`.")]
     ProfilingNotEnabled,
 }
 
@@ -122,7 +122,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Enable profiling, allowing [`Evaluator::write_profile`] to be used.
     /// Has the side effect of disabling garbage-collection.
-    pub fn enable_profiling(&mut self) {
+    pub fn enable_profile(&mut self) {
         self.profiling = true;
         // Disable GC because otherwise why lose the profile records, as we use the heap
         // to store a complete list of what happened in linear order.
@@ -131,7 +131,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Write a profile (as a `.csv` file) to a file.
     /// Contains information about time spent in each function and allocations by each function.
-    /// Only valid if [`enable_profiling`](Evaluator::enable_profiling) was called before execution began.
+    /// Only valid if [`enable_profile`](Evaluator::enable_profile) was called before execution began.
     pub fn write_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
         if !self.profiling {
             return Err(EvaluatorError::ProfilingNotEnabled.into());

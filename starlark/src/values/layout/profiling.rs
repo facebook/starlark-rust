@@ -262,7 +262,7 @@ impl Heap {
                 info.time_rec.as_secs_f64(),
                 info.calls,
                 info.callers.len(),
-                un_ids[callers.0.0],
+                un_ids[callers.0 .0],
                 callers.1,
                 allocs
             )?;
@@ -301,7 +301,7 @@ f
         let globals = Globals::standard();
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
-        eval.enable_profiling();
+        eval.enable_profile();
         let f = eval.eval_module(ast)?;
         // first check module profiling works
         module.heap().write_profile_to(&mut Vec::new())?;
@@ -309,7 +309,7 @@ f
         // second check function profiling works
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
-        eval.enable_profiling();
+        eval.enable_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         module.heap().write_profile_to(&mut Vec::new())?;
 
@@ -317,7 +317,7 @@ f
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
         module.heap().alloc("Thing that goes before");
-        eval.enable_profiling();
+        eval.enable_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         module.heap().alloc("Thing that goes after");
         module.heap().write_profile_to(&mut Vec::new())?;
