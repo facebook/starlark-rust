@@ -78,12 +78,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ///
     /// If your program contains `load()` statements, you also need to call
     /// [`set_loader`](Evaluator::set_loader).
-    pub fn new(env: &'v Module, globals: &'a Globals) -> Self {
-        env.frozen_heap().add_reference(globals.heap());
+    pub fn new(module: &'v Module, globals: &'a Globals) -> Self {
+        module.frozen_heap().add_reference(globals.heap());
         Evaluator {
             call_stack: CallStack::default(),
             is_module_scope: true,
-            module_env: env,
+            module_env: module,
             module_variables: None,
             local_variables: LocalSlots::default(),
             local_variables_stack: Vec::new(),
@@ -96,7 +96,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             disable_gc: false,
             profiling: false,
             check_types: true,
-            heap: env.heap(),
+            heap: module.heap(),
             on_stmt: None,
         }
     }

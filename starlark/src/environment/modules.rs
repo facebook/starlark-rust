@@ -237,11 +237,11 @@ impl Module {
     }
 
     /// Import symbols from a module, similar to what is done during `load()`.
-    pub fn import_public_symbols(&self, env: &FrozenModule) {
-        self.frozen_heap.add_reference(&env.0);
-        for (k, slot) in env.1.0.names.symbols() {
+    pub fn import_public_symbols(&self, module: &FrozenModule) {
+        self.frozen_heap.add_reference(&module.0);
+        for (k, slot) in module.1.0.names.symbols() {
             if Self::is_public_symbol(k) {
-                if let Some(value) = env.1.0.slots.get_slot(*slot) {
+                if let Some(value) = module.1.0.slots.get_slot(*slot) {
                     self.set(k, Value::new_frozen(value))
                 }
             }
@@ -250,13 +250,13 @@ impl Module {
 
     pub(crate) fn load_symbol<'v>(
         &'v self,
-        env: &FrozenModule,
+        module: &FrozenModule,
         symbol: &str,
     ) -> anyhow::Result<Value<'v>> {
         if !Self::is_public_symbol(symbol) {
             return Err(EnvironmentError::CannotImportPrivateSymbol(symbol.to_owned()).into());
         }
-        match env.get(symbol) {
+        match module.get(symbol) {
             None => Err(EnvironmentError::VariableNotFound(symbol.to_owned()).into()),
             Some(v) => Ok(v.owned_value(self.frozen_heap())),
         }

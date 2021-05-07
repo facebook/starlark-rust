@@ -202,7 +202,7 @@ impl Assert {
         &self,
         path: &str,
         program: &str,
-        env: &'a Module,
+        module: &'a Module,
         gc: GcStrategy,
     ) -> anyhow::Result<Value<'a>> {
         let mut modules = HashMap::with_capacity(self.modules.len());
@@ -211,7 +211,7 @@ impl Assert {
         }
         let mut loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
-        let mut ctx = Evaluator::new(env, &self.globals);
+        let mut ctx = Evaluator::new(module, &self.globals);
 
         let gc_always = |_, ctx: &mut Evaluator| {
             if ctx.is_module_scope && !ctx.disable_gc {
@@ -234,10 +234,10 @@ impl Assert {
         &self,
         func: &str,
         program: &str,
-        env: &'a Module,
+        module: &'a Module,
         gc: GcStrategy,
     ) -> anyhow::Error {
-        match self.execute("assert.bzl", program, env, gc) {
+        match self.execute("assert.bzl", program, module, gc) {
             Ok(v) => panic!(
                 "starlark::assert::{}, didn't fail!\nCode:\n{}\nResult:\n{}\n",
                 func, program, v
@@ -251,10 +251,10 @@ impl Assert {
         func: &str,
         path: &str,
         program: &str,
-        env: &'a Module,
+        module: &'a Module,
         gc: GcStrategy,
     ) -> Value<'a> {
-        match self.execute(path, program, env, gc) {
+        match self.execute(path, program, module, gc) {
             Ok(v) => v,
             Err(err) => {
                 Diagnostic::eprint(&err);
@@ -266,8 +266,14 @@ impl Assert {
         }
     }
 
-    fn execute_unwrap_true<'a>(&self, func: &str, program: &str, env: &'a Module, gc: GcStrategy) {
-        let v = self.execute_unwrap(func, "assert.bzl", program, env, gc);
+    fn execute_unwrap_true<'a>(
+        &self,
+        func: &str,
+        program: &str,
+        module: &'a Module,
+        gc: GcStrategy,
+    ) {
+        let v = self.execute_unwrap(func, "assert.bzl", program, module, gc);
         match v.unpack_bool() {
             Some(true) => {}
             Some(false) => panic!("starlark::assert::{}, got false!\nCode:\n{}", func, program),
