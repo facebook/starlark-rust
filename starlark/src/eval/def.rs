@@ -280,7 +280,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         _heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
         Ok(FunctionInvoker(FunctionInvokerInner::DefFrozen(
-            DefInvokerFrozen::new(ARef::map(me.get_aref(), |x| {
+            DefInvokerFrozen::new_frozen(ARef::map(me.get_aref(), |x| {
                 x.as_dyn_any().downcast_ref::<Self>().unwrap()
             })),
         )))
@@ -312,7 +312,7 @@ pub(crate) type DefInvokerFrozen<'v, 'a> = DefInvokerGen<'v, 'a, FrozenValue, Fr
 
 pub(crate) struct DefInvokerGen<'v, 'a, V, RefV> {
     def: ARef<'a, DefGen<V, RefV>>,
-    collect: ParametersCollect<'v, 'a, V>,
+    collect: ParametersCollect<'v, 'a>,
 }
 
 pub(crate) trait AsValueRef<'v> {
@@ -331,8 +331,8 @@ impl<'v> AsValueRef<'v> for ValueRef<'v> {
     }
 }
 
-impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'v, 'a, V, RefV> {
-    fn new(def: ARef<'a, DefGen<V, RefV>>) -> Self {
+impl<'v, 'a> DefInvoker<'v, 'a> {
+    fn new(def: ARef<'a, Def<'v>>) -> Self {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, &x.parameters));
         Self {
@@ -340,7 +340,20 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'v, 'a, V, Re
             collect: ParametersSpec::collect(params, slots),
         }
     }
+}
 
+impl<'v, 'a> DefInvokerFrozen<'v, 'a> {
+    fn new_frozen(def: ARef<'a, FrozenDef>) -> Self {
+        let slots = def.stmt.scope_names.used;
+        let (def, params) = ARef::map_split(def, |x| (x, x.parameters.promote()));
+        Self {
+            def,
+            collect: ParametersSpec::collect(params, slots),
+        }
+    }
+}
+
+impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'v, 'a, V, RefV> {
     pub fn invoke(self, context: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
         let DefInvokerGen { collect, def } = self;
@@ -387,7 +400,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'v, 'a, V, Re
         Ok(ret)
     }
 
-    pub fn collect(&mut self) -> &mut ParametersCollect<'v, 'a, V> {
+    pub fn collect(&mut self) -> &mut ParametersCollect<'v, 'a> {
         &mut self.collect
     }
 }

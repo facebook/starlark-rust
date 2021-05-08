@@ -22,10 +22,10 @@ use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, UnpackValue, Value, ValueError,
-        ValueLike, ValueRef, Walker,
+        ValueRef, Walker,
     },
 };
-use gazebo::{cell::ARef, prelude::*};
+use gazebo::{cell::ARef, prelude::*, types::TEq};
 use std::{cmp, mem, slice::Iter};
 use thiserror::Error;
 
@@ -202,22 +202,6 @@ impl<V> ParametersSpec<V> {
         self.kwargs = Some(self.kinds.len() - 1);
     }
 
-    pub(crate) fn collect<'v, 'a>(
-        me: ARef<'a, Self>,
-        slots: usize,
-    ) -> ParametersCollect<'v, 'a, V> {
-        let len = me.kinds.len();
-        ParametersCollect {
-            params: me,
-            slots: vec![ValueRef::new_unassigned(); cmp::max(slots, len)],
-            only_positional: true,
-            next_position: 0,
-            args: Vec::new(),
-            kwargs: SmallMap::new(),
-            err: None,
-        }
-    }
-
     /// Produce an approximate signature for the function, combining the name and arguments.
     pub fn signature(&self) -> String {
         let mut collector = String::new();
@@ -278,6 +262,33 @@ impl<V> ParametersSpec<V> {
 }
 
 impl<'v> ParametersSpec<Value<'v>> {
+    pub(crate) fn collect<'a>(
+        me: ARef<'a, ParametersSpec<Value<'v>>>,
+        slots: usize,
+    ) -> ParametersCollect<'v, 'a> {
+        let len = me.kinds.len();
+        ParametersCollect {
+            params: me.teq(),
+            slots: vec![ValueRef::new_unassigned(); cmp::max(slots, len)],
+            only_positional: true,
+            next_position: 0,
+            args: Vec::new(),
+            kwargs: SmallMap::new(),
+            err: None,
+        }
+    }
+}
+
+impl ParametersSpec<FrozenValue> {
+    pub(crate) fn promote<'v>(&self) -> &ParametersSpec<Value<'v>> {
+        unsafe {
+            // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
+            &*(self as *const ParametersSpec<FrozenValue> as *const ParametersSpec<Value<'v>>)
+        }
+    }
+}
+
+impl<'v> ParametersSpec<Value<'v>> {
     /// Used to freeze a [`ParametersSpec`].
     pub fn freeze(self, freezer: &Freezer) -> ParametersSpec<FrozenValue> {
         ParametersSpec {
@@ -297,8 +308,8 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 }
 
-pub(crate) struct ParametersCollect<'v, 'a, V> {
-    params: ARef<'a, ParametersSpec<V>>,
+pub(crate) struct ParametersCollect<'v, 'a> {
+    params: ARef<'a, ParametersSpec<Value<'v>>>,
     slots: Vec<ValueRef<'v>>,
 
     /// Initially true, becomes false once we see something not-positional.
@@ -311,7 +322,7 @@ pub(crate) struct ParametersCollect<'v, 'a, V> {
     err: Option<anyhow::Error>,
 }
 
-impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
+impl<'v, 'a> ParametersCollect<'v, 'a> {
     fn set_err(&mut self, err: anyhow::Error) {
         if self.err.is_none() {
             self.err = Some(err);
@@ -430,7 +441,7 @@ impl<'v, 'a, V: ValueLike<'v>> ParametersCollect<'v, 'a, V> {
                 }
                 ParameterKind::Optional => {}
                 ParameterKind::Defaulted(x) => {
-                    slot.set(x.to_value());
+                    slot.set(*x);
                 }
                 ParameterKind::Args => {
                     let args = mem::take(&mut args);

@@ -122,7 +122,7 @@ impl<T> NativeFunc for T where
 /// A function that can be evaluated which can also collect parameters
 pub(crate) struct NativeFunctionInvoker<'v, 'a> {
     function: ARef<'a, dyn NativeFunc>,
-    collect: ParametersCollect<'v, 'a, FrozenValue>,
+    collect: ParametersCollect<'v, 'a>,
 }
 
 impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
@@ -133,7 +133,7 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
         }
 
         let (function, parameters) =
-            ARef::map_split(func, |x| (convert(&x.function), &x.parameters));
+            ARef::map_split(func, |x| (convert(&x.function), x.parameters.promote()));
         Self {
             function,
             collect: ParametersSpec::collect(parameters, 0),
@@ -147,7 +147,7 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
         (*self.function)(context, parser)
     }
 
-    fn collect(&mut self) -> &mut ParametersCollect<'v, 'a, FrozenValue> {
+    fn collect(&mut self) -> &mut ParametersCollect<'v, 'a> {
         &mut self.collect
     }
 }
