@@ -444,7 +444,7 @@ impl<'v> Value<'v> {
     /// `dir()` function.
     pub fn dir_attr(self) -> Vec<String> {
         let aref = self.get_aref();
-        let mut result = if let Some(methods) = self.get_aref().get_methods() {
+        let mut result = if let Some(methods) = aref.get_methods() {
             let mut res = methods.names();
             res.extend(aref.dir_attr());
             res
