@@ -332,6 +332,26 @@ f(1)(2)(3) == 6",
 }
 
 #[test]
+fn test_lambda_capture() {
+    assert::is_true(
+        "
+f = lambda y: x + y
+x = 100
+f(42) == 142
+",
+    );
+    assert::is_true(
+        "
+def inside():
+    f = lambda y: x + y
+    x = 100
+    return f(42) == 142
+inside()
+",
+    );
+}
+
+#[test]
 fn test_garbage_collect() {
     assert::pass(
         r#"
