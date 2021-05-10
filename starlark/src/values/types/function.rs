@@ -20,7 +20,7 @@
 use crate::{
     codemap::Span,
     eval::{
-        def::{DefInvoker, DefInvokerFrozen},
+        fragment::def::{DefInvoker, DefInvokerFrozen},
         Evaluator, ParametersCollect, ParametersParser, ParametersSpec,
     },
     values::{

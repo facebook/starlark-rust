@@ -38,18 +38,15 @@ pub use parameters::{ParametersParser, ParametersSpec};
 pub(crate) use scope::ScopeNames;
 
 pub(crate) mod call_stack;
-mod expr;
 mod file_loader;
+pub(crate) mod fragment;
 mod parameters;
 mod scope;
-mod stmt;
 mod stmt_profile;
 
 #[cfg(test)]
 mod tests;
 
-pub(crate) mod compr;
-pub(crate) mod def;
 mod evaluator;
 
 pub(crate) type EvalCompiled = Box<

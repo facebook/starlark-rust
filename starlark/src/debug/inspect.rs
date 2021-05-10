@@ -18,7 +18,7 @@
 use crate::{
     collections::SmallMap,
     eval::{
-        def::{Def, FrozenDef},
+        fragment::def::{Def, FrozenDef},
         Evaluator, ScopeNames,
     },
     values::Value,
