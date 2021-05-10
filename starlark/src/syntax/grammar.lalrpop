@@ -215,8 +215,8 @@ Argument: AstArgument = ASTA<Argument_>;
 Argument_: Argument = {
     <Test>                    => Argument::Positional(<>),
     <identifier> "=" <Test>   => Argument::Named(<>),
-    "*" <Test>                => Argument::ArgsArray(<>),
-    "**" <Test>               => Argument::KWArgsDict(<>)
+    "*" <Test>                => Argument::Args(<>),
+    "**" <Test>               => Argument::KWArgs(<>)
 };
 
 Operand: AstExpr = {

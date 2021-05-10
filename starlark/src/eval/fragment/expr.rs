@@ -403,8 +403,8 @@ impl Compiler<'_> {
                             .expect("String is Hashable");
                         ArgCompiled::Named(name.node, name_value, self.expr(value))
                     }
-                    Argument::ArgsArray(x) => ArgCompiled::Args(self.expr(x)),
-                    Argument::KWArgsDict(x) => ArgCompiled::KWArgs(self.expr(x)),
+                    Argument::Args(x) => ArgCompiled::Args(self.expr(x)),
+                    Argument::KWArgs(x) => ArgCompiled::KWArgs(self.expr(x)),
                 });
                 let call = eval_call(span, args);
                 match left.node {

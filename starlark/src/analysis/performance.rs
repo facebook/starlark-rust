@@ -42,7 +42,7 @@ fn match_dict_copy(codemap: &CodeMap, x: &AstExpr, res: &mut Vec<LintT<Performan
     // If we see `dict(**x)` suggest `dict(x)`
     match &**x {
         Expr::Call(fun, args) if args.len() == 1 => match (&***fun, &*args[0]) {
-            (Expr::Identifier(f), Argument::KWArgsDict(arg)) if f.node == "dict" => {
+            (Expr::Identifier(f), Argument::KWArgs(arg)) if f.node == "dict" => {
                 res.push(LintT::new(
                     codemap,
                     x.span,

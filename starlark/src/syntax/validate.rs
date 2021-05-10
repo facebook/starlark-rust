@@ -114,7 +114,7 @@ impl Expr {
                         stage = ArgsStage::Named;
                     }
                 }
-                Argument::ArgsArray(_) => {
+                Argument::Args(_) => {
                     if stage > ArgsStage::Named {
                         return err(
                             arg.span,
@@ -124,7 +124,7 @@ impl Expr {
                         stage = ArgsStage::Args;
                     }
                 }
-                Argument::KWArgsDict(_) => {
+                Argument::KWArgs(_) => {
                     if stage == ArgsStage::Kwargs {
                         return err(arg.span, ArgumentDefinitionOrderError::MultipleKwargs);
                     } else {

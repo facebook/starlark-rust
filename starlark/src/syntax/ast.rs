@@ -71,8 +71,8 @@ impl<T> ToAst for T {}
 pub enum Argument {
     Positional(AstExpr),
     Named(AstString, AstExpr),
-    ArgsArray(AstExpr),
-    KWArgsDict(AstExpr),
+    Args(AstExpr),
+    KWArgs(AstExpr),
 }
 
 #[derive(Debug)]
@@ -201,8 +201,8 @@ impl Argument {
         match self {
             Argument::Positional(x) => x,
             Argument::Named(_, x) => x,
-            Argument::ArgsArray(x) => x,
-            Argument::KWArgsDict(x) => x,
+            Argument::Args(x) => x,
+            Argument::KWArgs(x) => x,
         }
     }
 }
@@ -383,8 +383,8 @@ impl Display for Argument {
         match self {
             Argument::Positional(s) => s.node.fmt(f),
             Argument::Named(s, e) => write!(f, "{} = {}", s.node, e.node),
-            Argument::ArgsArray(s) => write!(f, "*{}", s.node),
-            Argument::KWArgsDict(s) => write!(f, "**{}", s.node),
+            Argument::Args(s) => write!(f, "*{}", s.node),
+            Argument::KWArgs(s) => write!(f, "**{}", s.node),
         }
     }
 }
