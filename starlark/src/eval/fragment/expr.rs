@@ -24,8 +24,8 @@ use crate::{
     eval::{evaluator::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
-        dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList, FrozenHeap,
-        FrozenValue, *,
+        dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList,
+        tuple::FrozenTuple, FrozenHeap, FrozenValue, *,
     },
 };
 use either::Either;
@@ -182,6 +182,8 @@ impl AstLiteral {
 }
 
 impl Expr {
+    // We could actually treat tuples as immutable literals,
+    // but no great evidence of nested tuples of tuples being common.
     fn unpack_immutable_literal(&self) -> Option<&AstLiteral> {
         match self {
             Expr::Literal(x) => match x {
@@ -294,8 +296,18 @@ impl Compiler<'_> {
                 }
             }
             Expr::Tuple(exprs) => {
-                let exprs = self.exprs(exprs);
-                box move |context| Ok(context.heap.alloc(tuple::Tuple::new(exprs(context)?)))
+                if let Some(lits) = exprs
+                    .iter()
+                    .map(|e| e.unpack_immutable_literal())
+                    .collect::<Option<Vec<_>>>()
+                {
+                    let vals: Vec<FrozenValue> = lits.map(|v| v.compile(self.heap));
+                    let result = self.heap.alloc(FrozenTuple { content: vals });
+                    box move |_| Ok(result.to_value())
+                } else {
+                    let exprs = self.exprs(exprs);
+                    box move |context| Ok(context.heap.alloc(tuple::Tuple::new(exprs(context)?)))
+                }
             }
             Expr::Lambda(params, box inner) => {
                 let suite = Spanned {
