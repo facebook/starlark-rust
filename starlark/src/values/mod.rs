@@ -462,10 +462,20 @@ impl<'v> Value<'v> {
         self.get_aref().get_type()
     }
     pub fn to_bool(self) -> bool {
-        self.get_aref().to_bool()
+        // Fast path for the common case
+        if let Some(x) = self.unpack_bool() {
+            x
+        } else {
+            self.get_aref().to_bool()
+        }
     }
     pub fn to_int(self) -> anyhow::Result<i32> {
-        self.get_aref().to_int()
+        // Fast path for the common case
+        if let Some(x) = self.unpack_int() {
+            Ok(x)
+        } else {
+            self.get_aref().to_int()
+        }
     }
     pub fn at(self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_aref().at(index, heap)
