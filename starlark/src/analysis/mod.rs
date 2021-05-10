@@ -25,6 +25,7 @@ mod exported;
 mod flow;
 mod incompatible;
 mod names;
+mod performance;
 mod types;
 
 impl AstModule {
@@ -45,6 +46,7 @@ impl AstModule {
                 .into_iter()
                 .map(LintT::erase),
         );
+        res.extend(performance::performance(self).into_iter().map(LintT::erase));
         res
     }
 }
