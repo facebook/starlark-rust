@@ -42,7 +42,7 @@ enum ParameterCompiled {
     WithDefaultValue(String, Option<EvalCompiled>, EvalCompiled),
     NoArgs,
     Args(String, Option<EvalCompiled>),
-    KWArgs(String, Option<EvalCompiled>),
+    KwArgs(String, Option<EvalCompiled>),
 }
 
 impl ParameterCompiled {
@@ -52,7 +52,7 @@ impl ParameterCompiled {
             Self::WithDefaultValue(x, _, _) => Some(x),
             Self::NoArgs => None,
             Self::Args(x, _) => Some(x),
-            Self::KWArgs(x, _) => Some(x),
+            Self::KwArgs(x, _) => Some(x),
         }
     }
 
@@ -62,7 +62,7 @@ impl ParameterCompiled {
             Self::WithDefaultValue(_, t, _) => t.as_ref(),
             Self::NoArgs => None,
             Self::Args(_, t) => t.as_ref(),
-            Self::KWArgs(_, t) => t.as_ref(),
+            Self::KwArgs(_, t) => t.as_ref(),
         }
     }
 }
@@ -86,7 +86,7 @@ impl Compiler<'_> {
             }
             Parameter::NoArgs => ParameterCompiled::NoArgs,
             Parameter::Args(x, t) => ParameterCompiled::Args(x.node, self.expr_opt(t)),
-            Parameter::KWArgs(x, t) => ParameterCompiled::KWArgs(x.node, self.expr_opt(t)),
+            Parameter::KwArgs(x, t) => ParameterCompiled::KwArgs(x.node, self.expr_opt(t)),
         }
     }
 
@@ -148,7 +148,7 @@ impl Compiler<'_> {
                         run(t, context)?;
                         parameters.args()
                     }
-                    ParameterCompiled::KWArgs(_, t) => {
+                    ParameterCompiled::KwArgs(_, t) => {
                         run(t, context)?;
                         parameters.kwargs()
                     }

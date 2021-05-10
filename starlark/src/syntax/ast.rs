@@ -72,7 +72,7 @@ pub enum Argument {
     Positional(AstExpr),
     Named(AstString, AstExpr),
     Args(AstExpr),
-    KWArgs(AstExpr),
+    KwArgs(AstExpr),
 }
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ pub enum Parameter {
     WithDefaultValue(AstString, Option<Box<AstExpr>>, Box<AstExpr>),
     NoArgs,
     Args(AstString, Option<Box<AstExpr>>),
-    KWArgs(AstString, Option<Box<AstExpr>>),
+    KwArgs(AstString, Option<Box<AstExpr>>),
 }
 
 #[derive(Debug, Clone)]
@@ -202,7 +202,7 @@ impl Argument {
             Argument::Positional(x) => x,
             Argument::Named(_, x) => x,
             Argument::Args(x) => x,
-            Argument::KWArgs(x) => x,
+            Argument::KwArgs(x) => x,
         }
     }
 }
@@ -384,7 +384,7 @@ impl Display for Argument {
             Argument::Positional(s) => s.node.fmt(f),
             Argument::Named(s, e) => write!(f, "{} = {}", s.node, e.node),
             Argument::Args(s) => write!(f, "*{}", s.node),
-            Argument::KWArgs(s) => write!(f, "**{}", s.node),
+            Argument::KwArgs(s) => write!(f, "**{}", s.node),
         }
     }
 }
@@ -396,7 +396,7 @@ impl Display for Parameter {
             Parameter::WithDefaultValue(s, t, e) => ("", s, t, Some(e)),
             Parameter::NoArgs => return write!(f, "*"),
             Parameter::Args(s, t) => ("*", s, t, None),
-            Parameter::KWArgs(s, t) => ("**", s, t, None),
+            Parameter::KwArgs(s, t) => ("**", s, t, None),
         };
         write!(f, "{}{}", prefix, name.node)?;
         if let Some(t) = typ {

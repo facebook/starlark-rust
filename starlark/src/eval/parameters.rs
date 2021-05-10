@@ -47,7 +47,7 @@ pub(crate) enum FunctionError {
     #[error("The argument provided for *args is not iterable")]
     ArgsArrayIsNotIterable,
     #[error("The argument provided for **kwargs is not a dictionary")]
-    KWArgsIsNotDict,
+    KwArgsIsNotDict,
 }
 
 #[derive(Debug, Clone)]
@@ -406,7 +406,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
                         }
                     }
                 }
-                None => Err(FunctionError::KWArgsIsNotDict)?,
+                None => Err(FunctionError::KwArgsIsNotDict)?,
             }
         };
         match res {

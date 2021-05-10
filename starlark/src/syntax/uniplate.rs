@@ -100,7 +100,7 @@ impl Parameter {
     // Split a parameter into name, type, default value
     pub fn split(&self) -> (Option<&AstString>, Option<&AstExpr>, Option<&AstExpr>) {
         match self {
-            Parameter::Normal(a, b) | Parameter::Args(a, b) | Parameter::KWArgs(a, b) => {
+            Parameter::Normal(a, b) | Parameter::Args(a, b) | Parameter::KwArgs(a, b) => {
                 (Some(a), b.as_ref().map(|x| &**x), None)
             }
             Parameter::WithDefaultValue(a, b, c) => (Some(a), b.as_ref().map(|x| &**x), Some(&**c)),

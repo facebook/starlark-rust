@@ -103,7 +103,7 @@ enum ArgCompiled {
     Pos(EvalCompiled),
     Named(String, Hashed<FrozenValue>, EvalCompiled),
     Args(EvalCompiled),
-    KWArgs(EvalCompiled),
+    KwArgs(EvalCompiled),
 }
 
 fn eval_call(
@@ -122,7 +122,7 @@ fn eval_call(
                     invoker.push_named(k, kk.to_hashed_value(), expr(context)?)
                 }
                 ArgCompiled::Args(expr) => invoker.push_args(expr(context)?, context.heap),
-                ArgCompiled::KWArgs(expr) => invoker.push_kwargs(expr(context)?),
+                ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(context)?),
             }
         }
 
@@ -404,7 +404,7 @@ impl Compiler<'_> {
                         ArgCompiled::Named(name.node, name_value, self.expr(value))
                     }
                     Argument::Args(x) => ArgCompiled::Args(self.expr(x)),
-                    Argument::KWArgs(x) => ArgCompiled::KWArgs(self.expr(x)),
+                    Argument::KwArgs(x) => ArgCompiled::KwArgs(self.expr(x)),
                 });
                 let call = eval_call(span, args);
                 match left.node {

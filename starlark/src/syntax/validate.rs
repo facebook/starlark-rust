@@ -124,7 +124,7 @@ impl Expr {
                         stage = ArgsStage::Args;
                     }
                 }
-                Argument::KWArgs(_) => {
+                Argument::KwArgs(_) => {
                     if stage == ArgsStage::Kwargs {
                         return err(arg.span, ArgumentDefinitionOrderError::MultipleKwargs);
                     } else {
@@ -215,7 +215,7 @@ impl Stmt {
                     seen_args = true;
                     test_param_name(&mut argset, n, arg, codemap)?;
                 }
-                Parameter::KWArgs(n, ..) => {
+                Parameter::KwArgs(n, ..) => {
                     if seen_kwargs {
                         return err(arg.span, ArgumentUseOrderError::MultipleKwargs);
                     }

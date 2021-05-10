@@ -72,7 +72,7 @@ Parameter_: Parameter = {
     <identifier>            => Parameter::Normal(<>, None),
     "*" <identifier>        => Parameter::Args(<>, None),
     <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l as u64, r as u64), Parameter::NoArgs)?),
-    "**" <identifier>       => Parameter::KWArgs(<>, None),
+    "**" <identifier>       => Parameter::KwArgs(<>, None),
 };
 
 ParameterTyped: AstParameter = ASTP<ParameterTyped_>;
@@ -81,7 +81,7 @@ ParameterTyped_: Parameter = {
     <identifier> <Type>            => Parameter::Normal(<>),
     "*" <identifier> <Type>        => Parameter::Args(<>),
     <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(codemap, file_span.subspan(l as u64, r as u64), Parameter::NoArgs)?),
-    "**" <identifier> <Type>       => Parameter::KWArgs(<>),
+    "**" <identifier> <Type>       => Parameter::KwArgs(<>),
 };
 
 Type: Option<Box<AstExpr>> = {
@@ -216,7 +216,7 @@ Argument_: Argument = {
     <Test>                    => Argument::Positional(<>),
     <identifier> "=" <Test>   => Argument::Named(<>),
     "*" <Test>                => Argument::Args(<>),
-    "**" <Test>               => Argument::KWArgs(<>)
+    "**" <Test>               => Argument::KwArgs(<>)
 };
 
 Operand: AstExpr = {
