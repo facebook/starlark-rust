@@ -45,7 +45,9 @@ use std::{
 };
 
 /// A small, `Copy`, value representing a position in a `CodeMap`'s file.
-#[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
+#[derive(
+    Copy, Clone, Dupe, Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Default
+)]
 pub struct Pos(u32);
 
 impl Add<u64> for Pos {
