@@ -25,9 +25,7 @@
 use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
-    eval::{
-        evaluator::Evaluator, scope::Slot, thrw, AssignError, Compiler, EvalCompiled, EvalException,
-    },
+    eval::{evaluator::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
     values::{
         fast_string,
@@ -37,6 +35,17 @@ use crate::{
 };
 use gazebo::prelude::*;
 use std::{collections::HashMap, mem};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+enum AssignError {
+    // Expression used as left value cannot be assigned
+    #[error("Incorrect expression as left value")]
+    IncorrectLeftValue,
+    // Incorrect number of value to unpack (expected, got)
+    #[error("Unpacked {1} values but expected {0}")]
+    IncorrectNumberOfValueToUnpack(i32, i32),
+}
 
 pub(crate) type AssignCompiled = Box<
     dyn for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>

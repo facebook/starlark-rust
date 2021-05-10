@@ -29,7 +29,6 @@ use crate::{
 use anyhow::anyhow;
 use gazebo::prelude::*;
 use std::{fmt::Debug, mem};
-use thiserror::Error;
 
 pub use crate::eval::file_loader::*;
 pub use evaluator::Evaluator;
@@ -68,16 +67,6 @@ impl<'v> From<anyhow::Error> for EvalException<'v> {
     fn from(x: anyhow::Error) -> Self {
         Self::Error(x)
     }
-}
-
-#[derive(Debug, Error)]
-pub(crate) enum AssignError {
-    // Expression used as left value cannot be assigned
-    #[error("Incorrect expression as left value")]
-    IncorrectLeftValue,
-    // Incorrect number of value to unpack (expected, got)
-    #[error("Unpacked {1} values but expected {0}")]
-    IncorrectNumberOfValueToUnpack(i32, i32),
 }
 
 /// Convert syntax error to spanned evaluation exception
