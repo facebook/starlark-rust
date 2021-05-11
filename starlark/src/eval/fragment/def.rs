@@ -354,7 +354,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
         // println!("invoking {}", self.def.stmt.name.node);
         let DefInvokerGen(def) = self;
 
-        if context.check_types {
+        if context.check_types() {
             for (i, arg_name, ty) in &def.parameter_types {
                 match slots[*i].get() {
                     None => panic!("Not allowed optional unassigned with type annotations on them"),
@@ -381,7 +381,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
             Ok(_) => Value::new_none(),
         };
 
-        if context.check_types {
+        if context.check_types() {
             // Slightly ugly: by the time we check the return type, we no longer
             // have the location of the return statement, so the "blame" is attached
             // to the caller, rather than the return statement. Fixing it requires

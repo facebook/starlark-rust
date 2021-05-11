@@ -68,8 +68,6 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) last_heap_size: usize,
     // The normal heap, where values are produced, get GC'd at the end
     pub(crate) heap: &'v Heap,
-    // Should we do runtime checking of types (defaults to true)
-    pub(crate) check_types: bool,
     // Extra functions to run on each statement, usually empty
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
@@ -103,7 +101,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             last_heap_size: 0,
             disable_gc: false,
             profiling: false,
-            check_types: true,
             stmt_profile: StmtProfile::new(),
             heap: module.heap(),
             before_stmt: Vec::new(),
@@ -195,6 +192,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// This function can be used in conjunction with [`before_stmt`](Evaluator::before_stmt).
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
         self.codemap.look_up_span(span)
+    }
+
+    pub(crate) fn check_types(&self) -> bool {
+        // We currently always check types. We suspect that for performance reasons one day
+        // we'll want to make it optional, so guard the relevant places behind this test.
+        true
     }
 
     /// Called to add an entry to the call stack, from the caller.
