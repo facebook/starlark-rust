@@ -72,22 +72,22 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
 
     /// Add a positional argument.
     pub fn push_pos(&mut self, v: Value<'v>) {
-        self.collect.positional(v)
+        self.collect.push_pos(v)
     }
 
     /// Add a `*args` argument.
     pub fn push_args(&mut self, v: Value<'v>, heap: &'v Heap) {
-        self.collect.args(v, heap)
+        self.collect.push_args(v, heap)
     }
 
     /// Add a named argument.
     pub fn push_named(&mut self, name: &str, name_value: Hashed<Value<'v>>, v: Value<'v>) {
-        self.collect.named(name, name_value, v)
+        self.collect.push_named(name, name_value, v)
     }
 
     /// Add a `**kargs` argument.
     pub fn push_kwargs(&mut self, v: Value<'v>) {
-        self.collect.kwargs(v)
+        self.collect.push_kwargs(v)
     }
 }
 

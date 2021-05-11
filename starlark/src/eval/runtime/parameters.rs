@@ -329,7 +329,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         }
     }
 
-    pub fn positional(&mut self, val: Value<'v>) {
+    pub fn push_pos(&mut self, val: Value<'v>) {
         if self.next_position < self.params.positional {
             // Checking unassigned is moderately expensive, so use only_positional
             // which knows we have never set anything below next_position
@@ -350,7 +350,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         }
     }
 
-    pub fn named(&mut self, name: &str, name_value: Hashed<Value<'v>>, val: Value<'v>) {
+    pub fn push_named(&mut self, name: &str, name_value: Hashed<Value<'v>>, val: Value<'v>) {
         self.only_positional = false;
         // Safe to use new_unchecked because hash for the Value and str are the same
         let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
@@ -375,7 +375,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         }
     }
 
-    pub fn args(&mut self, val: Value<'v>, heap: &'v Heap) {
+    pub fn push_args(&mut self, val: Value<'v>, heap: &'v Heap) {
         match val.iterate(heap) {
             Err(_) => self.set_err(FunctionError::ArgsArrayIsNotIterable.into()),
             Ok(iter) => {
@@ -383,13 +383,13 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
                 // But because lists are mutable that becomes observable behaviour, so we have
                 // to copy the array
                 for x in &iter {
-                    self.positional(x);
+                    self.push_pos(x);
                 }
             }
         }
     }
 
-    pub fn kwargs(&mut self, val: Value<'v>) {
+    pub fn push_kwargs(&mut self, val: Value<'v>) {
         let res = try {
             match Dict::from_value(val) {
                 Some(y) => {
@@ -402,7 +402,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
                     for (n, v) in y.iter_hashed() {
                         match n.key().unpack_str() {
                             None => Err(FunctionError::ArgsValueIsNotString)?,
-                            Some(s) => self.named(s, n, v),
+                            Some(s) => self.push_named(s, n, v),
                         }
                     }
                 }
