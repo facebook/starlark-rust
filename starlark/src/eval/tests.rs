@@ -1464,6 +1464,33 @@ fn test_dict_with_duplicates() {
 }
 
 #[test]
+fn test_unassigned() {
+    assert::fails("y = x; x = 1", &["referenced before assignment", "`x`"]);
+    assert::fails(
+        "def f():\n y = x; x = 1\nf()",
+        &["referenced before assignment", "`x`"],
+    );
+    assert::fails(
+        "
+def f():
+    y = x
+    x = 1
+def g(q = 1):
+    f()
+g()",
+        &["referenced before assignment", "`x`"],
+    );
+    assert::fails(
+        "[1 for _ in [1] for y in y]",
+        &["referenced before assignment", "`y`"],
+    );
+    assert::fails(
+        "def f():\n [1 for _ in [1] for y in y]\nf()",
+        &["referenced before assignment", "`y`"],
+    );
+}
+
+#[test]
 fn test_self_assign() {
     // In Go Starlark this works.
     // Doesn't seem unreasonable.
