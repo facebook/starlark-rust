@@ -137,7 +137,7 @@ fn test_methods(builder: &mut GlobalsBuilder) {
     fn garbage_collect() -> NoneType {
         if ctx.is_module_scope {
             unsafe {
-                ctx.heap.garbage_collect(|walker| ctx.walk(walker))
+                ctx.heap().garbage_collect(|walker| ctx.walk(walker))
             };
             Ok(NoneType)
         } else {
@@ -216,7 +216,7 @@ impl Assert {
         let gc_always = |_, ctx: &mut Evaluator| {
             if ctx.is_module_scope && !ctx.disable_gc {
                 unsafe {
-                    ctx.heap.garbage_collect(|walker| ctx.walk(walker))
+                    ctx.heap().garbage_collect(|walker| ctx.walk(walker))
                 };
             }
         };

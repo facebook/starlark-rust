@@ -203,8 +203,8 @@ impl<'v> Def<'v> {
         let captured = stmt
             .scope_names
             .parent
-            .map(|(x, _)| context.clone_slot_reference(*x, context.heap));
-        context.heap.alloc(Self {
+            .map(|(x, _)| context.clone_slot_reference(*x, context.heap()));
+        context.heap().alloc(Self {
             parameters,
             parameter_types,
             return_type,

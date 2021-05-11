@@ -73,7 +73,7 @@ fn eval_assign_list<'v>(
     } else {
         let mut it1 = lvalues.iter();
         // TODO: the span here should probably include the rvalue
-        let it2 = thrw(value.iterate(context.heap), span, context)?;
+        let it2 = thrw(value.iterate(context.heap()), span, context)?;
         let mut it2 = it2.iter();
         for _ in 0..l {
             it1.next().unwrap()(it2.next().unwrap(), context)?;
@@ -90,7 +90,11 @@ impl Compiler<'_> {
                 let e = self.expr(*e);
                 let s = s.node;
                 box move |value, context| {
-                    thrw(e(context)?.set_attr(&s, value, context.heap), span, context)
+                    thrw(
+                        e(context)?.set_attr(&s, value, context.heap()),
+                        span,
+                        context,
+                    )
                 }
             }
             Expr::ArrayIndirection(box (e, idx)) => {
@@ -98,7 +102,7 @@ impl Compiler<'_> {
                 let idx = self.expr(idx);
                 box move |value, context| {
                     thrw(
-                        e(context)?.set_at(idx(context)?, value, context.heap),
+                        e(context)?.set_at(idx(context)?, value, context.heap()),
                         span,
                         context,
                     )
@@ -115,7 +119,7 @@ impl Compiler<'_> {
                 },
                 Slot::Module(slot) => box move |value, context| {
                     // Make sure that `ComplexValue`s get their name as soon as possible
-                    value.export_as(&ident.node, context.heap);
+                    value.export_as(&ident.node, context.heap());
                     context.set_slot_module(slot, value);
                     Ok(())
                 },
@@ -141,13 +145,13 @@ impl Compiler<'_> {
                 box move |context| {
                     before_stmt(span, context);
                     let e: Value = e(context)?;
-                    let (_, v) = thrw(e.get_attr(&s, context.heap), span, context)?;
+                    let (_, v) = thrw(e.get_attr(&s, context.heap()), span, context)?;
                     let rhs = rhs(context)?;
                     thrw(
                         e.set_attr(
                             &s,
                             thrw(op(v, rhs, context), span_op, context)?,
-                            context.heap,
+                            context.heap(),
                         ),
                         span,
                         context,
@@ -162,13 +166,13 @@ impl Compiler<'_> {
                     before_stmt(span, context);
                     let e: Value = e(context)?;
                     let idx = idx(context)?;
-                    let v = thrw(e.at(idx, context.heap), span, context)?;
+                    let v = thrw(e.at(idx, context.heap()), span, context)?;
                     let rhs = rhs(context)?;
                     thrw(
                         e.set_at(
                             idx,
                             thrw(op(v, rhs, context), span_op, context)?,
-                            context.heap,
+                            context.heap(),
                         ),
                         span,
                         context,
@@ -258,16 +262,18 @@ fn before_stmt(span: Span, context: &mut Evaluator) {
 
     if context.is_module_scope
         && !context.disable_gc
-        && context.heap.allocated_bytes() >= context.last_heap_size + GC_THRESHOLD
+        && context.heap().allocated_bytes() >= context.last_heap_size + GC_THRESHOLD
         && context.extra_v.is_none()
     {
         // When we are at a module scope (as checked above) the context contains
         // references to all values, so walking covers everything and the unsafe
         // is satisfied.
         unsafe {
-            context.heap.garbage_collect(|walker| context.walk(walker))
+            context
+                .heap()
+                .garbage_collect(|walker| context.walk(walker))
         }
-        context.last_heap_size = context.heap.allocated_bytes();
+        context.last_heap_size = context.heap().allocated_bytes();
     }
 }
 
@@ -372,7 +378,7 @@ impl Compiler<'_> {
                     before_stmt(span, context);
                     let iterable = over(context)?;
                     let freeze_for_iteration = iterable.get_aref();
-                    for v in &thrw(iterable.iterate(context.heap), over_span, context)? {
+                    for v in &thrw(iterable.iterate(context.heap()), over_span, context)? {
                         var(v, context)?;
                         match st(context) {
                             Err(EvalException::Break) => break,
@@ -457,21 +463,20 @@ impl Compiler<'_> {
                         }
                     }
                     AssignOp::Add => self.assign_modify(span, *lhs, rhs, |l, r, context| {
-                        add_assign(l, r, context.heap)
+                        add_assign(l, r, context.heap())
                     }),
-                    AssignOp::Subtract => {
-                        self.assign_modify(span, *lhs, rhs, |l, r, context| l.sub(r, context.heap))
-                    }
-                    AssignOp::Multiply => {
-                        self.assign_modify(span, *lhs, rhs, |l, r, context| l.mul(r, context.heap))
-                    }
+                    AssignOp::Subtract => self
+                        .assign_modify(span, *lhs, rhs, |l, r, context| l.sub(r, context.heap())),
+                    AssignOp::Multiply => self
+                        .assign_modify(span, *lhs, rhs, |l, r, context| l.mul(r, context.heap())),
                     AssignOp::FloorDivide => {
                         self.assign_modify(span, *lhs, rhs, |l, r, context| {
-                            l.floor_div(r, context.heap)
+                            l.floor_div(r, context.heap())
                         })
                     }
-                    AssignOp::Percent => self
-                        .assign_modify(span, *lhs, rhs, |l, r, context| l.percent(r, context.heap)),
+                    AssignOp::Percent => self.assign_modify(span, *lhs, rhs, |l, r, context| {
+                        l.percent(r, context.heap())
+                    }),
                     AssignOp::BitAnd => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_and(r)),
                     AssignOp::BitOr => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_or(r)),
                     AssignOp::BitXor => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_xor(r)),

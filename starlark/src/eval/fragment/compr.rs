@@ -136,7 +136,7 @@ fn eval_list(x: EvalCompiled, clauses: Vec<ClauseCompiled>) -> EvalCompiled {
     box move |context| {
         let mut r = Vec::new();
         clauses(&mut r, context)?;
-        Ok(context.heap.alloc(r))
+        Ok(context.heap().alloc(r))
     }
 }
 
@@ -151,7 +151,7 @@ fn eval_dict(k: EvalCompiled, v: EvalCompiled, clauses: Vec<ClauseCompiled>) -> 
     box move |context| {
         let mut r = SmallMap::new();
         clauses(&mut r, context)?;
-        Ok(context.heap.alloc(Dict::new(r)))
+        Ok(context.heap().alloc(Dict::new(r)))
     }
 }
 
@@ -189,7 +189,7 @@ fn eval_one_dimensional_comprehension_dict(
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(context)?;
             let freeze_for_iteration = iterable.get_aref();
-            'f: for i in &thrw(iterable.iterate(context.heap), c.over_span, context)? {
+            'f: for i in &thrw(iterable.iterate(context.heap()), c.over_span, context)? {
                 (c.var)(i, context)?;
                 for ifc in &c.ifs {
                     if !ifc(context)?.to_bool() {
@@ -224,7 +224,7 @@ fn eval_one_dimensional_comprehension_list(
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(context)?;
             let freeze_for_iteration = iterable.get_aref();
-            'f: for i in &thrw(iterable.iterate(context.heap), c.over_span, context)? {
+            'f: for i in &thrw(iterable.iterate(context.heap()), c.over_span, context)? {
                 (c.var)(i, context)?;
                 for ifc in &c.ifs {
                     if !ifc(context)?.to_bool() {

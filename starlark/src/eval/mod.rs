@@ -82,7 +82,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             .push(Value::new_none(), Some((codemap, span)))
             .unwrap();
         if self.profiling {
-            self.heap.record_call_enter(Value::new_none());
+            self.heap().record_call_enter(Value::new_none());
         }
 
         // Evaluation
@@ -91,7 +91,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // Clean up the world, putting everything back
         self.call_stack.pop();
         if self.profiling {
-            self.heap.record_call_exit();
+            self.heap().record_call_exit();
         }
         self.set_codemap(old_codemap);
         self.local_variables.pop();
@@ -108,12 +108,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
         self.with_call_stack(function, None, |context| {
-            let mut invoker = function.new_invoker(context.heap)?;
+            let mut invoker = function.new_invoker(context.heap())?;
             for x in positional {
                 invoker.push_pos(*x);
             }
             for (s, x) in named {
-                invoker.push_named(s, context.heap.alloc(*s).get_hashed()?, *x);
+                invoker.push_named(s, context.heap().alloc(*s).get_hashed()?, *x);
             }
             invoker.invoke(function, None, context)
         })

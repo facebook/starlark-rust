@@ -67,7 +67,7 @@ pub struct Evaluator<'v, 'a> {
     // Size of the heap when we last performed a GC
     pub(crate) last_heap_size: usize,
     // The normal heap, where values are produced, get GC'd at the end
-    pub(crate) heap: &'v Heap,
+    heap: &'v Heap,
     // Extra functions to run on each statement, usually empty
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
@@ -157,7 +157,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         if !self.profiling {
             return Err(EvaluatorError::ProfilingNotEnabled.into());
         }
-        self.heap.write_profile(filename.as_ref())
+        self.heap().write_profile(filename.as_ref())
     }
 
     /// Write a profile (as a `.csv` file) to a file.
@@ -210,7 +210,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ) -> anyhow::Result<R> {
         self.call_stack.push(function, location)?;
         if self.profiling {
-            self.heap.record_call_enter(function);
+            self.heap().record_call_enter(function);
         }
         // Must always call .pop regardless
         let res = within(self).map_err(|e| {
@@ -221,7 +221,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         });
         self.call_stack.pop();
         if self.profiling {
-            self.heap.record_call_exit();
+            self.heap().record_call_exit();
         }
         res
     }

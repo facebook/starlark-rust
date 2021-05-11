@@ -95,7 +95,7 @@ fn eval_slice(
             None => None,
         };
         thrw(
-            collection.slice(start, stop, stride, context.heap),
+            collection.slice(start, stop, stride, context.heap()),
             span,
             context,
         )
@@ -124,7 +124,7 @@ fn eval_call(
                 ArgCompiled::Named(k, kk, expr) => {
                     invoker.push_named(k, kk.to_hashed_value(), expr(context)?)
                 }
-                ArgCompiled::Args(expr) => invoker.push_args(expr(context)?, context.heap),
+                ArgCompiled::Args(expr) => invoker.push_args(expr(context)?, context.heap()),
                 ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(context)?),
             }
         }
@@ -143,7 +143,7 @@ fn eval_dot(
 ) -> Result<Either<Value<'v>, WrappedMethod<'v>>, EvalException<'v>> {
     move |context| {
         let left = e(context)?;
-        let (attr_type, v) = thrw(left.get_attr(&s, context.heap), span, context)?;
+        let (attr_type, v) = thrw(left.get_attr(&s, context.heap()), span, context)?;
         if attr_type == AttrType::Field {
             Ok(Either::Left(v))
         } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
@@ -309,7 +309,7 @@ impl Compiler<'_> {
                     box move |_| Ok(result.to_value())
                 } else {
                     let exprs = self.exprs(exprs);
-                    box move |context| Ok(context.heap.alloc(tuple::Tuple::new(exprs(context)?)))
+                    box move |context| Ok(context.heap().alloc(tuple::Tuple::new(exprs(context)?)))
                 }
             }
             Expr::Lambda(params, box inner) => {
@@ -327,10 +327,10 @@ impl Compiler<'_> {
                 {
                     let vals: Vec<FrozenValue> = lits.map(|v| v.compile(self.heap));
                     let result = self.heap.alloc(FrozenList { content: vals });
-                    box move |context| Ok(context.heap.alloc_thaw_on_write(result))
+                    box move |context| Ok(context.heap().alloc_thaw_on_write(result))
                 } else {
                     let exprs = self.exprs(exprs);
-                    box move |context| Ok(context.heap.alloc(exprs(context)?))
+                    box move |context| Ok(context.heap().alloc(exprs(context)?))
                 }
             }
             Expr::Dict(exprs) => {
@@ -355,7 +355,7 @@ impl Compiler<'_> {
                     // We have a lint that will likely fire on this issue (and others).
                     if res.len() == lits.len() {
                         let result = self.heap.alloc(FrozenDict::new(res));
-                        return box move |context| Ok(context.heap.alloc_thaw_on_write(result));
+                        return box move |context| Ok(context.heap().alloc_thaw_on_write(result));
                     }
                 }
 
@@ -372,7 +372,7 @@ impl Compiler<'_> {
                             )?;
                         }
                     }
-                    Ok(context.heap.alloc(dict::Dict::new(r)))
+                    Ok(context.heap().alloc(dict::Dict::new(r)))
                 }
             }
             Expr::If(box (cond, then_expr, else_expr)) => {
@@ -392,7 +392,7 @@ impl Compiler<'_> {
                 let res = eval_dot(expr.span, left, right.node);
                 box move |context| match res(context)? {
                     Either::Left(v) => Ok(v),
-                    Either::Right(v) => Ok(context.heap.alloc(v)),
+                    Either::Right(v) => Ok(context.heap().alloc(v)),
                 }
             }
             Expr::Call(left, args) => {
@@ -417,11 +417,11 @@ impl Compiler<'_> {
                         box move |context| match dot(context)? {
                             Either::Left(function) => {
                                 let invoker =
-                                    thrw(function.new_invoker(context.heap), span, context)?;
+                                    thrw(function.new_invoker(context.heap()), span, context)?;
                                 call(invoker, function, context)
                             }
                             Either::Right(wrapper) => {
-                                let invoker = thrw(wrapper.invoke(context.heap), span, context)?;
+                                let invoker = thrw(wrapper.invoke(context.heap()), span, context)?;
                                 call(invoker, wrapper.method, context)
                             }
                         }
@@ -430,7 +430,8 @@ impl Compiler<'_> {
                         let left = self.expr(*left);
                         box move |context| {
                             let function = left(context)?;
-                            let invoker = thrw(function.new_invoker(context.heap), span, context)?;
+                            let invoker =
+                                thrw(function.new_invoker(context.heap()), span, context)?;
                             call(invoker, function, context)
                         }
                     }
@@ -441,7 +442,7 @@ impl Compiler<'_> {
                 let index = self.expr(index);
                 box move |context| {
                     thrw(
-                        array(context)?.at(index(context)?, context.heap),
+                        array(context)?.at(index(context)?, context.heap()),
                         span,
                         context,
                     )
@@ -461,7 +462,7 @@ impl Compiler<'_> {
             Expr::Minus(expr) => match expr.unpack_int_literal().and_then(i32::checked_neg) {
                 None => {
                     let expr = self.expr(*expr);
-                    box move |context| thrw(expr(context)?.minus(context.heap), span, context)
+                    box move |context| thrw(expr(context)?.minus(context.heap()), span, context)
                 }
                 Some(x) => {
                     let val = FrozenValue::new_int(x);
@@ -471,7 +472,7 @@ impl Compiler<'_> {
             Expr::Plus(expr) => match expr.unpack_int_literal() {
                 None => {
                     let expr = self.expr(*expr);
-                    box move |context| thrw(expr(context)?.plus(context.heap), span, context)
+                    box move |context| thrw(expr(context)?.plus(context.heap()), span, context)
                 }
                 Some(x) => {
                     let val = FrozenValue::new_int(x);
@@ -519,7 +520,7 @@ impl Compiler<'_> {
                             )
                         },
                         BinOp::Subtraction => box move |context| {
-                            thrw(l(context)?.sub(r(context)?, context.heap), span, context)
+                            thrw(l(context)?.sub(r(context)?, context.heap()), span, context)
                         },
                         BinOp::Addition => box move |context| {
                             // Addition of string is super common and pretty cheap, so have a special case for it.
@@ -532,27 +533,29 @@ impl Compiler<'_> {
                                     } else if rs.is_empty() {
                                         return Ok(l);
                                     } else {
-                                        return Ok(context.heap.alloc(fast_string::append(ls, rs)));
+                                        return Ok(context
+                                            .heap()
+                                            .alloc(fast_string::append(ls, rs)));
                                     }
                                 }
                             }
 
                             // Written using Value::add so that Rust Analyzer doesn't think it is an error.
-                            thrw(Value::add(l, r, context.heap), span, context)
+                            thrw(Value::add(l, r, context.heap()), span, context)
                         },
                         BinOp::Multiplication => box move |context| {
-                            thrw(l(context)?.mul(r(context)?, context.heap), span, context)
+                            thrw(l(context)?.mul(r(context)?, context.heap()), span, context)
                         },
                         BinOp::Percent => box move |context| {
                             thrw(
-                                l(context)?.percent(r(context)?, context.heap),
+                                l(context)?.percent(r(context)?, context.heap()),
                                 span,
                                 context,
                             )
                         },
                         BinOp::FloorDivision => box move |context| {
                             thrw(
-                                l(context)?.floor_div(r(context)?, context.heap),
+                                l(context)?.floor_div(r(context)?, context.heap()),
                                 span,
                                 context,
                             )

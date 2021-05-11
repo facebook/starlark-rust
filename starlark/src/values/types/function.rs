@@ -61,7 +61,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
             None => None,
             Some(span) => Some((context.codemap.dupe(), span)),
         };
-        let slots = self.collect.done(context.heap)?;
+        let slots = self.collect.done(context.heap())?;
         let invoke = self.invoke;
         context.with_call_stack(function, loc, |context| match invoke {
             FunctionInvokerInner::Native(inv) => inv.invoke(slots, context),
@@ -248,7 +248,7 @@ impl NativeAttribute {
         context: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
-        let mut invoker = self.0.get_aref().new_invoker(function, context.heap)?;
+        let mut invoker = self.0.get_aref().new_invoker(function, context.heap())?;
         invoker.push_pos(value);
         invoker.invoke(function, None, context)
     }
