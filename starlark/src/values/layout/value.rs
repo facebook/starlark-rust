@@ -265,7 +265,7 @@ impl<'v> Value<'v> {
     }
 
     /// Create a new unassigned value. Will mostly throw errors when used.
-    pub fn new_unassigned() -> Self {
+    pub(crate) fn new_unassigned() -> Self {
         Self(Pointer::new_unassigned())
     }
 
@@ -493,7 +493,7 @@ impl<'v> ValueRef<'v> {
         self.get_cell().set(value);
     }
 
-    pub fn is_unassigned(&self) -> bool {
+    pub(crate) fn is_unassigned(&self) -> bool {
         self.get().is_none()
     }
 

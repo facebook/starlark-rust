@@ -138,7 +138,7 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         self.pointer == TAG_CONST_NONE
     }
 
-    pub fn is_unassigned(self) -> bool {
+    pub(crate) fn is_unassigned(self) -> bool {
         self.pointer == TAG_CONST_UNASSIGNED
     }
 
