@@ -225,20 +225,17 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             // Save to skip regenerating as we know that kwargs will always be a copy
             None => Ok(kwargs),
             Some(a) => {
-                let mut result = SmallMap::new();
-                match Dict::from_value(a) {
-                    Some(mp) => {
-                        for (k, v) in mp.iter_hashed() {
-                            result.insert_hashed(k, v);
-                        }
-                    }
+                let mut result = match Dict::from_value(a) {
+                    Some(mp) => mp.content.clone(),
                     None => {
+                        let mut result = SmallMap::new();
                         for el in &a.iterate(heap)? {
                             let (k, v) = unpack_pair(el, heap)?;
                             result.insert_hashed(k.get_hashed()?, v);
                         }
+                        result
                     }
-                }
+                };
                 for (k, v) in Dict::from_value(kwargs).unwrap().iter_hashed() {
                     result.insert_hashed(k, v);
                 }
