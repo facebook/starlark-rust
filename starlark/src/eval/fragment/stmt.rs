@@ -25,7 +25,10 @@
 use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
-    eval::{evaluator::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+    eval::{
+        compiler::{scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+        evaluator::Evaluator,
+    },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
     values::{
         fast_string,

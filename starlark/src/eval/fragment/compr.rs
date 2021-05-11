@@ -21,8 +21,9 @@ use crate::{
     codemap::Span,
     collections::SmallMap,
     eval::{
-        evaluator::Evaluator, fragment::stmt::AssignCompiled, thrw, Compiler, EvalCompiled,
-        EvalException,
+        compiler::{thrw, Compiler, EvalCompiled, EvalException},
+        evaluator::Evaluator,
+        fragment::stmt::AssignCompiled,
     },
     syntax::ast::{AstExpr, Clause, ForClause},
     values::{dict::Dict, Value},

@@ -21,10 +21,9 @@ use crate::{
     codemap::CodeMap,
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
+        compiler::{scope::ScopeNames, Compiler, EvalCompiled, EvalException},
         evaluator::Evaluator,
         parameters::{ParametersCollect, ParametersSpec},
-        scope::ScopeNames,
-        Compiler, EvalCompiled, EvalException,
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{

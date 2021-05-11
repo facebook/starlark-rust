@@ -21,11 +21,14 @@ use crate::{
     collections::{Hashed, SmallMap},
     environment::EnvironmentError,
     errors::Diagnostic,
-    eval::{evaluator::Evaluator, scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+    eval::{
+        compiler::{scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+        evaluator::Evaluator,
+    },
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
         dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList,
-        tuple::FrozenTuple, FrozenHeap, FrozenValue, *,
+        tuple::FrozenTuple, FrozenHeap, FrozenValue, Value, *,
     },
 };
 use either::Either;

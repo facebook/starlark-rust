@@ -19,94 +19,30 @@
 //! [`eval_module`](Evaluator::eval_module).
 
 use crate::{
-    codemap::{CodeMap, Span},
-    environment::{slots::LocalSlots, Globals},
-    errors::Diagnostic,
-    eval::scope::Scope,
+    environment::slots::LocalSlots,
+    eval::compiler::{scope::Scope, Compiler},
     syntax::ast::AstModule,
-    values::{FrozenHeap, Value, ValueRef},
+    values::{Value, ValueRef},
 };
-use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::{fmt::Debug, mem};
+use std::mem;
 
 pub use crate::eval::file_loader::*;
+pub(crate) use compiler::scope::ScopeNames;
 pub use evaluator::Evaluator;
 pub(crate) use parameters::ParametersCollect;
 pub use parameters::{ParametersParser, ParametersSpec};
-pub(crate) use scope::ScopeNames;
 
 pub(crate) mod call_stack;
+mod compiler;
+mod evaluator;
 mod file_loader;
 pub(crate) mod fragment;
 mod parameters;
-mod scope;
 mod stmt_profile;
 
 #[cfg(test)]
 mod tests;
-
-mod evaluator;
-
-pub(crate) type EvalCompiled = Box<
-    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
->;
-
-#[derive(Debug)]
-pub(crate) enum EvalException<'v> {
-    // Flow control statement reached, impossible to escape with
-    // since we statically check for them
-    Break,
-    Continue,
-    Return(Value<'v>),
-    // Error bubbling up
-    Error(anyhow::Error),
-}
-
-impl<'v> From<anyhow::Error> for EvalException<'v> {
-    fn from(x: anyhow::Error) -> Self {
-        Self::Error(x)
-    }
-}
-
-/// Convert syntax error to spanned evaluation exception
-fn thrw<'v, T>(
-    r: anyhow::Result<T>,
-    span: Span,
-    context: &Evaluator<'v, '_>,
-) -> Result<T, EvalException<'v>> {
-    match r {
-        Ok(v) => Ok(v),
-        Err(e) => {
-            let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
-                d.set_span(span, context.codemap.dupe());
-                d.set_call_stack(|| context.call_stack.to_diagnostic_frames());
-            });
-            Err(EvalException::Error(e))
-        }
-    }
-}
-
-impl From<EvalException<'_>> for anyhow::Error {
-    fn from(x: EvalException) -> Self {
-        match x {
-            EvalException::Error(e) => e,
-            EvalException::Break => anyhow!("Break statement used outside of a loop"),
-            EvalException::Continue => anyhow!("Continue statement used outside of a loop"),
-            EvalException::Return(..) => {
-                anyhow!("Return statement used outside of a function call")
-            }
-        }
-    }
-}
-
-pub(crate) struct Compiler<'a> {
-    scope: Scope<'a>,
-    heap: &'a FrozenHeap,
-    globals: &'a Globals,
-    errors: Vec<anyhow::Error>,
-    codemap: CodeMap,
-}
 
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
