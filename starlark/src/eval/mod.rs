@@ -31,6 +31,7 @@ pub use crate::eval::file_loader::*;
 pub(crate) use call_stack::stack_guard;
 pub(crate) use compiler::scope::ScopeNames;
 pub use evaluator::Evaluator;
+pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
 pub(crate) use parameters::ParametersCollect;
 pub use parameters::{ParametersParser, ParametersSpec};
 
@@ -38,7 +39,7 @@ mod call_stack;
 mod compiler;
 mod evaluator;
 mod file_loader;
-pub(crate) mod fragment;
+mod fragment;
 mod parameters;
 mod stmt_profile;
 

@@ -17,10 +17,7 @@
 
 use crate::{
     collections::SmallMap,
-    eval::{
-        fragment::def::{Def, FrozenDef},
-        Evaluator, ScopeNames,
-    },
+    eval::{Def, Evaluator, FrozenDef, ScopeNames},
     values::Value,
 };
 use gazebo::cell::ARef;

@@ -20,8 +20,8 @@
 use crate::{
     codemap::Span,
     eval::{
-        fragment::def::{DefInvoker, DefInvokerFrozen},
-        Evaluator, ParametersCollect, ParametersParser, ParametersSpec,
+        DefInvoker, DefInvokerFrozen, Evaluator, ParametersCollect, ParametersParser,
+        ParametersSpec,
     },
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
