@@ -19,6 +19,15 @@ use crate::values::{Freezer, FrozenValue, Heap, Value, ValueRef, Walker};
 use gazebo::prelude::*;
 use std::cell::{RefCell, RefMut};
 
+#[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
+pub(crate) struct LocalSlotId(usize);
+
+impl LocalSlotId {
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+}
+
 /// Slots that are used in a local context, e.g. for a function that is executing.
 /// Always mutable, never frozen. Uses the `ValueRef` because they have reference
 /// semantics - if a variable gets mutated, someone who has a copy will see the
@@ -84,22 +93,22 @@ impl<'v> LocalSlots<'v> {
     }
 
     /// Gets a local variable. Returns None to indicate the variable is not yet assigned.
-    pub fn get_slot(&self, slot: usize) -> Option<Value<'v>> {
-        self.0[slot].get()
+    pub fn get_slot(&self, slot: LocalSlotId) -> Option<Value<'v>> {
+        self.0[slot.0].get()
     }
 
-    pub fn set_slot(&self, slot: usize, value: Value<'v>) {
-        self.0[slot].set(value);
+    pub fn set_slot(&self, slot: LocalSlotId, value: Value<'v>) {
+        self.0[slot.0].set(value);
     }
 
     /// Make a copy of this slot that can be used with `set_slot_ref` to
     /// bind two instances together.
-    pub fn clone_slot_reference(&self, slot: usize, heap: &'v Heap) -> ValueRef<'v> {
-        self.0[slot].clone_reference(heap)
+    pub fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
+        self.0[slot.0].clone_reference(heap)
     }
 
-    pub fn set_slot_ref(&mut self, slot: usize, value_ref: ValueRef<'v>) {
-        self.0[slot] = value_ref;
+    pub fn set_slot_ref(&mut self, slot: LocalSlotId, value_ref: ValueRef<'v>) {
+        self.0[slot.0] = value_ref;
     }
 
     pub(crate) fn walk(&mut self, walker: &Walker<'v>) {

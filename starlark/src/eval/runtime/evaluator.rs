@@ -19,7 +19,8 @@ use crate::{
     codemap::{CodeMap, Span, SpanLoc},
     collections::stack::Stack1,
     environment::{
-        slots::LocalSlots, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
+        slots::{LocalSlotId, LocalSlots},
+        EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
     errors::{Diagnostic, Frame},
     eval::{
@@ -301,13 +302,17 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         })
     }
 
-    pub(crate) fn get_slot_local(&self, slot: usize, name: &str) -> anyhow::Result<Value<'v>> {
+    pub(crate) fn get_slot_local(
+        &self,
+        slot: LocalSlotId,
+        name: &str,
+    ) -> anyhow::Result<Value<'v>> {
         self.local_variables.top().get_slot(slot).ok_or_else(|| {
             EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
         })
     }
 
-    pub(crate) fn clone_slot_reference(&self, slot: usize, heap: &'v Heap) -> ValueRef<'v> {
+    pub(crate) fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
         self.local_variables.top().clone_slot_reference(slot, heap)
     }
 
@@ -339,7 +344,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.module_env.slots().set_slot(slot, value);
     }
 
-    pub(crate) fn set_slot_local(&mut self, slot: usize, value: Value<'v>) {
+    pub(crate) fn set_slot_local(&mut self, slot: LocalSlotId, value: Value<'v>) {
         self.local_variables.top().set_slot(slot, value)
     }
 

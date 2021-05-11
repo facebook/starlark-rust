@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    environment::names::MutableNames,
+    environment::{names::MutableNames, slots::LocalSlotId},
     syntax::ast::{AstExpr, AstStmt, Expr, Stmt, Visibility},
 };
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ pub(crate) struct Scope<'a> {
 }
 
 #[derive(Default)]
-struct Unscope(Vec<(String, Option<usize>)>);
+struct Unscope(Vec<(String, Option<LocalSlotId>)>);
 
 #[derive(Default, Debug)]
 pub(crate) struct ScopeNames {
@@ -38,27 +38,27 @@ pub(crate) struct ScopeNames {
     /// The next required slot would be at index `used`.
     pub used: usize,
     /// The names that are in this scope
-    pub mp: HashMap<String, usize>,
+    pub mp: HashMap<String, LocalSlotId>,
     /// Slots to copy from the parent. (index in parent, index in child).
     /// Module-level identifiers are not copied over, to avoid excess copying.
-    pub parent: Vec<(usize, usize)>,
+    pub parent: Vec<(LocalSlotId, LocalSlotId)>,
 }
 
 impl ScopeNames {
-    fn copy_parent(&mut self, parent: usize, name: &str) -> usize {
+    fn copy_parent(&mut self, parent: LocalSlotId, name: &str) -> LocalSlotId {
         assert!(self.get_name(name).is_none()); // Or we'll be overwriting our variable
         let res = self.add_name(name);
         self.parent.push((parent, res));
         res
     }
 
-    fn next_slot(&mut self) -> usize {
-        let res = self.used;
+    fn next_slot(&mut self) -> LocalSlotId {
+        let res = LocalSlotId::new(self.used);
         self.used += 1;
         res
     }
 
-    fn add_name(&mut self, name: &str) -> usize {
+    fn add_name(&mut self, name: &str) -> LocalSlotId {
         match self.mp.get(name) {
             Some(v) => *v,
             None => {
@@ -69,7 +69,7 @@ impl ScopeNames {
         }
     }
 
-    fn add_scoped(&mut self, name: &str, unscope: &mut Unscope) -> usize {
+    fn add_scoped(&mut self, name: &str, unscope: &mut Unscope) -> LocalSlotId {
         let slot = self.next_slot();
         let undo = match self.mp.get_mut(name) {
             Some(v) => {
@@ -97,14 +97,14 @@ impl ScopeNames {
         }
     }
 
-    fn get_name(&self, name: &str) -> Option<usize> {
+    fn get_name(&self, name: &str) -> Option<LocalSlotId> {
         self.mp.get(name).copied()
     }
 }
 
 pub(crate) enum Slot {
-    Module(usize), // Top-level module scope
-    Local(usize),  // Local scope, always mutable
+    Module(usize),      // Top-level module scope
+    Local(LocalSlotId), // Local scope, always mutable
 }
 
 impl<'a> Scope<'a> {
@@ -114,9 +114,13 @@ impl<'a> Scope<'a> {
         let mut module_private = ScopeNames::default();
         for (x, vis) in locals {
             match vis {
-                Visibility::Public => module.add_name(x),
-                Visibility::Private => module_private.add_name(x),
-            };
+                Visibility::Public => {
+                    module.add_name(x);
+                }
+                Visibility::Private => {
+                    module_private.add_name(x);
+                }
+            }
         }
         Self {
             module,
