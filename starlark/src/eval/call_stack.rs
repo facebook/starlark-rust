@@ -182,11 +182,11 @@ fn check() -> anyhow::Result<()> {
 
 /// Try increment stack depth.
 ///
-/// Return opaque `StackGuard` object which resets stack to previous value
+/// Return opaque object which resets stack to previous value
 /// on `drop`.
 ///
 /// If stack depth exceeds configured limit, return error.
-pub fn try_inc() -> anyhow::Result<StackGuard> {
+pub(crate) fn stack_guard() -> anyhow::Result<impl Drop> {
     check()?;
     Ok(inc())
 }

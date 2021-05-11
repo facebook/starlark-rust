@@ -28,12 +28,13 @@ use gazebo::prelude::*;
 use std::mem;
 
 pub use crate::eval::file_loader::*;
+pub(crate) use call_stack::stack_guard;
 pub(crate) use compiler::scope::ScopeNames;
 pub use evaluator::Evaluator;
 pub(crate) use parameters::ParametersCollect;
 pub use parameters::{ParametersParser, ParametersSpec};
 
-pub(crate) mod call_stack;
+mod call_stack;
 mod compiler;
 mod evaluator;
 mod file_loader;
