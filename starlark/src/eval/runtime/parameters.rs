@@ -427,7 +427,14 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         if let Some(err) = err {
             return Err(err);
         }
-        for ((index, def), ref slot) in params.kinds.iter().enumerate().zip(slots.iter_mut()) {
+        for ((index, def), ref slot) in params
+            .kinds
+            .iter()
+            .enumerate()
+            .zip(slots.iter_mut())
+            .skip(self.next_position)
+        {
+            // We know that up to next_position got filled positionally, so we don't need to check those
             if !slot.is_unassigned() {
                 continue;
             }
