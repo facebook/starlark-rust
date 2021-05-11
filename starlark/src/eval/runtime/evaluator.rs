@@ -66,8 +66,6 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) disable_gc: bool,
     // Size of the heap when we last performed a GC
     pub(crate) last_heap_size: usize,
-    // The normal heap, where values are produced, get GC'd at the end
-    heap: &'v Heap,
     // Extra functions to run on each statement, usually empty
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
@@ -102,7 +100,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             disable_gc: false,
             profiling: false,
             stmt_profile: StmtProfile::new(),
-            heap: module.heap(),
             before_stmt: Vec::new(),
         }
     }
@@ -277,7 +274,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// The active heap where [`Value`]s are allocated.
     pub fn heap(&self) -> &'v Heap {
-        self.heap
+        self.module_env.heap()
     }
 
     /// The frozen heap. It's possible to allocate [`FrozenValue`](crate::values::FrozenValue)s here,
