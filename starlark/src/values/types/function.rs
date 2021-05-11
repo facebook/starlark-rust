@@ -26,7 +26,7 @@ use crate::{
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
         FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike,
-        Walker,
+        ValueRef, Walker,
     },
 };
 use derivative::Derivative;
@@ -35,13 +35,16 @@ use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 pub const FUNCTION_TYPE: &str = "function";
 
 /// Function that can be invoked. Accumulates arguments before being called.
-pub struct FunctionInvoker<'v, 'a>(pub(crate) FunctionInvokerInner<'v, 'a>);
+pub struct FunctionInvoker<'v, 'a> {
+    pub(crate) collect: ParametersCollect<'v, 'a>,
+    pub(crate) invoke: FunctionInvokerInner<'v, 'a>,
+}
 
 // Wrap to avoid exposing the enum alterantives
 pub(crate) enum FunctionInvokerInner<'v, 'a> {
-    Native(NativeFunctionInvoker<'v, 'a>),
+    Native(NativeFunctionInvoker<'a>),
     Def(DefInvoker<'v, 'a>),
-    DefFrozen(DefInvokerFrozen<'v, 'a>),
+    DefFrozen(DefInvokerFrozen<'a>),
 }
 
 impl<'v, 'a> FunctionInvoker<'v, 'a> {
@@ -58,47 +61,33 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
             None => None,
             Some(span) => Some((context.codemap.dupe(), span)),
         };
-        context.with_call_stack(function, loc, |context| match self.0 {
-            FunctionInvokerInner::Native(inv) => inv.invoke(context),
-            FunctionInvokerInner::Def(inv) => inv.invoke(context),
-            FunctionInvokerInner::DefFrozen(inv) => inv.invoke(context),
+        let slots = self.collect.done(context.heap)?;
+        let invoke = self.invoke;
+        context.with_call_stack(function, loc, |context| match invoke {
+            FunctionInvokerInner::Native(inv) => inv.invoke(slots, context),
+            FunctionInvokerInner::Def(inv) => inv.invoke(slots, context),
+            FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, context),
         })
     }
 
     /// Add a positional argument.
     pub fn push_pos(&mut self, v: Value<'v>) {
-        match &mut self.0 {
-            FunctionInvokerInner::Native(x) => x.collect().positional(v),
-            FunctionInvokerInner::Def(x) => x.collect().positional(v),
-            FunctionInvokerInner::DefFrozen(x) => x.collect().positional(v),
-        }
+        self.collect.positional(v)
     }
 
     /// Add a `*args` argument.
     pub fn push_args(&mut self, v: Value<'v>, heap: &'v Heap) {
-        match &mut self.0 {
-            FunctionInvokerInner::Native(x) => x.collect().args(v, heap),
-            FunctionInvokerInner::Def(x) => x.collect().args(v, heap),
-            FunctionInvokerInner::DefFrozen(x) => x.collect().args(v, heap),
-        }
+        self.collect.args(v, heap)
     }
 
     /// Add a named argument.
     pub fn push_named(&mut self, name: &str, name_value: Hashed<Value<'v>>, v: Value<'v>) {
-        match &mut self.0 {
-            FunctionInvokerInner::Native(x) => x.collect().named(name, name_value, v),
-            FunctionInvokerInner::Def(x) => x.collect().named(name, name_value, v),
-            FunctionInvokerInner::DefFrozen(x) => x.collect().named(name, name_value, v),
-        }
+        self.collect.named(name, name_value, v)
     }
 
     /// Add a `**kargs` argument.
     pub fn push_kwargs(&mut self, v: Value<'v>) {
-        match &mut self.0 {
-            FunctionInvokerInner::Native(x) => x.collect().kwargs(v),
-            FunctionInvokerInner::Def(x) => x.collect().kwargs(v),
-            FunctionInvokerInner::DefFrozen(x) => x.collect().kwargs(v),
-        }
+        self.collect.kwargs(v)
     }
 }
 
@@ -120,13 +109,10 @@ impl<T> NativeFunc for T where
 }
 
 /// A function that can be evaluated which can also collect parameters
-pub(crate) struct NativeFunctionInvoker<'v, 'a> {
-    function: ARef<'a, dyn NativeFunc>,
-    collect: ParametersCollect<'v, 'a>,
-}
+pub(crate) struct NativeFunctionInvoker<'a>(ARef<'a, dyn NativeFunc>);
 
-impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
-    pub fn new<F: NativeFunc>(func: ARef<'a, NativeFunction<F>>) -> Self {
+impl<'a> NativeFunctionInvoker<'a> {
+    pub fn new<'v, F: NativeFunc>(func: ARef<'a, NativeFunction<F>>) -> FunctionInvoker<'v, 'a> {
         // Used to help guide the type checker
         fn convert(x: &impl NativeFunc) -> &(dyn NativeFunc) {
             x
@@ -134,21 +120,20 @@ impl<'v, 'a> NativeFunctionInvoker<'v, 'a> {
 
         let (function, parameters) =
             ARef::map_split(func, |x| (convert(&x.function), x.parameters.promote()));
-        Self {
-            function,
+        FunctionInvoker {
             collect: ParametersSpec::collect(parameters, 0),
+            invoke: FunctionInvokerInner::Native(NativeFunctionInvoker(function)),
         }
     }
 
-    pub fn invoke(self, context: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
-        let slots = self.collect.done(context.heap)?;
+    pub fn invoke<'v>(
+        self,
+        slots: Vec<ValueRef<'v>>,
+        context: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
         let slots = slots.map(|x| x.get());
         let parser = ParametersParser::new(&slots);
-        (*self.function)(context, parser)
-    }
-
-    fn collect(&mut self) -> &mut ParametersCollect<'v, 'a> {
-        &mut self.collect
+        (*self.0)(context, parser)
     }
 }
 
@@ -221,11 +206,9 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
         me: Value<'v>,
         _heap: &'v Heap,
     ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
-        Ok(FunctionInvoker(FunctionInvokerInner::Native(
-            NativeFunctionInvoker::new(ARef::map(me.get_aref(), |x| {
-                x.as_dyn_any().downcast_ref::<Self>().unwrap()
-            })),
-        )))
+        Ok(NativeFunctionInvoker::new(ARef::map(me.get_aref(), |x| {
+            x.as_dyn_any().downcast_ref::<Self>().unwrap()
+        })))
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
