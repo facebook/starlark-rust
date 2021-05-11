@@ -31,7 +31,6 @@
 pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
     collections::{Hashed, SmallHashResult},
-    eval::stack_guard,
     values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
 };
 pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -54,6 +53,7 @@ mod interpolation;
 mod iter;
 mod layout;
 mod owned;
+mod stack_guard;
 mod traits;
 mod types;
 mod typing;
@@ -191,13 +191,13 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
         if self.to_value().ptr_eq(other) {
             Ok(true)
         } else {
-            let _guard = stack_guard()?;
+            let _guard = stack_guard::stack_guard()?;
             self.get_aref().equals(other)
         }
     }
 
     fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
-        let _guard = stack_guard()?;
+        let _guard = stack_guard::stack_guard()?;
         self.get_aref().compare(other)
     }
 
