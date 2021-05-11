@@ -427,7 +427,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         if let Some(err) = err {
             return Err(err);
         }
-        for ((index, def), ref slot) in params
+        for ((index, def), slot) in params
             .kinds
             .iter()
             .enumerate()
