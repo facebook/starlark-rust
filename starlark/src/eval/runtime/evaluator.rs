@@ -19,7 +19,7 @@ use crate::{
     codemap::{CodeMap, Span, SpanLoc},
     collections::stack::Stack1,
     environment::{
-        slots::{LocalSlotId, LocalSlots},
+        slots::{LocalSlotId, LocalSlots, ModuleSlotId},
         EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
     errors::{Diagnostic, Frame},
@@ -287,7 +287,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.module_env.frozen_heap()
     }
 
-    pub(crate) fn get_slot_module(&self, slot: usize) -> anyhow::Result<Value<'v>> {
+    pub(crate) fn get_slot_module(&self, slot: ModuleSlotId) -> anyhow::Result<Value<'v>> {
         match &self.module_variables {
             None => self.module_env.slots().get_slot(slot),
             Some(e) => e.get_slot(slot).map(Value::new_frozen),
@@ -339,7 +339,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
     }
 
-    pub(crate) fn set_slot_module(&mut self, slot: usize, value: Value<'v>) {
+    pub(crate) fn set_slot_module(&mut self, slot: ModuleSlotId, value: Value<'v>) {
         assert!(self.is_module_scope);
         self.module_env.slots().set_slot(slot, value);
     }

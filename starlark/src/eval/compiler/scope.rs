@@ -16,7 +16,10 @@
  */
 
 use crate::{
-    environment::{names::MutableNames, slots::LocalSlotId},
+    environment::{
+        names::MutableNames,
+        slots::{LocalSlotId, ModuleSlotId},
+    },
     syntax::ast::{AstExpr, AstStmt, Expr, Stmt, Visibility},
 };
 use std::collections::HashMap;
@@ -103,8 +106,8 @@ impl ScopeNames {
 }
 
 pub(crate) enum Slot {
-    Module(usize),      // Top-level module scope
-    Local(LocalSlotId), // Local scope, always mutable
+    Module(ModuleSlotId), // Top-level module scope
+    Local(LocalSlotId),   // Local scope, always mutable
 }
 
 impl<'a> Scope<'a> {

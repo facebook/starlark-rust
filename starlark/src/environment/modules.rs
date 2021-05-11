@@ -23,7 +23,7 @@
 use crate::{
     environment::{
         names::{FrozenNames, MutableNames},
-        slots::{FrozenSlots, MutableSlots},
+        slots::{FrozenSlots, ModuleSlotId, MutableSlots},
         EnvironmentError,
     },
     values::{
@@ -129,13 +129,13 @@ impl FrozenModuleRef {
             .join("\n")
     }
 
-    pub(crate) fn get_slot(&self, slot: usize) -> Option<FrozenValue> {
+    pub(crate) fn get_slot(&self, slot: ModuleSlotId) -> Option<FrozenValue> {
         self.0.slots.get_slot(slot)
     }
 
     /// Try and go back from a slot to a name.
     /// Inefficient - only use in error paths.
-    pub(crate) fn get_slot_name(&self, slot: usize) -> Option<String> {
+    pub(crate) fn get_slot_name(&self, slot: ModuleSlotId) -> Option<String> {
         for (s, i) in self.0.names.symbols() {
             if *i == slot {
                 return Some(s.clone());
@@ -239,7 +239,7 @@ impl Module {
     pub fn set<'v>(&'v self, name: &str, value: Value<'v>) {
         let slot = self.names.add_name(name);
         let slots = self.slots();
-        slots.ensure_slots(slot + 1);
+        slots.ensure_slot(slot);
         slots.set_slot(slot, value);
     }
 

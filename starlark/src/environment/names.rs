@@ -17,6 +17,8 @@
 
 use std::{cell::RefCell, collections::HashMap, iter::Iterator};
 
+use crate::environment::slots::ModuleSlotId;
+
 /// MutableNames are how we allocate slots (index-based) to variables
 /// (name-based). The slots field is the current active mapping of names to
 /// index.
@@ -35,10 +37,10 @@ use std::{cell::RefCell, collections::HashMap, iter::Iterator};
 /// On an unscope, we do the reverse, putting things back to how they were
 /// before (apart from the total) number of slots required.
 #[derive(Debug)]
-pub(crate) struct MutableNames(RefCell<HashMap<String, usize>>);
+pub(crate) struct MutableNames(RefCell<HashMap<String, ModuleSlotId>>);
 
 #[derive(Debug)]
-pub(crate) struct FrozenNames(HashMap<String, usize>);
+pub(crate) struct FrozenNames(HashMap<String, ModuleSlotId>);
 
 impl MutableNames {
     pub fn new() -> Self {
@@ -51,7 +53,7 @@ impl MutableNames {
 
     /// Try and go back from a slot to a name.
     /// Inefficient - only use in error paths.
-    pub fn get_slot(&self, slot: usize) -> Option<String> {
+    pub fn get_slot(&self, slot: ModuleSlotId) -> Option<String> {
         for (s, i) in &*self.0.borrow() {
             if *i == slot {
                 return Some(s.clone());
@@ -60,17 +62,17 @@ impl MutableNames {
         None
     }
 
-    pub fn get_name(&self, name: &str) -> Option<usize> {
+    pub fn get_name(&self, name: &str) -> Option<ModuleSlotId> {
         self.0.borrow().get(name).copied()
     }
 
     // Add a name, or if it's already there, return the existing name
-    pub fn add_name(&self, name: &str) -> usize {
+    pub fn add_name(&self, name: &str) -> ModuleSlotId {
         let mut x = self.0.borrow_mut();
         match x.get(name) {
             Some(v) => *v,
             None => {
-                let slot = x.len();
+                let slot = ModuleSlotId::new(x.len());
                 x.insert(name.to_owned(), slot);
                 slot
             }
@@ -81,7 +83,7 @@ impl MutableNames {
         self.0.borrow_mut().remove(name);
     }
 
-    pub fn all_names(&self) -> HashMap<String, usize> {
+    pub fn all_names(&self) -> HashMap<String, ModuleSlotId> {
         self.0.borrow().clone()
     }
 
@@ -91,11 +93,11 @@ impl MutableNames {
 }
 
 impl FrozenNames {
-    pub fn get_name(&self, name: &str) -> Option<usize> {
+    pub fn get_name(&self, name: &str) -> Option<ModuleSlotId> {
         self.0.get(name).copied()
     }
 
-    pub fn symbols(&self) -> impl Iterator<Item = (&String, &usize)> {
+    pub fn symbols(&self) -> impl Iterator<Item = (&String, &ModuleSlotId)> {
         self.0.iter()
     }
 }

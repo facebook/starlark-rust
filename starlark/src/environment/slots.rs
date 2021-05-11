@@ -28,6 +28,15 @@ impl LocalSlotId {
     }
 }
 
+#[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
+pub(crate) struct ModuleSlotId(usize);
+
+impl ModuleSlotId {
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+}
+
 /// Slots that are used in a local context, e.g. for a function that is executing.
 /// Always mutable, never frozen. Uses the `ValueRef` because they have reference
 /// semantics - if a variable gets mutated, someone who has a copy will see the
@@ -52,14 +61,19 @@ impl<'v> MutableSlots<'v> {
         self.0.borrow_mut()
     }
 
-    pub fn get_slot(&self, slot: usize) -> Option<Value<'v>> {
-        let v = self.0.borrow()[slot];
+    pub fn get_slot(&self, slot: ModuleSlotId) -> Option<Value<'v>> {
+        let v = self.0.borrow()[slot.0];
         if v.is_unassigned() { None } else { Some(v) }
     }
 
-    pub fn set_slot(&self, slot: usize, value: Value<'v>) {
+    pub fn set_slot(&self, slot: ModuleSlotId, value: Value<'v>) {
         assert!(!value.is_unassigned());
-        self.0.borrow_mut()[slot] = value;
+        self.0.borrow_mut()[slot.0] = value;
+    }
+
+    pub fn ensure_slot(&self, slot: ModuleSlotId) {
+        // To ensure that `slot` exists, we need at least `slot + 1` slots.
+        self.ensure_slots(slot.0 + 1);
     }
 
     pub fn ensure_slots(&self, count: usize) {
@@ -81,8 +95,8 @@ impl<'v> MutableSlots<'v> {
 }
 
 impl FrozenSlots {
-    pub fn get_slot(&self, slot: usize) -> Option<FrozenValue> {
-        let fv = self.0[slot];
+    pub fn get_slot(&self, slot: ModuleSlotId) -> Option<FrozenValue> {
+        let fv = self.0[slot.0];
         if fv.is_unassigned() { None } else { Some(fv) }
     }
 }
