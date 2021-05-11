@@ -22,8 +22,10 @@ use crate::{
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
         compiler::{scope::ScopeNames, Compiler, EvalCompiled, EvalException},
-        evaluator::Evaluator,
-        parameters::{ParametersCollect, ParametersSpec},
+        runtime::{
+            evaluator::Evaluator,
+            parameters::{ParametersCollect, ParametersSpec},
+        },
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{

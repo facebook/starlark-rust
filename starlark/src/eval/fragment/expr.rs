@@ -23,7 +23,7 @@ use crate::{
     errors::Diagnostic,
     eval::{
         compiler::{scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
-        evaluator::Evaluator,
+        runtime::evaluator::Evaluator,
     },
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{

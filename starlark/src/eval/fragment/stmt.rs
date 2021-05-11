@@ -27,7 +27,7 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
-        evaluator::Evaluator,
+        runtime::evaluator::Evaluator,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
     values::{

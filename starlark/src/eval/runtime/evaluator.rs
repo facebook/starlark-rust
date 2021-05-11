@@ -15,14 +15,16 @@
  * limitations under the License.
  */
 
-pub use crate::eval::file_loader::FileLoader;
 use crate::{
     codemap::{CodeMap, Span, SpanLoc},
     environment::{
         slots::LocalSlots, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
     errors::{Diagnostic, Frame},
-    eval::{call_stack::CallStack, stmt_profile::StmtProfile},
+    eval::{
+        runtime::{call_stack::CallStack, stmt_profile::StmtProfile},
+        FileLoader,
+    },
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
 use gazebo::any::AnyLifetime;
