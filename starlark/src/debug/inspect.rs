@@ -46,7 +46,7 @@ fn inspect_local_variables<'v>(ctx: &Evaluator<'v, '_>) -> Option<SmallMap<Strin
     let names = xs.into_iter().rev().find_map(to_scope_names)?;
     let mut res = SmallMap::new();
     for (name, slot) in &names.mp {
-        if let Some(v) = ctx.local_variables.get_slot(*slot) {
+        if let Some(v) = ctx.local_variables.top().get_slot(*slot) {
             res.insert(name.clone(), v);
         }
     }

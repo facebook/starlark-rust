@@ -15,20 +15,28 @@
  * limitations under the License.
  */
 
-//! Defines [`SmallMap`] and [`SmallSet`] - collections with deterministic iteration and small memory footprint.
-//!
-//! These structures use vector backed storage if there are only a few elements, and [`IndexMap`](indexmap::IndexMap)
-//! for larger collections. The API mirrors standard Rust collections.
+use std::{iter, mem};
 
-pub use crate::collections::{
-    hash::{BorrowHashed, Hashed, SmallHashResult},
-    small_map::SmallMap,
-    small_set::SmallSet,
-};
+#[derive(Default)]
+pub(crate) struct Stack1<T> {
+    top: T,
+    rest: Vec<T>,
+}
 
-mod hash;
-mod idhasher;
-mod small_map;
-mod small_set;
-pub(crate) mod stack;
-mod vec_map;
+impl<T> Stack1<T> {
+    pub fn push(&mut self, top: T) {
+        self.rest.push(mem::replace(&mut self.top, top));
+    }
+
+    pub fn pop(&mut self) -> T {
+        mem::replace(&mut self.top, self.rest.pop().unwrap())
+    }
+
+    pub fn top(&self) -> &T {
+        &self.top
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.rest.iter_mut().chain(iter::once(&mut self.top))
+    }
+}

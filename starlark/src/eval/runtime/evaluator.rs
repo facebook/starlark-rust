@@ -17,6 +17,7 @@
 
 use crate::{
     codemap::{CodeMap, Span, SpanLoc},
+    collections::stack::Stack1,
     environment::{
         slots::LocalSlots, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
@@ -49,11 +50,8 @@ pub struct Evaluator<'v, 'a> {
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
     pub(crate) module_variables: Option<FrozenModuleRef>,
-    // Local variables for this function.
-    pub(crate) local_variables: LocalSlots<'v>,
-    // When we enter a function, push the old local_variables here
-    // Ensures we have access to all the GC roots
-    local_variables_stack: Vec<LocalSlots<'v>>,
+    // Local variables for this function, and older stack frames too.
+    pub(crate) local_variables: Stack1<LocalSlots<'v>>,
     // Globals used to resolve global variables.
     pub(crate) globals: &'a Globals,
     // The Starlark-level call-stack of functions.
@@ -96,8 +94,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             is_module_scope: true,
             module_env: module,
             module_variables: None,
-            local_variables: LocalSlots::default(),
-            local_variables_stack: Vec::new(),
+            local_variables: Stack1::default(),
             globals,
             loader: None,
             codemap: CodeMap::default(), // Will be replaced before it is used
@@ -251,8 +248,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let old_module_variables =
             mem::replace(&mut self.module_variables, module.map(|x| x.get()));
         self.is_module_scope = false;
-        self.local_variables_stack
-            .push(mem::replace(&mut self.local_variables, locals));
+        self.local_variables.push(locals);
 
         // Run the computation
         let res = within(self);
@@ -260,7 +256,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // Restore them all back
         self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
-        self.local_variables = self.local_variables_stack.pop().unwrap();
+        self.local_variables.pop();
         self.is_module_scope = old_is_module_scope;
         res
     }
@@ -270,11 +266,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         for x in roots.iter_mut() {
             walker.walk(x);
         }
-        for locals in self
-            .local_variables_stack
-            .iter_mut()
-            .chain(std::iter::once(&mut self.local_variables))
-        {
+        for locals in self.local_variables.iter_mut() {
             locals.walk(walker);
         }
         self.call_stack.walk(walker);
@@ -305,13 +297,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn get_slot_local(&self, slot: usize, name: &str) -> anyhow::Result<Value<'v>> {
-        self.local_variables.get_slot(slot).ok_or_else(|| {
+        self.local_variables.top().get_slot(slot).ok_or_else(|| {
             EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
         })
     }
 
     pub(crate) fn clone_slot_reference(&self, slot: usize, heap: &'v Heap) -> ValueRef<'v> {
-        self.local_variables.clone_slot_reference(slot, heap)
+        self.local_variables.top().clone_slot_reference(slot, heap)
     }
 
     /// Set a variable in the module. Raises an error if called from a frozen module
@@ -343,7 +335,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn set_slot_local(&mut self, slot: usize, value: Value<'v>) {
-        self.local_variables.set_slot(slot, value)
+        self.local_variables.top().set_slot(slot, value)
     }
 
     pub(crate) fn assert_module_env(&self) -> &'v Module {

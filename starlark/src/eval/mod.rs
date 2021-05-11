@@ -25,7 +25,6 @@ use crate::{
     values::{Value, ValueRef},
 };
 use gazebo::prelude::*;
-use std::mem;
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
@@ -72,10 +71,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let (module_slots, local_slots) = compiler.scope.exit_module();
         module_env.slots().ensure_slots(module_slots);
-        let old_locals = mem::replace(
-            &mut self.local_variables,
-            LocalSlots::new(vec![ValueRef::new_unassigned(); local_slots]),
-        );
+        self.local_variables.push(LocalSlots::new(vec![
+            ValueRef::new_unassigned();
+            local_slots
+        ]));
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
         let old_codemap = self.set_codemap(codemap.dupe());
@@ -95,7 +94,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.heap.record_call_exit();
         }
         self.set_codemap(old_codemap);
-        self.local_variables = old_locals;
+        self.local_variables.pop();
 
         // Return the result of evaluation
         Ok(res?)
