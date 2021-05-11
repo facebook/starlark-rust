@@ -286,13 +286,18 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.module_env.frozen_heap()
     }
 
-    pub(crate) fn get_slot_module(&self, slot: usize, name: &str) -> anyhow::Result<Value<'v>> {
+    pub(crate) fn get_slot_module(&self, slot: usize) -> anyhow::Result<Value<'v>> {
         match &self.module_variables {
             None => self.module_env.slots().get_slot(slot),
             Some(e) => e.get_slot(slot).map(Value::new_frozen),
         }
         .ok_or_else(|| {
-            EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
+            let name = match &self.module_variables {
+                None => self.module_env.names().get_slot(slot),
+                Some(e) => e.get_slot_name(slot),
+            }
+            .unwrap_or_else(|| "<unknown>".to_owned());
+            EnvironmentError::LocalVariableReferencedBeforeAssignment(name).into()
         })
     }
 

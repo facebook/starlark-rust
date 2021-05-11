@@ -132,6 +132,17 @@ impl FrozenModuleRef {
     pub(crate) fn get_slot(&self, slot: usize) -> Option<FrozenValue> {
         self.0.slots.get_slot(slot)
     }
+
+    /// Try and go back from a slot to a name.
+    /// Inefficient - only use in error paths.
+    pub(crate) fn get_slot_name(&self, slot: usize) -> Option<String> {
+        for (s, i) in self.0.names.symbols() {
+            if *i == slot {
+                return Some(s.clone());
+            }
+        }
+        None
+    }
 }
 
 impl<'v> StarlarkValue<'v> for FrozenModuleRef {

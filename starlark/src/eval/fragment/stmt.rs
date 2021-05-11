@@ -189,7 +189,7 @@ impl Compiler<'_> {
                     },
                     Slot::Module(slot) => box move |context| {
                         before_stmt(span, context);
-                        let v = thrw(context.get_slot_module(slot, &name), span, context)?;
+                        let v = thrw(context.get_slot_module(slot), span, context)?;
                         let rhs = rhs(context)?;
                         let v = thrw(op(v, rhs, context), span_op, context)?;
                         context.set_slot_module(slot, v);

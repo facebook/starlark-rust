@@ -49,6 +49,17 @@ impl MutableNames {
         self.0.borrow().len()
     }
 
+    /// Try and go back from a slot to a name.
+    /// Inefficient - only use in error paths.
+    pub fn get_slot(&self, slot: usize) -> Option<String> {
+        for (s, i) in &*self.0.borrow() {
+            if *i == slot {
+                return Some(s.clone());
+            }
+        }
+        None
+    }
+
     pub fn get_name(&self, name: &str) -> Option<usize> {
         self.0.borrow().get(name).copied()
     }

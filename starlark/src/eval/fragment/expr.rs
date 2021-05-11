@@ -275,7 +275,7 @@ impl Compiler<'_> {
                     Some(Slot::Module(slot)) => {
                         // We can't look up the module variables in advance because the first time around they are
                         // mutables, but after freezing they point at a different set of frozen slots.
-                        box move |context| thrw(context.get_slot_module(slot, &name), span, context)
+                        box move |context| thrw(context.get_slot_module(slot), span, context)
                     }
                     None => {
                         // Must be a global, since we know all variables
