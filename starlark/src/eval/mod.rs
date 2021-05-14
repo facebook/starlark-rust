@@ -19,12 +19,14 @@
 //! [`eval_module`](Evaluator::eval_module).
 
 use crate::{
+    codemap::{Span, Spanned},
     environment::slots::LocalSlots,
-    eval::compiler::{scope::Scope, Compiler},
-    syntax::ast::AstModule,
+    eval::compiler::{scope::Scope, Compiler, EvalException},
+    syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::{Value, ValueRef},
 };
 use gazebo::prelude::*;
+use std::mem;
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
@@ -42,11 +44,40 @@ mod runtime;
 #[cfg(test)]
 mod tests;
 
+/// For modules, we want to capture the "last" statement in the code,
+/// if it was an expression. Rather than keep track of the value of every
+/// expression, instead add a fake return at the end if the final statement
+/// is an expression.
+fn inject_return(x: &mut AstStmt) {
+    match &mut x.node {
+        Stmt::Statements(xs) => {
+            if let Some(x) = xs.last_mut() {
+                inject_return(x)
+            }
+        }
+        Stmt::Expression(e) => {
+            let e = mem::replace(
+                e,
+                Spanned {
+                    node: Expr::Tuple(Vec::new()),
+                    span: Span::default(),
+                },
+            );
+            x.node = Stmt::Return(Some(e));
+        }
+        _ => {}
+    }
+}
+
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
     /// [`Module`](crate::environment::Module) as appropriate.
     pub fn eval_module(&mut self, ast: AstModule) -> anyhow::Result<Value<'v>> {
-        let AstModule { codemap, statement } = ast;
+        let AstModule {
+            codemap,
+            mut statement,
+        } = ast;
+        inject_return(&mut statement);
         let module_env = self.assert_module_env();
 
         let scope = Scope::enter_module(module_env.names(), &statement);
@@ -97,7 +128,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.local_variables.pop();
 
         // Return the result of evaluation
-        Ok(res?)
+        match res {
+            Ok(_) => Ok(Value::new_none()),
+            Err(EvalException::Return(x)) => Ok(x),
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Evaluate a function stored in a [`Value`], passing in `positional` and `named` arguments.
