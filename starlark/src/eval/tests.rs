@@ -18,11 +18,15 @@
 use crate::{
     self as starlark,
     assert::{self, Assert},
+    collections::SmallMap,
     environment::{Globals, GlobalsBuilder, Module},
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{any::StarlarkAny, none::NoneType, Heap, Value},
+    values::{
+        any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
+        Value, ValueLike, Walker,
+    },
 };
 use gazebo::any::AnyLifetime;
 use itertools::Itertools;
@@ -1565,6 +1569,83 @@ def bar(xs):
         res.append(foo(x))
     assert_eq(xs, res)
 bar(["a","b","c"])
+"#,
+    );
+}
+
+#[test]
+fn test_label_assign() {
+    // Test the a.b = c construct.
+    // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
+
+    #[derive(Debug)]
+    struct WrapperGen<V>(SmallMap<String, V>);
+    starlark_complex_value!(Wrapper);
+
+    impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrapperGen<V>
+    where
+        Self: AnyLifetime<'v>,
+    {
+        starlark_type!("wrapper");
+
+        fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+            Ok(self.0.get(attribute).unwrap().to_value())
+        }
+    }
+
+    impl<'v> ComplexValue<'v> for Wrapper<'v> {
+        fn is_mutable(&self) -> bool {
+            true
+        }
+
+        fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+            let mut res = SmallMap::with_capacity(self.0.len());
+            for (key, val) in self.0.into_iter_hashed() {
+                res.insert_hashed(key, val.freeze(freezer));
+            }
+            box WrapperGen(res)
+        }
+
+        unsafe fn walk(&mut self, walker: &Walker<'v>) {
+            self.0.values_mut().for_each(|x| walker.walk(x))
+        }
+
+        fn set_attr(&mut self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
+            self.0.insert(attribute.to_owned(), new_value);
+            Ok(())
+        }
+    }
+
+    #[starlark_module]
+    fn module(builder: &mut GlobalsBuilder) {
+        fn wrapper() -> Wrapper<'v> {
+            Ok(WrapperGen(SmallMap::new()))
+        }
+    }
+
+    let mut a = Assert::new();
+    a.globals_add(module);
+    a.pass(
+        r#"
+a = wrapper()
+b = wrapper()
+a.foo = 100
+a.bar = 93
+b.foo = 7
+assert_eq(a.bar + b.foo, a.foo)
+
+a.foo += 8
+assert_eq(a.foo, 108)
+
+count = []
+def mk_wrapper():
+    count.append(1)
+    res = wrapper()
+    res.x = 9
+    return res
+
+mk_wrapper().x += 5
+assert_eq(len(count), 1)
 "#,
     );
 }
