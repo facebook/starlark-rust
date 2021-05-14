@@ -35,15 +35,15 @@ use derivative::Derivative;
 use gazebo::{cell::ARef, prelude::*};
 use std::sync::Arc;
 
-enum ParameterCompiled {
-    Normal(String, Option<ExprCompiled>),
-    WithDefaultValue(String, Option<ExprCompiled>, ExprCompiled),
+enum ParameterCompiled<T> {
+    Normal(String, Option<T>),
+    WithDefaultValue(String, Option<T>, T),
     NoArgs,
-    Args(String, Option<ExprCompiled>),
-    KwArgs(String, Option<ExprCompiled>),
+    Args(String, Option<T>),
+    KwArgs(String, Option<T>),
 }
 
-impl ParameterCompiled {
+impl<T> ParameterCompiled<T> {
     fn name(&self) -> Option<&str> {
         match self {
             Self::Normal(x, _) => Some(x),
@@ -54,7 +54,7 @@ impl ParameterCompiled {
         }
     }
 
-    fn ty(&self) -> Option<&ExprCompiled> {
+    fn ty(&self) -> Option<&T> {
         match self {
             Self::Normal(_, t) => t.as_ref(),
             Self::WithDefaultValue(_, t, _) => t.as_ref(),
@@ -76,7 +76,7 @@ struct DefInfo {
 }
 
 impl Compiler<'_> {
-    fn parameter(&mut self, x: AstParameter) -> ParameterCompiled {
+    fn parameter(&mut self, x: AstParameter) -> ParameterCompiled<ExprCompiled> {
         match x.node {
             Parameter::Normal(x, t) => ParameterCompiled::Normal(x.node, self.expr_opt(t)),
             Parameter::WithDefaultValue(x, t, v) => {
