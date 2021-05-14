@@ -1499,6 +1499,28 @@ fn test_self_assign() {
 }
 
 #[test]
+fn test_nested_loops() {
+    // Nested loops with returns used to cause problems in some cases, add a test
+    assert::pass(
+        r#"
+def foo(y):
+    for x in [1,2,3,4]:
+        if x == 3:
+            return y
+
+def bar(xs):
+    res = []
+    for x in xs:
+        if type(x) == type(1):
+            fail("Type confusion")
+        res.append(foo(x))
+    assert_eq(xs, res)
+bar(["a","b","c"])
+"#,
+    );
+}
+
+#[test]
 fn test_go() {
     macro_rules! test_case {
         ($name:expr) => {
