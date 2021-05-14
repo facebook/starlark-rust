@@ -21,7 +21,7 @@ use crate::{
     codemap::Span,
     collections::SmallMap,
     eval::{
-        compiler::{thrw, Compiler, EvalCompiled, EvalException},
+        compiler::{thrw, Compiler, EvalException, ExprCompiled},
         fragment::stmt::AssignCompiled,
         runtime::evaluator::Evaluator,
     },
@@ -36,7 +36,7 @@ impl Compiler<'_> {
         x: AstExpr,
         for_: ForClause,
         clauses: Vec<Clause>,
-    ) -> EvalCompiled {
+    ) -> ExprCompiled {
         self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
         let x = self.expr(x);
@@ -50,7 +50,7 @@ impl Compiler<'_> {
         v: AstExpr,
         for_: ForClause,
         clauses: Vec<Clause>,
-    ) -> EvalCompiled {
+    ) -> ExprCompiled {
         self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
         let k = self.expr(k);
@@ -64,7 +64,7 @@ impl Compiler<'_> {
 fn compile_ifs(
     clauses: &mut Vec<Clause>,
     compiler: &mut Compiler,
-) -> (Option<ForClause>, Vec<EvalCompiled>) {
+) -> (Option<ForClause>, Vec<ExprCompiled>) {
     let mut ifs = Vec::new();
     while let Some(x) = clauses.pop() {
         match x {
@@ -126,7 +126,7 @@ fn compile_clauses(
     }
 }
 
-fn eval_list(x: EvalCompiled, clauses: Vec<ClauseCompiled>) -> EvalCompiled {
+fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
     let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, context| {
         let x = x(context)?;
         me.push(x);
@@ -140,7 +140,7 @@ fn eval_list(x: EvalCompiled, clauses: Vec<ClauseCompiled>) -> EvalCompiled {
     }
 }
 
-fn eval_dict(k: EvalCompiled, v: EvalCompiled, clauses: Vec<ClauseCompiled>) -> EvalCompiled {
+fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
     let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, context| {
         let k = k(context)?;
         let v = v(context)?;
@@ -157,9 +157,9 @@ fn eval_dict(k: EvalCompiled, v: EvalCompiled, clauses: Vec<ClauseCompiled>) -> 
 
 struct ClauseCompiled {
     var: AssignCompiled,
-    over: EvalCompiled,
+    over: ExprCompiled,
     over_span: Span,
-    ifs: Vec<EvalCompiled>,
+    ifs: Vec<ExprCompiled>,
 }
 
 // FIXME: These two expressions are identical, but I need higher-kinded

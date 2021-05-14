@@ -21,7 +21,7 @@ use crate::{
     codemap::CodeMap,
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
-        compiler::{scope::ScopeNames, Compiler, EvalCompiled, EvalException},
+        compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled},
         runtime::{evaluator::Evaluator, parameters::ParametersSpec},
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
@@ -36,11 +36,11 @@ use gazebo::{cell::ARef, prelude::*};
 use std::sync::Arc;
 
 enum ParameterCompiled {
-    Normal(String, Option<EvalCompiled>),
-    WithDefaultValue(String, Option<EvalCompiled>, EvalCompiled),
+    Normal(String, Option<ExprCompiled>),
+    WithDefaultValue(String, Option<ExprCompiled>, ExprCompiled),
     NoArgs,
-    Args(String, Option<EvalCompiled>),
-    KwArgs(String, Option<EvalCompiled>),
+    Args(String, Option<ExprCompiled>),
+    KwArgs(String, Option<ExprCompiled>),
 }
 
 impl ParameterCompiled {
@@ -54,7 +54,7 @@ impl ParameterCompiled {
         }
     }
 
-    fn ty(&self) -> Option<&EvalCompiled> {
+    fn ty(&self) -> Option<&ExprCompiled> {
         match self {
             Self::Normal(_, t) => t.as_ref(),
             Self::WithDefaultValue(_, t, _) => t.as_ref(),
@@ -72,7 +72,7 @@ struct DefInfo {
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
     #[derivative(Debug = "ignore")]
-    body: EvalCompiled,
+    body: ExprCompiled,
 }
 
 impl Compiler<'_> {
@@ -94,7 +94,7 @@ impl Compiler<'_> {
         params: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
         suite: AstStmt,
-    ) -> EvalCompiled {
+    ) -> ExprCompiled {
         let file = self.codemap.look_up_span(suite.span);
         let function_name = format!("{}.{}", file.file.name(), name);
 
@@ -111,7 +111,7 @@ impl Compiler<'_> {
         let info = Arc::new(DefInfo { scope_names, body });
 
         fn run<'v>(
-            x: &Option<EvalCompiled>,
+            x: &Option<ExprCompiled>,
             context: &mut Evaluator<'v, '_>,
         ) -> Result<(), EvalException<'v>> {
             if let Some(v) = x {

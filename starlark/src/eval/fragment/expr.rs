@@ -22,7 +22,7 @@ use crate::{
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{
-        compiler::{scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+        compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled},
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
@@ -45,10 +45,10 @@ pub(crate) enum EvalError {
 
 fn eval_compare(
     span: Span,
-    l: EvalCompiled,
-    r: EvalCompiled,
+    l: ExprCompiled,
+    r: ExprCompiled,
     cmp: fn(Ordering) -> bool,
-) -> EvalCompiled {
+) -> ExprCompiled {
     box move |context| {
         Ok(Value::new_bool(cmp(thrw(
             l(context)?.compare(r(context)?),
@@ -60,10 +60,10 @@ fn eval_compare(
 
 fn eval_equals(
     span: Span,
-    l: EvalCompiled,
-    r: EvalCompiled,
+    l: ExprCompiled,
+    r: ExprCompiled,
     cmp: fn(bool) -> bool,
-) -> EvalCompiled {
+) -> ExprCompiled {
     box move |context| {
         Ok(Value::new_bool(cmp(thrw(
             l(context)?.equals(r(context)?),
@@ -75,11 +75,11 @@ fn eval_equals(
 
 fn eval_slice(
     span: Span,
-    collection: EvalCompiled,
-    start: Option<EvalCompiled>,
-    stop: Option<EvalCompiled>,
-    stride: Option<EvalCompiled>,
-) -> EvalCompiled {
+    collection: ExprCompiled,
+    start: Option<ExprCompiled>,
+    stop: Option<ExprCompiled>,
+    stride: Option<ExprCompiled>,
+) -> ExprCompiled {
     box move |context| {
         let collection = collection(context)?;
         let start = match start {
@@ -103,10 +103,10 @@ fn eval_slice(
 }
 
 enum ArgCompiled {
-    Pos(EvalCompiled),
-    Named(String, Hashed<FrozenValue>, EvalCompiled),
-    Args(EvalCompiled),
-    KwArgs(EvalCompiled),
+    Pos(ExprCompiled),
+    Named(String, Hashed<FrozenValue>, ExprCompiled),
+    Args(ExprCompiled),
+    KwArgs(ExprCompiled),
 }
 
 fn eval_call(
@@ -136,7 +136,7 @@ fn eval_call(
 
 fn eval_dot(
     span: Span,
-    e: EvalCompiled,
+    e: ExprCompiled,
     s: String,
 ) -> impl for<'v> Fn(
     &mut Evaluator<'v, '_>,
@@ -255,11 +255,11 @@ impl Expr {
 }
 
 impl Compiler<'_> {
-    pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<EvalCompiled> {
+    pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<ExprCompiled> {
         expr.map(|v| self.expr(*v))
     }
 
-    pub fn expr(&mut self, expr: AstExpr) -> EvalCompiled {
+    pub fn expr(&mut self, expr: AstExpr) -> ExprCompiled {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {

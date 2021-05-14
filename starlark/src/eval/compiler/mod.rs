@@ -28,7 +28,7 @@ use anyhow::anyhow;
 use gazebo::prelude::*;
 use std::fmt::Debug;
 
-pub(crate) type EvalCompiled = Box<
+pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
 >;
 

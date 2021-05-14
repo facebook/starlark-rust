@@ -26,7 +26,7 @@ use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
     eval::{
-        compiler::{scope::Slot, thrw, Compiler, EvalCompiled, EvalException},
+        compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled},
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
@@ -134,9 +134,9 @@ impl Compiler<'_> {
         &mut self,
         span_op: Span,
         lhs: AstExpr,
-        rhs: EvalCompiled,
+        rhs: ExprCompiled,
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
-    ) -> EvalCompiled {
+    ) -> ExprCompiled {
         let span = lhs.span;
         match lhs.node {
             Expr::Dot(e, s) => {
@@ -354,7 +354,7 @@ impl Stmt {
 }
 
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> EvalCompiled {
+    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> ExprCompiled {
         let span = stmt.span;
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
