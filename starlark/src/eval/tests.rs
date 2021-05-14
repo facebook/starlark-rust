@@ -1491,6 +1491,55 @@ g()",
 }
 
 #[test]
+fn test_stack_depth() {
+    #[starlark_module]
+    fn measure_stack(builder: &mut GlobalsBuilder) {
+        fn stack_depth() -> String {
+            // Put a variable on the stack, and get a reference to it
+            // Not entirely documented as to what this does, but hopefully
+            // a mut pointer is harder to elide or optimise away
+            let mut s = 1i32;
+            Ok((&mut s as *mut i32 as usize).to_string())
+        }
+    }
+
+    let mut a = Assert::new();
+    a.globals_add(measure_stack);
+    let s = a.pass(
+        r#"
+for i in range(1001):
+    if i == 1:
+        v1 = stack_depth()
+    if i == 100:
+        v100 = stack_depth()
+    elif i == 1000:
+        v1000 = stack_depth()
+v1 + " " + v100 + " " + v1000
+"#,
+    );
+    let s = s.unpack_str().unwrap();
+    let words = s
+        .split(' ')
+        .map(|x| x.parse::<isize>().unwrap())
+        .collect::<Vec<_>>();
+    let v1 = words[0];
+    let v100 = words[1];
+    let v1000 = words[2];
+
+    // We want to ensure they don't keep increasing, as that would be very bad
+    // so ensure that the increase from v0 to v100 is less than the increase from v100 to v1000
+    // with a 1000 for random noise.
+    assert!(
+        (v1 - v100).abs() + 1000 >= (v1000 - v100).abs(),
+        "Stack change exceeded, FAILED {} + 1000 >= {} (relative to v1), 100={}, 1000={}",
+        (v1 - v100).abs(),
+        (v1000 - v100).abs(),
+        v100 - v1,
+        v1000 - v1
+    );
+}
+
+#[test]
 fn test_self_assign() {
     // In Go Starlark this works.
     // Doesn't seem unreasonable.
