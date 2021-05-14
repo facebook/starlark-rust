@@ -32,6 +32,9 @@ pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
 >;
 
+pub(crate) type StmtCompiled =
+    Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
+
 #[derive(Debug)]
 pub(crate) enum EvalException<'v> {
     // Flow control statement reached, impossible to escape with

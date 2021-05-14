@@ -21,7 +21,7 @@ use crate::{
     codemap::CodeMap,
     environment::{slots::LocalSlots, FrozenModuleValue},
     eval::{
-        compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled},
+        compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled, StmtCompiled},
         runtime::{evaluator::Evaluator, parameters::ParametersSpec},
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
@@ -72,7 +72,7 @@ struct DefInfo {
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
     #[derivative(Debug = "ignore")]
-    body: ExprCompiled,
+    body: StmtCompiled,
 }
 
 impl Compiler<'_> {

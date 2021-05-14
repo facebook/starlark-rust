@@ -26,7 +26,7 @@ use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
     eval::{
-        compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled},
+        compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled, StmtCompiled},
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
@@ -136,7 +136,7 @@ impl Compiler<'_> {
         lhs: AstExpr,
         rhs: ExprCompiled,
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
-    ) -> ExprCompiled {
+    ) -> StmtCompiled {
         let span = lhs.span;
         match lhs.node {
             Expr::Dot(e, s) => {
@@ -156,7 +156,7 @@ impl Compiler<'_> {
                         span,
                         context,
                     )?;
-                    Ok(Value::new_none())
+                    Ok(())
                 }
             }
             Expr::ArrayIndirection(box (e, idx)) => {
@@ -177,7 +177,7 @@ impl Compiler<'_> {
                         span,
                         context,
                     )?;
-                    Ok(Value::new_none())
+                    Ok(())
                 }
             }
             Expr::Identifier(ident) => {
@@ -189,7 +189,7 @@ impl Compiler<'_> {
                         let rhs = rhs(context)?;
                         let v = thrw(op(v, rhs, context), span_op, context)?;
                         context.set_slot_local(slot, v);
-                        Ok(Value::new_none())
+                        Ok(())
                     },
                     Slot::Module(slot) => box move |context| {
                         before_stmt(span, context);
@@ -197,7 +197,7 @@ impl Compiler<'_> {
                         let rhs = rhs(context)?;
                         let v = thrw(op(v, rhs, context), span_op, context)?;
                         context.set_slot_module(slot, v);
-                        Ok(Value::new_none())
+                        Ok(())
                     },
                 }
             }
@@ -354,7 +354,7 @@ impl Stmt {
 }
 
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> ExprCompiled {
+    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> StmtCompiled {
         let span = stmt.span;
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
@@ -366,7 +366,7 @@ impl Compiler<'_> {
                 box move |context| {
                     before_stmt(span, context);
                     lhs(rhs(context)?, context)?;
-                    Ok(Value::new_none())
+                    Ok(())
                 }
             }
             Stmt::For(box (var, over, body)) => {
@@ -388,7 +388,7 @@ impl Compiler<'_> {
                         }
                     }
                     mem::drop(freeze_for_iteration);
-                    Ok(Value::new_none())
+                    Ok(())
                 }
             }
             Stmt::Return(Some(e)) => {
@@ -410,7 +410,7 @@ impl Compiler<'_> {
                     if cond(context)?.to_bool() {
                         then_block(context)
                     } else {
-                        Ok(Value::new_none())
+                        Ok(())
                     }
                 }
             }
@@ -433,14 +433,13 @@ impl Compiler<'_> {
                 let stmts = Stmt::flatten_statements(stmts);
                 let mut stmts = stmts.into_map(|x| self.stmt(x));
                 match stmts.len() {
-                    0 => box move |_| Ok(Value::new_none()),
+                    0 => box move |_| Ok(()),
                     1 => stmts.pop().unwrap(),
                     _ => box move |context| {
-                        let mut last = Value::new_none();
                         for stmt in &stmts {
-                            last = stmt(context)?;
+                            stmt(context)?;
                         }
-                        Ok(last)
+                        Ok(())
                     },
                 }
             }
@@ -448,7 +447,8 @@ impl Compiler<'_> {
                 let e = self.expr(e);
                 box move |context| {
                     before_stmt(span, context);
-                    e(context)
+                    e(context)?;
+                    Ok(())
                 }
             }
             Stmt::Assign(lhs, op, rhs) => {
@@ -459,7 +459,7 @@ impl Compiler<'_> {
                         box move |context| {
                             before_stmt(span, context);
                             lhs(rhs(context)?, context)?;
-                            Ok(Value::new_none())
+                            Ok(())
                         }
                     }
                     AssignOp::Add => self.assign_modify(span, *lhs, rhs, |l, r, context| {
@@ -515,12 +515,12 @@ impl Compiler<'_> {
                             Slot::Module(slot) => context.set_slot_module(*slot, value),
                         }
                     }
-                    Ok(Value::new_none())
+                    Ok(())
                 }
             }
             Stmt::Pass => box move |context| {
                 before_stmt(span, context);
-                Ok(Value::new_none())
+                Ok(())
             },
             Stmt::Break => box move |context| {
                 before_stmt(span, context);
