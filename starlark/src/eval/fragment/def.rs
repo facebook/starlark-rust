@@ -110,16 +110,6 @@ impl Compiler<'_> {
 
         let info = Arc::new(DefInfo { scope_names, body });
 
-        fn run<'v>(
-            x: &Option<ExprCompiled>,
-            context: &mut Evaluator<'v, '_>,
-        ) -> Result<(), EvalException<'v>> {
-            if let Some(v) = x {
-                v(context)?;
-            }
-            Ok(())
-        }
-
         box move |context| {
             let mut parameters =
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
@@ -133,23 +123,13 @@ impl Compiler<'_> {
                 }
 
                 match x {
-                    ParameterCompiled::Normal(n, t) => {
-                        run(t, context)?;
-                        parameters.required(n)
-                    }
-                    ParameterCompiled::WithDefaultValue(n, t, v) => {
-                        run(t, context)?;
+                    ParameterCompiled::Normal(n, _) => parameters.required(n),
+                    ParameterCompiled::WithDefaultValue(n, _, v) => {
                         parameters.defaulted(n, v(context)?);
                     }
                     ParameterCompiled::NoArgs => parameters.no_args(),
-                    ParameterCompiled::Args(_, t) => {
-                        run(t, context)?;
-                        parameters.args()
-                    }
-                    ParameterCompiled::KwArgs(_, t) => {
-                        run(t, context)?;
-                        parameters.kwargs()
-                    }
+                    ParameterCompiled::Args(_, _) => parameters.args(),
+                    ParameterCompiled::KwArgs(_, _) => parameters.kwargs(),
                 }
             }
             let return_type = match &return_type {
