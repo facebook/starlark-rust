@@ -22,8 +22,8 @@ use crate::{
     errors::Diagnostic,
     syntax::{
         ast::{
-            mk_assign, Argument, AssignOp, AstArgument, AstExpr, AstParameter, AstStmt, AstString,
-            Expr, Parameter, Stmt,
+            mk_assign, Argument, AssignOp, AstArgument, AstAssign, AstExpr, AstParameter, AstStmt,
+            AstString, Expr, Parameter, Stmt,
         },
         Dialect,
     },
@@ -232,27 +232,14 @@ impl Stmt {
         Ok(Stmt::Def(name, parameters, return_type, box stmts))
     }
 
-    pub fn check_assign(
-        codemap: &CodeMap,
-        lhs: AstExpr,
-        op: Option<AssignOp>,
-        rhs: AstExpr,
-    ) -> anyhow::Result<Stmt> {
-        fn f(allow_list: bool, x: &AstExpr, codemap: &CodeMap) -> anyhow::Result<()> {
+    pub fn check_assign(codemap: &CodeMap, x: AstExpr) -> anyhow::Result<AstAssign> {
+        fn f(x: &AstExpr, codemap: &CodeMap) -> anyhow::Result<()> {
             match &x.node {
                 Expr::Tuple(xs) | Expr::List(xs) => {
-                    if allow_list {
-                        for x in xs {
-                            f(true, x, codemap)?;
-                        }
-                        Ok(())
-                    } else {
-                        Err(Diagnostic::new(
-                            ValidateError::InvalidModifyLhs,
-                            x.span,
-                            codemap.dupe(),
-                        ))
+                    for x in xs {
+                        f(x, codemap)?;
                     }
+                    Ok(())
                 }
                 Expr::Dot(..) | Expr::ArrayIndirection(..) | Expr::Identifier(..) => Ok(()),
                 _ => Err(Diagnostic::new(
@@ -262,8 +249,30 @@ impl Stmt {
                 )),
             }
         }
-        f(op.is_none(), &lhs, codemap)?;
-        let lhs = mk_assign(lhs);
+        f(&x, codemap)?;
+        Ok(mk_assign(x))
+    }
+
+    pub fn check_assignment(
+        codemap: &CodeMap,
+        lhs: AstExpr,
+        op: Option<AssignOp>,
+        rhs: AstExpr,
+    ) -> anyhow::Result<Stmt> {
+        if op.is_some() {
+            // for augmented assignment, Starlark doesn't allow tuple/list
+            match &lhs.node {
+                Expr::Tuple(_) | Expr::List(_) => {
+                    return Err(Diagnostic::new(
+                        ValidateError::InvalidModifyLhs,
+                        lhs.span,
+                        codemap.dupe(),
+                    ));
+                }
+                _ => {}
+            }
+        }
+        let lhs = Self::check_assign(codemap, lhs)?;
         Ok(match op {
             None => Stmt::Assign(box lhs, box rhs),
             Some(op) => Stmt::AssignModify(box lhs, op, box rhs),
