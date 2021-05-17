@@ -319,7 +319,7 @@ impl Stmt {
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         match &stmt.node {
-            Stmt::Assign(dest, _, _) => {
+            Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
                 Expr::collect_defines_lvalue(dest, result);
             }
             Stmt::For(box (dest, _, body)) => {
@@ -451,17 +451,18 @@ impl Compiler<'_> {
                     Ok(())
                 }
             }
-            Stmt::Assign(lhs, op, rhs) => {
+            Stmt::Assign(lhs, rhs) => {
+                let rhs = self.expr(*rhs);
+                let lhs = self.assign(*lhs);
+                box move |context| {
+                    before_stmt(span, context);
+                    lhs(rhs(context)?, context)?;
+                    Ok(())
+                }
+            }
+            Stmt::AssignModify(lhs, op, rhs) => {
                 let rhs = self.expr(*rhs);
                 match op {
-                    AssignOp::Assign => {
-                        let lhs = self.assign(*lhs);
-                        box move |context| {
-                            before_stmt(span, context);
-                            lhs(rhs(context)?, context)?;
-                            Ok(())
-                        }
-                    }
                     AssignOp::Add => self.assign_modify(span, *lhs, rhs, |l, r, context| {
                         add_assign(l, r, context.heap())
                     }),

@@ -54,7 +54,11 @@ impl Stmt {
                 ret.iter().for_each(|x| f(Either::Right(x)));
             }
             Stmt::Expression(e) => f(Either::Right(e)),
-            Stmt::Assign(lhs, _, rhs) => {
+            Stmt::Assign(lhs, rhs) => {
+                f(Either::Right(lhs));
+                f(Either::Right(rhs));
+            }
+            Stmt::AssignModify(lhs, _, rhs) => {
                 f(Either::Right(lhs));
                 f(Either::Right(rhs));
             }

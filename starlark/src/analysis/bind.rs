@@ -18,7 +18,7 @@
 use crate::{
     codemap::Span,
     syntax::{
-        ast::{AssignOp, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt},
+        ast::{AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt},
         AstModule,
     },
 };
@@ -185,11 +185,13 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             stmt(body, &mut inner);
             res.push(Bind::Scope(Scope::new(inner)));
         }
-        Stmt::Assign(lhs, op, rhs) => {
+        Stmt::Assign(lhs, rhs) => {
             expr(rhs, res);
-            if *op != AssignOp::Assign {
-                expr(lhs, res);
-            }
+            expr_lvalue(lhs, res);
+        }
+        Stmt::AssignModify(lhs, _, rhs) => {
+            expr(rhs, res);
+            expr(lhs, res);
             expr_lvalue(lhs, res);
         }
         Stmt::For(box (dest, inner, body)) => {

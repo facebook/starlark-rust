@@ -29,7 +29,7 @@ impl AstModule {
         // IndexMap since we want the order to match the order they were defined in
         let mut result = IndexMap::new();
         self.statement.visit_stmt(|x| match &**x {
-            Stmt::Assign(dest, _, _) => {
+            Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
                 dest.visit_expr_lvalue(|name| {
                     result.entry(&name.node).or_insert(name.span);
                 });

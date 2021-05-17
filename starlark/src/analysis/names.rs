@@ -213,16 +213,18 @@ fn inappropriate_underscore(
             }
             inappropriate_underscore(codemap, x, false, res)
         }
-        Stmt::Assign(lhs, _, rhs) if !top => match (&***lhs, &***rhs) {
-            (Expr::Identifier(name), Expr::Lambda(..)) if name.starts_with('_') => {
-                res.push(LintT::new(
-                    codemap,
-                    name.span,
-                    NameWarning::UnderscoreFunction(name.node.clone()),
-                ))
+        Stmt::Assign(lhs, rhs) | Stmt::AssignModify(lhs, _, rhs) if !top => {
+            match (&***lhs, &***rhs) {
+                (Expr::Identifier(name), Expr::Lambda(..)) if name.starts_with('_') => {
+                    res.push(LintT::new(
+                        codemap,
+                        name.span,
+                        NameWarning::UnderscoreFunction(name.node.clone()),
+                    ))
+                }
+                _ => {}
             }
-            _ => {}
-        },
+        }
         _ => x.visit_stmt(|x| inappropriate_underscore(codemap, x, top, res)),
     }
 }

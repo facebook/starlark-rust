@@ -19,7 +19,7 @@ use crate::{
     analysis::types::{LintT, LintWarning},
     codemap::{CodeMap, Span, SpanLoc},
     syntax::{
-        ast::{AssignOp, AstExpr, AstStmt, AstString, BinOp, Expr, Stmt},
+        ast::{AstExpr, AstStmt, AstString, BinOp, Expr, Stmt},
         AstModule,
     },
 };
@@ -148,8 +148,8 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
         res: &mut Vec<LintT<Incompatibility>>,
     ) {
         match &**x {
-            Stmt::Assign(lhs, op, rhs) => match (&***lhs, op, &***rhs) {
-                (Expr::Identifier(x), AssignOp::Assign, Expr::Identifier(y))
+            Stmt::Assign(lhs, rhs) => match (&***lhs, &***rhs) {
+                (Expr::Identifier(x), Expr::Identifier(y))
                     if x.node == y.node
                         && defined.get(x.node.as_str()).map_or(false, |x| x.1)
                         && !exported.contains(x.node.as_str()) =>
@@ -160,6 +160,9 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
                 }
                 _ => lhs.visit_expr_lvalue(|x| ident(x, false, codemap, defined, res)),
             },
+            Stmt::AssignModify(lhs, _, _) => {
+                lhs.visit_expr_lvalue(|x| ident(x, false, codemap, defined, res))
+            }
             Stmt::Def(name, _, _, _) => ident(name, false, codemap, defined, res),
             Stmt::Load(_, names, _) => {
                 for (name, _) in names {

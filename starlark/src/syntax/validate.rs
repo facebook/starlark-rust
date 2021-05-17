@@ -235,7 +235,7 @@ impl Stmt {
     pub fn check_assign(
         codemap: &CodeMap,
         lhs: AstExpr,
-        op: AssignOp,
+        op: Option<AssignOp>,
         rhs: AstExpr,
     ) -> anyhow::Result<Stmt> {
         fn f(allow_list: bool, x: &AstExpr, codemap: &CodeMap) -> anyhow::Result<()> {
@@ -262,8 +262,11 @@ impl Stmt {
                 )),
             }
         }
-        f(op == AssignOp::Assign, &lhs, codemap)?;
-        Ok(Stmt::Assign(box lhs, op, box rhs))
+        f(op.is_none(), &lhs, codemap)?;
+        Ok(match op {
+            None => Stmt::Assign(box lhs, box rhs),
+            Some(op) => Stmt::AssignModify(box lhs, op, box rhs),
+        })
     }
 
     /// Validate all statements only occur where they are allowed to.

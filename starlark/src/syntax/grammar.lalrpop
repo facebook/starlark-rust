@@ -142,18 +142,18 @@ SmallStmt: AstStmt = {
     LoadStmt,
 };
 
-AssignOp: AssignOp = {
-    "=" => AssignOp::Assign,
-    "+=" => AssignOp::Add,
-    "-=" => AssignOp::Subtract,
-    "*=" => AssignOp::Multiply,
-    "//=" => AssignOp::FloorDivide,
-    "%=" => AssignOp::Percent,
-    "&=" => AssignOp::BitAnd,
-    "|=" => AssignOp::BitOr,
-    "^=" => AssignOp::BitXor,
-    "<<=" => AssignOp::LeftShift,
-    ">>=" => AssignOp::RightShift,
+AssignOp: Option<AssignOp> = {
+    "=" => None,
+    "+=" => Some(AssignOp::Add),
+    "-=" => Some(AssignOp::Subtract),
+    "*=" => Some(AssignOp::Multiply),
+    "//=" => Some(AssignOp::FloorDivide),
+    "%=" => Some(AssignOp::Percent),
+    "&=" => Some(AssignOp::BitAnd),
+    "|=" => Some(AssignOp::BitOr),
+    "^=" => Some(AssignOp::BitXor),
+    "<<=" => Some(AssignOp::LeftShift),
+    ">>=" => Some(AssignOp::RightShift),
 };
 
 AssignStmt: AstStmt = ASTS<AssignStmt_>;

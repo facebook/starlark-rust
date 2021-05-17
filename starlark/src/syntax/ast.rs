@@ -155,7 +155,6 @@ pub enum BinOp {
 
 #[derive(Debug, Clone, Copy, Dupe, PartialEq, Eq)]
 pub enum AssignOp {
-    Assign,
     Add,         // +=
     Subtract,    // -=
     Multiply,    // *=
@@ -181,7 +180,8 @@ pub enum Stmt {
     Pass,
     Return(Option<AstExpr>),
     Expression(AstExpr),
-    Assign(Box<AstExpr>, AssignOp, Box<AstExpr>),
+    Assign(Box<AstExpr>, Box<AstExpr>),
+    AssignModify(Box<AstExpr>, AssignOp, Box<AstExpr>),
     Statements(Vec<AstStmt>),
     If(AstExpr, Box<AstStmt>),
     IfElse(AstExpr, Box<(AstStmt, AstStmt)>),
@@ -237,7 +237,6 @@ impl Display for BinOp {
 impl Display for AssignOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match *self {
-            AssignOp::Assign => f.write_str(" = "),
             AssignOp::Add => f.write_str(" += "),
             AssignOp::Subtract => f.write_str(" += "),
             AssignOp::Multiply => f.write_str(" *= "),
@@ -433,7 +432,8 @@ impl Stmt {
             Stmt::Return(Some(e)) => writeln!(f, "{}return {}", tab, e.node),
             Stmt::Return(None) => writeln!(f, "{}return", tab),
             Stmt::Expression(e) => writeln!(f, "{}{}", tab, e.node),
-            Stmt::Assign(l, op, r) => writeln!(f, "{}{}{}{}", tab, l.node, op, r.node),
+            Stmt::Assign(l, r) => writeln!(f, "{}{} = {}", tab, l.node, r.node),
+            Stmt::AssignModify(l, op, r) => writeln!(f, "{}{}{}{}", tab, l.node, op, r.node),
             Stmt::Statements(v) => {
                 for s in v {
                     s.node.fmt_with_tab(f, tab.clone())?;
