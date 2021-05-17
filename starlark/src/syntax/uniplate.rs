@@ -187,7 +187,7 @@ impl Expr {
 impl Assign {
     // See through compound statements (tuple, array) - mostly useful for lvalue's
     // where those compound forms are structure rather than lvalue
-    pub fn visit_expr_compound<'a>(x: &'a AstAssign, mut f: impl FnMut(&'a AstExpr)) {
+    pub fn visit_assign_simple<'a>(x: &'a AstAssign, mut f: impl FnMut(&'a AstExpr)) {
         fn recurse<'a>(x: &'a AstExpr, f: &mut impl FnMut(&'a AstExpr)) {
             match &**x {
                 Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(x, f)),
@@ -200,7 +200,7 @@ impl Assign {
     /// Assuming this expression was on the left-hand-side of an assignment,
     /// visit all the names that are bound by this assignment.
     /// Note that assignments like `x[i] = n` don't bind any names.
-    pub fn visit_expr_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstString)) {
+    pub fn visit_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstString)) {
         fn recurse<'a>(x: &'a Expr, f: &mut impl FnMut(&'a AstString)) {
             match x {
                 Expr::Identifier(x) => f(x),

@@ -30,7 +30,7 @@ impl AstModule {
         let mut result = IndexMap::new();
         self.statement.visit_stmt(|x| match &**x {
             Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
-                dest.visit_expr_lvalue(|name| {
+                dest.visit_lvalue(|name| {
                     result.entry(&name.node).or_insert(name.span);
                 });
             }

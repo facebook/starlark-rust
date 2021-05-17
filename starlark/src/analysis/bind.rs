@@ -128,13 +128,13 @@ fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
 }
 
 fn expr_lvalue(x: &AstAssign, res: &mut Vec<Bind>) {
-    Assign::visit_expr_compound(x, |x| match &**x {
+    Assign::visit_assign_simple(x, |x| match &**x {
         // A value doesn't get read first
         Expr::Identifier(_) => {}
         // But things like a[i] do get read first
         _ => expr(x, res),
     });
-    x.visit_expr_lvalue(|x| res.push(Bind::Set(Assigner::Assign, x.clone())))
+    x.visit_lvalue(|x| res.push(Bind::Set(Assigner::Assign, x.clone())))
 }
 
 fn parameters(args: &[AstParameter], res: &mut Vec<Bind>, inner: &mut Vec<Bind>) {

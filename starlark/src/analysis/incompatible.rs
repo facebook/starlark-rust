@@ -158,10 +158,10 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
                     // But only allow one export
                     exported.insert(x.node.as_str());
                 }
-                _ => lhs.visit_expr_lvalue(|x| ident(x, false, codemap, defined, res)),
+                _ => lhs.visit_lvalue(|x| ident(x, false, codemap, defined, res)),
             },
             Stmt::AssignModify(lhs, _, _) => {
-                lhs.visit_expr_lvalue(|x| ident(x, false, codemap, defined, res))
+                lhs.visit_lvalue(|x| ident(x, false, codemap, defined, res))
             }
             Stmt::Def(name, _, _, _) => ident(name, false, codemap, defined, res),
             Stmt::Load(_, names, _) => {

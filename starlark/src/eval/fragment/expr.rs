@@ -248,7 +248,7 @@ impl Expr {
         expr: &'a AstAssign,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
-        expr.node.visit_expr_lvalue(|x| {
+        expr.node.visit_lvalue(|x| {
             result.insert(&x.node, Visibility::Public);
         })
     }
