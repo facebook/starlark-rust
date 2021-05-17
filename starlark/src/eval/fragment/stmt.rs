@@ -315,7 +315,7 @@ impl Stmt {
             Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
                 Expr::collect_defines_lvalue(dest, result);
             }
-            Stmt::For(box (dest, _, body)) => {
+            Stmt::For(dest, box (_, body)) => {
                 Expr::collect_defines_lvalue(dest, result);
                 Stmt::collect_defines(body, result);
             }
@@ -362,7 +362,7 @@ impl Compiler<'_> {
                     Ok(())
                 }
             }
-            Stmt::For(box (var, over, body)) => {
+            Stmt::For(var, box (over, body)) => {
                 let over_span = over.span;
                 let var = self.assign(var);
                 let over = self.expr(over);
@@ -446,7 +446,7 @@ impl Compiler<'_> {
             }
             Stmt::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs);
-                let lhs = self.assign(*lhs);
+                let lhs = self.assign(lhs);
                 box move |context| {
                     before_stmt(span, context);
                     lhs(rhs(context)?, context)?;
@@ -456,29 +456,29 @@ impl Compiler<'_> {
             Stmt::AssignModify(lhs, op, rhs) => {
                 let rhs = self.expr(*rhs);
                 match op {
-                    AssignOp::Add => self.assign_modify(span, *lhs, rhs, |l, r, context| {
+                    AssignOp::Add => self.assign_modify(span, lhs, rhs, |l, r, context| {
                         add_assign(l, r, context.heap())
                     }),
-                    AssignOp::Subtract => self
-                        .assign_modify(span, *lhs, rhs, |l, r, context| l.sub(r, context.heap())),
-                    AssignOp::Multiply => self
-                        .assign_modify(span, *lhs, rhs, |l, r, context| l.mul(r, context.heap())),
-                    AssignOp::FloorDivide => {
-                        self.assign_modify(span, *lhs, rhs, |l, r, context| {
-                            l.floor_div(r, context.heap())
-                        })
+                    AssignOp::Subtract => {
+                        self.assign_modify(span, lhs, rhs, |l, r, context| l.sub(r, context.heap()))
                     }
-                    AssignOp::Percent => self.assign_modify(span, *lhs, rhs, |l, r, context| {
+                    AssignOp::Multiply => {
+                        self.assign_modify(span, lhs, rhs, |l, r, context| l.mul(r, context.heap()))
+                    }
+                    AssignOp::FloorDivide => self.assign_modify(span, lhs, rhs, |l, r, context| {
+                        l.floor_div(r, context.heap())
+                    }),
+                    AssignOp::Percent => self.assign_modify(span, lhs, rhs, |l, r, context| {
                         l.percent(r, context.heap())
                     }),
-                    AssignOp::BitAnd => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_and(r)),
-                    AssignOp::BitOr => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_or(r)),
-                    AssignOp::BitXor => self.assign_modify(span, *lhs, rhs, |l, r, _| l.bit_xor(r)),
+                    AssignOp::BitAnd => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_and(r)),
+                    AssignOp::BitOr => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_or(r)),
+                    AssignOp::BitXor => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_xor(r)),
                     AssignOp::LeftShift => {
-                        self.assign_modify(span, *lhs, rhs, |l, r, _| l.left_shift(r))
+                        self.assign_modify(span, lhs, rhs, |l, r, _| l.left_shift(r))
                     }
                     AssignOp::RightShift => {
-                        self.assign_modify(span, *lhs, rhs, |l, r, _| l.right_shift(r))
+                        self.assign_modify(span, lhs, rhs, |l, r, _| l.right_shift(r))
                     }
                 }
             }

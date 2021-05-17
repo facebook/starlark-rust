@@ -276,8 +276,8 @@ impl Stmt {
         }
         let lhs = Self::check_assign(codemap, lhs)?;
         Ok(match op {
-            None => Stmt::Assign(box lhs, box rhs),
-            Some(op) => Stmt::AssignModify(box lhs, op, box rhs),
+            None => Stmt::Assign(lhs, box rhs),
+            Some(op) => Stmt::AssignModify(lhs, op, box rhs),
         })
     }
 
@@ -299,7 +299,7 @@ impl Stmt {
 
             match &stmt.node {
                 Stmt::Def(_, _, _, body) => f(codemap, dialect, body, false, false, true),
-                Stmt::For(box (_, _, body)) => {
+                Stmt::For(_, box (_, body)) => {
                     if top_level && !dialect.enable_top_level_stmt {
                         err(ValidateError::NoTopLevelFor)
                     } else {

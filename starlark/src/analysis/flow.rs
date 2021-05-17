@@ -210,7 +210,7 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
 
     fn f(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
         match &**x {
-            Stmt::For(box (_, _, body)) => check(true, codemap, body, res),
+            Stmt::For(_, box (_, body)) => check(true, codemap, body, res),
             Stmt::Def(_, _, _, body) => check(false, codemap, body, res),
             _ => {}
         }

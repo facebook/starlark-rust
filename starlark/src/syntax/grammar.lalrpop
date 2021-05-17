@@ -115,7 +115,7 @@ ElseStmt: AstStmt = {
 
 ForStmt: AstStmt = ASTS<ForStmt_>;
 ForStmt_: Stmt = "for" <e:ExprList> "in" <c:Test> ":" <s:Suite>
-    =>? Ok(Stmt::For(box (Stmt::check_assign(codemap, e)?, c, s)));
+    =>? Ok(Stmt::For(Stmt::check_assign(codemap, e)?, box (c, s)));
 
 SimpleStmt<S>: AstStmt =
     <l:@L> <e:S> <v:(";" <S>)*> ";"? <r:@R> "\n" => {

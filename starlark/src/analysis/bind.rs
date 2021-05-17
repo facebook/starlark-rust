@@ -196,7 +196,7 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             expr(rhs, res);
             expr_lvalue(lhs, res);
         }
-        Stmt::For(box (dest, inner, body)) => {
+        Stmt::For(dest, box (inner, body)) => {
             expr(inner, res);
             expr_lvalue(dest, res);
             flow(res);

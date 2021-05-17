@@ -47,7 +47,7 @@ impl Stmt {
                 ret_type.iter().for_each(|x| f(Visit::Expr(x)));
                 f(Visit::Stmt(body));
             }
-            Stmt::For(box (lhs, over, body)) => {
+            Stmt::For(lhs, box (over, body)) => {
                 lhs.visit_expr(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(over));
                 f(Visit::Stmt(body));

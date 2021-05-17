@@ -193,12 +193,12 @@ pub enum Stmt {
     Pass,
     Return(Option<AstExpr>),
     Expression(AstExpr),
-    Assign(Box<AstAssign>, Box<AstExpr>),
-    AssignModify(Box<AstAssign>, AssignOp, Box<AstExpr>),
+    Assign(AstAssign, Box<AstExpr>),
+    AssignModify(AstAssign, AssignOp, Box<AstExpr>),
     Statements(Vec<AstStmt>),
     If(AstExpr, Box<AstStmt>),
     IfElse(AstExpr, Box<(AstStmt, AstStmt)>),
-    For(Box<(AstAssign, AstExpr, AstStmt)>),
+    For(AstAssign, Box<(AstExpr, AstStmt)>),
     Def(
         AstString,
         Vec<AstParameter>,
@@ -478,7 +478,7 @@ impl Stmt {
                 writeln!(f, "{}else:", tab)?;
                 suite2.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::For(box (bind, coll, suite)) => {
+            Stmt::For(bind, box (coll, suite)) => {
                 writeln!(f, "{}for {} in {}:", tab, bind.node, coll.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
