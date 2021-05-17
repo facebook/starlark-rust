@@ -19,7 +19,7 @@ use crate::{
     codemap::Span,
     syntax::{
         ast::{
-            unassign, Assign, AstAssign, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr,
+            unassign, AstAssign, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr,
             ForClause, Stmt,
         },
         AstModule,
@@ -128,12 +128,7 @@ fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
 }
 
 fn expr_lvalue(x: &AstAssign, res: &mut Vec<Bind>) {
-    Assign::visit_assign_simple(x, |x| match &**x {
-        // A value doesn't get read first
-        Expr::Identifier(_) => {}
-        // But things like a[i] do get read first
-        _ => expr(x, res),
-    });
+    x.visit_expr(|x| expr(x, res));
     x.visit_lvalue(|x| res.push(Bind::Set(Assigner::Assign, x.clone())))
 }
 

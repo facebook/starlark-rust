@@ -19,8 +19,7 @@
 #![allow(clippy::many_single_char_names)]
 
 use crate::syntax::ast::{
-    unassign, Assign, AstAssign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter,
-    Stmt,
+    Assign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter, Stmt,
 };
 
 enum Visit<'a> {
@@ -200,18 +199,6 @@ impl Assign {
             }
         }
         recurse(&self.0, &mut f)
-    }
-
-    // See through compound statements (tuple, array) - mostly useful for lvalue's
-    // where those compound forms are structure rather than lvalue
-    pub fn visit_assign_simple<'a>(x: &'a AstAssign, mut f: impl FnMut(&'a AstExpr)) {
-        fn recurse<'a>(x: &'a AstExpr, f: &mut impl FnMut(&'a AstExpr)) {
-            match &**x {
-                Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(x, f)),
-                _ => f(x),
-            }
-        }
-        recurse(unassign(x), &mut f)
     }
 
     /// Assuming this expression was on the left-hand-side of an assignment,
