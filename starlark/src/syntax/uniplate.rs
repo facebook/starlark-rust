@@ -204,7 +204,7 @@ impl Assign {
                 _ => {}
             }
         }
-        recurse(self, &mut f)
+        recurse(&self.0, &mut f)
     }
 }
 

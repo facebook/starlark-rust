@@ -24,7 +24,6 @@ use static_assertions::assert_eq_size;
 use std::{
     fmt,
     fmt::{Display, Formatter},
-    ops::Deref,
 };
 
 // Boxed types used for storing information from the parsing will be used
@@ -133,14 +132,6 @@ pub(crate) fn mk_assign(x: AstExpr) -> AstAssign {
 pub(crate) fn unassign(x: &AstAssign) -> &AstExpr {
     // FIXME(ndmitchell): This is only temporary until AstAssign becomes its own type
     unsafe { cast::ptr(x) }
-}
-
-impl Deref for Assign {
-    type Target = Expr;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
 }
 
 #[derive(Debug)]
