@@ -22,48 +22,52 @@ use crate::syntax::ast::{
     unassign, Assign, AstAssign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter,
     Stmt,
 };
-use either::Either;
+
+enum Visit<'a> {
+    Stmt(&'a AstStmt),
+    Expr(&'a AstExpr),
+}
 
 impl Stmt {
-    pub fn visit_children<'a>(&'a self, mut f: impl FnMut(Either<&'a AstStmt, &'a AstExpr>)) {
+    fn visit_children<'a>(&'a self, mut f: impl FnMut(Visit<'a>)) {
         match self {
-            Stmt::Statements(xs) => xs.iter().for_each(|x| f(Either::Left(x))),
+            Stmt::Statements(xs) => xs.iter().for_each(|x| f(Visit::Stmt(x))),
             Stmt::If(condition, box then_block) => {
-                f(Either::Right(condition));
-                f(Either::Left(then_block));
+                f(Visit::Expr(condition));
+                f(Visit::Stmt(then_block));
             }
             Stmt::IfElse(condition, box (then_block, else_block)) => {
-                f(Either::Right(condition));
-                f(Either::Left(then_block));
-                f(Either::Left(else_block));
+                f(Visit::Expr(condition));
+                f(Visit::Stmt(then_block));
+                f(Visit::Stmt(else_block));
             }
             Stmt::Def(_, params, ret_type, body) => {
                 params
                     .iter()
-                    .for_each(|x| x.visit_expr(|x| f(Either::Right(x))));
-                ret_type.iter().for_each(|x| f(Either::Right(x)));
-                f(Either::Left(body));
+                    .for_each(|x| x.visit_expr(|x| f(Visit::Expr(x))));
+                ret_type.iter().for_each(|x| f(Visit::Expr(x)));
+                f(Visit::Stmt(body));
             }
             Stmt::For(box (lhs, over, body)) => {
-                f(Either::Right(unassign(lhs)));
-                f(Either::Right(over));
-                f(Either::Left(body));
+                f(Visit::Expr(unassign(lhs)));
+                f(Visit::Expr(over));
+                f(Visit::Stmt(body));
             }
             // Nothing else contains nested statements
             Stmt::Break => {}
             Stmt::Continue => {}
             Stmt::Pass => {}
             Stmt::Return(ret) => {
-                ret.iter().for_each(|x| f(Either::Right(x)));
+                ret.iter().for_each(|x| f(Visit::Expr(x)));
             }
-            Stmt::Expression(e) => f(Either::Right(e)),
+            Stmt::Expression(e) => f(Visit::Expr(e)),
             Stmt::Assign(lhs, rhs) => {
-                f(Either::Right(unassign(lhs)));
-                f(Either::Right(rhs));
+                f(Visit::Expr(unassign(lhs)));
+                f(Visit::Expr(rhs));
             }
             Stmt::AssignModify(lhs, _, rhs) => {
-                f(Either::Right(unassign(lhs)));
-                f(Either::Right(rhs));
+                f(Visit::Expr(unassign(lhs)));
+                f(Visit::Expr(rhs));
             }
             Stmt::Load(_, _, _) => {}
         }
@@ -71,18 +75,18 @@ impl Stmt {
 
     pub fn visit_stmt<'a>(&'a self, mut f: impl FnMut(&'a AstStmt)) {
         self.visit_children(|x| match x {
-            Either::Left(x) => f(x),
-            Either::Right(_) => {} // Nothing to do
+            Visit::Stmt(x) => f(x),
+            Visit::Expr(_) => {} // Nothing to do
         })
     }
 
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
         // Note the &mut impl on f, it's subtle, see
         // https://stackoverflow.com/questions/54613966/error-reached-the-recursion-limit-while-instantiating-funcclosure
-        fn pick<'a>(x: Either<&'a AstStmt, &'a AstExpr>, f: &mut impl FnMut(&'a AstExpr)) {
+        fn pick<'a>(x: Visit<'a>, f: &mut impl FnMut(&'a AstExpr)) {
             match x {
-                Either::Left(x) => x.visit_children(|x| pick(x, f)),
-                Either::Right(x) => f(x),
+                Visit::Stmt(x) => x.visit_children(|x| pick(x, f)),
+                Visit::Expr(x) => f(x),
             }
         }
         self.visit_children(|x| pick(x, &mut f))
