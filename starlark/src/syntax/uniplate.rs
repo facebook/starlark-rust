@@ -19,7 +19,8 @@
 #![allow(clippy::many_single_char_names)]
 
 use crate::syntax::ast::{
-    unassign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter, Stmt,
+    unassign, Assign, AstAssign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter,
+    Stmt,
 };
 use either::Either;
 
@@ -177,17 +178,19 @@ impl Expr {
             }
         }
     }
+}
 
+impl Assign {
     // See through compound statements (tuple, array) - mostly useful for lvalue's
     // where those compound forms are structure rather than lvalue
-    pub fn visit_expr_compound<'a>(x: &'a AstExpr, mut f: impl FnMut(&'a AstExpr)) {
+    pub fn visit_expr_compound<'a>(x: &'a AstAssign, mut f: impl FnMut(&'a AstExpr)) {
         fn recurse<'a>(x: &'a AstExpr, f: &mut impl FnMut(&'a AstExpr)) {
             match &**x {
                 Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(x, f)),
                 _ => f(x),
             }
         }
-        recurse(x, &mut f)
+        recurse(unassign(x), &mut f)
     }
 
     /// Assuming this expression was on the left-hand-side of an assignment,
