@@ -219,7 +219,7 @@ impl Expr {
     ) -> Option<String> {
         let mut results = Vec::new();
         loop {
-            if op != BinOp::Addition {
+            if op != BinOp::Add {
                 return None;
             }
             // a + b + c  associates as  (a + b) + c
@@ -519,10 +519,10 @@ impl Compiler<'_> {
                                 context,
                             )
                         },
-                        BinOp::Subtraction => box move |context| {
+                        BinOp::Subtract => box move |context| {
                             thrw(l(context)?.sub(r(context)?, context.heap()), span, context)
                         },
-                        BinOp::Addition => box move |context| {
+                        BinOp::Add => box move |context| {
                             // Addition of string is super common and pretty cheap, so have a special case for it.
                             let l = l(context)?;
                             let r = r(context)?;
@@ -543,7 +543,7 @@ impl Compiler<'_> {
                             // Written using Value::add so that Rust Analyzer doesn't think it is an error.
                             thrw(Value::add(l, r, context.heap()), span, context)
                         },
-                        BinOp::Multiplication => box move |context| {
+                        BinOp::Multiply => box move |context| {
                             thrw(l(context)?.mul(r(context)?, context.heap()), span, context)
                         },
                         BinOp::Percent => box move |context| {
@@ -553,7 +553,7 @@ impl Compiler<'_> {
                                 context,
                             )
                         },
-                        BinOp::FloorDivision => box move |context| {
+                        BinOp::FloorDivide => box move |context| {
                             thrw(
                                 l(context)?.floor_div(r(context)?, context.heap()),
                                 span,

@@ -343,20 +343,20 @@ ShiftExpr: AstExpr = {
 
 ArithExpr: AstExpr = {
     <l:@L> <e1:ArithExpr> "+" <e2:ProductExpr> <r:@R>
-        => Expr::Op(box e1, BinOp::Addition, box e2).ast(file_span, l, r),
+        => Expr::Op(box e1, BinOp::Add, box e2).ast(file_span, l, r),
     <l:@L> <e1:ArithExpr> "-" <e2:ProductExpr> <r:@R>
-        => Expr::Op(box e1, BinOp::Subtraction, box e2).ast(file_span, l, r),
+        => Expr::Op(box e1, BinOp::Subtract, box e2).ast(file_span, l, r),
     ProductExpr,
 };
 
 ProductExpr: AstExpr = {
     <l:@L> <e1:ProductExpr> "*" <e2:FactorExpr> <r:@R>
-        => Expr::Op(box e1, BinOp::Multiplication, box e2)
+        => Expr::Op(box e1, BinOp::Multiply, box e2)
             .ast(file_span, l, r),
     <l:@L> <e1:ProductExpr> "%" <e2:FactorExpr> <r:@R>
         => Expr::Op(box e1, BinOp::Percent, box e2).ast(file_span, l, r),
     <l:@L> <e1:ProductExpr> "//" <e2:FactorExpr> <r:@R>
-        => Expr::Op(box e1, BinOp::FloorDivision, box e2).ast(file_span, l, r),
+        => Expr::Op(box e1, BinOp::FloorDivide, box e2).ast(file_span, l, r),
     FactorExpr
 };
 
