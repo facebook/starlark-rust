@@ -40,6 +40,7 @@ pub type AstStmt = Spanned<Stmt>;
 // but we equally don't want to regress without noticing.
 assert_eq_size!(AstStmt, [usize; 11]);
 assert_eq_size!(AstExpr, [usize; 7]);
+assert_eq_size!(AstAssign, [usize; 7]);
 
 /// A representation of a Starlark module abstract syntax tree.
 ///
