@@ -18,7 +18,9 @@
 // These are more readable for formulaic code like Uniplate
 #![allow(clippy::many_single_char_names)]
 
-use crate::syntax::ast::{AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter, Stmt};
+use crate::syntax::ast::{
+    unassign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter, Stmt,
+};
 use either::Either;
 
 impl Stmt {
@@ -42,7 +44,7 @@ impl Stmt {
                 f(Either::Left(body));
             }
             Stmt::For(box (lhs, over, body)) => {
-                f(Either::Right(lhs));
+                f(Either::Right(unassign(lhs)));
                 f(Either::Right(over));
                 f(Either::Left(body));
             }
@@ -55,11 +57,11 @@ impl Stmt {
             }
             Stmt::Expression(e) => f(Either::Right(e)),
             Stmt::Assign(lhs, rhs) => {
-                f(Either::Right(lhs));
+                f(Either::Right(unassign(lhs)));
                 f(Either::Right(rhs));
             }
             Stmt::AssignModify(lhs, _, rhs) => {
-                f(Either::Right(lhs));
+                f(Either::Right(unassign(lhs)));
                 f(Either::Right(rhs));
             }
             Stmt::Load(_, _, _) => {}
@@ -205,7 +207,7 @@ impl Expr {
 
 impl ForClause {
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
-        f(&self.var);
+        f(unassign(&self.var));
         f(&self.over);
     }
 }

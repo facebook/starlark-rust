@@ -25,7 +25,7 @@ use crate::{
         compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled},
         runtime::evaluator::Evaluator,
     },
-    syntax::ast::{Argument, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
+    syntax::ast::{Argument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
         dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList,
         tuple::FrozenTuple, FrozenHeap, FrozenValue, Value, *,
@@ -245,7 +245,7 @@ impl Expr {
     // Collect variables defined in an expression on the LHS of an assignment (or
     // for variable etc)
     pub(crate) fn collect_defines_lvalue<'a>(
-        expr: &'a AstExpr,
+        expr: &'a AstAssign,
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         expr.node.visit_expr_lvalue(|x| {

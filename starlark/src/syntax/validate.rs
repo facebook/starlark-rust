@@ -22,8 +22,8 @@ use crate::{
     errors::Diagnostic,
     syntax::{
         ast::{
-            Argument, AssignOp, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr,
-            Parameter, Stmt,
+            mk_assign, Argument, AssignOp, AstArgument, AstExpr, AstParameter, AstStmt, AstString,
+            Expr, Parameter, Stmt,
         },
         Dialect,
     },
@@ -263,6 +263,7 @@ impl Stmt {
             }
         }
         f(op.is_none(), &lhs, codemap)?;
+        let lhs = mk_assign(lhs);
         Ok(match op {
             None => Stmt::Assign(box lhs, box rhs),
             Some(op) => Stmt::AssignModify(box lhs, op, box rhs),

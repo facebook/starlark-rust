@@ -115,7 +115,7 @@ ElseStmt: AstStmt = {
 
 ForStmt: AstStmt = ASTS<ForStmt_>;
 ForStmt_: Stmt = "for" <e:ExprList> "in" <c:Test> ":" <s:Suite>
-    => Stmt::For(box (e, c, s));
+    => Stmt::For(box (mk_assign(e), c, s));
 
 SimpleStmt<S>: AstStmt =
     <l:@L> <e:S> <v:(";" <S>)*> ";"? <r:@R> "\n" => {
@@ -258,7 +258,7 @@ Clause: Clause = {
     "if" <OrTest> => Clause::If(<>),
 };
 ForClause: ForClause = "for" <var:ExprList> "in" <over:OrTest>
-    => ForClause {var, over};
+    => ForClause {var: mk_assign(var), over};
 
 // Base expression. Priorities are taken from Python 3 grammar.
 Test: AstExpr = {

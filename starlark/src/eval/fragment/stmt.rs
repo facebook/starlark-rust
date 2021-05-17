@@ -29,7 +29,7 @@ use crate::{
         compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled, StmtCompiled},
         runtime::evaluator::Evaluator,
     },
-    syntax::ast::{AssignOp, AstExpr, AstStmt, Expr, Stmt, Visibility},
+    syntax::ast::{mk_assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
     values::{
         fast_string,
         list::{FrozenList, List},
@@ -83,9 +83,9 @@ fn eval_assign_list<'v>(
 }
 
 impl Compiler<'_> {
-    pub fn assign(&mut self, expr: AstExpr) -> AssignCompiled {
+    pub fn assign(&mut self, expr: AstAssign) -> AssignCompiled {
         let span = expr.span;
-        match expr.node {
+        match expr.node.0 {
             Expr::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
@@ -109,7 +109,7 @@ impl Compiler<'_> {
                 }
             }
             Expr::Tuple(v) | Expr::List(v) => {
-                let v = v.into_map(|x| self.assign(x));
+                let v = v.into_map(|x| self.assign(mk_assign(x)));
                 box move |value, context| eval_assign_list(&v, span, value, context)
             }
             Expr::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
@@ -133,12 +133,12 @@ impl Compiler<'_> {
     fn assign_modify(
         &mut self,
         span_op: Span,
-        lhs: AstExpr,
+        lhs: AstAssign,
         rhs: ExprCompiled,
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
     ) -> StmtCompiled {
         let span = lhs.span;
-        match lhs.node {
+        match lhs.node.0 {
             Expr::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
@@ -359,10 +359,10 @@ impl Compiler<'_> {
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
                 let rhs = self.function(&name.node, params, return_type, *suite);
-                let lhs = self.assign(Spanned {
+                let lhs = self.assign(mk_assign(Spanned {
                     span: name.span,
                     node: Expr::Identifier(name),
-                });
+                }));
                 box move |context| {
                     before_stmt(span, context);
                     lhs(rhs(context)?, context)?;

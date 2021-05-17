@@ -148,7 +148,7 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
         res: &mut Vec<LintT<Incompatibility>>,
     ) {
         match &**x {
-            Stmt::Assign(lhs, rhs) => match (&***lhs, &***rhs) {
+            Stmt::Assign(lhs, rhs) => match (&****lhs, &***rhs) {
                 (Expr::Identifier(x), Expr::Identifier(y))
                     if x.node == y.node
                         && defined.get(x.node.as_str()).map_or(false, |x| x.1)

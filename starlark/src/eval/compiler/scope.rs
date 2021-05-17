@@ -20,7 +20,7 @@ use crate::{
         names::MutableNames,
         slots::{LocalSlotId, ModuleSlotId},
     },
-    syntax::ast::{AstExpr, AstStmt, Expr, Stmt, Visibility},
+    syntax::ast::{AstAssign, AstStmt, Expr, Stmt, Visibility},
 };
 use std::collections::HashMap;
 
@@ -168,7 +168,7 @@ impl<'a> Scope<'a> {
         self.unscopes.push(Unscope::default());
     }
 
-    pub fn add_compr(&mut self, var: &AstExpr) {
+    pub fn add_compr(&mut self, var: &AstAssign) {
         let mut locals = HashMap::new();
         Expr::collect_defines_lvalue(var, &mut locals);
         for k in locals.into_iter() {

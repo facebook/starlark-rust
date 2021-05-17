@@ -19,16 +19,18 @@
 
 use crate::codemap::{CodeMap, Span, Spanned};
 use derivative::Derivative;
-use gazebo::prelude::*;
+use gazebo::{cast, prelude::*};
 use static_assertions::assert_eq_size;
 use std::{
     fmt,
     fmt::{Display, Formatter},
+    ops::Deref,
 };
 
 // Boxed types used for storing information from the parsing will be used
 // especially for the location of the AST item
 pub type AstExpr = Spanned<Expr>;
+pub type AstAssign = Spanned<Assign>;
 pub type AstArgument = Spanned<Argument>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = Spanned<Parameter>;
@@ -118,8 +120,32 @@ pub enum Expr {
 }
 
 #[derive(Debug)]
+#[repr(transparent)]
+pub struct Assign(pub Expr);
+
+pub(crate) fn mk_assign(x: AstExpr) -> AstAssign {
+    Spanned {
+        span: x.span,
+        node: Assign(x.node),
+    }
+}
+
+pub(crate) fn unassign(x: &AstAssign) -> &AstExpr {
+    // FIXME(ndmitchell): This is only temporary until AstAssign becomes its own type
+    unsafe { cast::ptr(x) }
+}
+
+impl Deref for Assign {
+    type Target = Expr;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
 pub struct ForClause {
-    pub var: AstExpr,
+    pub var: AstAssign,
     pub over: AstExpr,
 }
 
@@ -180,12 +206,12 @@ pub enum Stmt {
     Pass,
     Return(Option<AstExpr>),
     Expression(AstExpr),
-    Assign(Box<AstExpr>, Box<AstExpr>),
-    AssignModify(Box<AstExpr>, AssignOp, Box<AstExpr>),
+    Assign(Box<AstAssign>, Box<AstExpr>),
+    AssignModify(Box<AstAssign>, AssignOp, Box<AstExpr>),
     Statements(Vec<AstStmt>),
     If(AstExpr, Box<AstStmt>),
     IfElse(AstExpr, Box<(AstStmt, AstStmt)>),
-    For(Box<(AstExpr, AstExpr, AstStmt)>),
+    For(Box<(AstAssign, AstExpr, AstStmt)>),
     Def(
         AstString,
         Vec<AstParameter>,
@@ -374,6 +400,12 @@ impl Display for Expr {
             }
             Expr::Literal(x) => x.fmt(f),
         }
+    }
+}
+
+impl Display for Assign {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
