@@ -62,7 +62,7 @@ fn assert_equals<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
 
 /// How often we garbage collection _should_ be transparent to the tests,
 /// so we run each test in three configurations.
-#[derive(Clone, Copy, Dupe)]
+#[derive(Clone, Copy, Dupe, Debug)]
 enum GcStrategy {
     Never,  // Disable GC
     Auto,   // Use the automatic heuristics (in practice, this does almost no GC)
