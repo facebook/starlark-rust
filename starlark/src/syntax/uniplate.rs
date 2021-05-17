@@ -49,7 +49,7 @@ impl Stmt {
                 f(Visit::Stmt(body));
             }
             Stmt::For(box (lhs, over, body)) => {
-                f(Visit::Expr(unassign(lhs)));
+                lhs.visit_expr(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(over));
                 f(Visit::Stmt(body));
             }
@@ -62,11 +62,11 @@ impl Stmt {
             }
             Stmt::Expression(e) => f(Visit::Expr(e)),
             Stmt::Assign(lhs, rhs) => {
-                f(Visit::Expr(unassign(lhs)));
+                lhs.visit_expr(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(rhs));
             }
             Stmt::AssignModify(lhs, _, rhs) => {
-                f(Visit::Expr(unassign(lhs)));
+                lhs.visit_expr(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(rhs));
             }
             Stmt::Load(_, _, _) => {}
@@ -185,6 +185,23 @@ impl Expr {
 }
 
 impl Assign {
+    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
+        fn recurse<'a>(x: &'a Expr, f: &mut impl FnMut(&'a AstExpr)) {
+            match &*x {
+                Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(&*x, f)),
+                Expr::Dot(a, _) => f(a),
+                Expr::ArrayIndirection(box (a, b)) => {
+                    f(a);
+                    f(b);
+                }
+                Expr::Identifier(_) => {}
+                // These shouldn't occur in assignments
+                _ => {}
+            }
+        }
+        recurse(&self.0, &mut f)
+    }
+
     // See through compound statements (tuple, array) - mostly useful for lvalue's
     // where those compound forms are structure rather than lvalue
     pub fn visit_assign_simple<'a>(x: &'a AstAssign, mut f: impl FnMut(&'a AstExpr)) {
@@ -214,7 +231,7 @@ impl Assign {
 
 impl ForClause {
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
-        f(unassign(&self.var));
+        self.var.visit_expr(&mut f);
         f(&self.over);
     }
 }
