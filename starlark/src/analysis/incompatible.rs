@@ -79,7 +79,7 @@ fn match_bad_type_equality(
     // If we see type(x) == y (or negated), where y is in our types table, suggest a replacement
     match &**x {
         Expr::Op(lhs, op, rhs)
-            if (*op == BinOp::EqualsTo || *op == BinOp::Different) && is_type_call(lhs) =>
+            if (*op == BinOp::Equal || *op == BinOp::NotEqual) && is_type_call(lhs) =>
         {
             if let Some(replacement) = lookup_type(rhs, types) {
                 res.push(LintT::new(

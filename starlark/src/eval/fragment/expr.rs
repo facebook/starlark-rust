@@ -499,10 +499,10 @@ impl Compiler<'_> {
                             let l = l(context)?;
                             Ok(if !l.to_bool() { l } else { r(context)? })
                         },
-                        BinOp::EqualsTo => eval_equals(span, l, r, |x| x),
-                        BinOp::Different => eval_equals(span, l, r, |x| !x),
-                        BinOp::LessThan => eval_compare(span, l, r, |x| x == Ordering::Less),
-                        BinOp::GreaterThan => eval_compare(span, l, r, |x| x == Ordering::Greater),
+                        BinOp::Equal => eval_equals(span, l, r, |x| x),
+                        BinOp::NotEqual => eval_equals(span, l, r, |x| !x),
+                        BinOp::Less => eval_compare(span, l, r, |x| x == Ordering::Less),
+                        BinOp::Greater => eval_compare(span, l, r, |x| x == Ordering::Greater),
                         BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
                         BinOp::GreaterOrEqual => eval_compare(span, l, r, |x| x != Ordering::Less),
                         BinOp::In => box move |context| {
