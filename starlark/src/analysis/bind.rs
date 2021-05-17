@@ -19,8 +19,7 @@ use crate::{
     codemap::Span,
     syntax::{
         ast::{
-            unassign, AstAssign, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr,
-            ForClause, Stmt,
+            AstAssign, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt,
         },
         AstModule,
     },
@@ -188,8 +187,13 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             expr_lvalue(lhs, res);
         }
         Stmt::AssignModify(lhs, _, rhs) => {
+            // For a += b, we:
+            // 1. Evaluate all variables and expressions in a.
+            // 2. Evaluate b.
+            // 3. Assign to all variables in a.
+            lhs.visit_expr(|x| expr(x, res));
+            lhs.visit_lvalue(|x| res.push(Bind::Get(x.clone())));
             expr(rhs, res);
-            expr(unassign(lhs), res);
             expr_lvalue(lhs, res);
         }
         Stmt::For(box (dest, inner, body)) => {

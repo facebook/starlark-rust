@@ -185,34 +185,32 @@ impl Expr {
 
 impl Assign {
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExpr)) {
-        fn recurse<'a>(x: &'a Expr, f: &mut impl FnMut(&'a AstExpr)) {
-            match &*x {
-                Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(&*x, f)),
-                Expr::Dot(a, _) => f(a),
-                Expr::ArrayIndirection(box (a, b)) => {
+        fn recurse<'a>(x: &'a Assign, f: &mut impl FnMut(&'a AstExpr)) {
+            match x {
+                Assign::Tuple(xs) => xs.iter().for_each(|x| recurse(&*x, f)),
+                Assign::Dot(a, _) => f(a),
+                Assign::ArrayIndirection(box (a, b)) => {
                     f(a);
                     f(b);
                 }
-                Expr::Identifier(_) => {}
-                // These shouldn't occur in assignments
-                _ => {}
+                Assign::Identifier(_) => {}
             }
         }
-        recurse(&self.0, &mut f)
+        recurse(self, &mut f)
     }
 
     /// Assuming this expression was on the left-hand-side of an assignment,
     /// visit all the names that are bound by this assignment.
     /// Note that assignments like `x[i] = n` don't bind any names.
     pub fn visit_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstString)) {
-        fn recurse<'a>(x: &'a Expr, f: &mut impl FnMut(&'a AstString)) {
+        fn recurse<'a>(x: &'a Assign, f: &mut impl FnMut(&'a AstString)) {
             match x {
-                Expr::Identifier(x) => f(x),
-                Expr::Tuple(xs) | Expr::List(xs) => xs.iter().for_each(|x| recurse(x, f)),
+                Assign::Identifier(x) => f(x),
+                Assign::Tuple(xs) => xs.iter().for_each(|x| recurse(x, f)),
                 _ => {}
             }
         }
-        recurse(&self.0, &mut f)
+        recurse(self, &mut f)
     }
 }
 

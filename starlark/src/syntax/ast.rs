@@ -19,7 +19,7 @@
 
 use crate::codemap::{CodeMap, Span, Spanned};
 use derivative::Derivative;
-use gazebo::{cast, prelude::*};
+use gazebo::prelude::*;
 use static_assertions::assert_eq_size;
 use std::{
     fmt,
@@ -118,20 +118,15 @@ pub enum Expr {
     DictComprehension(Box<(AstExpr, AstExpr)>, Box<ForClause>, Vec<Clause>),
 }
 
+/// In some places e.g. AssignModify, the Tuple case is not allowed.
 #[derive(Debug)]
-#[repr(transparent)]
-pub struct Assign(pub Expr);
-
-pub(crate) fn mk_assign(x: AstExpr) -> AstAssign {
-    Spanned {
-        span: x.span,
-        node: Assign(x.node),
-    }
-}
-
-pub(crate) fn unassign(x: &AstAssign) -> &AstExpr {
-    // FIXME(ndmitchell): This is only temporary until AstAssign becomes its own type
-    unsafe { cast::ptr(x) }
+pub enum Assign {
+    // We use Tuple for both Tuple and List,
+    // as these have the same semantics in Starlark.
+    Tuple(Vec<AstAssign>),
+    ArrayIndirection(Box<(AstExpr, AstExpr)>),
+    Dot(Box<AstExpr>, AstString),
+    Identifier(AstString),
 }
 
 #[derive(Debug)]
@@ -396,7 +391,16 @@ impl Display for Expr {
 
 impl Display for Assign {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        match self {
+            Assign::Tuple(e) => {
+                f.write_str("(")?;
+                comma_separated_fmt(f, e, |x, f| x.node.fmt(f), true)?;
+                f.write_str(")")
+            }
+            Assign::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
+            Assign::ArrayIndirection(box (e, i)) => write!(f, "{}[{}]", e.node, i.node),
+            Assign::Identifier(s) => s.node.fmt(f),
+        }
     }
 }
 

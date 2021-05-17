@@ -22,7 +22,7 @@ use crate::{
     errors::Diagnostic,
     syntax::{
         ast::{
-            mk_assign, Argument, AssignOp, AstArgument, AstAssign, AstExpr, AstParameter, AstStmt,
+            Argument, Assign, AssignOp, AstArgument, AstAssign, AstExpr, AstParameter, AstStmt,
             AstString, Expr, Parameter, Stmt,
         },
         Dialect,
@@ -233,24 +233,26 @@ impl Stmt {
     }
 
     pub fn check_assign(codemap: &CodeMap, x: AstExpr) -> anyhow::Result<AstAssign> {
-        fn f(x: &AstExpr, codemap: &CodeMap) -> anyhow::Result<()> {
-            match &x.node {
-                Expr::Tuple(xs) | Expr::List(xs) => {
-                    for x in xs {
-                        f(x, codemap)?;
-                    }
-                    Ok(())
+        Ok(Spanned {
+            span: x.span,
+            node: match x.node {
+                Expr::Tuple(xs) | Expr::List(xs) => Assign::Tuple(
+                    xs.into_iter()
+                        .map(|x| Self::check_assign(codemap, x))
+                        .collect::<anyhow::Result<Vec<_>>>()?,
+                ),
+                Expr::Dot(a, b) => Assign::Dot(a, b),
+                Expr::ArrayIndirection(box (a, b)) => Assign::ArrayIndirection(box (a, b)),
+                Expr::Identifier(x) => Assign::Identifier(x),
+                _ => {
+                    return Err(Diagnostic::new(
+                        ValidateError::InvalidLhs,
+                        x.span,
+                        codemap.dupe(),
+                    ));
                 }
-                Expr::Dot(..) | Expr::ArrayIndirection(..) | Expr::Identifier(..) => Ok(()),
-                _ => Err(Diagnostic::new(
-                    ValidateError::InvalidLhs,
-                    x.span,
-                    codemap.dupe(),
-                )),
-            }
-        }
-        f(&x, codemap)?;
-        Ok(mk_assign(x))
+            },
+        })
     }
 
     pub fn check_assignment(

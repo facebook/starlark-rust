@@ -29,7 +29,7 @@ use crate::{
         compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled, StmtCompiled},
         runtime::evaluator::Evaluator,
     },
-    syntax::ast::{mk_assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
+    syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
     values::{
         fast_string,
         list::{FrozenList, List},
@@ -42,9 +42,6 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum AssignError {
-    // Expression used as left value cannot be assigned
-    #[error("Incorrect expression as left value")]
-    IncorrectLeftValue,
     // Incorrect number of value to unpack (expected, got)
     #[error("Unpacked {1} values but expected {0}")]
     IncorrectNumberOfValueToUnpack(i32, i32),
@@ -85,8 +82,8 @@ fn eval_assign_list<'v>(
 impl Compiler<'_> {
     pub fn assign(&mut self, expr: AstAssign) -> AssignCompiled {
         let span = expr.span;
-        match expr.node.0 {
-            Expr::Dot(e, s) => {
+        match expr.node {
+            Assign::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
                 box move |value, context| {
@@ -97,7 +94,7 @@ impl Compiler<'_> {
                     )
                 }
             }
-            Expr::ArrayIndirection(box (e, idx)) => {
+            Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e);
                 let idx = self.expr(idx);
                 box move |value, context| {
@@ -108,11 +105,11 @@ impl Compiler<'_> {
                     )
                 }
             }
-            Expr::Tuple(v) | Expr::List(v) => {
-                let v = v.into_map(|x| self.assign(mk_assign(x)));
+            Assign::Tuple(v) => {
+                let v = v.into_map(|x| self.assign(x));
                 box move |value, context| eval_assign_list(&v, span, value, context)
             }
-            Expr::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
+            Assign::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
                 Slot::Local(slot) => box move |value, context| {
                     context.set_slot_local(slot, value);
                     Ok(())
@@ -123,9 +120,6 @@ impl Compiler<'_> {
                     context.set_slot_module(slot, value);
                     Ok(())
                 },
-            },
-            _ => box move |_, context| {
-                thrw(Err(AssignError::IncorrectLeftValue.into()), span, context)
             },
         }
     }
@@ -138,8 +132,8 @@ impl Compiler<'_> {
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
     ) -> StmtCompiled {
         let span = lhs.span;
-        match lhs.node.0 {
-            Expr::Dot(e, s) => {
+        match lhs.node {
+            Assign::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
                 box move |context| {
@@ -159,7 +153,7 @@ impl Compiler<'_> {
                     Ok(())
                 }
             }
-            Expr::ArrayIndirection(box (e, idx)) => {
+            Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e);
                 let idx = self.expr(idx);
                 box move |context| {
@@ -180,7 +174,7 @@ impl Compiler<'_> {
                     Ok(())
                 }
             }
-            Expr::Identifier(ident) => {
+            Assign::Identifier(ident) => {
                 let name = ident.node;
                 match self.scope.get_name_or_panic(&name) {
                     Slot::Local(slot) => box move |context| {
@@ -201,10 +195,9 @@ impl Compiler<'_> {
                     },
                 }
             }
-            _ => box move |context| {
-                before_stmt(span, context);
-                thrw(Err(AssignError::IncorrectLeftValue.into()), span, context)
-            },
+            Assign::Tuple(_) => {
+                unreachable!("Assign modify validates that the LHS is never a tuple")
+            }
         }
     }
 }
@@ -359,10 +352,10 @@ impl Compiler<'_> {
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
                 let rhs = self.function(&name.node, params, return_type, *suite);
-                let lhs = self.assign(mk_assign(Spanned {
+                let lhs = self.assign(Spanned {
                     span: name.span,
-                    node: Expr::Identifier(name),
-                }));
+                    node: Assign::Identifier(name),
+                });
                 box move |context| {
                     before_stmt(span, context);
                     lhs(rhs(context)?, context)?;
