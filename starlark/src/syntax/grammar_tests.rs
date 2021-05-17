@@ -292,3 +292,9 @@ fn test_op_associativity() {
     // TODO - create a better error message for this case
     assert::fail("0 <= 1 < 2", "Parse error");
 }
+
+#[test]
+fn test_bad_assignment() {
+    assert::parse_fail("[!x or y!] = 1");
+    assert::parse_fail("![x]! += 1");
+}

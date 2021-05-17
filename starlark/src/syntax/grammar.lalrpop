@@ -158,7 +158,7 @@ AssignOp: AssignOp = {
 
 AssignStmt: AstStmt = ASTS<AssignStmt_>;
 AssignStmt_: Stmt = <lhs:TestList> <op:AssignOp> <rhs:TestList>
-        => Stmt::Assign(box lhs, op, box rhs);
+        =>? Ok(Stmt::check_assign(codemap, <>)?);
 
 // In python ExprStmt is an AssignStmt (
 // https://docs.python.org/3/reference/grammar.html). This ExprStmt is

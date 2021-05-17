@@ -22,7 +22,8 @@ use crate::{
     errors::Diagnostic,
     syntax::{
         ast::{
-            Argument, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
+            Argument, AssignOp, AstArgument, AstExpr, AstParameter, AstStmt, AstString, Expr,
+            Parameter, Stmt,
         },
         Dialect,
     },
@@ -45,6 +46,10 @@ enum ValidateError {
     NoTopLevelIf,
     #[error("`for` cannot be used outside `def` in this dialect")]
     NoTopLevelFor,
+    #[error("left-hand-side of assignment must take the form `a`, `a.b` or `a[b]`")]
+    InvalidLhs,
+    #[error("left-hand-side of modifying assignment cannot be a list or tuple")]
+    InvalidModifyLhs,
 }
 
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
@@ -225,6 +230,40 @@ impl Stmt {
             }
         }
         Ok(Stmt::Def(name, parameters, return_type, box stmts))
+    }
+
+    pub fn check_assign(
+        codemap: &CodeMap,
+        lhs: AstExpr,
+        op: AssignOp,
+        rhs: AstExpr,
+    ) -> anyhow::Result<Stmt> {
+        fn f(allow_list: bool, x: &AstExpr, codemap: &CodeMap) -> anyhow::Result<()> {
+            match &x.node {
+                Expr::Tuple(xs) | Expr::List(xs) => {
+                    if allow_list {
+                        for x in xs {
+                            f(true, x, codemap)?;
+                        }
+                        Ok(())
+                    } else {
+                        Err(Diagnostic::new(
+                            ValidateError::InvalidModifyLhs,
+                            x.span,
+                            codemap.dupe(),
+                        ))
+                    }
+                }
+                Expr::Dot(..) | Expr::ArrayIndirection(..) | Expr::Identifier(..) => Ok(()),
+                _ => Err(Diagnostic::new(
+                    ValidateError::InvalidLhs,
+                    x.span,
+                    codemap.dupe(),
+                )),
+            }
+        }
+        f(op == AssignOp::Assign, &lhs, codemap)?;
+        Ok(Stmt::Assign(box lhs, op, box rhs))
     }
 
     /// Validate all statements only occur where they are allowed to.
