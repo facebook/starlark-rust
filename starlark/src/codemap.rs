@@ -236,7 +236,7 @@ impl CodeMap {
         let line = self.find_line(pos);
         let line_span = self.line_span(line);
         let byte_col = pos.0 - line_span.low.0;
-        let column = self.source_slice(line_span)[..byte_col as usize]
+        let column = self.source_span(line_span)[..byte_col as usize]
             .chars()
             .count();
 
@@ -251,8 +251,7 @@ impl CodeMap {
     /// Gets the source text of a Span.
     ///
     /// Panics if `span` is not entirely within this file.
-    pub fn source_slice(&self, span: Span) -> &str {
-        assert!(self.file_span().contains(span));
+    pub fn source_span(&self, span: Span) -> &str {
         &self.0.source[(span.low.0 as usize)..(span.high.0 as usize)]
     }
 
@@ -276,7 +275,7 @@ impl CodeMap {
     ///
     /// Panics if the line number is out of range.
     pub fn source_line(&self, line: usize) -> &str {
-        self.source_slice(self.line_span(line))
+        self.source_span(self.line_span(line))
             .trim_end_matches(&['\n', '\r'][..])
     }
 

@@ -75,7 +75,7 @@ impl Message {
                 span: Some((span, codemap)),
                 ..
             }) => {
-                let original = codemap.source_slice(*span).to_owned();
+                let original = codemap.source_span(*span).to_owned();
                 let span = LineColSpan::from_span(
                     codemap.find_line_col(span.low()),
                     codemap.find_line_col(span.high()),

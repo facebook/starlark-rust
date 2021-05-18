@@ -181,7 +181,7 @@ fn get_display_list_for_diagnostic<'a>(
         let source_span = diagnostic_span.merge(first_line_span).merge(last_line_span);
 
         Slice {
-            source: codemap.source_slice(source_span),
+            source: codemap.source_span(source_span),
             line_start: 1 + first_line_col.line,
             origin: Some(codemap.filename()),
             fold: false,
