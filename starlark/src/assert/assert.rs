@@ -18,7 +18,7 @@
 //! Utilities to test Starlark code execution.
 use crate::{
     self as starlark,
-    codemap::CodeMap,
+    codemap::{CodeMap, Pos, Span},
     collections::SmallMap,
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::Diagnostic,
@@ -555,8 +555,8 @@ impl Assert {
             ),
             Err(e) => {
                 if let Some(d) = e.downcast_ref::<Diagnostic>() {
-                    if let Some((span, codemap)) = &d.span {
-                        let want_span = codemap.file_span().subspan(begin as u32, end as u32);
+                    if let Some((span, _)) = &d.span {
+                        let want_span = Span::new(Pos::new(begin as u32), Pos::new(end as u32));
                         if *span == want_span {
                             return e; // Success
                         }

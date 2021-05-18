@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::{CodeMap, FileSpan, Span},
+    codemap::{CodeMap, FileSpan, Pos, Span},
     errors::Diagnostic,
     syntax::{
         ast::{AstModule, AstStmt, Stmt},
@@ -50,7 +50,7 @@ fn one_of(expected: &[String]) -> String {
 /// to the parsed file.
 pub(crate) fn parse_error_add_span(
     err: lu::ParseError<usize, Token, anyhow::Error>,
-    span: Span,
+    len: usize,
     codemap: CodeMap,
 ) -> anyhow::Error {
     if let lu::ParseError::User { error } = err {
@@ -75,16 +75,17 @@ pub(crate) fn parse_error_add_span(
     };
     let span = match &err {
         lu::ParseError::InvalidToken { location } => {
-            span.subspan(*location as u32, *location as u32)
+            Span::new(Pos::new(*location as u32), Pos::new(*location as u32))
         }
         lu::ParseError::UnrecognizedToken {
             token: (x, .., y), ..
-        } => span.subspan(*x as u32, *y as u32),
+        } => Span::new(Pos::new(*x as u32), Pos::new(*y as u32)),
         lu::ParseError::UnrecognizedEOF { .. } => {
-            let x = span.len();
-            span.subspan(x, x)
+            Span::new(Pos::new(len as u32), Pos::new(len as u32))
         }
-        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x as u32, *y as u32),
+        lu::ParseError::ExtraToken { token: (x, .., y) } => {
+            Span::new(Pos::new(*x as u32), Pos::new(*y as u32))
+        }
         lu::ParseError::User { .. } => unreachable!(),
     };
 
@@ -112,11 +113,10 @@ impl AstModule {
     /// The [`Dialect`] selects which Starlark constructs are valid.
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
         let codemap = CodeMap::new(filename.to_owned(), content);
-        let file_span = codemap.file_span();
         let lexer = Lexer::new(codemap.source(), dialect, codemap.dupe());
         match StarlarkParser::new().parse(&codemap, dialect, lexer) {
             Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
-            Err(p) => Err(parse_error_add_span(p, file_span, codemap)),
+            Err(p) => Err(parse_error_add_span(p, codemap.source().len(), codemap)),
         }
     }
 

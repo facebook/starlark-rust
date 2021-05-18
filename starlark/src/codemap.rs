@@ -24,9 +24,9 @@
 //!
 //! # Example
 //! ```
-//! use starlark::codemap::CodeMap;
+//! use starlark::codemap::{CodeMap, Pos, Span};
 //! let mut codemap = CodeMap::new("test.rs".to_owned(), "fn test(){\n    println!(\"Hello\");\n}\n".to_owned());
-//! let string_literal_span = codemap.file_span().subspan(24, 31);
+//! let string_literal_span = Span::new(Pos::new(24), Pos::new(31));
 //!
 //! let location = codemap.look_up_span(string_literal_span);
 //! assert_eq!(location.file.filename(), "test.rs");
@@ -189,7 +189,7 @@ impl CodeMap {
         &self.0
     }
 
-    pub fn file_span(&self) -> Span {
+    pub(crate) fn file_span(&self) -> Span {
         Span {
             begin: Pos(0),
             end: Pos(self.0.source.len() as u32),
