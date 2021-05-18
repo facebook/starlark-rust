@@ -518,4 +518,33 @@ mod test {
             LineCol { line: 1, column: 1 }
         );
     }
+
+    #[test]
+    fn test_line_col_span_display_point() {
+        let line_col = LineCol { line: 0, column: 0 };
+        let span = LineColSpan::from_span(line_col, line_col);
+        assert_eq!(span.to_string(), "1:1");
+    }
+
+    #[test]
+    fn test_line_col_span_display_single_line_span() {
+        let begin = LineCol { line: 0, column: 0 };
+        let end = LineCol {
+            line: 0,
+            column: 32,
+        };
+        let span = LineColSpan::from_span(begin, end);
+        assert_eq!(span.to_string(), "1:1-33");
+    }
+
+    #[test]
+    fn test_line_col_span_display_multi_line_span() {
+        let begin = LineCol { line: 0, column: 0 };
+        let end = LineCol {
+            line: 2,
+            column: 32,
+        };
+        let span = LineColSpan::from_span(begin, end);
+        assert_eq!(span.to_string(), "1:1-3:33");
+    }
 }
