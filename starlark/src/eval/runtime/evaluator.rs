@@ -231,16 +231,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Called to change the local variables, from the callee.
     /// Only called for user written functions.
-    pub(crate) fn with_function_context<R, E>(
+    pub(crate) fn with_function_context<R>(
         &mut self,
         module: Option<FrozenModuleValue>, // None == use module_env
         locals: LocalSlots<'v>,
         codemap: CodeMap,
-        within: impl FnOnce(&mut Self) -> Result<R, E>,
-    ) -> Result<R, E>
-    where
-        E: From<anyhow::Error>,
-    {
+        within: impl FnOnce(&mut Self) -> R,
+    ) -> R {
         // Capture the variables we will be mutating
         let old_is_module_scope = self.is_module_scope;
         let old_codemap = self.set_codemap(codemap);
