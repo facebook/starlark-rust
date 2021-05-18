@@ -191,15 +191,6 @@ impl CodeMap {
         self.file.span
     }
 
-    /// Gets the file, line, and column represented by a `Pos`.
-    pub fn look_up_pos(&self, pos: Pos) -> Loc {
-        let position = self.find_line_col(pos);
-        Loc {
-            file: self.dupe(),
-            position,
-        }
-    }
-
     /// Gets the file and its line and column ranges represented by a `Span`.
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
         let begin = self.find_line_col(span.low);
@@ -328,27 +319,6 @@ pub struct LineCol {
 
     /// The column within the line (0-indexed).
     pub column: usize,
-}
-
-/// A file, and a line and column within it.
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct Loc {
-    pub file: CodeMap,
-    pub position: LineCol,
-}
-
-impl fmt::Display for Loc {
-    /// Formats the location as `filename:line:column`, with a 1-indexed
-    /// line and column.
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}:{}:{}",
-            self.file.file.name,
-            self.position.line + 1,
-            self.position.column + 1
-        )
-    }
 }
 
 /// A file, and a line and column range within it.
@@ -557,30 +527,21 @@ fn test_multibyte() {
     let file = codemap.get_file();
 
     assert_eq!(
-        codemap.look_up_pos(file.span.low() + 21),
-        Loc {
-            file: codemap.dupe(),
-            position: LineCol {
-                line: 0,
-                column: 15
-            }
+        codemap.find_line_col(file.span.low() + 21),
+        LineCol {
+            line: 0,
+            column: 15
         }
     );
     assert_eq!(
-        codemap.look_up_pos(file.span.low() + 28),
-        Loc {
-            file: codemap.dupe(),
-            position: LineCol {
-                line: 0,
-                column: 18
-            }
+        codemap.find_line_col(file.span.low() + 28),
+        LineCol {
+            line: 0,
+            column: 18
         }
     );
     assert_eq!(
-        codemap.look_up_pos(file.span.low() + 33),
-        Loc {
-            file: codemap.dupe(),
-            position: LineCol { line: 1, column: 1 }
-        }
+        codemap.find_line_col(file.span.low() + 33),
+        LineCol { line: 1, column: 1 }
     );
 }
