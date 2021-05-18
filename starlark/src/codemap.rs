@@ -175,7 +175,7 @@ impl CodeMap {
         &self.0
     }
 
-    pub(crate) fn file_span(&self) -> Span {
+    fn full_span(&self) -> Span {
         Span {
             begin: Pos(0),
             end: Pos(self.0.source.len() as u32),
@@ -201,7 +201,7 @@ impl CodeMap {
     ///
     /// Panics if `pos` is not within this file's span.
     pub(crate) fn find_line(&self, pos: Pos) -> usize {
-        assert!(pos <= self.file_span().end());
+        assert!(pos <= self.full_span().end());
         match self.0.lines.binary_search(&pos) {
             Ok(i) => i,
             Err(i) => i - 1,
@@ -245,7 +245,7 @@ impl CodeMap {
         assert!(line < self.0.lines.len());
         Span {
             begin: self.0.lines[line],
-            end: *self.0.lines.get(line + 1).unwrap_or(&self.file_span().end),
+            end: *self.0.lines.get(line + 1).unwrap_or(&self.full_span().end),
         }
     }
 
@@ -378,7 +378,7 @@ mod test {
     fn test_codemap() {
         let source = "abcd\nefghij\nqwerty";
         let codemap = CodeMap::new("test1.rs".to_owned(), source.to_owned());
-        let start = codemap.file_span().begin();
+        let start = codemap.full_span().begin();
 
         // Test .name()
         assert_eq!(codemap.filename(), "test1.rs");
@@ -436,7 +436,7 @@ mod test {
         let content = "a \nxyz\r\n";
         let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
 
-        let span = codemap.file_span().subspan(2, 3);
+        let span = codemap.full_span().subspan(2, 3);
         assert_eq!(
             codemap.resolve_span(span),
             ResolvedSpan {
@@ -458,21 +458,21 @@ mod test {
         let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
 
         assert_eq!(
-            codemap.find_line_col(codemap.file_span().begin() + 21),
+            codemap.find_line_col(codemap.full_span().begin() + 21),
             LineCol {
                 line: 0,
                 column: 15
             }
         );
         assert_eq!(
-            codemap.find_line_col(codemap.file_span().begin() + 28),
+            codemap.find_line_col(codemap.full_span().begin() + 28),
             LineCol {
                 line: 0,
                 column: 18
             }
         );
         assert_eq!(
-            codemap.find_line_col(codemap.file_span().begin() + 33),
+            codemap.find_line_col(codemap.full_span().begin() + 33),
             LineCol { line: 1, column: 1 }
         );
     }
