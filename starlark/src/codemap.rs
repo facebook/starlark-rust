@@ -315,6 +315,15 @@ impl fmt::Display for FileSpan {
     }
 }
 
+impl FileSpan {
+    pub fn resolve(&self) -> ResolvedFileSpan {
+        ResolvedFileSpan {
+            file: self.file.filename().to_owned(),
+            span: ResolvedSpan::from_span(self.begin, self.end),
+        }
+    }
+}
+
 /// The locations of values within a span.
 /// All are 0-based, but print out with 1-based.
 #[derive(Debug, Dupe, Clone, Copy)]
@@ -369,23 +378,14 @@ impl ResolvedSpan {
 }
 
 #[derive(Debug)]
-pub struct FileSpanLoc {
-    pub path: String,
+pub struct ResolvedFileSpan {
+    pub file: String,
     pub span: ResolvedSpan,
 }
 
-impl FileSpanLoc {
-    pub fn from_span_loc(span_loc: &FileSpan) -> Self {
-        Self {
-            span: ResolvedSpan::from_span(span_loc.begin, span_loc.end),
-            path: span_loc.file.filename().to_owned(),
-        }
-    }
-}
-
-impl Display for FileSpanLoc {
+impl Display for ResolvedFileSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.path, self.span)
+        write!(f, "{}:{}", self.file, self.span)
     }
 }
 

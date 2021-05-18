@@ -17,7 +17,7 @@
 
 use crate::{
     analysis::types::{LintT, LintWarning},
-    codemap::{CodeMap, FileSpanLoc, Span, Spanned},
+    codemap::{CodeMap, ResolvedFileSpan, Span, Spanned},
     syntax::{
         ast::{AstExpr, AstLiteral, AstStmt, Expr, Stmt},
         AstModule,
@@ -29,9 +29,9 @@ use thiserror::Error;
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum FlowIssue {
     #[error("`return` lacks expression, but function `{0}` at {1} seems to want one due to {2}")]
-    MissingReturnExpression(String, FileSpanLoc, FileSpanLoc),
+    MissingReturnExpression(String, ResolvedFileSpan, ResolvedFileSpan),
     #[error("No `return` at the end, but function `{0}` seems to want one due to {1}")]
-    MissingReturn(String, FileSpanLoc),
+    MissingReturn(String, ResolvedFileSpan),
     #[error("Unreachable statement `{0}`")]
     Unreachable(String),
     #[error("Redundant `return` at the end of a function")]
@@ -116,7 +116,7 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
                         FlowIssue::MissingReturn(
                             // Statements often end with \n, so remove that to fit nicely
                             name.node.trim_end().to_owned(),
-                            FileSpanLoc::from_span_loc(&codemap.look_up_span(reason)),
+                            codemap.look_up_span(reason).resolve(),
                         ),
                     ));
                 }
@@ -127,8 +127,8 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
                             span,
                             FlowIssue::MissingReturnExpression(
                                 name.node.clone(),
-                                FileSpanLoc::from_span_loc(&codemap.look_up_span(x.span)),
-                                FileSpanLoc::from_span_loc(&codemap.look_up_span(reason)),
+                                codemap.look_up_span(x.span).resolve(),
+                                codemap.look_up_span(reason).resolve(),
                             ),
                         ))
                     }
