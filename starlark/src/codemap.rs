@@ -163,8 +163,8 @@ impl Eq for CodeMap {}
 impl CodeMap {
     /// Creates an new `CodeMap`.
     pub fn new(filename: String, contents: String) -> CodeMap {
-        let low = Pos(1);
-        let high = low + contents.len() as u32;
+        let low = Pos(0);
+        let high = Pos(contents.len() as u32);
         let mut lines = vec![low];
         lines.extend(
             contents
