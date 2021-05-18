@@ -17,7 +17,7 @@
 
 //! AST for parsed starlark files.
 
-use crate::codemap::{CodeMap, Span, Spanned};
+use crate::codemap::{CodeMap, Pos, Span, Spanned};
 use derivative::Derivative;
 use gazebo::prelude::*;
 use static_assertions::assert_eq_size;
@@ -59,9 +59,9 @@ pub struct AstModule {
 
 // A trait rather than a function to allow .ast() chaining in the parser.
 pub(crate) trait ToAst: Sized {
-    fn ast(self, file_span: Span, begin: usize, end: usize) -> Spanned<Self> {
+    fn ast(self, begin: usize, end: usize) -> Spanned<Self> {
         Spanned {
-            span: file_span.subspan(begin as u32, end as u32),
+            span: Span::new(Pos::new(begin as u32), Pos::new(end as u32)),
             node: self,
         }
     }

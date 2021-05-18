@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::{CodeMap, Span, Spanned},
+    codemap::{CodeMap, Pos, Span, Spanned},
     errors::Diagnostic,
     syntax::ast::Visibility,
 };
@@ -140,9 +140,11 @@ impl Dialect {
     pub(crate) fn check_keyword_only_arguments<T>(
         &self,
         codemap: &CodeMap,
-        span: Span,
+        begin: usize,
+        end: usize,
         x: T,
     ) -> anyhow::Result<T> {
+        let span = Span::new(Pos::new(begin as u32), Pos::new(end as u32));
         if self.enable_keyword_only_arguments {
             Ok(x)
         } else {

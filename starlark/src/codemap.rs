@@ -50,6 +50,12 @@ use std::{
 )]
 pub struct Pos(u32);
 
+impl Pos {
+    pub fn new(x: u32) -> Self {
+        Self(x)
+    }
+}
+
 impl Add<u32> for Pos {
     type Output = Pos;
     fn add(self, other: u32) -> Pos {
@@ -68,6 +74,15 @@ pub struct Span {
 }
 
 impl Span {
+    /// Create a new span. Panics if `end < begin`.
+    pub fn new(begin: Pos, end: Pos) -> Self {
+        assert!(begin <= end);
+        Span {
+            low: begin,
+            high: end,
+        }
+    }
+
     /// Makes a span from offsets relative to the start of this span.
     ///
     /// # Panics
