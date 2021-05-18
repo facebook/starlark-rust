@@ -100,7 +100,7 @@ impl Message {
     pub fn from_lint(x: Lint) -> Self {
         Self {
             path: x.location.file.filename().to_owned(),
-            span: Some(ResolvedSpan::from_span_loc(&x.location)),
+            span: Some(x.location.resolve_span()),
             severity: if x.serious {
                 Severity::Warning
             } else {

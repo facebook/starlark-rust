@@ -273,7 +273,7 @@ impl CodeMap {
 
 /// A line and column.
 #[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Debug)]
-pub struct LineCol {
+struct LineCol {
     /// The line number within the file (0-indexed).
     pub line: usize,
 
@@ -348,11 +348,7 @@ impl Display for ResolvedSpan {
 }
 
 impl ResolvedSpan {
-    pub fn from_span_loc(span: &FileSpan) -> Self {
-        span.resolve_span()
-    }
-
-    pub fn from_span(begin: LineCol, end: LineCol) -> Self {
+    fn from_span(begin: LineCol, end: LineCol) -> Self {
         Self {
             begin_line: begin.line,
             begin_column: begin.column,
