@@ -16,8 +16,8 @@
  */
 
 use crate::{
-    analysis::types::{FileSpanLoc, LintT, LintWarning},
-    codemap::{CodeMap, Span, Spanned},
+    analysis::types::{LintT, LintWarning},
+    codemap::{CodeMap, FileSpanLoc, Span, Spanned},
     syntax::{
         ast::{AstExpr, AstLiteral, AstStmt, Expr, Stmt},
         AstModule,

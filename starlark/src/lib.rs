@@ -376,11 +376,7 @@ extern crate maplit;
 #[macro_use]
 mod macros;
 
-// There's only one thing in analysis, and that's LineCol1
-// which is itself hidden (and slated for removal) so hide that analysis exists
-#[doc(hidden)]
-pub mod analysis;
-
+pub(crate) mod analysis;
 pub mod assert;
 pub mod codemap;
 pub mod collections;

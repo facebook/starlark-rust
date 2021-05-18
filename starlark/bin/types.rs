@@ -18,8 +18,8 @@
 use gazebo::prelude::*;
 use serde::Serialize;
 use starlark::{
-    analysis::{LineColSpan, Lint},
-    errors::Diagnostic,
+    codemap::LineColSpan,
+    errors::{Diagnostic, Lint},
 };
 use std::fmt::{self, Display};
 

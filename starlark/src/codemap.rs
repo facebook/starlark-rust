@@ -38,7 +38,8 @@
 //! ```
 use gazebo::prelude::*;
 use std::{
-    cmp, fmt,
+    cmp,
+    fmt::{self, Display},
     hash::{Hash, Hasher},
     ops::{Add, Deref, Sub},
     sync::Arc,
@@ -381,6 +382,93 @@ impl fmt::Display for SpanLoc {
                 self.end.column + 1
             )
         }
+    }
+}
+
+#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct LineCol1 {
+    /// The line number within the file (1-indexed).
+    pub line: usize,
+
+    /// The column within the line (1-indexed).
+    pub column: usize,
+}
+
+#[doc(hidden)] // Eventually we want CodeMap to gain these features, so this will go away
+#[derive(Debug, Dupe, Clone, Copy)]
+pub struct LineColSpan {
+    pub begin: LineCol1,
+    pub end: LineCol1,
+}
+
+impl LineColSpan {
+    pub fn spans_only_one_line(&self) -> bool {
+        self.begin.line == self.end.line
+    }
+
+    pub fn is_empty_span(&self) -> bool {
+        self.begin.line == self.end.line && self.begin.column == self.end.column
+    }
+}
+
+impl Display for LineColSpan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty_span() {
+            write!(f, "{}:{}", self.begin.line, self.begin.column)
+        } else if self.spans_only_one_line() {
+            write!(
+                f,
+                "{}:{}-{}",
+                self.begin.line, self.begin.column, self.end.column
+            )
+        } else {
+            write!(
+                f,
+                "{}:{}-{}:{}",
+                self.begin.line, self.begin.column, self.end.line, self.end.column
+            )
+        }
+    }
+}
+
+// Starlark line/columns are 0-based, then add 1 here to have 1-based.
+impl LineColSpan {
+    pub fn from_span_loc(span_loc: &SpanLoc) -> Self {
+        Self::from_span(span_loc.begin, span_loc.end)
+    }
+
+    pub fn from_span(begin: LineCol, end: LineCol) -> Self {
+        Self {
+            begin: LineCol1 {
+                line: begin.line + 1,
+                column: begin.column + 1,
+            },
+            end: LineCol1 {
+                line: end.line + 1,
+                column: end.column + 1,
+            },
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FileSpanLoc {
+    pub path: String,
+    pub span: LineColSpan,
+}
+
+impl FileSpanLoc {
+    pub fn from_span_loc(span_loc: &SpanLoc) -> Self {
+        Self {
+            span: LineColSpan::from_span_loc(span_loc),
+            path: span_loc.file.name().to_owned(),
+        }
+    }
+}
+
+impl Display for FileSpanLoc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.path, self.span)
     }
 }
 

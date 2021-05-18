@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-pub use types::{LineColSpan, Lint};
+pub use types::Lint;
 
 use crate::{analysis::types::LintT, syntax::AstModule};
 
