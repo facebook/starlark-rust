@@ -75,14 +75,13 @@ impl Message {
                 span: Some((span, codemap)),
                 ..
             }) => {
-                let file = codemap.get_file();
-                let original = file.source_slice(*span).to_owned();
+                let original = codemap.source_slice(*span).to_owned();
                 let span = LineColSpan::from_span(
-                    file.find_line_col(span.low()),
-                    file.find_line_col(span.high()),
+                    codemap.find_line_col(span.low()),
+                    codemap.find_line_col(span.high()),
                 );
                 Self {
-                    path: file.name().to_owned(),
+                    path: codemap.name().to_owned(),
                     span: Some(span),
                     severity: Severity::Error,
                     name: "error".to_owned(),

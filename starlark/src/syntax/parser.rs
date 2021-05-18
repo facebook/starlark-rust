@@ -112,8 +112,8 @@ impl AstModule {
     /// The [`Dialect`] selects which Starlark constructs are valid.
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
         let codemap = CodeMap::new(filename.to_owned(), content);
-        let file = codemap.get_file().dupe();
-        let lexer = Lexer::new(file.source(), dialect, codemap.dupe(), file.span);
+        let file = codemap.get_file();
+        let lexer = Lexer::new(codemap.source(), dialect, codemap.dupe(), file.span);
         match StarlarkParser::new().parse(&codemap, file.span, dialect, lexer) {
             Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
             Err(p) => Err(parse_error_add_span(p, file.span, codemap)),

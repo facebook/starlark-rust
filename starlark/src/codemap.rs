@@ -135,7 +135,7 @@ impl<T> Deref for Spanned<T> {
 }
 
 /// A data structure recording a source code file for position lookup.
-#[derive(Debug, Clone, Dupe)]
+#[derive(Debug, Clone, Dupe, PartialEq, Eq)]
 pub struct CodeMap {
     file: Arc<File>,
 }
@@ -175,21 +175,19 @@ impl CodeMap {
 
     /// Gets the file, line, and column represented by a `Pos`.
     pub fn look_up_pos(&self, pos: Pos) -> Loc {
-        let file = self.get_file();
-        let position = file.find_line_col(pos);
+        let position = self.find_line_col(pos);
         Loc {
-            file: file.dupe(),
+            file: self.dupe(),
             position,
         }
     }
 
     /// Gets the file and its line and column ranges represented by a `Span`.
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
-        let file = self.get_file();
-        let begin = file.find_line_col(span.low);
-        let end = file.find_line_col(span.high);
+        let begin = self.find_line_col(span.low);
+        let end = self.find_line_col(span.high);
         SpanLoc {
-            file: file.dupe(),
+            file: self.dupe(),
             begin,
             end,
         }
@@ -211,10 +209,10 @@ pub struct File {
     lines: Vec<Pos>,
 }
 
-impl File {
+impl CodeMap {
     /// Gets the name of the file
     pub fn name(&self) -> &str {
-        &self.name
+        &self.file.name
     }
 
     /// Gets the line number of a Pos.
@@ -225,9 +223,9 @@ impl File {
     ///
     ///  * If `pos` is not within this file's span
     pub fn find_line(&self, pos: Pos) -> usize {
-        assert!(pos >= self.span.low);
-        assert!(pos <= self.span.high);
-        match self.lines.binary_search(&pos) {
+        assert!(pos >= self.file.span.low);
+        assert!(pos <= self.file.span.high);
+        match self.file.lines.binary_search(&pos) {
             Ok(i) => i,
             Err(i) => i - 1,
         }
@@ -252,7 +250,7 @@ impl File {
 
     /// Gets the full source text of the file
     pub fn source(&self) -> &str {
-        &self.source
+        &self.file.source
     }
 
     /// Gets the source text of a Span.
@@ -261,8 +259,9 @@ impl File {
     ///
     ///   * If `span` is not entirely within this file.
     pub fn source_slice(&self, span: Span) -> &str {
-        assert!(self.span.contains(span));
-        &self.source[((span.low - self.span.low) as usize)..((span.high - self.span.low) as usize)]
+        assert!(self.file.span.contains(span));
+        &self.file.source[((span.low - self.file.span.low) as usize)
+            ..((span.high - self.file.span.low) as usize)]
     }
 
     /// Gets the span representing a line by line number.
@@ -274,10 +273,14 @@ impl File {
     ///
     ///  * If the line number is out of range
     pub fn line_span(&self, line: usize) -> Span {
-        assert!(line < self.lines.len());
+        assert!(line < self.file.lines.len());
         Span {
-            low: self.lines[line],
-            high: *self.lines.get(line + 1).unwrap_or(&self.span.high),
+            low: self.file.lines[line],
+            high: *self
+                .file
+                .lines
+                .get(line + 1)
+                .unwrap_or(&self.file.span.high),
         }
     }
 
@@ -295,7 +298,7 @@ impl File {
 
     /// Gets the number of lines in the file
     pub fn num_lines(&self) -> usize {
-        self.lines.len()
+        self.file.lines.len()
     }
 }
 
@@ -333,7 +336,7 @@ pub struct LineCol {
 /// A file, and a line and column within it.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Loc {
-    pub file: Arc<File>,
+    pub file: CodeMap,
     pub position: LineCol,
 }
 
@@ -344,7 +347,7 @@ impl fmt::Display for Loc {
         write!(
             f,
             "{}:{}:{}",
-            self.file.name,
+            self.file.file.name,
             self.position.line + 1,
             self.position.column + 1
         )
@@ -354,7 +357,7 @@ impl fmt::Display for Loc {
 /// A file, and a line and column range within it.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct SpanLoc {
-    pub file: Arc<File>,
+    pub file: CodeMap,
     pub begin: LineCol,
     pub end: LineCol,
 }
@@ -367,7 +370,7 @@ impl fmt::Display for SpanLoc {
             write!(
                 f,
                 "{}:{}:{}",
-                self.file.name,
+                self.file.name(),
                 self.begin.line + 1,
                 self.begin.column + 1
             )
@@ -375,7 +378,7 @@ impl fmt::Display for SpanLoc {
             write!(
                 f,
                 "{}:{}:{}: {}:{}",
-                self.file.name,
+                self.file.name(),
                 self.begin.line + 1,
                 self.begin.column + 1,
                 self.end.line + 1,
@@ -476,25 +479,25 @@ impl Display for FileSpanLoc {
 fn test_codemap() {
     let codemap = CodeMap::new("test1.rs".to_owned(), "abcd\nefghij\nqwerty".to_owned());
 
-    assert_eq!(codemap.get_file().name(), "test1.rs");
-    assert_eq!(codemap.get_file().name(), "test1.rs");
+    assert_eq!(codemap.name(), "test1.rs");
+    assert_eq!(codemap.name(), "test1.rs");
 
     let f = codemap.get_file();
     assert_eq!(f.name, "test1.rs");
     assert_eq!(
-        f.find_line_col(f.span.low()),
+        codemap.find_line_col(f.span.low()),
         LineCol { line: 0, column: 0 }
     );
     assert_eq!(
-        f.find_line_col(f.span.low() + 4),
+        codemap.find_line_col(f.span.low() + 4),
         LineCol { line: 0, column: 4 }
     );
     assert_eq!(
-        f.find_line_col(f.span.low() + 5),
+        codemap.find_line_col(f.span.low() + 5),
         LineCol { line: 1, column: 0 }
     );
     assert_eq!(
-        f.find_line_col(f.span.low() + 16),
+        codemap.find_line_col(f.span.low() + 16),
         LineCol { line: 2, column: 4 }
     );
 }
@@ -509,15 +512,15 @@ fn test_issue2() {
     assert_eq!(
         codemap.look_up_span(span),
         SpanLoc {
-            file: file.dupe(),
+            file: codemap.dupe(),
             begin: LineCol { line: 0, column: 2 },
             end: LineCol { line: 1, column: 0 }
         }
     );
 
-    assert_eq!(file.source_line(0), "a ");
-    assert_eq!(file.source_line(1), "xyz");
-    assert_eq!(file.source_line(2), "");
+    assert_eq!(codemap.source_line(0), "a ");
+    assert_eq!(codemap.source_line(1), "xyz");
+    assert_eq!(codemap.source_line(2), "");
 }
 
 #[test]
@@ -529,7 +532,7 @@ fn test_multibyte() {
     assert_eq!(
         codemap.look_up_pos(file.span.low() + 21),
         Loc {
-            file: file.dupe(),
+            file: codemap.dupe(),
             position: LineCol {
                 line: 0,
                 column: 15
@@ -539,7 +542,7 @@ fn test_multibyte() {
     assert_eq!(
         codemap.look_up_pos(file.span.low() + 28),
         Loc {
-            file: file.dupe(),
+            file: codemap.dupe(),
             position: LineCol {
                 line: 0,
                 column: 18
@@ -549,7 +552,7 @@ fn test_multibyte() {
     assert_eq!(
         codemap.look_up_pos(file.span.low() + 33),
         Loc {
-            file: file.dupe(),
+            file: codemap.dupe(),
             position: LineCol { line: 1, column: 1 }
         }
     );

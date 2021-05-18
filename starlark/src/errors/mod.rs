@@ -170,21 +170,20 @@ fn get_display_list_for_diagnostic<'a>(
     }
 
     fn convert_span_to_slice<'a>(diagnostic_span: Span, codemap: &'a CodeMap) -> Slice<'a> {
-        let file = codemap.get_file();
-        let first_line_col = file.find_line_col(diagnostic_span.low());
-        let last_line_col = file.find_line_col(diagnostic_span.high());
+        let first_line_col = codemap.find_line_col(diagnostic_span.low());
+        let last_line_col = codemap.find_line_col(diagnostic_span.high());
 
         // we want the source_span to capture any whitespace ahead of the diagnostic span to
         // get the column numbers correct in the DisplayList, and any trailing source code
         // on the last line for context.
-        let first_line_span = file.line_span(first_line_col.line);
-        let last_line_span = file.line_span(last_line_col.line);
+        let first_line_span = codemap.line_span(first_line_col.line);
+        let last_line_span = codemap.line_span(last_line_col.line);
         let source_span = diagnostic_span.merge(first_line_span).merge(last_line_span);
 
         Slice {
-            source: file.source_slice(source_span),
+            source: codemap.source_slice(source_span),
             line_start: 1 + first_line_col.line,
-            origin: Some(file.name()),
+            origin: Some(codemap.name()),
             fold: false,
             annotations: vec![SourceAnnotation {
                 label: "",
