@@ -342,21 +342,14 @@ pub struct ResolvedSpan {
     pub end_column: usize,
 }
 
-impl ResolvedSpan {
-    fn spans_only_one_line(&self) -> bool {
-        self.begin_line == self.end_line
-    }
-
-    fn is_empty_span(&self) -> bool {
-        self.begin_line == self.end_line && self.begin_column == self.end_column
-    }
-}
-
 impl Display for ResolvedSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.is_empty_span() {
+        let single_line = self.begin_line == self.end_line;
+        let is_empty = single_line && self.begin_column == self.end_column;
+
+        if is_empty {
             write!(f, "{}:{}", self.begin_line + 1, self.begin_column + 1)
-        } else if self.spans_only_one_line() {
+        } else if single_line {
             write!(
                 f,
                 "{}:{}-{}",
