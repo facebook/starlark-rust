@@ -298,7 +298,7 @@ impl DebugServer for Backend {
             let mut res = Vec::with_capacity(frames.len() + 1);
             for (i, x) in frames.iter().rev().enumerate() {
                 res.push(convert_frame(i, x.name.clone(), next));
-                next = x.location.clone();
+                next = x.location.dupe();
             }
             res.push(convert_frame(10000, "Root".to_owned(), next));
             Ok(StackTraceResponseBody {

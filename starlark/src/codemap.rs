@@ -282,7 +282,7 @@ pub struct LineCol {
 }
 
 /// A file, and a line and column range within it.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Dupe, Eq, PartialEq, Debug)]
 pub struct FileSpan {
     pub file: CodeMap,
     pub span: Span,

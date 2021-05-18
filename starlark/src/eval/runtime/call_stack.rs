@@ -25,10 +25,11 @@
 //   up, in eval_call.
 
 use crate::{
-    codemap::{CodeMap, FileSpan, Span},
+    codemap::FileSpan,
     errors::Frame,
     values::{ControlError, Value, Walker},
 };
+use gazebo::prelude::*;
 use std::{fmt, fmt::Debug};
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
@@ -36,20 +37,14 @@ use std::{fmt, fmt::Debug};
 // The downside is it has a lifetime on 'v and keeps alive the whole CodeMap.
 struct CheapFrame<'v> {
     function: Value<'v>,
-    location: Option<(CodeMap, Span)>,
+    location: Option<FileSpan>,
 }
 
 impl CheapFrame<'_> {
-    fn resolve_location(&self) -> Option<FileSpan> {
-        self.location
-            .as_ref()
-            .map(|(codemap, span)| codemap.look_up_span(*span))
-    }
-
     fn to_frame(&self) -> Frame {
         Frame {
             name: self.function.to_repr(),
-            location: self.resolve_location(),
+            location: self.location.dupe(),
         }
     }
 }
@@ -58,7 +53,7 @@ impl Debug for CheapFrame<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut x = f.debug_struct("Frame");
         x.field("function", &self.function);
-        x.field("location", &self.resolve_location());
+        x.field("location", &self.location);
         x.finish()
     }
 }
@@ -79,7 +74,7 @@ impl<'v> CallStack<'v> {
     pub(crate) fn push(
         &mut self,
         function: Value<'v>,
-        location: Option<(CodeMap, Span)>,
+        location: Option<FileSpan>,
     ) -> anyhow::Result<()> {
         if self.stack.len() > MAX_CALLSTACK_RECURSION {
             return Err(ControlError::TooManyRecursionLevel.into());
@@ -101,7 +96,7 @@ impl<'v> CallStack<'v> {
     /// either there the stack is empty, or the top of the stack lacks location
     /// information (e.g. called from Rust).
     pub fn top_location(&self) -> Option<FileSpan> {
-        self.stack.last()?.resolve_location()
+        self.stack.last()?.location.dupe()
     }
 
     pub(crate) fn walk(&mut self, walker: &Walker<'v>) {

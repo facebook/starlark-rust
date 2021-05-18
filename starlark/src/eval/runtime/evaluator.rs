@@ -203,7 +203,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
-        location: Option<(CodeMap, Span)>,
+        location: Option<FileSpan>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         self.call_stack.push(function, location)?;

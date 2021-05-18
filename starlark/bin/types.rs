@@ -72,14 +72,14 @@ impl Message {
         match x.downcast_ref::<Diagnostic>() {
             Some(Diagnostic {
                 message,
-                span: Some((span, codemap)),
+                span: Some(span),
                 ..
             }) => {
-                let original = codemap.source_span(*span).to_owned();
-                let span = codemap.resolve_span(*span);
+                let original = span.file.source_span(span.span).to_owned();
+                let resolved_span = span.resolve_span();
                 Self {
-                    path: codemap.filename().to_owned(),
-                    span: Some(span),
+                    path: span.file.filename().to_owned(),
+                    span: Some(resolved_span),
                     severity: Severity::Error,
                     name: "error".to_owned(),
                     description: format!("{:#}", message),

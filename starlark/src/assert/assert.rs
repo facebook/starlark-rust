@@ -555,9 +555,9 @@ impl Assert {
             ),
             Err(e) => {
                 if let Some(d) = e.downcast_ref::<Diagnostic>() {
-                    if let Some((span, _)) = &d.span {
+                    if let Some(span) = &d.span {
                         let want_span = Span::new(Pos::new(begin as u32), Pos::new(end as u32));
-                        if *span == want_span {
+                        if span.span == want_span {
                             return e; // Success
                         }
                     }

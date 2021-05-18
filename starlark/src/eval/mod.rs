@@ -110,7 +110,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // Set up the world to allow evaluation (do NOT use ? from now on)
         let old_codemap = self.set_codemap(codemap.dupe());
         self.call_stack
-            .push(Value::new_none(), Some((codemap, span)))
+            .push(Value::new_none(), Some(codemap.look_up_span(span)))
             .unwrap();
         if self.profiling {
             self.heap().record_call_enter(Value::new_none());

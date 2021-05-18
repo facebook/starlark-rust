@@ -39,7 +39,7 @@ pub struct Diagnostic {
     pub message: anyhow::Error,
 
     /// Location where the error originated.
-    pub span: Option<(Span, CodeMap)>,
+    pub span: Option<FileSpan>,
 
     /// Call stack of what called what. Most recent frames are at the end.
     pub call_stack: Vec<Frame>,
@@ -107,7 +107,7 @@ impl Diagnostic {
     pub fn set_span(&mut self, span: Span, codemap: CodeMap) {
         if self.span.is_none() {
             // We want the best span, which is likely the first person to set it
-            self.span = Some((span, codemap));
+            self.span = Some(codemap.look_up_span(span));
         }
     }
 
@@ -169,33 +169,30 @@ fn get_display_list_for_diagnostic<'a>(
         (start_column, start_column + span_length)
     }
 
-    fn convert_span_to_slice<'a>(diagnostic_span: Span, codemap: &'a CodeMap) -> Slice<'a> {
-        let region = codemap.resolve_span(diagnostic_span);
+    fn convert_span_to_slice<'a>(span: &'a FileSpan) -> Slice<'a> {
+        let region = span.resolve_span();
 
         // we want the source_span to capture any whitespace ahead of the diagnostic span to
         // get the column numbers correct in the DisplayList, and any trailing source code
         // on the last line for context.
-        let first_line_span = codemap.line_span(region.begin_line);
-        let last_line_span = codemap.line_span(region.end_line);
-        let source_span = diagnostic_span.merge(first_line_span).merge(last_line_span);
+        let first_line_span = span.file.line_span(region.begin_line);
+        let last_line_span = span.file.line_span(region.end_line);
+        let source_span = span.span.merge(first_line_span).merge(last_line_span);
 
         Slice {
-            source: codemap.source_span(source_span),
+            source: span.file.source_span(source_span),
             line_start: 1 + region.begin_line,
-            origin: Some(codemap.filename()),
+            origin: Some(span.file.filename()),
             fold: false,
             annotations: vec![SourceAnnotation {
                 label: "",
                 annotation_type: AnnotationType::Error,
-                range: convert_span_to_range_relative_to_first_line(
-                    diagnostic_span,
-                    region.begin_column,
-                ),
+                range: convert_span_to_range_relative_to_first_line(span.span, region.begin_column),
             }],
         }
     }
 
-    let slice = x.span.as_ref().map(|s| convert_span_to_slice(s.0, &s.1));
+    let slice = x.span.as_ref().map(convert_span_to_slice);
 
     let snippet = Snippet {
         title: Some(Annotation {

@@ -79,9 +79,8 @@ impl ConformanceTest {
         fn get_line(err: &anyhow::Error) -> Option<usize> {
             match err.downcast_ref::<Diagnostic>() {
                 Some(Diagnostic {
-                    span: Some((span, codemap)),
-                    ..
-                }) => Some(codemap.resolve_span(*span).begin_line + 1),
+                    span: Some(span), ..
+                }) => Some(span.resolve_span().begin_line + 1),
                 _ => None,
             }
         }
