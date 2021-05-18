@@ -163,18 +163,11 @@ impl Eq for CodeMap {}
 impl CodeMap {
     /// Creates an new `CodeMap`.
     pub fn new(filename: String, contents: String) -> CodeMap {
-        let low = Pos(0);
-        let high = Pos(contents.len() as u32);
-        let mut lines = vec![low];
-        lines.extend(
-            contents
-                .match_indices('\n')
-                .map(|(p, _)| low + (p + 1) as u32),
-        );
+        let mut lines = vec![Pos(0)];
+        lines.extend(contents.match_indices('\n').map(|(p, _)| Pos(p as u32 + 1)));
 
         CodeMap {
             file: Arc::new(File {
-                span: Span { low, high },
                 name: filename,
                 source: contents,
                 lines,
@@ -188,7 +181,10 @@ impl CodeMap {
     }
 
     pub fn file_span(&self) -> Span {
-        self.file.span
+        Span {
+            low: Pos(0),
+            high: Pos(self.file.source.len() as u32),
+        }
     }
 
     /// Gets the file and its line and column ranges represented by a `Span`.
@@ -205,9 +201,6 @@ impl CodeMap {
 
 /// A `CodeMap`'s record of a source file.
 pub(crate) struct File {
-    /// The span representing the entire file.
-    span: Span,
-
     /// The filename as it would be displayed in an error message.
     name: String,
 
@@ -232,8 +225,7 @@ impl CodeMap {
     ///
     ///  * If `pos` is not within this file's span
     pub fn find_line(&self, pos: Pos) -> usize {
-        assert!(pos >= self.file.span.low);
-        assert!(pos <= self.file.span.high);
+        assert!(pos <= self.file_span().high());
         match self.file.lines.binary_search(&pos) {
             Ok(i) => i,
             Err(i) => i - 1,
@@ -268,9 +260,8 @@ impl CodeMap {
     ///
     ///   * If `span` is not entirely within this file.
     pub fn source_slice(&self, span: Span) -> &str {
-        assert!(self.file.span.contains(span));
-        &self.file.source[((span.low - self.file.span.low) as usize)
-            ..((span.high - self.file.span.low) as usize)]
+        assert!(self.file_span().contains(span));
+        &self.file.source[(span.low.0 as usize)..(span.high.0 as usize)]
     }
 
     /// Gets the span representing a line by line number.
@@ -289,7 +280,7 @@ impl CodeMap {
                 .file
                 .lines
                 .get(line + 1)
-                .unwrap_or(&self.file.span.high),
+                .unwrap_or(&self.file_span().high),
         }
     }
 
@@ -503,9 +494,8 @@ fn test_codemap() {
 fn test_issue2() {
     let content = "a \nxyz\r\n";
     let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
-    let file = codemap.get_file();
 
-    let span = file.span.subspan(2, 3);
+    let span = codemap.file_span().subspan(2, 3);
     assert_eq!(
         codemap.look_up_span(span),
         SpanLoc {
@@ -524,24 +514,23 @@ fn test_issue2() {
 fn test_multibyte() {
     let content = "65°00′N 18°00′W 汉语\n🔬";
     let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
-    let file = codemap.get_file();
 
     assert_eq!(
-        codemap.find_line_col(file.span.low() + 21),
+        codemap.find_line_col(codemap.file_span().low() + 21),
         LineCol {
             line: 0,
             column: 15
         }
     );
     assert_eq!(
-        codemap.find_line_col(file.span.low() + 28),
+        codemap.find_line_col(codemap.file_span().low() + 28),
         LineCol {
             line: 0,
             column: 18
         }
     );
     assert_eq!(
-        codemap.find_line_col(file.span.low() + 33),
+        codemap.find_line_col(codemap.file_span().low() + 33),
         LineCol { line: 1, column: 1 }
     );
 }
