@@ -18,7 +18,7 @@
 //! Error types used by Starlark, mostly [`Diagnostic`].
 
 pub use crate::analysis::Lint;
-use crate::codemap::{CodeMap, Span, SpanLoc};
+use crate::codemap::{CodeMap, FileSpan, Span};
 use annotate_snippets::{
     display_list::{DisplayList, FormatOptions},
     snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
@@ -51,7 +51,7 @@ pub struct Frame {
     /// The name of the entry on the call-stack.
     pub name: String,
     /// The location of the definition, or [`None`] for native Rust functions.
-    pub location: Option<SpanLoc>,
+    pub location: Option<FileSpan>,
 }
 
 impl Display for Frame {

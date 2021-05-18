@@ -25,7 +25,7 @@
 //   up, in eval_call.
 
 use crate::{
-    codemap::{CodeMap, Span, SpanLoc},
+    codemap::{CodeMap, FileSpan, Span},
     errors::Frame,
     values::{ControlError, Value, Walker},
 };
@@ -40,7 +40,7 @@ struct CheapFrame<'v> {
 }
 
 impl CheapFrame<'_> {
-    fn resolve_location(&self) -> Option<SpanLoc> {
+    fn resolve_location(&self) -> Option<FileSpan> {
         self.location
             .as_ref()
             .map(|(codemap, span)| codemap.look_up_span(*span))
@@ -100,7 +100,7 @@ impl<'v> CallStack<'v> {
     /// The location at the top of the stack. May be `None` if
     /// either there the stack is empty, or the top of the stack lacks location
     /// information (e.g. called from Rust).
-    pub fn top_location(&self) -> Option<SpanLoc> {
+    pub fn top_location(&self) -> Option<FileSpan> {
         self.stack.last()?.resolve_location()
     }
 

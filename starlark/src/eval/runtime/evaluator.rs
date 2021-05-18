@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::{CodeMap, Span, SpanLoc},
+    codemap::{CodeMap, FileSpan, Span},
     collections::stack::Stack1,
     environment::{
         slots::{LocalSlotId, LocalSlots, ModuleSlotId},
@@ -174,7 +174,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Obtain the top location on the call-stack. May be [`None`] if the
     /// call happened via native functions.
-    pub fn call_stack_top_location(&self) -> Option<SpanLoc> {
+    pub fn call_stack_top_location(&self) -> Option<FileSpan> {
         self.call_stack.top_location()
     }
 
@@ -185,10 +185,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.before_stmt.push(f)
     }
 
-    /// Given a [`Span`] resolve it to a concrete [`SpanLoc`] using
+    /// Given a [`Span`] resolve it to a concrete [`FileSpan`] using
     /// whatever module is currently at the top of the stack.
     /// This function can be used in conjunction with [`before_stmt`](Evaluator::before_stmt).
-    pub fn look_up_span(&self, span: Span) -> SpanLoc {
+    pub fn look_up_span(&self, span: Span) -> FileSpan {
         self.codemap.look_up_span(span)
     }
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::codemap::{CodeMap, Span, SpanLoc};
+use crate::codemap::{CodeMap, FileSpan, Span};
 use gazebo::variants::VariantName;
 use std::fmt::{self, Display};
 
@@ -26,7 +26,7 @@ pub(crate) trait LintWarning: Display + VariantName {
 /// A private version of lint without the inner trait erased, useful so we can test
 /// using full matching, but then erase the internal details when exporting to users.
 pub(crate) struct LintT<T> {
-    pub location: SpanLoc,
+    pub location: FileSpan,
     pub original: String,
     pub problem: T,
 }
@@ -35,7 +35,7 @@ pub(crate) struct LintT<T> {
 #[derive(Debug)]
 pub struct Lint {
     /// Which code location does this lint refer to.
-    pub location: SpanLoc,
+    pub location: FileSpan,
     /// kebab-case constant describing this issue, e.g. `missing-return`.
     pub short_name: String,
     /// Is this code highly-likely to be wrong, rather

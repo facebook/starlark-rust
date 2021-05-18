@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::{CodeMap, Span, SpanLoc},
+    codemap::{CodeMap, FileSpan, Span},
     errors::Diagnostic,
     syntax::{
         ast::{AstModule, AstStmt, Stmt},
@@ -142,8 +142,8 @@ impl AstModule {
         loads
     }
 
-    /// Look up a [`Span`] contained in this module to a [`SpanLoc`].
-    pub fn look_up_span(&self, x: Span) -> SpanLoc {
+    /// Look up a [`Span`] contained in this module to a [`FileSpan`].
+    pub fn look_up_span(&self, x: Span) -> FileSpan {
         self.codemap.look_up_span(x)
     }
 }

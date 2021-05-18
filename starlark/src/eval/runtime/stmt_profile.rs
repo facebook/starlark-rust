@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::codemap::{CodeMap, Span, SpanLoc};
+use crate::codemap::{CodeMap, FileSpan, Span};
 use anyhow::Context;
 use gazebo::prelude::*;
 use std::{
@@ -128,7 +128,7 @@ impl StmtProfileData {
         data.add_last(now);
 
         struct Item {
-            span: SpanLoc,
+            span: FileSpan,
             time: Duration,
             count: usize,
         }

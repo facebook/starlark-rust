@@ -17,7 +17,7 @@
 
 use crate::{
     analysis::types::{LintT, LintWarning},
-    codemap::{CodeMap, Span, SpanLoc},
+    codemap::{CodeMap, FileSpan, Span},
     syntax::{
         ast::{Assign, AstExpr, AstStmt, AstString, BinOp, Expr, Stmt},
         AstModule,
@@ -33,7 +33,7 @@ pub(crate) enum Incompatibility {
     #[error("Type check `{0}` should be written `{1}`")]
     IncompatibleTypeCheck(String, String),
     #[error("Duplicate top-level assignment of `{0}`, first defined at {1}")]
-    DuplicateTopLevelAssign(String, SpanLoc),
+    DuplicateTopLevelAssign(String, FileSpan),
 }
 
 impl LintWarning for Incompatibility {

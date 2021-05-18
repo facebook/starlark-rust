@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::SpanLoc,
+    codemap::FileSpan,
     syntax::{ast::Stmt, AstModule},
 };
 use indexmap::IndexMap;
@@ -24,7 +24,7 @@ use indexmap::IndexMap;
 impl AstModule {
     /// Which symbols are exported by this module. These are the top-level assignments,
     /// including function definitions. Any symbols that start with `_` are not exported.
-    pub fn exported_symbols(&self) -> Vec<(SpanLoc, &str)> {
+    pub fn exported_symbols(&self) -> Vec<(FileSpan, &str)> {
         // Map since we only want to store the first of each export
         // IndexMap since we want the order to match the order they were defined in
         let mut result = IndexMap::new();

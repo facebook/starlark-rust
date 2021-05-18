@@ -197,10 +197,10 @@ impl CodeMap {
     }
 
     /// Gets the file and its line and column ranges represented by a `Span`.
-    pub fn look_up_span(&self, span: Span) -> SpanLoc {
+    pub fn look_up_span(&self, span: Span) -> FileSpan {
         let begin = self.find_line_col(span.begin);
         let end = self.find_line_col(span.end);
-        SpanLoc {
+        FileSpan {
             file: self.dupe(),
             begin,
             end,
@@ -294,13 +294,13 @@ pub struct LineCol {
 
 /// A file, and a line and column range within it.
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub struct SpanLoc {
+pub struct FileSpan {
     pub file: CodeMap,
     pub begin: LineCol,
     pub end: LineCol,
 }
 
-impl fmt::Display for SpanLoc {
+impl fmt::Display for FileSpan {
     /// Formats the span as `filename:start_line:start_column: end_line:end_column`,
     /// or if the span is zero-length, `filename:line:column`, with a 1-indexed line and column.
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -374,7 +374,7 @@ impl Display for LineColSpan {
 
 // Starlark line/columns are 0-based, then add 1 here to have 1-based.
 impl LineColSpan {
-    pub fn from_span_loc(span_loc: &SpanLoc) -> Self {
+    pub fn from_span_loc(span_loc: &FileSpan) -> Self {
         Self::from_span(span_loc.begin, span_loc.end)
     }
 
@@ -399,7 +399,7 @@ pub struct FileSpanLoc {
 }
 
 impl FileSpanLoc {
-    pub fn from_span_loc(span_loc: &SpanLoc) -> Self {
+    pub fn from_span_loc(span_loc: &FileSpan) -> Self {
         Self {
             span: LineColSpan::from_span_loc(span_loc),
             path: span_loc.file.filename().to_owned(),
@@ -478,7 +478,7 @@ fn test_issue2() {
     let span = codemap.file_span().subspan(2, 3);
     assert_eq!(
         codemap.look_up_span(span),
-        SpanLoc {
+        FileSpan {
             file: codemap.dupe(),
             begin: LineCol { line: 0, column: 2 },
             end: LineCol { line: 1, column: 0 }

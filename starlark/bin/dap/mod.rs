@@ -21,7 +21,7 @@ use gazebo::prelude::*;
 pub use library::*;
 use serde_json::{Map, Value};
 use starlark::{
-    codemap::{Span, SpanLoc},
+    codemap::{FileSpan, Span},
     environment::Module,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
@@ -263,7 +263,7 @@ impl DebugServer for Backend {
     }
 
     fn stack_trace(&self, _: StackTraceArguments) -> anyhow::Result<StackTraceResponseBody> {
-        fn convert_frame(id: usize, name: String, location: Option<SpanLoc>) -> StackFrame {
+        fn convert_frame(id: usize, name: String, location: Option<FileSpan>) -> StackFrame {
             let mut s = StackFrame {
                 id: id as i64,
                 name,

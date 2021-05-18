@@ -17,7 +17,7 @@
 
 use crate::{
     analysis::types::{LintT, LintWarning},
-    codemap::{CodeMap, Span, SpanLoc},
+    codemap::{CodeMap, FileSpan, Span},
     syntax::{
         ast::{AstExpr, AstLiteral, Expr},
         AstModule,
@@ -30,7 +30,7 @@ use thiserror::Error;
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum Dubious {
     #[error("Duplicate dictionary key `{0}`, also used at {1}")]
-    DuplicateKey(String, SpanLoc),
+    DuplicateKey(String, FileSpan),
 }
 
 impl LintWarning for Dubious {
