@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::{CodeMap, Span},
+    codemap::{CodeMap, Pos, Span},
     errors::Diagnostic,
     syntax::{
         cursors::{CursorBytes, CursorChars},
@@ -53,7 +53,6 @@ type Lexeme = anyhow::Result<(usize, Token, usize)>;
 pub(crate) struct Lexer<'a> {
     // Information for spans
     codemap: CodeMap,
-    filespan: Span,
     // Other info
     indent_levels: Vec<usize>,
     /// Lexemes that have been generated but not yet returned
@@ -65,11 +64,10 @@ pub(crate) struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str, dialect: &Dialect, codemap: CodeMap, filespan: Span) -> Self {
+    pub fn new(input: &'a str, dialect: &Dialect, codemap: CodeMap) -> Self {
         let lexer = Token::lexer(input);
         let mut lexer2 = Self {
             codemap,
-            filespan,
             // Aim to size all the buffers such that they never resize
             indent_levels: Vec::with_capacity(20),
             buffer: VecDeque::with_capacity(10),
@@ -91,7 +89,7 @@ impl<'a> Lexer<'a> {
     fn err_span<T>(&self, msg: LexemeError, start: usize, end: usize) -> anyhow::Result<T> {
         Err(Diagnostic::new(
             msg,
-            self.filespan.subspan(start as u32, end as u32),
+            Span::new(Pos::new(start as u32), Pos::new(end as u32)),
             self.codemap.dupe(),
         ))
     }

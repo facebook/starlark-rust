@@ -483,8 +483,7 @@ impl Assert {
     pub(crate) fn lex_tokens(&self, program: &str) -> Vec<(usize, Token, usize)> {
         fn tokens(dialect: &Dialect, program: &str) -> Vec<(usize, Token, usize)> {
             let codemap = CodeMap::new("assert.bzl".to_owned(), program.to_owned());
-            let file_span = codemap.file_span();
-            Lexer::new(program, dialect, codemap.dupe(), file_span)
+            Lexer::new(program, dialect, codemap.dupe())
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap_or_else(|e|
                     panic!(

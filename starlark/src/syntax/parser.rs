@@ -113,7 +113,7 @@ impl AstModule {
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
         let codemap = CodeMap::new(filename.to_owned(), content);
         let file_span = codemap.file_span();
-        let lexer = Lexer::new(codemap.source(), dialect, codemap.dupe(), file_span);
+        let lexer = Lexer::new(codemap.source(), dialect, codemap.dupe());
         match StarlarkParser::new().parse(&codemap, dialect, lexer) {
             Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
             Err(p) => Err(parse_error_add_span(p, file_span, codemap)),
