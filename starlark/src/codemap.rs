@@ -85,9 +85,7 @@ impl Span {
 
     /// Makes a span from offsets relative to the start of this span.
     ///
-    /// # Panics
-    ///   * If `end < begin`
-    ///   * If `end` is beyond the length of the span
+    /// Panics if `end < begin` or if `end` is beyond the length of the span.
     pub fn subspan(self, begin: u32, end: u32) -> Span {
         assert!(end >= begin);
         assert!(self.low + end <= self.high);
@@ -221,9 +219,7 @@ impl CodeMap {
     ///
     /// The lines are 0-indexed (first line is numbered 0)
     ///
-    /// # Panics
-    ///
-    ///  * If `pos` is not within this file's span
+    /// Panics if `pos` is not within this file's span.
     pub fn find_line(&self, pos: Pos) -> usize {
         assert!(pos <= self.file_span().high());
         match self.0.lines.binary_search(&pos) {
@@ -234,10 +230,8 @@ impl CodeMap {
 
     /// Gets the line and column of a Pos.
     ///
-    /// # Panics
-    ///
-    /// * If `pos` is not with this file's span
-    /// * If `pos` points to a byte in the middle of a UTF-8 character
+    /// Panics if `pos` is not with this file's span or
+    /// if `pos` points to a byte in the middle of a UTF-8 character.
     pub fn find_line_col(&self, pos: Pos) -> LineCol {
         let line = self.find_line(pos);
         let line_span = self.line_span(line);
@@ -256,9 +250,7 @@ impl CodeMap {
 
     /// Gets the source text of a Span.
     ///
-    /// # Panics
-    ///
-    ///   * If `span` is not entirely within this file.
+    /// Panics if `span` is not entirely within this file.
     pub fn source_slice(&self, span: Span) -> &str {
         assert!(self.file_span().contains(span));
         &self.0.source[(span.low.0 as usize)..(span.high.0 as usize)]
@@ -269,9 +261,7 @@ impl CodeMap {
     /// The line number is 0-indexed (first line is numbered 0). The returned span includes the
     /// line terminator.
     ///
-    /// # Panics
-    ///
-    ///  * If the line number is out of range
+    /// Panics if the line number is out of range.
     pub fn line_span(&self, line: usize) -> Span {
         assert!(line < self.0.lines.len());
         Span {
@@ -284,9 +274,7 @@ impl CodeMap {
     ///
     /// The string returned does not include the terminating \r or \n characters.
     ///
-    /// # Panics
-    ///
-    ///  * If the line number is out of range
+    /// Panics if the line number is out of range.
     pub fn source_line(&self, line: usize) -> &str {
         self.source_slice(self.line_span(line))
             .trim_end_matches(&['\n', '\r'][..])
