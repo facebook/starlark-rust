@@ -168,7 +168,7 @@ impl CodeMap {
     }
 
     /// Looks up a `File`
-    pub fn get_file(&self) -> &Arc<File> {
+    pub(crate) fn get_file(&self) -> &Arc<File> {
         &self.file
     }
 
@@ -198,7 +198,7 @@ impl CodeMap {
 }
 
 /// A `CodeMap`'s record of a source file.
-pub struct File {
+pub(crate) struct File {
     /// The span representing the entire file.
     span: Span,
 
