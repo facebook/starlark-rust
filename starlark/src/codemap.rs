@@ -26,8 +26,7 @@
 //! ```
 //! use starlark::codemap::CodeMap;
 //! let mut codemap = CodeMap::new("test.rs".to_owned(), "fn test(){\n    println!(\"Hello\");\n}\n".to_owned());
-//! let file = codemap.get_file();
-//! let string_literal_span = file.span.subspan(24, 31);
+//! let string_literal_span = codemap.file_span().subspan(24, 31);
 //!
 //! let location = codemap.look_up_span(string_literal_span);
 //! assert_eq!(location.file.name(), "test.rs");
@@ -173,6 +172,10 @@ impl CodeMap {
         &self.file
     }
 
+    pub fn file_span(&self) -> Span {
+        self.file.span
+    }
+
     /// Gets the file, line, and column represented by a `Pos`.
     pub fn look_up_pos(&self, pos: Pos) -> Loc {
         let position = self.find_line_col(pos);
@@ -197,7 +200,7 @@ impl CodeMap {
 /// A `CodeMap`'s record of a source file.
 pub struct File {
     /// The span representing the entire file.
-    pub span: Span,
+    span: Span,
 
     /// The filename as it would be displayed in an error message.
     name: String,
