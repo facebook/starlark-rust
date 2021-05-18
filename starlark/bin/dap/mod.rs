@@ -104,7 +104,7 @@ impl Backend {
                     false
                 } else {
                     let breaks = breakpoints.lock().unwrap();
-                    let span_loc = ctx.look_up_span(span);
+                    let span_loc = ctx.file_span(span);
                     breaks
                         .get(span_loc.file.filename())
                         .map(|set| set.contains(&span))
@@ -210,7 +210,7 @@ impl DebugServer for Backend {
                         .stmt_locations()
                         .iter()
                         .map(|x| {
-                            let span = ast.look_up_span(*x);
+                            let span = ast.file_span(*x);
                             (span.resolve_span().begin_line, *x)
                         })
                         .collect();
@@ -294,7 +294,7 @@ impl DebugServer for Backend {
         // We also have them in the wrong order
         self.with_ctx(box |span, ctx| {
             let frames = ctx.call_stack();
-            let mut next = Some(ctx.look_up_span(span));
+            let mut next = Some(ctx.file_span(span));
             let mut res = Vec::with_capacity(frames.len() + 1);
             for (i, x) in frames.iter().rev().enumerate() {
                 res.push(convert_frame(i, x.name.clone(), next));

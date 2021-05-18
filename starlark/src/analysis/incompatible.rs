@@ -130,10 +130,7 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
             res.push(LintT::new(
                 codemap,
                 x.span,
-                Incompatibility::DuplicateTopLevelAssign(
-                    x.node.clone(),
-                    codemap.look_up_span(*old),
-                ),
+                Incompatibility::DuplicateTopLevelAssign(x.node.clone(), codemap.file_span(*old)),
             ));
         } else {
             defined.insert(&x.node, (x.span, is_load));

@@ -57,7 +57,7 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         location: Option<Span>,
         context: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let loc = location.map(|x| context.look_up_span(x));
+        let loc = location.map(|x| context.file_span(x));
         let slots = self.collect.done(context.heap())?;
         let invoke = self.invoke;
         context.with_call_stack(function, loc, |context| match invoke {

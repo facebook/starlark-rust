@@ -116,7 +116,7 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
                         FlowIssue::MissingReturn(
                             // Statements often end with \n, so remove that to fit nicely
                             name.node.trim_end().to_owned(),
-                            codemap.look_up_span(reason).resolve(),
+                            codemap.file_span(reason).resolve(),
                         ),
                     ));
                 }
@@ -127,8 +127,8 @@ fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
                             span,
                             FlowIssue::MissingReturnExpression(
                                 name.node.clone(),
-                                codemap.look_up_span(x.span).resolve(),
-                                codemap.look_up_span(reason).resolve(),
+                                codemap.file_span(x.span).resolve(),
+                                codemap.file_span(reason).resolve(),
                             ),
                         ))
                     }

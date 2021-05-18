@@ -143,7 +143,7 @@ impl AstModule {
     }
 
     /// Look up a [`Span`] contained in this module to a [`FileSpan`].
-    pub fn look_up_span(&self, x: Span) -> FileSpan {
-        self.codemap.look_up_span(x)
+    pub fn file_span(&self, x: Span) -> FileSpan {
+        self.codemap.file_span(x)
     }
 }

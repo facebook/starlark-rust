@@ -61,7 +61,7 @@ impl<T: Display> Display for LintT<T> {
 
 impl<T: LintWarning> LintT<T> {
     pub(crate) fn new(codemap: &CodeMap, span: Span, problem: T) -> Self {
-        let location = codemap.look_up_span(span);
+        let location = codemap.file_span(span);
         Self {
             original: location.file.source_span(span).to_owned(),
             location,

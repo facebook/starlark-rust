@@ -188,8 +188,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Given a [`Span`] resolve it to a concrete [`FileSpan`] using
     /// whatever module is currently at the top of the stack.
     /// This function can be used in conjunction with [`before_stmt`](Evaluator::before_stmt).
-    pub fn look_up_span(&self, span: Span) -> FileSpan {
-        self.codemap.look_up_span(span)
+    pub fn file_span(&self, span: Span) -> FileSpan {
+        self.codemap.file_span(span)
     }
 
     pub(crate) fn check_types(&self) -> bool {

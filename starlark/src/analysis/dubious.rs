@@ -71,7 +71,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
                             res.push(LintT::new(
                                 codemap,
                                 old,
-                                Dubious::DuplicateKey(key.to_string(), codemap.look_up_span(pos)),
+                                Dubious::DuplicateKey(key.to_string(), codemap.file_span(pos)),
                             ))
                         }
                     }

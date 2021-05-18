@@ -42,7 +42,7 @@ impl AstModule {
         result
             .into_iter()
             .filter(|(name, _)| !name.starts_with('_'))
-            .map(|(name, span)| (self.look_up_span(span), name.as_str()))
+            .map(|(name, span)| (self.file_span(span), name.as_str()))
             .collect()
     }
 }

@@ -139,7 +139,7 @@ impl StmtProfileData {
         for ((file, span), (count, time)) in data.stmts {
             // EMPTY represents the first time special-case
             if file != FileId::EMPTY {
-                let span = data.files[&file].look_up_span(span);
+                let span = data.files[&file].file_span(span);
                 total_time += time;
                 total_count += count;
                 items.push(Item { span, count, time })

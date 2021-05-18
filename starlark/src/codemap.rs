@@ -183,7 +183,7 @@ impl CodeMap {
     }
 
     /// Gets the file and its line and column ranges represented by a `Span`.
-    pub fn look_up_span(&self, span: Span) -> FileSpan {
+    pub fn file_span(&self, span: Span) -> FileSpan {
         FileSpan {
             file: self.dupe(),
             span,

@@ -95,7 +95,7 @@ impl Compiler<'_> {
         return_type: Option<Box<AstExpr>>,
         suite: AstStmt,
     ) -> ExprCompiled {
-        let file = self.codemap.look_up_span(suite.span);
+        let file = self.codemap.file_span(suite.span);
         let function_name = format!("{}.{}", file.file.filename(), name);
 
         // The parameters run in the scope of the parent, so compile them with the outer

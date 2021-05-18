@@ -107,7 +107,7 @@ impl Diagnostic {
     pub fn set_span(&mut self, span: Span, codemap: CodeMap) {
         if self.span.is_none() {
             // We want the best span, which is likely the first person to set it
-            self.span = Some(codemap.look_up_span(span));
+            self.span = Some(codemap.file_span(span));
         }
     }
 
