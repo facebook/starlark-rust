@@ -81,7 +81,7 @@ pub(crate) fn parse_error_add_span(
             token: (x, .., y), ..
         } => span.subspan(*x as u64, *y as u64),
         lu::ParseError::UnrecognizedEOF { .. } => {
-            let x = span.high() - span.low();
+            let x = span.len();
             span.subspan(x, x)
         }
         lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x as u64, *y as u64),
