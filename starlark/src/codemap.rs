@@ -29,7 +29,7 @@
 //! let string_literal_span = codemap.file_span().subspan(24, 31);
 //!
 //! let location = codemap.look_up_span(string_literal_span);
-//! assert_eq!(location.file.name(), "test.rs");
+//! assert_eq!(location.file.filename(), "test.rs");
 //! assert_eq!(location.begin.line, 1);
 //! assert_eq!(location.begin.column, 13);
 //! assert_eq!(location.end.line, 1);
@@ -206,7 +206,7 @@ pub(crate) struct File {
 
 impl CodeMap {
     /// Gets the name of the file
-    pub fn name(&self) -> &str {
+    pub fn filename(&self) -> &str {
         &self.file.name
     }
 
@@ -321,7 +321,7 @@ impl fmt::Display for SpanLoc {
             write!(
                 f,
                 "{}:{}:{}",
-                self.file.name(),
+                self.file.filename(),
                 self.begin.line + 1,
                 self.begin.column + 1
             )
@@ -329,7 +329,7 @@ impl fmt::Display for SpanLoc {
             write!(
                 f,
                 "{}:{}:{}: {}:{}",
-                self.file.name(),
+                self.file.filename(),
                 self.begin.line + 1,
                 self.begin.column + 1,
                 self.end.line + 1,
@@ -415,7 +415,7 @@ impl FileSpanLoc {
     pub fn from_span_loc(span_loc: &SpanLoc) -> Self {
         Self {
             span: LineColSpan::from_span_loc(span_loc),
-            path: span_loc.file.name().to_owned(),
+            path: span_loc.file.filename().to_owned(),
         }
     }
 }
@@ -433,7 +433,7 @@ fn test_codemap() {
     let start = codemap.file_span().low();
 
     // Test .name()
-    assert_eq!(codemap.name(), "test1.rs");
+    assert_eq!(codemap.filename(), "test1.rs");
 
     // Test .find_line_col()
     assert_eq!(codemap.find_line_col(start), LineCol { line: 0, column: 0 });

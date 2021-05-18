@@ -159,7 +159,7 @@ impl StmtProfileData {
             writeln!(
                 file,
                 "\"{}\",\"{}:{}-{}:{}\",{:.3},{}",
-                x.span.file.name(),
+                x.span.file.filename(),
                 x.span.begin.line + 1,
                 x.span.begin.column + 1,
                 x.span.end.line + 1,

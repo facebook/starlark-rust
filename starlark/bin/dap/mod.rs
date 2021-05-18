@@ -106,7 +106,7 @@ impl Backend {
                     let breaks = breakpoints.lock().unwrap();
                     let span_loc = ctx.look_up_span(span);
                     breaks
-                        .get(span_loc.file.name())
+                        .get(span_loc.file.filename())
                         .map(|set| set.contains(&span))
                         .unwrap_or_default()
                 };
@@ -281,7 +281,7 @@ impl DebugServer for Backend {
                 s.end_line = Some(loc.end.line as i64 + 1);
                 s.end_column = Some(loc.end.column as i64 + 1);
                 s.source = Some(Source {
-                    path: Some(loc.file.name().to_owned()),
+                    path: Some(loc.file.filename().to_owned()),
                     ..Source::default()
                 })
             }

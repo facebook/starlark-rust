@@ -81,7 +81,7 @@ impl Message {
                     codemap.find_line_col(span.high()),
                 );
                 Self {
-                    path: codemap.name().to_owned(),
+                    path: codemap.filename().to_owned(),
                     span: Some(span),
                     severity: Severity::Error,
                     name: "error".to_owned(),
@@ -102,7 +102,7 @@ impl Message {
 
     pub fn from_lint(x: Lint) -> Self {
         Self {
-            path: x.location.file.name().to_owned(),
+            path: x.location.file.filename().to_owned(),
             span: Some(LineColSpan::from_span_loc(&x.location)),
             severity: if x.serious {
                 Severity::Warning

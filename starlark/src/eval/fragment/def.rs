@@ -96,7 +96,7 @@ impl Compiler<'_> {
         suite: AstStmt,
     ) -> ExprCompiled {
         let file = self.codemap.look_up_span(suite.span);
-        let function_name = format!("{}.{}", file.file.name(), name);
+        let function_name = format!("{}.{}", file.file.filename(), name);
 
         // The parameters run in the scope of the parent, so compile them with the outer
         // scope

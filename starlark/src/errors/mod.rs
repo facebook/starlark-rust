@@ -183,7 +183,7 @@ fn get_display_list_for_diagnostic<'a>(
         Slice {
             source: codemap.source_slice(source_span),
             line_start: 1 + first_line_col.line,
-            origin: Some(codemap.name()),
+            origin: Some(codemap.filename()),
             fold: false,
             annotations: vec![SourceAnnotation {
                 label: "",
