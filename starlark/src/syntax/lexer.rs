@@ -91,7 +91,7 @@ impl<'a> Lexer<'a> {
     fn err_span<T>(&self, msg: LexemeError, start: usize, end: usize) -> anyhow::Result<T> {
         Err(Diagnostic::new(
             msg,
-            self.filespan.subspan(start as u64, end as u64),
+            self.filespan.subspan(start as u32, end as u32),
             self.codemap.dupe(),
         ))
     }

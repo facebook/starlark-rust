@@ -51,17 +51,17 @@ use std::{
 )]
 pub struct Pos(u32);
 
-impl Add<u64> for Pos {
+impl Add<u32> for Pos {
     type Output = Pos;
-    fn add(self, other: u64) -> Pos {
-        Pos(self.0 + other as u32)
+    fn add(self, other: u32) -> Pos {
+        Pos(self.0 + other)
     }
 }
 
 impl Sub<Pos> for Pos {
-    type Output = u64;
-    fn sub(self, other: Pos) -> u64 {
-        (self.0 - other.0) as u64
+    type Output = u32;
+    fn sub(self, other: Pos) -> u32 {
+        self.0 - other.0
     }
 }
 
@@ -81,7 +81,7 @@ impl Span {
     /// # Panics
     ///   * If `end < begin`
     ///   * If `end` is beyond the length of the span
-    pub fn subspan(self, begin: u64, end: u64) -> Span {
+    pub fn subspan(self, begin: u32, end: u32) -> Span {
         assert!(end >= begin);
         assert!(self.low + end <= self.high);
         Span {
@@ -106,7 +106,7 @@ impl Span {
     }
 
     /// The length in bytes of the text of the span
-    pub fn len(self) -> u64 {
+    pub fn len(self) -> u32 {
         self.high - self.low
     }
 
@@ -150,12 +150,12 @@ impl CodeMap {
     /// Creates an new `CodeMap`.
     pub fn new(filename: String, contents: String) -> CodeMap {
         let low = Pos(1);
-        let high = low + contents.len() as u64;
+        let high = low + contents.len() as u32;
         let mut lines = vec![low];
         lines.extend(
             contents
                 .match_indices('\n')
-                .map(|(p, _)| low + (p + 1) as u64),
+                .map(|(p, _)| low + (p + 1) as u32),
         );
 
         CodeMap {

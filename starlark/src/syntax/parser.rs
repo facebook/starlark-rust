@@ -75,16 +75,16 @@ pub(crate) fn parse_error_add_span(
     };
     let span = match &err {
         lu::ParseError::InvalidToken { location } => {
-            span.subspan(*location as u64, *location as u64)
+            span.subspan(*location as u32, *location as u32)
         }
         lu::ParseError::UnrecognizedToken {
             token: (x, .., y), ..
-        } => span.subspan(*x as u64, *y as u64),
+        } => span.subspan(*x as u32, *y as u32),
         lu::ParseError::UnrecognizedEOF { .. } => {
             let x = span.len();
             span.subspan(x, x)
         }
-        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x as u64, *y as u64),
+        lu::ParseError::ExtraToken { token: (x, .., y) } => span.subspan(*x as u32, *y as u32),
         lu::ParseError::User { .. } => unreachable!(),
     };
 

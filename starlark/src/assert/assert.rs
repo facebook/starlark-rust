@@ -558,7 +558,7 @@ impl Assert {
                 if let Some(d) = e.downcast_ref::<Diagnostic>() {
                     if let Some((span, codemap)) = &d.span {
                         let file = codemap.get_file();
-                        let want_span = file.span.subspan(begin as u64, end as u64);
+                        let want_span = file.span.subspan(begin as u32, end as u32);
                         if *span == want_span {
                             return e; // Success
                         }

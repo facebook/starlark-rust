@@ -61,7 +61,7 @@ pub struct AstModule {
 pub(crate) trait ToAst: Sized {
     fn ast(self, file_span: Span, begin: usize, end: usize) -> Spanned<Self> {
         Spanned {
-            span: file_span.subspan(begin as u64, end as u64),
+            span: file_span.subspan(begin as u32, end as u32),
             node: self,
         }
     }
