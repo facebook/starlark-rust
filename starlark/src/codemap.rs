@@ -40,7 +40,7 @@ use std::{
     cmp,
     fmt::{self, Display},
     hash::Hash,
-    ops::{Add, Deref, Sub},
+    ops::{Add, Deref},
     sync::Arc,
 };
 
@@ -54,13 +54,6 @@ impl Add<u32> for Pos {
     type Output = Pos;
     fn add(self, other: u32) -> Pos {
         Pos(self.0 + other)
-    }
-}
-
-impl Sub<Pos> for Pos {
-    type Output = u32;
-    fn sub(self, other: Pos) -> u32 {
-        self.0 - other.0
     }
 }
 
@@ -106,7 +99,7 @@ impl Span {
 
     /// The length in bytes of the text of the span
     pub fn len(self) -> u32 {
-        self.high - self.low
+        self.high.0 - self.low.0
     }
 
     /// Create a span that encloses both `self` and `other`.
@@ -241,7 +234,7 @@ impl CodeMap {
     pub fn find_line_col(&self, pos: Pos) -> LineCol {
         let line = self.find_line(pos);
         let line_span = self.line_span(line);
-        let byte_col = pos - line_span.low;
+        let byte_col = pos.0 - line_span.low.0;
         let column = self.source_slice(line_span)[..byte_col as usize]
             .chars()
             .count();
