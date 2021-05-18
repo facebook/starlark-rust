@@ -71,7 +71,7 @@ d = 2
         let res = modu.exported_symbols();
         assert_eq!(
             res.map(|(loc, name)| format!("{} {}", loc, name)),
-            &["X:3:5: 3:6 b", "X:4:1: 4:2 d"]
+            &["X:3:5-6 b", "X:4:1-2 d"]
         );
     }
 }

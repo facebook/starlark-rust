@@ -82,7 +82,7 @@ mod test {
     }
 
     #[test]
-    fn test_lint_incompatible() {
+    fn test_lint_performance() {
         let mut res = Vec::new();
         dict_copy(
             &module(
@@ -97,7 +97,7 @@ def foo(extra, **kwargs):
         );
         assert_eq!(
             res.map(|x| x.to_string()),
-            &["bad.bzl:3:9: 3:23: Dict copy `dict(**kwargs)` is more efficient as `dict(kwargs)`"]
+            &["bad.bzl:3:9-23: Dict copy `dict(**kwargs)` is more efficient as `dict(kwargs)`"]
         );
     }
 }

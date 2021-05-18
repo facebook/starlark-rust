@@ -216,7 +216,7 @@ def foo():
         assert_eq!(
             res.map(|x| x.to_string()),
             &[
-                "bad.py:3:8: 3:22: Type check `(type(x) == str)` should be written `type(x) == type(\"\")`"
+                "bad.py:3:8-22: Type check `(type(x) == str)` should be written `type(x) == type(\"\")`"
             ]
         );
     }
