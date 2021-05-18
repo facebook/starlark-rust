@@ -209,7 +209,7 @@ fail(2)
     let ast = assert::parse_ast(content);
     match &ast.statement.node {
         Stmt::Statements(xs) => {
-            let lines = xs.map(|x| ast.codemap.find_line_col(x.span.begin()).line);
+            let lines = xs.map(|x| ast.codemap.resolve_span(x.span).begin_line);
             assert_eq!(lines, vec![0, 3, 5])
         }
         _ => panic!("Expected to parse as statements"),

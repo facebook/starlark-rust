@@ -229,7 +229,7 @@ impl CodeMap {
     ///
     /// Panics if `pos` is not with this file's span or
     /// if `pos` points to a byte in the middle of a UTF-8 character.
-    pub fn find_line_col(&self, pos: Pos) -> LineCol {
+    fn find_line_col(&self, pos: Pos) -> LineCol {
         let line = self.find_line(pos);
         let line_span = self.line_span(line);
         let byte_col = pos.0 - line_span.begin.0;
