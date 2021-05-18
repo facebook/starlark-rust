@@ -134,7 +134,7 @@ impl<T> Deref for Spanned<T> {
 }
 
 /// A data structure recording a source code file for position lookup.
-#[derive(Debug, Clone, Dupe, PartialEq, Eq)]
+#[derive(Clone, Dupe)]
 pub struct CodeMap {
     file: Arc<File>,
 }
@@ -144,6 +144,21 @@ impl Default for CodeMap {
         Self::new("".to_owned(), "".to_owned())
     }
 }
+
+impl fmt::Debug for CodeMap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "CodeMap({:?})", self.file.name)
+    }
+}
+
+impl PartialEq for CodeMap {
+    /// Compares by identity
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.file, &other.file)
+    }
+}
+
+impl Eq for CodeMap {}
 
 impl CodeMap {
     /// Creates an new `CodeMap`.
@@ -304,21 +319,6 @@ impl CodeMap {
         self.file.lines.len()
     }
 }
-
-impl fmt::Debug for File {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "File({:?})", self.name)
-    }
-}
-
-impl PartialEq for File {
-    /// Compares by identity
-    fn eq(&self, other: &File) -> bool {
-        std::ptr::eq(self, other)
-    }
-}
-
-impl Eq for File {}
 
 /// A line and column.
 #[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Debug)]
