@@ -28,11 +28,11 @@ use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum FlowIssue {
-    #[error("`return` lacks expression, but function `{}` at {} seems to want one due to {}", .0, .1, .2)]
+    #[error("`return` lacks expression, but function `{0}` at {1} seems to want one due to {2}")]
     MissingReturnExpression(String, FileSpanLoc, FileSpanLoc),
-    #[error("No `return` at the end, but function `{}` seems to want one due to {}", .0, .1)]
+    #[error("No `return` at the end, but function `{0}` seems to want one due to {1}")]
     MissingReturn(String, FileSpanLoc),
-    #[error("Unreachable statement `{}`", .0)]
+    #[error("Unreachable statement `{0}`")]
     Unreachable(String),
     #[error("Redundant `return` at the end of a function")]
     RedundantReturn,

@@ -29,7 +29,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum Dubious {
-    #[error("Duplicate dictionary key `{}`, also used at {}", .0, .1)]
+    #[error("Duplicate dictionary key `{0}`, also used at {1}")]
     DuplicateKey(String, SpanLoc),
 }
 

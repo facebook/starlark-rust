@@ -33,19 +33,19 @@ use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum NameWarning {
-    #[error("Unused `load` of `{}`", .0)]
+    #[error("Unused `load` of `{0}`")]
     UnusedLoad(String),
-    #[error("Unused assignment of `{}`", .0)]
+    #[error("Unused assignment of `{0}`")]
     UnusedAssign(String),
-    #[error("Unused argument `{}`", .0)]
+    #[error("Unused argument `{0}`")]
     UnusedArgument(String),
-    #[error("Use of unassigned variable `{}`", .0)]
+    #[error("Use of unassigned variable `{0}`")]
     UsingUnassigned(String),
-    #[error("Use of undefined variable `{}`", .0)]
+    #[error("Use of undefined variable `{0}`")]
     UsingUndefined(String),
-    #[error("Underscore-prefixed nested function name `{}`", .0)]
+    #[error("Underscore-prefixed nested function name `{0}`")]
     UnderscoreFunction(String),
-    #[error("Used ignored variable `{}`", .0)]
+    #[error("Used ignored variable `{0}`")]
     UsingIgnored(String),
 }
 

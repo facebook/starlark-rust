@@ -28,7 +28,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum Performance {
-    #[error("Dict copy `{}` is more efficient as `{}`", .0, .1)]
+    #[error("Dict copy `{0}` is more efficient as `{1}`")]
     DictWithoutStarStar(String, String),
 }
 

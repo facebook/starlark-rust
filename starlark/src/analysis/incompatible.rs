@@ -30,9 +30,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum Incompatibility {
-    #[error("Type check `{}` should be written `{}`", .0, .1)]
+    #[error("Type check `{0}` should be written `{1}`")]
     IncompatibleTypeCheck(String, String),
-    #[error("Duplicate top-level assignment of `{}`, first defined at {}", .0, .1)]
+    #[error("Duplicate top-level assignment of `{0}`, first defined at {1}")]
     DuplicateTopLevelAssign(String, SpanLoc),
 }
 
