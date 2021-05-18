@@ -39,7 +39,7 @@ use gazebo::prelude::*;
 use std::{
     cmp,
     fmt::{self, Display},
-    hash::{Hash, Hasher},
+    hash::Hash,
     ops::{Add, Deref, Sub},
     sync::Arc,
 };
@@ -319,12 +319,6 @@ impl PartialEq for File {
 }
 
 impl Eq for File {}
-
-impl Hash for File {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        self.span.hash(hasher);
-    }
-}
 
 /// A line and column.
 #[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Debug)]
