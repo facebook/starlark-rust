@@ -21,20 +21,6 @@
 //! 32-bit `Pos` indexing into the `CodeMap`, under the assumption that the total amount of parsed
 //! source code will not exceed 4GiB. The `CodeMap` can look up the source file, line, and column
 //! of a `Pos` or `Span`, as well as provide source code snippets for error reporting.
-//!
-//! # Example
-//! ```
-//! use starlark::codemap::{CodeMap, Pos, Span};
-//! let mut codemap = CodeMap::new("test.rs".to_owned(), "fn test(){\n    println!(\"Hello\");\n}\n".to_owned());
-//! let string_literal_span = Span::new(Pos::new(24), Pos::new(31));
-//!
-//! let location = codemap.look_up_span(string_literal_span);
-//! assert_eq!(location.file.filename(), "test.rs");
-//! assert_eq!(location.begin.line, 1);
-//! assert_eq!(location.begin.column, 13);
-//! assert_eq!(location.end.line, 1);
-//! assert_eq!(location.end.column, 20);
-//! ```
 use gazebo::prelude::*;
 use std::{
     cmp,
@@ -173,7 +159,7 @@ impl Eq for CodeMap {}
 
 impl CodeMap {
     /// Creates an new `CodeMap`.
-    pub fn new(filename: String, source: String) -> CodeMap {
+    pub(crate) fn new(filename: String, source: String) -> CodeMap {
         let mut lines = vec![Pos(0)];
         lines.extend(source.match_indices('\n').map(|(p, _)| Pos(p as u32 + 1)));
 
