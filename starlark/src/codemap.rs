@@ -413,104 +413,109 @@ impl Display for FileSpanLoc {
     }
 }
 
-#[test]
-fn test_codemap() {
-    let source = "abcd\nefghij\nqwerty";
-    let codemap = CodeMap::new("test1.rs".to_owned(), source.to_owned());
-    let start = codemap.file_span().begin();
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    // Test .name()
-    assert_eq!(codemap.filename(), "test1.rs");
+    #[test]
+    fn test_codemap() {
+        let source = "abcd\nefghij\nqwerty";
+        let codemap = CodeMap::new("test1.rs".to_owned(), source.to_owned());
+        let start = codemap.file_span().begin();
 
-    // Test .find_line_col()
-    assert_eq!(codemap.find_line_col(start), LineCol { line: 0, column: 0 });
-    assert_eq!(
-        codemap.find_line_col(start + 4),
-        LineCol { line: 0, column: 4 }
-    );
-    assert_eq!(
-        codemap.find_line_col(start + 5),
-        LineCol { line: 1, column: 0 }
-    );
-    assert_eq!(
-        codemap.find_line_col(start + 16),
-        LineCol { line: 2, column: 4 }
-    );
+        // Test .name()
+        assert_eq!(codemap.filename(), "test1.rs");
 
-    // Test .source() and .num_lines()
-    assert_eq!(codemap.source(), source);
-    assert_eq!(codemap.num_lines(), 3);
-
-    // Test generic properties on each line
-    for line in 0..3 {
-        let line_str = codemap.source_line(line);
-        let line_span = codemap.line_span(line);
-        // The line_str omits trailing newlines
+        // Test .find_line_col()
+        assert_eq!(codemap.find_line_col(start), LineCol { line: 0, column: 0 });
         assert_eq!(
-            line_str.len() + if line < 2 { 1 } else { 0 },
-            line_span.len() as usize
-        );
-        assert_eq!(line_str, source.lines().nth(line).unwrap());
-        assert_eq!(codemap.find_line(line_span.begin()), line);
-        // The final character might be a newline, which is counted as the next line.
-        // Not sure this is a good thing!
-        let end = Pos(line_span.end().0 - 1);
-        assert_eq!(codemap.find_line(end), line);
-        assert_eq!(
-            codemap.find_line_col(line_span.begin()),
-            LineCol { line, column: 0 }
+            codemap.find_line_col(start + 4),
+            LineCol { line: 0, column: 4 }
         );
         assert_eq!(
-            codemap.find_line_col(end),
-            LineCol {
-                line,
-                column: line_span.len() as usize - 1
+            codemap.find_line_col(start + 5),
+            LineCol { line: 1, column: 0 }
+        );
+        assert_eq!(
+            codemap.find_line_col(start + 16),
+            LineCol { line: 2, column: 4 }
+        );
+
+        // Test .source() and .num_lines()
+        assert_eq!(codemap.source(), source);
+        assert_eq!(codemap.num_lines(), 3);
+
+        // Test generic properties on each line
+        for line in 0..3 {
+            let line_str = codemap.source_line(line);
+            let line_span = codemap.line_span(line);
+            // The line_str omits trailing newlines
+            assert_eq!(
+                line_str.len() + if line < 2 { 1 } else { 0 },
+                line_span.len() as usize
+            );
+            assert_eq!(line_str, source.lines().nth(line).unwrap());
+            assert_eq!(codemap.find_line(line_span.begin()), line);
+            // The final character might be a newline, which is counted as the next line.
+            // Not sure this is a good thing!
+            let end = Pos(line_span.end().0 - 1);
+            assert_eq!(codemap.find_line(end), line);
+            assert_eq!(
+                codemap.find_line_col(line_span.begin()),
+                LineCol { line, column: 0 }
+            );
+            assert_eq!(
+                codemap.find_line_col(end),
+                LineCol {
+                    line,
+                    column: line_span.len() as usize - 1
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn test_issue2() {
+        let content = "a \nxyz\r\n";
+        let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
+
+        let span = codemap.file_span().subspan(2, 3);
+        assert_eq!(
+            codemap.look_up_span(span),
+            FileSpan {
+                file: codemap.dupe(),
+                begin: LineCol { line: 0, column: 2 },
+                end: LineCol { line: 1, column: 0 }
             }
         );
+
+        assert_eq!(codemap.source_line(0), "a ");
+        assert_eq!(codemap.source_line(1), "xyz");
+        assert_eq!(codemap.source_line(2), "");
     }
-}
 
-#[test]
-fn test_issue2() {
-    let content = "a \nxyz\r\n";
-    let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
+    #[test]
+    fn test_multibyte() {
+        let content = "65°00′N 18°00′W 汉语\n🔬";
+        let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
 
-    let span = codemap.file_span().subspan(2, 3);
-    assert_eq!(
-        codemap.look_up_span(span),
-        FileSpan {
-            file: codemap.dupe(),
-            begin: LineCol { line: 0, column: 2 },
-            end: LineCol { line: 1, column: 0 }
-        }
-    );
-
-    assert_eq!(codemap.source_line(0), "a ");
-    assert_eq!(codemap.source_line(1), "xyz");
-    assert_eq!(codemap.source_line(2), "");
-}
-
-#[test]
-fn test_multibyte() {
-    let content = "65°00′N 18°00′W 汉语\n🔬";
-    let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
-
-    assert_eq!(
-        codemap.find_line_col(codemap.file_span().begin() + 21),
-        LineCol {
-            line: 0,
-            column: 15
-        }
-    );
-    assert_eq!(
-        codemap.find_line_col(codemap.file_span().begin() + 28),
-        LineCol {
-            line: 0,
-            column: 18
-        }
-    );
-    assert_eq!(
-        codemap.find_line_col(codemap.file_span().begin() + 33),
-        LineCol { line: 1, column: 1 }
-    );
+        assert_eq!(
+            codemap.find_line_col(codemap.file_span().begin() + 21),
+            LineCol {
+                line: 0,
+                column: 15
+            }
+        );
+        assert_eq!(
+            codemap.find_line_col(codemap.file_span().begin() + 28),
+            LineCol {
+                line: 0,
+                column: 18
+            }
+        );
+        assert_eq!(
+            codemap.find_line_col(codemap.file_span().begin() + 33),
+            LineCol { line: 1, column: 1 }
+        );
+    }
 }
