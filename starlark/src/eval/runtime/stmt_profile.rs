@@ -35,13 +35,13 @@ pub(crate) struct StmtProfile(Option<Box<StmtProfileData>>);
 // somewhat delving into internal details.
 // Remains unique because we take a reference to the CodeMap.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Dupe)]
-struct FileId(*const crate::codemap::File);
+struct FileId(*const crate::codemap::CodeMapData);
 
 impl FileId {
     const EMPTY: FileId = FileId(ptr::null());
 
     fn new(codemap: &CodeMap) -> Self {
-        Self(Arc::as_ptr(codemap.get_file()))
+        Self(Arc::as_ptr(codemap.get_ptr()))
     }
 }
 

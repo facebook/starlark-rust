@@ -128,8 +128,16 @@ impl<T> Deref for Spanned<T> {
 
 /// A data structure recording a source code file for position lookup.
 #[derive(Clone, Dupe)]
-pub struct CodeMap {
-    file: Arc<File>,
+pub struct CodeMap(Arc<CodeMapData>);
+
+/// A `CodeMap`'s record of a source file.
+pub(crate) struct CodeMapData {
+    /// The filename as it would be displayed in an error message.
+    filename: String,
+    /// Contents of the file.
+    source: String,
+    /// Byte positions of line beginnings.
+    lines: Vec<Pos>,
 }
 
 impl Default for CodeMap {
@@ -140,14 +148,14 @@ impl Default for CodeMap {
 
 impl fmt::Debug for CodeMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CodeMap({:?})", self.file.name)
+        write!(f, "CodeMap({:?})", self.0.filename)
     }
 }
 
 impl PartialEq for CodeMap {
     /// Compares by identity
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.file, &other.file)
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -155,28 +163,26 @@ impl Eq for CodeMap {}
 
 impl CodeMap {
     /// Creates an new `CodeMap`.
-    pub fn new(filename: String, contents: String) -> CodeMap {
+    pub fn new(filename: String, source: String) -> CodeMap {
         let mut lines = vec![Pos(0)];
-        lines.extend(contents.match_indices('\n').map(|(p, _)| Pos(p as u32 + 1)));
+        lines.extend(source.match_indices('\n').map(|(p, _)| Pos(p as u32 + 1)));
 
-        CodeMap {
-            file: Arc::new(File {
-                name: filename,
-                source: contents,
-                lines,
-            }),
-        }
+        CodeMap(Arc::new(CodeMapData {
+            filename,
+            source,
+            lines,
+        }))
     }
 
-    /// Looks up a `File`
-    pub(crate) fn get_file(&self) -> &Arc<File> {
-        &self.file
+    /// Only used internally for profiling optimisations
+    pub(crate) fn get_ptr(&self) -> &Arc<CodeMapData> {
+        &self.0
     }
 
     pub fn file_span(&self) -> Span {
         Span {
             low: Pos(0),
-            high: Pos(self.file.source.len() as u32),
+            high: Pos(self.0.source.len() as u32),
         }
     }
 
@@ -190,24 +196,10 @@ impl CodeMap {
             end,
         }
     }
-}
 
-/// A `CodeMap`'s record of a source file.
-pub(crate) struct File {
-    /// The filename as it would be displayed in an error message.
-    name: String,
-
-    /// Contents of the file.
-    source: String,
-
-    /// Byte positions of line beginnings.
-    lines: Vec<Pos>,
-}
-
-impl CodeMap {
     /// Gets the name of the file
     pub fn filename(&self) -> &str {
-        &self.file.name
+        &self.0.filename
     }
 
     /// Gets the line number of a Pos.
@@ -219,7 +211,7 @@ impl CodeMap {
     ///  * If `pos` is not within this file's span
     pub fn find_line(&self, pos: Pos) -> usize {
         assert!(pos <= self.file_span().high());
-        match self.file.lines.binary_search(&pos) {
+        match self.0.lines.binary_search(&pos) {
             Ok(i) => i,
             Err(i) => i - 1,
         }
@@ -244,7 +236,7 @@ impl CodeMap {
 
     /// Gets the full source text of the file
     pub fn source(&self) -> &str {
-        &self.file.source
+        &self.0.source
     }
 
     /// Gets the source text of a Span.
@@ -254,7 +246,7 @@ impl CodeMap {
     ///   * If `span` is not entirely within this file.
     pub fn source_slice(&self, span: Span) -> &str {
         assert!(self.file_span().contains(span));
-        &self.file.source[(span.low.0 as usize)..(span.high.0 as usize)]
+        &self.0.source[(span.low.0 as usize)..(span.high.0 as usize)]
     }
 
     /// Gets the span representing a line by line number.
@@ -266,14 +258,10 @@ impl CodeMap {
     ///
     ///  * If the line number is out of range
     pub fn line_span(&self, line: usize) -> Span {
-        assert!(line < self.file.lines.len());
+        assert!(line < self.0.lines.len());
         Span {
-            low: self.file.lines[line],
-            high: *self
-                .file
-                .lines
-                .get(line + 1)
-                .unwrap_or(&self.file_span().high),
+            low: self.0.lines[line],
+            high: *self.0.lines.get(line + 1).unwrap_or(&self.file_span().high),
         }
     }
 
@@ -291,7 +279,7 @@ impl CodeMap {
 
     /// Gets the number of lines in the file
     pub fn num_lines(&self) -> usize {
-        self.file.lines.len()
+        self.0.lines.len()
     }
 }
 
