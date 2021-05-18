@@ -184,12 +184,9 @@ impl CodeMap {
 
     /// Gets the file and its line and column ranges represented by a `Span`.
     pub fn look_up_span(&self, span: Span) -> FileSpan {
-        let begin = self.find_line_col(span.begin);
-        let end = self.find_line_col(span.end);
         FileSpan {
             file: self.dupe(),
-            begin,
-            end,
+            span,
         }
     }
 
@@ -288,31 +285,33 @@ pub struct LineCol {
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct FileSpan {
     pub file: CodeMap,
-    pub begin: LineCol,
-    pub end: LineCol,
+    pub span: Span,
 }
 
 impl fmt::Display for FileSpan {
     /// Formats the span as `filename:start_line:start_column: end_line:end_column`,
     /// or if the span is zero-length, `filename:line:column`, with a 1-indexed line and column.
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let resolved_span = ResolvedSpan::from_span_loc(self);
-        write!(f, "{}:{}", self.file.filename(), resolved_span)
+        write!(f, "{}:{}", self.file.filename(), self.resolve_span())
     }
 }
 
 impl FileSpan {
+    pub fn resolve_span(&self) -> ResolvedSpan {
+        self.file.resolve_span(self.span)
+    }
+
     pub fn resolve(&self) -> ResolvedFileSpan {
         ResolvedFileSpan {
             file: self.file.filename().to_owned(),
-            span: ResolvedSpan::from_span(self.begin, self.end),
+            span: self.file.resolve_span(self.span),
         }
     }
 }
 
 /// The locations of values within a span.
 /// All are 0-based, but print out with 1-based.
-#[derive(Debug, Dupe, Clone, Copy)]
+#[derive(Debug, Dupe, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedSpan {
     pub begin_line: usize,
     pub begin_column: usize,
@@ -349,8 +348,8 @@ impl Display for ResolvedSpan {
 }
 
 impl ResolvedSpan {
-    pub fn from_span_loc(span_loc: &FileSpan) -> Self {
-        Self::from_span(span_loc.begin, span_loc.end)
+    pub fn from_span_loc(span: &FileSpan) -> Self {
+        span.resolve_span()
     }
 
     pub fn from_span(begin: LineCol, end: LineCol) -> Self {
@@ -443,11 +442,12 @@ mod test {
 
         let span = codemap.file_span().subspan(2, 3);
         assert_eq!(
-            codemap.look_up_span(span),
-            FileSpan {
-                file: codemap.dupe(),
-                begin: LineCol { line: 0, column: 2 },
-                end: LineCol { line: 1, column: 0 }
+            codemap.resolve_span(span),
+            ResolvedSpan {
+                begin_line: 0,
+                begin_column: 2,
+                end_line: 1,
+                end_column: 0
             }
         );
 

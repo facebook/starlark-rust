@@ -412,7 +412,10 @@ def test7():
         );
         let mut res = Vec::new();
         redundant(&m.codemap, &m.statement, &mut res);
-        assert_eq!(res.map(|x| x.location.begin.line), &[3, 9, 19]);
+        assert_eq!(
+            res.map(|x| x.location.resolve_span().begin_line),
+            &[3, 9, 19]
+        );
     }
 
     #[test]

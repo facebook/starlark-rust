@@ -158,12 +158,9 @@ impl StmtProfileData {
         for x in items {
             writeln!(
                 file,
-                "\"{}\",\"{}:{}-{}:{}\",{:.3},{}",
+                "\"{}\",\"{}\",{:.3},{}",
                 x.span.file.filename(),
-                x.span.begin.line + 1,
-                x.span.begin.column + 1,
-                x.span.end.line + 1,
-                x.span.end.column + 1,
+                x.span.file.resolve_span(x.span.span),
                 x.time.as_secs_f64(),
                 x.count
             )?;

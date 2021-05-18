@@ -211,7 +211,7 @@ impl DebugServer for Backend {
                         .iter()
                         .map(|x| {
                             let span = ast.look_up_span(*x);
-                            (span.begin.line, *x)
+                            (span.resolve_span().begin_line, *x)
                         })
                         .collect();
                     let list = breakpoints.map(|x| poss.get(&(x.line as usize - 1)));
@@ -276,10 +276,11 @@ impl DebugServer for Backend {
                 source: None,
             };
             if let Some(loc) = location {
-                s.line = loc.begin.line as i64 + 1;
-                s.column = loc.begin.column as i64 + 1;
-                s.end_line = Some(loc.end.line as i64 + 1);
-                s.end_column = Some(loc.end.column as i64 + 1);
+                let span = loc.resolve_span();
+                s.line = span.begin_line as i64 + 1;
+                s.column = span.begin_column as i64 + 1;
+                s.end_line = Some(span.end_line as i64 + 1);
+                s.end_column = Some(span.end_column as i64 + 1);
                 s.source = Some(Source {
                     path: Some(loc.file.filename().to_owned()),
                     ..Source::default()

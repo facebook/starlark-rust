@@ -81,7 +81,7 @@ impl ConformanceTest {
                 Some(Diagnostic {
                     span: Some((span, codemap)),
                     ..
-                }) => Some(codemap.look_up_span(*span).begin.line + 1),
+                }) => Some(codemap.resolve_span(*span).begin_line + 1),
                 _ => None,
             }
         }
