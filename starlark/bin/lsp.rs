@@ -51,8 +51,8 @@ fn to_severity(x: Severity) -> DiagnosticSeverity {
 fn to_diagnostic(x: StarlarkMessage) -> Diagnostic {
     let range = match x.span {
         Some(s) => Range::new(
-            Position::new((s.begin.line - 1) as u64, (s.begin.column - 1) as u64),
-            Position::new((s.end.line - 1) as u64, (s.end.column - 1) as u64),
+            Position::new(s.begin_line as u64, s.begin_column as u64),
+            Position::new(s.end_line as u64, s.end_column as u64),
         ),
         _ => Range::default(),
     };

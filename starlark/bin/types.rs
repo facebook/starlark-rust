@@ -18,7 +18,7 @@
 use gazebo::prelude::*;
 use serde::Serialize;
 use starlark::{
-    codemap::LineColSpan,
+    codemap::ResolvedSpan,
     errors::{Diagnostic, Lint},
 };
 use std::fmt::{self, Display};
@@ -49,7 +49,7 @@ impl Display for Severity {
 #[derive(Debug, Clone)]
 pub struct Message {
     pub path: String,
-    pub span: Option<LineColSpan>,
+    pub span: Option<ResolvedSpan>,
     pub severity: Severity,
     pub name: String,
     pub description: String,
@@ -76,10 +76,7 @@ impl Message {
                 ..
             }) => {
                 let original = codemap.source_span(*span).to_owned();
-                let span = LineColSpan::from_span(
-                    codemap.find_line_col(span.begin()),
-                    codemap.find_line_col(span.end()),
-                );
+                let span = codemap.resolve_span(*span);
                 Self {
                     path: codemap.filename().to_owned(),
                     span: Some(span),
@@ -103,7 +100,7 @@ impl Message {
     pub fn from_lint(x: Lint) -> Self {
         Self {
             path: x.location.file.filename().to_owned(),
-            span: Some(LineColSpan::from_span_loc(&x.location)),
+            span: Some(ResolvedSpan::from_span_loc(&x.location)),
             severity: if x.serious {
                 Severity::Warning
             } else {
@@ -136,8 +133,8 @@ impl LintMessage {
     pub fn new(x: Message) -> Self {
         Self {
             path: x.path,
-            line: x.span.map(|x| x.begin.line),
-            char: x.span.map(|x| x.begin.column),
+            line: x.span.map(|x| x.begin_line + 1),
+            char: x.span.map(|x| x.begin_column + 1),
             code: "STARLARK".to_owned(),
             severity: x.severity,
             name: x.name,

@@ -217,7 +217,7 @@ impl CodeMap {
     /// The lines are 0-indexed (first line is numbered 0)
     ///
     /// Panics if `pos` is not within this file's span.
-    pub fn find_line(&self, pos: Pos) -> usize {
+    pub(crate) fn find_line(&self, pos: Pos) -> usize {
         assert!(pos <= self.file_span().end());
         match self.0.lines.binary_search(&pos) {
             Ok(i) => i,
@@ -264,6 +264,12 @@ impl CodeMap {
             begin: self.0.lines[line],
             end: *self.0.lines.get(line + 1).unwrap_or(&self.file_span().end),
         }
+    }
+
+    pub fn resolve_span(&self, span: Span) -> ResolvedSpan {
+        let begin = self.find_line_col(span.begin);
+        let end = self.find_line_col(span.end);
+        ResolvedSpan::from_span(begin, end)
     }
 
     /// Gets the source text of a line.
@@ -326,68 +332,62 @@ impl fmt::Display for FileSpan {
     }
 }
 
-#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct LineCol1 {
-    /// The line number within the file (1-indexed).
-    pub line: usize,
-
-    /// The column within the line (1-indexed).
-    pub column: usize,
-}
-
-#[doc(hidden)] // Eventually we want CodeMap to gain these features, so this will go away
+/// The locations of values within a span.
+/// All are 0-based, but print out with 1-based.
 #[derive(Debug, Dupe, Clone, Copy)]
-pub struct LineColSpan {
-    pub begin: LineCol1,
-    pub end: LineCol1,
+pub struct ResolvedSpan {
+    pub begin_line: usize,
+    pub begin_column: usize,
+    pub end_line: usize,
+    pub end_column: usize,
 }
 
-impl LineColSpan {
-    pub fn spans_only_one_line(&self) -> bool {
-        self.begin.line == self.end.line
+impl ResolvedSpan {
+    fn spans_only_one_line(&self) -> bool {
+        self.begin_line == self.end_line
     }
 
-    pub fn is_empty_span(&self) -> bool {
-        self.begin.line == self.end.line && self.begin.column == self.end.column
+    fn is_empty_span(&self) -> bool {
+        self.begin_line == self.end_line && self.begin_column == self.end_column
     }
 }
 
-impl Display for LineColSpan {
+impl Display for ResolvedSpan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_empty_span() {
-            write!(f, "{}:{}", self.begin.line, self.begin.column)
+            write!(f, "{}:{}", self.begin_line + 1, self.begin_column + 1)
         } else if self.spans_only_one_line() {
             write!(
                 f,
                 "{}:{}-{}",
-                self.begin.line, self.begin.column, self.end.column
+                self.begin_line + 1,
+                self.begin_column + 1,
+                self.end_column + 1
             )
         } else {
             write!(
                 f,
                 "{}:{}-{}:{}",
-                self.begin.line, self.begin.column, self.end.line, self.end.column
+                self.begin_line + 1,
+                self.begin_column + 1,
+                self.end_line + 1,
+                self.end_column + 1
             )
         }
     }
 }
 
-// Starlark line/columns are 0-based, then add 1 here to have 1-based.
-impl LineColSpan {
+impl ResolvedSpan {
     pub fn from_span_loc(span_loc: &FileSpan) -> Self {
         Self::from_span(span_loc.begin, span_loc.end)
     }
 
     pub fn from_span(begin: LineCol, end: LineCol) -> Self {
         Self {
-            begin: LineCol1 {
-                line: begin.line + 1,
-                column: begin.column + 1,
-            },
-            end: LineCol1 {
-                line: end.line + 1,
-                column: end.column + 1,
-            },
+            begin_line: begin.line,
+            begin_column: begin.column,
+            end_line: end.line,
+            end_column: end.column,
         }
     }
 }
@@ -395,13 +395,13 @@ impl LineColSpan {
 #[derive(Debug)]
 pub struct FileSpanLoc {
     pub path: String,
-    pub span: LineColSpan,
+    pub span: ResolvedSpan,
 }
 
 impl FileSpanLoc {
     pub fn from_span_loc(span_loc: &FileSpan) -> Self {
         Self {
-            span: LineColSpan::from_span_loc(span_loc),
+            span: ResolvedSpan::from_span(span_loc.begin, span_loc.end),
             path: span_loc.file.filename().to_owned(),
         }
     }
@@ -522,7 +522,7 @@ mod test {
     #[test]
     fn test_line_col_span_display_point() {
         let line_col = LineCol { line: 0, column: 0 };
-        let span = LineColSpan::from_span(line_col, line_col);
+        let span = ResolvedSpan::from_span(line_col, line_col);
         assert_eq!(span.to_string(), "1:1");
     }
 
@@ -533,7 +533,7 @@ mod test {
             line: 0,
             column: 32,
         };
-        let span = LineColSpan::from_span(begin, end);
+        let span = ResolvedSpan::from_span(begin, end);
         assert_eq!(span.to_string(), "1:1-33");
     }
 
@@ -544,7 +544,7 @@ mod test {
             line: 2,
             column: 32,
         };
-        let span = LineColSpan::from_span(begin, end);
+        let span = ResolvedSpan::from_span(begin, end);
         assert_eq!(span.to_string(), "1:1-3:33");
     }
 }
