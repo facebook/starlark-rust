@@ -67,20 +67,17 @@ impl Add<u32> for Pos {
 #[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug, Default)]
 pub struct Span {
     /// The position in the codemap representing the first byte of the span.
-    low: Pos,
+    begin: Pos,
 
     /// The position after the last byte of the span.
-    high: Pos,
+    end: Pos,
 }
 
 impl Span {
     /// Create a new span. Panics if `end < begin`.
     pub fn new(begin: Pos, end: Pos) -> Self {
         assert!(begin <= end);
-        Span {
-            low: begin,
-            high: end,
-        }
+        Span { begin, end }
     }
 
     /// Makes a span from offsets relative to the start of this span.
@@ -88,38 +85,38 @@ impl Span {
     /// Panics if `end < begin` or if `end` is beyond the length of the span.
     pub fn subspan(self, begin: u32, end: u32) -> Span {
         assert!(end >= begin);
-        assert!(self.low + end <= self.high);
+        assert!(self.begin + end <= self.end);
         Span {
-            low: self.low + begin,
-            high: self.low + end,
+            begin: self.begin + begin,
+            end: self.begin + end,
         }
     }
 
     /// Checks if a span is contained within this span.
     pub fn contains(self, other: Span) -> bool {
-        self.low <= other.low && self.high >= other.high
+        self.begin <= other.begin && self.end >= other.end
     }
 
     /// The position in the codemap representing the first byte of the span.
-    pub fn low(self) -> Pos {
-        self.low
+    pub fn begin(self) -> Pos {
+        self.begin
     }
 
     /// The position after the last byte of the span.
-    pub fn high(self) -> Pos {
-        self.high
+    pub fn end(self) -> Pos {
+        self.end
     }
 
     /// The length in bytes of the text of the span
     pub fn len(self) -> u32 {
-        self.high.0 - self.low.0
+        self.end.0 - self.begin.0
     }
 
     /// Create a span that encloses both `self` and `other`.
     pub fn merge(self, other: Span) -> Span {
         Span {
-            low: cmp::min(self.low, other.low),
-            high: cmp::max(self.high, other.high),
+            begin: cmp::min(self.begin, other.begin),
+            end: cmp::max(self.end, other.end),
         }
     }
 }
@@ -194,15 +191,15 @@ impl CodeMap {
 
     pub fn file_span(&self) -> Span {
         Span {
-            low: Pos(0),
-            high: Pos(self.0.source.len() as u32),
+            begin: Pos(0),
+            end: Pos(self.0.source.len() as u32),
         }
     }
 
     /// Gets the file and its line and column ranges represented by a `Span`.
     pub fn look_up_span(&self, span: Span) -> SpanLoc {
-        let begin = self.find_line_col(span.low);
-        let end = self.find_line_col(span.high);
+        let begin = self.find_line_col(span.begin);
+        let end = self.find_line_col(span.end);
         SpanLoc {
             file: self.dupe(),
             begin,
@@ -221,7 +218,7 @@ impl CodeMap {
     ///
     /// Panics if `pos` is not within this file's span.
     pub fn find_line(&self, pos: Pos) -> usize {
-        assert!(pos <= self.file_span().high());
+        assert!(pos <= self.file_span().end());
         match self.0.lines.binary_search(&pos) {
             Ok(i) => i,
             Err(i) => i - 1,
@@ -235,7 +232,7 @@ impl CodeMap {
     pub fn find_line_col(&self, pos: Pos) -> LineCol {
         let line = self.find_line(pos);
         let line_span = self.line_span(line);
-        let byte_col = pos.0 - line_span.low.0;
+        let byte_col = pos.0 - line_span.begin.0;
         let column = self.source_span(line_span)[..byte_col as usize]
             .chars()
             .count();
@@ -252,7 +249,7 @@ impl CodeMap {
     ///
     /// Panics if `span` is not entirely within this file.
     pub fn source_span(&self, span: Span) -> &str {
-        &self.0.source[(span.low.0 as usize)..(span.high.0 as usize)]
+        &self.0.source[(span.begin.0 as usize)..(span.end.0 as usize)]
     }
 
     /// Gets the span representing a line by line number.
@@ -264,8 +261,8 @@ impl CodeMap {
     pub fn line_span(&self, line: usize) -> Span {
         assert!(line < self.0.lines.len());
         Span {
-            low: self.0.lines[line],
-            high: *self.0.lines.get(line + 1).unwrap_or(&self.file_span().high),
+            begin: self.0.lines[line],
+            end: *self.0.lines.get(line + 1).unwrap_or(&self.file_span().end),
         }
     }
 
@@ -420,7 +417,7 @@ impl Display for FileSpanLoc {
 fn test_codemap() {
     let source = "abcd\nefghij\nqwerty";
     let codemap = CodeMap::new("test1.rs".to_owned(), source.to_owned());
-    let start = codemap.file_span().low();
+    let start = codemap.file_span().begin();
 
     // Test .name()
     assert_eq!(codemap.filename(), "test1.rs");
@@ -454,13 +451,13 @@ fn test_codemap() {
             line_span.len() as usize
         );
         assert_eq!(line_str, source.lines().nth(line).unwrap());
-        assert_eq!(codemap.find_line(line_span.low()), line);
+        assert_eq!(codemap.find_line(line_span.begin()), line);
         // The final character might be a newline, which is counted as the next line.
         // Not sure this is a good thing!
-        let end = Pos(line_span.high().0 - 1);
+        let end = Pos(line_span.end().0 - 1);
         assert_eq!(codemap.find_line(end), line);
         assert_eq!(
-            codemap.find_line_col(line_span.low()),
+            codemap.find_line_col(line_span.begin()),
             LineCol { line, column: 0 }
         );
         assert_eq!(
@@ -499,21 +496,21 @@ fn test_multibyte() {
     let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
 
     assert_eq!(
-        codemap.find_line_col(codemap.file_span().low() + 21),
+        codemap.find_line_col(codemap.file_span().begin() + 21),
         LineCol {
             line: 0,
             column: 15
         }
     );
     assert_eq!(
-        codemap.find_line_col(codemap.file_span().low() + 28),
+        codemap.find_line_col(codemap.file_span().begin() + 28),
         LineCol {
             line: 0,
             column: 18
         }
     );
     assert_eq!(
-        codemap.find_line_col(codemap.file_span().low() + 33),
+        codemap.find_line_col(codemap.file_span().begin() + 33),
         LineCol { line: 1, column: 1 }
     );
 }

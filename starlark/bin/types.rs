@@ -77,8 +77,8 @@ impl Message {
             }) => {
                 let original = codemap.source_span(*span).to_owned();
                 let span = LineColSpan::from_span(
-                    codemap.find_line_col(span.low()),
-                    codemap.find_line_col(span.high()),
+                    codemap.find_line_col(span.begin()),
+                    codemap.find_line_col(span.end()),
                 );
                 Self {
                     path: codemap.filename().to_owned(),

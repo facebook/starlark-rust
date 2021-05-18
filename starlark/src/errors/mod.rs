@@ -170,8 +170,8 @@ fn get_display_list_for_diagnostic<'a>(
     }
 
     fn convert_span_to_slice<'a>(diagnostic_span: Span, codemap: &'a CodeMap) -> Slice<'a> {
-        let first_line_col = codemap.find_line_col(diagnostic_span.low());
-        let last_line_col = codemap.find_line_col(diagnostic_span.high());
+        let first_line_col = codemap.find_line_col(diagnostic_span.begin());
+        let last_line_col = codemap.find_line_col(diagnostic_span.end());
 
         // we want the source_span to capture any whitespace ahead of the diagnostic span to
         // get the column numbers correct in the DisplayList, and any trailing source code
