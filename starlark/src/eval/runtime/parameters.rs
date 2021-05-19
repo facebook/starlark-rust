@@ -480,11 +480,11 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
 
 /// Parse a series of parameters which were specified by [`ParametersSpec`].
 pub struct ParametersParser<'v, 'a> {
-    slots: Iter<'a, Option<Value<'v>>>,
+    slots: Iter<'a, ValueRef<'v>>,
 }
 
 impl<'v, 'a> ParametersParser<'v, 'a> {
-    pub(crate) fn new(slots: &'a [Option<Value<'v>>]) -> Self {
+    pub(crate) fn new(slots: &'a [ValueRef<'v>]) -> Self {
         Self {
             slots: slots.iter(),
         }
@@ -501,10 +501,10 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     pub fn next_opt<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<Option<T>> {
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
-        let v = self.slots.next().unwrap();
+        let v = self.slots.next().unwrap().get();
         match v {
             None => Ok(None),
-            Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(*v))?)),
+            Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(v))?)),
         }
     }
 
@@ -518,10 +518,10 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
-        let v = self.slots.next().unwrap();
+        let v = self.slots.next().unwrap().get();
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
-        let v = v.as_ref().unwrap();
-        Self::named_err(name, T::unpack_value(*v))
+        let v = v.unwrap();
+        Self::named_err(name, T::unpack_value(v))
     }
 }

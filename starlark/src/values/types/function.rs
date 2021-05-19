@@ -30,7 +30,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
+use gazebo::{any::AnyLifetime, cell::ARef};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -128,7 +128,6 @@ impl<'a> NativeFunctionInvoker<'a> {
         slots: Vec<ValueRef<'v>>,
         context: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let slots = slots.map(|x| x.get());
         let parser = ParametersParser::new(&slots);
         (*self.0)(context, parser)
     }
