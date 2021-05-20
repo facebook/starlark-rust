@@ -231,7 +231,7 @@ impl<'v> StarlarkIterable<'v> for Range {
     where
         'v: 'a,
     {
-        box RangeIterator::<'v>(*self, PhantomData::default())
+        box RangeIterator::<'v>(*self, PhantomData)
     }
 }
 

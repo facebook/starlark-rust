@@ -302,7 +302,7 @@ impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, V> {
         if list.iter().all(|v| V::unpack_value(v).is_some()) {
             Some(ListOf {
                 value,
-                phantom: PhantomData {},
+                phantom: PhantomData,
             })
         } else {
             None

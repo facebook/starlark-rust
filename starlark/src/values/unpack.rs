@@ -103,7 +103,7 @@ impl<'v, T: ComplexValue<'v>> UnpackValue<'v> for ValueOfMut<'v, T> {
         if value.get_aref().as_dyn_any().is::<T>() {
             Some(ValueOfMut {
                 value,
-                phantom: PhantomData::default(),
+                phantom: PhantomData,
             })
         } else {
             None

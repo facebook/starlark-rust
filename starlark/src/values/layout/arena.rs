@@ -29,7 +29,7 @@ impl<T> Arena<T> {
     pub fn new() -> Self {
         Self {
             bump: Bump::new(),
-            phantom: Default::default(),
+            phantom: PhantomData,
         }
     }
 

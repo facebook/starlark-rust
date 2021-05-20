@@ -322,7 +322,7 @@ impl<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> UnpackValue<'v> for Dict
         if all_valid {
             Some(DictOf {
                 value,
-                phantom: PhantomData {},
+                phantom: PhantomData,
             })
         } else {
             None
