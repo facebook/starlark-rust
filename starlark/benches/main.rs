@@ -84,11 +84,11 @@ pub fn criterion_parsing_benchmark(c: &mut Criterion) {
 pub fn criterion_eval_benchmark(c: &mut Criterion, globals: &Globals) {
     c.bench_function("run_tight_loop", |b| {
         let env = Module::new();
-        let mut context = Evaluator::new(&env, globals);
+        let mut eval = Evaluator::new(&env, globals);
         let ast =
             AstModule::parse("benchmark.sky", TIGHT_LOOP.to_owned(), &Dialect::Standard).unwrap();
-        let bench_function = context.eval_module(ast).unwrap();
-        b.iter(move || context.eval_function(bench_function, &[], &[]).unwrap())
+        let bench_function = eval.eval_module(ast).unwrap();
+        b.iter(move || eval.eval_function(bench_function, &[], &[]).unwrap())
     });
 }
 

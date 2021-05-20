@@ -57,23 +57,23 @@ fn eval_assign_list<'v>(
     lvalues: &[AssignCompiled],
     span: Span,
     value: Value<'v>,
-    context: &mut Evaluator<'v, '_>,
+    eval: &mut Evaluator<'v, '_>,
 ) -> Result<(), EvalException<'v>> {
     let l = lvalues.len() as i32;
-    let nvl = thrw(value.length(), span, context)?;
+    let nvl = thrw(value.length(), span, eval)?;
     if nvl != l {
         thrw(
             Err(AssignError::IncorrectNumberOfValueToUnpack(l, nvl).into()),
             span,
-            context,
+            eval,
         )
     } else {
         let mut it1 = lvalues.iter();
         // TODO: the span here should probably include the rvalue
-        let it2 = thrw(value.iterate(context.heap()), span, context)?;
+        let it2 = thrw(value.iterate(eval.heap()), span, eval)?;
         let mut it2 = it2.iter();
         for _ in 0..l {
-            it1.next().unwrap()(it2.next().unwrap(), context)?;
+            it1.next().unwrap()(it2.next().unwrap(), eval)?;
         }
         Ok(())
     }
@@ -86,38 +86,28 @@ impl Compiler<'_> {
             Assign::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
-                box move |value, context| {
-                    thrw(
-                        e(context)?.set_attr(&s, value, context.heap()),
-                        span,
-                        context,
-                    )
-                }
+                box move |value, eval| thrw(e(eval)?.set_attr(&s, value, eval.heap()), span, eval)
             }
             Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e);
                 let idx = self.expr(idx);
-                box move |value, context| {
-                    thrw(
-                        e(context)?.set_at(idx(context)?, value, context.heap()),
-                        span,
-                        context,
-                    )
+                box move |value, eval| {
+                    thrw(e(eval)?.set_at(idx(eval)?, value, eval.heap()), span, eval)
                 }
             }
             Assign::Tuple(v) => {
                 let v = v.into_map(|x| self.assign(x));
-                box move |value, context| eval_assign_list(&v, span, value, context)
+                box move |value, eval| eval_assign_list(&v, span, value, eval)
             }
             Assign::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
-                Slot::Local(slot) => box move |value, context| {
-                    context.set_slot_local(slot, value);
+                Slot::Local(slot) => box move |value, eval| {
+                    eval.set_slot_local(slot, value);
                     Ok(())
                 },
-                Slot::Module(slot) => box move |value, context| {
+                Slot::Module(slot) => box move |value, eval| {
                     // Make sure that `ComplexValue`s get their name as soon as possible
-                    value.export_as(&ident.node, context.heap());
-                    context.set_slot_module(slot, value);
+                    value.export_as(&ident.node, eval.heap());
+                    eval.set_slot_module(slot, value);
                     Ok(())
                 },
             },
@@ -136,19 +126,15 @@ impl Compiler<'_> {
             Assign::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
-                box move |context| {
-                    before_stmt(span, context);
-                    let e: Value = e(context)?;
-                    let (_, v) = thrw(e.get_attr(&s, context.heap()), span, context)?;
-                    let rhs = rhs(context)?;
+                box move |eval| {
+                    before_stmt(span, eval);
+                    let e: Value = e(eval)?;
+                    let (_, v) = thrw(e.get_attr(&s, eval.heap()), span, eval)?;
+                    let rhs = rhs(eval)?;
                     thrw(
-                        e.set_attr(
-                            &s,
-                            thrw(op(v, rhs, context), span_op, context)?,
-                            context.heap(),
-                        ),
+                        e.set_attr(&s, thrw(op(v, rhs, eval), span_op, eval)?, eval.heap()),
                         span,
-                        context,
+                        eval,
                     )?;
                     Ok(())
                 }
@@ -156,20 +142,16 @@ impl Compiler<'_> {
             Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e);
                 let idx = self.expr(idx);
-                box move |context| {
-                    before_stmt(span, context);
-                    let e: Value = e(context)?;
-                    let idx = idx(context)?;
-                    let v = thrw(e.at(idx, context.heap()), span, context)?;
-                    let rhs = rhs(context)?;
+                box move |eval| {
+                    before_stmt(span, eval);
+                    let e: Value = e(eval)?;
+                    let idx = idx(eval)?;
+                    let v = thrw(e.at(idx, eval.heap()), span, eval)?;
+                    let rhs = rhs(eval)?;
                     thrw(
-                        e.set_at(
-                            idx,
-                            thrw(op(v, rhs, context), span_op, context)?,
-                            context.heap(),
-                        ),
+                        e.set_at(idx, thrw(op(v, rhs, eval), span_op, eval)?, eval.heap()),
                         span,
-                        context,
+                        eval,
                     )?;
                     Ok(())
                 }
@@ -177,20 +159,20 @@ impl Compiler<'_> {
             Assign::Identifier(ident) => {
                 let name = ident.node;
                 match self.scope.get_name_or_panic(&name) {
-                    Slot::Local(slot) => box move |context| {
-                        before_stmt(span, context);
-                        let v = thrw(context.get_slot_local(slot, &name), span, context)?;
-                        let rhs = rhs(context)?;
-                        let v = thrw(op(v, rhs, context), span_op, context)?;
-                        context.set_slot_local(slot, v);
+                    Slot::Local(slot) => box move |eval| {
+                        before_stmt(span, eval);
+                        let v = thrw(eval.get_slot_local(slot, &name), span, eval)?;
+                        let rhs = rhs(eval)?;
+                        let v = thrw(op(v, rhs, eval), span_op, eval)?;
+                        eval.set_slot_local(slot, v);
                         Ok(())
                     },
-                    Slot::Module(slot) => box move |context| {
-                        before_stmt(span, context);
-                        let v = thrw(context.get_slot_module(slot), span, context)?;
-                        let rhs = rhs(context)?;
-                        let v = thrw(op(v, rhs, context), span_op, context)?;
-                        context.set_slot_module(slot, v);
+                    Slot::Module(slot) => box move |eval| {
+                        before_stmt(span, eval);
+                        let v = thrw(eval.get_slot_module(slot), span, eval)?;
+                        let rhs = rhs(eval)?;
+                        let v = thrw(op(v, rhs, eval), span_op, eval)?;
+                        eval.set_slot_module(slot, v);
                         Ok(())
                     },
                 }
@@ -213,7 +195,7 @@ impl Compiler<'_> {
 //
 // We track as many roots as possible, and eventually aim to track them all, but
 // for the moment we're only sure we have all roots when we are in the module
-// evaluation context. There are three roots we don't yet know about:
+// evaluation eval. There are three roots we don't yet know about:
 //
 // 1. When evaluating an expression which has multiple subexpressions, e.g. List
 //    we can't GC during that, as we can't see the root of the first list.
@@ -234,18 +216,18 @@ impl Compiler<'_> {
 //
 // We also require that `extra_v` is None, since otherwise the user might have
 // additional values stashed somewhere.
-fn before_stmt(span: Span, context: &mut Evaluator) {
+fn before_stmt(span: Span, eval: &mut Evaluator) {
     // Almost always will be empty, especially in high-perf use cases
-    if !context.before_stmt.is_empty() {
+    if !eval.before_stmt.is_empty() {
         // The user could inject more before_stmt values during iteration (although that sounds like a bad plan!)
         // so grab the values at the start, and add any additional at the end.
-        let fs = mem::take(&mut context.before_stmt);
+        let fs = mem::take(&mut eval.before_stmt);
         for f in &fs {
-            f(span, context)
+            f(span, eval)
         }
-        let added = mem::replace(&mut context.before_stmt, fs);
+        let added = mem::replace(&mut eval.before_stmt, fs);
         for x in added {
-            context.before_stmt.push(x)
+            eval.before_stmt.push(x)
         }
     }
 
@@ -253,20 +235,18 @@ fn before_stmt(span: Span, context: &mut Evaluator) {
     // last time we GC'd
     const GC_THRESHOLD: usize = 100000;
 
-    if context.is_module_scope
-        && !context.disable_gc
-        && context.heap().allocated_bytes() >= context.last_heap_size + GC_THRESHOLD
-        && context.extra_v.is_none()
+    if eval.is_module_scope
+        && !eval.disable_gc
+        && eval.heap().allocated_bytes() >= eval.last_heap_size + GC_THRESHOLD
+        && eval.extra_v.is_none()
     {
-        // When we are at a module scope (as checked above) the context contains
+        // When we are at a module scope (as checked above) the eval contains
         // references to all values, so walking covers everything and the unsafe
         // is satisfied.
         unsafe {
-            context
-                .heap()
-                .garbage_collect(|walker| context.walk(walker))
+            eval.heap().garbage_collect(|walker| eval.walk(walker))
         }
-        context.last_heap_size = context.heap().allocated_bytes();
+        eval.last_heap_size = eval.heap().allocated_bytes();
     }
 }
 
@@ -356,9 +336,9 @@ impl Compiler<'_> {
                     span: name.span,
                     node: Assign::Identifier(name),
                 });
-                box move |context| {
-                    before_stmt(span, context);
-                    lhs(rhs(context)?, context)?;
+                box move |eval| {
+                    before_stmt(span, eval);
+                    lhs(rhs(eval)?, eval)?;
                     Ok(())
                 }
             }
@@ -367,13 +347,13 @@ impl Compiler<'_> {
                 let var = self.assign(var);
                 let over = self.expr(over);
                 let st = self.stmt(body);
-                box move |context| {
-                    before_stmt(span, context);
-                    let iterable = over(context)?;
+                box move |eval| {
+                    before_stmt(span, eval);
+                    let iterable = over(eval)?;
                     let freeze_for_iteration = iterable.get_aref();
-                    for v in &thrw(iterable.iterate(context.heap()), over_span, context)? {
-                        var(v, context)?;
-                        match st(context) {
+                    for v in &thrw(iterable.iterate(eval.heap()), over_span, eval)? {
+                        var(v, eval)?;
+                        match st(eval) {
                             Err(EvalException::Break) => break,
                             Err(EvalException::Continue) => {}
                             Err(e) => return Err(e),
@@ -386,22 +366,22 @@ impl Compiler<'_> {
             }
             Stmt::Return(Some(e)) => {
                 let e = self.expr(e);
-                box move |context| {
-                    before_stmt(span, context);
-                    Err(EvalException::Return(e(context)?))
+                box move |eval| {
+                    before_stmt(span, eval);
+                    Err(EvalException::Return(e(eval)?))
                 }
             }
-            Stmt::Return(None) => box move |context| {
-                before_stmt(span, context);
+            Stmt::Return(None) => box move |eval| {
+                before_stmt(span, eval);
                 Err(EvalException::Return(Value::new_none()))
             },
             Stmt::If(cond, box then_block) => {
                 let cond = self.expr(cond);
                 let then_block = self.stmt(then_block);
-                box move |context| {
-                    before_stmt(span, context);
-                    if cond(context)?.to_bool() {
-                        then_block(context)
+                box move |eval| {
+                    before_stmt(span, eval);
+                    if cond(eval)?.to_bool() {
+                        then_block(eval)
                     } else {
                         Ok(())
                     }
@@ -411,12 +391,12 @@ impl Compiler<'_> {
                 let cond = self.expr(cond);
                 let then_block = self.stmt(then_block);
                 let else_block = self.stmt(else_block);
-                box move |context| {
-                    before_stmt(span, context);
-                    if cond(context)?.to_bool() {
-                        then_block(context)
+                box move |eval| {
+                    before_stmt(span, eval);
+                    if cond(eval)?.to_bool() {
+                        then_block(eval)
                     } else {
-                        else_block(context)
+                        else_block(eval)
                     }
                 }
             }
@@ -428,9 +408,9 @@ impl Compiler<'_> {
                 match stmts.len() {
                     0 => box move |_| Ok(()),
                     1 => stmts.pop().unwrap(),
-                    _ => box move |context| {
+                    _ => box move |eval| {
                         for stmt in &stmts {
-                            stmt(context)?;
+                            stmt(eval)?;
                         }
                         Ok(())
                     },
@@ -438,39 +418,38 @@ impl Compiler<'_> {
             }
             Stmt::Expression(e) => {
                 let e = self.expr(e);
-                box move |context| {
-                    before_stmt(span, context);
-                    e(context)?;
+                box move |eval| {
+                    before_stmt(span, eval);
+                    e(eval)?;
                     Ok(())
                 }
             }
             Stmt::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs);
                 let lhs = self.assign(lhs);
-                box move |context| {
-                    before_stmt(span, context);
-                    lhs(rhs(context)?, context)?;
+                box move |eval| {
+                    before_stmt(span, eval);
+                    lhs(rhs(eval)?, eval)?;
                     Ok(())
                 }
             }
             Stmt::AssignModify(lhs, op, rhs) => {
                 let rhs = self.expr(*rhs);
                 match op {
-                    AssignOp::Add => self.assign_modify(span, lhs, rhs, |l, r, context| {
-                        add_assign(l, r, context.heap())
-                    }),
+                    AssignOp::Add => self
+                        .assign_modify(span, lhs, rhs, |l, r, eval| add_assign(l, r, eval.heap())),
                     AssignOp::Subtract => {
-                        self.assign_modify(span, lhs, rhs, |l, r, context| l.sub(r, context.heap()))
+                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.sub(r, eval.heap()))
                     }
                     AssignOp::Multiply => {
-                        self.assign_modify(span, lhs, rhs, |l, r, context| l.mul(r, context.heap()))
+                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.mul(r, eval.heap()))
                     }
-                    AssignOp::FloorDivide => self.assign_modify(span, lhs, rhs, |l, r, context| {
-                        l.floor_div(r, context.heap())
-                    }),
-                    AssignOp::Percent => self.assign_modify(span, lhs, rhs, |l, r, context| {
-                        l.percent(r, context.heap())
-                    }),
+                    AssignOp::FloorDivide => {
+                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.floor_div(r, eval.heap()))
+                    }
+                    AssignOp::Percent => {
+                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.percent(r, eval.heap()))
+                    }
                     AssignOp::BitAnd => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_and(r)),
                     AssignOp::BitOr => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_or(r)),
                     AssignOp::BitXor => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_xor(r)),
@@ -491,9 +470,9 @@ impl Compiler<'_> {
                         x.span.merge(y.span),
                     )
                 });
-                box move |context| {
-                    before_stmt(span, context);
-                    let loadenv = match context.loader.as_mut() {
+                box move |eval| {
+                    before_stmt(span, eval);
+                    let loadenv = match eval.loader.as_mut() {
                         None => {
                             return Err(EvalException::Error(
                                 EnvironmentError::NoImportsAvailable(name.to_owned()).into(),
@@ -501,27 +480,27 @@ impl Compiler<'_> {
                         }
                         Some(load) => load.load(&name).map_err(EvalException::Error)?,
                     };
-                    let modu = context.assert_module_env();
+                    let modu = eval.assert_module_env();
                     for (new_name, orig_name, span) in &symbols {
-                        let value = thrw(modu.load_symbol(&loadenv, orig_name), *span, context)?;
+                        let value = thrw(modu.load_symbol(&loadenv, orig_name), *span, eval)?;
                         match new_name {
-                            Slot::Local(slot) => context.set_slot_local(*slot, value),
-                            Slot::Module(slot) => context.set_slot_module(*slot, value),
+                            Slot::Local(slot) => eval.set_slot_local(*slot, value),
+                            Slot::Module(slot) => eval.set_slot_module(*slot, value),
                         }
                     }
                     Ok(())
                 }
             }
-            Stmt::Pass => box move |context| {
-                before_stmt(span, context);
+            Stmt::Pass => box move |eval| {
+                before_stmt(span, eval);
                 Ok(())
             },
-            Stmt::Break => box move |context| {
-                before_stmt(span, context);
+            Stmt::Break => box move |eval| {
+                before_stmt(span, eval);
                 Err(EvalException::Break)
             },
-            Stmt::Continue => box move |context| {
-                before_stmt(span, context);
+            Stmt::Continue => box move |eval| {
+                before_stmt(span, eval);
                 Err(EvalException::Continue)
             },
         }

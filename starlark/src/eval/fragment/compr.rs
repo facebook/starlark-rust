@@ -127,31 +127,31 @@ fn compile_clauses(
 }
 
 fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
-    let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, context| {
-        let x = x(context)?;
+    let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
+        let x = x(eval)?;
         me.push(x);
         Ok(())
     });
 
-    box move |context| {
+    box move |eval| {
         let mut r = Vec::new();
-        clauses(&mut r, context)?;
-        Ok(context.heap().alloc(r))
+        clauses(&mut r, eval)?;
+        Ok(eval.heap().alloc(r))
     }
 }
 
 fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
-    let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, context| {
-        let k = k(context)?;
-        let v = v(context)?;
+    let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, eval| {
+        let k = k(eval)?;
+        let v = v(eval)?;
         me.insert_hashed(k.get_hashed()?, v);
         Ok(())
     });
 
-    box move |context| {
+    box move |eval| {
         let mut r = SmallMap::new();
-        clauses(&mut r, context)?;
-        Ok(context.heap().alloc(Dict::new(r)))
+        clauses(&mut r, eval)?;
+        Ok(eval.heap().alloc(Dict::new(r)))
     }
 }
 
@@ -185,18 +185,18 @@ fn eval_one_dimensional_comprehension_dict(
 > {
     if let Some(c) = clauses.pop() {
         let rest = eval_one_dimensional_comprehension_dict(clauses, add);
-        box move |accumulator, context| {
+        box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
-            let iterable = (c.over)(context)?;
+            let iterable = (c.over)(eval)?;
             let freeze_for_iteration = iterable.get_aref();
-            'f: for i in &thrw(iterable.iterate(context.heap()), c.over_span, context)? {
-                (c.var)(i, context)?;
+            'f: for i in &thrw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+                (c.var)(i, eval)?;
                 for ifc in &c.ifs {
-                    if !ifc(context)?.to_bool() {
+                    if !ifc(eval)?.to_bool() {
                         continue 'f;
                     }
                 }
-                rest(accumulator, context)?;
+                rest(accumulator, eval)?;
             }
             mem::drop(freeze_for_iteration);
             Ok(())
@@ -220,18 +220,18 @@ fn eval_one_dimensional_comprehension_list(
 > {
     if let Some(c) = clauses.pop() {
         let rest = eval_one_dimensional_comprehension_list(clauses, add);
-        box move |accumulator, context| {
+        box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
-            let iterable = (c.over)(context)?;
+            let iterable = (c.over)(eval)?;
             let freeze_for_iteration = iterable.get_aref();
-            'f: for i in &thrw(iterable.iterate(context.heap()), c.over_span, context)? {
-                (c.var)(i, context)?;
+            'f: for i in &thrw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+                (c.var)(i, eval)?;
                 for ifc in &c.ifs {
-                    if !ifc(context)?.to_bool() {
+                    if !ifc(eval)?.to_bool() {
                         continue 'f;
                     }
                 }
-                rest(accumulator, context)?;
+                rest(accumulator, eval)?;
             }
             mem::drop(freeze_for_iteration);
             Ok(())

@@ -31,7 +31,7 @@ impl DapService {
 fn server(dap: impl DebugServer) {
     log_begin();
 
-    // Because of the context we're running in, we probably can't see panics.
+    // Because of the eval we're running in, we probably can't see panics.
     // So mirror them to the log file.
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(box move |panic_info| {

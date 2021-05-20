@@ -55,15 +55,15 @@ impl<'v, 'a> FunctionInvoker<'v, 'a> {
         self,
         function: Value<'v>,
         location: Option<Span>,
-        context: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let loc = location.map(|x| context.file_span(x));
-        let slots = self.collect.done(context.heap())?;
+        let loc = location.map(|x| eval.file_span(x));
+        let slots = self.collect.done(eval.heap())?;
         let invoke = self.invoke;
-        context.with_call_stack(function, loc, |context| match invoke {
-            FunctionInvokerInner::Native(inv) => inv.invoke(slots, context),
-            FunctionInvokerInner::Def(inv) => inv.invoke(slots, context),
-            FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, context),
+        eval.with_call_stack(function, loc, |eval| match invoke {
+            FunctionInvokerInner::Native(inv) => inv.invoke(slots, eval),
+            FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
+            FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
         })
     }
 
@@ -126,10 +126,10 @@ impl<'a> NativeFunctionInvoker<'a> {
     pub fn invoke<'v>(
         self,
         slots: Vec<ValueRef<'v>>,
-        context: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let parser = ParametersParser::new(&slots);
-        (*self.0)(context, parser)
+        (*self.0)(eval, parser)
     }
 }
 
@@ -241,12 +241,12 @@ impl NativeAttribute {
     pub(crate) fn call<'v>(
         &self,
         value: Value<'v>,
-        context: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
-        let mut invoker = self.0.get_aref().new_invoker(function, context.heap())?;
+        let mut invoker = self.0.get_aref().new_invoker(function, eval.heap())?;
         invoker.push_pos(value);
-        invoker.invoke(function, None, context)
+        invoker.invoke(function, None, eval)
     }
 }
 

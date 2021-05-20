@@ -168,7 +168,7 @@ impl<'v> EnumType<'v> {
         signature.required("value");
 
         // We want to get the value of `me` into the function, but that doesn't work since it
-        // might move between threads - so we create the NativeFunction and apply it later.
+        // might move between therads - so we create the NativeFunction and apply it later.
         NativeFunction::new(
             move |_eval, mut param_parser: ParametersParser| {
                 let typ_val = param_parser.next("me")?;

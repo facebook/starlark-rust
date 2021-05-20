@@ -110,14 +110,14 @@ impl Compiler<'_> {
 
         let info = Arc::new(DefInfo { scope_names, body });
 
-        box move |context| {
+        box move |eval| {
             let mut parameters =
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
 
             for (i, x) in params.iter().enumerate() {
                 if let Some(t) = x.ty() {
-                    let v = t(context)?;
+                    let v = t(eval)?;
                     let name = x.name().unwrap_or("unknown").to_owned();
                     parameter_types.push((i, name, v));
                 }
@@ -125,7 +125,7 @@ impl Compiler<'_> {
                 match x {
                     ParameterCompiled::Normal(n, _) => parameters.required(n),
                     ParameterCompiled::WithDefaultValue(n, _, v) => {
-                        parameters.defaulted(n, v(context)?);
+                        parameters.defaulted(n, v(eval)?);
                     }
                     ParameterCompiled::NoArgs => parameters.no_args(),
                     ParameterCompiled::Args(_, _) => parameters.args(),
@@ -134,15 +134,15 @@ impl Compiler<'_> {
             }
             let return_type = match &return_type {
                 None => None,
-                Some(v) => Some(v(context)?),
+                Some(v) => Some(v(eval)?),
             };
             Ok(Def::new(
                 parameters,
                 parameter_types,
                 return_type,
                 info.dupe(),
-                context.codemap.dupe(),
-                context,
+                eval.codemap.dupe(),
+                eval,
             ))
         }
     }
@@ -178,13 +178,13 @@ impl<'v> Def<'v> {
         return_type: Option<Value<'v>>,
         stmt: Arc<DefInfo>,
         codemap: CodeMap,
-        context: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> Value<'v> {
         let captured = stmt
             .scope_names
             .parent
-            .map(|(x, _)| context.clone_slot_reference(*x, context.heap()));
-        context.heap().alloc(Self {
+            .map(|(x, _)| eval.clone_slot_reference(*x, eval.heap()));
+        eval.heap().alloc(Self {
             parameters,
             parameter_types,
             return_type,
@@ -329,12 +329,12 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
     pub fn invoke(
         self,
         slots: Vec<ValueRef<'v>>,
-        context: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
         let DefInvokerGen(def) = self;
 
-        if context.check_types() {
+        if eval.check_types() {
             for (i, arg_name, ty) in &def.parameter_types {
                 match slots[*i].get() {
                     None => panic!("Not allowed optional unassigned with type annotations on them"),
@@ -350,10 +350,9 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
             locals.set_slot_ref(*me, captured.to_value_ref());
         }
 
-        let res =
-            context.with_function_context(def.module, locals, def.codemap.dupe(), |context| {
-                (def.stmt.body)(context)
-            });
+        let res = eval.with_function_context(def.module, locals, def.codemap.dupe(), |eval| {
+            (def.stmt.body)(eval)
+        });
 
         let ret = match res {
             Err(EvalException::Return(ret)) => ret,
@@ -361,7 +360,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
             Ok(_) => Value::new_none(),
         };
 
-        if context.check_types() {
+        if eval.check_types() {
             // Slightly ugly: by the time we check the return type, we no longer
             // have the location of the return statement, so the "blame" is attached
             // to the caller, rather than the return statement. Fixing it requires

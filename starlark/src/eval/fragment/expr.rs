@@ -49,11 +49,11 @@ fn eval_compare(
     r: ExprCompiled,
     cmp: fn(Ordering) -> bool,
 ) -> ExprCompiled {
-    box move |context| {
+    box move |eval| {
         Ok(Value::new_bool(cmp(thrw(
-            l(context)?.compare(r(context)?),
+            l(eval)?.compare(r(eval)?),
             span,
-            context,
+            eval,
         )?)))
     }
 }
@@ -64,11 +64,11 @@ fn eval_equals(
     r: ExprCompiled,
     cmp: fn(bool) -> bool,
 ) -> ExprCompiled {
-    box move |context| {
+    box move |eval| {
         Ok(Value::new_bool(cmp(thrw(
-            l(context)?.equals(r(context)?),
+            l(eval)?.equals(r(eval)?),
             span,
-            context,
+            eval,
         )?)))
     }
 }
@@ -80,24 +80,24 @@ fn eval_slice(
     stop: Option<ExprCompiled>,
     stride: Option<ExprCompiled>,
 ) -> ExprCompiled {
-    box move |context| {
-        let collection = collection(context)?;
+    box move |eval| {
+        let collection = collection(eval)?;
         let start = match start {
-            Some(ref e) => Some(e(context)?),
+            Some(ref e) => Some(e(eval)?),
             None => None,
         };
         let stop = match stop {
-            Some(ref e) => Some(e(context)?),
+            Some(ref e) => Some(e(eval)?),
             None => None,
         };
         let stride = match stride {
-            Some(ref e) => Some(e(context)?),
+            Some(ref e) => Some(e(eval)?),
             None => None,
         };
         thrw(
-            collection.slice(start, stop, stride, context.heap()),
+            collection.slice(start, stop, stride, eval.heap()),
             span,
-            context,
+            eval,
         )
     }
 }
@@ -117,20 +117,20 @@ fn eval_call(
     Value<'v>,
     &mut Evaluator<'v, '_>,
 ) -> Result<Value<'v>, EvalException<'v>> {
-    move |mut invoker, function, context| {
+    move |mut invoker, function, eval| {
         for x in &args {
             match x {
-                ArgCompiled::Pos(expr) => invoker.push_pos(expr(context)?),
+                ArgCompiled::Pos(expr) => invoker.push_pos(expr(eval)?),
                 ArgCompiled::Named(k, kk, expr) => {
-                    invoker.push_named(k, kk.to_hashed_value(), expr(context)?)
+                    invoker.push_named(k, kk.to_hashed_value(), expr(eval)?)
                 }
-                ArgCompiled::Args(expr) => invoker.push_args(expr(context)?, context.heap()),
-                ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(context)?),
+                ArgCompiled::Args(expr) => invoker.push_args(expr(eval)?, eval.heap()),
+                ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(eval)?),
             }
         }
 
-        let res = invoker.invoke(function, Some(span), context);
-        thrw(res, span, context)
+        let res = invoker.invoke(function, Some(span), eval);
+        thrw(res, span, eval)
     }
 }
 
@@ -141,13 +141,13 @@ fn eval_dot(
 ) -> impl for<'v> Fn(
     &mut Evaluator<'v, '_>,
 ) -> Result<Either<Value<'v>, WrappedMethod<'v>>, EvalException<'v>> {
-    move |context| {
-        let left = e(context)?;
-        let (attr_type, v) = thrw(left.get_attr(&s, context.heap()), span, context)?;
+    move |eval| {
+        let left = e(eval)?;
+        let (attr_type, v) = thrw(left.get_attr(&s, eval.heap()), span, eval)?;
         if attr_type == AttrType::Field {
             Ok(Either::Left(v))
         } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-            thrw(v_attr.call(left, context), span, context).map(Either::Left)
+            thrw(v_attr.call(left, eval), span, eval).map(Either::Left)
         } else {
             // Insert self so the method see the object it is acting on
             Ok(Either::Right(WrappedMethod::new(left, v)))
@@ -165,10 +165,10 @@ impl Compiler<'_> {
             + Sync,
     > {
         let v = v.into_map(|x| self.expr(x));
-        box move |context| {
+        box move |eval| {
             let mut r = Vec::with_capacity(v.len());
             for s in &v {
-                r.push(s(context)?)
+                r.push(s(eval)?)
             }
             Ok(r)
         }
@@ -270,12 +270,12 @@ impl Compiler<'_> {
                     Some(Slot::Local(slot)) => {
                         // We can't look up the local variabless in advance, because they are different each time
                         // we go through a new function call.
-                        box move |context| thrw(context.get_slot_local(slot, &name), span, context)
+                        box move |eval| thrw(eval.get_slot_local(slot, &name), span, eval)
                     }
                     Some(Slot::Module(slot)) => {
                         // We can't look up the module variables in advance because the first time around they are
                         // mutables, but after freezing they point at a different set of frozen slots.
-                        box move |context| thrw(context.get_slot_module(slot), span, context)
+                        box move |eval| thrw(eval.get_slot_module(slot), span, eval)
                     }
                     None => {
                         // Must be a global, since we know all variables
@@ -309,7 +309,7 @@ impl Compiler<'_> {
                     box move |_| Ok(result.to_value())
                 } else {
                     let exprs = self.exprs(exprs);
-                    box move |context| Ok(context.heap().alloc(tuple::Tuple::new(exprs(context)?)))
+                    box move |eval| Ok(eval.heap().alloc(tuple::Tuple::new(exprs(eval)?)))
                 }
             }
             Expr::Lambda(params, box inner) => {
@@ -327,10 +327,10 @@ impl Compiler<'_> {
                 {
                     let vals: Vec<FrozenValue> = lits.map(|v| v.compile(self.heap));
                     let result = self.heap.alloc(FrozenList { content: vals });
-                    box move |context| Ok(context.heap().alloc_thaw_on_write(result))
+                    box move |eval| Ok(eval.heap().alloc_thaw_on_write(result))
                 } else {
                     let exprs = self.exprs(exprs);
-                    box move |context| Ok(context.heap().alloc(exprs(context)?))
+                    box move |eval| Ok(eval.heap().alloc(exprs(eval)?))
                 }
             }
             Expr::Dict(exprs) => {
@@ -355,44 +355,44 @@ impl Compiler<'_> {
                     // We have a lint that will likely fire on this issue (and others).
                     if res.len() == lits.len() {
                         let result = self.heap.alloc(FrozenDict::new(res));
-                        return box move |context| Ok(context.heap().alloc_thaw_on_write(result));
+                        return box move |eval| Ok(eval.heap().alloc_thaw_on_write(result));
                     }
                 }
 
                 let v = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
-                box move |context| {
+                box move |eval| {
                     let mut r = SmallMap::with_capacity(v.len());
                     for (k, v) in v.iter() {
-                        let k = k(context)?;
-                        if r.insert_hashed(k.get_hashed()?, v(context)?).is_some() {
+                        let k = k(eval)?;
+                        if r.insert_hashed(k.get_hashed()?, v(eval)?).is_some() {
                             thrw(
                                 Err(EvalError::DuplicateDictionaryKey(k.to_string()).into()),
                                 span,
-                                context,
+                                eval,
                             )?;
                         }
                     }
-                    Ok(context.heap().alloc(dict::Dict::new(r)))
+                    Ok(eval.heap().alloc(dict::Dict::new(r)))
                 }
             }
             Expr::If(box (cond, then_expr, else_expr)) => {
                 let cond = self.expr(cond);
                 let then_expr = self.expr(then_expr);
                 let else_expr = self.expr(else_expr);
-                box move |context| {
-                    if cond(context)?.to_bool() {
-                        then_expr(context)
+                box move |eval| {
+                    if cond(eval)?.to_bool() {
+                        then_expr(eval)
                     } else {
-                        else_expr(context)
+                        else_expr(eval)
                     }
                 }
             }
             Expr::Dot(left, right) => {
                 let left = self.expr(*left);
                 let res = eval_dot(expr.span, left, right.node);
-                box move |context| match res(context)? {
+                box move |eval| match res(eval)? {
                     Either::Left(v) => Ok(v),
-                    Either::Right(v) => Ok(context.heap().alloc(v)),
+                    Either::Right(v) => Ok(eval.heap().alloc(v)),
                 }
             }
             Expr::Call(left, args) => {
@@ -414,25 +414,23 @@ impl Compiler<'_> {
                     Expr::Dot(e, s) => {
                         let e = self.expr(*e);
                         let dot = eval_dot(span, e, s.node);
-                        box move |context| match dot(context)? {
+                        box move |eval| match dot(eval)? {
                             Either::Left(function) => {
-                                let invoker =
-                                    thrw(function.new_invoker(context.heap()), span, context)?;
-                                call(invoker, function, context)
+                                let invoker = thrw(function.new_invoker(eval.heap()), span, eval)?;
+                                call(invoker, function, eval)
                             }
                             Either::Right(wrapper) => {
-                                let invoker = thrw(wrapper.invoke(context.heap()), span, context)?;
-                                call(invoker, wrapper.method, context)
+                                let invoker = thrw(wrapper.invoke(eval.heap()), span, eval)?;
+                                call(invoker, wrapper.method, eval)
                             }
                         }
                     }
                     _ => {
                         let left = self.expr(*left);
-                        box move |context| {
-                            let function = left(context)?;
-                            let invoker =
-                                thrw(function.new_invoker(context.heap()), span, context)?;
-                            call(invoker, function, context)
+                        box move |eval| {
+                            let function = left(eval)?;
+                            let invoker = thrw(function.new_invoker(eval.heap()), span, eval)?;
+                            call(invoker, function, eval)
                         }
                     }
                 }
@@ -440,13 +438,7 @@ impl Compiler<'_> {
             Expr::ArrayIndirection(box (array, index)) => {
                 let array = self.expr(array);
                 let index = self.expr(index);
-                box move |context| {
-                    thrw(
-                        array(context)?.at(index(context)?, context.heap()),
-                        span,
-                        context,
-                    )
-                }
+                box move |eval| thrw(array(eval)?.at(index(eval)?, eval.heap()), span, eval)
             }
             Expr::Slice(collection, start, stop, stride) => {
                 let collection = self.expr(*collection);
@@ -457,12 +449,12 @@ impl Compiler<'_> {
             }
             Expr::Not(expr) => {
                 let expr = self.expr(*expr);
-                box move |context| Ok(Value::new_bool(!expr(context)?.to_bool()))
+                box move |eval| Ok(Value::new_bool(!expr(eval)?.to_bool()))
             }
             Expr::Minus(expr) => match expr.unpack_int_literal().and_then(i32::checked_neg) {
                 None => {
                     let expr = self.expr(*expr);
-                    box move |context| thrw(expr(context)?.minus(context.heap()), span, context)
+                    box move |eval| thrw(expr(eval)?.minus(eval.heap()), span, eval)
                 }
                 Some(x) => {
                     let val = FrozenValue::new_int(x);
@@ -472,7 +464,7 @@ impl Compiler<'_> {
             Expr::Plus(expr) => match expr.unpack_int_literal() {
                 None => {
                     let expr = self.expr(*expr);
-                    box move |context| thrw(expr(context)?.plus(context.heap()), span, context)
+                    box move |eval| thrw(expr(eval)?.plus(eval.heap()), span, eval)
                 }
                 Some(x) => {
                     let val = FrozenValue::new_int(x);
@@ -481,7 +473,7 @@ impl Compiler<'_> {
             },
             Expr::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                box move |context| Ok(Value::new_int(!expr(context)?.to_int()?))
+                box move |eval| Ok(Value::new_int(!expr(eval)?.to_int()?))
             }
             Expr::Op(left, op, right) => {
                 if let Some(x) = Expr::reduces_to_string(op, &left, &right) {
@@ -491,13 +483,13 @@ impl Compiler<'_> {
                     let l = self.expr(*left);
                     let r = self.expr(*right);
                     match op {
-                        BinOp::Or => box move |context| {
-                            let l = l(context)?;
-                            if l.to_bool() { Ok(l) } else { r(context) }
+                        BinOp::Or => box move |eval| {
+                            let l = l(eval)?;
+                            if l.to_bool() { Ok(l) } else { r(eval) }
                         },
-                        BinOp::And => box move |context| {
-                            let l = l(context)?;
-                            Ok(if !l.to_bool() { l } else { r(context)? })
+                        BinOp::And => box move |eval| {
+                            let l = l(eval)?;
+                            Ok(if !l.to_bool() { l } else { r(eval)? })
                         },
                         BinOp::Equal => eval_equals(span, l, r, |x| x),
                         BinOp::NotEqual => eval_equals(span, l, r, |x| !x),
@@ -505,27 +497,23 @@ impl Compiler<'_> {
                         BinOp::Greater => eval_compare(span, l, r, |x| x == Ordering::Greater),
                         BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
                         BinOp::GreaterOrEqual => eval_compare(span, l, r, |x| x != Ordering::Less),
-                        BinOp::In => box move |context| {
+                        BinOp::In => box move |eval| {
+                            thrw(r(eval)?.is_in(l(eval)?).map(Value::new_bool), span, eval)
+                        },
+                        BinOp::NotIn => box move |eval| {
                             thrw(
-                                r(context)?.is_in(l(context)?).map(Value::new_bool),
+                                r(eval)?.is_in(l(eval)?).map(|x| Value::new_bool(!x)),
                                 span,
-                                context,
+                                eval,
                             )
                         },
-                        BinOp::NotIn => box move |context| {
-                            thrw(
-                                r(context)?.is_in(l(context)?).map(|x| Value::new_bool(!x)),
-                                span,
-                                context,
-                            )
-                        },
-                        BinOp::Subtract => box move |context| {
-                            thrw(l(context)?.sub(r(context)?, context.heap()), span, context)
-                        },
-                        BinOp::Add => box move |context| {
+                        BinOp::Subtract => {
+                            box move |eval| thrw(l(eval)?.sub(r(eval)?, eval.heap()), span, eval)
+                        }
+                        BinOp::Add => box move |eval| {
                             // Addition of string is super common and pretty cheap, so have a special case for it.
-                            let l = l(context)?;
-                            let r = r(context)?;
+                            let l = l(eval)?;
+                            let r = r(eval)?;
                             if let Some(ls) = l.unpack_str() {
                                 if let Some(rs) = r.unpack_str() {
                                     if ls.is_empty() {
@@ -533,48 +521,36 @@ impl Compiler<'_> {
                                     } else if rs.is_empty() {
                                         return Ok(l);
                                     } else {
-                                        return Ok(context
-                                            .heap()
-                                            .alloc(fast_string::append(ls, rs)));
+                                        return Ok(eval.heap().alloc(fast_string::append(ls, rs)));
                                     }
                                 }
                             }
 
                             // Written using Value::add so that Rust Analyzer doesn't think it is an error.
-                            thrw(Value::add(l, r, context.heap()), span, context)
+                            thrw(Value::add(l, r, eval.heap()), span, eval)
                         },
-                        BinOp::Multiply => box move |context| {
-                            thrw(l(context)?.mul(r(context)?, context.heap()), span, context)
+                        BinOp::Multiply => {
+                            box move |eval| thrw(l(eval)?.mul(r(eval)?, eval.heap()), span, eval)
+                        }
+                        BinOp::Percent => box move |eval| {
+                            thrw(l(eval)?.percent(r(eval)?, eval.heap()), span, eval)
                         },
-                        BinOp::Percent => box move |context| {
-                            thrw(
-                                l(context)?.percent(r(context)?, context.heap()),
-                                span,
-                                context,
-                            )
-                        },
-                        BinOp::FloorDivide => box move |context| {
-                            thrw(
-                                l(context)?.floor_div(r(context)?, context.heap()),
-                                span,
-                                context,
-                            )
+                        BinOp::FloorDivide => box move |eval| {
+                            thrw(l(eval)?.floor_div(r(eval)?, eval.heap()), span, eval)
                         },
                         BinOp::BitAnd => {
-                            box move |context| thrw(l(context)?.bit_and(r(context)?), span, context)
+                            box move |eval| thrw(l(eval)?.bit_and(r(eval)?), span, eval)
                         }
-                        BinOp::BitOr => {
-                            box move |context| thrw(l(context)?.bit_or(r(context)?), span, context)
-                        }
+                        BinOp::BitOr => box move |eval| thrw(l(eval)?.bit_or(r(eval)?), span, eval),
                         BinOp::BitXor => {
-                            box move |context| thrw(l(context)?.bit_xor(r(context)?), span, context)
+                            box move |eval| thrw(l(eval)?.bit_xor(r(eval)?), span, eval)
                         }
-                        BinOp::LeftShift => box move |context| {
-                            thrw(l(context)?.left_shift(r(context)?), span, context)
-                        },
-                        BinOp::RightShift => box move |context| {
-                            thrw(l(context)?.right_shift(r(context)?), span, context)
-                        },
+                        BinOp::LeftShift => {
+                            box move |eval| thrw(l(eval)?.left_shift(r(eval)?), span, eval)
+                        }
+                        BinOp::RightShift => {
+                            box move |eval| thrw(l(eval)?.right_shift(r(eval)?), span, eval)
+                        }
                     }
                 }
             }

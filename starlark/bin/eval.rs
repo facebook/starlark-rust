@@ -43,9 +43,9 @@ impl Context {
             .map(|x| {
                 let env = Module::new();
 
-                let mut context = Evaluator::new(&env, &globals);
+                let mut eval = Evaluator::new(&env, &globals);
                 let module = AstModule::parse_file(x, &dialect())?;
-                context.eval_module(module)?;
+                eval.eval_module(module)?;
                 Ok(env.freeze())
             })
             .collect::<anyhow::Result<_>>()?;
@@ -119,8 +119,8 @@ impl Context {
             env.import_public_symbols(p)
         }
         let globals = globals();
-        let mut context = Evaluator::new(&env, &globals);
-        Self::err(file, context.eval_module(ast).map(|_| iter::empty()))
+        let mut eval = Evaluator::new(&env, &globals);
+        Self::err(file, eval.eval_module(ast).map(|_| iter::empty()))
     }
 
     fn info(&self, module: &AstModule) {

@@ -155,7 +155,7 @@ impl<'v> RecordType<'v> {
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.
         NativeFunction::new(
-            move |context, mut param_parser: ParametersParser| {
+            move |eval, mut param_parser: ParametersParser| {
                 let me = param_parser.next("me")?;
                 let info = RecordType::from_value(me).unwrap();
                 let mut values = Vec::with_capacity(info.fields.len());
@@ -178,7 +178,7 @@ impl<'v> RecordType<'v> {
                         }
                     }
                 }
-                Ok(context.heap().alloc_complex(Record { typ: me, values }))
+                Ok(eval.heap().alloc_complex(Record { typ: me, values }))
             },
             parameters,
         )

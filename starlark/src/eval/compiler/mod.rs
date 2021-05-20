@@ -56,14 +56,14 @@ impl<'v> From<anyhow::Error> for EvalException<'v> {
 pub(crate) fn thrw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
-    context: &Evaluator<'v, '_>,
+    eval: &Evaluator<'v, '_>,
 ) -> Result<T, EvalException<'v>> {
     match r {
         Ok(v) => Ok(v),
         Err(e) => {
             let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
-                d.set_span(span, context.codemap.dupe());
-                d.set_call_stack(|| context.call_stack.to_diagnostic_frames());
+                d.set_span(span, eval.codemap.dupe());
+                d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
             });
             Err(EvalException::Error(e))
         }
