@@ -47,7 +47,7 @@ enum Next {
     Fail,   // Stop running
 }
 
-fn cmd_help(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_help(_eval: &mut Evaluator) -> anyhow::Result<Next> {
     for (name, msg, _) in COMMANDS {
         eprintln!("* :{}, {}", name[0], msg)
     }
@@ -76,11 +76,11 @@ fn cmd_stack(eval: &mut Evaluator) -> anyhow::Result<Next> {
     Ok(Next::Again)
 }
 
-fn cmd_resume(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_resume(_eval: &mut Evaluator) -> anyhow::Result<Next> {
     Ok(Next::Resume)
 }
 
-fn cmd_fail(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_fail(_eval: &mut Evaluator) -> anyhow::Result<Next> {
     Ok(Next::Fail)
 }
 
