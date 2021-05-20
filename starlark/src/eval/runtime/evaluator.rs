@@ -145,7 +145,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// See [`Evaluator::enable_profile`] for details about the two types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
-        self.before_stmt(&|span, evaluator| evaluator.stmt_profile.before_stmt(span));
+        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
     }
 
     /// Write a profile (as a `.csv` file) to a file.
