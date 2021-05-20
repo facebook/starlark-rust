@@ -68,8 +68,8 @@ impl Backend {
     ) -> T {
         let (sender, receiver) = channel();
         self.sender
-            .send(box move |span, ctx| {
-                let (next, res) = f(span, ctx);
+            .send(box move |span, eval| {
+                let (next, res) = f(span, eval);
                 sender.send(res).unwrap();
                 next
             })
@@ -82,7 +82,7 @@ impl Backend {
     }
 
     fn with_ctx<T: 'static + Send>(&self, f: Box<dyn Fn(Span, &mut Evaluator) -> T + Send>) -> T {
-        self.inject(box move |span, ctx| (Next::RemainPaused, f(span, ctx)))
+        self.inject(box move |span, eval| (Next::RemainPaused, f(span, eval)))
     }
 
     fn execute(&self, path: &str) {
@@ -98,13 +98,13 @@ impl Backend {
             let ast = AstModule::parse_file(&path, &dialect())?;
             let module = Module::new();
             let globals = globals();
-            let mut ctx = Evaluator::new(&module, &globals);
-            let fun = |span, ctx: &mut Evaluator| {
+            let mut eval = Evaluator::new(&module, &globals);
+            let fun = |span, eval: &mut Evaluator| {
                 let stop = if disable_breakpoints.load(Ordering::SeqCst) > 0 {
                     false
                 } else {
                     let breaks = breakpoints.lock().unwrap();
-                    let span_loc = ctx.file_span(span);
+                    let span_loc = eval.file_span(span);
                     breaks
                         .get(span_loc.file.filename())
                         .map(|set| set.contains(&span))
@@ -121,17 +121,17 @@ impl Backend {
                     });
                     loop {
                         let msg = receiver.lock().unwrap().recv().unwrap();
-                        match msg(span, ctx) {
+                        match msg(span, eval) {
                             Next::Continue => break,
                             Next::RemainPaused => continue,
                         }
                     }
                 }
             };
-            ctx.before_stmt(&fun);
+            eval.before_stmt(&fun);
             // No way to pass back success/failure to the caller
             client.log(&format!("EVALUATION START: {}", path.display()));
-            let v = ctx.eval_module(ast)?;
+            let v = eval.eval_module(ast)?;
             let s = v.to_string();
             client.log(&format!("EVALUATION FINISHED: {}", path.display()));
             Ok(s)
@@ -292,9 +292,9 @@ impl DebugServer for Backend {
         // Our model of a Frame and the debugger model are a bit different.
         // We record the location of the call, but DAP wants the location we are at.
         // We also have them in the wrong order
-        self.with_ctx(box |span, ctx| {
-            let frames = ctx.call_stack();
-            let mut next = Some(ctx.file_span(span));
+        self.with_ctx(box |span, eval| {
+            let frames = eval.call_stack();
+            let mut next = Some(eval.file_span(span));
             let mut res = Vec::with_capacity(frames.len() + 1);
             for (i, x) in frames.iter().rev().enumerate() {
                 res.push(convert_frame(i, x.name.clone(), next));
@@ -309,8 +309,8 @@ impl DebugServer for Backend {
     }
 
     fn scopes(&self, _: ScopesArguments) -> anyhow::Result<ScopesResponseBody> {
-        self.with_ctx(box |_, ctx| {
-            let vars = ctx.local_variables();
+        self.with_ctx(box |_, eval| {
+            let vars = eval.local_variables();
             Ok(ScopesResponseBody {
                 scopes: vec![Scope {
                     name: "Locals".to_owned(),
@@ -329,8 +329,8 @@ impl DebugServer for Backend {
     }
 
     fn variables(&self, _: VariablesArguments) -> anyhow::Result<VariablesResponseBody> {
-        self.with_ctx(box |_, ctx| {
-            let vars = ctx.local_variables();
+        self.with_ctx(box |_, eval| {
+            let vars = eval.local_variables();
             Ok(VariablesResponseBody {
                 variables: vars
                     .into_iter()
@@ -356,12 +356,12 @@ impl DebugServer for Backend {
 
     fn evaluate(&self, x: EvaluateArguments) -> anyhow::Result<EvaluateResponseBody> {
         let disable_breakpoints = self.disable_breakpoints.dupe();
-        self.with_ctx(box move |_, ctx| {
+        self.with_ctx(box move |_, eval| {
             // We don't want to trigger breakpoints during an evaluate,
             // not least because we currently don't allow reenterant evaluate
             disable_breakpoints.fetch_add(1, Ordering::SeqCst);
             let ast = AstModule::parse("interactive", x.expression.clone(), &Dialect::Extended);
-            let s = match ast.and_then(|ast| ctx.eval_statements(ast)) {
+            let s = match ast.and_then(|ast| eval.eval_statements(ast)) {
                 Err(e) => format!("{:#}", e),
                 Ok(v) => v.to_string(),
             };

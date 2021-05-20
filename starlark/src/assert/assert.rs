@@ -211,23 +211,23 @@ impl Assert {
         }
         let mut loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
-        let mut ctx = Evaluator::new(module, &self.globals);
+        let mut eval = Evaluator::new(module, &self.globals);
 
-        let gc_always = |_, ctx: &mut Evaluator| {
-            if ctx.is_module_scope && !ctx.disable_gc {
+        let gc_always = |_, eval: &mut Evaluator| {
+            if eval.is_module_scope && !eval.disable_gc {
                 unsafe {
-                    ctx.heap().garbage_collect(|walker| ctx.walk(walker))
+                    eval.heap().garbage_collect(|walker| eval.walk(walker))
                 };
             }
         };
 
         match gc {
-            GcStrategy::Never => ctx.disable_gc(),
+            GcStrategy::Never => eval.disable_gc(),
             GcStrategy::Auto => {}
-            GcStrategy::Always => ctx.before_stmt(&gc_always),
+            GcStrategy::Always => eval.before_stmt(&gc_always),
         }
-        ctx.set_loader(&mut loader);
-        ctx.eval_module(ast)
+        eval.set_loader(&mut loader);
+        eval.eval_module(ast)
     }
 
     fn execute_fail<'a>(

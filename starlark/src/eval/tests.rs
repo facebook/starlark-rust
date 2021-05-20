@@ -867,10 +867,10 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
 
     let modu = Module::new();
     let globals = GlobalsBuilder::extended().with(module).build();
-    let mut ctx = Evaluator::new(&modu, &globals);
+    let mut eval = Evaluator::new(&modu, &globals);
     let extra = Extra::default();
-    ctx.extra_v = Some(&extra);
-    ctx.eval_module(AstModule::parse(
+    eval.extra_v = Some(&extra);
+    eval.eval_module(AstModule::parse(
         "a",
         "load_symbol('x', 6*7)".to_owned(),
         &Dialect::Extended,

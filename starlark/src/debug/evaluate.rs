@@ -30,7 +30,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.disable_gc();
 
         // Everything must be evaluated with the current heap (or we'll lose memory), which means
-        // the current module (ctx.module_env).
+        // the current module (eval.module_env).
         // We also want access to the module variables (fine), the locals (need to move them over),
         // and the frozen variables (move them over).
         // Afterwards, we want to put everything back - locals can move back to locals, modules

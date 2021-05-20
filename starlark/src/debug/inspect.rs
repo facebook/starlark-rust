@@ -40,23 +40,23 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 }
 
-fn inspect_local_variables<'v>(ctx: &Evaluator<'v, '_>) -> Option<SmallMap<String, Value<'v>>> {
+fn inspect_local_variables<'v>(eval: &Evaluator<'v, '_>) -> Option<SmallMap<String, Value<'v>>> {
     // First we find the first entry on the call_stack which contains a Def (and thus has locals)
-    let xs = ctx.call_stack.to_function_values();
+    let xs = eval.call_stack.to_function_values();
     let names = xs.into_iter().rev().find_map(to_scope_names)?;
     let mut res = SmallMap::new();
     for (name, slot) in &names.mp {
-        if let Some(v) = ctx.local_variables.top().get_slot(*slot) {
+        if let Some(v) = eval.local_variables.top().get_slot(*slot) {
             res.insert(name.clone(), v);
         }
     }
     Some(res)
 }
 
-fn inspect_module_variables<'v>(ctx: &Evaluator<'v, '_>) -> SmallMap<String, Value<'v>> {
+fn inspect_module_variables<'v>(eval: &Evaluator<'v, '_>) -> SmallMap<String, Value<'v>> {
     let mut res = SmallMap::new();
-    for (name, slot) in ctx.module_env.names().all_names() {
-        if let Some(v) = ctx.module_env.slots().get_slot(slot) {
+    for (name, slot) in eval.module_env.names().all_names() {
+        if let Some(v) = eval.module_env.slots().get_slot(slot) {
             res.insert(name, v);
         }
     }

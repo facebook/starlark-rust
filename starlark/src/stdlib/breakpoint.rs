@@ -54,7 +54,7 @@ fn cmd_help(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
     Ok(Next::Again)
 }
 
-fn cmd_variables(ctx: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_variables(eval: &mut Evaluator) -> anyhow::Result<Next> {
     fn truncate(mut s: String, n: usize) -> String {
         if s.len() > n {
             s.truncate(n);
@@ -63,14 +63,14 @@ fn cmd_variables(ctx: &mut Evaluator) -> anyhow::Result<Next> {
         s
     }
 
-    for (name, value) in ctx.local_variables() {
+    for (name, value) in eval.local_variables() {
         eprintln!("* {} = {}", name, truncate(value.to_string(), 80))
     }
     Ok(Next::Again)
 }
 
-fn cmd_stack(ctx: &mut Evaluator) -> anyhow::Result<Next> {
-    for x in ctx.call_stack() {
+fn cmd_stack(eval: &mut Evaluator) -> anyhow::Result<Next> {
+    for x in eval.call_stack() {
         eprintln!("* {}", x)
     }
     Ok(Next::Again)
@@ -87,7 +87,7 @@ fn cmd_fail(_ctx: &mut Evaluator) -> anyhow::Result<Next> {
 const COMMANDS: &[(
     &[&str], // Possible names
     &str,    // Help text
-    fn(ctx: &mut Evaluator) -> anyhow::Result<Next>,
+    fn(eval: &mut Evaluator) -> anyhow::Result<Next>,
 )] = &[
     (&["help", "?"], "Show this help message", cmd_help),
     (&["vars"], "Show all local variables", cmd_variables),
@@ -96,7 +96,7 @@ const COMMANDS: &[(
     (&["fail"], "Abort with a failure message", cmd_fail),
 ];
 
-fn pick_command(x: &str) -> Option<fn(ctx: &mut Evaluator) -> anyhow::Result<Next>> {
+fn pick_command(x: &str) -> Option<fn(eval: &mut Evaluator) -> anyhow::Result<Next>> {
     // If we can find a command that matches perfectly, do that
     // Otherwise return the longest match, but if they are multiple, show a warning
     let mut poss = Vec::new();
@@ -122,7 +122,7 @@ fn pick_command(x: &str) -> Option<fn(ctx: &mut Evaluator) -> anyhow::Result<Nex
     None
 }
 
-fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<State> {
+fn breakpoint_loop(eval: &mut Evaluator) -> anyhow::Result<State> {
     let mut rl = Editor::<()>::new();
     loop {
         let readline = rl.readline("$> ");
@@ -131,7 +131,7 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<State> {
                 rl.add_history_entry(line.as_str());
                 if let Some(line) = line.strip_prefix(':') {
                     if let Some(cmd) = pick_command(line.trim_end()) {
-                        match cmd(ctx)? {
+                        match cmd(eval)? {
                             Next::Again => {}
                             Next::Resume => return Ok(State::Allow),
                             Next::Fail => return Err(anyhow!("Selected :fail at breakpoint()")),
@@ -139,7 +139,7 @@ fn breakpoint_loop(ctx: &mut Evaluator) -> anyhow::Result<State> {
                     }
                 } else {
                     let ast = AstModule::parse("interactive", line, &Dialect::Extended);
-                    let res = ast.and_then(|ast| ctx.eval_statements(ast));
+                    let res = ast.and_then(|ast| eval.eval_statements(ast));
                     match res {
                         Err(e) => eprintln!("{:#}", e),
                         Ok(v) => {

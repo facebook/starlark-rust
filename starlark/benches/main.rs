@@ -24,9 +24,9 @@ use starlark::{
 
 fn benchmark_run(globals: &Globals, code: &str) {
     let env = Module::new();
-    let mut ctx = Evaluator::new(&env, globals);
+    let mut eval = Evaluator::new(&env, globals);
     let ast = AstModule::parse("benchmark.sky", code.to_owned(), &Dialect::Standard).unwrap();
-    ctx.eval_module(ast).unwrap();
+    eval.eval_module(ast).unwrap();
 }
 
 fn benchmark_pure_parsing(code: &str) {
