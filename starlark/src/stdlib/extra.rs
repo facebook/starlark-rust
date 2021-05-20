@@ -42,7 +42,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
             } else {
                 let mut inv = func.new_invoker(heap)?;
                 inv.push_pos(v);
-                if inv.invoke(func, None, ctx)?.to_bool() {
+                if inv.invoke(func, None, eval)?.to_bool() {
                     res.push(v);
                 }
             }
@@ -58,7 +58,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
         for v in &seq.iterate(heap)? {
             let mut inv = func.new_invoker(heap)?;
             inv.push_pos(v);
-            res.push(inv.invoke(func, None, ctx)?);
+            res.push(inv.invoke(func, None, eval)?);
         }
         Ok(res)
     }

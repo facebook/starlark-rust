@@ -136,7 +136,7 @@
 //!     fn emit(x: Value) -> NoneType {
 //!         // We modify extra (which we know is a Store) and add the JSON of the
 //!         // value the user gave.
-//!         ctx.extra
+//!         eval.extra
 //!             .unwrap()
 //!             .downcast_ref::<Store>()
 //!             .unwrap()

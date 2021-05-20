@@ -107,7 +107,7 @@ mod tests {
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_evaluate(code: String) -> Value<'v> {
             let ast = AstModule::parse("interactive", code, &Dialect::Extended)?;
-            ctx.eval_statements(ast)
+            eval.eval_statements(ast)
         }
     }
 

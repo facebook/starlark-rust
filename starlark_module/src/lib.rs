@@ -32,11 +32,11 @@ use syn::*;
 // ```
 // pub fn global(globals_builder: &mut GlobalsBuilder) {
 //     fn cc_binary<'v, 'a, 'a2>(
-//         ctx: &mut starlark::eval::Evaluator<'v, 'a>,
+//         eval: &mut starlark::eval::Evaluator<'v, 'a>,
 //         args: starlark::eval::ParametersParser<'v, 'a2>,
 //     ) -> anyhow::Result<starlark::values::Value<'v>> {
 //         fn inner<'v, 'a, 'a2>(
-//             #[allow(unused_variables)] ctx: &mut starlark::eval::Evaluator<'v, 'a>,
+//             #[allow(unused_variables)] eval: &mut starlark::eval::Evaluator<'v, 'a>,
 //             #[allow(unused_mut)]
 //             #[allow(unused_variables)]
 //             mut args: starlark::eval::ParametersParser<'v, 'a2>,
@@ -58,8 +58,8 @@ use syn::*;
 //                 res
 //             })
 //         }
-//         match inner(ctx, args) {
-//             Ok(v) => Ok(ctx.heap().alloc(v)),
+//         match inner(eval, args) {
+//             Ok(v) => Ok(eval.heap().alloc(v)),
 //             Err(e) => Err(e),
 //         }
 //     }
@@ -101,8 +101,8 @@ use syn::*;
 ///
 /// During execution there are two local variables injected into scope:
 ///
-/// * `ctx` is the `Evaluator`.
-/// * `heap` is the `Heap`, obtained from `ctx.heap()`.
+/// * `eval` is the `Evaluator`.
+/// * `heap` is the `Heap`, obtained from `eval.heap()`.
 ///
 /// A function with the `#[starlark_module]` attribute can be added to a `GlobalsBuilder` value
 /// using the `with` function. Those `Globals` can be passed to `Evaluator` to provide global functions.
@@ -260,23 +260,23 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v, 'a, 'a2>(
-            ctx: &mut starlark::eval::Evaluator<'v, 'a>,
+            eval: &mut starlark::eval::Evaluator<'v, 'a>,
             starlark_args: starlark::eval::ParametersParser<'v, 'a2>,
         ) -> anyhow::Result<starlark::values::Value<'v>> {
              fn inner<'v, 'a, 'a2>(
                 #[allow(unused_variables)]
-                ctx: &mut starlark::eval::Evaluator<'v, 'a>,
+                eval: &mut starlark::eval::Evaluator<'v, 'a>,
                 #[allow(unused_mut)]
                 #[allow(unused_variables)]
                 mut starlark_args: starlark::eval::ParametersParser<'v, 'a2>,
             ) -> anyhow::Result<#return_type> {
                 #[allow(unused_variables)]
-                let heap = ctx.heap();
+                let heap = eval.heap();
                 #( #bind_args )*
                 #body
             }
-            match inner(ctx, starlark_args) {
-                Ok(v) => Ok(ctx.heap().alloc(v)),
+            match inner(eval, starlark_args) {
+                Ok(v) => Ok(eval.heap().alloc(v)),
                 Err(e) => Err(e),
             }
         }

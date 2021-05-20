@@ -107,7 +107,7 @@ fn assert_star(builder: &mut GlobalsBuilder) {
 
     fn fails(f: Value, _msg: &str) -> NoneType {
         let invoke = f.new_invoker(heap)?;
-        match invoke.invoke(f, None, ctx) {
+        match invoke.invoke(f, None, eval) {
             Err(_e) => Ok(NoneType), // We don't actually check the message
             Ok(_) => Err(anyhow!("assert.fails: didn't fail")),
         }
@@ -135,9 +135,9 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 
     // This is only safe to call at the top-level of a Starlark module
     fn garbage_collect() -> NoneType {
-        if ctx.is_module_scope {
+        if eval.is_module_scope {
             unsafe {
-                ctx.heap().garbage_collect(|walker| ctx.walk(walker))
+                eval.heap().garbage_collect(|walker| eval.walk(walker))
             };
             Ok(NoneType)
         } else {

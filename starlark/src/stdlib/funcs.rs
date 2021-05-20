@@ -313,7 +313,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 if attr_type == AttrType::Field {
                     Ok(v)
                 } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                    v_attr.call(a, ctx)
+                    v_attr.call(a, eval)
                 } else {
                     // Insert self so the method see the object it is acting on
                     Ok(heap.alloc(WrappedMethod::new(a, v)))
@@ -581,11 +581,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Some(key) => {
                 let mut invoker = key.new_invoker(heap)?;
                 invoker.push_pos(max);
-                let mut cached = invoker.invoke(key, None, ctx)?;
+                let mut cached = invoker.invoke(key, None, eval)?;
                 for i in it {
                     let mut invoker = key.new_invoker(heap)?;
                     invoker.push_pos(i);
-                    let keyi = invoker.invoke(key, None, ctx)?;
+                    let keyi = invoker.invoke(key, None, eval)?;
                     if cached.compare(keyi)? == Ordering::Less {
                         max = i;
                         cached = keyi;
@@ -639,11 +639,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Some(key) => {
                 let mut invoker = key.new_invoker(heap)?;
                 invoker.push_pos(min);
-                let mut cached = invoker.invoke(key, None, ctx)?;
+                let mut cached = invoker.invoke(key, None, eval)?;
                 for i in it {
                     let mut invoker = key.new_invoker(heap)?;
                     invoker.push_pos(i);
-                    let keyi = invoker.invoke(key, None, ctx)?;
+                    let keyi = invoker.invoke(key, None, eval)?;
                     if cached.compare(keyi)? == Ordering::Greater {
                         min = i;
                         cached = keyi;
@@ -807,7 +807,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 for el in x {
                     let mut inv = key.new_invoker(heap)?;
                     inv.push_pos(el);
-                    v.push((el, inv.invoke(key, None, ctx)?));
+                    v.push((el, inv.invoke(key, None, eval)?));
                 }
                 v
             }

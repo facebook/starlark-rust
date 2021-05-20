@@ -838,7 +838,7 @@ fn test_load_symbols() {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
         fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
-            ctx.set_module_variable_at_some_point(name, value, heap)?;
+            eval.set_module_variable_at_some_point(name, value, heap)?;
             Ok(NoneType)
         }
     }
@@ -856,7 +856,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
         fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
-            let extra = ctx.extra_v.unwrap().downcast_ref::<Extra<'v>>().unwrap();
+            let extra = eval.extra_v.unwrap().downcast_ref::<Extra<'v>>().unwrap();
             extra.0.lock().unwrap().insert(name.to_owned(), value);
             Ok(NoneType)
         }

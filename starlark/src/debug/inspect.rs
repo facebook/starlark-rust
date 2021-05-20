@@ -71,12 +71,12 @@ mod tests {
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_inspect_stack() -> Vec<String> {
-            Ok(ctx.call_stack().map(ToString::to_string))
+            Ok(eval.call_stack().map(ToString::to_string))
         }
 
         fn debug_inspect_variables() -> Struct<'v> {
             Ok(Struct {
-                fields: ctx.local_variables(),
+                fields: eval.local_variables(),
             })
         }
     }

@@ -164,7 +164,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
             let mut guard = BREAKPOINT_MUTEX.lock().unwrap();
             if *guard == State::Allow {
                 eprintln!("BREAKPOINT HIT! :resume to continue, :help for all options");
-                *guard = breakpoint_loop(ctx)?;
+                *guard = breakpoint_loop(eval)?;
             }
         }
         Ok(NoneType)
