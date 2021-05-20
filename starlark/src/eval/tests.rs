@@ -969,9 +969,9 @@ range(4) != [0,1,2,3,4]
 {1: 2, 3: 4} == {3: 4, 1: 2}  # Spec is a little ambiguous here
 repr == repr
 repr != str
-[].copy != [1].copy
-x = []; x.copy != x.copy
-x = []; y = x.copy; y == y
+[].clear != [1].clear
+x = []; x.clear != x.clear
+x = []; y = x.clear; y == y
 x = repr; y = repr; x == y
 "#,
     );
