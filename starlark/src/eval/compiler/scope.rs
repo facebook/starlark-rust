@@ -16,10 +16,8 @@
  */
 
 use crate::{
-    environment::{
-        names::MutableNames,
-        slots::{LocalSlotId, ModuleSlotId},
-    },
+    environment::{names::MutableNames, slots::ModuleSlotId},
+    eval::runtime::slots::LocalSlotId,
     syntax::ast::{AstAssign, AstStmt, Expr, Stmt, Visibility},
 };
 use std::collections::HashMap;

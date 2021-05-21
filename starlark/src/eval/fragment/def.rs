@@ -19,10 +19,10 @@
 
 use crate::{
     codemap::CodeMap,
-    environment::{slots::LocalSlots, FrozenModuleValue},
+    environment::FrozenModuleValue,
     eval::{
         compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled, StmtCompiled},
-        runtime::{evaluator::Evaluator, parameters::ParametersSpec},
+        runtime::{evaluator::Evaluator, parameters::ParametersSpec, slots::LocalSlots},
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{

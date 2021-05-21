@@ -20,8 +20,10 @@
 
 use crate::{
     codemap::{Span, Spanned},
-    environment::slots::LocalSlots,
-    eval::compiler::{scope::Scope, Compiler, EvalException},
+    eval::{
+        compiler::{scope::Scope, Compiler, EvalException},
+        runtime::slots::LocalSlots,
+    },
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::{Value, ValueRef},
 };

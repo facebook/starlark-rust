@@ -19,12 +19,15 @@ use crate::{
     codemap::{CodeMap, FileSpan, Span},
     collections::stack::Stack1,
     environment::{
-        slots::{LocalSlotId, LocalSlots, ModuleSlotId},
-        EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
+        slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
     errors::{Diagnostic, Frame},
     eval::{
-        runtime::{call_stack::CallStack, stmt_profile::StmtProfile},
+        runtime::{
+            call_stack::CallStack,
+            slots::{LocalSlotId, LocalSlots},
+            stmt_profile::StmtProfile,
+        },
         FileLoader,
     },
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
