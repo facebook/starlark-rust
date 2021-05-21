@@ -209,13 +209,13 @@ impl<'v> ValueMem<'v> {
 
     pub fn get_aref(&'v self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self {
-            Self::Forward(x) => ARef::Ptr(x.get_ref()),
-            Self::Str(x) => ARef::Ptr(x),
-            Self::Simple(x) => ARef::Ptr(simple_starlark_value(Box::as_ref(x))),
-            Self::Immutable(x) => ARef::Ptr(x.as_starlark_value()),
-            Self::Mutable(x) => ARef::Ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
+            Self::Forward(x) => ARef::new_ptr(x.get_ref()),
+            Self::Str(x) => ARef::new_ptr(x),
+            Self::Simple(x) => ARef::new_ptr(simple_starlark_value(Box::as_ref(x))),
+            Self::Immutable(x) => ARef::new_ptr(x.as_starlark_value()),
+            Self::Mutable(x) => ARef::new_ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
             Self::ThawOnWrite(state) => match state.get_ref() {
-                Either::Left(fv) => ARef::Ref(Ref::map(fv, |fv| fv.get_ref())),
+                Either::Left(fv) => ARef::new_ref(Ref::map(fv, |fv| fv.get_ref())),
                 Either::Right(v) => v.get_aref(),
             },
             _ => self.unexpected("get_aref"),
@@ -344,12 +344,12 @@ impl<'v> Value<'v> {
     /// Get a pointer to a [`StarlarkValue`].
     pub fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => ARef::Ptr(x.get_ref()),
+            PointerUnpack::Ptr1(x) => ARef::new_ptr(x.get_ref()),
             PointerUnpack::Ptr2(x) => x.get_aref(),
             PointerUnpack::Unassigned => panic!("get_aref on Unassigned"),
-            PointerUnpack::None => ARef::Ptr(&VALUE_NONE),
-            PointerUnpack::Bool(x) => ARef::Ptr(if x { &VALUE_TRUE } else { &VALUE_FALSE }),
-            PointerUnpack::Int(x) => ARef::Ptr(PointerI32::new(x)),
+            PointerUnpack::None => ARef::new_ptr(&VALUE_NONE),
+            PointerUnpack::Bool(x) => ARef::new_ptr(if x { &VALUE_TRUE } else { &VALUE_FALSE }),
+            PointerUnpack::Int(x) => ARef::new_ptr(PointerI32::new(x)),
         }
     }
 

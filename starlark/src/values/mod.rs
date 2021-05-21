@@ -240,7 +240,7 @@ impl<'v> ValueLike<'v> for Value<'v> {
 
 impl<'v> ValueLike<'v> for FrozenValue {
     fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
-        ARef::Ptr(self.get_ref())
+        ARef::new_ptr(self.get_ref())
     }
 
     fn to_value(self) -> Value<'v> {
