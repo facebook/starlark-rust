@@ -26,7 +26,10 @@
 // This lint is fairly new, so have to also enable unknown-clippy-lints.
 #![allow(clippy::unusual_byte_groupings)]
 
+use std::num::NonZeroUsize;
+
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};
+use static_assertions::assert_eq_size;
 use void::Void;
 
 // A structure that is morally a `PointerUnpack`, but gets encoded in one
@@ -34,11 +37,14 @@ use void::Void;
 // instantiate to FrozenValueMem and ValueMem)
 #[derive(Clone_, Copy_, Dupe_)]
 pub(crate) struct Pointer<'p1, 'p2, P1, P2> {
-    pointer: usize,
+    pointer: NonZeroUsize,
     // Make sure we are invariant in all the types/lifetimes.
     // See https://stackoverflow.com/questions/62659221/why-does-a-program-compile-despite-an-apparent-lifetime-mismatch
     phantom: PhantomDataInvariant<(&'p1 P1, &'p2 P2)>,
 }
+
+assert_eq_size!(Pointer<'static, 'static, String, String>, usize);
+assert_eq_size!(Option<Pointer<'static, 'static, String, String>>, usize);
 
 pub(crate) enum PointerUnpack<'p1, 'p2, P1, P2> {
     Ptr1(&'p1 P1),
@@ -80,6 +86,9 @@ fn untag_int(x: usize) -> i32 {
 impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
     fn new(pointer: usize) -> Self {
         let phantom = PhantomDataInvariant::new();
+        // Never zero because the only TAG which is zero is P1, and that must be a pointer
+        debug_assert!(pointer != 0);
+        let pointer = unsafe { NonZeroUsize::new_unchecked(pointer) };
         Self { pointer, phantom }
     }
 
@@ -92,7 +101,7 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
     }
 
     pub fn set_user_tag(self) -> Self {
-        Self::new(self.pointer | TAG_USER)
+        Self::new(self.pointer.get() | TAG_USER)
     }
 
     pub fn new_bool(x: bool) -> Self {
@@ -116,11 +125,12 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
     }
 
     pub fn unpack(self) -> PointerUnpack<'p1, 'p2, P1, P2> {
-        match self.pointer & TAG_BITS {
-            TAG_P1 => PointerUnpack::Ptr1(unsafe { untag_pointer(self.pointer) }),
-            TAG_P2 => PointerUnpack::Ptr2(unsafe { untag_pointer(self.pointer) }),
-            TAG_INT => PointerUnpack::Int(untag_int(self.pointer)),
-            _ => match self.pointer {
+        let p = self.pointer.get();
+        match p & TAG_BITS {
+            TAG_P1 => PointerUnpack::Ptr1(unsafe { untag_pointer(p) }),
+            TAG_P2 => PointerUnpack::Ptr2(unsafe { untag_pointer(p) }),
+            TAG_INT => PointerUnpack::Int(untag_int(p)),
+            _ => match p {
                 TAG_CONST_NONE => PointerUnpack::None,
                 TAG_CONST_UNASSIGNED => PointerUnpack::Unassigned,
                 TAG_CONST_TRUE => PointerUnpack::Bool(true),
@@ -131,21 +141,22 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
     }
 
     pub fn get_user_tag(self) -> bool {
-        self.pointer & TAG_USER == TAG_USER
+        self.pointer.get() & TAG_USER == TAG_USER
     }
 
     pub fn is_none(self) -> bool {
-        self.pointer == TAG_CONST_NONE
+        self.pointer.get() == TAG_CONST_NONE
     }
 
     pub(crate) fn is_unassigned(self) -> bool {
-        self.pointer == TAG_CONST_UNASSIGNED
+        self.pointer.get() == TAG_CONST_UNASSIGNED
     }
 
     pub fn unpack_bool(self) -> Option<bool> {
-        if self.pointer == TAG_CONST_FALSE {
+        let p = self.pointer.get();
+        if p == TAG_CONST_FALSE {
             Some(false)
-        } else if self.pointer == TAG_CONST_TRUE {
+        } else if p == TAG_CONST_TRUE {
             Some(true)
         } else {
             None
@@ -153,31 +164,35 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
     }
 
     pub fn unpack_int(self) -> Option<i32> {
-        if self.pointer & TAG_BITS == TAG_INT {
-            Some(untag_int(self.pointer))
+        let p = self.pointer.get();
+        if p & TAG_BITS == TAG_INT {
+            Some(untag_int(p))
         } else {
             None
         }
     }
 
     pub fn unpack_ptr1(self) -> Option<&'p1 P1> {
-        if self.pointer & TAG_BITS == TAG_P1 {
-            Some(unsafe { untag_pointer(self.pointer) })
+        let p = self.pointer.get();
+        if p & TAG_BITS == TAG_P1 {
+            Some(unsafe { untag_pointer(p) })
         } else {
             None
         }
     }
 
     pub fn unpack_ptr2(self) -> Option<&'p2 P2> {
-        if self.pointer & TAG_BITS == TAG_P2 {
-            Some(unsafe { untag_pointer(self.pointer) })
+        let p = self.pointer.get();
+        if p & TAG_BITS == TAG_P2 {
+            Some(unsafe { untag_pointer(p) })
         } else {
             None
         }
     }
 
     pub fn coerce_opt<'p2_, P2_>(self) -> Option<Pointer<'p1, 'p2_, P1, P2_>> {
-        if self.pointer & TAG_BITS == TAG_P2 {
+        let p = self.pointer.get();
+        if p & TAG_BITS == TAG_P2 {
             None
         } else {
             // Safe because we aren't a P2, and other than P2, we are equal representation
@@ -193,7 +208,7 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
     }
 
     pub fn ptr_value(self) -> usize {
-        self.pointer
+        self.pointer.get()
     }
 }
 
