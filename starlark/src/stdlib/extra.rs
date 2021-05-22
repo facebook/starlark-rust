@@ -158,11 +158,7 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
-    fn new_invoker<'a>(
-        &self,
-        _me: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, _me: Value<'v>, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut inv = self.func.new_invoker(heap)?;
         inv.push_args(self.args.to_value(), heap);
         inv.push_kwargs(self.kwargs.to_value());

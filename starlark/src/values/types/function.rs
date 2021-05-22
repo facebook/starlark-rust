@@ -35,19 +35,19 @@ use gazebo::{any::AnyLifetime, cell::ARef};
 pub const FUNCTION_TYPE: &str = "function";
 
 /// Function that can be invoked. Accumulates arguments before being called.
-pub struct FunctionInvoker<'v, 'a> {
+pub struct FunctionInvoker<'v> {
     pub(crate) collect: ParametersCollect<'v>,
-    pub(crate) invoke: FunctionInvokerInner<'v, 'a>,
+    pub(crate) invoke: FunctionInvokerInner<'v>,
 }
 
 // Wrap to avoid exposing the enum alterantives
-pub(crate) enum FunctionInvokerInner<'v, 'a> {
-    Native(NativeFunctionInvoker<'a>),
-    Def(DefInvoker<'v, 'a>),
-    DefFrozen(DefInvokerFrozen<'a>),
+pub(crate) enum FunctionInvokerInner<'v> {
+    Native(NativeFunctionInvoker<'v>),
+    Def(DefInvoker<'v>),
+    DefFrozen(DefInvokerFrozen<'v>),
 }
 
-impl<'v, 'a> FunctionInvoker<'v, 'a> {
+impl<'v> FunctionInvoker<'v> {
     /// Actually invoke the underlying function, giving call-stack information.
     /// If provided, the `location` must use the currently active [`CodeMap`](crate::codemap::CodeMap)
     /// from the [`Evaluator`].
@@ -109,7 +109,7 @@ impl<T> NativeFunc for T where
 pub(crate) struct NativeFunctionInvoker<'a>(ARef<'a, dyn NativeFunc>);
 
 impl<'a> NativeFunctionInvoker<'a> {
-    pub fn new<'v, F: NativeFunc>(func: ARef<'v, NativeFunction<F>>) -> FunctionInvoker<'v, 'v> {
+    pub fn new<'v, F: NativeFunc>(func: ARef<'v, NativeFunction<F>>) -> FunctionInvoker<'v> {
         // Used to help guide the type checker
         fn convert(x: &impl NativeFunc) -> &(dyn NativeFunc) {
             x
@@ -197,11 +197,7 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
         self.parameters.collect_repr(s)
     }
 
-    fn new_invoker<'a>(
-        &self,
-        me: Value<'v>,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         Ok(NativeFunctionInvoker::new(ARef::map(me.get_aref(), |x| {
             x.as_dyn_any().downcast_ref::<Self>().unwrap()
         })))
@@ -272,7 +268,7 @@ impl<'v> WrappedMethod<'v> {
 }
 
 impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
-    pub(crate) fn invoke<'a>(&self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    pub(crate) fn invoke(&self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut inv = self.method.new_invoker(heap)?;
         inv.push_pos(self.self_obj.to_value());
         Ok(inv)
@@ -303,11 +299,7 @@ where
         self.method.collect_repr(s);
     }
 
-    fn new_invoker<'a>(
-        &self,
-        _me: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, _me: Value<'v>, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         self.invoke(heap)
     }
 }

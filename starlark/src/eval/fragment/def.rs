@@ -252,11 +252,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         collector.push_str(&self.parameters.signature());
     }
 
-    fn new_invoker<'a>(
-        &self,
-        me: Value<'v>,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         Ok(DefInvokerFrozen::new_frozen(ARef::map(
             me.get_aref(),
             |x| x.as_dyn_any().downcast_ref::<Self>().unwrap(),
@@ -271,21 +267,17 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         collector.push_str(&self.parameters.signature());
     }
 
-    fn new_invoker<'a>(
-        &self,
-        me: Value<'v>,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         Ok(DefInvoker::new(ARef::map(me.get_aref(), |x| {
             x.as_dyn_any().downcast_ref::<Self>().unwrap()
         })))
     }
 }
 
-pub(crate) type DefInvoker<'v, 'a> = DefInvokerGen<'a, Value<'v>, ValueRef<'v>>;
-pub(crate) type DefInvokerFrozen<'a> = DefInvokerGen<'a, FrozenValue, FrozenValue>;
+pub(crate) type DefInvoker<'v> = DefInvokerGen<'v, Value<'v>, ValueRef<'v>>;
+pub(crate) type DefInvokerFrozen<'v> = DefInvokerGen<'v, FrozenValue, FrozenValue>;
 
-pub(crate) struct DefInvokerGen<'a, V, RefV>(ARef<'a, DefGen<V, RefV>>);
+pub(crate) struct DefInvokerGen<'v, V, RefV>(ARef<'v, DefGen<V, RefV>>);
 
 pub(crate) trait AsValueRef<'v> {
     fn to_value_ref(&self) -> ValueRef<'v>;
@@ -303,8 +295,8 @@ impl<'v> AsValueRef<'v> for ValueRef<'v> {
     }
 }
 
-impl<'v, 'a> DefInvoker<'v, 'a> {
-    fn new(def: ARef<'v, Def<'v>>) -> FunctionInvoker<'v, 'v> {
+impl<'v> DefInvoker<'v> {
+    fn new(def: ARef<'v, Def<'v>>) -> FunctionInvoker<'v> {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, &x.parameters));
         FunctionInvoker {
@@ -315,7 +307,7 @@ impl<'v, 'a> DefInvoker<'v, 'a> {
 }
 
 impl<'a> DefInvokerFrozen<'a> {
-    fn new_frozen<'v>(def: ARef<'v, FrozenDef>) -> FunctionInvoker<'v, 'v> {
+    fn new_frozen<'v>(def: ARef<'v, FrozenDef>) -> FunctionInvoker<'v> {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, x.parameters.promote()));
         FunctionInvoker {

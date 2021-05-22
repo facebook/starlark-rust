@@ -164,7 +164,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
 
     fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
 
-    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
+    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         self.to_value().new_invoker(heap)
     }
 
@@ -540,7 +540,7 @@ impl<'v> Value<'v> {
         self.get_aref().right_shift(other)
     }
 
-    pub fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v, '_>> {
+    pub fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         self.get_aref().new_invoker(self, heap)
     }
 

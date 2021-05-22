@@ -279,11 +279,7 @@ where
         Ok(s.finish())
     }
 
-    fn new_invoker<'a>(
-        &self,
-        me: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, me: Value<'v>, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut f = self.constructor.new_invoker(heap)?;
         f.push_pos(me);
         Ok(f)

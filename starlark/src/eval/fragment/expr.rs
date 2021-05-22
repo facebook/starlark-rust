@@ -104,7 +104,7 @@ fn eval_call(
     span: Span,
     args: Vec<ArgCompiled>,
 ) -> impl for<'v> Fn(
-    FunctionInvoker<'v, '_>,
+    FunctionInvoker<'v>,
     Value<'v>,
     &mut Evaluator<'v, '_>,
 ) -> Result<Value<'v>, EvalException<'v>> {

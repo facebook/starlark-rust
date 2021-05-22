@@ -397,11 +397,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     }
 
     /// Create a [`FunctionInvoker`] for this object, allowing it to be invoked.
-    fn new_invoker<'a>(
-        &self,
-        _me: Value<'v>,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<FunctionInvoker<'v, 'a>> {
+    fn new_invoker(&self, _me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
         ValueError::unsupported(self, "call()")
     }
 
