@@ -346,6 +346,13 @@ impl<'v> Walker<'v> {
         self.walk_cell(&value.0)
     }
 
+    /// Walk over an optional value during garbage collection.
+    pub fn walk_opt(&self, value: &mut Option<Value<'v>>) {
+        if let Some(d) = value {
+            self.walk(d)
+        }
+    }
+
     fn walk_cell(&self, value: &Cell<Value<'v>>) {
         value.set(self.adjust(value.get()))
     }
