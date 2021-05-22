@@ -262,10 +262,10 @@ impl<V> ParametersSpec<V> {
 }
 
 impl<'v> ParametersSpec<Value<'v>> {
-    pub(crate) fn collect<'a>(
-        me: ARef<'a, ParametersSpec<Value<'v>>>,
+    pub(crate) fn collect(
+        me: ARef<'v, ParametersSpec<Value<'v>>>,
         slots: usize,
-    ) -> ParametersCollect<'v, 'a> {
+    ) -> ParametersCollect<'v> {
         let len = me.kinds.len();
         ParametersCollect {
             params: me.teq(),
@@ -308,8 +308,8 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 }
 
-pub(crate) struct ParametersCollect<'v, 'a> {
-    params: ARef<'a, ParametersSpec<Value<'v>>>,
+pub(crate) struct ParametersCollect<'v> {
+    params: ARef<'v, ParametersSpec<Value<'v>>>,
     slots: Vec<ValueRef<'v>>,
 
     /// Initially true, becomes false once we see something not-positional.
@@ -322,7 +322,7 @@ pub(crate) struct ParametersCollect<'v, 'a> {
     err: Option<anyhow::Error>,
 }
 
-impl<'v, 'a> ParametersCollect<'v, 'a> {
+impl<'v> ParametersCollect<'v> {
     fn set_err(&mut self, err: anyhow::Error) {
         if self.err.is_none() {
             self.err = Some(err);

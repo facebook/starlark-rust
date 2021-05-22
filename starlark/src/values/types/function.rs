@@ -36,7 +36,7 @@ pub const FUNCTION_TYPE: &str = "function";
 
 /// Function that can be invoked. Accumulates arguments before being called.
 pub struct FunctionInvoker<'v, 'a> {
-    pub(crate) collect: ParametersCollect<'v, 'a>,
+    pub(crate) collect: ParametersCollect<'v>,
     pub(crate) invoke: FunctionInvokerInner<'v, 'a>,
 }
 
