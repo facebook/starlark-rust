@@ -133,11 +133,11 @@ fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
         Ok(())
     });
 
-    box move |eval| {
+    expr!(|eval| {
         let mut r = Vec::new();
         clauses(&mut r, eval)?;
-        Ok(eval.heap().alloc(r))
-    }
+        eval.heap().alloc(r)
+    })
 }
 
 fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
@@ -148,11 +148,11 @@ fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> 
         Ok(())
     });
 
-    box move |eval| {
+    expr!(|eval| {
         let mut r = SmallMap::new();
         clauses(&mut r, eval)?;
-        Ok(eval.heap().alloc(Dict::new(r)))
-    }
+        eval.heap().alloc(Dict::new(r))
+    })
 }
 
 struct ClauseCompiled {

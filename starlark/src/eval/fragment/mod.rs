@@ -15,6 +15,37 @@
  * limitations under the License.
  */
 
+macro_rules! expr {
+    (|$eval:ident| $body:expr) => {{
+        #[allow(clippy::needless_question_mark)]
+        let res: ExprCompiled = box move |$eval| Ok($body);
+        res
+    }};
+    ($v1:ident, |$eval:ident| $body:expr) => {{
+        #[allow(clippy::needless_question_mark)]
+        let res: ExprCompiled = box move |$eval| {
+            let $v1 = $v1($eval)?;
+            Ok($body)
+        };
+        res
+    }};
+    ($v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
+        #[allow(clippy::needless_question_mark)]
+        let res: ExprCompiled = box move |$eval| {
+            let $v1 = $v1($eval)?;
+            let $v2 = $v2($eval)?;
+            Ok($body)
+        };
+        res
+    }};
+}
+
+macro_rules! value {
+    ($v:expr) => {
+        box move |_eval| Ok($v.to_value())
+    };
+}
+
 pub(crate) mod compr;
 pub(crate) mod def;
 pub(crate) mod expr;
