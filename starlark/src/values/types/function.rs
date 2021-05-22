@@ -109,7 +109,7 @@ impl<T> NativeFunc for T where
 pub(crate) struct NativeFunctionInvoker<'a>(ARef<'a, dyn NativeFunc>);
 
 impl<'a> NativeFunctionInvoker<'a> {
-    pub fn new<'v, F: NativeFunc>(func: ARef<'a, NativeFunction<F>>) -> FunctionInvoker<'v, 'a> {
+    pub fn new<'v, F: NativeFunc>(func: ARef<'v, NativeFunction<F>>) -> FunctionInvoker<'v, 'v> {
         // Used to help guide the type checker
         fn convert(x: &impl NativeFunc) -> &(dyn NativeFunc) {
             x

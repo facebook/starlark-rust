@@ -304,7 +304,7 @@ impl<'v> AsValueRef<'v> for ValueRef<'v> {
 }
 
 impl<'v, 'a> DefInvoker<'v, 'a> {
-    fn new(def: ARef<'a, Def<'v>>) -> FunctionInvoker<'v, 'a> {
+    fn new(def: ARef<'v, Def<'v>>) -> FunctionInvoker<'v, 'v> {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, &x.parameters));
         FunctionInvoker {
@@ -315,7 +315,7 @@ impl<'v, 'a> DefInvoker<'v, 'a> {
 }
 
 impl<'a> DefInvokerFrozen<'a> {
-    fn new_frozen<'v>(def: ARef<'a, FrozenDef>) -> FunctionInvoker<'v, 'a> {
+    fn new_frozen<'v>(def: ARef<'v, FrozenDef>) -> FunctionInvoker<'v, 'v> {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, x.parameters.promote()));
         FunctionInvoker {
