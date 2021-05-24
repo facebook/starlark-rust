@@ -480,9 +480,12 @@ impl Compiler<'_> {
                         }
                         Some(load) => load.load(&name).map_err(EvalException::Error)?,
                     };
-                    let modu = eval.assert_module_env();
                     for (new_name, orig_name, span) in &symbols {
-                        let value = thrw(modu.load_symbol(&loadenv, orig_name), *span, eval)?;
+                        let value = thrw(
+                            eval.module_env.load_symbol(&loadenv, orig_name),
+                            *span,
+                            eval,
+                        )?;
                         match new_name {
                             Slot::Local(slot) => eval.set_slot_local(*slot, value),
                             Slot::Module(slot) => eval.set_slot_module(*slot, value),

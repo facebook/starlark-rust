@@ -80,15 +80,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             mut statement,
         } = ast;
         inject_return(&mut statement);
-        let module_env = self.assert_module_env();
 
-        let scope = Scope::enter_module(module_env.names(), &statement);
+        let scope = Scope::enter_module(self.module_env.names(), &statement);
 
         let span = statement.span;
 
         let mut compiler = Compiler {
             scope,
-            heap: module_env.frozen_heap(),
+            heap: self.module_env.frozen_heap(),
             globals: self.globals,
             errors: Vec::new(),
             codemap: codemap.dupe(),
@@ -103,7 +102,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
 
         let (module_slots, local_slots) = compiler.scope.exit_module();
-        module_env.slots().ensure_slots(module_slots);
+        self.module_env.slots().ensure_slots(module_slots);
         self.local_variables.push(LocalSlots::new(vec![
             ValueRef::new_unassigned();
             local_slots

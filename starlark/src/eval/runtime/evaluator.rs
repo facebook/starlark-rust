@@ -347,19 +347,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn set_slot_module(&mut self, slot: ModuleSlotId, value: Value<'v>) {
-        assert!(self.is_module_scope);
         self.module_env.slots().set_slot(slot, value);
     }
 
     pub(crate) fn set_slot_local(&mut self, slot: LocalSlotId, value: Value<'v>) {
         self.local_variables.top().set_slot(slot, value)
-    }
-
-    pub(crate) fn assert_module_env(&self) -> &'v Module {
-        if self.is_module_scope {
-            self.module_env
-        } else {
-            panic!("this function is meant to be called only on module level")
-        }
     }
 }
