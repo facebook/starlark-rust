@@ -473,6 +473,25 @@ impl<'v> ValueRef<'v> {
         self.get_cell().set(Some(value));
     }
 
+    fn is_ref(&self) -> bool {
+        match self.0.get() {
+            Some(v) => v.0.get_user_tag(),
+            _ => false,
+        }
+    }
+
+    // Only valid if there is no chance this is a real ref
+    pub fn set_direct(&self, value: Value<'v>) {
+        debug_assert!(!self.is_ref());
+        self.0.set(Some(value));
+    }
+
+    // Only valid if there is no chance this is a real ref
+    pub fn get_direct(&self) -> Option<Value<'v>> {
+        debug_assert!(!self.is_ref());
+        self.0.get()
+    }
+
     pub(crate) fn is_unassigned(&self) -> bool {
         self.get().is_none()
     }

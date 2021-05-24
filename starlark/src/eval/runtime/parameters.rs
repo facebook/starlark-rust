@@ -333,8 +333,8 @@ impl<'v> ParametersCollect<'v> {
         if self.next_position < self.params.positional {
             // Checking unassigned is moderately expensive, so use only_positional
             // which knows we have never set anything below next_position
-            if self.only_positional || self.slots[self.next_position].is_unassigned() {
-                self.slots[self.next_position].set(val);
+            if self.only_positional || self.slots[self.next_position].get_direct().is_none() {
+                self.slots[self.next_position].set_direct(val);
                 self.next_position += 1;
             } else {
                 // Occurs if we have def f(a), then a=1, *[2]
@@ -360,8 +360,8 @@ impl<'v> ParametersCollect<'v> {
                 old.is_some()
             }
             Some(i) => {
-                let res = !self.slots[*i].is_unassigned();
-                self.slots[*i].set(val);
+                let res = self.slots[*i].get_direct().is_some();
+                self.slots[*i].set_direct(val);
                 res
             }
         };
@@ -501,7 +501,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     pub fn next_opt<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<Option<T>> {
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
-        let v = self.slots.next().unwrap().get();
+        let v = self.slots.next().unwrap().get_direct();
         match v {
             None => Ok(None),
             Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(v))?)),
@@ -518,7 +518,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
-        let v = self.slots.next().unwrap().get();
+        let v = self.slots.next().unwrap().get_direct();
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
         let v = v.unwrap();
