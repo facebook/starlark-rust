@@ -70,10 +70,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             }
         }
 
-        let orig_is_module_scope = mem::replace(&mut self.is_module_scope, true);
         let orig_module_variables = mem::replace(&mut self.module_variables, None);
         let res = self.eval_module(statements);
-        self.is_module_scope = orig_is_module_scope;
         self.module_variables = orig_module_variables;
 
         // Now put the Module back how it was before we started, as best we can

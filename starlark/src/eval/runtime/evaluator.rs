@@ -46,8 +46,6 @@ enum EvaluatorError {
 
 /// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a> {
-    // Am I at the root module-level, true until a function call
-    pub(crate) is_module_scope: bool,
     // The module that is being used for this evaluation
     pub(crate) module_env: &'v Module,
     // The module-level variables in scope at the moment.
@@ -92,7 +90,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         module.frozen_heap().add_reference(globals.heap());
         Evaluator {
             call_stack: CallStack::default(),
-            is_module_scope: true,
             module_env: module,
             module_variables: None,
             local_variables: Stack1::default(),
@@ -243,13 +240,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
         // Capture the variables we will be mutating
-        let old_is_module_scope = self.is_module_scope;
         let old_codemap = self.set_codemap(codemap);
 
         // Set up for the new function call
         let old_module_variables =
             mem::replace(&mut self.module_variables, module.map(|x| x.get()));
-        self.is_module_scope = false;
         self.local_variables.push(locals);
 
         // Run the computation
@@ -259,7 +254,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
         self.local_variables.pop();
-        self.is_module_scope = old_is_module_scope;
         res
     }
 
