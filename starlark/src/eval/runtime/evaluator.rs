@@ -327,8 +327,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.local_variables.top().clone_slot_reference(slot, heap)
     }
 
-    /// Set a variable in the module. Raises an error if called from a frozen module
-    /// or not from the top-level.
+    /// Set a variable in the top-level module currently being processed.
+    /// This may not be the module the function is being called in.
     ///
     /// Any variables which are set will be available in the [`Module`] after evaluation returns.
     /// If those variables are _also_ existing top-level variables, then the program from that point on
@@ -341,13 +341,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         value: Value<'v>,
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
-        if self.is_module_scope {
-            value.export_as(name, heap);
-            self.module_env.set(name, value);
-            Ok(())
-        } else {
-            Err(EnvironmentError::CannotSetVariable(name.to_owned()).into())
-        }
+        value.export_as(name, heap);
+        self.module_env.set(name, value);
+        Ok(())
     }
 
     pub(crate) fn set_slot_module(&mut self, slot: ModuleSlotId, value: Value<'v>) {

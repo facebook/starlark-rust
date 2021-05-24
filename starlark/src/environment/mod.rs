@@ -42,9 +42,6 @@ pub(crate) enum EnvironmentError {
     /// Cannot import private symbol, i.e. underscore prefixed
     #[error("Cannot import private symbol `{0}`")]
     CannotImportPrivateSymbol(String),
-    /// Can't set variables unless in the root name
-    #[error("Cannot set variable `{0}` at this point, must be in a non-frozen module context")]
-    CannotSetVariable(String),
     #[error("No imports are available, you tried `{0}` (no call to `Evaluator.set_loader`)")]
     NoImportsAvailable(String),
 }
