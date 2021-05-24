@@ -100,29 +100,26 @@ enum ArgCompiled {
     KwArgs(ExprCompiled),
 }
 
-fn eval_call(
+fn eval_call<'v>(
     span: Span,
-    args: Vec<ArgCompiled>,
-) -> impl for<'v> Fn(
-    FunctionInvoker<'v>,
-    Value<'v>,
-    &mut Evaluator<'v, '_>,
+    args: &[ArgCompiled],
+    mut invoker: FunctionInvoker<'v>,
+    function: Value<'v>,
+    eval: &mut Evaluator<'v, '_>,
 ) -> Result<Value<'v>, EvalException<'v>> {
-    move |mut invoker, function, eval| {
-        for x in &args {
-            match x {
-                ArgCompiled::Pos(expr) => invoker.push_pos(expr(eval)?),
-                ArgCompiled::Named(k, kk, expr) => {
-                    invoker.push_named(k, kk.to_hashed_value(), expr(eval)?)
-                }
-                ArgCompiled::Args(expr) => invoker.push_args(expr(eval)?, eval.heap()),
-                ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(eval)?),
+    for x in args {
+        match x {
+            ArgCompiled::Pos(expr) => invoker.push_pos(expr(eval)?),
+            ArgCompiled::Named(k, kk, expr) => {
+                invoker.push_named(k, kk.to_hashed_value(), expr(eval)?)
             }
+            ArgCompiled::Args(expr) => invoker.push_args(expr(eval)?, eval.heap()),
+            ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(eval)?),
         }
-
-        let res = invoker.invoke(function, Some(span), eval);
-        thrw(res, span, eval)
     }
+
+    let res = invoker.invoke(function, Some(span), eval);
+    thrw(res, span, eval)
 }
 
 fn eval_dot(
@@ -400,7 +397,6 @@ impl Compiler<'_> {
                     Argument::Args(x) => ArgCompiled::Args(self.expr(x)),
                     Argument::KwArgs(x) => ArgCompiled::KwArgs(self.expr(x)),
                 });
-                let call = eval_call(span, args);
                 match left.node {
                     Expr::Dot(e, s) => {
                         let e = self.expr(*e);
@@ -408,11 +404,11 @@ impl Compiler<'_> {
                         box move |eval| match dot(eval)? {
                             Either::Left(function) => {
                                 let invoker = thrw(function.new_invoker(eval.heap()), span, eval)?;
-                                call(invoker, function, eval)
+                                eval_call(span, &args, invoker, function, eval)
                             }
                             Either::Right(wrapper) => {
                                 let invoker = thrw(wrapper.invoke(eval.heap()), span, eval)?;
-                                call(invoker, wrapper.method, eval)
+                                eval_call(span, &args, invoker, wrapper.method, eval)
                             }
                         }
                     }
@@ -420,7 +416,7 @@ impl Compiler<'_> {
                         let left = self.expr(*left);
                         expr!(left, |eval| {
                             let invoker = thrw(left.new_invoker(eval.heap()), span, eval)?;
-                            call(invoker, left, eval)?
+                            eval_call(span, &args, invoker, left, eval)?
                         })
                     }
                 }
