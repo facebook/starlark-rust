@@ -288,18 +288,22 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn get_slot_module(&self, slot: ModuleSlotId) -> anyhow::Result<Value<'v>> {
-        match &self.module_variables {
-            None => self.module_env.slots().get_slot(slot),
-            Some(e) => e.get_slot(slot).map(Value::new_frozen),
-        }
-        .ok_or_else(|| {
-            let name = match &self.module_variables {
-                None => self.module_env.names().get_slot(slot),
+        // Make sure the error-path doesn't get inlined into the normal-path execution
+        #[inline(never)]
+        fn error<'v>(eval: &Evaluator<'v, '_>, slot: ModuleSlotId) -> anyhow::Error {
+            let name = match &eval.module_variables {
+                None => eval.module_env.names().get_slot(slot),
                 Some(e) => e.get_slot_name(slot),
             }
             .unwrap_or_else(|| "<unknown>".to_owned());
             EnvironmentError::LocalVariableReferencedBeforeAssignment(name).into()
-        })
+        }
+
+        match &self.module_variables {
+            None => self.module_env.slots().get_slot(slot),
+            Some(e) => e.get_slot(slot).map(Value::new_frozen),
+        }
+        .ok_or_else(|| error(self, slot))
     }
 
     pub(crate) fn get_slot_local(
@@ -307,9 +311,16 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         slot: LocalSlotId,
         name: &str,
     ) -> anyhow::Result<Value<'v>> {
-        self.local_variables.top().get_slot(slot).ok_or_else(|| {
+        // Make sure the error-path doesn't get inlined into the normal-path execution
+        #[inline(never)]
+        fn error(name: &str) -> anyhow::Error {
             EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
-        })
+        }
+
+        self.local_variables
+            .top()
+            .get_slot(slot)
+            .ok_or_else(|| error(name))
     }
 
     pub(crate) fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {

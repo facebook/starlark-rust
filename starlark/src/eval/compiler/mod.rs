@@ -58,15 +58,23 @@ pub(crate) fn thrw<'v, T>(
     span: Span,
     eval: &Evaluator<'v, '_>,
 ) -> Result<T, EvalException<'v>> {
+    // Make sure the error-path doesn't get inlined into the normal-path execution
+    #[inline(never)]
+    fn thrw_error<'v, T>(
+        e: anyhow::Error,
+        span: Span,
+        eval: &Evaluator<'v, '_>,
+    ) -> Result<T, EvalException<'v>> {
+        let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
+            d.set_span(span, eval.codemap.dupe());
+            d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
+        });
+        Err(EvalException::Error(e))
+    }
+
     match r {
         Ok(v) => Ok(v),
-        Err(e) => {
-            let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
-                d.set_span(span, eval.codemap.dupe());
-                d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
-            });
-            Err(EvalException::Error(e))
-        }
+        Err(e) => thrw_error(e, span, eval),
     }
 }
 
