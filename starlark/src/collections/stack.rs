@@ -22,7 +22,54 @@
 // Once everything is stable, it might be worth removing what we don't need.
 #![allow(dead_code)]
 
+use gazebo::prelude::*;
 use std::{iter, mem};
+
+#[derive(Default_)]
+pub(crate) struct Stack<T> {
+    // Invariant: If last is None, items must be empty
+    last: Option<T>,
+    items: Vec<T>,
+}
+
+impl<T> Stack<T> {
+    pub fn push(&mut self, x: T) {
+        let old = mem::replace(&mut self.last, Some(x));
+        if let Some(old) = old {
+            self.items.push(old)
+        }
+    }
+
+    pub fn top(&mut self) -> &T {
+        self.last.as_ref().unwrap()
+    }
+
+    pub fn top_mut(&mut self) -> &mut T {
+        self.last.as_mut().unwrap()
+    }
+
+    pub fn pop(&mut self) -> T {
+        mem::replace(&mut self.last, self.items.pop()).unwrap()
+    }
+
+    pub fn len(&self) -> usize {
+        if self.last.is_none() {
+            0
+        } else {
+            self.items.len() + 1
+        }
+    }
+
+    pub fn truncate(&mut self, len: usize) {
+        assert!(len <= self.len());
+        if self.last.is_some() {
+            // Keep the code simple - push me onto the Vec, truncate pop
+            self.items.push(self.last.take().unwrap());
+            self.items.truncate(len);
+            self.last = self.items.pop();
+        }
+    }
+}
 
 #[derive(Default)]
 pub(crate) struct Stack1<T> {
@@ -43,7 +90,26 @@ impl<T> Stack1<T> {
         &self.top
     }
 
+    pub fn top_mut(&mut self) -> &mut T {
+        &mut self.top
+    }
+
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.rest.iter_mut().chain(iter::once(&mut self.top))
+    }
+
+    pub fn len(&self) -> usize {
+        self.rest.len() + 1
+    }
+
+    pub fn truncate(&mut self, len: usize) {
+        assert!(len >= 1 && len <= self.len());
+        let n = self.rest.len();
+        if len == n + 1 {
+            // nothing to do, didn't want truncation
+        } else {
+            self.rest.truncate(len + 1);
+            self.top = self.rest.pop().unwrap()
+        }
     }
 }
