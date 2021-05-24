@@ -135,14 +135,8 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 
     // This is only safe to call at the top-level of a Starlark module
     fn garbage_collect() -> NoneType {
-        if eval.is_module_scope {
-            unsafe {
-                eval.heap().garbage_collect(|walker| eval.walk(walker))
-            };
-            Ok(NoneType)
-        } else {
-            panic!("assert::garbage_collect, can only be called from a top-level statement")
-        }
+        eval.trigger_gc();
+        Ok(NoneType)
     }
 
     fn assert_type(v: Value, ty: Value) -> NoneType {
@@ -214,11 +208,7 @@ impl Assert {
         let mut eval = Evaluator::new(module, &self.globals);
 
         let gc_always = |_, eval: &mut Evaluator| {
-            if eval.is_module_scope && !eval.disable_gc {
-                unsafe {
-                    eval.heap().garbage_collect(|walker| eval.walk(walker))
-                };
-            }
+            eval.trigger_gc();
         };
 
         match gc {

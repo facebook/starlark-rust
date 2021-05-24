@@ -241,10 +241,10 @@ fn before_stmt(span: Span, eval: &mut Evaluator) {
 fn possible_gc(eval: &mut Evaluator) {
     // We only actually GC if there have been GC_THRESHOLD bytes allocated since the
     // last time we GC'd
-    const GC_THRESHOLD: usize = 100000;
+    const GC_THRESHOLD: isize = 100000;
 
     if !eval.disable_gc
-        && eval.heap().allocated_bytes() >= eval.last_heap_size + GC_THRESHOLD
+        && (eval.heap().allocated_bytes() as isize) >= eval.last_heap_size + GC_THRESHOLD
         && eval.extra_v.is_none()
     {
         // When we are at a module scope (as checked above) the eval contains
@@ -253,7 +253,7 @@ fn possible_gc(eval: &mut Evaluator) {
         unsafe {
             eval.heap().garbage_collect(|walker| eval.walk(walker))
         }
-        eval.last_heap_size = eval.heap().allocated_bytes();
+        eval.last_heap_size = eval.heap().allocated_bytes() as isize;
     }
 }
 

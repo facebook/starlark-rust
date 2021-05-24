@@ -68,8 +68,9 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) profiling: bool,
     // Is GC disabled for some reason
     pub(crate) disable_gc: bool,
-    // Size of the heap when we last performed a GC
-    pub(crate) last_heap_size: usize,
+    // Size of the heap when we last performed a GC.
+    // Morally a `usize`, but set highly negative by `trigger_gc`.
+    pub(crate) last_heap_size: isize,
     // Extra functions to run on each statement, usually empty
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
@@ -352,5 +353,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     pub(crate) fn set_slot_local(&mut self, slot: LocalSlotId, value: Value<'v>) {
         self.local_variables.top().set_slot(slot, value)
+    }
+
+    /// Cause a GC to be triggered next time it's possible.
+    pub(crate) fn trigger_gc(&mut self) {
+        // We check the current heap size relative to the last heap size,
+        // so pretend the last heap size was very negative to force a GC
+        self.last_heap_size = isize::MIN;
     }
 }
