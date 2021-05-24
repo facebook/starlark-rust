@@ -187,8 +187,10 @@ impl Compiler<'_> {
 // This function should be called before every meaningful statement.
 // The purposes are GC, profiling and debugging.
 fn before_stmt(span: Span, eval: &mut Evaluator) {
-    // Almost always will be empty, especially in high-perf use cases
-    if !eval.before_stmt.is_empty() {
+    // In all the high-performance use cases we don't have any `before_stmt` things set,
+    // so ensure the check gets inlined but the operation doesn't.
+    #[inline(never)]
+    fn have_stmt(span: Span, eval: &mut Evaluator) {
         // The user could inject more before_stmt values during iteration (although that sounds like a bad plan!)
         // so grab the values at the start, and add any additional at the end.
         let fs = mem::take(&mut eval.before_stmt);
@@ -199,6 +201,11 @@ fn before_stmt(span: Span, eval: &mut Evaluator) {
         for x in added {
             eval.before_stmt.push(x)
         }
+    }
+
+    // Almost always will be empty, especially in high-perf use cases
+    if !eval.before_stmt.is_empty() {
+        have_stmt(span, eval)
     }
 }
 
