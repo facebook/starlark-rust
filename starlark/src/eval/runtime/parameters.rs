@@ -25,7 +25,7 @@ use crate::{
         ValueRef, Walker,
     },
 };
-use gazebo::{cell::ARef, prelude::*, types::TEq};
+use gazebo::{cell::ARef, prelude::*};
 use std::{cmp, mem, slice::Iter};
 use thiserror::Error;
 
@@ -263,12 +263,12 @@ impl<V> ParametersSpec<V> {
 
 impl<'v> ParametersSpec<Value<'v>> {
     pub(crate) fn collect(
-        me: ARef<'v, ParametersSpec<Value<'v>>>,
+        params: ARef<'v, ParametersSpec<Value<'v>>>,
         slots: usize,
     ) -> ParametersCollect<'v> {
-        let len = me.kinds.len();
+        let len = params.kinds.len();
         ParametersCollect {
-            params: me.teq(),
+            params,
             slots: vec![ValueRef::new_unassigned(); cmp::max(slots, len)],
             only_positional: true,
             next_position: 0,
