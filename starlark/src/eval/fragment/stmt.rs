@@ -338,7 +338,7 @@ impl Compiler<'_> {
         let is_statements = matches!(&stmt.node, Stmt::Statements(_));
         let res = self.stmt_direct(stmt, allow_gc);
         // No point inserting a GC point around statements, since they will contain inner statements we can do
-        if allow_gc && is_statements {
+        if allow_gc && !is_statements {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
             box move |eval| {
