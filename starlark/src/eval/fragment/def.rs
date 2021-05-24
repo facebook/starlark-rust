@@ -105,7 +105,7 @@ impl Compiler<'_> {
 
         self.scope
             .enter_def(params.iter().flat_map(ParameterCompiled::name), &suite);
-        let body = self.stmt(suite);
+        let body = self.stmt(suite, false);
         let scope_names = self.scope.exit_def();
 
         let info = Arc::new(DefInfo { scope_names, body });

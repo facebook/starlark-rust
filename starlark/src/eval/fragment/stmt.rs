@@ -186,7 +186,22 @@ impl Compiler<'_> {
 
 // This function should be called before every meaningful statement.
 // The purposes are GC, profiling and debugging.
-//
+fn before_stmt(span: Span, eval: &mut Evaluator) {
+    // Almost always will be empty, especially in high-perf use cases
+    if !eval.before_stmt.is_empty() {
+        // The user could inject more before_stmt values during iteration (although that sounds like a bad plan!)
+        // so grab the values at the start, and add any additional at the end.
+        let fs = mem::take(&mut eval.before_stmt);
+        for f in &fs {
+            f(span, eval)
+        }
+        let added = mem::replace(&mut eval.before_stmt, fs);
+        for x in added {
+            eval.before_stmt.push(x)
+        }
+    }
+}
+
 // There are two requirements to perform a GC:
 //
 // 1. We can't be profiling, since profiling relies on the redundant heap
@@ -216,27 +231,12 @@ impl Compiler<'_> {
 //
 // We also require that `extra_v` is None, since otherwise the user might have
 // additional values stashed somewhere.
-fn before_stmt(span: Span, eval: &mut Evaluator) {
-    // Almost always will be empty, especially in high-perf use cases
-    if !eval.before_stmt.is_empty() {
-        // The user could inject more before_stmt values during iteration (although that sounds like a bad plan!)
-        // so grab the values at the start, and add any additional at the end.
-        let fs = mem::take(&mut eval.before_stmt);
-        for f in &fs {
-            f(span, eval)
-        }
-        let added = mem::replace(&mut eval.before_stmt, fs);
-        for x in added {
-            eval.before_stmt.push(x)
-        }
-    }
-
+fn possible_gc(eval: &mut Evaluator) {
     // We only actually GC if there have been GC_THRESHOLD bytes allocated since the
     // last time we GC'd
     const GC_THRESHOLD: usize = 100000;
 
-    if eval.is_module_scope
-        && !eval.disable_gc
+    if !eval.disable_gc
         && eval.heap().allocated_bytes() >= eval.last_heap_size + GC_THRESHOLD
         && eval.extra_v.is_none()
     {
@@ -327,7 +327,23 @@ impl Stmt {
 }
 
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: AstStmt) -> StmtCompiled {
+    pub(crate) fn stmt(&mut self, stmt: AstStmt, allow_gc: bool) -> StmtCompiled {
+        let is_statements = matches!(&stmt.node, Stmt::Statements(_));
+        let res = self.stmt_direct(stmt, allow_gc);
+        // No point inserting a GC point around statements, since they will contain inner statements we can do
+        if allow_gc && is_statements {
+            // We could do this more efficiently by fusing the possible_gc
+            // into the inner closure, but no real need - we insert allow_gc fairly rarely
+            box move |eval| {
+                possible_gc(eval);
+                res(eval)
+            }
+        } else {
+            res
+        }
+    }
+
+    fn stmt_direct(&mut self, stmt: AstStmt, allow_gc: bool) -> StmtCompiled {
         let span = stmt.span;
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
@@ -346,7 +362,7 @@ impl Compiler<'_> {
                 let over_span = over.span;
                 let var = self.assign(var);
                 let over = self.expr(over);
-                let st = self.stmt(body);
+                let st = self.stmt(body, false);
                 box move |eval| {
                     before_stmt(span, eval);
                     let iterable = over(eval)?;
@@ -377,7 +393,7 @@ impl Compiler<'_> {
             },
             Stmt::If(cond, box then_block) => {
                 let cond = self.expr(cond);
-                let then_block = self.stmt(then_block);
+                let then_block = self.stmt(then_block, allow_gc);
                 box move |eval| {
                     before_stmt(span, eval);
                     if cond(eval)?.to_bool() {
@@ -389,8 +405,8 @@ impl Compiler<'_> {
             }
             Stmt::IfElse(cond, box (then_block, else_block)) => {
                 let cond = self.expr(cond);
-                let then_block = self.stmt(then_block);
-                let else_block = self.stmt(else_block);
+                let then_block = self.stmt(then_block, allow_gc);
+                let else_block = self.stmt(else_block, allow_gc);
                 box move |eval| {
                     before_stmt(span, eval);
                     if cond(eval)?.to_bool() {
@@ -404,7 +420,7 @@ impl Compiler<'_> {
                 // No need to do before_stmt on these statements as they are
                 // not meaningful statements
                 let stmts = Stmt::flatten_statements(stmts);
-                let mut stmts = stmts.into_map(|x| self.stmt(x));
+                let mut stmts = stmts.into_map(|x| self.stmt(x, allow_gc));
                 match stmts.len() {
                     0 => box move |_| Ok(()),
                     1 => stmts.pop().unwrap(),

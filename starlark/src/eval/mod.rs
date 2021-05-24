@@ -92,7 +92,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             errors: Vec::new(),
             codemap: codemap.dupe(),
         };
-        let stmt = compiler.stmt(statement);
+        let stmt = compiler.stmt(statement, true);
 
         // We want to grab the first error only, with ownership, so drop all but the first
         compiler.errors.truncate(1);
