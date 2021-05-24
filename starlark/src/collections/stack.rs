@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+// This module contains stack-like data structures that tend to be super
+// useful when writing an interpreter. As we refactor, various types
+// and methods become used/unused on a fairly regular basis. Rather than
+// trying to fight the dead-code checker, just give up for this module.
+// Once everything is stable, it might be worth removing what we don't need.
+#![allow(dead_code)]
+
 use std::{iter, mem};
 
 #[derive(Default)]
