@@ -265,7 +265,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn walk(&mut self, walker: &Walker<'v>) {
         let mut roots = self.module_env.slots().get_slots_mut();
         for x in roots.iter_mut() {
-            walker.walk(x);
+            walker.walk_opt(x);
         }
         for locals in self.local_variables.iter_mut() {
             locals.walk(walker);

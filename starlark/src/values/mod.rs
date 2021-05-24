@@ -72,12 +72,7 @@ impl Display for FrozenValue {
 }
 
 fn debug_value(typ: &str, v: Value, f: &mut fmt::Formatter) -> fmt::Result {
-    if v.is_unassigned() {
-        f.write_str(typ)?;
-        f.write_str("::Unassigned")
-    } else {
-        f.debug_tuple(typ).field(v.get_aref().as_debug()).finish()
-    }
+    f.debug_tuple(typ).field(v.get_aref().as_debug()).finish()
 }
 
 impl Debug for Value<'_> {

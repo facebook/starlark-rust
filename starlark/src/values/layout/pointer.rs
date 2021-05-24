@@ -18,7 +18,7 @@
 // We use pointer tagging on the bottom three bits:
 // ?00 => ptr1
 // ?01 => ptr2
-// ?10 => constants (None, Unassigned, True, False)
+// ?10 => constants (None, True, False)
 // ?11 => int (61 bit)
 // third bit is a tag set by the user (get_user_tag)
 
@@ -50,7 +50,6 @@ pub(crate) enum PointerUnpack<'p1, 'p2, P1, P2> {
     Ptr1(&'p1 P1),
     Ptr2(&'p2 P2),
     None,
-    Unassigned,
     Bool(bool),
     Int(i32),
 }
@@ -62,7 +61,6 @@ const TAG_P1: usize = 0b000;
 const TAG_P2: usize = 0b001;
 // All TAG_CONST_* end with 0b010
 const TAG_CONST_NONE: usize = 0b00_010;
-const TAG_CONST_UNASSIGNED: usize = 0b01_010;
 const TAG_CONST_FALSE: usize = 0b10_010;
 const TAG_CONST_TRUE: usize = 0b11_010;
 const TAG_INT: usize = 0b11;
@@ -94,10 +92,6 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
 
     pub fn new_none() -> Self {
         Self::new(TAG_CONST_NONE)
-    }
-
-    pub fn new_unassigned() -> Self {
-        Self::new(TAG_CONST_UNASSIGNED)
     }
 
     pub fn set_user_tag(self) -> Self {
@@ -132,7 +126,6 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
             TAG_INT => PointerUnpack::Int(untag_int(p)),
             _ => match p {
                 TAG_CONST_NONE => PointerUnpack::None,
-                TAG_CONST_UNASSIGNED => PointerUnpack::Unassigned,
                 TAG_CONST_TRUE => PointerUnpack::Bool(true),
                 TAG_CONST_FALSE => PointerUnpack::Bool(false),
                 _ => panic!("Corrupted pointer"),
@@ -146,10 +139,6 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
 
     pub fn is_none(self) -> bool {
         self.pointer.get() == TAG_CONST_NONE
-    }
-
-    pub(crate) fn is_unassigned(self) -> bool {
-        self.pointer.get() == TAG_CONST_UNASSIGNED
     }
 
     pub fn unpack_bool(self) -> Option<bool> {

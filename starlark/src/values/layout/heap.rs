@@ -353,8 +353,8 @@ impl<'v> Walker<'v> {
         }
     }
 
-    fn walk_cell(&self, value: &Cell<Value<'v>>) {
-        value.set(self.adjust(value.get()))
+    fn walk_cell(&self, value: &Cell<Option<Value<'v>>>) {
+        value.set(value.get().map(|x| self.adjust(x)))
     }
 
     /// Walk over a value during garbage collection.

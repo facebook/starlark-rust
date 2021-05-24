@@ -28,31 +28,29 @@ impl ModuleSlotId {
     }
 }
 
-// Indexed slots of a module. May contain unassigned values
+// Indexed slots of a module. May contain unassigned values as `None`.
 #[derive(Debug)]
-pub(crate) struct MutableSlots<'v>(RefCell<Vec<Value<'v>>>);
+pub(crate) struct MutableSlots<'v>(RefCell<Vec<Option<Value<'v>>>>);
 
-// Indexed slots of a module. May contain unassigned values
+// Indexed slots of a module. May contain unassigned values as `None`.
 #[derive(Debug)]
-pub(crate) struct FrozenSlots(Vec<FrozenValue>);
+pub(crate) struct FrozenSlots(Vec<Option<FrozenValue>>);
 
 impl<'v> MutableSlots<'v> {
     pub fn new() -> Self {
         Self(RefCell::new(Vec::new()))
     }
 
-    pub(crate) fn get_slots_mut(&self) -> RefMut<Vec<Value<'v>>> {
+    pub(crate) fn get_slots_mut(&self) -> RefMut<Vec<Option<Value<'v>>>> {
         self.0.borrow_mut()
     }
 
     pub fn get_slot(&self, slot: ModuleSlotId) -> Option<Value<'v>> {
-        let v = self.0.borrow()[slot.0];
-        if v.is_unassigned() { None } else { Some(v) }
+        self.0.borrow()[slot.0]
     }
 
     pub fn set_slot(&self, slot: ModuleSlotId, value: Value<'v>) {
-        assert!(!value.is_unassigned());
-        self.0.borrow_mut()[slot.0] = value;
+        self.0.borrow_mut()[slot.0] = Some(value);
     }
 
     pub fn ensure_slot(&self, slot: ModuleSlotId) {
@@ -68,19 +66,18 @@ impl<'v> MutableSlots<'v> {
         let extra = count - slots.len();
         slots.reserve(extra);
         for _ in 0..extra {
-            slots.push(Value::new_unassigned());
+            slots.push(None);
         }
     }
 
     pub(crate) fn freeze(self, freezer: &Freezer) -> FrozenSlots {
-        let slots = self.0.into_inner().map(|x| x.freeze(freezer));
+        let slots = self.0.into_inner().map(|x| x.map(|x| x.freeze(freezer)));
         FrozenSlots(slots)
     }
 }
 
 impl FrozenSlots {
     pub fn get_slot(&self, slot: ModuleSlotId) -> Option<FrozenValue> {
-        let fv = self.0[slot.0];
-        if fv.is_unassigned() { None } else { Some(fv) }
+        self.0[slot.0]
     }
 }

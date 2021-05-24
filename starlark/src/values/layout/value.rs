@@ -70,7 +70,7 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 /// or just a normal `Value` (much cheaper).
 /// A normal `Value` cannot be `ValueMem::Ref`, but this one might be.
 #[derive(Clone, Dupe, Debug)]
-pub(crate) struct ValueRef<'v>(pub(crate) Cell<Value<'v>>);
+pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
 ///
@@ -138,8 +138,9 @@ pub(crate) enum ValueMem<'v> {
     // They are either frozen pointers (to be thaw'ed) or normal (point at Mutable)
     ThawOnWrite(ThawableCell<'v>),
     // Used references in slots - usually wrapped in ValueRef
-    // Never points at a Ref, must point directly at a real value
-    Ref(Cell<Value<'v>>),
+    // Never points at a Ref, must point directly at a real value,
+    // but might be unassigned (None)
+    Ref(Cell<Option<Value<'v>>>),
     // Used for profiling
     CallEnter(Value<'v>, Instant),
     CallExit(Instant),
@@ -264,11 +265,6 @@ impl<'v> Value<'v> {
         Self(Pointer::new_int(x))
     }
 
-    /// Create a new unassigned value. Will mostly throw errors when used.
-    pub(crate) fn new_unassigned() -> Self {
-        Self(Pointer::new_unassigned())
-    }
-
     /// Turn a [`FrozenValue`] into a [`Value`]. See the safety warnings on
     /// [`OwnedFrozenValue`](crate::values::OwnedFrozenValue).
     pub fn new_frozen(x: FrozenValue) -> Self {
@@ -301,11 +297,6 @@ impl<'v> Value<'v> {
         self.0.is_none()
     }
 
-    /// Is this value unassigned.
-    pub fn is_unassigned(self) -> bool {
-        self.0.is_unassigned()
-    }
-
     /// Obtain the underlying `bool` if it is a boolean.
     pub fn unpack_bool(self) -> Option<bool> {
         self.0.unpack_bool()
@@ -333,7 +324,6 @@ impl<'v> Value<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => Some(x.get_ref()),
             PointerUnpack::Ptr2(x) => x.get_ref(),
-            PointerUnpack::Unassigned => panic!("get_ref on Unassigned"),
             PointerUnpack::None => Some(&VALUE_NONE),
             PointerUnpack::Bool(true) => Some(&VALUE_TRUE),
             PointerUnpack::Bool(false) => Some(&VALUE_FALSE),
@@ -346,7 +336,6 @@ impl<'v> Value<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => ARef::new_ptr(x.get_ref()),
             PointerUnpack::Ptr2(x) => x.get_aref(),
-            PointerUnpack::Unassigned => panic!("get_aref on Unassigned"),
             PointerUnpack::None => ARef::new_ptr(&VALUE_NONE),
             PointerUnpack::Bool(x) => ARef::new_ptr(if x { &VALUE_TRUE } else { &VALUE_FALSE }),
             PointerUnpack::Int(x) => ARef::new_ptr(PointerI32::new(x)),
@@ -410,11 +399,6 @@ impl FrozenValue {
         self.0.is_none()
     }
 
-    /// Is a value currently unassigned, e.g. in `f(x); x = 1` the first `x` would be unassigned.
-    pub fn is_unassigned(self) -> bool {
-        self.0.is_unassigned()
-    }
-
     /// Return the [`bool`] if the value is a boolean, otherwise [`None`].
     pub fn unpack_bool(self) -> Option<bool> {
         self.0.unpack_bool()
@@ -442,7 +426,6 @@ impl FrozenValue {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),
-            PointerUnpack::Unassigned => panic!("get_ref on Unassigned"),
             PointerUnpack::None => &VALUE_NONE,
             PointerUnpack::Bool(true) => &VALUE_TRUE,
             PointerUnpack::Bool(false) => &VALUE_FALSE,
@@ -468,29 +451,26 @@ impl FrozenValue {
 impl<'v> ValueRef<'v> {
     // Get the cell, chasing down any forwarding if it exists.
     // We have the invariant that if we have a ref we always set the user tag
-    fn get_cell(&self) -> &Cell<Value<'v>> {
-        let v = self.0.get();
-        if v.0.get_user_tag() {
-            match v.0.unpack_ptr2() {
+    fn get_cell(&self) -> &Cell<Option<Value<'v>>> {
+        match self.0.get() {
+            Some(v) if v.0.get_user_tag() => match v.0.unpack_ptr2() {
                 Some(ValueMem::Ref(cell)) => cell,
                 _ => unreachable!(),
-            }
-        } else {
-            &self.0
+            },
+            _ => &self.0,
         }
     }
 
     pub fn new_unassigned() -> Self {
-        Self(Cell::new(Value::new_unassigned()))
+        Self(Cell::new(None))
     }
 
-    pub fn new_frozen(x: FrozenValue) -> Self {
-        Self(Cell::new(Value::new_frozen(x)))
+    pub fn new_frozen(x: Option<FrozenValue>) -> Self {
+        Self(Cell::new(x.map(Value::new_frozen)))
     }
 
     pub fn set(&self, value: Value<'v>) {
-        assert!(!value.0.is_unassigned());
-        self.get_cell().set(value);
+        self.get_cell().set(Some(value));
     }
 
     pub(crate) fn is_unassigned(&self) -> bool {
@@ -498,28 +478,27 @@ impl<'v> ValueRef<'v> {
     }
 
     pub fn get(&self) -> Option<Value<'v>> {
-        let v = self.get_cell().get();
-        if v.0.is_unassigned() { None } else { Some(v) }
+        self.get_cell().get()
     }
 
     /// Return a new `ValueRef` that points at the same underlying memory as the original.
     /// Updates to either will result in both changing.
     pub fn clone_reference(&self, heap: &'v Heap) -> ValueRef<'v> {
-        let v = self.0.get();
-        if v.0.get_user_tag() {
-            match v.0.unpack_ptr2() {
-                Some(ValueMem::Ref(_)) => Self(Cell::new(v)),
+        match self.0.get() {
+            Some(v) if v.0.get_user_tag() => match v.0.unpack_ptr2() {
+                Some(ValueMem::Ref(_)) => Self(Cell::new(Some(v))),
                 _ => panic!(),
+            },
+            v => {
+                let reffed = Value(heap.alloc_raw(ValueMem::Ref(Cell::new(v))).0.set_user_tag());
+                self.0.set(Some(reffed));
+                Self(Cell::new(Some(reffed)))
             }
-        } else {
-            let reffed = Value(heap.alloc_raw(ValueMem::Ref(Cell::new(v))).0.set_user_tag());
-            self.0.set(reffed);
-            Self(Cell::new(reffed))
         }
     }
 
-    pub fn freeze(&self, freezer: &Freezer) -> FrozenValue {
-        freezer.freeze(self.get_cell().get())
+    pub fn freeze(&self, freezer: &Freezer) -> Option<FrozenValue> {
+        self.get_cell().get().map(|x| freezer.freeze(x))
     }
 }
 

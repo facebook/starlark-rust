@@ -166,7 +166,7 @@ pub(crate) struct DefGen<V, RefV> {
 
 // We can't use the `starlark_complex_value!` macro because we have two type arguments.
 pub(crate) type Def<'v> = DefGen<Value<'v>, ValueRef<'v>>;
-pub(crate) type FrozenDef = DefGen<FrozenValue, FrozenValue>;
+pub(crate) type FrozenDef = DefGen<FrozenValue, Option<FrozenValue>>;
 
 any_lifetime!(Def<'v>);
 any_lifetime!(FrozenDef);
@@ -275,7 +275,7 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
 }
 
 pub(crate) type DefInvoker<'v> = DefInvokerGen<'v, Value<'v>, ValueRef<'v>>;
-pub(crate) type DefInvokerFrozen<'v> = DefInvokerGen<'v, FrozenValue, FrozenValue>;
+pub(crate) type DefInvokerFrozen<'v> = DefInvokerGen<'v, FrozenValue, Option<FrozenValue>>;
 
 pub(crate) struct DefInvokerGen<'v, V, RefV>(ARef<'v, DefGen<V, RefV>>);
 
@@ -283,7 +283,7 @@ pub(crate) trait AsValueRef<'v> {
     fn to_value_ref(&self) -> ValueRef<'v>;
 }
 
-impl<'v> AsValueRef<'v> for FrozenValue {
+impl<'v> AsValueRef<'v> for Option<FrozenValue> {
     fn to_value_ref(&self) -> ValueRef<'v> {
         ValueRef::new_frozen(*self)
     }
