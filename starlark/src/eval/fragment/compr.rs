@@ -21,7 +21,7 @@ use crate::{
     codemap::Span,
     collections::SmallMap,
     eval::{
-        compiler::{thrw, Compiler, EvalException, ExprCompiled},
+        compiler::{throw, Compiler, EvalException, ExprCompiled},
         fragment::stmt::AssignCompiled,
         runtime::evaluator::Evaluator,
     },
@@ -189,7 +189,7 @@ fn eval_one_dimensional_comprehension_dict(
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
             let freeze_for_iteration = iterable.get_aref();
-            'f: for i in &thrw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+            'f: for i in &throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
                     if !ifc(eval)?.to_bool() {
@@ -224,7 +224,7 @@ fn eval_one_dimensional_comprehension_list(
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
             let freeze_for_iteration = iterable.get_aref();
-            'f: for i in &thrw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+            'f: for i in &throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
                     if !ifc(eval)?.to_bool() {

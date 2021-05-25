@@ -54,7 +54,7 @@ impl<'v> From<anyhow::Error> for EvalException<'v> {
 
 // Make sure the error-path doesn't get inlined into the normal-path execution
 #[inline(never)]
-fn thrw_error<'v, T>(
+fn throw_error<'v, T>(
     e: anyhow::Error,
     span: Span,
     eval: &Evaluator<'v, '_>,
@@ -67,19 +67,19 @@ fn thrw_error<'v, T>(
 }
 
 /// Convert syntax error to spanned evaluation exception
-pub(crate) fn thrw<'v, T>(
+pub(crate) fn throw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
     eval: &Evaluator<'v, '_>,
 ) -> Result<T, EvalException<'v>> {
     match r {
         Ok(v) => Ok(v),
-        Err(e) => thrw_error(e, span, eval),
+        Err(e) => throw_error(e, span, eval),
     }
 }
 
-/// Like `thrw`, but for when `T` is expensive to copy.
-pub(crate) fn thrw_mut<'a, 'v, T>(
+/// Like `throw`, but for when `T` is expensive to copy.
+pub(crate) fn throw_mut<'a, 'v, T>(
     r: &'a mut anyhow::Result<T>,
     span: Span,
     eval: &Evaluator<'v, '_>,
@@ -88,7 +88,7 @@ pub(crate) fn thrw_mut<'a, 'v, T>(
         Ok(v) => Ok(v),
         Err(e) => {
             let e = mem::replace(e, anyhow::Error::msg(""));
-            thrw_error(e, span, eval)
+            throw_error(e, span, eval)
         }
     }
 }

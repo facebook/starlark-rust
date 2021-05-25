@@ -26,7 +26,7 @@ use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
     eval::{
-        compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled, StmtCompiled},
+        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, StmtCompiled},
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
@@ -60,9 +60,9 @@ fn eval_assign_list<'v>(
     eval: &mut Evaluator<'v, '_>,
 ) -> Result<(), EvalException<'v>> {
     let l = lvalues.len() as i32;
-    let nvl = thrw(value.length(), span, eval)?;
+    let nvl = throw(value.length(), span, eval)?;
     if nvl != l {
-        thrw(
+        throw(
             Err(AssignError::IncorrectNumberOfValueToUnpack(l, nvl).into()),
             span,
             eval,
@@ -70,7 +70,7 @@ fn eval_assign_list<'v>(
     } else {
         let mut it1 = lvalues.iter();
         // TODO: the span here should probably include the rvalue
-        let it2 = thrw(value.iterate(eval.heap()), span, eval)?;
+        let it2 = throw(value.iterate(eval.heap()), span, eval)?;
         let mut it2 = it2.iter();
         for _ in 0..l {
             it1.next().unwrap()(it2.next().unwrap(), eval)?;
@@ -86,13 +86,13 @@ impl Compiler<'_> {
             Assign::Dot(e, s) => {
                 let e = self.expr(*e);
                 let s = s.node;
-                box move |value, eval| thrw(e(eval)?.set_attr(&s, value, eval.heap()), span, eval)
+                box move |value, eval| throw(e(eval)?.set_attr(&s, value, eval.heap()), span, eval)
             }
             Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e);
                 let idx = self.expr(idx);
                 box move |value, eval| {
-                    thrw(e(eval)?.set_at(idx(eval)?, value, eval.heap()), span, eval)
+                    throw(e(eval)?.set_at(idx(eval)?, value, eval.heap()), span, eval)
                 }
             }
             Assign::Tuple(v) => {
@@ -129,10 +129,10 @@ impl Compiler<'_> {
                 box move |eval| {
                     before_stmt(span_stmt, eval);
                     let e: Value = e(eval)?;
-                    let (_, v) = thrw(e.get_attr(&s, eval.heap()), span_lhs, eval)?;
+                    let (_, v) = throw(e.get_attr(&s, eval.heap()), span_lhs, eval)?;
                     let rhs = rhs(eval)?;
-                    thrw(
-                        e.set_attr(&s, thrw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),
+                    throw(
+                        e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),
                         span_stmt,
                         eval,
                     )?;
@@ -146,10 +146,10 @@ impl Compiler<'_> {
                     before_stmt(span_stmt, eval);
                     let e: Value = e(eval)?;
                     let idx = idx(eval)?;
-                    let v = thrw(e.at(idx, eval.heap()), span_lhs, eval)?;
+                    let v = throw(e.at(idx, eval.heap()), span_lhs, eval)?;
                     let rhs = rhs(eval)?;
-                    thrw(
-                        e.set_at(idx, thrw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),
+                    throw(
+                        e.set_at(idx, throw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),
                         span_stmt,
                         eval,
                     )?;
@@ -161,17 +161,17 @@ impl Compiler<'_> {
                 match self.scope.get_name_or_panic(&name) {
                     Slot::Local(slot) => box move |eval| {
                         before_stmt(span_stmt, eval);
-                        let v = thrw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
+                        let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
                         let rhs = rhs(eval)?;
-                        let v = thrw(op(v, rhs, eval), span_stmt, eval)?;
+                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                         eval.set_slot_local(slot, v);
                         Ok(())
                     },
                     Slot::Module(slot) => box move |eval| {
                         before_stmt(span_stmt, eval);
-                        let v = thrw(eval.get_slot_module(slot), span_lhs, eval)?;
+                        let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
                         let rhs = rhs(eval)?;
-                        let v = thrw(op(v, rhs, eval), span_stmt, eval)?;
+                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                         eval.set_slot_module(slot, v);
                         Ok(())
                     },
@@ -374,7 +374,7 @@ impl Compiler<'_> {
                     before_stmt(span, eval);
                     let iterable = over(eval)?;
                     let freeze_for_iteration = iterable.get_aref();
-                    for v in &thrw(iterable.iterate(eval.heap()), over_span, eval)? {
+                    for v in &throw(iterable.iterate(eval.heap()), over_span, eval)? {
                         var(v, eval)?;
                         match st(eval) {
                             Err(EvalException::Break) => break,
@@ -504,7 +504,7 @@ impl Compiler<'_> {
                         Some(load) => load.load(&name).map_err(EvalException::Error)?,
                     };
                     for (new_name, orig_name, span) in &symbols {
-                        let value = thrw(
+                        let value = throw(
                             eval.module_env.load_symbol(&loadenv, orig_name),
                             *span,
                             eval,
