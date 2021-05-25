@@ -43,6 +43,9 @@ enum EvaluatorError {
     StmtProfilingNotEnabled,
 }
 
+/// Number of bytes to allocate between GC's.
+pub(crate) const GC_THRESHOLD: usize = 100000;
+
 /// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a> {
     // The module that is being used for this evaluation
@@ -65,9 +68,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) profiling: bool,
     // Is GC disabled for some reason
     pub(crate) disable_gc: bool,
-    // Size of the heap when we last performed a GC.
-    // Morally a `usize`, but set highly negative by `trigger_gc`.
-    pub(crate) last_heap_size: isize,
+    // Size of the heap when we should next perform a GC.
+    pub(crate) next_gc_level: usize,
     // Extra functions to run on each statement, usually empty
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
@@ -97,7 +99,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             codemap: CodeMap::default(), // Will be replaced before it is used
             extra: None,
             extra_v: None,
-            last_heap_size: 0,
+            next_gc_level: GC_THRESHOLD,
             disable_gc: false,
             profiling: false,
             stmt_profile: StmtProfile::new(),
@@ -344,8 +346,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Cause a GC to be triggered next time it's possible.
     pub(crate) fn trigger_gc(&mut self) {
-        // We check the current heap size relative to the last heap size,
-        // so pretend the last heap size was very negative to force a GC
-        self.last_heap_size = isize::MIN;
+        // We will GC next time we can, since the threshold is if 0 or more bytes are allocated
+        self.next_gc_level = 0;
     }
 }
