@@ -58,7 +58,7 @@ impl<'v> FunctionInvoker<'v> {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let loc = location.map(|x| eval.file_span(x));
-        let slots = self.collect.done(eval.heap())?;
+        let slots = self.collect.done(eval)?;
         let invoke = self.invoke;
         eval.with_call_stack(function, loc, |eval| match invoke {
             FunctionInvokerInner::Native(inv) => inv.invoke(slots, eval),
@@ -115,7 +115,10 @@ impl<T> NativeFunc for T where
 pub(crate) struct NativeFunctionInvoker<'a>(ARef<'a, dyn NativeFunc>);
 
 impl<'a> NativeFunctionInvoker<'a> {
-    pub fn new<'v, F: NativeFunc>(func: ARef<'v, NativeFunction<F>>) -> FunctionInvoker<'v> {
+    pub fn new<'v, F: NativeFunc>(
+        func: ARef<'v, NativeFunction<F>>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> FunctionInvoker<'v> {
         // Used to help guide the type checker
         fn convert(x: &impl NativeFunc) -> &(dyn NativeFunc) {
             x
@@ -124,7 +127,7 @@ impl<'a> NativeFunctionInvoker<'a> {
         let (function, parameters) =
             ARef::map_split(func, |x| (convert(&x.function), x.parameters.promote()));
         FunctionInvoker {
-            collect: ParametersSpec::collect(parameters, 0),
+            collect: ParametersSpec::collect(parameters, 0, eval),
             invoke: FunctionInvokerInner::Native(NativeFunctionInvoker(function)),
         }
     }
@@ -206,11 +209,14 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
     fn new_invoker(
         &self,
         me: Value<'v>,
-        _eval: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
-        Ok(NativeFunctionInvoker::new(ARef::map(me.get_aref(), |x| {
-            x.as_dyn_any().downcast_ref::<Self>().unwrap()
-        })))
+        Ok(NativeFunctionInvoker::new(
+            ARef::map(me.get_aref(), |x| {
+                x.as_dyn_any().downcast_ref::<Self>().unwrap()
+            }),
+            eval,
+        ))
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {

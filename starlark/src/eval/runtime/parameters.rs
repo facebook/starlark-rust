@@ -22,8 +22,8 @@ use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
     eval::Evaluator,
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, UnpackValue, Value, ValueError,
-        ValueRef, Walker,
+        dict::Dict, tuple::Tuple, Freezer, FrozenValue, UnpackValue, Value, ValueError, ValueRef,
+        Walker,
     },
 };
 use gazebo::{cell::ARef, prelude::*};
@@ -266,6 +266,7 @@ impl<'v> ParametersSpec<Value<'v>> {
     pub(crate) fn collect(
         params: ARef<'v, ParametersSpec<Value<'v>>>,
         slots: usize,
+        _eval: &mut Evaluator<'v, '_>,
     ) -> ParametersCollect<'v> {
         let len = params.kinds.len();
         ParametersCollect {
@@ -422,7 +423,7 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub(crate) fn done(self, heap: &'v Heap) -> anyhow::Result<Vec<ValueRef<'v>>> {
+    pub(crate) fn done(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Vec<ValueRef<'v>>> {
         let Self {
             params,
             mut slots,
@@ -459,11 +460,11 @@ impl<'v> ParametersCollect<'v> {
                 }
                 ParameterKind::Args => {
                     let args = mem::take(&mut args);
-                    slot.set(heap.alloc(Tuple::new(args)));
+                    slot.set(eval.heap().alloc(Tuple::new(args)));
                 }
                 ParameterKind::KWargs => {
                     let kwargs = mem::take(&mut kwargs);
-                    slot.set(heap.alloc(Dict::new(kwargs)))
+                    slot.set(eval.heap().alloc(Dict::new(kwargs)))
                 }
             }
         }

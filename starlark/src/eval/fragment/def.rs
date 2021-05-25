@@ -255,12 +255,14 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
     fn new_invoker(
         &self,
         me: Value<'v>,
-        _eval: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
-        Ok(DefInvokerFrozen::new_frozen(ARef::map(
-            me.get_aref(),
-            |x| x.as_dyn_any().downcast_ref::<Self>().unwrap(),
-        )))
+        Ok(DefInvokerFrozen::new_frozen(
+            ARef::map(me.get_aref(), |x| {
+                x.as_dyn_any().downcast_ref::<Self>().unwrap()
+            }),
+            eval,
+        ))
     }
 }
 
@@ -274,11 +276,14 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
     fn new_invoker(
         &self,
         me: Value<'v>,
-        _eval: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
-        Ok(DefInvoker::new(ARef::map(me.get_aref(), |x| {
-            x.as_dyn_any().downcast_ref::<Self>().unwrap()
-        })))
+        Ok(DefInvoker::new(
+            ARef::map(me.get_aref(), |x| {
+                x.as_dyn_any().downcast_ref::<Self>().unwrap()
+            }),
+            eval,
+        ))
     }
 }
 
@@ -304,22 +309,25 @@ impl<'v> AsValueRef<'v> for ValueRef<'v> {
 }
 
 impl<'v> DefInvoker<'v> {
-    fn new(def: ARef<'v, Def<'v>>) -> FunctionInvoker<'v> {
+    fn new(def: ARef<'v, Def<'v>>, eval: &mut Evaluator<'v, '_>) -> FunctionInvoker<'v> {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, &x.parameters));
         FunctionInvoker {
-            collect: ParametersSpec::collect(params, slots),
+            collect: ParametersSpec::collect(params, slots, eval),
             invoke: FunctionInvokerInner::Def(DefInvokerGen(def)),
         }
     }
 }
 
 impl<'a> DefInvokerFrozen<'a> {
-    fn new_frozen<'v>(def: ARef<'v, FrozenDef>) -> FunctionInvoker<'v> {
+    fn new_frozen<'v>(
+        def: ARef<'v, FrozenDef>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> FunctionInvoker<'v> {
         let slots = def.stmt.scope_names.used;
         let (def, params) = ARef::map_split(def, |x| (x, x.parameters.promote()));
         FunctionInvoker {
-            collect: ParametersSpec::collect(params, slots),
+            collect: ParametersSpec::collect(params, slots, eval),
             invoke: FunctionInvokerInner::DefFrozen(DefInvokerGen(def)),
         }
     }
