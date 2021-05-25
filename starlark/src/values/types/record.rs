@@ -47,7 +47,7 @@ use crate::{
     values::{
         comparison::equals_slice,
         error::ValueError,
-        function::{FunctionInvoker, NativeFunc, NativeFunction, FUNCTION_TYPE},
+        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
@@ -136,9 +136,7 @@ impl<'v> RecordType<'v> {
         }
     }
 
-    fn make_constructor(
-        fields: &SmallMap<String, FieldGen<Value<'v>>>,
-    ) -> NativeFunction<impl NativeFunc> {
+    fn make_constructor(fields: &SmallMap<String, FieldGen<Value<'v>>>) -> NativeFunction {
         let mut parameters = ParametersSpec::with_capacity("record".to_owned(), fields.len() + 1);
         parameters.required("me"); // Hidden first argument
         parameters.no_args();

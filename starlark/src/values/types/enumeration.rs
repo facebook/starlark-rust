@@ -39,7 +39,7 @@ use crate::{
     eval::{Evaluator, ParametersParser, ParametersSpec},
     values::{
         error::ValueError,
-        function::{FunctionInvoker, NativeFunc, NativeFunction, FUNCTION_TYPE},
+        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
         ValueLike, Walker,
@@ -162,7 +162,7 @@ impl<'v> EnumType<'v> {
 
     // The constructor is actually invariant in the enum type it works for, so we could try and allocate it
     // once for all enumerations. But that seems like a lot of work for not much benefit.
-    fn make_constructor() -> NativeFunction<impl NativeFunc> {
+    fn make_constructor() -> NativeFunction {
         let mut signature = ParametersSpec::with_capacity("enum".to_owned(), 2);
         signature.required("me"); // Hidden first argument
         signature.required("value");

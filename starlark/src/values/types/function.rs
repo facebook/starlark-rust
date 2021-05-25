@@ -114,17 +114,12 @@ impl<T> NativeFunc for T where
 pub(crate) struct NativeFunctionInvoker<'a>(ARef<'a, dyn NativeFunc>);
 
 impl<'a> NativeFunctionInvoker<'a> {
-    pub fn new<'v, F: NativeFunc>(
-        func: ARef<'v, NativeFunction<F>>,
+    pub fn new<'v>(
+        func: ARef<'v, NativeFunction>,
         eval: &mut Evaluator<'v, '_>,
     ) -> FunctionInvoker<'v> {
-        // Used to help guide the type checker
-        fn convert(x: &impl NativeFunc) -> &(dyn NativeFunc) {
-            x
-        }
-
         let (function, parameters) =
-            ARef::map_split(func, |x| (convert(&x.function), x.parameters.promote()));
+            ARef::map_split(func, |x| (&*x.function, x.parameters.promote()));
         FunctionInvoker {
             collect: ParametersSpec::collect(parameters, 0, eval),
             invoke: FunctionInvokerInner::Native(NativeFunctionInvoker(function)),
@@ -146,40 +141,33 @@ impl<'a> NativeFunctionInvoker<'a> {
 /// Starlark representation of native (Rust) functions.
 ///
 /// Almost always created with [`#[starlark_module]`](macro@starlark_module).
-#[derive(Derivative)]
+#[derive(Derivative, AnyLifetime)]
 #[derivative(Debug)]
-pub struct NativeFunction<F: NativeFunc> {
-    /// Pointer to a native function.
-    /// Note it is a function pointer, not `Box<Fn(...)>`
-    /// to avoid generic instantiation and allocation for each native function.
+pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
-    function: F,
+    function: Box<dyn NativeFunc>,
     parameters: ParametersSpec<FrozenValue>,
     typ: Option<FrozenValue>,
 }
 
-unsafe impl<'a, F: NativeFunc> AnyLifetime<'a> for NativeFunction<F> {
-    any_lifetime_body!(Self);
-}
-
-impl<'v, F: NativeFunc> AllocFrozenValue for NativeFunction<F> {
+impl AllocFrozenValue for NativeFunction {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_simple(self)
     }
 }
 
-// If I switch this to the trait alias then it fails to resolve the usages
-impl<
-    F: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
-        + Send
-        + Sync
-        + 'static,
-> NativeFunction<F>
-{
+impl NativeFunction {
     /// Create a new [`NativeFunction`] from the Rust function, plus the parameter specification.
-    pub fn new(function: F, parameters: ParametersSpec<FrozenValue>) -> Self {
+    pub fn new<F>(function: F, parameters: ParametersSpec<FrozenValue>) -> Self
+    where
+        // If I switch this to the trait alias then it fails to resolve the usages
+        F: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
+            + Send
+            + Sync
+            + 'static,
+    {
         NativeFunction {
-            function,
+            function: box function,
             parameters,
             typ: None,
         }
@@ -191,16 +179,16 @@ impl<
     }
 }
 
-impl<F: NativeFunc> SimpleValue for NativeFunction<F> {}
+impl SimpleValue for NativeFunction {}
 
-impl<'v, F: NativeFunc> AllocValue<'v> for NativeFunction<F> {
+impl<'v> AllocValue<'v> for NativeFunction {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
         heap.alloc_simple(self)
     }
 }
 
 /// Define the function type
-impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
+impl<'v> StarlarkValue<'v> for NativeFunction {
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
