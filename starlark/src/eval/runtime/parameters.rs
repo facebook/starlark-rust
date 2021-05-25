@@ -20,6 +20,7 @@
 /// parameters into slots.
 use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
+    eval::Evaluator,
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, UnpackValue, Value, ValueError,
         ValueRef, Walker,
@@ -329,7 +330,7 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub fn push_pos(&mut self, val: Value<'v>) {
+    pub fn push_pos(&mut self, val: Value<'v>, _eval: &mut Evaluator<'v, '_>) {
         if self.next_position < self.params.positional {
             // Checking unassigned is moderately expensive, so use only_positional
             // which knows we have never set anything below next_position
@@ -350,7 +351,13 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub fn push_named(&mut self, name: &str, name_value: Hashed<Value<'v>>, val: Value<'v>) {
+    pub fn push_named(
+        &mut self,
+        name: &str,
+        name_value: Hashed<Value<'v>>,
+        val: Value<'v>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) {
         self.only_positional = false;
         // Safe to use new_unchecked because hash for the Value and str are the same
         let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
@@ -375,21 +382,21 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub fn push_args(&mut self, val: Value<'v>, heap: &'v Heap) {
-        match val.iterate(heap) {
+    pub fn push_args(&mut self, val: Value<'v>, eval: &mut Evaluator<'v, '_>) {
+        match val.iterate(eval.heap()) {
             Err(_) => self.set_err(FunctionError::ArgsArrayIsNotIterable.into()),
             Ok(iter) => {
                 // It might be tempting to avoid iterating if it's going into the *args directly
                 // But because lists are mutable that becomes observable behaviour, so we have
                 // to copy the array
                 for x in &iter {
-                    self.push_pos(x);
+                    self.push_pos(x, eval);
                 }
             }
         }
     }
 
-    pub fn push_kwargs(&mut self, val: Value<'v>) {
+    pub fn push_kwargs(&mut self, val: Value<'v>, eval: &mut Evaluator<'v, '_>) {
         let res = try {
             match Dict::from_value(val) {
                 Some(y) => {
@@ -402,7 +409,7 @@ impl<'v> ParametersCollect<'v> {
                     for (n, v) in y.iter_hashed() {
                         match n.key().unpack_str() {
                             None => Err(FunctionError::ArgsValueIsNotString)?,
-                            Some(s) => self.push_named(s, n, v),
+                            Some(s) => self.push_named(s, n, v, eval),
                         }
                     }
                 }

@@ -68,23 +68,29 @@ impl<'v> FunctionInvoker<'v> {
     }
 
     /// Add a positional argument.
-    pub fn push_pos(&mut self, v: Value<'v>) {
-        self.collect.push_pos(v)
+    pub fn push_pos(&mut self, v: Value<'v>, eval: &mut Evaluator<'v, '_>) {
+        self.collect.push_pos(v, eval)
     }
 
     /// Add a `*args` argument.
-    pub fn push_args(&mut self, v: Value<'v>, heap: &'v Heap) {
-        self.collect.push_args(v, heap)
+    pub fn push_args(&mut self, v: Value<'v>, eval: &mut Evaluator<'v, '_>) {
+        self.collect.push_args(v, eval)
     }
 
     /// Add a named argument.
-    pub fn push_named(&mut self, name: &str, name_value: Hashed<Value<'v>>, v: Value<'v>) {
-        self.collect.push_named(name, name_value, v)
+    pub fn push_named(
+        &mut self,
+        name: &str,
+        name_value: Hashed<Value<'v>>,
+        v: Value<'v>,
+        eval: &mut Evaluator<'v, '_>,
+    ) {
+        self.collect.push_named(name, name_value, v, eval)
     }
 
     /// Add a `**kargs` argument.
-    pub fn push_kwargs(&mut self, v: Value<'v>) {
-        self.collect.push_kwargs(v)
+    pub fn push_kwargs(&mut self, v: Value<'v>, eval: &mut Evaluator<'v, '_>) {
+        self.collect.push_kwargs(v, eval)
     }
 }
 
@@ -245,7 +251,7 @@ impl NativeAttribute {
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
         let mut invoker = self.0.get_aref().new_invoker(function, eval)?;
-        invoker.push_pos(value);
+        invoker.push_pos(value, eval);
         invoker.invoke(function, None, eval)
     }
 }
@@ -277,7 +283,7 @@ impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut inv = self.method.new_invoker(eval)?;
-        inv.push_pos(self.self_obj.to_value());
+        inv.push_pos(self.self_obj.to_value(), eval);
         Ok(inv)
     }
 }

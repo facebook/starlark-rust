@@ -41,7 +41,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
                 }
             } else {
                 let mut inv = func.new_invoker(eval)?;
-                inv.push_pos(v);
+                inv.push_pos(v, eval);
                 if inv.invoke(func, None, eval)?.to_bool() {
                     res.push(v);
                 }
@@ -57,7 +57,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
         let mut res = Vec::new();
         for v in &seq.iterate(heap)? {
             let mut inv = func.new_invoker(eval)?;
-            inv.push_pos(v);
+            inv.push_pos(v, eval);
             res.push(inv.invoke(func, None, eval)?);
         }
         Ok(res)
@@ -164,8 +164,8 @@ where
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut inv = self.func.new_invoker(eval)?;
-        inv.push_args(self.args.to_value(), eval.heap());
-        inv.push_kwargs(self.kwargs.to_value());
+        inv.push_args(self.args.to_value(), eval);
+        inv.push_kwargs(self.kwargs.to_value(), eval);
         Ok(inv)
     }
 

@@ -109,12 +109,12 @@ fn eval_call<'v>(
 ) -> Result<Value<'v>, EvalException<'v>> {
     for x in args {
         match x {
-            ArgCompiled::Pos(expr) => invoker.push_pos(expr(eval)?),
+            ArgCompiled::Pos(expr) => invoker.push_pos(expr(eval)?, eval),
             ArgCompiled::Named(k, kk, expr) => {
-                invoker.push_named(k, kk.to_hashed_value(), expr(eval)?)
+                invoker.push_named(k, kk.to_hashed_value(), expr(eval)?, eval)
             }
-            ArgCompiled::Args(expr) => invoker.push_args(expr(eval)?, eval.heap()),
-            ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(eval)?),
+            ArgCompiled::Args(expr) => invoker.push_args(expr(eval)?, eval),
+            ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(eval)?, eval),
         }
     }
 

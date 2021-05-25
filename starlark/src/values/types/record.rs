@@ -285,7 +285,7 @@ where
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut f = self.constructor.new_invoker(eval)?;
-        f.push_pos(me);
+        f.push_pos(me, eval);
         Ok(f)
     }
 
