@@ -1574,6 +1574,58 @@ bar(["a","b","c"])
 }
 
 #[test]
+fn test_garbage_collect_happens() {
+    // GC is meant to be "not observable", but if we break it, we want this test to fail
+    #[starlark_module]
+    fn helpers(builder: &mut GlobalsBuilder) {
+        fn current_usage() -> i32 {
+            Ok(heap.allocated_bytes() as i32)
+        }
+
+        fn is_gc_disabled() -> bool {
+            Ok(eval.disable_gc)
+        }
+    }
+
+    let mut a = Assert::new();
+    a.globals_add(helpers);
+
+    // Approach is to keep doing something expensive, and we want to see the memory usage decrease.
+    let mut code = r#"
+globals = []
+maximum = [0]
+success = [is_gc_disabled()]
+
+def update_maximum():
+    maximum[0] = max(current_usage(), maximum[0])
+
+def expensive(n):
+    if success[0]:
+        return
+    now = current_usage()
+    if now < maximum[0]:
+        print("Success in " + str(n))
+        success[0] = True
+        return
+    update_maximum()
+    globals.append(str(n))
+    locals = []
+    for i in range(10 * n):
+        locals.append(str(i))
+    update_maximum()
+"#
+    .to_owned();
+    // I expect success in approx 25 times, so do 100 for safety
+    for i in 0..100 {
+        code.push_str(&format!("expensive({})\n", i));
+    }
+    code.push_str("assert_eq(success[0], True)\nis_gc_disabled()");
+    // I expect to run with GC disabled some of the time, but not on the last run
+    // so make sure at least once GC was enabled
+    assert!(!a.pass(&code).unpack_bool().unwrap());
+}
+
+#[test]
 fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
