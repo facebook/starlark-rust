@@ -106,7 +106,7 @@ fn assert_star(builder: &mut GlobalsBuilder) {
     }
 
     fn fails(f: Value, _msg: &str) -> NoneType {
-        let invoke = f.new_invoker(eval)?;
+        let mut invoke = f.new_invoker(eval)?;
         match invoke.invoke(f, None, eval) {
             Err(_e) => Ok(NoneType), // We don't actually check the message
             Ok(_) => Err(anyhow!("assert.fails: didn't fail")),

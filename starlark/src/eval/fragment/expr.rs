@@ -22,7 +22,7 @@ use crate::{
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{
-        compiler::{scope::Slot, thrw, Compiler, EvalException, ExprCompiled},
+        compiler::{scope::Slot, thrw, thrw_mut, Compiler, EvalException, ExprCompiled},
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{Argument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
@@ -103,7 +103,7 @@ enum ArgCompiled {
 fn eval_call<'v>(
     span: Span,
     args: &[ArgCompiled],
-    mut invoker: FunctionInvoker<'v>,
+    invoker: &mut FunctionInvoker<'v>,
     function: Value<'v>,
     eval: &mut Evaluator<'v, '_>,
 ) -> Result<Value<'v>, EvalException<'v>> {
@@ -397,17 +397,21 @@ impl Compiler<'_> {
                     Argument::Args(x) => ArgCompiled::Args(self.expr(x)),
                     Argument::KwArgs(x) => ArgCompiled::KwArgs(self.expr(x)),
                 });
+                // Note that the FunctionInvoker type is large, and has a tendancy for being copied around
+                // so make the fact it is a pointer very explicit
                 match left.node {
                     Expr::Dot(e, s) => {
                         let e = self.expr(*e);
                         let dot = eval_dot(span, e, s.node);
                         box move |eval| match dot(eval)? {
                             Either::Left(function) => {
-                                let invoker = thrw(function.new_invoker(eval), span, eval)?;
+                                let mut invoker = function.new_invoker(eval);
+                                let invoker = thrw_mut(&mut invoker, span, eval)?;
                                 eval_call(span, &args, invoker, function, eval)
                             }
                             Either::Right(wrapper) => {
-                                let invoker = thrw(wrapper.invoke(eval), span, eval)?;
+                                let mut invoker = wrapper.invoke(eval);
+                                let invoker = thrw_mut(&mut invoker, span, eval)?;
                                 eval_call(span, &args, invoker, wrapper.method, eval)
                             }
                         }
@@ -415,7 +419,8 @@ impl Compiler<'_> {
                     _ => {
                         let left = self.expr(*left);
                         expr!(left, |eval| {
-                            let invoker = thrw(left.new_invoker(eval), span, eval)?;
+                            let mut invoker = left.new_invoker(eval);
+                            let invoker = thrw_mut(&mut invoker, span, eval)?;
                             eval_call(span, &args, invoker, left, eval)?
                         })
                     }

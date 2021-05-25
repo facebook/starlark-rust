@@ -30,7 +30,7 @@ def benchmark2():
     return y
 
 
-# Python = 7.04s, Rust = 12.4s
+# Python = 7.04s, Rust = 9.2s
 def benchmark3():
     y = 0
     xs = []

@@ -52,15 +52,14 @@ impl<'v> FunctionInvoker<'v> {
     /// If provided, the `location` must use the currently active [`CodeMap`](crate::codemap::CodeMap)
     /// from the [`Evaluator`].
     pub fn invoke(
-        self,
+        &mut self,
         function: Value<'v>,
         location: Option<Span>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let loc = location.map(|x| eval.file_span(x));
         let slots = self.collect.done(eval)?;
-        let invoke = self.invoke;
-        eval.with_call_stack(function, loc, |eval| match invoke {
+        eval.with_call_stack(function, loc, |eval| match &self.invoke {
             FunctionInvokerInner::Native(inv) => inv.invoke(slots, eval),
             FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
             FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
@@ -133,7 +132,7 @@ impl<'a> NativeFunctionInvoker<'a> {
     }
 
     pub fn invoke<'v>(
-        self,
+        &self,
         slots: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {

@@ -26,7 +26,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::fmt::Debug;
+use std::{fmt::Debug, mem};
 
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
@@ -52,29 +52,44 @@ impl<'v> From<anyhow::Error> for EvalException<'v> {
     }
 }
 
+// Make sure the error-path doesn't get inlined into the normal-path execution
+#[inline(never)]
+fn thrw_error<'v, T>(
+    e: anyhow::Error,
+    span: Span,
+    eval: &Evaluator<'v, '_>,
+) -> Result<T, EvalException<'v>> {
+    let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
+        d.set_span(span, eval.codemap.dupe());
+        d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
+    });
+    Err(EvalException::Error(e))
+}
+
 /// Convert syntax error to spanned evaluation exception
 pub(crate) fn thrw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
     eval: &Evaluator<'v, '_>,
 ) -> Result<T, EvalException<'v>> {
-    // Make sure the error-path doesn't get inlined into the normal-path execution
-    #[inline(never)]
-    fn thrw_error<'v, T>(
-        e: anyhow::Error,
-        span: Span,
-        eval: &Evaluator<'v, '_>,
-    ) -> Result<T, EvalException<'v>> {
-        let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
-            d.set_span(span, eval.codemap.dupe());
-            d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
-        });
-        Err(EvalException::Error(e))
-    }
-
     match r {
         Ok(v) => Ok(v),
         Err(e) => thrw_error(e, span, eval),
+    }
+}
+
+/// Like `thrw`, but for when `T` is expensive to copy.
+pub(crate) fn thrw_mut<'a, 'v, T>(
+    r: &'a mut anyhow::Result<T>,
+    span: Span,
+    eval: &Evaluator<'v, '_>,
+) -> Result<&'a mut T, EvalException<'v>> {
+    match r {
+        Ok(v) => Ok(v),
+        Err(e) => {
+            let e = mem::replace(e, anyhow::Error::msg(""));
+            thrw_error(e, span, eval)
+        }
     }
 }
 

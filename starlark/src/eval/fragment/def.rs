@@ -339,7 +339,7 @@ impl<'a> DefInvokerFrozen<'a> {
 
 impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> {
     pub fn invoke(
-        self,
+        &self,
         locals: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {

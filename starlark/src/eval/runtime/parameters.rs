@@ -427,8 +427,8 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub(crate) fn done(mut self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
-        if let Some(err) = self.err {
+    pub(crate) fn done(&mut self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
+        if let Some(err) = self.err.take() {
             return Err(err);
         }
         for ((index, def), slot) in self
