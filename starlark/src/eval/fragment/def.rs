@@ -308,7 +308,7 @@ impl<'v> AsValueRef<'v> for Option<FrozenValue> {
 
 impl<'v> AsValueRef<'v> for ValueRef<'v> {
     fn to_value_ref(&self) -> ValueRef<'v> {
-        self.dupe()
+        self.dupe_reference()
     }
 }
 

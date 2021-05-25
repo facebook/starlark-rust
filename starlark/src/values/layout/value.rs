@@ -69,7 +69,7 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 /// to indicate whether a value is a `Ref` (and must be dereffed a lot),
 /// or just a normal `Value` (much cheaper).
 /// A normal `Value` cannot be `ValueMem::Ref`, but this one might be.
-#[derive(Clone, Dupe, Debug)]
+#[derive(Debug)]
 pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
@@ -514,6 +514,13 @@ impl<'v> ValueRef<'v> {
                 Self(Cell::new(Some(reffed)))
             }
         }
+    }
+
+    /// Create a duplicate `ValueRef` on something that must have been turned into a real ref,
+    /// probably via `clone_reference`.
+    pub fn dupe_reference(&self) -> ValueRef<'v> {
+        debug_assert!(self.0.get().unwrap().0.get_user_tag());
+        Self(self.0.dupe())
     }
 
     pub fn freeze(&self, freezer: &Freezer) -> Option<FrozenValue> {
