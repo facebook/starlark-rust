@@ -20,13 +20,13 @@
 use crate::{
     codemap::Span,
     eval::{
-        DefInvoker, DefInvokerFrozen, Evaluator, ParametersCollect, ParametersParser,
-        ParametersSpec,
+        DefInvoker, DefInvokerFrozen, Evaluator, LocalSlotBase, ParametersCollect,
+        ParametersParser, ParametersSpec,
     },
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
         FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike,
-        ValueRef, Walker,
+        Walker,
     },
 };
 use derivative::Derivative;
@@ -96,7 +96,7 @@ impl<'v> FunctionInvoker<'v> {
 
 /// A native function that can be evaluated.
 pub trait NativeFunc:
-    for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -104,7 +104,7 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -134,11 +134,13 @@ impl<'a> NativeFunctionInvoker<'a> {
 
     pub fn invoke<'v>(
         self,
-        slots: Vec<ValueRef<'v>>,
+        slots: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let parser = ParametersParser::new(&slots);
-        (*self.0)(eval, parser)
+        let parser = ParametersParser::new(slots);
+        let res = (*self.0)(eval, parser);
+        eval.local_variables.release_after(slots);
+        res
     }
 }
 
@@ -169,7 +171,7 @@ impl<'v, F: NativeFunc> AllocFrozenValue for NativeFunction<F> {
 
 // If I switch this to the trait alias then it fails to resolve the usages
 impl<
-    F: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser<'v, '_>) -> anyhow::Result<Value<'v>>
+    F: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static,

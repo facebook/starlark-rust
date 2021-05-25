@@ -31,15 +31,15 @@ use syn::*;
 //
 // ```
 // pub fn global(globals_builder: &mut GlobalsBuilder) {
-//     fn cc_binary<'v, 'a, 'a2>(
+//     fn cc_binary<'v, 'a>(
 //         eval: &mut starlark::eval::Evaluator<'v, 'a>,
-//         args: starlark::eval::ParametersParser<'v, 'a2>,
+//         args: starlark::eval::ParametersParser,
 //     ) -> anyhow::Result<starlark::values::Value<'v>> {
 //         fn inner<'v, 'a, 'a2>(
 //             #[allow(unused_variables)] eval: &mut starlark::eval::Evaluator<'v, 'a>,
 //             #[allow(unused_mut)]
 //             #[allow(unused_variables)]
-//             mut args: starlark::eval::ParametersParser<'v, 'a2>,
+//             mut args: starlark::eval::ParametersParser,
 //         ) -> anyhow::Result<String> {
 //             #[allow(unused_mut)]
 //             let mut name: &str = args.next("name", eval)?;
@@ -259,16 +259,16 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
     quote! {
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
-        fn #name<'v, 'a, 'a2>(
+        fn #name<'v, 'a>(
             eval: &mut starlark::eval::Evaluator<'v, 'a>,
-            starlark_args: starlark::eval::ParametersParser<'v, 'a2>,
+            starlark_args: starlark::eval::ParametersParser,
         ) -> anyhow::Result<starlark::values::Value<'v>> {
-             fn inner<'v, 'a, 'a2>(
+             fn inner<'v, 'a>(
                 #[allow(unused_variables)]
                 eval: &mut starlark::eval::Evaluator<'v, 'a>,
                 #[allow(unused_mut)]
                 #[allow(unused_variables)]
-                mut starlark_args: starlark::eval::ParametersParser<'v, 'a2>,
+                mut starlark_args: starlark::eval::ParametersParser,
             ) -> anyhow::Result<#return_type> {
                 #[allow(unused_variables)]
                 let heap = eval.heap();

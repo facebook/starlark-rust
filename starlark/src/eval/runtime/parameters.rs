@@ -20,14 +20,13 @@
 /// parameters into slots.
 use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
-    eval::Evaluator,
+    eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, UnpackValue, Value, ValueError, ValueRef,
-        Walker,
+        dict::Dict, tuple::Tuple, Freezer, FrozenValue, UnpackValue, Value, ValueError, Walker,
     },
 };
 use gazebo::{cell::ARef, prelude::*};
-use std::{cmp, mem, slice::Iter};
+use std::{cmp, mem};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -266,12 +265,13 @@ impl<'v> ParametersSpec<Value<'v>> {
     pub(crate) fn collect(
         params: ARef<'v, ParametersSpec<Value<'v>>>,
         slots: usize,
-        _eval: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> ParametersCollect<'v> {
         let len = params.kinds.len();
+        let slots = eval.local_variables.reserve(cmp::max(slots, len));
         ParametersCollect {
             params,
-            slots: vec![ValueRef::new_unassigned(); cmp::max(slots, len)],
+            slots,
             only_positional: true,
             next_position: 0,
             args: Vec::new(),
@@ -312,7 +312,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 
 pub(crate) struct ParametersCollect<'v> {
     params: ARef<'v, ParametersSpec<Value<'v>>>,
-    slots: Vec<ValueRef<'v>>,
+    slots: LocalSlotBase,
 
     /// Initially true, becomes false once we see something not-positional.
     /// Required since we can fast-path positional if there are no conflicts.
@@ -331,12 +331,15 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub fn push_pos(&mut self, val: Value<'v>, _eval: &mut Evaluator<'v, '_>) {
+    pub fn push_pos(&mut self, val: Value<'v>, eval: &mut Evaluator<'v, '_>) {
         if self.next_position < self.params.positional {
             // Checking unassigned is moderately expensive, so use only_positional
             // which knows we have never set anything below next_position
-            if self.only_positional || self.slots[self.next_position].get_direct().is_none() {
-                self.slots[self.next_position].set_direct(val);
+            let val_ref = eval
+                .local_variables
+                .get_slot_at(self.slots, self.next_position);
+            if self.only_positional || val_ref.get_direct().is_none() {
+                val_ref.set_direct(val);
                 self.next_position += 1;
             } else {
                 // Occurs if we have def f(a), then a=1, *[2]
@@ -357,7 +360,7 @@ impl<'v> ParametersCollect<'v> {
         name: &str,
         name_value: Hashed<Value<'v>>,
         val: Value<'v>,
-        _eval: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) {
         self.only_positional = false;
         // Safe to use new_unchecked because hash for the Value and str are the same
@@ -368,8 +371,9 @@ impl<'v> ParametersCollect<'v> {
                 old.is_some()
             }
             Some(i) => {
-                let res = self.slots[*i].get_direct().is_some();
-                self.slots[*i].set_direct(val);
+                let val_ref = eval.local_variables.get_slot_at(self.slots, *i);
+                let res = val_ref.get_direct().is_some();
+                val_ref.set_direct(val);
                 res
             }
         };
@@ -423,10 +427,10 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub(crate) fn done(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Vec<ValueRef<'v>>> {
+    pub(crate) fn done(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
         let Self {
             params,
-            mut slots,
+            slots,
             mut args,
             mut kwargs,
             err,
@@ -439,7 +443,7 @@ impl<'v> ParametersCollect<'v> {
             .kinds
             .iter()
             .enumerate()
-            .zip(slots.iter_mut())
+            .zip(eval.local_variables.get_slots_at(self.slots))
             .skip(self.next_position)
         {
             // We know that up to next_position got filled positionally, so we don't need to check those
@@ -487,15 +491,14 @@ impl<'v> ParametersCollect<'v> {
 }
 
 /// Parse a series of parameters which were specified by [`ParametersSpec`].
-pub struct ParametersParser<'v, 'a> {
-    slots: Iter<'a, ValueRef<'v>>,
+pub struct ParametersParser {
+    base: LocalSlotBase,
+    next: usize,
 }
 
-impl<'v, 'a> ParametersParser<'v, 'a> {
-    pub(crate) fn new(slots: &'a [ValueRef<'v>]) -> Self {
-        Self {
-            slots: slots.iter(),
-        }
+impl ParametersParser {
+    pub(crate) fn new(base: LocalSlotBase) -> Self {
+        Self { base, next: 0 }
     }
 
     // Utility for improving the error message with more information
@@ -503,18 +506,24 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
     }
 
+    fn get_next<'v>(&mut self, eval: &Evaluator<'v, '_>) -> Option<Value<'v>> {
+        let v = eval
+            .local_variables
+            .get_slot_at(self.base, self.next)
+            .get_direct();
+        self.next += 1;
+        v
+    }
+
     /// Obtain the next parameter, corresponding to [`ParametersSpec::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next_opt<T: UnpackValue<'v>>(
+    pub fn next_opt<'v, T: UnpackValue<'v>>(
         &mut self,
         name: &str,
-        _eval: &Evaluator<'v, '_>,
+        eval: &Evaluator<'v, '_>,
     ) -> anyhow::Result<Option<T>> {
-        // This unwrap is safe because we only call next one time per ParametersSpec.count()
-        // and slots starts out with that many entries.
-        let v = self.slots.next().unwrap().get_direct();
-        match v {
+        match self.get_next(eval) {
             None => Ok(None),
             Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(v))?)),
         }
@@ -523,21 +532,18 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     /// Obtain the next parameter, which can't be defined by [`ParametersSpec::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next<T: UnpackValue<'v>>(
+    pub fn next<'v, T: UnpackValue<'v>>(
         &mut self,
         name: &str,
-        _eval: &Evaluator<'v, '_>,
+        eval: &Evaluator<'v, '_>,
     ) -> anyhow::Result<T> {
         // After ParametersCollect.done() all variables will be Some,
         // apart from those where we called ParametersSpec.optional(),
         // and for those we chould call next_opt()
 
-        // This unwrap is safe because we only call next one time per ParametersSpec.count()
-        // and slots starts out with that many entries.
-        let v = self.slots.next().unwrap().get_direct();
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
-        let v = v.unwrap();
+        let v = self.get_next(eval).unwrap();
         Self::named_err(name, T::unpack_value(v))
     }
 }

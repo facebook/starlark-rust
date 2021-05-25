@@ -17,6 +17,7 @@
 
 use crate::values::{Heap, Value, ValueRef, Walker};
 use gazebo::prelude::*;
+use std::mem;
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
 pub(crate) struct LocalSlotId(usize);
@@ -27,38 +28,89 @@ impl LocalSlotId {
     }
 }
 
+#[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
+pub(crate) struct LocalSlotBase(usize);
+
 /// Slots that are used in a local context, e.g. for a function that is executing.
 /// Always mutable, never frozen. Uses the `ValueRef` because they have reference
 /// semantics - if a variable gets mutated, someone who has a copy will see the
 /// mutation.
-#[derive(Default)]
-pub(crate) struct LocalSlots<'v>(Vec<ValueRef<'v>>);
+///
+/// The slots are stored as a linear buffer. To make a function call we:
+///
+/// 1. `reserve` some slots at the end, which will be the locals for the callee.
+/// 2. Fill up these slots with parameters.
+/// 3. `utilise` these slots by moving the register index to these slots.
+/// 4. Execute the function.
+/// 5. `release` these slots by moving the register index back.
+pub(crate) struct LocalSlots<'v> {
+    // All the slots are stored continguously
+    slots: Vec<ValueRef<'v>>,
+    // The current index at which LocalSlotId is relative to
+    base: LocalSlotBase,
+}
 
 impl<'v> LocalSlots<'v> {
-    pub fn new(values: Vec<ValueRef<'v>>) -> Self {
-        Self(values)
+    pub fn new() -> Self {
+        Self {
+            slots: Vec::new(),
+            base: LocalSlotBase(0),
+        }
+    }
+
+    pub fn reserve(&mut self, len: usize) -> LocalSlotBase {
+        let res = LocalSlotBase(self.slots.len());
+        self.slots.reserve(len);
+        for _ in 0..len {
+            self.slots.push(ValueRef::new_unassigned());
+        }
+        res
+    }
+
+    pub fn utilise(&mut self, base: LocalSlotBase) -> LocalSlotBase {
+        mem::replace(&mut self.base, base)
+    }
+
+    pub fn release_after(&mut self, base: LocalSlotBase) {
+        // If people create two reservations and use them in an odd manner, we probably get issues here
+        // but they will be caught by the bound check.
+        // NOTE: If we ever remove bounds checks, this probably needs to check its the final reservation.
+        self.slots.truncate(base.0);
+    }
+
+    pub fn release(&mut self, new_base: LocalSlotBase) {
+        self.release_after(self.base);
+        self.base = new_base;
+    }
+
+    pub fn get_slot_at(&self, base: LocalSlotBase, i: usize) -> &ValueRef<'v> {
+        &self.slots[base.0 + i]
+    }
+
+    pub fn get_slots_at(&self, base: LocalSlotBase) -> &[ValueRef<'v>] {
+        &self.slots[base.0..]
     }
 
     /// Gets a local variable. Returns None to indicate the variable is not yet assigned.
     pub fn get_slot(&self, slot: LocalSlotId) -> Option<Value<'v>> {
-        self.0[slot.0].get()
+        self.slots[self.base.0 + slot.0].get()
     }
 
     pub fn set_slot(&self, slot: LocalSlotId, value: Value<'v>) {
-        self.0[slot.0].set(value);
+        self.slots[self.base.0 + slot.0].set(value);
     }
 
     /// Make a copy of this slot that can be used with `set_slot_ref` to
     /// bind two instances together.
     pub fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
-        self.0[slot.0].clone_reference(heap)
+        self.slots[self.base.0 + slot.0].clone_reference(heap)
     }
 
     pub fn set_slot_ref(&mut self, slot: LocalSlotId, value_ref: ValueRef<'v>) {
-        self.0[slot.0] = value_ref;
+        self.slots[self.base.0 + slot.0] = value_ref;
     }
 
     pub(crate) fn walk(&mut self, walker: &Walker<'v>) {
-        self.0.iter_mut().for_each(|x| walker.walk_ref(x))
+        self.slots.iter_mut().for_each(|x| walker.walk_ref(x))
     }
 }

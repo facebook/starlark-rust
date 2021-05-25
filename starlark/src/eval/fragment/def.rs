@@ -22,7 +22,11 @@ use crate::{
     environment::FrozenModuleValue,
     eval::{
         compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled, StmtCompiled},
-        runtime::{evaluator::Evaluator, parameters::ParametersSpec, slots::LocalSlots},
+        runtime::{
+            evaluator::Evaluator,
+            parameters::ParametersSpec,
+            slots::{LocalSlotBase, LocalSlotId},
+        },
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
@@ -336,31 +340,33 @@ impl<'a> DefInvokerFrozen<'a> {
 impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> {
     pub fn invoke(
         self,
-        slots: Vec<ValueRef<'v>>,
+        locals: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
         let DefInvokerGen(def) = self;
+        let old_locals = eval.local_variables.utilise(locals);
 
         if eval.check_types() {
             for (i, arg_name, ty) in &def.parameter_types {
-                match slots[*i].get() {
-                    None => panic!("Not allowed optional unassigned with type annotations on them"),
-                    Some(v) => v.check_type(ty.to_value(), Some(arg_name))?,
+                match eval.get_slot_local(LocalSlotId::new(*i), arg_name.as_str()) {
+                    Err(_) => {
+                        panic!("Not allowed optional unassigned with type annotations on them")
+                    }
+                    Ok(v) => v.check_type(ty.to_value(), Some(arg_name))?,
                 }
             }
         }
 
-        let mut locals = LocalSlots::new(slots);
-
         // Copy over the parent slots
         for ((_, me), captured) in def.stmt.scope_names.parent.iter().zip(def.captured.iter()) {
-            locals.set_slot_ref(*me, captured.to_value_ref());
+            eval.local_variables
+                .set_slot_ref(*me, captured.to_value_ref());
         }
 
-        let res = eval.with_function_context(def.module, locals, def.codemap.dupe(), |eval| {
-            (def.stmt.body)(eval)
-        });
+        let res = eval
+            .with_function_context(def.module, def.codemap.dupe(), |eval| (def.stmt.body)(eval));
+        eval.local_variables.release(old_locals);
 
         let ret = match res {
             Err(EvalException::Return(ret)) => ret,

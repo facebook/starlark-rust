@@ -17,7 +17,6 @@
 
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
-    collections::stack::Stack1,
     environment::{
         slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
@@ -53,7 +52,7 @@ pub struct Evaluator<'v, 'a> {
     // If `Some` we've called a `def` in a loaded frozen module.
     pub(crate) module_variables: Option<FrozenModuleRef>,
     // Local variables for this function, and older stack frames too.
-    pub(crate) local_variables: Stack1<LocalSlots<'v>>,
+    pub(crate) local_variables: LocalSlots<'v>,
     // Globals used to resolve global variables.
     pub(crate) globals: &'a Globals,
     // The Starlark-level call-stack of functions.
@@ -92,7 +91,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             call_stack: CallStack::default(),
             module_env: module,
             module_variables: None,
-            local_variables: Stack1::default(),
+            local_variables: LocalSlots::new(),
             globals,
             loader: None,
             codemap: CodeMap::default(), // Will be replaced before it is used
@@ -235,7 +234,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_function_context<R>(
         &mut self,
         module: Option<FrozenModuleValue>, // None == use module_env
-        locals: LocalSlots<'v>,
         codemap: CodeMap,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
@@ -245,7 +243,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // Set up for the new function call
         let old_module_variables =
             mem::replace(&mut self.module_variables, module.map(|x| x.get()));
-        self.local_variables.push(locals);
 
         // Run the computation
         let res = within(self);
@@ -253,7 +250,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // Restore them all back
         self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
-        self.local_variables.pop();
         res
     }
 
@@ -262,9 +258,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         for x in roots.iter_mut() {
             walker.walk_opt(x);
         }
-        for locals in self.local_variables.iter_mut() {
-            locals.walk(walker);
-        }
+        self.local_variables.walk(walker);
         self.call_stack.walk(walker);
     }
 
@@ -313,13 +307,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
 
         self.local_variables
-            .top()
             .get_slot(slot)
             .ok_or_else(|| error(name))
     }
 
     pub(crate) fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
-        self.local_variables.top().clone_slot_reference(slot, heap)
+        self.local_variables.clone_slot_reference(slot, heap)
     }
 
     /// Set a variable in the top-level module currently being processed.
@@ -346,7 +339,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn set_slot_local(&mut self, slot: LocalSlotId, value: Value<'v>) {
-        self.local_variables.top().set_slot(slot, value)
+        self.local_variables.set_slot(slot, value)
     }
 
     /// Cause a GC to be triggered next time it's possible.

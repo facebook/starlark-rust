@@ -20,24 +20,21 @@
 
 use crate::{
     codemap::{Span, Spanned},
-    eval::{
-        compiler::{scope::Scope, Compiler, EvalException},
-        runtime::slots::LocalSlots,
-    },
+    eval::compiler::{scope::Scope, Compiler, EvalException},
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
-    values::{Value, ValueRef},
+    values::Value,
 };
 use gazebo::prelude::*;
 use std::mem;
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
-pub(crate) use runtime::parameters::ParametersCollect;
 pub use runtime::{
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
     parameters::{ParametersParser, ParametersSpec},
 };
+pub(crate) use runtime::{parameters::ParametersCollect, slots::LocalSlotBase};
 
 mod compiler;
 mod fragment;
@@ -103,10 +100,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let (module_slots, local_slots) = compiler.scope.exit_module();
         self.module_env.slots().ensure_slots(module_slots);
-        self.local_variables.push(LocalSlots::new(vec![
-            ValueRef::new_unassigned();
-            local_slots
-        ]));
+        let new_locals = self.local_variables.reserve(local_slots);
+        let old_locals = self.local_variables.utilise(new_locals);
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
         let old_codemap = self.set_codemap(codemap.dupe());
@@ -126,7 +121,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.heap().record_call_exit();
         }
         self.set_codemap(old_codemap);
-        self.local_variables.pop();
+        self.local_variables.release(old_locals);
 
         // Return the result of evaluation
         match res {
