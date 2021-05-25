@@ -427,19 +427,12 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
-    pub(crate) fn done(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
-        let Self {
-            params,
-            slots,
-            mut args,
-            mut kwargs,
-            err,
-            ..
-        } = self;
-        if let Some(err) = err {
+    pub(crate) fn done(mut self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
+        if let Some(err) = self.err {
             return Err(err);
         }
-        for ((index, def), slot) in params
+        for ((index, def), slot) in self
+            .params
             .kinds
             .iter()
             .enumerate()
@@ -453,8 +446,8 @@ impl<'v> ParametersCollect<'v> {
             match def {
                 ParameterKind::Required => {
                     return Err(FunctionError::MissingParameter {
-                        name: params.param_name_at(index),
-                        function: params.signature(),
+                        name: self.params.param_name_at(index),
+                        function: self.params.signature(),
                     }
                     .into());
                 }
@@ -463,30 +456,30 @@ impl<'v> ParametersCollect<'v> {
                     slot.set(*x);
                 }
                 ParameterKind::Args => {
-                    let args = mem::take(&mut args);
+                    let args = mem::take(&mut self.args);
                     slot.set(eval.heap().alloc(Tuple::new(args)));
                 }
                 ParameterKind::KWargs => {
-                    let kwargs = mem::take(&mut kwargs);
+                    let kwargs = mem::take(&mut self.kwargs);
                     slot.set(eval.heap().alloc(Dict::new(kwargs)))
                 }
             }
         }
-        if !kwargs.is_empty() {
+        if !self.kwargs.is_empty() {
             return Err(FunctionError::ExtraNamedParameters {
-                names: kwargs.keys().map(|x| x.to_str()).collect(),
-                function: params.signature(),
+                names: self.kwargs.keys().map(|x| x.to_str()).collect(),
+                function: self.params.signature(),
             }
             .into());
         }
-        if !args.is_empty() {
+        if !self.args.is_empty() {
             return Err(FunctionError::ExtraPositionalParameters {
-                count: args.len(),
-                function: params.signature(),
+                count: self.args.len(),
+                function: self.params.signature(),
             }
             .into());
         }
-        Ok(slots)
+        Ok(self.slots)
     }
 }
 
