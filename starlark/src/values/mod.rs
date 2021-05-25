@@ -31,6 +31,7 @@
 pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
     collections::{Hashed, SmallHashResult},
+    eval::Evaluator,
     values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
 };
 pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -159,8 +160,8 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
 
     fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
 
-    fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
-        self.to_value().new_invoker(heap)
+    fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
+        self.to_value().new_invoker(eval)
     }
 
     fn get_hash(self) -> anyhow::Result<u64> {
@@ -535,8 +536,8 @@ impl<'v> Value<'v> {
         self.get_aref().right_shift(other)
     }
 
-    pub fn new_invoker(self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
-        self.get_aref().new_invoker(self, heap)
+    pub fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
+        self.get_aref().new_invoker(self, eval)
     }
 
     pub fn get_type_value(self) -> &'static ConstFrozenValue {

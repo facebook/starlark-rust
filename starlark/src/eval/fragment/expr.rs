@@ -403,11 +403,11 @@ impl Compiler<'_> {
                         let dot = eval_dot(span, e, s.node);
                         box move |eval| match dot(eval)? {
                             Either::Left(function) => {
-                                let invoker = thrw(function.new_invoker(eval.heap()), span, eval)?;
+                                let invoker = thrw(function.new_invoker(eval), span, eval)?;
                                 eval_call(span, &args, invoker, function, eval)
                             }
                             Either::Right(wrapper) => {
-                                let invoker = thrw(wrapper.invoke(eval.heap()), span, eval)?;
+                                let invoker = thrw(wrapper.invoke(eval), span, eval)?;
                                 eval_call(span, &args, invoker, wrapper.method, eval)
                             }
                         }
@@ -415,7 +415,7 @@ impl Compiler<'_> {
                     _ => {
                         let left = self.expr(*left);
                         expr!(left, |eval| {
-                            let invoker = thrw(left.new_invoker(eval.heap()), span, eval)?;
+                            let invoker = thrw(left.new_invoker(eval), span, eval)?;
                             eval_call(span, &args, invoker, left, eval)?
                         })
                     }

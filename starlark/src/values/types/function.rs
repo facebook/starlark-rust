@@ -197,7 +197,11 @@ impl<'v, F: NativeFunc> StarlarkValue<'v> for NativeFunction<F> {
         self.parameters.collect_repr(s)
     }
 
-    fn new_invoker(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
+    fn new_invoker(
+        &self,
+        me: Value<'v>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
         Ok(NativeFunctionInvoker::new(ARef::map(me.get_aref(), |x| {
             x.as_dyn_any().downcast_ref::<Self>().unwrap()
         })))
@@ -240,7 +244,7 @@ impl NativeAttribute {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
-        let mut invoker = self.0.get_aref().new_invoker(function, eval.heap())?;
+        let mut invoker = self.0.get_aref().new_invoker(function, eval)?;
         invoker.push_pos(value);
         invoker.invoke(function, None, eval)
     }
@@ -268,8 +272,11 @@ impl<'v> WrappedMethod<'v> {
 }
 
 impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
-    pub(crate) fn invoke(&self, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
-        let mut inv = self.method.new_invoker(heap)?;
+    pub(crate) fn invoke(
+        &self,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
+        let mut inv = self.method.new_invoker(eval)?;
         inv.push_pos(self.self_obj.to_value());
         Ok(inv)
     }
@@ -299,7 +306,11 @@ where
         self.method.collect_repr(s);
     }
 
-    fn new_invoker(&self, _me: Value<'v>, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
-        self.invoke(heap)
+    fn new_invoker(
+        &self,
+        _me: Value<'v>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
+        self.invoke(eval)
     }
 }

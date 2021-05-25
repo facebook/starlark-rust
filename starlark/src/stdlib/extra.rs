@@ -18,11 +18,11 @@
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
-    eval::ParametersSpec,
+    eval::{Evaluator, ParametersSpec},
     values::{
         function::{FunctionInvoker, FUNCTION_TYPE},
         none::NoneType,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        ComplexValue, Freezer, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -40,7 +40,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
                     res.push(v);
                 }
             } else {
-                let mut inv = func.new_invoker(heap)?;
+                let mut inv = func.new_invoker(eval)?;
                 inv.push_pos(v);
                 if inv.invoke(func, None, eval)?.to_bool() {
                     res.push(v);
@@ -56,7 +56,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
     fn map(func: Value, seq: Value) -> Vec<Value<'v>> {
         let mut res = Vec::new();
         for v in &seq.iterate(heap)? {
-            let mut inv = func.new_invoker(heap)?;
+            let mut inv = func.new_invoker(eval)?;
             inv.push_pos(v);
             res.push(inv.invoke(func, None, eval)?);
         }
@@ -158,9 +158,13 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
-    fn new_invoker(&self, _me: Value<'v>, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
-        let mut inv = self.func.new_invoker(heap)?;
-        inv.push_args(self.args.to_value(), heap);
+    fn new_invoker(
+        &self,
+        _me: Value<'v>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
+        let mut inv = self.func.new_invoker(eval)?;
+        inv.push_args(self.args.to_value(), eval.heap());
         inv.push_kwargs(self.kwargs.to_value());
         Ok(inv)
     }

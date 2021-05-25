@@ -43,7 +43,7 @@
 
 use crate::{
     collections::SmallMap,
-    eval::{ParametersParser, ParametersSpec},
+    eval::{Evaluator, ParametersParser, ParametersSpec},
     values::{
         comparison::equals_slice,
         error::ValueError,
@@ -279,8 +279,12 @@ where
         Ok(s.finish())
     }
 
-    fn new_invoker(&self, me: Value<'v>, heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
-        let mut f = self.constructor.new_invoker(heap)?;
+    fn new_invoker(
+        &self,
+        me: Value<'v>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
+        let mut f = self.constructor.new_invoker(eval)?;
         f.push_pos(me);
         Ok(f)
     }

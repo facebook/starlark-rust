@@ -252,7 +252,11 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         collector.push_str(&self.parameters.signature());
     }
 
-    fn new_invoker(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
+    fn new_invoker(
+        &self,
+        me: Value<'v>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
         Ok(DefInvokerFrozen::new_frozen(ARef::map(
             me.get_aref(),
             |x| x.as_dyn_any().downcast_ref::<Self>().unwrap(),
@@ -267,7 +271,11 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         collector.push_str(&self.parameters.signature());
     }
 
-    fn new_invoker(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
+    fn new_invoker(
+        &self,
+        me: Value<'v>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
         Ok(DefInvoker::new(ARef::map(me.get_aref(), |x| {
             x.as_dyn_any().downcast_ref::<Self>().unwrap()
         })))

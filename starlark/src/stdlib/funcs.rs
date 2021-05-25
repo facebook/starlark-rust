@@ -579,11 +579,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 }
             }
             Some(key) => {
-                let mut invoker = key.new_invoker(heap)?;
+                let mut invoker = key.new_invoker(eval)?;
                 invoker.push_pos(max);
                 let mut cached = invoker.invoke(key, None, eval)?;
                 for i in it {
-                    let mut invoker = key.new_invoker(heap)?;
+                    let mut invoker = key.new_invoker(eval)?;
                     invoker.push_pos(i);
                     let keyi = invoker.invoke(key, None, eval)?;
                     if cached.compare(keyi)? == Ordering::Less {
@@ -637,11 +637,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 }
             }
             Some(key) => {
-                let mut invoker = key.new_invoker(heap)?;
+                let mut invoker = key.new_invoker(eval)?;
                 invoker.push_pos(min);
                 let mut cached = invoker.invoke(key, None, eval)?;
                 for i in it {
-                    let mut invoker = key.new_invoker(heap)?;
+                    let mut invoker = key.new_invoker(eval)?;
                     invoker.push_pos(i);
                     let keyi = invoker.invoke(key, None, eval)?;
                     if cached.compare(keyi)? == Ordering::Greater {
@@ -805,7 +805,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Some(key) => {
                 let mut v = Vec::new();
                 for el in x {
-                    let mut inv = key.new_invoker(heap)?;
+                    let mut inv = key.new_invoker(eval)?;
                     inv.push_pos(el);
                     v.push((el, inv.invoke(key, None, eval)?));
                 }

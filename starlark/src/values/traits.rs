@@ -30,6 +30,7 @@
 //! hold several values.
 use crate::{
     environment::Globals,
+    eval::Evaluator,
     values::{
         function::{FunctionInvoker, FUNCTION_TYPE},
         ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable, Value, ValueError, Walker,
@@ -397,7 +398,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     }
 
     /// Create a [`FunctionInvoker`] for this object, allowing it to be invoked.
-    fn new_invoker(&self, _me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<FunctionInvoker<'v>> {
+    fn new_invoker(
+        &self,
+        _me: Value<'v>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<FunctionInvoker<'v>> {
         ValueError::unsupported(self, "call()")
     }
 
