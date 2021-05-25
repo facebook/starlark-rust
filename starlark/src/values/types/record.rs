@@ -154,18 +154,18 @@ impl<'v> RecordType<'v> {
         // might move between threads - so we create the NativeFunction and apply it later.
         NativeFunction::new(
             move |eval, mut param_parser: ParametersParser| {
-                let me = param_parser.next("me")?;
+                let me = param_parser.next("me", eval)?;
                 let info = RecordType::from_value(me).unwrap();
                 let mut values = Vec::with_capacity(info.fields.len());
                 for (name, field) in &info.fields {
                     match field.default {
                         None => {
-                            let v: Value = param_parser.next(name)?;
+                            let v: Value = param_parser.next(name, eval)?;
                             v.check_type(field.typ, Some(name))?;
                             values.push(v);
                         }
                         Some(default) => {
-                            let v: Option<Value> = param_parser.next_opt(name)?;
+                            let v: Option<Value> = param_parser.next_opt(name, eval)?;
                             match v {
                                 None => values.push(default),
                                 Some(v) => {

@@ -42,9 +42,9 @@ use syn::*;
 //             mut args: starlark::eval::ParametersParser<'v, 'a2>,
 //         ) -> anyhow::Result<String> {
 //             #[allow(unused_mut)]
-//             let mut name: &str = args.next("name")?;
+//             let mut name: &str = args.next("name", eval)?;
 //             #[allow(unused_mut)]
-//             let mut srcs: Vec<&str> = args.next("srcs")?;
+//             let mut srcs: Vec<&str> = args.next("srcs", eval)?;
 //             Ok({
 //                 let res = ::alloc::fmt::format(::core::fmt::Arguments::new_v1(
 //                     &["", " "],
@@ -301,12 +301,12 @@ fn bind_argument(arg: &Arg) -> proc_macro2::TokenStream {
             "Can't have Option argument with a default, for `{}`",
             name_str
         );
-        quote! { starlark_args.next_opt(#name_str)? }
+        quote! { starlark_args.next_opt(#name_str, eval)? }
     } else if !is_type_value(ty) && default.is_some() {
         let default = default.unwrap();
-        quote! { starlark_args.next_opt(#name_str)?.unwrap_or(#default) }
+        quote! { starlark_args.next_opt(#name_str, eval)?.unwrap_or(#default) }
     } else {
-        quote! { starlark_args.next(#name_str)? }
+        quote! { starlark_args.next(#name_str, eval)? }
     };
 
     let mutability = &arg.ident.mutability;

@@ -506,7 +506,11 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     /// Obtain the next parameter, corresponding to [`ParametersSpec::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next_opt<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<Option<T>> {
+    pub fn next_opt<T: UnpackValue<'v>>(
+        &mut self,
+        name: &str,
+        _eval: &Evaluator<'v, '_>,
+    ) -> anyhow::Result<Option<T>> {
         // This unwrap is safe because we only call next one time per ParametersSpec.count()
         // and slots starts out with that many entries.
         let v = self.slots.next().unwrap().get_direct();
@@ -519,7 +523,11 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     /// Obtain the next parameter, which can't be defined by [`ParametersSpec::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<T> {
+    pub fn next<T: UnpackValue<'v>>(
+        &mut self,
+        name: &str,
+        _eval: &Evaluator<'v, '_>,
+    ) -> anyhow::Result<T> {
         // After ParametersCollect.done() all variables will be Some,
         // apart from those where we called ParametersSpec.optional(),
         // and for those we chould call next_opt()
