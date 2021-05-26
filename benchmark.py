@@ -30,7 +30,7 @@ def benchmark2():
     return y
 
 
-# Python = 7.04s, Rust = 9.2s
+# Python = 7.04s, Rust = 8.4s
 def benchmark3():
     y = 0
     xs = []
@@ -43,7 +43,7 @@ def op4(_x):
     pass
 
 
-# Python = 9.85s, Rust = 10.8s
+# Python = 9.85s, Rust = 8.4s
 def benchmark4():
     y = 0
     for x in range(100000000):

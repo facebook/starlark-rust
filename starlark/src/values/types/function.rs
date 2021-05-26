@@ -57,13 +57,17 @@ impl<'v> FunctionInvoker<'v> {
         location: Option<Span>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let loc = location.map(|x| eval.file_span(x));
         let slots = self.collect.done(eval)?;
-        eval.with_call_stack(function, loc, |eval| match &self.invoke {
-            FunctionInvokerInner::Native(inv) => inv.invoke(slots, eval),
-            FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
-            FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
-        })
+        eval.with_call_stack(
+            function,
+            location.unwrap_or_default(),
+            location.map(|_| eval.codemap),
+            |eval| match &self.invoke {
+                FunctionInvokerInner::Native(inv) => inv.invoke(slots, eval),
+                FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
+                FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
+            },
+        )
     }
 
     /// Add a positional argument.

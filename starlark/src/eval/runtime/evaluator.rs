@@ -31,7 +31,8 @@ use crate::{
     },
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
-use gazebo::{any::AnyLifetime, dupe::Dupe};
+use gazebo::{any::AnyLifetime, cast};
+use once_cell::sync::Lazy;
 use std::{mem, path::Path};
 use thiserror::Error;
 
@@ -63,7 +64,7 @@ pub struct Evaluator<'v, 'a> {
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a mut dyn FileLoader>,
     // The codemap that corresponds to this module.
-    pub(crate) codemap: CodeMap,
+    pub(crate) codemap: &'v CodeMap,
     // Should we enable profiling or not
     pub(crate) profiling: bool,
     // Is GC disabled for some reason
@@ -81,6 +82,7 @@ pub struct Evaluator<'v, 'a> {
     /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
 }
+
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Crate a new [`Evaluator`] specifying the [`Module`] used for module variables,
     /// and the [`Globals`] used to resolve global variables.
@@ -88,6 +90,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// If your program contains `load()` statements, you also need to call
     /// [`set_loader`](Evaluator::set_loader).
     pub fn new(module: &'v Module, globals: &'a Globals) -> Self {
+        static CODEMAP: Lazy<CodeMap> = Lazy::new(CodeMap::default);
+
         module.frozen_heap().add_reference(globals.heap());
         Evaluator {
             call_stack: CallStack::default(),
@@ -96,7 +100,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             local_variables: LocalSlots::new(),
             globals,
             loader: None,
-            codemap: CodeMap::default(), // Will be replaced before it is used
+            codemap: &CODEMAP, // Will be replaced before it is used
             extra: None,
             extra_v: None,
             next_gc_level: GC_THRESHOLD,
@@ -205,10 +209,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
-        location: Option<FileSpan>,
+        span: Span,
+        codemap: Option<&'v CodeMap>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        self.call_stack.push(function, location)?;
+        self.call_stack.push(function, span, codemap)?;
         if self.profiling {
             self.heap().record_call_enter(function);
         }
@@ -226,8 +231,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         res
     }
 
-    pub(crate) fn set_codemap(&mut self, codemap: CodeMap) -> CodeMap {
-        self.stmt_profile.set_codemap(&codemap);
+    pub(crate) fn set_codemap(&mut self, codemap: &'v CodeMap) -> &'v CodeMap {
+        self.stmt_profile.set_codemap(codemap);
         mem::replace(&mut self.codemap, codemap)
     }
 
@@ -240,8 +245,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         codemap: &CodeMap,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
+        // Safe because we promise to put codemap back to how it was before this function terminates.
+        // And because anyone who gets access to the CodeMap does so with a dupe, taking ownership.
+        // We'd like to express that `Evaluator` has a lifetime for the codemap that lasts only
+        // this function, but Rust can't express that.
+        let codemap = unsafe { cast::ptr_lifetime(codemap) };
+
         // Capture the variables we will be mutating
-        let old_codemap = self.set_codemap(codemap.dupe());
+        let old_codemap = self.set_codemap(codemap);
 
         // Set up for the new function call
         let old_module_variables =

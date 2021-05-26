@@ -24,7 +24,7 @@ use crate::{
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::Value,
 };
-use gazebo::prelude::*;
+use gazebo::{cast, prelude::*};
 use std::mem;
 
 pub(crate) use compiler::scope::ScopeNames;
@@ -104,9 +104,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let old_locals = self.local_variables.utilise(new_locals);
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
-        let old_codemap = self.set_codemap(codemap.dupe());
+
+        // Safe because we promise to put codemap back to how it was before this function terminates.
+        // See with_function_context for more safety arguments.
+        let codemap = unsafe { cast::ptr_lifetime(&codemap) };
+
+        let old_codemap = self.set_codemap(codemap);
         self.call_stack
-            .push(Value::new_none(), Some(codemap.file_span(span)))
+            .push(Value::new_none(), span, Some(codemap))
             .unwrap();
         if self.profiling {
             self.heap().record_call_enter(Value::new_none());
@@ -138,7 +143,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         positional: &[Value<'v>],
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
-        self.with_call_stack(function, None, |eval| {
+        self.with_call_stack(function, Span::default(), None, |eval| {
             let mut invoker = function.new_invoker(eval)?;
             for x in positional {
                 invoker.push_pos(*x, eval);
