@@ -39,4 +39,16 @@ def benchmark3():
     return y
 
 
-print(benchmark3())
+def op4(_x):
+    pass
+
+
+# Python = 9.85s, Rust = 10.8s
+def benchmark4():
+    y = 0
+    for x in range(100000000):
+        op4(x)
+    return y
+
+
+print(benchmark4())
