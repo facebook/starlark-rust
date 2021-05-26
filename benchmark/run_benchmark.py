@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
 import subprocess
 import tempfile
@@ -41,13 +42,13 @@ def generate_benchmarks(dir):
     return outputs
 
 
-def absh(a, b):
+def absh(a, b, repeat):
     a_time = 0
     b_time = 0
     runs = 0
 
     # Run a/b repeatedly, ignoring the first loop around
-    for i in range(6):
+    for i in range(repeat + 1):
         start_time = time.time()
         subprocess.run(a, check=True, capture_output=True)
         middle_time = time.time()
@@ -65,12 +66,21 @@ def absh(a, b):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--repeat",
+        default=6,
+        type=int,
+        help="How many times to repeat",
+    )
+    args = parser.parse_args()
+
     starlark = compile_starlark()
     with tempfile.TemporaryDirectory() as dir:
         benchmarks = generate_benchmarks(dir)
         for name, file in benchmarks.items():
             print("Benchmarking: " + name + " ", end="", flush=True)
-            (py, st) = absh(("python3", file), (starlark, file))
+            (py, st) = absh(("python3", file), (starlark, file), repeat=args.repeat)
             print("Python3 {:.2f}s, Starlark Rust {:.2f}s".format(py, st))
 
 
