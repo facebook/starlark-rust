@@ -208,7 +208,8 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    pub fn get_aref(&'v self) -> ARef<'v, dyn StarlarkValue<'v>> {
+    #[inline(always)] // There are only two callers
+    pub(crate) fn get_aref(&'v self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self {
             Self::Forward(x) => ARef::new_ptr(x.get_ref()),
             Self::Str(x) => ARef::new_ptr(x),

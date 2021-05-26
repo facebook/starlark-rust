@@ -233,6 +233,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Called to change the local variables, from the callee.
     /// Only called for user written functions.
+    #[inline(always)] // There is only one caller
     pub(crate) fn with_function_context<R>(
         &mut self,
         module: Option<FrozenModuleValue>, // None == use module_env
