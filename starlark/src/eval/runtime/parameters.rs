@@ -275,7 +275,7 @@ impl<'v> ParametersSpec<Value<'v>> {
             only_positional: true,
             next_position: 0,
             args: Vec::new(),
-            kwargs: SmallMap::new(),
+            kwargs: None,
             err: None,
         }
     }
@@ -319,7 +319,9 @@ pub(crate) struct ParametersCollect<'v> {
     only_positional: bool,
     next_position: usize,
     args: Vec<Value<'v>>,
-    kwargs: SmallMap<Value<'v>, Value<'v>>,
+    // A SmallMap is relatively large (10 words), so we don't want it in our data
+    // structure in most cases as it isn't used.
+    kwargs: Option<Box<SmallMap<Value<'v>, Value<'v>>>>,
     // We defer errors right until the end, to simplify the API
     err: Option<anyhow::Error>,
 }
@@ -355,6 +357,13 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
+    fn kwargs(&mut self) -> &mut SmallMap<Value<'v>, Value<'v>> {
+        if self.kwargs.is_none() {
+            self.kwargs = Some(box SmallMap::default());
+        }
+        self.kwargs.as_mut().unwrap()
+    }
+
     pub fn push_named(
         &mut self,
         name: &str,
@@ -367,7 +376,7 @@ impl<'v> ParametersCollect<'v> {
         let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
         let repeated = match self.params.names.get_hashed(name_hash) {
             None => {
-                let old = self.kwargs.insert_hashed(name_value, val);
+                let old = self.kwargs().insert_hashed(name_value, val);
                 old.is_some()
             }
             Some(i) => {
@@ -405,12 +414,6 @@ impl<'v> ParametersCollect<'v> {
         let res = try {
             match Dict::from_value(val) {
                 Some(y) => {
-                    // We know that reservation isn't too memory hungry,
-                    // mostly because big maps don't actually properly reserve,
-                    // so reserve assuming all of these values might go into kwargs
-                    if self.params.kwargs.is_some() {
-                        self.kwargs.reserve(y.len());
-                    }
                     for (n, v) in y.iter_hashed() {
                         match n.key().unpack_str() {
                             None => Err(FunctionError::ArgsValueIsNotString)?,
@@ -460,14 +463,14 @@ impl<'v> ParametersCollect<'v> {
                     slot.set(eval.heap().alloc(Tuple::new(args)));
                 }
                 ParameterKind::KWargs => {
-                    let kwargs = mem::take(&mut self.kwargs);
-                    slot.set(eval.heap().alloc(Dict::new(kwargs)))
+                    let kwargs = self.kwargs.take().unwrap_or_default();
+                    slot.set(eval.heap().alloc_complex_box(Dict::from_box(kwargs)))
                 }
             }
         }
-        if !self.kwargs.is_empty() {
+        if let Some(kwargs) = &self.kwargs {
             return Err(FunctionError::ExtraNamedParameters {
-                names: self.kwargs.keys().map(|x| x.to_str()).collect(),
+                names: kwargs.keys().map(|x| x.to_str()).collect(),
                 function: self.params.signature(),
             }
             .into());

@@ -33,7 +33,7 @@ def benchmark2():
     return y
 
 
-# Python = 7.04s, Rust = 8.4s
+# Python = 7.04s, Rust = 6.5s
 def benchmark3():
     y = 0
     xs = []
@@ -46,7 +46,7 @@ def op4(_x):
     pass
 
 
-# Python = 9.85s, Rust = 8.4s
+# Python = 9.85s, Rust = 6.6s
 def benchmark4():
     y = 0
     for x in range(REPEAT_100M):
@@ -58,7 +58,7 @@ def op5(_a, _b, _c, _d, _e, _f, _g, _h):
     pass
 
 
-# Python = 12.2s, Rust = 13.0s
+# Python = 12.2s, Rust = 12.0s
 def benchmark5():
     y = 0
     for x in range(REPEAT_100M):
@@ -70,7 +70,7 @@ def op6(a, b, c, d, e, f, g, h):
     pass
 
 
-# Python = 17.1s, Rust = 19.2s
+# Python = 17.1s, Rust = 18.3s
 def benchmark6():
     y = 0
     for x in range(REPEAT_100M):
