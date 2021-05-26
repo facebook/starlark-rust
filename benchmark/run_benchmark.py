@@ -73,15 +73,22 @@ def main():
         type=int,
         help="How many times to repeat",
     )
+    parser.add_argument(
+        "benchmarks",
+        nargs="*",
+        type=str,
+        help="Benchmarks to run, if not specified, all benchmarks",
+    )
     args = parser.parse_args()
 
     starlark = compile_starlark()
     with tempfile.TemporaryDirectory() as dir:
         benchmarks = generate_benchmarks(dir)
         for name, file in benchmarks.items():
-            print("Benchmarking: " + name + " ", end="", flush=True)
-            (py, st) = absh(("python3", file), (starlark, file), repeat=args.repeat)
-            print("Python3 {:.2f}s, Starlark Rust {:.2f}s".format(py, st))
+            if len(args.benchmarks) == 0 or name in args.benchmarks:
+                print("Benchmarking: " + name + " ", end="", flush=True)
+                (py, st) = absh(("python3", file), (starlark, file), repeat=args.repeat)
+                print("Python3 {:.2f}s, Starlark Rust {:.2f}s".format(py, st))
 
 
 if __name__ == "__main__":
