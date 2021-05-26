@@ -16,16 +16,19 @@
 # Python: python benchmark.py
 # Rust: starlark benchmark.py
 
+REPEAT_100M = 100000000
+
+
 # Python = 4.35s, Rust = 0.72s
 def benchmark1():
-    for _x in range(100000000):
+    for _x in range(REPEAT_100M):
         pass
 
 
 # Python = 6.08s, Rust = 2.35s
 def benchmark2():
     y = 3
-    for _x in range(100000000):
+    for _x in range(REPEAT_100M):
         y = y * 1
     return y
 
@@ -34,7 +37,7 @@ def benchmark2():
 def benchmark3():
     y = 0
     xs = []
-    for _x in range(100000000):
+    for _x in range(REPEAT_100M):
         y = len(xs)
     return y
 
@@ -46,7 +49,7 @@ def op4(_x):
 # Python = 9.85s, Rust = 8.4s
 def benchmark4():
     y = 0
-    for x in range(100000000):
+    for x in range(REPEAT_100M):
         op4(x)
     return y
 
@@ -58,7 +61,7 @@ def op5(_a, _b, _c, _d, _e, _f, _g, _h):
 # Python = 12.2s, Rust = 13.0s
 def benchmark5():
     y = 0
-    for x in range(100000000):
+    for x in range(REPEAT_100M):
         op5(x, x, x, x, x, x, x, x)
     return y
 
@@ -70,7 +73,7 @@ def op6(a, b, c, d, e, f, g, h):
 # Python = 17.1s, Rust = 19.2s
 def benchmark6():
     y = 0
-    for x in range(100000000):
+    for x in range(REPEAT_100M):
         op6(a=x, b=x, c=x, d=x, e=x, f=x, g=x, h=x)
     return y
 
