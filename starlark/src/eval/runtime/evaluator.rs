@@ -31,7 +31,7 @@ use crate::{
     },
     values::{FrozenHeap, Heap, Value, ValueRef, Walker},
 };
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, dupe::Dupe};
 use std::{mem, path::Path};
 use thiserror::Error;
 
@@ -237,11 +237,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_function_context<R>(
         &mut self,
         module: Option<FrozenModuleValue>, // None == use module_env
-        codemap: CodeMap,
+        codemap: &CodeMap,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
         // Capture the variables we will be mutating
-        let old_codemap = self.set_codemap(codemap);
+        let old_codemap = self.set_codemap(codemap.dupe());
 
         // Set up for the new function call
         let old_module_variables =

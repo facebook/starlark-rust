@@ -364,8 +364,8 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
                 .set_slot_ref(*me, captured.to_value_ref());
         }
 
-        let res = eval
-            .with_function_context(def.module, def.codemap.dupe(), |eval| (def.stmt.body)(eval));
+        let res =
+            eval.with_function_context(def.module, &def.codemap, |eval| (def.stmt.body)(eval));
         eval.local_variables.release(old_locals);
 
         let ret = match res {
