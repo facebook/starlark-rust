@@ -51,4 +51,28 @@ def benchmark4():
     return y
 
 
-print(benchmark4())
+def op5(_a, _b, _c, _d, _e, _f, _g, _h):
+    pass
+
+
+# Python = 12.2s, Rust = 13.0s
+def benchmark5():
+    y = 0
+    for x in range(100000000):
+        op5(x, x, x, x, x, x, x, x)
+    return y
+
+
+def op6(a, b, c, d, e, f, g, h):
+    pass
+
+
+# Python = 17.1s, Rust = 19.2s
+def benchmark6():
+    y = 0
+    for x in range(100000000):
+        op6(a=x, b=x, c=x, d=x, e=x, f=x, g=x, h=x)
+    return y
+
+
+print(benchmark6())
