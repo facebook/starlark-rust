@@ -13,19 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Python: python benchmark.py
+# Python: python3 benchmark.py
 # Rust: starlark benchmark.py
 
 REPEAT_100M = 100000000
 
 
-# Python = 4.35s, Rust = 0.72s
 def benchmark_loop():
     for _x in range(REPEAT_100M):
         pass
 
 
-# Python = 6.08s, Rust = 2.35s
 def benchmark_multiply():
     y = 3
     for _x in range(REPEAT_100M):
@@ -33,7 +31,6 @@ def benchmark_multiply():
     return y
 
 
-# Python = 7.04s, Rust = 6.5s
 def benchmark_call_native_1pos():
     y = 0
     xs = []
@@ -46,7 +43,6 @@ def op4(_x):
     pass
 
 
-# Python = 9.85s, Rust = 6.6s
 def benchmark_call_def_1pos():
     y = 0
     for x in range(REPEAT_100M):
@@ -58,7 +54,6 @@ def op5(_a, _b, _c, _d, _e, _f, _g, _h):
     pass
 
 
-# Python = 12.2s, Rust = 12.0s
 def benchmark_call_def_8pos():
     y = 0
     for x in range(REPEAT_100M):
@@ -70,7 +65,6 @@ def op6(a, b, c, d, e, f, g, h):
     pass
 
 
-# Python = 17.1s, Rust = 18.3s
 def benchmark_call_def_8name():
     y = 0
     for x in range(REPEAT_100M):
