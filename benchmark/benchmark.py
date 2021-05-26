@@ -20,13 +20,13 @@ REPEAT_100M = 100000000
 
 
 # Python = 4.35s, Rust = 0.72s
-def benchmark1():
+def benchmark_loop():
     for _x in range(REPEAT_100M):
         pass
 
 
 # Python = 6.08s, Rust = 2.35s
-def benchmark2():
+def benchmark_multiply():
     y = 3
     for _x in range(REPEAT_100M):
         y = y * 1
@@ -34,7 +34,7 @@ def benchmark2():
 
 
 # Python = 7.04s, Rust = 6.5s
-def benchmark3():
+def benchmark_call_native_1pos():
     y = 0
     xs = []
     for _x in range(REPEAT_100M):
@@ -47,7 +47,7 @@ def op4(_x):
 
 
 # Python = 9.85s, Rust = 6.6s
-def benchmark4():
+def benchmark_call_def_1pos():
     y = 0
     for x in range(REPEAT_100M):
         op4(x)
@@ -59,7 +59,7 @@ def op5(_a, _b, _c, _d, _e, _f, _g, _h):
 
 
 # Python = 12.2s, Rust = 12.0s
-def benchmark5():
+def benchmark_call_def_8pos():
     y = 0
     for x in range(REPEAT_100M):
         op5(x, x, x, x, x, x, x, x)
@@ -71,11 +71,11 @@ def op6(a, b, c, d, e, f, g, h):
 
 
 # Python = 17.1s, Rust = 18.3s
-def benchmark6():
+def benchmark_call_def_8name():
     y = 0
     for x in range(REPEAT_100M):
         op6(a=x, b=x, c=x, d=x, e=x, f=x, g=x, h=x)
     return y
 
 
-print(benchmark6())
+print(benchmark_call_def_8name())
