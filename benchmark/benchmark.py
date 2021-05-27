@@ -61,15 +61,26 @@ def benchmark_call_def_8pos():
     return y
 
 
-def op6(a, b, c, d, e, f, g, h):
+def op6(a):
+    pass
+
+
+def benchmark_call_def_1name():
+    y = 0
+    for x in range(REPEAT_100M):
+        op6(a=x)
+    return y
+
+
+def op7(a, b, c, d, e, f, g, h):
     pass
 
 
 def benchmark_call_def_8name():
     y = 0
     for x in range(REPEAT_100M):
-        op6(a=x, b=x, c=x, d=x, e=x, f=x, g=x, h=x)
+        op7(a=x, b=x, c=x, d=x, e=x, f=x, g=x, h=x)
     return y
 
 
-print(benchmark_call_def_8name())
+print(benchmark_call_def_1name())
