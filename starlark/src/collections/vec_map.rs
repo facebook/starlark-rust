@@ -255,9 +255,17 @@ impl<K, V> VecMap<K, V> {
     where
         Q: ?Sized + Equivalent<K>,
     {
+        // This method is _very_ hot. There are three ways to implement this scan:
+        // 1) Checked index operations.
+        // 2) Unchecked index operations.
+        // 3) Iterators.
+        // Iterators would be best, but is significantly slower, so go with unchecked.
+        // (25% on a benchmark which did a lot of other stuff too).
+        debug_assert!(self.values.len() <= self.hashes.len());
         for i in 0..self.values.len() {
-            if self.hashes[i] == key.hash() {
-                let v = &self.values[i];
+            // We always have at least as many hashes as value, so this index is safe.
+            if unsafe { *self.hashes.get_unchecked(i) } == key.hash() {
+                let v = unsafe { self.values.get_unchecked(i) };
                 if key.key().equivalent(&v.0) {
                     return Some((i, &v.0, &v.1));
                 }
