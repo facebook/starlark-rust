@@ -434,14 +434,15 @@ impl<'v> ParametersCollect<'v> {
         if let Some(err) = self.err.take() {
             return Err(err);
         }
-        for ((index, def), slot) in self
-            .params
-            .kinds
-            .iter()
-            .enumerate()
-            .zip(eval.local_variables.get_slots_at(self.slots))
-            .skip(self.next_position)
-        {
+        let locals = eval.local_variables.get_slots_at(self.slots);
+        let kinds = &self.params.kinds;
+        // This code is very hot, and setting up iterators was a noticeable bottleneck.
+        for index in self.next_position..kinds.len() {
+            // The number of locals must be at least the number of parameters, see `collect`
+            // which reserves `max(_, kinds.len())`.
+            let slot = unsafe { locals.get_unchecked(index) };
+            let def = unsafe { kinds.get_unchecked(index) };
+
             // We know that up to next_position got filled positionally, so we don't need to check those
             if !slot.is_unassigned() {
                 continue;
