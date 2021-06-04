@@ -528,9 +528,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn list(ref a: Option<Value>) -> Vec<Value<'v>> {
         let mut l = Vec::new();
         if let Some(a) = a {
-            for x in &a.iterate(heap)? {
-                l.push(x)
-            }
+            l.extend(&a.iterate(heap)?);
         }
         Ok(l)
     }
@@ -878,9 +876,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn tuple(ref a: Option<Value>) -> Tuple<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
-            for x in &a.iterate(heap)? {
-                l.push(x)
-            }
+            l.extend(&a.iterate(heap)?);
         }
         Ok(Tuple::new(l))
     }

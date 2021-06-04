@@ -54,8 +54,10 @@ pub fn filter(builder: &mut GlobalsBuilder) {
 #[starlark_module]
 pub fn map(builder: &mut GlobalsBuilder) {
     fn map(func: Value, seq: Value) -> Vec<Value<'v>> {
-        let mut res = Vec::new();
-        for v in &seq.iterate(heap)? {
+        let it = seq.iterate(heap)?;
+        let it = it.into_iter();
+        let mut res = Vec::with_capacity(it.size_hint().0);
+        for v in it {
             let mut inv = func.new_invoker(eval)?;
             inv.push_pos(v, eval);
             res.push(inv.invoke(func, None, eval)?);
