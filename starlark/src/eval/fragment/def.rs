@@ -27,6 +27,7 @@ use crate::{
             parameters::ParametersSpec,
             slots::{LocalSlotBase, LocalSlotId},
         },
+        ParametersSpecBuilder,
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
@@ -116,7 +117,7 @@ impl Compiler<'_> {
 
         box move |eval| {
             let mut parameters =
-                ParametersSpec::with_capacity(function_name.to_owned(), params.len());
+                ParametersSpecBuilder::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
 
             for (i, x) in params.iter().enumerate() {
@@ -141,7 +142,7 @@ impl Compiler<'_> {
                 Some(v) => Some(v(eval)?),
             };
             Ok(Def::new(
-                parameters,
+                parameters.build(),
                 parameter_types,
                 return_type,
                 info.dupe(),

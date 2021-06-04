@@ -282,8 +282,9 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
         }
         {
             #[allow(unused_mut)]
-            let mut signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
+            let mut signature = starlark::eval::ParametersSpecBuilder::with_capacity(#name_str.to_owned(), #args_count);
             #( #signature )*
+            let signature = signature.build();
             #setter
         }
     }

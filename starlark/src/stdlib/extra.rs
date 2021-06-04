@@ -18,7 +18,7 @@
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
-    eval::{Evaluator, ParametersSpec},
+    eval::{Evaluator, ParametersSpec, ParametersSpecBuilder},
     values::{
         function::{FunctionInvoker, FUNCTION_TYPE},
         none::NoneType,
@@ -69,14 +69,14 @@ pub fn partial(builder: &mut GlobalsBuilder) {
     fn partial(func: Value, args: Value, kwargs: Value) -> Partial<'v> {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
-        let mut signature = ParametersSpec::with_capacity(name, 2);
+        let mut signature = ParametersSpecBuilder::with_capacity(name, 2);
         signature.args();
         signature.kwargs();
         Ok(Partial {
             func,
             args,
             kwargs,
-            signature,
+            signature: signature.build(),
         })
     }
 }

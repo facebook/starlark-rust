@@ -43,7 +43,7 @@
 
 use crate::{
     collections::SmallMap,
-    eval::{Evaluator, ParametersParser, ParametersSpec},
+    eval::{Evaluator, ParametersParser, ParametersSpecBuilder},
     values::{
         comparison::equals_slice,
         error::ValueError,
@@ -137,7 +137,8 @@ impl<'v> RecordType<'v> {
     }
 
     fn make_constructor(fields: &SmallMap<String, FieldGen<Value<'v>>>) -> NativeFunction {
-        let mut parameters = ParametersSpec::with_capacity("record".to_owned(), fields.len() + 1);
+        let mut parameters =
+            ParametersSpecBuilder::with_capacity("record".to_owned(), fields.len() + 1);
         parameters.required("me"); // Hidden first argument
         parameters.no_args();
         for (name, field) in fields {
@@ -176,7 +177,7 @@ impl<'v> RecordType<'v> {
                 }
                 Ok(eval.heap().alloc_complex(Record { typ: me, values }))
             },
-            parameters,
+            parameters.build(),
         )
     }
 }

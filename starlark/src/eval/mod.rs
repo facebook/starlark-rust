@@ -32,7 +32,7 @@ pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
 pub use runtime::{
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
-    parameters::{ParametersParser, ParametersSpec},
+    parameters::{ParametersParser, ParametersSpec, ParametersSpecBuilder},
 };
 pub(crate) use runtime::{parameters::ParametersCollect, slots::LocalSlotBase};
 
