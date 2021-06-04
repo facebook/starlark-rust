@@ -824,4 +824,27 @@ mod tests {
         assert_eq!(i.next(), Some((3, "b")));
         assert_eq!(i.next(), None);
     }
+
+    #[test]
+    fn test_duplicate_hashes() {
+        // A type which always gives hash collisions
+        #[derive(PartialEq, Eq, Debug)]
+        struct K(i32);
+        #[allow(clippy::derive_hash_xor_eq)]
+        impl Hash for K {
+            fn hash<H: Hasher>(&self, _state: &mut H) {}
+        }
+
+        let mut map = smallmap![K(1) => "test", K(3) => "more"];
+        assert_eq!(map.get(&K(1)), Some(&"test"));
+        assert_eq!(map.get(&K(2)), None);
+        assert_eq!(map.get(&K(3)), Some(&"more"));
+
+        assert_eq!(map.insert(K(2), "magic"), None);
+        assert_eq!(map.get(&K(2)), Some(&"magic"));
+
+        assert_eq!(map.remove(&K(1)), Some("test"));
+        assert_eq!(map.get(&K(1)), None);
+        assert_eq!(map.keys().collect::<Vec<_>>(), vec![&K(3), &K(2)]);
+    }
 }
