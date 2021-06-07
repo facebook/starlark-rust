@@ -26,18 +26,18 @@ pub const THRESHOLD: usize = 12;
 // We define a lot of iterators on top of other iterators
 // so define a helper macro for that
 macro_rules! def_iter {
-    ($mapper:expr) => {
+    () => {
         fn next(&mut self) -> Option<Self::Item> {
-            self.iter.next().map($mapper)
+            self.iter.next().map(Self::map)
         }
 
         fn nth(&mut self, n: usize) -> Option<Self::Item> {
-            self.iter.nth(n).map($mapper)
+            self.iter.nth(n).map(Self::map)
         }
 
         fn last(mut self) -> Option<Self::Item> {
             // Since these are all double-ended iterators we can skip to the end quickly
-            self.iter.next_back().map($mapper)
+            self.iter.next_back().map(Self::map)
         }
 
         fn size_hint(&self) -> (usize, Option<usize>) {
@@ -52,7 +52,7 @@ macro_rules! def_iter {
         where
             C: std::iter::FromIterator<Self::Item>,
         {
-            self.iter.map($mapper).collect()
+            self.iter.map(Self::map).collect()
         }
     };
 }
@@ -76,7 +76,7 @@ impl<'a, K: 'a, V: 'a> VMKeys<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMKeys<'a, K, V> {
     type Item = &'a K;
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMKeys<'a, K, V> {
@@ -98,7 +98,7 @@ impl<'a, K: 'a, V: 'a> VMValues<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMValues<'a, K, V> {
     type Item = &'a V;
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValues<'a, K, V> {
@@ -120,7 +120,7 @@ impl<'a, K: 'a, V: 'a> VMValuesMut<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMValuesMut<'a, K, V> {
     type Item = &'a mut V;
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValuesMut<'a, K, V> {
@@ -142,7 +142,7 @@ impl<'a, K: 'a, V: 'a> VMIter<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMIter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 pub struct VMIterHash<'a, K: 'a, V: 'a> {
@@ -160,7 +160,7 @@ impl<'a, K: 'a, V: 'a> VMIterHash<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMIterHash<'a, K, V> {
     type Item = (BorrowHashed<'a, K>, &'a V);
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterHash<'a, K, V> {
@@ -182,7 +182,7 @@ impl<'a, K: 'a, V: 'a> VMIterMut<'a, K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMIterMut<'a, K, V> {
     type Item = (&'a K, &'a mut V);
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 pub struct VMIntoIterHash<K, V> {
@@ -259,7 +259,7 @@ impl<K, V> VMIntoIter<K, V> {
 impl<'a, K: 'a, V: 'a> Iterator for VMIntoIter<K, V> {
     type Item = (K, V);
 
-    def_iter!(Self::map);
+    def_iter!();
 }
 
 impl<K, V> VecMap<K, V> {
