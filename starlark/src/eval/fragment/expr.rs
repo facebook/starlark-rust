@@ -27,8 +27,8 @@ use crate::{
     },
     syntax::ast::{Argument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
-        dict::FrozenDict, fast_string, function::WrappedMethod, list::FrozenList,
-        tuple::FrozenTuple, FrozenHeap, FrozenValue, Value, *,
+        dict::FrozenDict, fast_string, function::BoundMethod, list::FrozenList, tuple::FrozenTuple,
+        FrozenHeap, FrozenValue, Value, *,
     },
 };
 use either::Either;
@@ -128,7 +128,7 @@ fn eval_dot(
     s: String,
 ) -> impl for<'v> Fn(
     &mut Evaluator<'v, '_>,
-) -> Result<Either<Value<'v>, WrappedMethod<'v>>, EvalException<'v>> {
+) -> Result<Either<Value<'v>, BoundMethod<'v>>, EvalException<'v>> {
     move |eval| {
         let left = e(eval)?;
         let (attr_type, v) = throw(left.get_attr(&s, eval.heap()), span, eval)?;
@@ -138,7 +138,7 @@ fn eval_dot(
             throw(v_attr.call(left, eval), span, eval).map(Either::Left)
         } else {
             // Insert self so the method see the object it is acting on
-            Ok(Either::Right(WrappedMethod::new(left, v)))
+            Ok(Either::Right(BoundMethod::new(left, v)))
         }
     }
 }

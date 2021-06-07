@@ -20,7 +20,7 @@ use crate::{
     collections::SmallMap,
     stdlib,
     values::{
-        function::{FrozenWrappedMethod, NativeAttribute},
+        function::{FrozenBoundMethod, NativeAttribute},
         structs::FrozenStruct,
         AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value,
     },
@@ -202,8 +202,8 @@ impl GlobalsBuilder {
 
         let name = name.to_owned();
         let value = value.alloc_frozen_value(&self.heap);
-        let val = self.heap.alloc(FrozenWrappedMethod {
-            self_obj: value,
+        let val = self.heap.alloc(FrozenBoundMethod {
+            this: value,
             method: constant,
         });
         let x = self.heap.alloc(NativeAttribute::new(val));

@@ -25,7 +25,7 @@ use crate::{
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
-        function::{NativeAttribute, WrappedMethod},
+        function::{BoundMethod, NativeAttribute},
         int::INT_TYPE,
         list::List,
         none::NoneType,
@@ -316,7 +316,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     v_attr.call(a, eval)
                 } else {
                     // Insert self so the method see the object it is acting on
-                    Ok(heap.alloc(WrappedMethod::new(a, v)))
+                    Ok(heap.alloc(BoundMethod::new(a, v)))
                 }
             }
             Err(e) => {

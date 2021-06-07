@@ -261,47 +261,47 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 
 /// A wrapper for a method with a self object already bound.
 #[derive(Clone, Debug)]
-pub struct WrappedMethodGen<V> {
+pub struct BoundMethodGen<V> {
     pub(crate) method: V,
-    pub(crate) self_obj: V,
+    pub(crate) this: V,
 }
 
-starlark_complex_value!(pub WrappedMethod);
+starlark_complex_value!(pub BoundMethod);
 
-impl<'v> WrappedMethod<'v> {
-    /// Create a new [`WrappedMethod`]. Given the expression `object.function`,
+impl<'v> BoundMethod<'v> {
+    /// Create a new [`BoundMethod`]. Given the expression `object.function`,
     /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
-    pub fn new(self_obj: Value<'v>, method: Value<'v>) -> Self {
-        WrappedMethod { method, self_obj }
+    pub fn new(this: Value<'v>, method: Value<'v>) -> Self {
+        BoundMethod { method, this }
     }
 }
 
-impl<'v, V: ValueLike<'v>> WrappedMethodGen<V> {
+impl<'v, V: ValueLike<'v>> BoundMethodGen<V> {
     pub(crate) fn invoke(
         &self,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<FunctionInvoker<'v>> {
         let mut inv = self.method.new_invoker(eval)?;
-        inv.push_pos(self.self_obj.to_value(), eval);
+        inv.push_pos(self.this.to_value(), eval);
         Ok(inv)
     }
 }
 
-impl<'v> ComplexValue<'v> for WrappedMethod<'v> {
+impl<'v> ComplexValue<'v> for BoundMethod<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box WrappedMethodGen {
+        box BoundMethodGen {
             method: self.method.freeze(freezer),
-            self_obj: self.self_obj.freeze(freezer),
+            this: self.this.freeze(freezer),
         }
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.method);
-        walker.walk(&mut self.self_obj);
+        walker.walk(&mut self.this);
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrappedMethodGen<V>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for BoundMethodGen<V>
 where
     Self: AnyLifetime<'v>,
 {
