@@ -282,14 +282,14 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// enumerate(["one", "two"], 1) == [(1, "one"), (2, "two")]
     /// # "#);
     /// ```
-    fn enumerate(ref it: Value, offset @ 0: i32) -> Vec<(i32, Value<'v>)> {
+    fn enumerate(ref it: Value, offset @ 0: i32) -> List<'v> {
         let v = it
             .iterate(heap)?
             .iter()
             .enumerate()
-            .map(|(k, v)| (k as i32 + offset, v))
+            .map(|(k, v)| heap.alloc((k as i32 + offset, v)))
             .collect();
-        Ok(v)
+        Ok(List::new(v))
     }
 
     /// [getattr](
@@ -525,12 +525,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#, "not supported");
     /// ```
     #[starlark_type(List::TYPE)]
-    fn list(ref a: Option<Value>) -> Vec<Value<'v>> {
+    fn list(ref a: Option<Value>) -> List<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
             l.extend(&a.iterate(heap)?);
         }
-        Ok(l)
+        Ok(List::new(l))
     }
 
     /// [max](
@@ -767,10 +767,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// reversed({"one": 1, "two": 2}.keys())           == ["two", "one"]
     /// # "#);
     /// ```
-    fn reversed(ref a: Value) -> Vec<Value<'v>> {
+    fn reversed(ref a: Value) -> List<'v> {
         let mut v: Vec<Value> = a.iterate(heap)?.iter().collect();
         v.reverse();
-        Ok(v)
+        Ok(List::new(v))
     }
 
     /// [sorted](
@@ -795,7 +795,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// sorted(["two", "three", "four"], key=len, reverse=True)  == ["three", "four", "two"] # longest to shortest
     /// # "#);
     /// ```
-    fn sorted(ref x: Value, key: Option<Value>, reverse @ false: Value) -> Vec<Value<'v>> {
+    fn sorted(ref x: Value, key: Option<Value>, reverse @ false: Value) -> List<'v> {
         let it = x.iterate(heap)?;
         let x = it.iter();
         let mut it = match key {
@@ -832,7 +832,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
         compare_ok?;
 
         let result: Vec<Value> = it.into_map(|x| x.0);
-        Ok(result)
+        Ok(List::new(result))
     }
 
     /// [str](
@@ -916,7 +916,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// zip(range(5), "abc".split_codepoints()) == [(0, "a"), (1, "b"), (2, "c")]
     /// # "#);
     /// ```
-    fn zip(args: Vec<Value>) -> Vec<Value<'v>> {
+    fn zip(args: Vec<Value>) -> List<'v> {
         let mut v = Vec::new();
         let mut first = true;
         for arg in args {
@@ -933,7 +933,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             v.truncate(idx);
             first = false;
         }
-        Ok(v)
+        Ok(List::new(v))
     }
 }
 
