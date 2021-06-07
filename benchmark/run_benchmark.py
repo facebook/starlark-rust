@@ -58,6 +58,16 @@ def generate_benchmarks(dir):
     return outputs
 
 
+def cmd(args):
+    res = subprocess.run(args, capture_output=True)
+    if res.returncode != 0:
+        raise Exception(
+            "Command failed: {}\nStdout: {}\nStderr: {}".format(
+                args, res.stdout, res.stderr
+            )
+        )
+
+
 def absh(a, b, repeat):
     a_time = 0
     b_time = 0
@@ -66,9 +76,9 @@ def absh(a, b, repeat):
     # Run a/b repeatedly, ignoring the first loop around
     for i in range(repeat + 1):
         start_time = time.time()
-        subprocess.run(a, check=True, capture_output=True)
+        cmd(a)
         middle_time = time.time()
-        subprocess.run(b, check=True, capture_output=True)
+        cmd(b)
         end_time = time.time()
 
         if i != 0:
