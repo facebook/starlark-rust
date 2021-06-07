@@ -90,8 +90,10 @@ use syn::*;
 /// }
 /// ```
 ///
-/// Parameters operate as named parameters of a given type, with five possible tweaks:
+/// Parameters operate as named parameters of a given type, with six possible tweaks:
 ///
+/// * `this` (or `_this`) as the first argument means the argument is passed as a
+///   bound method value, e.g. in `a.f(...)` the `a` would be `this`.
 /// * `args` means the argument is the `*args`.
 /// * `kwargs` means the argument is the `**kwargs`.
 /// * `ref name` means the argument must be passed by position, not by name.
