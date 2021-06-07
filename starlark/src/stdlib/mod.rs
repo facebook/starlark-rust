@@ -161,12 +161,12 @@ mod tests {
         #[starlark_module]
         fn methods(builder: &mut GlobalsBuilder) {
             #[attribute]
-            fn invert1(x: Bool2) -> Bool2 {
-                Ok(Bool2(!x.0))
+            fn invert1(this: Bool2) -> Bool2 {
+                Ok(Bool2(!this.0))
             }
 
-            fn invert2(x: Bool2) -> Bool2 {
-                Ok(Bool2(!x.0))
+            fn invert2(this: Bool2) -> Bool2 {
+                Ok(Bool2(!this.0))
             }
         }
 
