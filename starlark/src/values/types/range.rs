@@ -81,6 +81,13 @@ impl<'a> Iterator for RangeIterator<'a> {
         self.0.start = self.0.start.saturating_add(self.0.step.get());
         Some(Value::new_int(old_start))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self.0.length() {
+            Ok(n) => (n as usize, Some(n as usize)),
+            Err(_) => (0, None),
+        }
+    }
 }
 
 impl<'v> StarlarkValue<'v> for Range {
