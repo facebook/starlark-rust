@@ -69,6 +69,14 @@ impl<'a, K: 'a, V: 'a> Iterator for MHKeys<'a, K, V> {
             MHKeys::Map(iter) => iter.next().map(Hashed::key),
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            MHKeys::Empty => (0, Some(0)),
+            MHKeys::Vec(iter) => iter.size_hint(),
+            MHKeys::Map(iter) => iter.size_hint(),
+        }
+    }
 }
 
 enum MHValues<'a, K: 'a, V: 'a> {
