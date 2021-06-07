@@ -79,6 +79,16 @@ impl<'a, K: 'a, V: 'a> Iterator for MHKeys<'a, K, V> {
     }
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHKeys<'a, K, V> {
+    fn len(&self) -> usize {
+        match self {
+            MHKeys::Empty => 0,
+            MHKeys::Vec(iter) => iter.len(),
+            MHKeys::Map(iter) => iter.len(),
+        }
+    }
+}
+
 enum MHValues<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMValues<'a, K, V>),
@@ -105,6 +115,16 @@ impl<'a, K: 'a, V: 'a> Iterator for MHValues<'a, K, V> {
     }
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValues<'a, K, V> {
+    fn len(&self) -> usize {
+        match self {
+            MHValues::Empty => 0,
+            MHValues::Vec(iter) => iter.len(),
+            MHValues::Map(iter) => iter.len(),
+        }
+    }
+}
+
 enum MHValuesMut<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMValuesMut<'a, K, V>),
@@ -127,6 +147,16 @@ impl<'a, K: 'a, V: 'a> Iterator for MHValuesMut<'a, K, V> {
             MHValuesMut::Empty => (0, Some(0)),
             MHValuesMut::Vec(iter) => iter.size_hint(),
             MHValuesMut::Map(iter) => iter.size_hint(),
+        }
+    }
+}
+
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValuesMut<'a, K, V> {
+    fn len(&self) -> usize {
+        match self {
+            MHValuesMut::Empty => 0,
+            MHValuesMut::Vec(iter) => iter.len(),
+            MHValuesMut::Map(iter) => iter.len(),
         }
     }
 }
@@ -183,6 +213,16 @@ impl<'a, K: 'a, V: 'a> Iterator for MHIterHash<'a, K, V> {
     }
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIterHash<'a, K, V> {
+    fn len(&self) -> usize {
+        match self {
+            MHIterHash::Empty => 0,
+            MHIterHash::Vec(iter) => iter.len(),
+            MHIterHash::Map(iter) => iter.len(),
+        }
+    }
+}
+
 enum MHIntoIterHash<K, V> {
     Empty,
     Vec(VMIntoIterHash<K, V>),
@@ -205,6 +245,16 @@ impl<K, V> Iterator for MHIntoIterHash<K, V> {
             MHIntoIterHash::Empty => (0, Some(0)),
             MHIntoIterHash::Vec(iter) => iter.size_hint(),
             MHIntoIterHash::Map(iter) => iter.size_hint(),
+        }
+    }
+}
+
+impl<K, V> ExactSizeIterator for MHIntoIterHash<K, V> {
+    fn len(&self) -> usize {
+        match self {
+            MHIntoIterHash::Empty => 0,
+            MHIntoIterHash::Vec(iter) => iter.len(),
+            MHIntoIterHash::Map(iter) => iter.len(),
         }
     }
 }
@@ -300,7 +350,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &K> {
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> {
         match self.state {
             MapHolder::Empty => MHKeys::Empty,
             MapHolder::Vec(ref v) => MHKeys::Vec(v.keys()),
@@ -308,7 +358,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &V> {
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &V> {
         match self.state {
             MapHolder::Empty => MHValues::Empty,
             MapHolder::Vec(ref v) => MHValues::Vec(v.values()),
@@ -316,7 +366,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut V> {
+    pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> {
         match self.state {
             MapHolder::Empty => MHValuesMut::Empty,
             MapHolder::Vec(ref mut v) => MHValuesMut::Vec(v.values_mut()),
@@ -332,7 +382,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn iter_hashed(&self) -> impl Iterator<Item = (BorrowHashed<K>, &V)> {
+    pub fn iter_hashed(&self) -> impl ExactSizeIterator<Item = (BorrowHashed<K>, &V)> {
         match self.state {
             MapHolder::Empty => MHIterHash::Empty,
             MapHolder::Vec(ref v) => MHIterHash::Vec(v.iter_hashed()),
@@ -340,7 +390,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn into_iter_hashed(self) -> impl Iterator<Item = (Hashed<K>, V)> {
+    pub fn into_iter_hashed(self) -> impl ExactSizeIterator<Item = (Hashed<K>, V)> {
         match self.state {
             MapHolder::Empty => MHIntoIterHash::Empty,
             MapHolder::Vec(v) => MHIntoIterHash::Vec(v.into_iter_hashed()),

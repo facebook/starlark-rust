@@ -79,6 +79,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMKeys<'a, K, V> {
     def_iter!(Self::map);
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMKeys<'a, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
 pub struct VMValues<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, (K, V)>,
 }
@@ -95,6 +101,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMValues<'a, K, V> {
     def_iter!(Self::map);
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValues<'a, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
 pub struct VMValuesMut<'a, K: 'a, V: 'a> {
     iter: std::slice::IterMut<'a, (K, V)>,
 }
@@ -109,6 +121,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMValuesMut<'a, K, V> {
     type Item = &'a mut V;
 
     def_iter!(Self::map);
+}
+
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValuesMut<'a, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
 }
 
 pub struct VMIter<'a, K: 'a, V: 'a> {
@@ -143,6 +161,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIterHash<'a, K, V> {
     type Item = (BorrowHashed<'a, K>, &'a V);
 
     def_iter!(Self::map);
+}
+
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterHash<'a, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
 }
 
 pub struct VMIterMut<'a, K: 'a, V: 'a> {
@@ -213,6 +237,12 @@ impl<K, V> Iterator for VMIntoIterHash<K, V> {
     {
         let hashes = self.hashes;
         self.iter.map(|x| Self::get_hashes(&hashes, x)).collect()
+    }
+}
+
+impl<K, V> ExactSizeIterator for VMIntoIterHash<K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
     }
 }
 
