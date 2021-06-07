@@ -145,6 +145,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIter<'a, K, V> {
     def_iter!();
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIter<'a, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
 pub struct VMIterHash<'a, K: 'a, V: 'a> {
     iter: std::iter::Zip<std::slice::Iter<'a, (K, V)>, std::slice::Iter<'a, SmallHashResult>>,
 }
@@ -183,6 +189,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIterMut<'a, K, V> {
     type Item = (&'a K, &'a mut V);
 
     def_iter!();
+}
+
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterMut<'a, K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
 }
 
 pub struct VMIntoIterHash<K, V> {
@@ -260,6 +272,12 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIntoIter<K, V> {
     type Item = (K, V);
 
     def_iter!();
+}
+
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
 }
 
 impl<K, V> VecMap<K, V> {

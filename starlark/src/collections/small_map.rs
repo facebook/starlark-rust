@@ -206,6 +206,10 @@ impl<'a, K: 'a, V: 'a> Iterator for MHIter<'a, K, V> {
     def_iter!();
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIter<'a, K, V> {
+    def_exact_size_iter!();
+}
+
 enum MHIterHash<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMIterHash<'a, K, V>),
@@ -268,6 +272,10 @@ impl<'a, K: 'a, V: 'a> Iterator for MHIterMut<'a, K, V> {
     def_iter!();
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIterMut<'a, K, V> {
+    def_exact_size_iter!();
+}
+
 pub enum MHIntoIter<K, V> {
     Empty,
     Vec(VMIntoIter<K, V>),
@@ -284,6 +292,10 @@ impl<K, V> Iterator for MHIntoIter<K, V> {
     type Item = (K, V);
 
     def_iter!();
+}
+
+impl<K, V> ExactSizeIterator for MHIntoIter<K, V> {
+    def_exact_size_iter!();
 }
 
 impl<K, V> MapHolder<K, V> {
