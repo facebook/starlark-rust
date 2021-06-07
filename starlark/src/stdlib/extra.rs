@@ -31,7 +31,7 @@ use std::collections::HashSet;
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
-    fn filter(func: Value, seq: Value) -> Vec<Value<'v>> {
+    fn filter(ref func: Value, ref seq: Value) -> Vec<Value<'v>> {
         let mut res = Vec::new();
 
         for v in &seq.iterate(heap)? {
@@ -49,7 +49,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn map(builder: &mut GlobalsBuilder) {
-    fn map(func: Value, seq: Value) -> Vec<Value<'v>> {
+    fn map(ref func: Value, ref seq: Value) -> Vec<Value<'v>> {
         let it = seq.iterate(heap)?;
         let it = it.into_iter();
         let mut res = Vec::with_capacity(it.size_hint().0);
@@ -62,7 +62,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
-    fn partial(func: Value, args: Value, kwargs: Value) -> Partial<'v> {
+    fn partial(ref func: Value, args: Value, kwargs: Value) -> Partial<'v> {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
         let mut signature = ParametersSpecBuilder::with_capacity(name, 2);
@@ -81,7 +81,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
 pub fn debug(builder: &mut GlobalsBuilder) {
     /// Print the value with full debug formatting. The result may not be stable over time,
     /// mostly intended for debugging purposes.
-    fn debug(val: Value) -> String {
+    fn debug(ref val: Value) -> String {
         Ok(format!("{:?}", val))
     }
 }
@@ -90,7 +90,7 @@ pub fn debug(builder: &mut GlobalsBuilder) {
 pub fn dedupe(builder: &mut GlobalsBuilder) {
     /// Remove duplicates in a list. Uses identity of value (pointer),
     /// rather than by equality.
-    fn dedupe(val: Value) -> Value<'v> {
+    fn dedupe(ref val: Value) -> Value<'v> {
         let mut seen = HashSet::new();
         let mut res = Vec::new();
         for v in &val.iterate(heap)? {
@@ -115,7 +115,7 @@ pub fn print(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn json(builder: &mut GlobalsBuilder) {
-    fn json(x: Value) -> String {
+    fn json(ref x: Value) -> String {
         x.to_json()
     }
 }

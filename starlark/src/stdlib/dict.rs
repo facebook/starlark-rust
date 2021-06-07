@@ -178,7 +178,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// {'one': 1}.pop('four')   # error: not found
     /// # "#, "not found");
     /// ```
-    fn pop(this: Value, ref key: Value, default: Option<Value>) -> Value<'v> {
+    fn pop(this: Value, ref key: Value, ref default: Option<Value>) -> Value<'v> {
         let mut me = Dict::from_value_mut(this, heap)?.unwrap();
         match me.content.remove_hashed(key.get_hashed()?.borrow()) {
             Some(x) => Ok(x),

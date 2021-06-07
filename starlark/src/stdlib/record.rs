@@ -48,14 +48,14 @@ pub fn global(builder: &mut GlobalsBuilder) {
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
-    /// rec_type = record(host=field(str.type), port=field(type=int.type), mask=field(int.type, default=255))
+    /// rec_type = record(host=field(str.type), port=field(int.type), mask=field(int.type, default=255))
     /// rec = rec_type(host="localhost", port=80)
     /// rec.port == 80
     /// rec.mask == 255
     /// # "#);
     /// ```
-    fn field(_type: Value, default: Option<Value>) -> Field<'v> {
-        Ok(Field::new(_type, default))
+    fn field(ref typ: Value, default: Option<Value>) -> Field<'v> {
+        Ok(Field::new(typ, default))
     }
 }
 

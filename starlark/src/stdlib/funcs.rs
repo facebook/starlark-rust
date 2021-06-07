@@ -73,7 +73,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// fail("this is an error")  # error: this is an error
     /// # "#, "this is an error");
     /// ```
-    fn fail(msg: Value) -> NoneType {
+    fn fail(ref msg: Value) -> NoneType {
         Err(anyhow!("fail(): {}", msg))
     }
 
@@ -282,12 +282,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// enumerate(["one", "two"], 1) == [(1, "one"), (2, "two")]
     /// # "#);
     /// ```
-    fn enumerate(ref it: Value, offset @ 0: i32) -> List<'v> {
+    fn enumerate(ref it: Value, start @ 0: i32) -> List<'v> {
         let v = it
             .iterate(heap)?
             .iter()
             .enumerate()
-            .map(|(k, v)| heap.alloc((k as i32 + offset, v)))
+            .map(|(k, v)| heap.alloc((k as i32 + start, v)))
             .collect();
         Ok(List::new(v))
     }

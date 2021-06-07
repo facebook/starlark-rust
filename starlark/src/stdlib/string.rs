@@ -1253,7 +1253,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "Hello".removeprefix("Hello") == ""
     /// # "#);
     /// ```
-    fn removeprefix(this: Value<'v>, prefix: &str) -> Value<'v> {
+    fn removeprefix(this: Value<'v>, ref prefix: &str) -> Value<'v> {
         let x = this.unpack_str().unwrap();
         if x.starts_with(prefix) && !prefix.is_empty() {
             Ok(heap.alloc(&x[prefix.len()..]))
@@ -1278,7 +1278,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "Hello".removesuffix("Hello") == ""
     /// # "#);
     /// ```
-    fn removesuffix(this: Value<'v>, suffix: &str) -> Value<'v> {
+    fn removesuffix(this: Value<'v>, ref suffix: &str) -> Value<'v> {
         let x = this.unpack_str().unwrap();
         if x.ends_with(suffix) && !suffix.is_empty() {
             Ok(heap.alloc(&x[..x.len() - suffix.len()]))

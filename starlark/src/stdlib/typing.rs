@@ -23,12 +23,12 @@ use crate::{
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    fn assert_type(v: Value, ty: Value) -> NoneType {
+    fn assert_type(ref v: Value, ref ty: Value) -> NoneType {
         v.check_type(ty, Some("v"))?;
         Ok(NoneType)
     }
 
-    fn is_type(v: Value, ty: Value) -> bool {
+    fn is_type(ref v: Value, ref ty: Value) -> bool {
         v.is_type(ty)
     }
 }

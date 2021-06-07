@@ -165,7 +165,7 @@ impl<'v> EnumType<'v> {
     fn make_constructor() -> NativeFunction {
         let mut signature = ParametersSpecBuilder::with_capacity("enum".to_owned(), 2);
         signature.required("me"); // Hidden first argument
-        signature.required("value");
+        signature.required("$value");
 
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between therads - so we create the NativeFunction and apply it later.
