@@ -53,40 +53,95 @@ enum MapHolder<K, V> {
     Map(IndexMap<Hashed<K>, V, BuildIdHasher>),
 }
 
+// We define a lot of iterators on top of three other iterators
+// so define a helper macro for that
+macro_rules! def_iter {
+    () => {
+        fn next(&mut self) -> Option<Self::Item> {
+            match self {
+                Self::Empty => None,
+                Self::Vec(iter) => iter.next(),
+                Self::Map(iter) => iter.next().map(Self::map),
+            }
+        }
+
+        fn nth(&mut self, n: usize) -> Option<Self::Item> {
+            match self {
+                Self::Empty => None,
+                Self::Vec(iter) => iter.nth(n),
+                Self::Map(iter) => iter.nth(n).map(Self::map),
+            }
+        }
+
+        fn last(self) -> Option<Self::Item> {
+            match self {
+                Self::Empty => None,
+                Self::Vec(iter) => iter.last(),
+                Self::Map(iter) => iter.last().map(Self::map),
+            }
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            match self {
+                Self::Empty => (0, Some(0)),
+                Self::Vec(iter) => iter.size_hint(),
+                Self::Map(iter) => iter.size_hint(),
+            }
+        }
+
+        fn count(self) -> usize {
+            match self {
+                Self::Empty => 0,
+                Self::Vec(iter) => iter.count(),
+                Self::Map(iter) => iter.count(),
+            }
+        }
+
+        fn collect<C>(self) -> C
+        where
+            C: std::iter::FromIterator<Self::Item>,
+        {
+            match self {
+                Self::Empty => C::from_iter(None),
+                Self::Vec(iter) => iter.collect(),
+                Self::Map(iter) => iter.map(Self::map).collect(),
+            }
+        }
+    };
+}
+
+macro_rules! def_exact_size_iter {
+    () => {
+        fn len(&self) -> usize {
+            match self {
+                Self::Empty => 0,
+                Self::Vec(iter) => iter.len(),
+                Self::Map(iter) => iter.len(),
+            }
+        }
+    };
+}
+
 enum MHKeys<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMKeys<'a, K, V>),
     Map(indexmap::map::Keys<'a, Hashed<K>, V>),
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for MHKeys<'a, K, V> {
-    type Item = &'a K;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHKeys::Empty => None,
-            MHKeys::Vec(iter) => iter.next(),
-            MHKeys::Map(iter) => iter.next().map(Hashed::key),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHKeys::Empty => (0, Some(0)),
-            MHKeys::Vec(iter) => iter.size_hint(),
-            MHKeys::Map(iter) => iter.size_hint(),
-        }
+impl<'a, K: 'a, V: 'a> MHKeys<'a, K, V> {
+    fn map(x: &Hashed<K>) -> &K {
+        x.key()
     }
 }
 
+impl<'a, K: 'a, V: 'a> Iterator for MHKeys<'a, K, V> {
+    type Item = &'a K;
+
+    def_iter!();
+}
+
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHKeys<'a, K, V> {
-    fn len(&self) -> usize {
-        match self {
-            MHKeys::Empty => 0,
-            MHKeys::Vec(iter) => iter.len(),
-            MHKeys::Map(iter) => iter.len(),
-        }
-    }
+    def_exact_size_iter!();
 }
 
 enum MHValues<'a, K: 'a, V: 'a> {
@@ -95,34 +150,20 @@ enum MHValues<'a, K: 'a, V: 'a> {
     Map(indexmap::map::Values<'a, Hashed<K>, V>),
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for MHValues<'a, K, V> {
-    type Item = &'a V;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHValues::Empty => None,
-            MHValues::Vec(iter) => iter.next(),
-            MHValues::Map(iter) => iter.next(),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHValues::Empty => (0, Some(0)),
-            MHValues::Vec(iter) => iter.size_hint(),
-            MHValues::Map(iter) => iter.size_hint(),
-        }
+impl<'a, K: 'a, V: 'a> MHValues<'a, K, V> {
+    fn map(x: &V) -> &V {
+        x
     }
 }
 
+impl<'a, K: 'a, V: 'a> Iterator for MHValues<'a, K, V> {
+    type Item = &'a V;
+
+    def_iter!();
+}
+
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValues<'a, K, V> {
-    fn len(&self) -> usize {
-        match self {
-            MHValues::Empty => 0,
-            MHValues::Vec(iter) => iter.len(),
-            MHValues::Map(iter) => iter.len(),
-        }
-    }
+    def_exact_size_iter!();
 }
 
 enum MHValuesMut<'a, K: 'a, V: 'a> {
@@ -131,34 +172,20 @@ enum MHValuesMut<'a, K: 'a, V: 'a> {
     Map(indexmap::map::ValuesMut<'a, Hashed<K>, V>),
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for MHValuesMut<'a, K, V> {
-    type Item = &'a mut V;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHValuesMut::Empty => None,
-            MHValuesMut::Vec(iter) => iter.next(),
-            MHValuesMut::Map(iter) => iter.next(),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHValuesMut::Empty => (0, Some(0)),
-            MHValuesMut::Vec(iter) => iter.size_hint(),
-            MHValuesMut::Map(iter) => iter.size_hint(),
-        }
+impl<'a, K: 'a, V: 'a> MHValuesMut<'a, K, V> {
+    fn map(x: &mut V) -> &mut V {
+        x
     }
 }
 
+impl<'a, K: 'a, V: 'a> Iterator for MHValuesMut<'a, K, V> {
+    type Item = &'a mut V;
+
+    def_iter!();
+}
+
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValuesMut<'a, K, V> {
-    fn len(&self) -> usize {
-        match self {
-            MHValuesMut::Empty => 0,
-            MHValuesMut::Vec(iter) => iter.len(),
-            MHValuesMut::Map(iter) => iter.len(),
-        }
-    }
+    def_exact_size_iter!();
 }
 
 pub enum MHIter<'a, K: 'a, V: 'a> {
@@ -167,24 +194,16 @@ pub enum MHIter<'a, K: 'a, V: 'a> {
     Map(indexmap::map::Iter<'a, Hashed<K>, V>),
 }
 
+impl<'a, K: 'a, V: 'a> MHIter<'a, K, V> {
+    fn map(x: (&'a Hashed<K>, &'a V)) -> (&'a K, &'a V) {
+        (x.0.key(), x.1)
+    }
+}
+
 impl<'a, K: 'a, V: 'a> Iterator for MHIter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHIter::Empty => None,
-            MHIter::Vec(iter) => iter.next(),
-            MHIter::Map(iter) => iter.next().map(|(hk, v)| (hk.key(), v)),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHIter::Empty => (0, Some(0)),
-            MHIter::Vec(iter) => iter.size_hint(),
-            MHIter::Map(iter) => iter.size_hint(),
-        }
-    }
+    def_iter!();
 }
 
 enum MHIterHash<'a, K: 'a, V: 'a> {
@@ -193,34 +212,20 @@ enum MHIterHash<'a, K: 'a, V: 'a> {
     Map(indexmap::map::Iter<'a, Hashed<K>, V>),
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for MHIterHash<'a, K, V> {
-    type Item = (BorrowHashed<'a, K>, &'a V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHIterHash::Empty => None,
-            MHIterHash::Vec(iter) => iter.next(),
-            MHIterHash::Map(iter) => iter.next().map(|(hk, v)| (hk.borrow(), v)),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHIterHash::Empty => (0, Some(0)),
-            MHIterHash::Vec(iter) => iter.size_hint(),
-            MHIterHash::Map(iter) => iter.size_hint(),
-        }
+impl<'a, K: 'a, V: 'a> MHIterHash<'a, K, V> {
+    fn map(x: (&'a Hashed<K>, &'a V)) -> (BorrowHashed<'a, K>, &'a V) {
+        (x.0.borrow(), x.1)
     }
 }
 
+impl<'a, K: 'a, V: 'a> Iterator for MHIterHash<'a, K, V> {
+    type Item = (BorrowHashed<'a, K>, &'a V);
+
+    def_iter!();
+}
+
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIterHash<'a, K, V> {
-    fn len(&self) -> usize {
-        match self {
-            MHIterHash::Empty => 0,
-            MHIterHash::Vec(iter) => iter.len(),
-            MHIterHash::Map(iter) => iter.len(),
-        }
-    }
+    def_exact_size_iter!();
 }
 
 enum MHIntoIterHash<K, V> {
@@ -229,34 +234,20 @@ enum MHIntoIterHash<K, V> {
     Map(indexmap::map::IntoIter<Hashed<K>, V>),
 }
 
-impl<K, V> Iterator for MHIntoIterHash<K, V> {
-    type Item = (Hashed<K>, V);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHIntoIterHash::Empty => None,
-            MHIntoIterHash::Vec(iter) => iter.next(),
-            MHIntoIterHash::Map(iter) => iter.next(),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHIntoIterHash::Empty => (0, Some(0)),
-            MHIntoIterHash::Vec(iter) => iter.size_hint(),
-            MHIntoIterHash::Map(iter) => iter.size_hint(),
-        }
+impl<K, V> MHIntoIterHash<K, V> {
+    fn map(x: (Hashed<K>, V)) -> (Hashed<K>, V) {
+        x
     }
 }
 
+impl<K, V> Iterator for MHIntoIterHash<K, V> {
+    type Item = (Hashed<K>, V);
+
+    def_iter!();
+}
+
 impl<K, V> ExactSizeIterator for MHIntoIterHash<K, V> {
-    fn len(&self) -> usize {
-        match self {
-            MHIntoIterHash::Empty => 0,
-            MHIntoIterHash::Vec(iter) => iter.len(),
-            MHIntoIterHash::Map(iter) => iter.len(),
-        }
-    }
+    def_exact_size_iter!();
 }
 
 pub enum MHIterMut<'a, K: 'a, V: 'a> {
@@ -265,24 +256,16 @@ pub enum MHIterMut<'a, K: 'a, V: 'a> {
     Map(indexmap::map::IterMut<'a, Hashed<K>, V>),
 }
 
+impl<'a, K: 'a, V: 'a> MHIterMut<'a, K, V> {
+    fn map(x: (&'a Hashed<K>, &'a mut V)) -> (&'a K, &'a mut V) {
+        (x.0.key(), x.1)
+    }
+}
+
 impl<'a, K: 'a, V: 'a> Iterator for MHIterMut<'a, K, V> {
     type Item = (&'a K, &'a mut V);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHIterMut::Empty => None,
-            MHIterMut::Vec(iter) => iter.next(),
-            MHIterMut::Map(iter) => iter.next().map(|(k, v)| (k.key(), v)),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHIterMut::Empty => (0, Some(0)),
-            MHIterMut::Vec(iter) => iter.size_hint(),
-            MHIterMut::Map(iter) => iter.size_hint(),
-        }
-    }
+    def_iter!();
 }
 
 pub enum MHIntoIter<K, V> {
@@ -291,24 +274,16 @@ pub enum MHIntoIter<K, V> {
     Map(indexmap::map::IntoIter<Hashed<K>, V>),
 }
 
+impl<K, V> MHIntoIter<K, V> {
+    fn map(x: (Hashed<K>, V)) -> (K, V) {
+        (x.0.into_key(), x.1)
+    }
+}
+
 impl<K, V> Iterator for MHIntoIter<K, V> {
     type Item = (K, V);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            MHIntoIter::Empty => None,
-            MHIntoIter::Vec(iter) => iter.next(),
-            MHIntoIter::Map(iter) => iter.next().map(|(hk, v)| (hk.into_key(), v)),
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match self {
-            MHIntoIter::Empty => (0, Some(0)),
-            MHIntoIter::Vec(iter) => iter.size_hint(),
-            MHIntoIter::Map(iter) => iter.size_hint(),
-        }
-    }
+    def_iter!();
 }
 
 impl<K, V> MapHolder<K, V> {
