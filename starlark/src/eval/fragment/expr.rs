@@ -27,12 +27,15 @@ use crate::{
     },
     syntax::ast::{Argument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
-        dict::FrozenDict, fast_string, function::BoundMethod, list::FrozenList, tuple::FrozenTuple,
+        dict::FrozenDict,
+        fast_string,
+        function::{BoundMethod, FunctionInvoker, NativeAttribute},
+        list::FrozenList,
+        tuple::FrozenTuple,
         FrozenHeap, FrozenValue, Value, *,
     },
 };
 use either::Either;
-use function::{FunctionInvoker, NativeAttribute};
 use gazebo::prelude::*;
 use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
