@@ -17,6 +17,7 @@
 
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
+    collections::alloca::Alloca,
     environment::{
         slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
     },
@@ -73,6 +74,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
     stmt_profile: StmtProfile,
+    // Used for stack-like allocation
+    alloca: Alloca,
     /// Field that can be used for any purpose you want (can store types you define).
     /// Typically accessed via native functions you also define.
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
@@ -106,6 +109,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             extra_v: None,
             next_gc_level: GC_THRESHOLD,
             disable_gc: false,
+            alloca: Alloca::new(),
             profiling: false,
             stmt_profile: StmtProfile::new(),
             before_stmt: Vec::new(),
@@ -367,5 +371,19 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn trigger_gc(&mut self) {
         // We will GC next time we can, since the threshold is if 0 or more bytes are allocated
         self.next_gc_level = 0;
+    }
+
+    #[allow(dead_code)]
+    #[inline(always)]
+    pub(crate) fn alloca<T: Copy, R>(
+        &mut self,
+        len: usize,
+        default: T,
+        f: impl FnOnce(&mut [T], &mut Self) -> R,
+    ) -> R {
+        // We want to be able to access the evaluator underneath the alloca.
+        // We know that the alloca will be used in a stacked way, so that's fine.
+        let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
+        alloca.alloca(len, default, |xs| f(xs, self))
     }
 }

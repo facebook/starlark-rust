@@ -26,6 +26,7 @@ pub use crate::collections::{
     small_set::SmallSet,
 };
 
+pub(crate) mod alloca;
 mod hash;
 mod idhasher;
 mod small_map;
