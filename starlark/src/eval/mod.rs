@@ -143,15 +143,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         positional: &[Value<'v>],
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
-        self.with_call_stack(function, None, |eval| {
-            let mut invoker = function.new_invoker(eval)?;
-            for x in positional {
-                invoker.push_pos(*x, eval);
-            }
-            for (s, x) in named {
-                invoker.push_named(s, eval.heap().alloc(*s).get_hashed()?, *x, eval);
-            }
-            invoker.invoke(function, None, eval)
-        })
+        let mut invoker = function.new_invoker(self)?;
+        for x in positional {
+            invoker.push_pos(*x, self);
+        }
+        for (s, x) in named {
+            invoker.push_named(s, self.heap().alloc(*s).get_hashed()?, *x, self);
+        }
+        invoker.invoke(function, None, self)
     }
 }
