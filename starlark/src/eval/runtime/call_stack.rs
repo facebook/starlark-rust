@@ -100,7 +100,7 @@ impl<'v> CallStack<'v> {
     /// Remove the top element from the stack. Called after `push`.
     pub(crate) fn pop(&mut self) {
         let old = self.stack.pop();
-        assert!(
+        debug_assert!(
             old.is_some(),
             "CallStack.pop() called without preceding push()"
         )
