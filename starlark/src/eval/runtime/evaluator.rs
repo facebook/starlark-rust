@@ -59,8 +59,6 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) local_variables: LocalSlots<'v>,
     // Globals used to resolve global variables.
     pub(crate) globals: &'a Globals,
-    // The Starlark-level call-stack of functions.
-    pub(crate) call_stack: CallStack<'v>,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a mut dyn FileLoader>,
     // The codemap that corresponds to this module.
@@ -81,6 +79,9 @@ pub struct Evaluator<'v, 'a> {
     /// Field that can be used for any purpose you want (can store heap-resident [`Value<'v>`]).
     /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
+    // The Starlark-level call-stack of functions.
+    // Must go last because it's quite a big structure
+    pub(crate) call_stack: CallStack<'v>,
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {

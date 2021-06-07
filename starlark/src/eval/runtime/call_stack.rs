@@ -35,6 +35,7 @@ use std::{fmt, fmt::Debug};
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
 // anything in advance.
 // The downside is it has a lifetime on 'v and keeps alive the whole CodeMap.
+#[derive(Clone, Copy, Dupe)]
 struct CheapFrame<'v> {
     function: Value<'v>,
     file: Option<&'v CodeMap>,
@@ -68,9 +69,23 @@ impl Debug for CheapFrame<'_> {
 }
 
 /// Starlark call stack.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct CallStack<'v> {
-    stack: Vec<CheapFrame<'v>>,
+    count: usize,
+    stack: [CheapFrame<'v>; MAX_CALLSTACK_RECURSION],
+}
+
+impl<'v> Default for CallStack<'v> {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            stack: [CheapFrame {
+                function: Value::new_none(),
+                file: None,
+                span: Span::default(),
+            }; MAX_CALLSTACK_RECURSION],
+        }
+    }
 }
 
 // At 50 we see the C stack overflowing, so limit to 40 (which seems quite
@@ -86,50 +101,55 @@ impl<'v> CallStack<'v> {
         span: Span,
         file: Option<&'v CodeMap>,
     ) -> anyhow::Result<()> {
-        if self.stack.len() > MAX_CALLSTACK_RECURSION {
+        if self.count >= MAX_CALLSTACK_RECURSION {
             return Err(ControlError::TooManyRecursionLevel.into());
         }
-        self.stack.push(CheapFrame {
+        self.stack[self.count] = CheapFrame {
             function,
             span,
             file,
-        });
+        };
+        self.count += 1;
         Ok(())
     }
 
     /// Remove the top element from the stack. Called after `push`.
     pub(crate) fn pop(&mut self) {
-        let old = self.stack.pop();
-        debug_assert!(
-            old.is_some(),
-            "CallStack.pop() called without preceding push()"
-        )
+        debug_assert!(self.count >= 1);
+        // We could clear the elements, but don't need to bother
+        self.count -= 1;
     }
 
     /// The location at the top of the stack. May be `None` if
     /// either there the stack is empty, or the top of the stack lacks location
     /// information (e.g. called from Rust).
     pub fn top_location(&self) -> Option<FileSpan> {
-        self.stack.last()?.location()
+        if self.count == 0 {
+            None
+        } else {
+            self.stack[self.count - 1].location()
+        }
     }
 
     pub(crate) fn walk(&mut self, walker: &Walker<'v>) {
-        for x in self.stack.iter_mut() {
+        for x in self.stack[0..self.count].iter_mut() {
             walker.walk(&mut x.function);
+        }
+        // Not required, but since we are chosing not to walk those above
+        // the current stack depth, it's good practice to blank those values out
+        for x in self.stack[self.count..].iter_mut() {
+            x.function = Value::new_none();
+            x.file = None;
         }
     }
 
     pub fn to_diagnostic_frames(&self) -> Vec<Frame> {
         // The first entry is just the entire module, so skip it
-        self.stack
-            .iter()
-            .skip(1)
-            .map(CheapFrame::to_frame)
-            .collect()
+        self.stack[1..self.count].map(CheapFrame::to_frame)
     }
 
     /// List the entries on the stack as values
     pub(crate) fn to_function_values(&self) -> Vec<Value<'v>> {
-        self.stack.iter().skip(1).map(|x| x.function).collect()
+        self.stack[1..self.count].map(|x| x.function)
     }
 }
