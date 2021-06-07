@@ -30,6 +30,7 @@
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
 pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
+    codemap::Span,
     collections::{Hashed, SmallHashResult},
     eval::Evaluator,
     values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
@@ -538,6 +539,20 @@ impl<'v> Value<'v> {
 
     pub fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
         self.get_aref().new_invoker(self, eval)
+    }
+
+    /// Invoke a function with only positional arguments.
+    pub fn invoke_pos(
+        self,
+        location: Option<Span>,
+        pos: &[Value<'v>],
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        let mut f = self.new_invoker(eval)?;
+        for v in pos {
+            f.push_pos(*v, eval);
+        }
+        f.invoke(self, location, eval)
     }
 
     pub fn get_type_value(self) -> &'static ConstFrozenValue {

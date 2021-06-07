@@ -577,13 +577,9 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 }
             }
             Some(key) => {
-                let mut invoker = key.new_invoker(eval)?;
-                invoker.push_pos(max, eval);
-                let mut cached = invoker.invoke(key, None, eval)?;
+                let mut cached = key.invoke_pos(None, &[max], eval)?;
                 for i in it {
-                    let mut invoker = key.new_invoker(eval)?;
-                    invoker.push_pos(i, eval);
-                    let keyi = invoker.invoke(key, None, eval)?;
+                    let keyi = key.invoke_pos(None, &[i], eval)?;
                     if cached.compare(keyi)? == Ordering::Less {
                         max = i;
                         cached = keyi;
@@ -635,13 +631,9 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 }
             }
             Some(key) => {
-                let mut invoker = key.new_invoker(eval)?;
-                invoker.push_pos(min, eval);
-                let mut cached = invoker.invoke(key, None, eval)?;
+                let mut cached = key.invoke_pos(None, &[min], eval)?;
                 for i in it {
-                    let mut invoker = key.new_invoker(eval)?;
-                    invoker.push_pos(i, eval);
-                    let keyi = invoker.invoke(key, None, eval)?;
+                    let keyi = key.invoke_pos(None, &[i], eval)?;
                     if cached.compare(keyi)? == Ordering::Greater {
                         min = i;
                         cached = keyi;
@@ -803,9 +795,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Some(key) => {
                 let mut v = Vec::new();
                 for el in x {
-                    let mut inv = key.new_invoker(eval)?;
-                    inv.push_pos(el, eval);
-                    v.push((el, inv.invoke(key, None, eval)?));
+                    v.push((el, key.invoke_pos(None, &[el], eval)?));
                 }
                 v
             }

@@ -39,12 +39,8 @@ pub fn filter(builder: &mut GlobalsBuilder) {
                 if !v.is_none() {
                     res.push(v);
                 }
-            } else {
-                let mut inv = func.new_invoker(eval)?;
-                inv.push_pos(v, eval);
-                if inv.invoke(func, None, eval)?.to_bool() {
-                    res.push(v);
-                }
+            } else if func.invoke_pos(None, &[v], eval)?.to_bool() {
+                res.push(v);
             }
         }
         Ok(res)
@@ -58,9 +54,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
         let it = it.into_iter();
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
-            let mut inv = func.new_invoker(eval)?;
-            inv.push_pos(v, eval);
-            res.push(inv.invoke(func, None, eval)?);
+            res.push(func.invoke_pos(None, &[v], eval)?);
         }
         Ok(res)
     }

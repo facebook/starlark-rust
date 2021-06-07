@@ -249,9 +249,7 @@ impl NativeAttribute {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
-        let mut invoker = self.0.get_aref().new_invoker(function, eval)?;
-        invoker.push_pos(value, eval);
-        invoker.invoke(function, None, eval)
+        function.invoke_pos(None, &[value], eval)
     }
 }
 
