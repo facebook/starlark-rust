@@ -212,6 +212,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         span: Option<Span>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
+        #[inline(never)]
+        fn add_diagnostics(e: anyhow::Error, me: &Evaluator) -> anyhow::Error {
+            Diagnostic::modify(e, |d: &mut Diagnostic| {
+                // Make sure we capture the call_stack before popping things off it
+                d.set_call_stack(|| me.call_stack.to_diagnostic_frames());
+            })
+        }
+
         self.call_stack.push(
             function,
             span.unwrap_or_default(),
@@ -221,12 +229,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.heap().record_call_enter(function);
         }
         // Must always call .pop regardless
-        let res = within(self).map_err(|e| {
-            Diagnostic::modify(e, |d: &mut Diagnostic| {
-                // Make sure we capture the call_stack before popping things off it
-                d.set_call_stack(|| self.call_stack.to_diagnostic_frames());
-            })
-        });
+        let res = within(self).map_err(|e| add_diagnostics(e, self));
         self.call_stack.pop();
         if self.profiling {
             self.heap().record_call_exit();

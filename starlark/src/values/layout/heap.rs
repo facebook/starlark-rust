@@ -274,12 +274,14 @@ impl Heap {
         }
     }
 
+    #[inline(never)]
     pub(crate) fn record_call_enter<'v>(&'v self, function: Value<'v>) {
         // Deliberately don't return anything - no one should ever get a Value to this
         // entry
         self.alloc_raw(ValueMem::CallEnter(function, Instant::now()));
     }
 
+    #[inline(never)]
     pub(crate) fn record_call_exit(&self) {
         // Deliberately don't return anything - no one should ever get a Value to this
         // entry
