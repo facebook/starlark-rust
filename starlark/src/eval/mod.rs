@@ -143,7 +143,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         positional: &[Value<'v>],
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
-        self.with_call_stack(function, Span::default(), None, |eval| {
+        self.with_call_stack(function, None, |eval| {
             let mut invoker = function.new_invoker(eval)?;
             for x in positional {
                 invoker.push_pos(*x, eval);

@@ -209,11 +209,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
-        span: Span,
-        codemap: Option<&'v CodeMap>,
+        span: Option<Span>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
-        self.call_stack.push(function, span, codemap)?;
+        self.call_stack.push(
+            function,
+            span.unwrap_or_default(),
+            span.map(|_| self.codemap),
+        )?;
         if self.profiling {
             self.heap().record_call_enter(function);
         }
