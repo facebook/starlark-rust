@@ -566,11 +566,11 @@ impl<'v> Value<'v> {
         pos: &[Value<'v>],
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let mut f = self.new_invoker(eval)?;
-        for v in pos {
-            f.push_pos(*v, eval);
-        }
-        f.invoke(self, location, eval)
+        let params = Parameters {
+            pos,
+            ..Parameters::default()
+        };
+        self.invoke(location, params, eval)
     }
 
     pub fn get_type_value(self) -> &'static ConstFrozenValue {
