@@ -143,13 +143,17 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         positional: &[Value<'v>],
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
-        let mut invoker = function.new_invoker(self)?;
-        for x in positional {
-            invoker.push_pos(*x, self);
-        }
-        for (s, x) in named {
-            invoker.push_named(s, self.heap().alloc(*s).get_hashed()?, *x, self);
-        }
-        invoker.invoke(function, None, self)
+        let names =
+            named.map(|(s, _)| ((*s).to_owned(), self.heap().alloc(*s).get_hashed().unwrap()));
+        let named = named.map(|x| x.1);
+        let params = Parameters {
+            this: None,
+            pos: positional,
+            named: &named,
+            names: &names,
+            args: None,
+            kwargs: None,
+        };
+        function.invoke(None, params, self)
     }
 }
