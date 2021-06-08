@@ -437,8 +437,6 @@ impl Compiler<'_> {
                     Argument::KwArgs(x) => ArgCompiled::KwArgs(self.expr(x)),
                 });
                 let args = self.args(args);
-                // Note that the FunctionInvoker type is large, and has a tendancy for being copied around
-                // so make the fact it is a pointer very explicit
                 match left.node {
                     Expr::Dot(e, s) => {
                         let e = self.expr(*e);

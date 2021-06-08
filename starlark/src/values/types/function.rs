@@ -25,8 +25,7 @@ use crate::{
     },
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Hashed, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike,
-        Walker,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike, Walker,
     },
 };
 use derivative::Derivative;
@@ -35,7 +34,7 @@ use gazebo::{any::AnyLifetime, cell::ARef};
 pub const FUNCTION_TYPE: &str = "function";
 
 /// Function that can be invoked. Accumulates arguments before being called.
-pub struct FunctionInvoker<'v> {
+pub(crate) struct FunctionInvoker<'v> {
     pub(crate) collect: ParametersCollect<'v>,
     pub(crate) invoke: FunctionInvokerInner<'v>,
 }
@@ -67,32 +66,6 @@ impl<'v> FunctionInvoker<'v> {
 
     pub fn push_params(&mut self, params: Parameters<'v, '_>, eval: &mut Evaluator<'v, '_>) {
         self.collect.push_params(params, eval)
-    }
-
-    /// Add a positional argument.
-    pub fn push_pos(&mut self, v: Value<'v>, eval: &mut Evaluator<'v, '_>) {
-        self.collect.push_pos(v, eval)
-    }
-
-    /// Add a `*args` argument.
-    pub fn push_args(&mut self, v: Value<'v>, eval: &mut Evaluator<'v, '_>) {
-        self.collect.push_args(v, eval)
-    }
-
-    /// Add a named argument.
-    pub fn push_named(
-        &mut self,
-        name: &str,
-        name_value: Hashed<Value<'v>>,
-        v: Value<'v>,
-        eval: &mut Evaluator<'v, '_>,
-    ) {
-        self.collect.push_named(name, name_value, v, eval)
-    }
-
-    /// Add a `**kargs` argument.
-    pub fn push_kwargs(&mut self, v: Value<'v>, eval: &mut Evaluator<'v, '_>) {
-        self.collect.push_kwargs(v, eval)
     }
 }
 
