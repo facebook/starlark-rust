@@ -35,11 +35,12 @@
 //! # "#);
 //! ```
 use crate::{
+    codemap::Span,
     collections::SmallMap,
-    eval::{Evaluator, ParametersParser, ParametersSpecBuilder},
+    eval::{Evaluator, Parameters, ParametersParser, ParametersSpecBuilder},
     values::{
         error::ValueError,
-        function::{FunctionInvoker, NativeFunction, FUNCTION_TYPE},
+        function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
         ValueLike, Walker,
@@ -213,14 +214,15 @@ where
         collector.push(')');
     }
 
-    fn new_invoker(
+    fn invoke(
         &self,
         me: Value<'v>,
+        location: Option<Span>,
+        mut params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        let mut f = self.constructor.new_invoker(eval)?;
-        f.push_pos(me, eval);
-        Ok(f)
+    ) -> anyhow::Result<Value<'v>> {
+        params.this = Some(me);
+        self.constructor.invoke(location, params, eval)
     }
 
     fn length(&self) -> anyhow::Result<i32> {

@@ -18,7 +18,7 @@
 //! Implementation of `def`.
 
 use crate::{
-    codemap::CodeMap,
+    codemap::{CodeMap, Span},
     environment::FrozenModuleValue,
     eval::{
         compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled, StmtCompiled},
@@ -27,7 +27,7 @@ use crate::{
             parameters::ParametersSpec,
             slots::{LocalSlotBase, LocalSlotId},
         },
-        ParametersSpecBuilder,
+        Parameters, ParametersSpecBuilder,
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
@@ -257,17 +257,21 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         collector.push_str(&self.parameters.signature());
     }
 
-    fn new_invoker(
+    fn invoke(
         &self,
         me: Value<'v>,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        Ok(DefInvokerFrozen::new_frozen(
+    ) -> anyhow::Result<Value<'v>> {
+        let mut invoker = DefInvokerFrozen::new_frozen(
             ARef::map(me.get_aref(), |x| {
                 x.as_dyn_any().downcast_ref::<Self>().unwrap()
             }),
             eval,
-        ))
+        );
+        invoker.push_params(params, eval);
+        invoker.invoke(me, location, eval)
     }
 }
 
@@ -278,17 +282,21 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         collector.push_str(&self.parameters.signature());
     }
 
-    fn new_invoker(
+    fn invoke(
         &self,
         me: Value<'v>,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        Ok(DefInvoker::new(
+    ) -> anyhow::Result<Value<'v>> {
+        let mut invoker = DefInvoker::new(
             ARef::map(me.get_aref(), |x| {
                 x.as_dyn_any().downcast_ref::<Self>().unwrap()
             }),
             eval,
-        ))
+        );
+        invoker.push_params(params, eval);
+        invoker.invoke(me, location, eval)
     }
 }
 

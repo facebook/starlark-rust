@@ -198,17 +198,21 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         self.parameters.collect_repr(s)
     }
 
-    fn new_invoker(
+    fn invoke(
         &self,
         me: Value<'v>,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        Ok(NativeFunctionInvoker::new(
+    ) -> anyhow::Result<Value<'v>> {
+        let mut invoker = NativeFunctionInvoker::new(
             ARef::map(me.get_aref(), |x| {
                 x.as_dyn_any().downcast_ref::<Self>().unwrap()
             }),
             eval,
-        ))
+        );
+        invoker.push_params(params, eval);
+        invoker.invoke(me, location, eval)
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -273,17 +277,6 @@ impl<'v> BoundMethod<'v> {
     }
 }
 
-impl<'v, V: ValueLike<'v>> BoundMethodGen<V> {
-    pub(crate) fn invoke(
-        &self,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        let mut inv = self.method.new_invoker(eval)?;
-        inv.push_pos(self.this.to_value(), eval);
-        Ok(inv)
-    }
-}
-
 impl<'v> ComplexValue<'v> for BoundMethod<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box BoundMethodGen {
@@ -308,11 +301,14 @@ where
         self.method.collect_repr(s);
     }
 
-    fn new_invoker(
+    fn invoke(
         &self,
         _me: Value<'v>,
+        location: Option<Span>,
+        mut params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        self.invoke(eval)
+    ) -> anyhow::Result<Value<'v>> {
+        params.this = Some(self.this.to_value());
+        self.method.invoke(location, params, eval)
     }
 }

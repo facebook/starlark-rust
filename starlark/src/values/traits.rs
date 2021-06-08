@@ -33,8 +33,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        function::{FunctionInvoker, FUNCTION_TYPE},
-        ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable, Value, ValueError, Walker,
+        function::FUNCTION_TYPE, ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable,
+        Value, ValueError, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -398,34 +398,17 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         ValueError::unsupported_with(self, "compare", other)
     }
 
-    /// Directly invoke a function. Calls [`new_invoker`](StarlarkValue::new_invoker) by default.
+    /// Directly invoke a function.
     /// The number of `named` and `names` arguments are guaranteed to be equal.
     /// A direct implementation is responsible for calling [`Evaluator::with_call_stack`] to ensure
     /// the call stack is properly updated.
-    ///
-    /// For a value to be invokable it _must_ implement [`new_invoker`](StarlarkValue::new_invoker)
-    /// and it _may_ implement [`invoke`](StarlarkValue::invoke).
     fn invoke(
         &self,
-        me: Value<'v>,
-        location: Option<Span>,
-        params: Parameters<'v, '_>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
-        let mut invoker = self.new_invoker(me, eval)?;
-        invoker.push_params(params, eval);
-        invoker.invoke(me, location, eval)
-    }
-
-    /// Create a [`FunctionInvoker`] for this object, allowing it to be invoked.
-    ///
-    /// For a value to be invokable it _must_ implement [`new_invoker`](StarlarkValue::new_invoker)
-    /// and it _may_ implement [`invoke`](StarlarkValue::invoke).
-    fn new_invoker(
-        &self,
         _me: Value<'v>,
+        _location: Option<Span>,
+        _params: Parameters<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
+    ) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported(self, "call()")
     }
 

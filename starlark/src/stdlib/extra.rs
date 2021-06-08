@@ -17,15 +17,16 @@
 
 use crate::{
     self as starlark,
+    codemap::Span,
+    collections::Hashed,
     environment::GlobalsBuilder,
-    eval::{Evaluator, ParametersSpec, ParametersSpecBuilder},
+    eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
-        function::{FunctionInvoker, FUNCTION_TYPE},
-        none::NoneType,
-        ComplexValue, Freezer, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        dict::Dict, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, ComplexValue, Freezer,
+        SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use itertools::Itertools;
 use std::collections::HashSet;
 
@@ -62,16 +63,27 @@ pub fn map(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
-    fn partial(ref func: Value, args: Value, kwargs: Value) -> Partial<'v> {
+    fn partial(ref func: Value, args: ARef<Tuple>, kwargs: ARef<Dict>) -> Partial<'v> {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
         let mut signature = ParametersSpecBuilder::with_capacity(name, 2);
         signature.args();
         signature.kwargs();
+        let names = kwargs
+            .content
+            .iter_hashed()
+            .map(|x| {
+                (
+                    x.0.key().unpack_str().unwrap().to_owned(),
+                    x.0.unborrow_copy(),
+                )
+            })
+            .collect();
         Ok(Partial {
             func,
-            args,
-            kwargs,
+            pos: args.content.clone(),
+            named: kwargs.values(),
+            names,
             signature: signature.build(),
         })
     }
@@ -123,8 +135,9 @@ pub fn json(builder: &mut GlobalsBuilder) {
 #[derive(Debug)]
 struct PartialGen<V> {
     func: V,
-    args: V,
-    kwargs: V,
+    pos: Vec<V>,
+    named: Vec<V>,
+    names: Vec<(String, Hashed<V>)>,
     signature: ParametersSpec<V>,
 }
 
@@ -134,16 +147,20 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         box FrozenPartial {
             func: self.func.freeze(freezer),
-            args: self.args.freeze(freezer),
-            kwargs: self.kwargs.freeze(freezer),
+            pos: self.pos.map(|x| x.freeze(freezer)),
+            named: self.named.map(|x| x.freeze(freezer)),
+            names: self.names.into_map(|(s, x)| (s, x.freeze(freezer))),
             signature: self.signature.freeze(freezer),
         }
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
         walker.walk(&mut self.func);
-        walker.walk(&mut self.args);
-        walker.walk(&mut self.kwargs);
+        self.pos.iter_mut().for_each(|x| walker.walk(x));
+        self.named.iter_mut().for_each(|x| walker.walk(x));
+        self.names
+            .iter_mut()
+            .for_each(|x| walker.walk(x.1.key_mut()));
         self.signature.walk(walker);
     }
 }
@@ -154,25 +171,55 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
-    fn new_invoker(
+    fn invoke(
         &self,
         _me: Value<'v>,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<FunctionInvoker<'v>> {
-        let mut inv = self.func.new_invoker(eval)?;
-        inv.push_args(self.args.to_value(), eval);
-        inv.push_kwargs(self.kwargs.to_value(), eval);
-        Ok(inv)
+    ) -> anyhow::Result<Value<'v>> {
+        // apply the partial arguments first, then the remaining arguments I was given
+
+        // We know V must be either Value or FrozenValue, both of which have the same representation as Value
+        // so convert it directly
+        let self_pos = unsafe { &*(self.pos.as_slice() as *const [V] as *const [Value]) };
+        let self_named = unsafe { &*(self.named.as_slice() as *const [V] as *const [Value]) };
+        let self_names = unsafe {
+            &*(self.names.as_slice() as *const [(String, Hashed<V>)]
+                as *const [(String, Hashed<Value>)])
+        };
+
+        let params = Parameters {
+            this: params.this,
+            pos: &[self_pos, params.pos].concat(),
+            named: &[self_named, params.named].concat(),
+            names: &[self_names, params.names].concat(),
+            args: params.args,
+            kwargs: params.kwargs,
+        };
+        self.func.invoke(location, params, eval)
     }
 
     fn collect_repr(&self, collector: &mut String) {
         collector.push_str("partial(");
         self.func.collect_repr(collector);
-        collector.push_str(", *");
-        self.args.collect_repr(collector);
-        collector.push_str(", **");
-        self.kwargs.collect_repr(collector);
-        collector.push(')');
+        collector.push_str(", *[");
+        for (i, v) in self.pos.iter().enumerate() {
+            if i != 0 {
+                collector.push(',');
+            }
+            v.collect_repr(collector);
+        }
+        collector.push_str("], **{");
+        for (i, (k, v)) in self.names.iter().zip(self.named.iter()).enumerate() {
+            if i != 0 {
+                collector.push(',');
+            }
+            collector.push_str(&k.0);
+            collector.push(':');
+            v.collect_repr(collector);
+        }
+        collector.push_str("})");
     }
 }
 

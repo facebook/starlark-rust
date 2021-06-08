@@ -33,7 +33,7 @@ use crate::{
     codemap::Span,
     collections::{Hashed, SmallHashResult},
     eval::{Evaluator, Parameters},
-    values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
+    values::function::FUNCTION_TYPE,
 };
 pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use indexmap::Equivalent;
@@ -161,10 +161,6 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
 
     fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
 
-    fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
-        self.to_value().new_invoker(eval)
-    }
-
     fn invoke(
         self,
         location: Option<Span>,
@@ -225,7 +221,7 @@ impl<'v, V: ValueLike<'v>> Hashed<V> {
 }
 
 impl<'v> Hashed<Value<'v>> {
-    fn freeze(&self, freezer: &Freezer) -> Hashed<FrozenValue> {
+    pub(crate) fn freeze(&self, freezer: &Freezer) -> Hashed<FrozenValue> {
         // Safe because we know frozen values have the same hash as non-frozen ones
         let key = self.key().freeze(freezer);
         // But it's an easy mistake to make, so actually check it in debug
@@ -544,10 +540,6 @@ impl<'v> Value<'v> {
     }
     pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.get_aref().right_shift(other)
-    }
-
-    pub fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
-        self.get_aref().new_invoker(self, eval)
     }
 
     pub fn invoke(

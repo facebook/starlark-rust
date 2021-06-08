@@ -144,6 +144,11 @@ impl<K> Hashed<K> {
         &self.key
     }
 
+    /// Get the underlying key, as mutable.
+    pub fn key_mut(&mut self) -> &mut K {
+        &mut self.key
+    }
+
     /// Get the underlying key taking ownership.
     pub fn into_key(self) -> K {
         self.key
