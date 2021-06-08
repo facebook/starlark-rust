@@ -29,12 +29,12 @@ use std::mem;
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
+pub(crate) use runtime::parameters::ParametersCollect;
 pub use runtime::{
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
     parameters::{Parameters, ParametersParser, ParametersSpec, ParametersSpecBuilder},
 };
-pub(crate) use runtime::{parameters::ParametersCollect, slots::LocalSlotBase};
 
 mod compiler;
 mod fragment;

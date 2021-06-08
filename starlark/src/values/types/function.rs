@@ -20,8 +20,8 @@
 use crate::{
     codemap::Span,
     eval::{
-        DefInvoker, DefInvokerFrozen, Evaluator, LocalSlotBase, Parameters, ParametersCollect,
-        ParametersParser, ParametersSpec,
+        DefInvoker, DefInvokerFrozen, Evaluator, Parameters, ParametersCollect, ParametersParser,
+        ParametersSpec,
     },
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
@@ -41,7 +41,6 @@ pub(crate) struct FunctionInvoker<'v> {
 
 // Wrap to avoid exposing the enum alterantives
 pub(crate) enum FunctionInvokerInner<'v> {
-    Native(NativeFunctionInvoker<'v>),
     Def(DefInvoker<'v>),
     DefFrozen(DefInvokerFrozen<'v>),
 }
@@ -58,7 +57,6 @@ impl<'v> FunctionInvoker<'v> {
     ) -> anyhow::Result<Value<'v>> {
         let slots = self.collect.done(eval)?;
         eval.with_call_stack(function, location, |eval| match &self.invoke {
-            FunctionInvokerInner::Native(inv) => inv.invoke(slots, eval),
             FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
             FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
         })
@@ -84,34 +82,6 @@ impl<T> NativeFunc for T where
         + Sync
         + 'static
 {
-}
-
-/// A function that can be evaluated which can also collect parameters
-pub(crate) struct NativeFunctionInvoker<'a>(ARef<'a, dyn NativeFunc>);
-
-impl<'a> NativeFunctionInvoker<'a> {
-    pub fn new<'v>(
-        func: ARef<'v, NativeFunction>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> FunctionInvoker<'v> {
-        let (function, parameters) =
-            ARef::map_split(func, |x| (&*x.function, x.parameters.promote()));
-        FunctionInvoker {
-            collect: ParametersSpec::collect(parameters, 0, eval),
-            invoke: FunctionInvokerInner::Native(NativeFunctionInvoker(function)),
-        }
-    }
-
-    pub fn invoke<'v>(
-        &self,
-        slots: LocalSlotBase,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
-        let parser = ParametersParser::new(slots);
-        let res = (*self.0)(eval, parser);
-        eval.local_variables.release_after(slots);
-        res
-    }
 }
 
 /// Starlark representation of native (Rust) functions.
@@ -178,14 +148,20 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let mut invoker = NativeFunctionInvoker::new(
-            ARef::map(me.get_aref(), |x| {
-                x.as_dyn_any().downcast_ref::<Self>().unwrap()
-            }),
-            eval,
-        );
-        invoker.push_params(params, eval);
-        invoker.invoke(me, location, eval)
+        let func = ARef::map(me.get_aref(), |x| {
+            x.as_dyn_any().downcast_ref::<Self>().unwrap()
+        });
+        let (function, parameters) =
+            ARef::map_split(func, |x| (&*x.function, x.parameters.promote()));
+        let mut collect = ParametersSpec::collect(parameters, 0, eval);
+        collect.push_params(params, eval);
+        let slots = collect.done(eval)?;
+        eval.with_call_stack(me, location, |eval| {
+            let parser = ParametersParser::new(slots);
+            let res = function(eval, parser);
+            eval.local_variables.release_after(slots);
+            res
+        })
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
