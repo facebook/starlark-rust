@@ -267,8 +267,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
             x.as_dyn_any().downcast_ref::<Self>().unwrap()
         });
         let slots = def.stmt.scope_names.used;
-        let (def, param_spec) = ARef::map_split(def, |x| (x, x.parameters.promote()));
-        let mut collect = ParametersSpec::collect(param_spec, slots, eval);
+        let mut collect = ParametersSpec::collect(self.parameters.promote(), slots, eval);
         let invoke = DefInvokerGen(def);
         collect.push_params(params, eval);
         let slots = collect.done(eval)?;
@@ -294,8 +293,7 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
             x.as_dyn_any().downcast_ref::<Self>().unwrap()
         });
         let slots = def.stmt.scope_names.used;
-        let (def, param_spec) = ARef::map_split(def, |x| (x, &x.parameters));
-        let mut collect = ParametersSpec::collect(param_spec, slots, eval);
+        let mut collect = ParametersSpec::collect(&self.parameters, slots, eval);
         let invoke = DefInvokerGen(def);
         collect.push_params(params, eval);
         let slots = collect.done(eval)?;

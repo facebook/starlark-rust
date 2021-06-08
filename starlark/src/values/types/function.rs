@@ -26,7 +26,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{any::AnyLifetime, cell::ARef};
+use gazebo::any::AnyLifetime;
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -111,17 +111,12 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let func = ARef::map(me.get_aref(), |x| {
-            x.as_dyn_any().downcast_ref::<Self>().unwrap()
-        });
-        let (function, parameters) =
-            ARef::map_split(func, |x| (&*x.function, x.parameters.promote()));
-        let mut collect = ParametersSpec::collect(parameters, 0, eval);
+        let mut collect = ParametersSpec::collect(self.parameters.promote(), 0, eval);
         collect.push_params(params, eval);
         let slots = collect.done(eval)?;
         eval.with_call_stack(me, location, |eval| {
             let parser = ParametersParser::new(slots);
-            let res = function(eval, parser);
+            let res = (self.function)(eval, parser);
             eval.local_variables.release_after(slots);
             res
         })

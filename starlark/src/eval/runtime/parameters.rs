@@ -25,7 +25,7 @@ use crate::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, UnpackValue, Value, ValueError, Walker,
     },
 };
-use gazebo::{cell::ARef, prelude::*};
+use gazebo::prelude::*;
 use std::{cmp, mem};
 use thiserror::Error;
 
@@ -276,11 +276,11 @@ impl<V> ParametersSpec<V> {
 }
 
 impl<'v> ParametersSpec<Value<'v>> {
-    pub(crate) fn collect(
-        params: ARef<'v, ParametersSpec<Value<'v>>>,
+    pub(crate) fn collect<'a>(
+        params: &'a ParametersSpec<Value<'v>>,
         slots: usize,
         eval: &mut Evaluator<'v, '_>,
-    ) -> ParametersCollect<'v> {
+    ) -> ParametersCollect<'v, 'a> {
         let len = params.0.kinds.len();
         let slots = eval.local_variables.reserve(cmp::max(slots, len));
         ParametersCollect {
@@ -324,8 +324,8 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 }
 
-pub(crate) struct ParametersCollect<'v> {
-    params: ARef<'v, ParametersSpec<Value<'v>>>,
+pub(crate) struct ParametersCollect<'v, 'a> {
+    params: &'a ParametersSpec<Value<'v>>,
     slots: LocalSlotBase,
 
     /// Initially true, becomes false once we see something not-positional.
@@ -340,7 +340,7 @@ pub(crate) struct ParametersCollect<'v> {
     err: Option<anyhow::Error>,
 }
 
-impl<'v> ParametersCollect<'v> {
+impl<'v, 'a> ParametersCollect<'v, 'a> {
     fn set_err(&mut self, err: anyhow::Error) {
         if self.err.is_none() {
             self.err = Some(err);
