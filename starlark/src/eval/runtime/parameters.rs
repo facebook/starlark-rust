@@ -586,3 +586,15 @@ pub struct Parameters<'v, 'a> {
     pub args: Option<Value<'v>>,
     pub kwargs: Option<Value<'v>>,
 }
+
+impl<'v, 'a> Parameters<'v, 'a> {
+    pub fn promote_names(
+        names: &'a [(String, Hashed<FrozenValue>)],
+    ) -> &'a [(String, Hashed<Value<'v>>)] {
+        // Safe because FrozenValue and Value have the same representation
+        unsafe {
+            &*(names as *const [(String, Hashed<FrozenValue>)]
+                as *const [(String, Hashed<Value<'v>>)])
+        }
+    }
+}

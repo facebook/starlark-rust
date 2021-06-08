@@ -26,7 +26,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::{fmt::Debug, mem};
+use std::fmt::Debug;
 
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
@@ -75,21 +75,6 @@ pub(crate) fn throw<'v, T>(
     match r {
         Ok(v) => Ok(v),
         Err(e) => throw_error(e, span, eval),
-    }
-}
-
-/// Like `throw`, but for when `T` is expensive to copy.
-pub(crate) fn throw_mut<'a, 'v, T>(
-    r: &'a mut anyhow::Result<T>,
-    span: Span,
-    eval: &Evaluator<'v, '_>,
-) -> Result<&'a mut T, EvalException<'v>> {
-    match r {
-        Ok(v) => Ok(v),
-        Err(e) => {
-            let e = mem::replace(e, anyhow::Error::msg(""));
-            throw_error(e, span, eval)
-        }
     }
 }
 

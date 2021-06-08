@@ -22,14 +22,15 @@ use crate::{
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{
-        compiler::{scope::Slot, throw, throw_mut, Compiler, EvalException, ExprCompiled},
+        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled},
         runtime::evaluator::Evaluator,
+        Parameters,
     },
     syntax::ast::{Argument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
     values::{
         dict::FrozenDict,
         fast_string,
-        function::{BoundMethod, FunctionInvoker, NativeAttribute},
+        function::{BoundMethod, NativeAttribute},
         list::FrozenList,
         tuple::FrozenTuple,
         FrozenHeap, FrozenValue, Value, *,
@@ -101,28 +102,6 @@ enum ArgCompiled {
     Named(String, Hashed<FrozenValue>, ExprCompiled),
     Args(ExprCompiled),
     KwArgs(ExprCompiled),
-}
-
-fn eval_call<'v>(
-    span: Span,
-    args: &[ArgCompiled],
-    invoker: &mut FunctionInvoker<'v>,
-    function: Value<'v>,
-    eval: &mut Evaluator<'v, '_>,
-) -> Result<Value<'v>, EvalException<'v>> {
-    for x in args {
-        match x {
-            ArgCompiled::Pos(expr) => invoker.push_pos(expr(eval)?, eval),
-            ArgCompiled::Named(k, kk, expr) => {
-                invoker.push_named(k, kk.to_hashed_value(), expr(eval)?, eval)
-            }
-            ArgCompiled::Args(expr) => invoker.push_args(expr(eval)?, eval),
-            ArgCompiled::KwArgs(expr) => invoker.push_kwargs(expr(eval)?, eval),
-        }
-    }
-
-    let res = invoker.invoke(function, Some(span), eval);
-    throw(res, span, eval)
 }
 
 fn eval_dot(
@@ -245,9 +224,66 @@ impl Expr {
     }
 }
 
+#[derive(Default)]
+struct ArgsCompiled {
+    pos_named: Vec<ExprCompiled>,
+    names: Vec<(String, Hashed<FrozenValue>)>,
+    args: Option<ExprCompiled>,
+    kwargs: Option<ExprCompiled>,
+}
+
+impl ArgsCompiled {
+    fn with_params<'v, R>(
+        &self,
+        this: Option<Value<'v>>,
+        eval: &mut Evaluator<'v, '_>,
+        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+    ) -> Result<R, EvalException<'v>> {
+        eval.alloca(self.pos_named.len(), Value::new_none(), |xs, eval| {
+            for (x, arg) in xs.iter_mut().zip(&self.pos_named) {
+                *x = arg(eval)?;
+            }
+            let args = match &self.args {
+                None => None,
+                Some(f) => Some(f(eval)?),
+            };
+            let kwargs = match &self.kwargs {
+                None => None,
+                Some(f) => Some(f(eval)?),
+            };
+            let (pos, named) = &xs.split_at(xs.len() - self.names.len());
+            let params = Parameters {
+                this,
+                pos,
+                named,
+                names: Parameters::promote_names(&self.names),
+                args,
+                kwargs,
+            };
+            f(params, eval)
+        })
+    }
+}
+
 impl Compiler<'_> {
     pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<ExprCompiled> {
         expr.map(|v| self.expr(*v))
+    }
+
+    fn args(&mut self, args: Vec<ArgCompiled>) -> ArgsCompiled {
+        let mut res = ArgsCompiled::default();
+        for a in args {
+            match a {
+                ArgCompiled::Pos(x) => res.pos_named.push(x),
+                ArgCompiled::Named(a, b, x) => {
+                    res.names.push((a, b));
+                    res.pos_named.push(x);
+                }
+                ArgCompiled::Args(x) => res.args = Some(x),
+                ArgCompiled::KwArgs(x) => res.kwargs = Some(x),
+            }
+        }
+        res
     }
 
     pub fn expr(&mut self, expr: AstExpr) -> ExprCompiled {
@@ -400,6 +436,7 @@ impl Compiler<'_> {
                     Argument::Args(x) => ArgCompiled::Args(self.expr(x)),
                     Argument::KwArgs(x) => ArgCompiled::KwArgs(self.expr(x)),
                 });
+                let args = self.args(args);
                 // Note that the FunctionInvoker type is large, and has a tendancy for being copied around
                 // so make the fact it is a pointer very explicit
                 match left.node {
@@ -408,23 +445,27 @@ impl Compiler<'_> {
                         let dot = eval_dot(span, e, s.node);
                         box move |eval| match dot(eval)? {
                             Either::Left(function) => {
-                                let mut invoker = function.new_invoker(eval);
-                                let invoker = throw_mut(&mut invoker, span, eval)?;
-                                eval_call(span, &args, invoker, function, eval)
+                                args.with_params(None, eval, |params, eval| {
+                                    throw(function.invoke(Some(span), params, eval), span, eval)
+                                })
                             }
                             Either::Right(wrapper) => {
-                                let mut invoker = wrapper.invoke(eval);
-                                let invoker = throw_mut(&mut invoker, span, eval)?;
-                                eval_call(span, &args, invoker, wrapper.method, eval)
+                                args.with_params(Some(wrapper.this), eval, |params, eval| {
+                                    throw(
+                                        wrapper.method.invoke(Some(span), params, eval),
+                                        span,
+                                        eval,
+                                    )
+                                })
                             }
                         }
                     }
                     _ => {
                         let left = self.expr(*left);
                         expr!(left, |eval| {
-                            let mut invoker = left.new_invoker(eval);
-                            let invoker = throw_mut(&mut invoker, span, eval)?;
-                            eval_call(span, &args, invoker, left, eval)?
+                            args.with_params(None, eval, |params, eval| {
+                                throw(left.invoke(Some(span), params, eval), span, eval)
+                            })?
                         })
                     }
                 }
