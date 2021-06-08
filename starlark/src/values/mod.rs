@@ -32,7 +32,7 @@ pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types
 use crate::{
     codemap::Span,
     collections::{Hashed, SmallHashResult},
-    eval::Evaluator,
+    eval::{Evaluator, Parameters},
     values::{function::FUNCTION_TYPE, types::function::FunctionInvoker},
 };
 pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -163,6 +163,15 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
 
     fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
         self.to_value().new_invoker(eval)
+    }
+
+    fn invoke(
+        self,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.to_value().invoke(location, params, eval)
     }
 
     fn get_hash(self) -> anyhow::Result<u64> {
@@ -539,6 +548,15 @@ impl<'v> Value<'v> {
 
     pub fn new_invoker(self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<FunctionInvoker<'v>> {
         self.get_aref().new_invoker(self, eval)
+    }
+
+    pub fn invoke(
+        self,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.get_aref().invoke(self, location, params, eval)
     }
 
     /// Invoke a function with only positional arguments.

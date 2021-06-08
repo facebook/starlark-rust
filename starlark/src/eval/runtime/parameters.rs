@@ -444,6 +444,24 @@ impl<'v> ParametersCollect<'v> {
         }
     }
 
+    pub fn push_params(&mut self, params: Parameters<'v, '_>, eval: &mut Evaluator<'v, '_>) {
+        if let Some(x) = params.this {
+            self.push_pos(x, eval);
+        }
+        for x in params.pos {
+            self.push_pos(*x, eval);
+        }
+        for ((name1, name2), x) in params.names.iter().zip(params.named.iter()) {
+            self.push_named(name1, name2.to_hashed_value(), *x, eval);
+        }
+        if let Some(x) = params.args {
+            self.push_args(x, eval);
+        }
+        if let Some(x) = params.kwargs {
+            self.push_kwargs(x, eval);
+        }
+    }
+
     pub(crate) fn done(&mut self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
         if let Some(err) = self.err.take() {
             return Err(err);
@@ -557,4 +575,14 @@ impl ParametersParser {
         let v = self.get_next(eval).unwrap();
         Self::named_err(name, T::unpack_value(v))
     }
+}
+
+#[derive(Default, Clone, Copy, Dupe)]
+pub struct Parameters<'v, 'a> {
+    pub this: Option<Value<'v>>,
+    pub pos: &'a [Value<'v>],
+    pub named: &'a [Value<'v>],
+    pub names: &'a [(String, Hashed<Value<'v>>)],
+    pub args: Option<Value<'v>>,
+    pub kwargs: Option<Value<'v>>,
 }

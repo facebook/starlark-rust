@@ -20,7 +20,7 @@
 use crate::{
     codemap::Span,
     eval::{
-        DefInvoker, DefInvokerFrozen, Evaluator, LocalSlotBase, ParametersCollect,
+        DefInvoker, DefInvokerFrozen, Evaluator, LocalSlotBase, Parameters, ParametersCollect,
         ParametersParser, ParametersSpec,
     },
     values::{
@@ -63,6 +63,10 @@ impl<'v> FunctionInvoker<'v> {
             FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
             FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
         })
+    }
+
+    pub fn push_params(&mut self, params: Parameters<'v, '_>, eval: &mut Evaluator<'v, '_>) {
+        self.collect.push_params(params, eval)
     }
 
     /// Add a positional argument.
