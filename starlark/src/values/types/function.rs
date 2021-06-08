@@ -19,10 +19,7 @@
 
 use crate::{
     codemap::Span,
-    eval::{
-        DefInvoker, DefInvokerFrozen, Evaluator, Parameters, ParametersCollect, ParametersParser,
-        ParametersSpec,
-    },
+    eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
         FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike, Walker,
@@ -32,40 +29,6 @@ use derivative::Derivative;
 use gazebo::{any::AnyLifetime, cell::ARef};
 
 pub const FUNCTION_TYPE: &str = "function";
-
-/// Function that can be invoked. Accumulates arguments before being called.
-pub(crate) struct FunctionInvoker<'v> {
-    pub(crate) collect: ParametersCollect<'v>,
-    pub(crate) invoke: FunctionInvokerInner<'v>,
-}
-
-// Wrap to avoid exposing the enum alterantives
-pub(crate) enum FunctionInvokerInner<'v> {
-    Def(DefInvoker<'v>),
-    DefFrozen(DefInvokerFrozen<'v>),
-}
-
-impl<'v> FunctionInvoker<'v> {
-    /// Actually invoke the underlying function, giving call-stack information.
-    /// If provided, the `location` must use the currently active [`CodeMap`](crate::codemap::CodeMap)
-    /// from the [`Evaluator`].
-    pub fn invoke(
-        &mut self,
-        function: Value<'v>,
-        location: Option<Span>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
-        let slots = self.collect.done(eval)?;
-        eval.with_call_stack(function, location, |eval| match &self.invoke {
-            FunctionInvokerInner::Def(inv) => inv.invoke(slots, eval),
-            FunctionInvokerInner::DefFrozen(inv) => inv.invoke(slots, eval),
-        })
-    }
-
-    pub fn push_params(&mut self, params: Parameters<'v, '_>, eval: &mut Evaluator<'v, '_>) {
-        self.collect.push_params(params, eval)
-    }
-}
 
 /// A native function that can be evaluated.
 pub trait NativeFunc:

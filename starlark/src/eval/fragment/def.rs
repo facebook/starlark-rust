@@ -31,9 +31,8 @@ use crate::{
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
-        function::{FunctionInvoker, FunctionInvokerInner, FUNCTION_TYPE},
-        AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Value,
-        ValueLike, ValueRef, Walker,
+        function::FUNCTION_TYPE, AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
+        StarlarkValue, Value, ValueLike, ValueRef, Walker,
     },
 };
 use derivative::Derivative;
@@ -264,14 +263,16 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let mut invoker = DefInvokerFrozen::new_frozen(
-            ARef::map(me.get_aref(), |x| {
-                x.as_dyn_any().downcast_ref::<Self>().unwrap()
-            }),
-            eval,
-        );
-        invoker.push_params(params, eval);
-        invoker.invoke(me, location, eval)
+        let def = ARef::map(me.get_aref(), |x| {
+            x.as_dyn_any().downcast_ref::<Self>().unwrap()
+        });
+        let slots = def.stmt.scope_names.used;
+        let (def, param_spec) = ARef::map_split(def, |x| (x, x.parameters.promote()));
+        let mut collect = ParametersSpec::collect(param_spec, slots, eval);
+        let invoke = DefInvokerGen(def);
+        collect.push_params(params, eval);
+        let slots = collect.done(eval)?;
+        eval.with_call_stack(me, location, |eval| invoke.invoke(slots, eval))
     }
 }
 
@@ -289,19 +290,18 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let mut invoker = DefInvoker::new(
-            ARef::map(me.get_aref(), |x| {
-                x.as_dyn_any().downcast_ref::<Self>().unwrap()
-            }),
-            eval,
-        );
-        invoker.push_params(params, eval);
-        invoker.invoke(me, location, eval)
+        let def = ARef::map(me.get_aref(), |x| {
+            x.as_dyn_any().downcast_ref::<Self>().unwrap()
+        });
+        let slots = def.stmt.scope_names.used;
+        let (def, param_spec) = ARef::map_split(def, |x| (x, &x.parameters));
+        let mut collect = ParametersSpec::collect(param_spec, slots, eval);
+        let invoke = DefInvokerGen(def);
+        collect.push_params(params, eval);
+        let slots = collect.done(eval)?;
+        eval.with_call_stack(me, location, |eval| invoke.invoke(slots, eval))
     }
 }
-
-pub(crate) type DefInvoker<'v> = DefInvokerGen<'v, Value<'v>, ValueRef<'v>>;
-pub(crate) type DefInvokerFrozen<'v> = DefInvokerGen<'v, FrozenValue, Option<FrozenValue>>;
 
 pub(crate) struct DefInvokerGen<'v, V, RefV>(ARef<'v, DefGen<V, RefV>>);
 
@@ -318,31 +318,6 @@ impl<'v> AsValueRef<'v> for Option<FrozenValue> {
 impl<'v> AsValueRef<'v> for ValueRef<'v> {
     fn to_value_ref(&self) -> ValueRef<'v> {
         self.dupe_reference()
-    }
-}
-
-impl<'v> DefInvoker<'v> {
-    fn new(def: ARef<'v, Def<'v>>, eval: &mut Evaluator<'v, '_>) -> FunctionInvoker<'v> {
-        let slots = def.stmt.scope_names.used;
-        let (def, params) = ARef::map_split(def, |x| (x, &x.parameters));
-        FunctionInvoker {
-            collect: ParametersSpec::collect(params, slots, eval),
-            invoke: FunctionInvokerInner::Def(DefInvokerGen(def)),
-        }
-    }
-}
-
-impl<'a> DefInvokerFrozen<'a> {
-    fn new_frozen<'v>(
-        def: ARef<'v, FrozenDef>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> FunctionInvoker<'v> {
-        let slots = def.stmt.scope_names.used;
-        let (def, params) = ARef::map_split(def, |x| (x, x.parameters.promote()));
-        FunctionInvoker {
-            collect: ParametersSpec::collect(params, slots, eval),
-            invoke: FunctionInvokerInner::DefFrozen(DefInvokerGen(def)),
-        }
     }
 }
 

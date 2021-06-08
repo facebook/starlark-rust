@@ -28,8 +28,7 @@ use gazebo::{cast, prelude::*};
 use std::mem;
 
 pub(crate) use compiler::scope::ScopeNames;
-pub(crate) use fragment::def::{Def, DefInvoker, DefInvokerFrozen, FrozenDef};
-pub(crate) use runtime::parameters::ParametersCollect;
+pub(crate) use fragment::def::{Def, FrozenDef};
 pub use runtime::{
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
