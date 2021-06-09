@@ -180,6 +180,18 @@ impl NativeAttribute {
 
 impl<'v> StarlarkValue<'v> for NativeAttribute {
     starlark_type!("attribute");
+
+    fn invoke(
+        &self,
+        _me: Value<'v>,
+        location: Option<Span>,
+        params: Parameters<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        // If someone tries to invoke us with a this, first unwind the call, then continue onwards
+        let me = self.call(params.this.unwrap(), eval)?;
+        me.invoke(location, params, eval)
+    }
 }
 
 /// A wrapper for a method with a self object already bound.

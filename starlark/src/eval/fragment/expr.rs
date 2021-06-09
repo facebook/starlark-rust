@@ -439,25 +439,16 @@ impl Compiler<'_> {
                 });
                 let args = self.args(args);
                 match left.node {
-                    Expr::Dot(e, s) => {
-                        let e = self.expr(*e);
-                        let dot = eval_dot(span, e, s.node);
-                        box move |eval| match dot(eval)? {
-                            Either::Left(function) => {
-                                args.with_params(None, eval, |params, eval| {
-                                    throw(function.invoke(Some(span), params, eval), span, eval)
-                                })
-                            }
-                            Either::Right(wrapper) => {
-                                args.with_params(Some(wrapper.this), eval, |params, eval| {
-                                    throw(
-                                        wrapper.method.invoke(Some(span), params, eval),
-                                        span,
-                                        eval,
-                                    )
-                                })
-                            }
-                        }
+                    Expr::Dot(box e, s) => {
+                        let e = self.expr(e);
+                        expr!(e, |eval| {
+                            // We don't need to worry about whether it's an attribute, method or field
+                            // since those that don't want the `this` just ignore it
+                            let fun = throw(e.get_attr(&s.node, eval.heap()), span, eval)?.1;
+                            args.with_params(Some(e), eval, |params, eval| {
+                                throw(fun.invoke(Some(span), params, eval), span, eval)
+                            })?
+                        })
                     }
                     _ => {
                         let left = self.expr(*left);
