@@ -51,7 +51,7 @@ mod comparison;
 mod error;
 pub(crate) mod fast_string;
 mod index;
-mod interpolation;
+pub(crate) mod interpolation;
 mod iter;
 mod layout;
 mod owned;
