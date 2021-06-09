@@ -709,7 +709,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::all_true(r#"
     /// ", ".join(["one", "two", "three"]) == "one, two, three"
-    /// "a".join("ctmrn".split_codepoints()) == "catamaran"
+    /// "a".join("ctmrn".elems()) == "catamaran"
     /// # "#);
     /// ```
     fn join(this: &str, ref to_join: Value) -> String {
@@ -1056,33 +1056,6 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                 this.splitn(maxsplit, sep).map(|x| heap.alloc(x)).collect()
             }
         }))
-    }
-
-    /// [string.split_codepoints](
-    /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·split_codepoints
-    /// ): split a string into characters.
-    ///
-    /// `S.split_codepoints()` returns an iterable value containing the sequence
-    /// of substrings of S that each encode a single Unicode code point.
-    /// Each invalid code within the string is treated as if it encodes the
-    /// Unicode replacement character, U+FFFD.
-    ///
-    /// By returning an iterable, not a list, the cost of decoding the string
-    /// is deferred until actually needed; apply `list(...)` to the result to
-    /// materialize the entire sequence.
-    ///
-    /// Example:
-    ///
-    /// Examples:
-    ///
-    /// ```
-    /// starlark::assert::all_true(r#"
-    /// list("Hello, 世界".split_codepoints()) == ["H", "e", "l", "l", "o", ",", " ", "世", "界"]
-    /// # "#);
-    /// ```
-    fn split_codepoints(this: &str) -> Vec<String> {
-        let v: Vec<String> = this.chars().map(|x| x.to_string()).collect();
-        Ok(v)
     }
 
     /// [string.splitlines](

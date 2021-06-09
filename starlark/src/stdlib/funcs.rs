@@ -753,10 +753,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
-    /// reversed(['a', 'b', 'c'])                       == ['c', 'b', 'a']
-    /// reversed(range(5))                              == [4, 3, 2, 1, 0]
-    /// reversed("stressed".split_codepoints())         == ["d", "e", "s", "s", "e", "r", "t", "s"]
-    /// reversed({"one": 1, "two": 2}.keys())           == ["two", "one"]
+    /// reversed(['a', 'b', 'c'])              == ['c', 'b', 'a']
+    /// reversed(range(5))                     == [4, 3, 2, 1, 0]
+    /// reversed("stressed".elems())           == ["d", "e", "s", "s", "e", "r", "t", "s"]
+    /// reversed({"one": 1, "two": 2}.keys())  == ["two", "one"]
     /// # "#);
     /// ```
     fn reversed(ref a: Value) -> List<'v> {
@@ -901,9 +901,9 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
-    /// zip()                                   == []
-    /// zip(range(5))                           == [(0,), (1,), (2,), (3,), (4,)]
-    /// zip(range(5), "abc".split_codepoints()) == [(0, "a"), (1, "b"), (2, "c")]
+    /// zip()                           == []
+    /// zip(range(5))                   == [(0,), (1,), (2,), (3,), (4,)]
+    /// zip(range(5), "abc".elems())    == [(0, "a"), (1, "b"), (2, "c")]
     /// # "#);
     /// ```
     fn zip(args: Vec<Value>) -> List<'v> {
