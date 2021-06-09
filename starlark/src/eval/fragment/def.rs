@@ -36,7 +36,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{cell::ARef, prelude::*};
+use gazebo::prelude::*;
 use std::sync::Arc;
 
 enum ParameterCompiled<T> {
@@ -263,15 +263,11 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let def = ARef::map(me.get_aref(), |x| {
-            x.as_dyn_any().downcast_ref::<Self>().unwrap()
-        });
-        let slots = def.stmt.scope_names.used;
+        let slots = self.stmt.scope_names.used;
         let mut collect = ParametersSpec::collect(self.parameters.promote(), slots, eval);
-        let invoke = DefInvokerGen(def);
         collect.push_params(params, eval);
         let slots = collect.done(eval)?;
-        eval.with_call_stack(me, location, |eval| invoke.invoke(slots, eval))
+        eval.with_call_stack(me, location, |eval| self.invoke_raw(slots, eval))
     }
 }
 
@@ -289,19 +285,13 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let def = ARef::map(me.get_aref(), |x| {
-            x.as_dyn_any().downcast_ref::<Self>().unwrap()
-        });
-        let slots = def.stmt.scope_names.used;
+        let slots = self.stmt.scope_names.used;
         let mut collect = ParametersSpec::collect(&self.parameters, slots, eval);
-        let invoke = DefInvokerGen(def);
         collect.push_params(params, eval);
         let slots = collect.done(eval)?;
-        eval.with_call_stack(me, location, |eval| invoke.invoke(slots, eval))
+        eval.with_call_stack(me, location, |eval| self.invoke_raw(slots, eval))
     }
 }
-
-pub(crate) struct DefInvokerGen<'v, V, RefV>(ARef<'v, DefGen<V, RefV>>);
 
 pub(crate) trait AsValueRef<'v> {
     fn to_value_ref(&self) -> ValueRef<'v>;
@@ -319,18 +309,17 @@ impl<'v> AsValueRef<'v> for ValueRef<'v> {
     }
 }
 
-impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> {
-    pub fn invoke(
+impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
+    pub fn invoke_raw(
         &self,
         locals: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
-        let DefInvokerGen(def) = self;
         let old_locals = eval.local_variables.utilise(locals);
 
         if eval.check_types() {
-            for (i, arg_name, ty) in &def.parameter_types {
+            for (i, arg_name, ty) in &self.parameter_types {
                 match eval.get_slot_local(LocalSlotId::new(*i), arg_name.as_str()) {
                     Err(_) => {
                         panic!("Not allowed optional unassigned with type annotations on them")
@@ -341,13 +330,19 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
         }
 
         // Copy over the parent slots
-        for ((_, me), captured) in def.stmt.scope_names.parent.iter().zip(def.captured.iter()) {
+        for ((_, me), captured) in self
+            .stmt
+            .scope_names
+            .parent
+            .iter()
+            .zip(self.captured.iter())
+        {
             eval.local_variables
                 .set_slot_ref(*me, captured.to_value_ref());
         }
 
         let res =
-            eval.with_function_context(def.module, &def.codemap, |eval| (def.stmt.body)(eval));
+            eval.with_function_context(self.module, &self.codemap, |eval| (self.stmt.body)(eval));
         eval.local_variables.release(old_locals);
 
         let ret = match res {
@@ -363,7 +358,7 @@ impl<'a, 'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefInvokerGen<'a, V, RefV> 
             // either passing the type down (ugly) or passing the location back
             // (ugly and fiddly). Both also imply some runtime cost. If types take off,
             // worth revisiting.
-            if let Some(t) = def.return_type {
+            if let Some(t) = self.return_type {
                 ret.check_type(t.to_value(), None)?
             }
         }
