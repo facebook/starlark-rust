@@ -22,9 +22,9 @@ use gazebo::any::AnyLifetime;
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
-        fast_string, index::convert_slice_indices, interpolation::Interpolation, AllocFrozenValue,
-        AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue,
-        StarlarkIterable, StarlarkValue, UnpackValue, Value, ValueError, ValueLike, Walker,
+        fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
+        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkIterable,
+        StarlarkValue, UnpackValue, Value, ValueError, ValueLike, Walker,
     },
 };
 use std::{
@@ -286,7 +286,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     }
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc(Interpolation::parse(self)?.apply(other, heap)?))
+        Ok(heap.alloc(interpolation::percent(self, other)?))
     }
 }
 

@@ -593,11 +593,8 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// 5 % 3 == 2
     /// "a %s c" % 3 == "a 3 c"
     /// "Hello %s, your score is %d" % ("Bob", 75) == "Hello Bob, your score is 75"
-    /// "%d %o %x %c" % (65, 65, 65, 65) == "65 101 41 A"
-    /// "%(greeting)s, %(audience)s" % {"greeting": "Hello", "audience": "world"} == "Hello, world"
+    /// "%d %o %x" % (65, 65, 65) == "65 101 41"
     /// "Hello %s, welcome" % "Bob" == "Hello Bob, welcome"
-    /// "%s%(a)%" % {"a": 1} == "{\"a\": 1}%" # Copy Python corner-cases
-    /// "%s%(a)s" % {"a": 1} == "{\"a\": 1}1" # Copy Python corner-cases
     /// "%s" % (1,) == "1"
     /// "%s" % ((1,),) == "(1,)"
     /// "%s" % [1] == "[1]"
