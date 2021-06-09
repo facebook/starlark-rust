@@ -22,7 +22,7 @@ use crate::{
     collections::SmallMap,
     environment::GlobalsBuilder,
     stdlib::util::convert_indices,
-    values::{none::NoneOr, string, StarlarkValue, UnpackValue, Value, ValueError},
+    values::{list::List, none::NoneOr, string, StarlarkValue, UnpackValue, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -950,7 +950,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
-    ) -> Vec<String> {
+    ) -> List<'v> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
             Some(v) => {
@@ -961,20 +961,20 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                 }
             }
         };
-        Ok(match sep.into_option() {
+        Ok(List::new(match sep.into_option() {
             None => match maxsplit {
-                None => this.split_whitespace().map(ToOwned::to_owned).collect(),
-                Some(maxsplit) => rsplitn_whitespace(this, maxsplit),
+                None => this.split_whitespace().map(|x| heap.alloc(x)).collect(),
+                Some(maxsplit) => rsplitn_whitespace(this, maxsplit).map(|x| heap.alloc(x)),
             },
             Some(sep) => {
-                let mut v: Vec<String> = match maxsplit {
-                    None => this.rsplit(sep).map(ToOwned::to_owned).collect(),
-                    Some(maxsplit) => this.rsplitn(maxsplit, sep).map(ToOwned::to_owned).collect(),
+                let mut v: Vec<_> = match maxsplit {
+                    None => this.rsplit(sep).map(|x| heap.alloc(x)).collect(),
+                    Some(maxsplit) => this.rsplitn(maxsplit, sep).map(|x| heap.alloc(x)).collect(),
                 };
                 v.reverse();
                 v
             }
-        })
+        }))
     }
 
     /// [string.rstrip](
@@ -1037,7 +1037,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
-    ) -> Vec<String> {
+    ) -> List<'v> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
             Some(v) => {
@@ -1048,14 +1048,14 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                 }
             }
         };
-        Ok(match (sep.into_option(), maxsplit) {
-            (None, None) => this.split_whitespace().map(ToOwned::to_owned).collect(),
-            (None, Some(maxsplit)) => splitn_whitespace(this, maxsplit),
-            (Some(sep), None) => this.split(sep).map(ToOwned::to_owned).collect(),
+        Ok(List::new(match (sep.into_option(), maxsplit) {
+            (None, None) => this.split_whitespace().map(|x| heap.alloc(x)).collect(),
+            (None, Some(maxsplit)) => splitn_whitespace(this, maxsplit).map(|x| heap.alloc(x)),
+            (Some(sep), None) => this.split(sep).map(|x| heap.alloc(x)).collect(),
             (Some(sep), Some(maxsplit)) => {
-                this.splitn(maxsplit, sep).map(ToOwned::to_owned).collect()
+                this.splitn(maxsplit, sep).map(|x| heap.alloc(x)).collect()
             }
-        })
+        }))
     }
 
     /// [string.split_codepoints](
@@ -1106,7 +1106,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "a\nb".splitlines() == ["a", "b"]
     /// # "#);
     /// ```
-    fn splitlines(this: &str, ref keepends @ false: bool) -> Vec<String> {
+    fn splitlines(this: &str, ref keepends @ false: bool) -> List<'v> {
         let mut s = this;
         let mut lines = Vec::new();
         loop {
@@ -1117,19 +1117,19 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                     _ => y + 1,
                 };
                 if keepends {
-                    lines.push(s.get(..x).unwrap())
+                    lines.push(heap.alloc(s.get(..x).unwrap()))
                 } else {
-                    lines.push(s.get(..y).unwrap())
+                    lines.push(heap.alloc(s.get(..y).unwrap()))
                 }
                 if x == s.len() {
-                    return Ok(lines.owned());
+                    return Ok(List::new(lines));
                 }
                 s = s.get(x..).unwrap();
             } else {
                 if !s.is_empty() {
-                    lines.push(s);
+                    lines.push(heap.alloc(s));
                 }
-                return Ok(lines.owned());
+                return Ok(List::new(lines));
             }
         }
     }
