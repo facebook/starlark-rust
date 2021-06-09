@@ -1640,8 +1640,8 @@ fn test_label_assign() {
     {
         starlark_type!("wrapper");
 
-        fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-            Ok(self.0.get(attribute).unwrap().to_value())
+        fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+            Some(self.0.get(attribute).unwrap().to_value())
         }
     }
 

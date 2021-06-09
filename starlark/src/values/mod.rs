@@ -417,18 +417,28 @@ impl<'v> Value<'v> {
     /// and should be used as a signal that if the attribute is subsequently called,
     /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
     /// argument to the function, e.g. `object.attribute(object, argument)`.
-    pub fn get_attr(
+    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> Option<(AttrType, Value<'v>)> {
+        let aref = self.get_aref();
+        if let Some(methods) = aref.get_methods() {
+            if let Some(v) = methods.get(attribute) {
+                return Some((AttrType::Method, v));
+            }
+        }
+        aref.get_attr(attribute, heap).map(|v| (AttrType::Field, v))
+    }
+
+    /// Like `get_attr` but return an error if the attribute is not available.
+    pub fn get_attr_error(
         self,
         attribute: &str,
         heap: &'v Heap,
     ) -> anyhow::Result<(AttrType, Value<'v>)> {
-        let aref = self.get_aref();
-        if let Some(methods) = aref.get_methods() {
-            if let Some(v) = methods.get(attribute) {
-                return Ok((AttrType::Method, v));
+        match self.get_attr(attribute, heap) {
+            None => {
+                ValueError::unsupported_owned(self.get_type(), &format!(".{}", attribute), None)
             }
+            Some(x) => Ok(x),
         }
-        aref.get_attr(attribute, heap).map(|v| (AttrType::Field, v))
     }
 
     /// Query whether an attribute exists on a type. Should be equivalent to whether

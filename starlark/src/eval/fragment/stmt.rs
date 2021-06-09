@@ -129,7 +129,7 @@ impl Compiler<'_> {
                 box move |eval| {
                     before_stmt(span_stmt, eval);
                     let e: Value = e(eval)?;
-                    let (_, v) = throw(e.get_attr(&s, eval.heap()), span_lhs, eval)?;
+                    let (_, v) = throw(e.get_attr_error(&s, eval.heap()), span_lhs, eval)?;
                     let rhs = rhs(eval)?;
                     throw(
                         e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),

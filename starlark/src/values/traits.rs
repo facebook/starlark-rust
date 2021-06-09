@@ -466,8 +466,8 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// The three methods [`get_attr`](StarlarkValue::get_attr),
     /// [`has_attr`](StarlarkValue::has_attr) and [`dir_attr`](StarlarkValue::dir_attr)
     /// must be consistent - if you implement one, you should probably implement all three.
-    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        ValueError::unsupported(self, &format!(".{}", attribute))
+    fn get_attr(&self, _attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+        None
     }
 
     /// Return true if an attribute of name `attribute` exists for the current

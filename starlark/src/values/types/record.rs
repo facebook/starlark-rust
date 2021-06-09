@@ -47,7 +47,6 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpecBuilder},
     values::{
         comparison::equals_slice,
-        error::ValueError,
         function::{NativeFunction, FUNCTION_TYPE},
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
@@ -298,15 +297,11 @@ where
         attribute == "type"
     }
 
-    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
         if attribute == "type" {
-            Ok(heap.alloc(self.typ.as_deref().unwrap_or(Record::TYPE)))
+            Some(heap.alloc(self.typ.as_deref().unwrap_or(Record::TYPE)))
         } else {
-            Err(ValueError::OperationNotSupported {
-                op: attribute.to_owned(),
-                typ: self.to_repr(),
-            }
-            .into())
+            None
         }
     }
 }
@@ -368,15 +363,9 @@ where
         }
     }
 
-    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match self.get_record_type().fields.get_index_of(attribute) {
-            Some(i) => Ok(self.values[i].to_value()),
-            None => Err(ValueError::OperationNotSupported {
-                op: attribute.to_owned(),
-                typ: self.to_repr(),
-            }
-            .into()),
-        }
+    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+        let i = self.get_record_type().fields.get_index_of(attribute)?;
+        Some(self.values[i].to_value())
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {

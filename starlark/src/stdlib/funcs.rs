@@ -32,7 +32,7 @@ use crate::{
         range::Range,
         string::STRING_TYPE,
         tuple::Tuple,
-        AttrType, Heap, Value,
+        AttrType, Heap, Value, ValueError,
     },
 };
 use anyhow::anyhow;
@@ -309,7 +309,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn getattr(ref a: Value, ref attr: &str, ref default: Option<Value>) -> Value<'v> {
         // Make sure we check if its a function first, to be consistent with `a.f`
         match a.get_attr(attr, heap) {
-            Ok((attr_type, v)) => {
+            Some((attr_type, v)) => {
                 if attr_type == AttrType::Field {
                     Ok(v)
                 } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
@@ -319,12 +319,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     Ok(heap.alloc(BoundMethod::new(a, v)))
                 }
             }
-            Err(e) => {
-                // A bit unfortunate we replace Err with a default value, potentially giving up
-                // a valid error. But the error here is actually a well-formatted type-dependent
-                // value that gives good information about why the lookup failed.
-                default.ok_or(e)
-            }
+            None => match default {
+                Some(x) => Ok(x),
+                None => ValueError::unsupported_owned(a.get_type(), &format!(".{}", attr), None),
+            },
         }
     }
 

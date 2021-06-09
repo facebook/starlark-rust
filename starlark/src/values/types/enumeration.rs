@@ -39,7 +39,6 @@ use crate::{
     collections::SmallMap,
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpecBuilder},
     values::{
-        error::ValueError,
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
@@ -247,15 +246,11 @@ where
         attribute == "type"
     }
 
-    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
         if attribute == "type" {
-            Ok(heap.alloc(self.typ.as_deref().unwrap_or(EnumValue::TYPE)))
+            Some(heap.alloc(self.typ.as_deref().unwrap_or(EnumValue::TYPE)))
         } else {
-            Err(ValueError::OperationNotSupported {
-                op: attribute.to_owned(),
-                typ: self.to_repr(),
-            }
-            .into())
+            None
         }
     }
 }
@@ -300,15 +295,11 @@ where
         self.value.get_hash()
     }
 
-    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         match attribute {
-            "index" => Ok(Value::new_int(self.index)),
-            "value" => Ok(self.value.to_value()),
-            _ => Err(ValueError::OperationNotSupported {
-                op: attribute.to_owned(),
-                typ: self.to_repr(),
-            }
-            .into()),
+            "index" => Some(Value::new_int(self.index)),
+            "value" => Some(self.value.to_value()),
+            _ => None,
         }
     }
 

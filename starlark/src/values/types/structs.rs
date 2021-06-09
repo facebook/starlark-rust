@@ -160,15 +160,8 @@ where
         }
     }
 
-    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match self.fields.get(attribute) {
-            Some(v) => Ok(v.to_value()),
-            None => Err(ValueError::OperationNotSupported {
-                op: attribute.to_owned(),
-                typ: self.to_repr(),
-            }
-            .into()),
-        }
+    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+        Some(self.fields.get(attribute)?.to_value())
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {

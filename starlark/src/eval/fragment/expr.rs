@@ -113,7 +113,7 @@ fn eval_dot(
 ) -> Result<Either<Value<'v>, BoundMethod<'v>>, EvalException<'v>> {
     move |eval| {
         let left = e(eval)?;
-        let (attr_type, v) = throw(left.get_attr(&s, eval.heap()), span, eval)?;
+        let (attr_type, v) = throw(left.get_attr_error(&s, eval.heap()), span, eval)?;
         if attr_type == AttrType::Field {
             Ok(Either::Left(v))
         } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {

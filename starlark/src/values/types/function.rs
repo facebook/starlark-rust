@@ -22,7 +22,7 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike, Walker,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use derivative::Derivative;
@@ -120,13 +120,13 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         })
     }
 
-    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         if let Some(s) = &self.typ {
             if attribute == "type" {
-                return Ok(s.to_value());
+                return Some(s.to_value());
             }
         }
-        ValueError::unsupported(self, &format!(".{}", attribute))
+        None
     }
 
     fn dir_attr(&self) -> Vec<String> {
