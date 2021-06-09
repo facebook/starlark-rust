@@ -32,7 +32,11 @@ pub const FUNCTION_TYPE: &str = "function";
 
 /// A native function that can be evaluated.
 pub trait NativeFunc:
-    for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(
+        &mut Evaluator<'v, '_>,
+        Option<Value<'v>>,
+        ParametersParser,
+    ) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -40,7 +44,11 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(
+            &mut Evaluator<'v, '_>,
+            Option<Value<'v>>,
+            ParametersParser,
+        ) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -70,7 +78,11 @@ impl NativeFunction {
     pub fn new<F>(function: F, parameters: ParametersSpec<FrozenValue>) -> Self
     where
         // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(&mut Evaluator<'v, '_>, ParametersParser) -> anyhow::Result<Value<'v>>
+        F: for<'v> Fn(
+                &mut Evaluator<'v, '_>,
+                Option<Value<'v>>,
+                ParametersParser,
+            ) -> anyhow::Result<Value<'v>>
             + Send
             + Sync
             + 'static,
@@ -111,10 +123,11 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
+        let this = params.this;
         let slots = ParametersSpec::collect(self.parameters.promote(), 0, params, eval)?;
         eval.with_call_stack(me, location, |eval| {
             let parser = ParametersParser::new(slots);
-            let res = (self.function)(eval, parser);
+            let res = (self.function)(eval, this, parser);
             eval.local_variables.release_after(slots);
             res
         })
@@ -157,7 +170,11 @@ impl NativeAttribute {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let function = self.0.to_value();
-        function.invoke_pos(None, &[value], eval)
+        let params = Parameters {
+            this: Some(value),
+            ..Parameters::default()
+        };
+        function.invoke(None, params, eval)
     }
 }
 

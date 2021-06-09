@@ -448,9 +448,6 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
     }
 
     pub fn push_params(&mut self, params: Parameters<'v, '_>, eval: &mut Evaluator<'v, '_>) {
-        if let Some(x) = params.this {
-            self.push_pos(x, eval);
-        }
         for x in params.pos {
             self.push_pos(*x, eval);
         }
@@ -545,6 +542,10 @@ impl ParametersParser {
             .get_direct();
         self.next += 1;
         v
+    }
+
+    pub fn this<'v, T: UnpackValue<'v>>(&self, this: Option<Value<'v>>) -> anyhow::Result<T> {
+        Self::named_err("this", this.and_then(T::unpack_value))
     }
 
     /// Obtain the next parameter, corresponding to [`ParametersSpecBuilder::optional`].

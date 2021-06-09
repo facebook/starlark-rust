@@ -193,8 +193,8 @@ impl GlobalsBuilder {
         #[starlark_module]
         fn constant_function(builder: &mut GlobalsBuilder) {
             // Used by set_attribute
-            fn f(outer: Value<'v>, _self: Value) -> Value<'v> {
-                Ok(outer)
+            fn f(this: Value<'v>) -> Value<'v> {
+                Ok(this)
             }
         }
         static CONSTANT: GlobalsStatic = GlobalsStatic::new();

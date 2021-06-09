@@ -164,20 +164,19 @@ impl<'v> EnumType<'v> {
     // once for all enumerations. But that seems like a lot of work for not much benefit.
     fn make_constructor() -> NativeFunction {
         let mut signature = ParametersSpecBuilder::with_capacity("enum".to_owned(), 2);
-        signature.required("me"); // Hidden first argument
         signature.required("$value");
 
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between therads - so we create the NativeFunction and apply it later.
         NativeFunction::new(
-            move |eval, mut param_parser: ParametersParser| {
-                let typ_val = param_parser.next("me", eval)?;
+            move |eval, this, mut param_parser: ParametersParser| {
+                let this = this.unwrap();
                 let val: Value = param_parser.next("value", eval)?;
-                let typ = EnumType::from_value(typ_val).unwrap();
+                let typ = EnumType::from_value(this).unwrap();
                 match typ.elements.get_hashed(val.get_hashed()?.borrow()) {
                     Some(v) => Ok(*v),
                     None => {
-                        Err(EnumError::InvalidElement(val.to_string(), typ_val.to_string()).into())
+                        Err(EnumError::InvalidElement(val.to_string(), this.to_string()).into())
                     }
                 }
             },

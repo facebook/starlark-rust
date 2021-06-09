@@ -33,10 +33,15 @@ use syn::*;
 // pub fn global(globals_builder: &mut GlobalsBuilder) {
 //     fn cc_binary<'v, 'a>(
 //         eval: &mut starlark::eval::Evaluator<'v, 'a>,
+//         #[allow(unused_variables)]
+//         this: Option<starlark::values::Value<'v>>,
 //         args: starlark::eval::ParametersParser,
 //     ) -> anyhow::Result<starlark::values::Value<'v>> {
 //         fn inner<'v, 'a, 'a2>(
-//             #[allow(unused_variables)] eval: &mut starlark::eval::Evaluator<'v, 'a>,
+//             #[allow(unused_variables)]
+//             eval: &mut starlark::eval::Evaluator<'v, 'a>,
+//             #[allow(unused_variables)]
+//             this: Option<starlark::values::Value<'v>>,
 //             #[allow(unused_mut)]
 //             #[allow(unused_variables)]
 //             mut args: starlark::eval::ParametersParser,
@@ -58,7 +63,7 @@ use syn::*;
 //                 res
 //             })
 //         }
-//         match inner(eval, args) {
+//         match inner(eval, this, args) {
 //             Ok(v) => Ok(eval.heap().alloc(v)),
 //             Err(e) => Err(e),
 //         }
@@ -263,11 +268,15 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v, 'a>(
             eval: &mut starlark::eval::Evaluator<'v, 'a>,
+            #[allow(unused_variables)]
+            this: Option<starlark::values::Value<'v>>,
             starlark_args: starlark::eval::ParametersParser,
         ) -> anyhow::Result<starlark::values::Value<'v>> {
              fn inner<'v, 'a>(
                 #[allow(unused_variables)]
                 eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                #[allow(unused_variables)]
+                this: Option<starlark::values::Value<'v>>,
                 #[allow(unused_mut)]
                 #[allow(unused_variables)]
                 mut starlark_args: starlark::eval::ParametersParser,
@@ -277,7 +286,7 @@ fn add_function(func: &ItemFn) -> proc_macro2::TokenStream {
                 #( #bind_args )*
                 #body
             }
-            match inner(eval, starlark_args) {
+            match inner(eval, this, starlark_args) {
                 Ok(v) => Ok(eval.heap().alloc(v)),
                 Err(e) => Err(e),
             }
@@ -298,7 +307,10 @@ fn bind_argument(arg: &Arg) -> proc_macro2::TokenStream {
     let ty = arg.ty;
     let default = get_default(arg);
 
-    let next = if is_type_option(ty) {
+    // Rust doesn't have powerful enough nested if yet
+    let next = if name_str == "this" || name_str == "_this" {
+        quote! { starlark_args.this(this)? }
+    } else if is_type_option(ty) {
         assert!(
             default.is_none(),
             "Can't have Option argument with a default, for `{}`",
@@ -306,7 +318,7 @@ fn bind_argument(arg: &Arg) -> proc_macro2::TokenStream {
         );
         quote! { starlark_args.next_opt(#name_str, eval)? }
     } else if !is_type_value(ty) && default.is_some() {
-        let default = default.unwrap();
+        let default = default.unwrap_or_else(|| unreachable!("Checked on the line above"));
         quote! { starlark_args.next_opt(#name_str, eval)?.unwrap_or(#default) }
     } else {
         quote! { starlark_args.next(#name_str, eval)? }
@@ -334,6 +346,9 @@ fn record_argument(arg: &Arg) -> proc_macro2::TokenStream {
         "kwargs" => {
             assert!(default.is_none(), "Can't have **kwargs with a default");
             quote! {signature.kwargs();}
+        }
+        "this" | "_this" => {
+            quote! {}
         }
         _ if is_type_option(arg.ty) => {
             quote! {signature.optional(#name_str);}

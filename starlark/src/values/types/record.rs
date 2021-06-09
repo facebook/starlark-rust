@@ -138,8 +138,7 @@ impl<'v> RecordType<'v> {
 
     fn make_constructor(fields: &SmallMap<String, FieldGen<Value<'v>>>) -> NativeFunction {
         let mut parameters =
-            ParametersSpecBuilder::with_capacity("record".to_owned(), fields.len() + 1);
-        parameters.required("me"); // Hidden first argument
+            ParametersSpecBuilder::with_capacity("record".to_owned(), fields.len());
         parameters.no_args();
         for (name, field) in fields {
             if field.default.is_some() {
@@ -152,9 +151,9 @@ impl<'v> RecordType<'v> {
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.
         NativeFunction::new(
-            move |eval, mut param_parser: ParametersParser| {
-                let me = param_parser.next("me", eval)?;
-                let info = RecordType::from_value(me).unwrap();
+            move |eval, this, mut param_parser: ParametersParser| {
+                let this = this.unwrap();
+                let info = RecordType::from_value(this).unwrap();
                 let mut values = Vec::with_capacity(info.fields.len());
                 for (name, field) in &info.fields {
                     match field.default {
@@ -175,7 +174,7 @@ impl<'v> RecordType<'v> {
                         }
                     }
                 }
-                Ok(eval.heap().alloc_complex(Record { typ: me, values }))
+                Ok(eval.heap().alloc_complex(Record { typ: this, values }))
             },
             parameters.build(),
         )
