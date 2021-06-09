@@ -233,6 +233,7 @@ struct ArgsCompiled {
 }
 
 impl ArgsCompiled {
+    #[inline(always)]
     fn with_params<'v, R>(
         &self,
         this: Option<Value<'v>>,

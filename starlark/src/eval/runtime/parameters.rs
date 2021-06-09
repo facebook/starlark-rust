@@ -276,6 +276,7 @@ impl<V> ParametersSpec<V> {
 }
 
 impl<'v> ParametersSpec<Value<'v>> {
+    #[inline(always)]
     pub(crate) fn collect<'a>(
         spec: &'a ParametersSpec<Value<'v>>,
         slots: usize,
