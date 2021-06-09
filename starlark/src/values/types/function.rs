@@ -111,9 +111,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let mut collect = ParametersSpec::collect(self.parameters.promote(), 0, eval);
-        collect.push_params(params, eval);
-        let slots = collect.done(eval)?;
+        let slots = ParametersSpec::collect(self.parameters.promote(), 0, params, eval)?;
         eval.with_call_stack(me, location, |eval| {
             let parser = ParametersParser::new(slots);
             let res = (self.function)(eval, parser);

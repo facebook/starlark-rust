@@ -277,21 +277,24 @@ impl<V> ParametersSpec<V> {
 
 impl<'v> ParametersSpec<Value<'v>> {
     pub(crate) fn collect<'a>(
-        params: &'a ParametersSpec<Value<'v>>,
+        spec: &'a ParametersSpec<Value<'v>>,
         slots: usize,
+        params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
-    ) -> ParametersCollect<'v, 'a> {
-        let len = params.0.kinds.len();
+    ) -> anyhow::Result<LocalSlotBase> {
+        let len = spec.0.kinds.len();
         let slots = eval.local_variables.reserve(cmp::max(slots, len));
-        ParametersCollect {
-            params,
+        let mut collect = ParametersCollect {
+            params: spec,
             slots,
             only_positional: true,
             next_position: 0,
             args: Vec::new(),
             kwargs: None,
             err: None,
-        }
+        };
+        collect.push_params(params, eval);
+        collect.done(eval)
     }
 }
 
@@ -324,7 +327,7 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 }
 
-pub(crate) struct ParametersCollect<'v, 'a> {
+struct ParametersCollect<'v, 'a> {
     params: &'a ParametersSpec<Value<'v>>,
     slots: LocalSlotBase,
 

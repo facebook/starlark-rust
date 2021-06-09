@@ -264,9 +264,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let slots = self.stmt.scope_names.used;
-        let mut collect = ParametersSpec::collect(self.parameters.promote(), slots, eval);
-        collect.push_params(params, eval);
-        let slots = collect.done(eval)?;
+        let slots = ParametersSpec::collect(self.parameters.promote(), slots, params, eval)?;
         eval.with_call_stack(me, location, |eval| self.invoke_raw(slots, eval))
     }
 }
@@ -286,9 +284,7 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let slots = self.stmt.scope_names.used;
-        let mut collect = ParametersSpec::collect(&self.parameters, slots, eval);
-        collect.push_params(params, eval);
-        let slots = collect.done(eval)?;
+        let slots = ParametersSpec::collect(&self.parameters, slots, params, eval)?;
         eval.with_call_stack(me, location, |eval| self.invoke_raw(slots, eval))
     }
 }
