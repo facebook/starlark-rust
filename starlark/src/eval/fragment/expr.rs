@@ -444,7 +444,7 @@ impl Compiler<'_> {
                         expr!(e, |eval| {
                             // We don't need to worry about whether it's an attribute, method or field
                             // since those that don't want the `this` just ignore it
-                            let fun = throw(e.get_attr(&s.node, eval.heap()), span, eval)?.1;
+                            let fun = throw(e.get_attr_error(&s.node, eval.heap()), span, eval)?.1;
                             args.with_params(Some(e), eval, |params, eval| {
                                 throw(fun.invoke(Some(span), params, eval), span, eval)
                             })?
