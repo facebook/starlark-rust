@@ -205,6 +205,103 @@ struct ArgsCompiled {
     kwargs: Option<ExprCompiled>,
 }
 
+// Helper that creates some specialised argument calls
+macro_rules! args {
+    ($args:ident, $e:expr) => {
+        if $args.names.is_empty()
+            && $args.args.is_none()
+            && $args.kwargs.is_none()
+            && $args.pos_named.len() <= 2
+        {
+            let mut args = $args;
+            match args.pos_named.pop() {
+                None => {
+                    let $args = Args0Compiled;
+                    $e
+                }
+                Some(a1) => match args.pos_named.pop() {
+                    None => {
+                        let $args = Args1Compiled(a1);
+                        $e
+                    }
+                    Some(a2) => {
+                        let $args = Args2Compiled(a2, a1);
+                        $e
+                    }
+                },
+            }
+        } else {
+            $e
+        }
+    };
+}
+
+struct Args0Compiled;
+
+struct Args1Compiled(ExprCompiled);
+
+struct Args2Compiled(ExprCompiled, ExprCompiled);
+
+impl Args0Compiled {
+    #[inline(always)]
+    fn with_params<'v, R>(
+        &self,
+        this: Option<Value<'v>>,
+        eval: &mut Evaluator<'v, '_>,
+        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+    ) -> Result<R, EvalException<'v>> {
+        let params = Parameters {
+            this,
+            pos: &[],
+            named: &[],
+            names: &[],
+            args: None,
+            kwargs: None,
+        };
+        f(params, eval)
+    }
+}
+
+impl Args1Compiled {
+    #[inline(always)]
+    fn with_params<'v, R>(
+        &self,
+        this: Option<Value<'v>>,
+        eval: &mut Evaluator<'v, '_>,
+        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+    ) -> Result<R, EvalException<'v>> {
+        let params = Parameters {
+            this,
+            pos: &[self.0(eval)?],
+            named: &[],
+            names: &[],
+            args: None,
+            kwargs: None,
+        };
+        f(params, eval)
+    }
+}
+
+impl Args2Compiled {
+    #[inline(always)]
+    fn with_params<'v, R>(
+        &self,
+        this: Option<Value<'v>>,
+        eval: &mut Evaluator<'v, '_>,
+        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+    ) -> Result<R, EvalException<'v>> {
+        let params = Parameters {
+            this,
+            pos: &[self.0(eval)?, self.1(eval)?],
+            named: &[],
+            names: &[],
+            args: None,
+            kwargs: None,
+        };
+        f(params, eval)
+    }
+}
+
 impl ArgsCompiled {
     #[inline(always)]
     fn with_params<'v, R>(
@@ -413,22 +510,29 @@ impl Compiler<'_> {
                 match left.node {
                     Expr::Dot(box e, s) => {
                         let e = self.expr(e);
-                        expr!(e, |eval| {
-                            // We don't need to worry about whether it's an attribute, method or field
-                            // since those that don't want the `this` just ignore it
-                            let fun = throw(e.get_attr_error(&s.node, eval.heap()), span, eval)?.1;
-                            args.with_params(Some(e), eval, |params, eval| {
-                                throw(fun.invoke(Some(span), params, eval), span, eval)
-                            })?
-                        })
+                        args!(
+                            args,
+                            expr!(e, |eval| {
+                                // We don't need to worry about whether it's an attribute, method or field
+                                // since those that don't want the `this` just ignore it
+                                let fun =
+                                    throw(e.get_attr_error(&s.node, eval.heap()), span, eval)?.1;
+                                args.with_params(Some(e), eval, |params, eval| {
+                                    throw(fun.invoke(Some(span), params, eval), span, eval)
+                                })?
+                            })
+                        )
                     }
                     _ => {
                         let left = self.expr(*left);
-                        expr!(left, |eval| {
-                            args.with_params(None, eval, |params, eval| {
-                                throw(left.invoke(Some(span), params, eval), span, eval)
-                            })?
-                        })
+                        args!(
+                            args,
+                            expr!(left, |eval| {
+                                args.with_params(None, eval, |params, eval| {
+                                    throw(left.invoke(Some(span), params, eval), span, eval)
+                                })?
+                            })
+                        )
                     }
                 }
             }
