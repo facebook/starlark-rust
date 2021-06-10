@@ -26,7 +26,9 @@ use crate::{
         runtime::evaluator::Evaluator,
         Parameters,
     },
-    syntax::ast::{Argument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility},
+    syntax::ast::{
+        Argument, AstArgument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility,
+    },
     values::{
         dict::FrozenDict,
         fast_string,
@@ -94,13 +96,6 @@ fn eval_slice(
             eval,
         )?
     })
-}
-
-enum ArgCompiled {
-    Pos(ExprCompiled),
-    Named(String, Hashed<FrozenValue>, ExprCompiled),
-    Args(ExprCompiled),
-    KwArgs(ExprCompiled),
 }
 
 impl Compiler<'_> {
@@ -249,17 +244,22 @@ impl Compiler<'_> {
         expr.map(|v| self.expr(*v))
     }
 
-    fn args(&mut self, args: Vec<ArgCompiled>) -> ArgsCompiled {
+    fn args(&mut self, args: Vec<AstArgument>) -> ArgsCompiled {
         let mut res = ArgsCompiled::default();
-        for a in args {
-            match a {
-                ArgCompiled::Pos(x) => res.pos_named.push(x),
-                ArgCompiled::Named(a, b, x) => {
-                    res.names.push((a, b));
-                    res.pos_named.push(x);
+        for x in args {
+            match x.node {
+                Argument::Positional(x) => res.pos_named.push(self.expr(x)),
+                Argument::Named(name, value) => {
+                    let name_value = self
+                        .heap
+                        .alloc(name.node.as_str())
+                        .get_hashed()
+                        .expect("String is Hashable");
+                    res.names.push((name.node, name_value));
+                    res.pos_named.push(self.expr(value));
                 }
-                ArgCompiled::Args(x) => res.args = Some(x),
-                ArgCompiled::KwArgs(x) => res.kwargs = Some(x),
+                Argument::Args(x) => res.args = Some(self.expr(x)),
+                Argument::KwArgs(x) => res.kwargs = Some(self.expr(x)),
             }
         }
         res
@@ -409,19 +409,6 @@ impl Compiler<'_> {
                 })
             }
             Expr::Call(left, args) => {
-                let args = args.into_map(|x| match x.node {
-                    Argument::Positional(x) => ArgCompiled::Pos(self.expr(x)),
-                    Argument::Named(name, value) => {
-                        let name_value = self
-                            .heap
-                            .alloc(name.node.as_str())
-                            .get_hashed()
-                            .expect("String is Hashable");
-                        ArgCompiled::Named(name.node, name_value, self.expr(value))
-                    }
-                    Argument::Args(x) => ArgCompiled::Args(self.expr(x)),
-                    Argument::KwArgs(x) => ArgCompiled::KwArgs(self.expr(x)),
-                });
                 let args = self.args(args);
                 match left.node {
                     Expr::Dot(box e, s) => {
