@@ -345,6 +345,7 @@
 #![feature(backtrace)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
+#![feature(cell_filter_map)]
 #![feature(hash_set_entry)]
 #![feature(try_blocks)]
 //

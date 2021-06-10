@@ -382,12 +382,7 @@ impl<'v> Value<'v> {
         heap: &'v Heap,
     ) -> anyhow::Result<Option<RefMut<'_, T>>> {
         let vref = self.get_ref_mut(heap)?;
-        let any: RefMut<'_, dyn AnyLifetime<'v>> = RefMut::map(vref, |v| v.as_dyn_any_mut());
-        Ok(if any.is::<T>() {
-            Some(RefMut::map(any, |any| any.downcast_mut::<T>().unwrap()))
-        } else {
-            None
-        })
+        Ok(RefMut::filter_map(vref, |v| v.as_dyn_any_mut().downcast_mut::<T>()).ok())
     }
 
     /// Describe the value, in order to get its metadata in a way that could be used
