@@ -36,7 +36,6 @@ use crate::{
         FrozenHeap, FrozenValue, Value, *,
     },
 };
-use either::Either;
 use gazebo::prelude::*;
 use std::{cmp::Ordering, collections::HashMap};
 use thiserror::Error;
@@ -102,27 +101,6 @@ enum ArgCompiled {
     Named(String, Hashed<FrozenValue>, ExprCompiled),
     Args(ExprCompiled),
     KwArgs(ExprCompiled),
-}
-
-fn eval_dot(
-    span: Span,
-    e: ExprCompiled,
-    s: String,
-) -> impl for<'v> Fn(
-    &mut Evaluator<'v, '_>,
-) -> Result<Either<Value<'v>, BoundMethod<'v>>, EvalException<'v>> {
-    move |eval| {
-        let left = e(eval)?;
-        let (attr_type, v) = throw(left.get_attr_error(&s, eval.heap()), span, eval)?;
-        if attr_type == AttrType::Field {
-            Ok(Either::Left(v))
-        } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-            throw(v_attr.call(left, eval), span, eval).map(Either::Left)
-        } else {
-            // Insert self so the method see the object it is acting on
-            Ok(Either::Right(BoundMethod::new(left, v)))
-        }
-    }
 }
 
 impl Compiler<'_> {
@@ -417,11 +395,18 @@ impl Compiler<'_> {
             }
             Expr::Dot(left, right) => {
                 let left = self.expr(*left);
-                let res = eval_dot(expr.span, left, right.node);
-                box move |eval| match res(eval)? {
-                    Either::Left(v) => Ok(v),
-                    Either::Right(v) => Ok(eval.heap().alloc(v)),
-                }
+                let s = right.node;
+                expr!(left, |eval| {
+                    let (attr_type, v) = throw(left.get_attr_error(&s, eval.heap()), span, eval)?;
+                    if attr_type == AttrType::Field {
+                        v
+                    } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
+                        throw(v_attr.call(left, eval), span, eval)?
+                    } else {
+                        // Insert self so the method see the object it is acting on
+                        eval.heap().alloc(BoundMethod::new(left, v))
+                    }
+                })
             }
             Expr::Call(left, args) => {
                 let args = args.into_map(|x| match x.node {
