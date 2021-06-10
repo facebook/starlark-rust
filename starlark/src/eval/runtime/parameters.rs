@@ -285,17 +285,31 @@ impl<'v> ParametersSpec<Value<'v>> {
     ) -> anyhow::Result<LocalSlotBase> {
         let len = spec.0.kinds.len();
         let slots = eval.local_variables.reserve(cmp::max(slots, len));
-        let mut collect = ParametersCollect {
-            params: spec,
-            slots,
-            only_positional: true,
-            next_position: 0,
-            args: Vec::new(),
-            kwargs: None,
-            err: None,
-        };
-        collect.push_params(params, eval);
-        collect.done(eval)
+
+        if len == params.pos.len()
+            && len == spec.0.positional
+            && params.named.is_empty()
+            && params.args.is_none()
+            && params.kwargs.is_none()
+        {
+            // fast path for saturated length only positional
+            for (i, x) in params.pos.iter().enumerate() {
+                eval.local_variables.get_slot_at(slots, i).set_direct(*x)
+            }
+            Ok(slots)
+        } else {
+            let mut collect = ParametersCollect {
+                params: spec,
+                slots,
+                only_positional: true,
+                next_position: 0,
+                args: Vec::new(),
+                kwargs: None,
+                err: None,
+            };
+            collect.push_params(params, eval);
+            collect.done(eval)
+        }
     }
 }
 
