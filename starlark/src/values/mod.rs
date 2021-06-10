@@ -204,12 +204,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug {
     }
 
     fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        let any = ARef::map(self.get_aref(), |e| e.as_dyn_any());
-        if any.is::<T>() {
-            Some(ARef::map(any, |any| any.downcast_ref::<T>().unwrap()))
-        } else {
-            None
-        }
+        ARef::filter_map(self.get_aref(), |e| e.as_dyn_any().downcast_ref::<T>()).ok()
     }
 }
 
