@@ -25,7 +25,7 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{
         any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
-        Value, ValueLike, Walker,
+        UnpackValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -1700,6 +1700,36 @@ mk_wrapper().x += 5
 assert_eq(len(count), 1)
 "#,
     );
+}
+
+#[test]
+fn test_joe() {
+    // Based on discussions at https://github.com/facebookexperimental/starlark-rust/issues/22
+    let code = r#"
+def animal(id):
+    return {
+        "kind": "giraffe",
+        "name": "giraffe-%s" % id,
+        "feeding": [
+            {
+                "name": "feeder",
+                "image": "photos-%s" % id,
+                "commands": [
+                    "lift",
+                    "roll-over",
+                ],
+            },
+        ],
+    }
+animal("Joe")
+"#;
+    let m = Module::new();
+    let globals = Globals::standard();
+    let mut eval = Evaluator::new(&m, &globals);
+    let ast = AstModule::parse("code.bzl", code.to_owned(), &Dialect::Standard).unwrap();
+    let res: Value = eval.eval_module(ast).unwrap();
+    let animal = SmallMap::<String, Value>::unpack_value(res).unwrap();
+    println!("animal = {:?}", animal);
 }
 
 #[test]
