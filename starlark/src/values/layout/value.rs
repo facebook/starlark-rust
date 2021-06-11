@@ -155,6 +155,15 @@ impl<'v> ValueMem<'v> {
         )
     }
 
+    #[allow(clippy::borrowed_box)]
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        match self {
+            Self::Str(x) => Some(x),
+            Self::Forward(x) => x.unpack_box_str(),
+            _ => None,
+        }
+    }
+
     fn unpack_str(&self) -> Option<&str> {
         match self {
             Self::Str(x) => Some(x),
@@ -241,6 +250,14 @@ impl FrozenValueMem {
         }
     }
 
+    #[allow(clippy::borrowed_box)]
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        match self {
+            Self::Str(x) => Some(x),
+            _ => None,
+        }
+    }
+
     fn get_ref<'v>(&self) -> &dyn StarlarkValue<'v> {
         match self {
             Self::Str(x) => x,
@@ -306,6 +323,21 @@ impl<'v> Value<'v> {
     /// Obtain the underlying `int` if it is an integer.
     pub fn unpack_int(self) -> Option<i32> {
         self.0.unpack_int()
+    }
+
+    /// Like [`unpack_str`](Value::unpack_str), but gives a pointer to a boxed string.
+    /// Mostly useful for when you want to convert the string to a `dyn` trait, but can't
+    /// form a `dyn` of an unsized type.
+    ///
+    /// Unstable and likely to be removed in future, as the presence of the `Box` is
+    /// not a guaranteed part of the API.
+    #[allow(clippy::borrowed_box)]
+    pub fn unpack_box_str(self) -> Option<&'v Box<str>> {
+        match self.0.unpack() {
+            PointerUnpack::Ptr1(x) => x.unpack_box_str(),
+            PointerUnpack::Ptr2(x) => x.unpack_box_str(),
+            _ => None,
+        }
     }
 
     /// Obtain the underlying `str` if it is a string.
@@ -418,6 +450,15 @@ impl FrozenValue {
     pub(crate) fn unpack_str<'v>(&'v self) -> Option<&'v str> {
         match self.0.unpack_ptr1() {
             Some(x) => x.unpack_str(),
+            _ => None,
+        }
+    }
+
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    #[allow(clippy::borrowed_box)]
+    pub(crate) fn unpack_box_str<'v>(&'v self) -> Option<&'v Box<str>> {
+        match self.0.unpack_ptr1() {
+            Some(x) => x.unpack_box_str(),
             _ => None,
         }
     }
