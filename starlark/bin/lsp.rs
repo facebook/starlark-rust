@@ -51,8 +51,8 @@ fn to_severity(x: Severity) -> DiagnosticSeverity {
 fn to_diagnostic(x: StarlarkMessage) -> Diagnostic {
     let range = match x.span {
         Some(s) => Range::new(
-            Position::new(s.begin_line as u64, s.begin_column as u64),
-            Position::new(s.end_line as u64, s.end_column as u64),
+            Position::new(s.begin_line as u32, s.begin_column as u32),
+            Position::new(s.end_line as u32, s.end_column as u32),
         ),
         _ => Range::default(),
     };
@@ -88,7 +88,7 @@ impl Backend {
     fn did_open(&self, params: DidOpenTextDocumentParams) {
         self.validate(
             params.text_document.uri,
-            Some(params.text_document.version),
+            Some(params.text_document.version as i64),
             params.text_document.text,
         )
     }
@@ -98,7 +98,7 @@ impl Backend {
         let change = params.content_changes.into_iter().next().unwrap();
         self.validate(
             params.text_document.uri,
-            params.text_document.version,
+            Some(params.text_document.version as i64),
             change.text,
         );
     }
@@ -126,7 +126,7 @@ impl Backend {
 
     fn publish_diagnostics(&self, uri: Url, diags: Vec<Diagnostic>, version: Option<i64>) {
         self.send_notification(new_notification::<PublishDiagnostics>(
-            PublishDiagnosticsParams::new(uri, diags, version),
+            PublishDiagnosticsParams::new(uri, diags, version.map(|i| i as i32)),
         ));
     }
 
