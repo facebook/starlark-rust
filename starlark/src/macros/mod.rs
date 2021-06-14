@@ -72,9 +72,13 @@ macro_rules! starlark_complex_value {
                         }
                     }
 
-                    x.downcast_ref::< [< Frozen $x >] >()
-                        .map(|o| $crate::values::ARef::map(o, |e| promote(e)))
-                        .or_else(|| x.downcast_ref::<$x<'v>>())
+                    let aref = $crate::values::ARef::map(x.get_aref(), |e| e.as_dyn_any());
+                    match $crate::values::ARef::filter_map(aref, |e| e.downcast_ref::< $x<'v> >()) {
+                        Ok(res) => Some(res),
+                        Err(aref) => {
+                            $crate::values::ARef::filter_map(aref, |e| e.downcast_ref::< [< Frozen $x >] >().map(promote)).ok()
+                        }
+                    }
                 }
 
                 #[allow(dead_code)]
