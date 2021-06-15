@@ -20,13 +20,20 @@ use gazebo::prelude::*;
 use indexmap::Equivalent;
 use std::{
     cmp::Ordering,
+    fmt::{self, Debug},
     hash::{Hash, Hasher},
     iter::FromIterator,
 };
 
 /// An memory-efficient set with determinstic order, based on [`SmallMap`].
-#[derive(Debug, Clone, Default_)]
+#[derive(Clone, Default_)]
 pub struct SmallSet<T>(SmallMap<T, ()>);
+
+impl<T: Debug> Debug for SmallSet<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_set().entries(self.iter()).finish()
+    }
+}
 
 impl<T> Eq for SmallSet<T> where T: Eq {}
 

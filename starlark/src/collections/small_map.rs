@@ -33,6 +33,7 @@ use indexmap::{Equivalent, IndexMap};
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
+    fmt::{self, Debug},
     hash::{Hash, Hasher},
     iter::FromIterator,
     mem,
@@ -321,9 +322,15 @@ impl<K, V> Default for MapHolder<K, V> {
 /// * Variants which take an already hashed value, e.g. [`get_hashed`](SmallMap::get_hashed).
 ///
 /// * Functions which work with the position, e.g. [`get_index_of`](SmallMap::get_index_of).
-#[derive(Debug, Clone, Default_)]
+#[derive(Clone, Default_)]
 pub struct SmallMap<K, V> {
     state: MapHolder<K, V>,
+}
+
+impl<K: Debug, V: Debug> Debug for SmallMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_map().entries(self.iter()).finish()
+    }
 }
 
 impl<K, V> SmallMap<K, V> {
@@ -891,5 +898,11 @@ mod tests {
         assert_eq!(map.remove(&K(1)), Some("test"));
         assert_eq!(map.get(&K(1)), None);
         assert_eq!(map.keys().collect::<Vec<_>>(), vec![&K(3), &K(2)]);
+    }
+
+    #[test]
+    fn test_smallmap_debug() {
+        let s = format!("{:?}", smallmap![1 => "test", 2 => "more"]);
+        assert_eq!(s, "{1: \"test\", 2: \"more\"}")
     }
 }
