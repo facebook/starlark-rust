@@ -15,7 +15,18 @@
  * limitations under the License.
  */
 
-use crate::values::{dict::Dict, list::List, tuple::Tuple, Value};
+use std::fmt::{self, Debug};
+
+use crate::{
+    collections::{BorrowHashed, Hashed},
+    values::{
+        dict::{Dict, ValueStr},
+        list::List,
+        tuple::Tuple,
+        Value,
+    },
+};
+use gazebo::prelude::*;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -28,8 +39,16 @@ enum TypingError {
     InvalidTypeAnnotation(String),
 }
 
-impl<'v> Value<'v> {
-    pub(crate) fn is_type(self, ty: Value<'v>) -> anyhow::Result<bool> {
+pub(crate) struct TypeCompiled(Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>);
+
+impl Debug for TypeCompiled {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("TypeCompiled")
+    }
+}
+
+impl TypeCompiled {
+    pub(crate) fn new(ty: Value) -> anyhow::Result<Self> {
         // Types that are "" are start with "_" are wildcard - they match everything
         fn is_wildcard(x: &str) -> bool {
             x == "" || x.starts_with('_')
@@ -40,107 +59,165 @@ impl<'v> Value<'v> {
             if x.len() == 1 { x.iter().next() } else { None }
         }
 
-        if let Some(s) = ty.unpack_str() {
-            if is_wildcard(s) {
-                Ok(true)
-            } else {
-                Ok(self.get_aref().matches_type(s))
-            }
-        } else if ty.is_none() {
-            Ok(self.is_none())
-        } else if let Some(t) = Tuple::from_value(ty) {
-            match Tuple::from_value(self) {
-                Some(v) if v.len() == t.len() => {
-                    for (v, t) in v.iter().zip(t.iter()) {
-                        if !v.is_type(t)? {
-                            return Ok(false);
+        fn f(ty: Value) -> anyhow::Result<Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>> {
+            if let Some(s) = ty.unpack_str() {
+                if is_wildcard(s) {
+                    Ok(box |_| true)
+                } else {
+                    match s {
+                        "string" => Ok(box |v| {
+                            v.unpack_str().is_some() || v.get_aref().matches_type("string")
+                        }),
+                        "int" => {
+                            Ok(
+                                box |v| {
+                                    v.unpack_int().is_some() || v.get_aref().matches_type("int")
+                                },
+                            )
+                        }
+                        "bool" => Ok(box |v| {
+                            v.unpack_bool().is_some() || v.get_aref().matches_type("bool")
+                        }),
+                        _ => {
+                            let s = s.to_owned();
+                            Ok(box move |v| v.get_aref().matches_type(&s))
                         }
                     }
-                    Ok(true)
                 }
-                _ => Ok(false),
-            }
-        } else if let Some(t) = List::from_value(ty) {
-            match t.len() {
-                0 => Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into()),
-                1 => {
-                    // Must be a list with all elements of this type
-                    match List::from_value(self) {
-                        None => Ok(false),
-                        Some(vs) => {
-                            let t: Value = t.iter().next().unwrap();
-                            if t.unpack_str().map(is_wildcard) == Some(true) {
-                                // Any type - so avoid the inner iteration
-                                return Ok(true);
-                            }
-                            for v in vs.iter() {
-                                if !v.is_type(t)? {
-                                    return Ok(false);
+            } else if ty.is_none() {
+                Ok(box |v| v.is_none())
+            } else if let Some(t) = Tuple::from_value(ty) {
+                let ts = t.content.try_map(|t| f(*t))?;
+                Ok(box move |v| match Tuple::from_value(v) {
+                    Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| t(v)),
+                    _ => false,
+                })
+            } else if let Some(t) = List::from_value(ty) {
+                match t.len() {
+                    0 => Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into()),
+                    1 => {
+                        // Must be a list with all elements of this type
+                        let t = *t.content.first().unwrap();
+                        let wildcard = t.unpack_str().map(is_wildcard) == Some(true);
+                        if wildcard {
+                            // Any type - so avoid the inner iteration
+                            Ok(box |v| List::from_value(v).is_some())
+                        } else {
+                            let t = f(t)?;
+                            Ok(box move |v| match List::from_value(v) {
+                                None => false,
+                                Some(v) => v.iter().all(|v| t(v)),
+                            })
+                        }
+                    }
+                    2 => {
+                        // A union type, can match either - special case of the arbitrary choice to go slightly faster
+                        let t1 = f(t.content[0])?;
+                        let t2 = f(t.content[1])?;
+                        Ok(box move |v| t1(v) || t2(v))
+                    }
+                    _ => {
+                        // A union type, can match any
+                        let ts = t.content.try_map(|t| f(*t))?;
+                        Ok(box move |v| ts.iter().any(|t| t(v)))
+                    }
+                }
+            } else if let Some(t) = Dict::from_value(ty) {
+                if t.content.is_empty() {
+                    Ok(box |v| Dict::from_value(v).is_some())
+                } else if let Some((tk, tv)) = unpack_singleton_dictionary(&t) {
+                    // Dict of the form {k: v} must all match the k/v types
+                    let tk = f(tk)?;
+                    let tv = f(tv)?;
+                    Ok(box move |v| match Dict::from_value(v) {
+                        None => false,
+                        Some(v) => v.content.iter().all(|(k, v)| tk(*k) && tv(*v)),
+                    })
+                } else {
+                    // Dict type, allowed to have more keys that aren't used.
+                    // All specified must be type String.
+                    let ts = t
+                        .iter_hashed()
+                        .map(|(k, kt)| {
+                            let k_str = match k.key().unpack_str() {
+                                None => {
+                                    return Err(
+                                        TypingError::InvalidTypeAnnotation(ty.to_str()).into()
+                                    );
                                 }
-                            }
-                            Ok(true)
-                        }
-                    }
-                }
-                _ => {
-                    // A union type, can match any
-                    for t in t.iter() {
-                        if self.is_type(t)? {
-                            return Ok(true);
-                        }
-                    }
-                    Ok(false)
-                }
-            }
-        } else if let Some(t) = Dict::from_value(ty) {
-            match Dict::from_value(self) {
-                None => Ok(false),
-                Some(v) => {
-                    if let Some((kt, vt)) = unpack_singleton_dictionary(&t) {
-                        // Dict of the form {k: v} must all match the k/v types
-                        for (k, kv) in v.content.iter() {
-                            if !k.is_type(kt)? || !kv.is_type(vt)? {
-                                return Ok(false);
-                            }
-                        }
-                    } else {
-                        // Dict type, allowed to have more keys that aren't used
-                        for (k, kt) in t.iter_hashed() {
-                            if k.key().unpack_str().is_none() {
-                                return Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into());
-                            }
-                            match v.content.get_hashed(k.borrow()) {
-                                None => return Ok(false),
-                                Some(kv) => {
-                                    if !kv.is_type(kt)? {
-                                        return Ok(false);
+                                Some(s) => Hashed::new_unchecked(k.hash(), s.to_owned()),
+                            };
+                            let kt = f(kt)?;
+                            Ok((k_str, kt))
+                        })
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+
+                    Ok(box move |v| match Dict::from_value(v) {
+                        None => false,
+                        Some(v) => {
+                            for (k, kt) in &ts {
+                                let ks = ValueStr(k.key().as_str());
+                                let kv = BorrowHashed::new_unchecked(k.hash(), &ks);
+                                match v.content.get_hashed(kv) {
+                                    None => return false,
+                                    Some(kv) => {
+                                        if !kt(*kv) {
+                                            return false;
+                                        }
                                     }
                                 }
                             }
+                            true
                         }
-                    }
-                    Ok(true)
+                    })
                 }
+            } else {
+                Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into())
             }
-        } else {
-            Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into())
         }
+
+        Ok(Self(f(ty)?))
+    }
+}
+
+impl<'v> Value<'v> {
+    pub(crate) fn is_type(self, ty: Value<'v>) -> anyhow::Result<bool> {
+        Ok(TypeCompiled::new(ty)?.0(self))
+    }
+
+    #[inline(never)]
+    fn check_type_error(value: Value, ty: Value, arg_name: Option<&str>) -> anyhow::Result<()> {
+        Err(TypingError::TypeAnnotationMismatch(
+            value.to_str(),
+            value.get_type().to_owned(),
+            ty.to_str(),
+            match arg_name {
+                None => "return type".to_owned(),
+                Some(x) => format!("argument `{}`", x),
+            },
+        )
+        .into())
     }
 
     pub(crate) fn check_type(self, ty: Value<'v>, arg_name: Option<&str>) -> anyhow::Result<()> {
         if self.is_type(ty)? {
             Ok(())
         } else {
-            Err(TypingError::TypeAnnotationMismatch(
-                self.to_str(),
-                self.get_type().to_owned(),
-                ty.to_str(),
-                match arg_name {
-                    None => "return type".to_owned(),
-                    Some(x) => format!("argument `{}`", x),
-                },
-            )
-            .into())
+            Self::check_type_error(self, ty, arg_name)
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn check_type_compiled(
+        self,
+        ty: Value<'v>,
+        ty_compiled: &TypeCompiled,
+        arg_name: Option<&str>,
+    ) -> anyhow::Result<()> {
+        if ty_compiled.0(self) {
+            Ok(())
+        } else {
+            Self::check_type_error(self, ty, arg_name)
         }
     }
 }

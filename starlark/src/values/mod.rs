@@ -58,7 +58,7 @@ mod owned;
 mod stack_guard;
 mod traits;
 mod types;
-mod typing;
+pub(crate) mod typing;
 mod unpack;
 
 impl Display for Value<'_> {

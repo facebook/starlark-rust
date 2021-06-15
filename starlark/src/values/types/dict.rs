@@ -72,7 +72,7 @@ impl<V> DictGen<V> {
 
 /// Helper type for lookups, not useful.
 #[derive(Eq, PartialEq)]
-pub struct ValueStr<'a>(&'a str);
+pub struct ValueStr<'a>(pub(crate) &'a str);
 
 impl<'a> Hash for ValueStr<'a> {
     fn hash<H: Hasher>(&self, state: &mut H) {
