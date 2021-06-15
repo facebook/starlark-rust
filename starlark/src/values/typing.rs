@@ -106,6 +106,9 @@ impl<'v> Value<'v> {
                     } else {
                         // Dict type, allowed to have more keys that aren't used
                         for (k, kt) in t.iter_hashed() {
+                            if k.key().unpack_str().is_none() {
+                                return Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into());
+                            }
                             match v.content.get_hashed(k.borrow()) {
                                 None => return Ok(false),
                                 Some(kv) => {
@@ -196,14 +199,14 @@ is_type([1, 2, 3], [int.type])
 is_type(None, [None, int.type])
 is_type('test', [int.type, str.type])
 is_type(('test', None), (str.type, None))
-is_type({1: 'test', 2: False, 3: 3}, {1: str.type, 2: bool.type})
+is_type({'1': 'test', '2': False, '3': 3}, {'1': str.type, '2': bool.type})
 is_type({"test": 1, "more": 2}, {str.type: int.type})
 is_type({1: 1, 2: 2}, {int.type: int.type})
 
 not is_type(1, None)
 not is_type((1, 1), str.type)
-not is_type({1: 'test', 3: 'test'}, {2: bool.type, 3: str.type})
-not is_type({1: 'test', 3: 'test'}, {1: bool.type, 3: str.type})
+not is_type({'1': 'test', '3': 'test'}, {'2': bool.type, '3': str.type})
+not is_type({'1': 'test', '3': 'test'}, {'1': bool.type, '3': str.type})
 not is_type('test', [int.type, bool.type])
 not is_type([1,2,None], [int.type])
 not is_type({"test": 1, 8: 2}, {str.type: int.type})
@@ -217,5 +220,6 @@ is_type([1,2,"test"], ["_a"])
         // Checking types fails for invalid types
         a.fail("is_type(None, is_type)", "not a valid type");
         a.fail("is_type(None, [])", "not a valid type");
+        a.fail("is_type({}, {1: 'string', 2: 'bool'})", "not a valid type");
     }
 }
