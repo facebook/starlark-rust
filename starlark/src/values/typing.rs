@@ -207,7 +207,6 @@ impl<'v> Value<'v> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn check_type_compiled(
         self,
         ty: Value<'v>,

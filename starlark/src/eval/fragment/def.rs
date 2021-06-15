@@ -31,8 +31,8 @@ use crate::{
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
-        function::FUNCTION_TYPE, AllocValue, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Value, ValueLike, ValueRef, Walker,
+        function::FUNCTION_TYPE, typing::TypeCompiled, AllocValue, ComplexValue, Freezer,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, ValueRef, Walker,
     },
 };
 use derivative::Derivative;
@@ -123,7 +123,7 @@ impl Compiler<'_> {
                 if let Some(t) = x.ty() {
                     let v = t(eval)?;
                     let name = x.name().unwrap_or("unknown").to_owned();
-                    parameter_types.push((i, name, v));
+                    parameter_types.push((i, name, v, TypeCompiled::new(v)?));
                 }
 
                 match x {
@@ -138,7 +138,10 @@ impl Compiler<'_> {
             }
             let return_type = match &return_type {
                 None => None,
-                Some(v) => Some(v(eval)?),
+                Some(v) => {
+                    let v = v(eval)?;
+                    Some((v, TypeCompiled::new(v)?))
+                }
             };
             Ok(Def::new(
                 parameters.build(),
@@ -158,10 +161,10 @@ impl Compiler<'_> {
 #[derivative(Debug)]
 pub(crate) struct DefGen<V, RefV> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
-    parameter_types: Vec<(usize, String, V)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
-    return_type: Option<V>,                   // The return type annotation for the function
-    codemap: CodeMap,                         // Codemap that was active during this module
-    stmt: Arc<DefInfo>,                       // The source code and metadata for this function
+    parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
+    return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
+    codemap: CodeMap,                       // Codemap that was active during this module
+    stmt: Arc<DefInfo>,                     // The source code and metadata for this function
     captured: Vec<RefV>, // Any variables captured from the outer scope (nested def/lambda), see stmt.parent
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
@@ -178,8 +181,8 @@ any_lifetime!(FrozenDef);
 impl<'v> Def<'v> {
     fn new(
         parameters: ParametersSpec<Value<'v>>,
-        parameter_types: Vec<(usize, String, Value<'v>)>,
-        return_type: Option<Value<'v>>,
+        parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
+        return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: Arc<DefInfo>,
         codemap: CodeMap,
         eval: &mut Evaluator<'v, '_>,
@@ -213,8 +216,8 @@ impl<'v> ComplexValue<'v> for Def<'v> {
         let parameters = self.parameters.freeze(freezer);
         let parameter_types = self
             .parameter_types
-            .into_map(|(i, s, v)| (i, s, v.freeze(freezer)));
-        let return_type = self.return_type.map(|v| v.freeze(freezer));
+            .into_map(|(i, s, v, t)| (i, s, v.freeze(freezer), t));
+        let return_type = self.return_type.map(|(v, t)| (v.freeze(freezer), t));
         let captured = self.captured.map(|x| x.freeze(freezer));
         box FrozenDef {
             parameters,
@@ -229,10 +232,10 @@ impl<'v> ComplexValue<'v> for Def<'v> {
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
         self.parameters.walk(walker);
-        for (_, _, v) in self.parameter_types.iter_mut() {
+        for (_, _, v, _) in self.parameter_types.iter_mut() {
             walker.walk(v)
         }
-        for v in self.return_type.iter_mut() {
+        for (v, _) in self.return_type.iter_mut() {
             walker.walk(v)
         }
         for x in self.captured.iter() {
@@ -315,12 +318,12 @@ impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
         let old_locals = eval.local_variables.utilise(locals);
 
         if eval.check_types() {
-            for (i, arg_name, ty) in &self.parameter_types {
+            for (i, arg_name, ty, ty2) in &self.parameter_types {
                 match eval.get_slot_local(LocalSlotId::new(*i), arg_name.as_str()) {
                     Err(_) => {
                         panic!("Not allowed optional unassigned with type annotations on them")
                     }
-                    Ok(v) => v.check_type(ty.to_value(), Some(arg_name))?,
+                    Ok(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
                 }
             }
         }
@@ -354,8 +357,8 @@ impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
             // either passing the type down (ugly) or passing the location back
             // (ugly and fiddly). Both also imply some runtime cost. If types take off,
             // worth revisiting.
-            if let Some(t) = self.return_type {
-                ret.check_type(t.to_value(), None)?
+            if let Some((tv, t)) = &self.return_type {
+                ret.check_type_compiled(tv.to_value(), t, None)?
             }
         }
         Ok(ret)
