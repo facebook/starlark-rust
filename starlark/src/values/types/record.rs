@@ -48,29 +48,31 @@ use crate::{
     values::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
+        typing::TypeCompiled,
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use std::{
     collections::hash_map::DefaultHasher,
+    fmt::Debug,
     hash::{Hash, Hasher},
 };
 
 /// The result of `field()`.
 #[derive(Clone, Debug, Dupe)]
 pub struct FieldGen<V> {
-    typ: V,
+    pub(crate) typ: V,
     default: Option<V>,
 }
 
 /// The result of `record()`, being the type of records.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RecordTypeGen<V> {
     /// The name of this type, e.g. MyRecord
     typ: Option<String>,
     /// The V is the type the field must satisfy (e.g. `"string"`)
-    fields: SmallMap<String, FieldGen<V>>,
+    fields: SmallMap<String, (FieldGen<V>, TypeCompiled)>,
     /// The construction function, which takes a hidden parameter (this type)
     /// followed by the arguments of the field.
     /// Creating these on every invoke is pretty expensive (profiling shows)
@@ -127,7 +129,10 @@ fn collect_repr_record<'s, 't, V: 't>(
 }
 
 impl<'v> RecordType<'v> {
-    pub(crate) fn new(fields: SmallMap<String, FieldGen<Value<'v>>>, heap: &'v Heap) -> Self {
+    pub(crate) fn new(
+        fields: SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>,
+        heap: &'v Heap,
+    ) -> Self {
         let constructor = heap.alloc(Self::make_constructor(&fields));
         Self {
             typ: None,
@@ -136,12 +141,14 @@ impl<'v> RecordType<'v> {
         }
     }
 
-    fn make_constructor(fields: &SmallMap<String, FieldGen<Value<'v>>>) -> NativeFunction {
+    fn make_constructor(
+        fields: &SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>,
+    ) -> NativeFunction {
         let mut parameters =
             ParametersSpecBuilder::with_capacity("record".to_owned(), fields.len());
         parameters.no_args();
         for (name, field) in fields {
-            if field.default.is_some() {
+            if field.0.default.is_some() {
                 parameters.optional(name);
             } else {
                 parameters.required(name);
@@ -156,10 +163,10 @@ impl<'v> RecordType<'v> {
                 let info = RecordType::from_value(this).unwrap();
                 let mut values = Vec::with_capacity(info.fields.len());
                 for (name, field) in &info.fields {
-                    match field.default {
+                    match field.0.default {
                         None => {
                             let v: Value = param_parser.next(name, eval)?;
-                            v.check_type(field.typ, Some(name))?;
+                            v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
                             values.push(v);
                         }
                         Some(default) => {
@@ -167,7 +174,7 @@ impl<'v> RecordType<'v> {
                             match v {
                                 None => values.push(default),
                                 Some(v) => {
-                                    v.check_type(field.typ, Some(name))?;
+                                    v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
                                     values.push(v);
                                 }
                             }
@@ -236,7 +243,7 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
-            fields.insert_hashed(k, t.freeze(freezer));
+            fields.insert_hashed(k, (t.0.freeze(freezer), t.1));
         }
         box FrozenRecordType {
             typ: self.typ,
@@ -246,7 +253,7 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
-        self.fields.values_mut().for_each(|v| v.walk(walker));
+        self.fields.values_mut().for_each(|v| v.0.walk(walker));
         walker.walk(&mut self.constructor);
     }
 
@@ -265,14 +272,15 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
-        collect_repr_record(self.fields.iter(), |x, s| x.collect_repr(s), collector);
+        collect_repr_record(self.fields.iter(), |x, s| x.0.collect_repr(s), collector);
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = DefaultHasher::new();
         for (name, typ) in &self.fields {
             name.hash(&mut s);
-            s.write_u64(typ.get_hash()?);
+            // No need to hash typ.1, since it was computed from typ.0
+            s.write_u64(typ.0.get_hash()?);
         }
         Ok(s.finish())
     }

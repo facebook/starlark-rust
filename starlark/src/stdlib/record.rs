@@ -22,10 +22,10 @@ use crate::{
     environment::GlobalsBuilder,
     values::{
         record::{Field, RecordType},
+        typing::TypeCompiled,
         Value,
     },
 };
-use gazebo::prelude::*;
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
@@ -35,9 +35,10 @@ pub fn global(builder: &mut GlobalsBuilder) {
         for (k, v) in kwargs.into_iter_hashed() {
             let field = match Field::from_value(v) {
                 None => Field::new(v, None),
-                Some(v) => v.dupe(),
+                Some(v) => v.clone(),
             };
-            mp.insert_hashed(k, field);
+            let compiled = TypeCompiled::new(field.typ)?;
+            mp.insert_hashed(k, (field, compiled));
         }
         Ok(RecordType::new(mp, heap))
     }
