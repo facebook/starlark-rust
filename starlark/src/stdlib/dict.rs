@@ -53,20 +53,6 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
         Ok(NoneType)
     }
 
-    /// Duplicate a dictionary so modifications don't impact the original.
-    ///
-    /// ```
-    /// # starlark::assert::is_true(r#"
-    /// x = {"one": 1, "two": 2}
-    /// y = x.copy()
-    /// y["one"] = 3
-    /// x["one"] == 1
-    /// # "#);
-    /// ```
-    fn copy(this: ARef<Dict>) -> Dict<'v> {
-        Ok(this.clone())
-    }
-
     /// [dict.get](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#dict·get
     /// ): return an element from the dictionary.

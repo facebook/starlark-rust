@@ -79,22 +79,6 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         Ok(NoneType)
     }
 
-    /// Duplicate a list so modifications don't impact the original.
-    ///
-    /// ```
-    /// # starlark::assert::is_true(r#"
-    /// x = [1, 2]
-    /// y = x.copy()
-    /// y.append(3)
-    /// len(x) == 2
-    /// # "#);
-    /// ```
-    fn copy(this: ARef<List>) -> List<'v> {
-        Ok(List {
-            content: this.content.clone(),
-        })
-    }
-
     /// [list.extend](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#list·extend
     /// ): extend a list with another iterable's content.
