@@ -211,7 +211,12 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     /// v == [1, 1, [2, 3]]
     /// # "#);
     /// ```
-    fn set_at(&mut self, index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
+    fn set_at(
+        &mut self,
+        _me: Value<'v>,
+        index: Value<'v>,
+        _new_value: Value<'v>,
+    ) -> anyhow::Result<()> {
         ValueError::unsupported_with(self, "[]=", index)
     }
 

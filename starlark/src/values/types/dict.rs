@@ -181,7 +181,12 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
         })
     }
 
-    fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
+    fn set_at(
+        &mut self,
+        _me: Value<'v>,
+        index: Value<'v>,
+        alloc_value: Value<'v>,
+    ) -> anyhow::Result<()> {
         let index = index.get_hashed()?;
         if let Some(x) = self.content.get_mut_hashed(index.borrow()) {
             *x = alloc_value;

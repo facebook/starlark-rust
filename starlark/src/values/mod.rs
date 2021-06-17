@@ -315,7 +315,7 @@ impl<'v> Value<'v> {
         alloc_value: Value<'v>,
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
-        self.get_ref_mut(heap)?.set_at(index, alloc_value)
+        self.get_ref_mut(heap)?.set_at(self, index, alloc_value)
     }
 
     /// Return the contents of an iterable collection, as an owned vector.

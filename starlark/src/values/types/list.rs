@@ -87,7 +87,12 @@ impl<'v> ComplexValue<'v> for List<'v> {
         self.content.iter_mut().for_each(|x| walker.walk(x))
     }
 
-    fn set_at(&mut self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
+    fn set_at(
+        &mut self,
+        _me: Value<'v>,
+        index: Value<'v>,
+        alloc_value: Value<'v>,
+    ) -> anyhow::Result<()> {
         let i = convert_index(index, self.len() as i32)? as usize;
         self.content[i] = alloc_value;
         Ok(())
