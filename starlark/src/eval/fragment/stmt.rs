@@ -36,8 +36,9 @@ use crate::{
         ControlError, Heap, Value,
     },
 };
+use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::{collections::HashMap, mem};
+use std::{any::TypeId, collections::HashMap, mem};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -270,21 +271,29 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     }
 
     // The Starlark spec says list += mutates, while nothing else does.
-    // When mutating, be careful we collect first, so we don't have `lhs`
+    // When mutating, be careful if they alias, so we don't have `lhs`
     // mutably borrowed when we iterate over `rhs`, as they might alias.
-    // We also have to carefully prod frozen lists, in case they are
+    // We also have to deal with frozen lists, in case they are
     // copy-on-write.
-    if lhs.downcast_ref::<List>().is_some() || lhs.downcast_ref::<FrozenList>().is_some() {
-        let xs = rhs.iterate_collect(heap)?;
-        match List::from_value_mut(lhs, heap)? {
-            None => Err(ControlError::CannotMutateImmutableValue.into()),
-            Some(mut list) => {
-                list.extend(xs);
-                Ok(lhs)
-            }
+
+    let lhs_aref = lhs.get_aref();
+    let lhs_ty = lhs_aref.as_dyn_any().static_type_of();
+
+    if lhs_ty == TypeId::of::<List>() || lhs_ty == TypeId::of::<FrozenList>() {
+        mem::drop(lhs_aref);
+        // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
+        let mut list = List::from_value_mut(lhs, heap)?
+            .ok_or_else(|| anyhow!(ControlError::CannotMutateImmutableValue))?;
+        if lhs.ptr_eq(rhs) {
+            list.content.extend_from_within(..);
+        } else {
+            list.content.extend(rhs.iterate(heap)?.iter());
         }
+        Ok(lhs)
+    } else if let Some(v) = rhs.get_aref().radd(lhs, heap) {
+        v
     } else {
-        Value::add(lhs, rhs, heap)
+        lhs_aref.add(rhs, heap)
     }
 }
 
