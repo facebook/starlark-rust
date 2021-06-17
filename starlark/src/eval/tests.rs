@@ -710,10 +710,6 @@ assert_eq(x, 9)"#,
     );
 }
 
-/// Some tests are currently disabled because self-referential things sometimes fail.
-/// These should be fixed.
-const SELF_REFERENCE_WORKS: bool = false;
-
 #[test]
 fn test_self_mutate_list() {
     // Check functions that mutate and access self on lists
@@ -767,15 +763,13 @@ xs[xs]
 "#,
         "Type of parameters mismatch",
     );
-    if SELF_REFERENCE_WORKS {
-        assert::fail(
-            r#"
+    assert::fail(
+        r#"
 xs = []
 xs[xs] = xs
 "#,
-            "not an int",
-        );
-    }
+        "Type of parameter `index` doesn't match",
+    );
 }
 
 #[test]
@@ -788,15 +782,13 @@ xs[xs]
 "#,
         "not hashable",
     );
-    if SELF_REFERENCE_WORKS {
-        assert::fail(
-            r#"
+    assert::fail(
+        r#"
 xs = {}
 xs[xs] = 1
 "#,
-            "not hashable",
-        );
-    }
+        "Type of parameter `index` doesn't match",
+    );
     assert::is_true(
         r#"
 xs = {}

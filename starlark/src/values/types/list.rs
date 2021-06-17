@@ -89,10 +89,14 @@ impl<'v> ComplexValue<'v> for List<'v> {
 
     fn set_at(
         &mut self,
-        _me: Value<'v>,
+        me: Value<'v>,
         index: Value<'v>,
         alloc_value: Value<'v>,
     ) -> anyhow::Result<()> {
+        if me.ptr_eq(index) {
+            // since me is a list, index must be a list, which isn't right
+            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
+        }
         let i = convert_index(index, self.len() as i32)? as usize;
         self.content[i] = alloc_value;
         Ok(())

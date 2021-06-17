@@ -183,10 +183,14 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
 
     fn set_at(
         &mut self,
-        _me: Value<'v>,
+        me: Value<'v>,
         index: Value<'v>,
         alloc_value: Value<'v>,
     ) -> anyhow::Result<()> {
+        if me.ptr_eq(index) {
+            // since me is a dict, index must be a dict, which isn't right
+            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
+        }
         let index = index.get_hashed()?;
         if let Some(x) = self.content.get_mut_hashed(index.borrow()) {
             *x = alloc_value;
