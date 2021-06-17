@@ -804,15 +804,13 @@ xs[1] = xs
 len(xs[1]) == 1
 "#,
     );
-    if SELF_REFERENCE_WORKS {
-        assert::is_true(
-            r#"
+    assert::is_true(
+        r#"
 xs = {}
 xs.update(xs)
 len(xs) == 0
 "#,
-        );
-    }
+    );
 }
 
 #[test]

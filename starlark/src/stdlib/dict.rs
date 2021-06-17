@@ -300,6 +300,15 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn update(this: Value, ref pairs: Option<Value>, kwargs: ARef<Dict>) -> NoneType {
+        let pairs = if pairs.map(|x| x.ptr_eq(this)) == Some(true) {
+            // someone has done `x.update(x)` - that isn't illegal, but we will have issues
+            // with trying to iterate over x while holding x for mutation, and it doesn't do
+            // anything useful, so just change pairs back to None
+            None
+        } else {
+            pairs
+        };
+
         let mut this = Dict::from_value_mut(this, heap)?.unwrap();
         if let Some(pairs) = pairs {
             if let Some(dict) = Dict::from_value(pairs) {
