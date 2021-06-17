@@ -100,9 +100,14 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn extend(this: Value, ref other: Value) -> NoneType {
-        let other = other.iterate_collect(heap)?;
-        let mut this = List::from_value_mut(this, heap)?.unwrap();
-        this.extend(other);
+        let mut res = List::from_value_mut(this, heap)?.unwrap();
+        if this.ptr_eq(other) {
+            // If the types alias, we can't borrow the `other` for iteration.
+            // But we can do something smarter to double the elements
+            res.content.extend_from_within(..);
+        } else {
+            res.content.extend(other.iterate(heap)?.iter());
+        }
         Ok(NoneType)
     }
 
