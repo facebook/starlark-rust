@@ -236,11 +236,9 @@ impl Stmt {
         Ok(Spanned {
             span: x.span,
             node: match x.node {
-                Expr::Tuple(xs) | Expr::List(xs) => Assign::Tuple(
-                    xs.into_iter()
-                        .map(|x| Self::check_assign(codemap, x))
-                        .collect::<anyhow::Result<Vec<_>>>()?,
-                ),
+                Expr::Tuple(xs) | Expr::List(xs) => {
+                    Assign::Tuple(xs.into_try_map(|x| Self::check_assign(codemap, x))?)
+                }
                 Expr::Dot(a, b) => Assign::Dot(a, b),
                 Expr::ArrayIndirection(box (a, b)) => Assign::ArrayIndirection(box (a, b)),
                 Expr::Identifier(x) => Assign::Identifier(x),
