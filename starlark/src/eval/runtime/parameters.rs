@@ -60,14 +60,14 @@ enum ParameterKind<V> {
 }
 
 impl<'v> ParameterKind<Value<'v>> {
-    fn freeze(&self, freezer: &Freezer) -> ParameterKind<FrozenValue> {
-        match self {
-            Self::Defaulted(v) => ParameterKind::Defaulted(v.freeze(freezer)),
+    fn freeze(&self, freezer: &Freezer) -> anyhow::Result<ParameterKind<FrozenValue>> {
+        Ok(match self {
+            Self::Defaulted(v) => ParameterKind::Defaulted(v.freeze(freezer)?),
             Self::Required => ParameterKind::Required,
             Self::Optional => ParameterKind::Optional,
             Self::Args => ParameterKind::Args,
             Self::KWargs => ParameterKind::KWargs,
-        }
+        })
     }
 
     fn walk(&mut self, walker: &Walker<'v>) {
@@ -316,16 +316,16 @@ impl ParametersSpec<FrozenValue> {
 
 impl<'v> ParametersSpec<Value<'v>> {
     /// Used to freeze a [`ParametersSpec`].
-    pub fn freeze(self, freezer: &Freezer) -> ParametersSpec<FrozenValue> {
-        ParametersSpec(ParametersSpecRaw {
+    pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<ParametersSpec<FrozenValue>> {
+        Ok(ParametersSpec(ParametersSpecRaw {
             function_name: self.0.function_name,
-            kinds: self.0.kinds.into_map(|v| v.freeze(freezer)),
+            kinds: self.0.kinds.try_map(|v| v.freeze(freezer))?,
             names: self.0.names,
             positional: self.0.positional,
             no_args: self.0.no_args,
             args: self.0.args,
             kwargs: self.0.kwargs,
-        })
+        }))
     }
 
     /// Used when performing garbage collection over a [`ParametersSpec`].

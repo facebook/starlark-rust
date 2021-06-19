@@ -841,9 +841,9 @@ fn test_export_as() {
             self.mutable
         }
 
-        fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> Box<dyn SimpleValue> {
+        fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
             self.mutable = false;
-            self
+            Ok(self)
         }
 
         unsafe fn walk(&mut self, _walker: &Walker) {}
@@ -935,7 +935,7 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
     }
     let mut a = Assert::new();
     a.globals(globals);
-    a.module_add("a", modu.freeze());
+    a.module_add("a", modu.freeze()?);
     a.is_true("load('a', 'x'); x == 42");
     Ok(())
 }
@@ -1704,12 +1704,12 @@ fn test_label_assign() {
             true
         }
 
-        fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+        fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
             let mut res = SmallMap::with_capacity(self.0.len());
             for (key, val) in self.0.into_iter_hashed() {
-                res.insert_hashed(key, val.freeze(freezer));
+                res.insert_hashed(key, val.freeze(freezer)?);
             }
-            box WrapperGen(res)
+            Ok(box WrapperGen(res))
         }
 
         unsafe fn walk(&mut self, walker: &Walker<'v>) {

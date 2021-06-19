@@ -144,14 +144,16 @@ struct PartialGen<V> {
 starlark_complex_value!(Partial);
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box FrozenPartial {
-            func: self.func.freeze(freezer),
-            pos: self.pos.map(|x| x.freeze(freezer)),
-            named: self.named.map(|x| x.freeze(freezer)),
-            names: self.names.into_map(|(s, x)| (s, x.freeze(freezer))),
-            signature: self.signature.freeze(freezer),
-        }
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        Ok(box FrozenPartial {
+            func: self.func.freeze(freezer)?,
+            pos: self.pos.try_map(|x| x.freeze(freezer))?,
+            named: self.named.try_map(|x| x.freeze(freezer))?,
+            names: self
+                .names
+                .into_try_map(|(s, x)| Ok::<_, anyhow::Error>((s, x.freeze(freezer)?)))?,
+            signature: self.signature.freeze(freezer)?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

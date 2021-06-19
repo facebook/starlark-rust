@@ -16,6 +16,7 @@
  */
 
 use crate::types::Message;
+use gazebo::prelude::*;
 use itertools::Either;
 use starlark::{
     environment::{FrozenModule, Globals, Module},
@@ -38,17 +39,14 @@ pub struct Context {
 impl Context {
     pub fn new(check: bool, info: bool, run: bool, prelude: &[PathBuf]) -> anyhow::Result<Self> {
         let globals = globals();
-        let prelude = prelude
-            .iter()
-            .map(|x| {
-                let env = Module::new();
+        let prelude = prelude.try_map(|x| {
+            let env = Module::new();
 
-                let mut eval = Evaluator::new(&env, &globals);
-                let module = AstModule::parse_file(x, &dialect())?;
-                eval.eval_module(module)?;
-                Ok(env.freeze())
-            })
-            .collect::<anyhow::Result<_>>()?;
+            let mut eval = Evaluator::new(&env, &globals);
+            let module = AstModule::parse_file(x, &dialect())?;
+            eval.eval_module(module)?;
+            env.freeze()
+        })?;
 
         Ok(Self {
             check,

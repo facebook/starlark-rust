@@ -165,13 +165,13 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
         true
     }
 
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut content: SmallMap<FrozenValue, FrozenValue> =
             SmallMap::with_capacity(self.content.len());
         for (k, v) in self.content.into_iter_hashed() {
-            content.insert_hashed(k.freeze(freezer), v.freeze(freezer));
+            content.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
-        box FrozenDict { content }
+        Ok(box FrozenDict { content })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

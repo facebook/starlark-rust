@@ -70,9 +70,12 @@ impl<'v> MutableSlots<'v> {
         }
     }
 
-    pub(crate) fn freeze(self, freezer: &Freezer) -> FrozenSlots {
-        let slots = self.0.into_inner().map(|x| x.map(|x| x.freeze(freezer)));
-        FrozenSlots(slots)
+    pub(crate) fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenSlots> {
+        let slots = self
+            .0
+            .into_inner()
+            .try_map(|x| x.into_try_map(|x| x.freeze(freezer)))?;
+        Ok(FrozenSlots(slots))
     }
 }
 

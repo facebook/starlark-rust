@@ -562,8 +562,8 @@ impl<'v> ValueRef<'v> {
         Self(self.0.dupe())
     }
 
-    pub fn freeze(&self, freezer: &Freezer) -> Option<FrozenValue> {
-        self.get_cell().get().map(|x| freezer.freeze(x))
+    pub fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Option<FrozenValue>> {
+        self.get_cell().get().into_try_map(|x| freezer.freeze(x))
     }
 }
 

@@ -208,7 +208,7 @@ impl Module {
     }
 
     /// Freeze the environment, all its value will become immutable afterwards.
-    pub fn freeze(self) -> FrozenModule {
+    pub fn freeze(self) -> anyhow::Result<FrozenModule> {
         let Module {
             names,
             slots,
@@ -220,7 +220,7 @@ impl Module {
         // slot-index in the code, and we don't walk into them, so don't know if
         // they are used.
         let freezer = Freezer::new(frozen_heap);
-        let slots = slots.freeze(&freezer);
+        let slots = slots.freeze(&freezer)?;
         let rest = FrozenModuleRef(Arc::new(FrozenModuleData {
             names: names.freeze(),
             slots,
@@ -230,7 +230,7 @@ impl Module {
         // but can now be dropped
         mem::drop(heap);
 
-        FrozenModule(freezer.into_ref(), rest)
+        Ok(FrozenModule(freezer.into_ref(), rest))
     }
 
     /// Set the value of a variable in the environment.

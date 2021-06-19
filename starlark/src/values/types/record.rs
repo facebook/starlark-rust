@@ -98,11 +98,11 @@ impl<V> FieldGen<V> {
 }
 
 impl<'v> Field<'v> {
-    fn freeze(self, freezer: &Freezer) -> FrozenField {
-        FrozenField {
-            typ: self.typ.freeze(freezer),
-            default: self.default.map(|x| x.freeze(freezer)),
-        }
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenField> {
+        Ok(FrozenField {
+            typ: self.typ.freeze(freezer)?,
+            default: self.default.into_try_map(|x| x.freeze(freezer))?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
@@ -198,8 +198,8 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
 }
 
 impl<'v> ComplexValue<'v> for Field<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box (*self).freeze(freezer)
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        Ok(box (*self).freeze(freezer)?)
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
@@ -240,16 +240,16 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
         true
     }
 
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
-            fields.insert_hashed(k, (t.0.freeze(freezer), t.1));
+            fields.insert_hashed(k, (t.0.freeze(freezer)?, t.1));
         }
-        box FrozenRecordType {
+        Ok(box FrozenRecordType {
             typ: self.typ,
             fields,
-            constructor: self.constructor.freeze(freezer),
-        }
+            constructor: self.constructor.freeze(freezer)?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
@@ -314,11 +314,11 @@ where
 }
 
 impl<'v> ComplexValue<'v> for Record<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box FrozenRecord {
-            typ: self.typ.freeze(freezer),
-            values: self.values.map(|v| v.freeze(freezer)),
-        }
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        Ok(box FrozenRecord {
+            typ: self.typ.freeze(freezer)?,
+            values: self.values.try_map(|v| v.freeze(freezer))?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

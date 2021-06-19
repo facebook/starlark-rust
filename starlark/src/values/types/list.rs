@@ -75,12 +75,12 @@ impl<'v> ComplexValue<'v> for List<'v> {
         true
     }
 
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut content = Vec::with_capacity(self.content.len());
         for v in self.content {
-            content.push(v.freeze(freezer))
+            content.push(v.freeze(freezer)?)
         }
-        box FrozenList { content }
+        Ok(box FrozenList { content })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

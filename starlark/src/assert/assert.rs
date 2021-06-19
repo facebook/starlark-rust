@@ -49,7 +49,7 @@ static ASSERT_STAR: Lazy<FrozenModule> = Lazy::new(|| {
     let assert = g.get("assert").unwrap();
     m.set("assert", assert);
     m.set("freeze", assert.get_attr("freeze", m.heap()).unwrap().1);
-    m.freeze()
+    m.freeze().unwrap()
 });
 
 fn assert_equals<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
@@ -298,11 +298,13 @@ impl Assert {
     /// a.is_true("load('hello.star', 'hello'); hello == 'world'");
     /// ```
     pub fn module(&mut self, name: &str, program: &str) {
-        let module = self.with_gc(|gc| {
-            let module = Module::new();
-            self.execute_unwrap("module", &format!("{}.bzl", name), program, &module, gc);
-            module.freeze()
-        });
+        let module = self
+            .with_gc(|gc| {
+                let module = Module::new();
+                self.execute_unwrap("module", &format!("{}.bzl", name), program, &module, gc);
+                module.freeze()
+            })
+            .expect("error freezing module");
         self.module_add(name, module);
     }
 
@@ -385,7 +387,10 @@ impl Assert {
             let env = Module::new();
             let res = self.execute_unwrap("pass", "assert.bzl", program, &env, gc);
             env.set("_", res);
-            env.freeze().get("_").unwrap()
+            env.freeze()
+                .expect("error freezing module")
+                .get("_")
+                .unwrap()
         })
     }
 

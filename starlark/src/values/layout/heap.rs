@@ -172,16 +172,16 @@ impl Freezer {
     }
 
     /// Freeze a nested value while freezing yourself.
-    pub fn freeze(&self, value: Value) -> FrozenValue {
+    pub fn freeze(&self, value: Value) -> anyhow::Result<FrozenValue> {
         // Case 1: We have our value encoded in our pointer
         if let Some(x) = value.unpack_frozen() {
-            return x;
+            return Ok(x);
         }
 
         // Case 2: We have already been replaced with a Forward node
         let value = value.0.unpack_ptr2().unwrap();
         match value {
-            ValueMem::Forward(x) => return *x,
+            ValueMem::Forward(x) => return Ok(*x),
             ValueMem::ThawOnWrite(x) => return self.freeze(x.get_value()),
             _ => {}
         }
@@ -199,10 +199,11 @@ impl Freezer {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
             ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
             ValueMem::Immutable(x) => {
-                *fvmem = FrozenValueMem::Simple(x.freeze(self).as_box_starlark_value())
+                *fvmem = FrozenValueMem::Simple(x.freeze(self)?.as_box_starlark_value())
             }
             ValueMem::Mutable(x) => {
-                *fvmem = FrozenValueMem::Simple(x.into_inner().freeze(self).as_box_starlark_value())
+                *fvmem =
+                    FrozenValueMem::Simple(x.into_inner().freeze(self)?.as_box_starlark_value())
             }
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
@@ -213,7 +214,7 @@ impl Freezer {
                 v.unexpected("FrozenHeap::freeze case 3")
             }
         }
-        fv
+        Ok(fv)
     }
 }
 

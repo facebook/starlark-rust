@@ -237,7 +237,7 @@
 //!    eval.eval_module(ast)?;
 //!    // After creating a module we freeze it, preventing further mutation.
 //!    // It can now be used as the input for other Starlark modules.
-//!    Ok(module.freeze())
+//!    Ok(module.freeze()?)
 //! }
 //!
 //! let ab = get_module("ab.star")?;

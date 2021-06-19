@@ -212,11 +212,11 @@ impl<'v> BoundMethod<'v> {
 }
 
 impl<'v> ComplexValue<'v> for BoundMethod<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box BoundMethodGen {
-            method: self.method.freeze(freezer),
-            this: self.this.freeze(freezer),
-        }
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        Ok(box BoundMethodGen {
+            method: self.method.freeze(freezer)?,
+            this: self.this.freeze(freezer)?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

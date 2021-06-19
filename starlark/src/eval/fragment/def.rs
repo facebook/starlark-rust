@@ -212,14 +212,16 @@ impl<T1, T2> DefGen<T1, T2> {
 impl SimpleValue for FrozenDef {}
 
 impl<'v> ComplexValue<'v> for Def<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        let parameters = self.parameters.freeze(freezer);
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        let parameters = self.parameters.freeze(freezer)?;
         let parameter_types = self
             .parameter_types
-            .into_map(|(i, s, v, t)| (i, s, v.freeze(freezer), t));
-        let return_type = self.return_type.map(|(v, t)| (v.freeze(freezer), t));
-        let captured = self.captured.map(|x| x.freeze(freezer));
-        box FrozenDef {
+            .into_try_map(|(i, s, v, t)| Ok::<_, anyhow::Error>((i, s, v.freeze(freezer)?, t)))?;
+        let return_type = self
+            .return_type
+            .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
+        let captured = self.captured.try_map(|x| x.freeze(freezer))?;
+        Ok(box FrozenDef {
             parameters,
             parameter_types,
             return_type,
@@ -227,7 +229,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             stmt: self.stmt,
             captured,
             module: Some(FrozenModuleValue::new(freezer)),
-        }
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

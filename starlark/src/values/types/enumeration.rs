@@ -90,16 +90,16 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         true
     }
 
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
-            elements.insert_hashed(k.freeze(freezer), t.freeze(freezer));
+            elements.insert_hashed(k.freeze(freezer)?, t.freeze(freezer)?);
         }
-        box FrozenEnumType {
+        Ok(box FrozenEnumType {
             typ: self.typ,
             elements,
-            constructor: self.constructor.freeze(freezer),
-        }
+            constructor: self.constructor.freeze(freezer)?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {
@@ -118,12 +118,12 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
 }
 
 impl<'v> ComplexValue<'v> for EnumValue<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box FrozenEnumValue {
-            typ: self.typ.freeze(freezer),
-            value: self.value.freeze(freezer),
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        Ok(box FrozenEnumValue {
+            typ: self.typ.freeze(freezer)?,
+            value: self.value.freeze(freezer)?,
             index: self.index,
-        }
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

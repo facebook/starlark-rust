@@ -96,13 +96,13 @@ impl<'v> StructBuilder<'v> {
 }
 
 impl<'v> ComplexValue<'v> for Struct<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
 
         for (k, v) in self.fields.into_iter_hashed() {
-            frozen.insert_hashed(k, v.freeze(freezer));
+            frozen.insert_hashed(k, v.freeze(freezer)?);
         }
-        box FrozenStruct { fields: frozen }
+        Ok(box FrozenStruct { fields: frozen })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

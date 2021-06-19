@@ -216,12 +216,12 @@ impl<'v, V: ValueLike<'v>> Hashed<V> {
 }
 
 impl<'v> Hashed<Value<'v>> {
-    pub(crate) fn freeze(&self, freezer: &Freezer) -> Hashed<FrozenValue> {
+    pub(crate) fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Hashed<FrozenValue>> {
         // Safe because we know frozen values have the same hash as non-frozen ones
-        let key = self.key().freeze(freezer);
+        let key = self.key().freeze(freezer)?;
         // But it's an easy mistake to make, so actually check it in debug
         debug_assert_eq!(Some(self.hash()), key.get_hashed().ok().map(|x| x.hash()));
-        Hashed::new_unchecked(self.hash(), key)
+        Ok(Hashed::new_unchecked(self.hash(), key))
     }
 }
 
@@ -290,7 +290,7 @@ impl<'v> Value<'v> {
     }
 
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
-    pub fn freeze(self, freezer: &Freezer) -> FrozenValue {
+    pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         freezer.freeze(self)
     }
 

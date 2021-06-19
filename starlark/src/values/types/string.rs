@@ -351,11 +351,11 @@ impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for StringIteratorGen<T> {
 }
 
 impl<'v> ComplexValue<'v> for StringIterator<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-        box FrozenStringIterator {
-            string: freezer.freeze(self.string),
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+        Ok(box FrozenStringIterator {
+            string: freezer.freeze(self.string)?,
             produce_char: self.produce_char,
-        }
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Walker<'v>) {

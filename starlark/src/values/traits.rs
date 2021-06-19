@@ -115,8 +115,8 @@ impl<T: SimpleValue> AsSimpleValue for T {
 /// }
 ///
 /// impl<'v> ComplexValue<'v> for One<'v> {
-///     fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue> {
-///         Box::new(OneGen(self.0.freeze(freezer)))
+///     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+///         Ok(Box::new(OneGen(self.0.freeze(freezer)?)))
 ///     }
 ///
 ///     unsafe fn walk(&mut self, walker: &Walker<'v>) {
@@ -199,7 +199,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> Box<dyn SimpleValue>;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>>;
 
     /// Called by the garbage collection, and must walk over every contained `Value` in the type.
     /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
