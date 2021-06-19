@@ -892,7 +892,7 @@ fn test_load_symbols() {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
         fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
-            eval.set_module_variable_at_some_point(name, value, heap)?;
+            eval.set_module_variable_at_some_point(name, value)?;
             Ok(NoneType)
         }
     }
