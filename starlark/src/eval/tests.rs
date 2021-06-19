@@ -836,7 +836,7 @@ fn test_export_as() {
         }
     }
 
-    impl ComplexValue<'_> for Exporter {
+    impl<'v> ComplexValue<'v> for Exporter {
         fn is_mutable(&self) -> bool {
             self.mutable
         }
@@ -848,7 +848,7 @@ fn test_export_as() {
 
         unsafe fn walk(&mut self, _walker: &Walker) {}
 
-        fn export_as(&mut self, _heap: &Heap, variable_name: &str) {
+        fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
             self.named = variable_name.to_owned();
         }
     }

@@ -407,9 +407,9 @@ impl<'v> Value<'v> {
 
     /// Call `export_as` on the underlying value, but only if the type is mutable.
     /// Otherwise, does nothing.
-    pub fn export_as(self, name: &str, heap: &'v Heap) {
+    pub fn export_as(self, variable_name: &str, eval: &mut Evaluator<'v, '_>) {
         if let Some(mut mv) = self.get_ref_mut_already() {
-            mv.export_as(heap, name)
+            mv.export_as(variable_name, eval)
         }
     }
 

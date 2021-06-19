@@ -207,7 +207,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 
     /// Called when exporting a value under a specific name,
     /// only applies to things that return [`true`] for [`is_mutable()`](ComplexValue::is_mutable).
-    fn export_as(&mut self, _heap: &'v Heap, _variable_name: &str) {
+    fn export_as(&mut self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users
     }

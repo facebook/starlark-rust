@@ -107,7 +107,7 @@ impl Compiler<'_> {
                 },
                 Slot::Module(slot) => box move |value, eval| {
                     // Make sure that `ComplexValue`s get their name as soon as possible
-                    value.export_as(&ident.node, eval.heap());
+                    value.export_as(&ident.node, eval);
                     eval.set_slot_module(slot, value);
                     Ok(())
                 },

@@ -257,7 +257,7 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
         walker.walk(&mut self.constructor);
     }
 
-    fn export_as(&mut self, _heap: &'v Heap, variable_name: &str) {
+    fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
         if self.typ.is_none() {
             self.typ = Some(variable_name.to_owned())
         }
