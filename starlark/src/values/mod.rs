@@ -155,7 +155,7 @@ impl Heap {
 /// allowing implementations of [`ComplexValue`] to be agnostic of their contained type.
 /// For details about each function, see the documentation for [`Value`],
 /// which provides the same functions (and more).
-pub trait ValueLike<'v>: Eq + Copy + Debug {
+pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
@@ -222,6 +222,18 @@ impl<'v> Hashed<Value<'v>> {
         // But it's an easy mistake to make, so actually check it in debug
         debug_assert_eq!(Some(self.hash()), key.get_hashed().ok().map(|x| x.hash()));
         Hashed::new_unchecked(self.hash(), key)
+    }
+}
+
+impl Default for Value<'_> {
+    fn default() -> Self {
+        Self::new_none()
+    }
+}
+
+impl Default for FrozenValue {
+    fn default() -> Self {
+        Self::new_none()
     }
 }
 
