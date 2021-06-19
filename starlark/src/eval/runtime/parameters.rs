@@ -117,15 +117,7 @@ pub struct ParametersSpec<V>(ParametersSpecRaw<V>);
 impl<V> ParametersSpecBuilder<V> {
     /// Create a new [`ParametersSpecBuilder`] with the given function name.
     pub fn new(function_name: String) -> Self {
-        Self(ParametersSpecRaw {
-            function_name,
-            kinds: Vec::new(),
-            names: SmallMap::new(),
-            positional: 0,
-            no_args: false,
-            args: None,
-            kwargs: None,
-        })
+        Self::with_capacity(function_name, 0)
     }
 
     /// Create a new [`ParametersSpecBuilder`] with the given function name and an advance capacity hint.
