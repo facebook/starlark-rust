@@ -198,8 +198,12 @@ impl Freezer {
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
             ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
-            ValueMem::Immutable(x) => *fvmem = FrozenValueMem::Simple(x.freeze(self)),
-            ValueMem::Mutable(x) => *fvmem = FrozenValueMem::Simple(x.into_inner().freeze(self)),
+            ValueMem::Immutable(x) => {
+                *fvmem = FrozenValueMem::Simple(x.freeze(self).as_box_starlark_value())
+            }
+            ValueMem::Mutable(x) => {
+                *fvmem = FrozenValueMem::Simple(x.into_inner().freeze(self).as_box_starlark_value())
+            }
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
                 // We don't expect Forward or ThawOnWrite since they are handled in step 2.

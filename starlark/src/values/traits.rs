@@ -72,6 +72,17 @@ impl<'v, T: StarlarkValue<'v>> AsStarlarkValue<'v> for T {
     }
 }
 
+/// Helper trait used in [`SimpleValue`] - has a single global implementation.
+pub trait AsSimpleValue {
+    fn as_box_starlark_value(self: Box<Self>) -> Box<dyn StarlarkValue<'static> + Send + Sync>;
+}
+
+impl<T: SimpleValue> AsSimpleValue for T {
+    fn as_box_starlark_value(self: Box<Self>) -> Box<dyn StarlarkValue<'static> + Send + Sync> {
+        self
+    }
+}
+
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.
 ///
@@ -269,7 +280,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 /// ```
 ///
 /// All users defining [`SimpleValue`] should use this macro.
-pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
+pub trait SimpleValue: StarlarkValue<'static> + AsSimpleValue + Send + Sync {}
 
 /// How to put a Rust values into [`Value`]s.
 ///

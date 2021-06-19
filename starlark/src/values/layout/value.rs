@@ -37,7 +37,7 @@ use crate::values::{
         thawable_cell::ThawableCell,
     },
     none::NoneType,
-    ComplexValue, ControlError, SimpleValue, StarlarkValue,
+    ComplexValue, ControlError, StarlarkValue,
 };
 use either::Either;
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
@@ -99,17 +99,14 @@ pub(crate) enum FrozenValueMem {
     Uninitialized(Void), // Never created (see Value::Uninitialized)
     Blackhole, // Only occurs during a GC
     Str(Box<str>),
-    Simple(Box<dyn SimpleValue>),
+    Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
 }
 
-fn simple_starlark_value<'a, 'v>(x: &'a dyn SimpleValue) -> &'a dyn StarlarkValue<'v> {
-    unsafe {
-        transmute!(
-            &'a dyn StarlarkValue<'static>,
-            &'a dyn StarlarkValue<'v>,
-            x.as_starlark_value()
-        )
-    }
+fn simple_starlark_value<'a, 'v>(
+    x: &'a (dyn StarlarkValue<'static> + Send + Sync),
+) -> &'a dyn StarlarkValue<'v> {
+    let x: &'a dyn StarlarkValue<'static> = x;
+    unsafe { transmute!(&'a dyn StarlarkValue<'static>, &'a dyn StarlarkValue<'v>, x) }
 }
 
 #[derive(VariantName)]
@@ -129,7 +126,7 @@ pub(crate) enum ValueMem<'v> {
     // A literal string
     Str(Box<str>),
     // Things that aren't mutable and don't point to other Value's
-    Simple(Box<dyn SimpleValue>),
+    Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
     // Mutable things in my heap that aren't `is_mutable()`
     Immutable(Box<dyn ComplexValue<'v>>),
     // Mutable things that are in my heap and are `is_mutable()`
