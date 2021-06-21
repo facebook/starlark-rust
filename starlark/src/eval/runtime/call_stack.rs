@@ -106,8 +106,8 @@ impl<'v> CallStack<'v> {
         }
         self.stack[self.count] = CheapFrame {
             function,
-            span,
             file,
+            span,
         };
         self.count += 1;
         Ok(())

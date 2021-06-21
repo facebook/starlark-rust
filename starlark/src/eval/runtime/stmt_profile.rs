@@ -142,7 +142,7 @@ impl StmtProfileData {
                 let span = data.files[&file].file_span(span);
                 total_time += time;
                 total_count += count;
-                items.push(Item { span, count, time })
+                items.push(Item { span, time, count })
             }
         }
         items.sort_by_key(|x| -(x.time.as_nanos() as i128));
