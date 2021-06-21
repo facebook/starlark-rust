@@ -194,9 +194,6 @@ impl StmtProfile {
     // None = not applicable because not enabled
     pub fn write(&self, filename: &Path) -> Option<anyhow::Result<()>> {
         let now = Instant::now();
-        match &self.0 {
-            None => None,
-            Some(box data) => Some(data.write(filename, now)),
-        }
+        self.0.as_ref().map(|data| data.write(filename, now))
     }
 }
