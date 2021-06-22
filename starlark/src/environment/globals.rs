@@ -272,6 +272,15 @@ impl GlobalsStatic {
         }
         *globals.0.variables.values().next().unwrap()
     }
+
+    /// Move all the globals in this [`GlobalsBuilder`] into a new one. All variables will
+    /// only be allocated once (ensuring things like function comparison works properly).
+    pub fn populate(&'static self, x: impl FnOnce(&mut GlobalsBuilder), out: &mut GlobalsBuilder) {
+        let globals = self.globals(x);
+        for (name, value) in &globals.0.variables {
+            out.set(name.as_str(), *value)
+        }
+    }
 }
 
 #[cfg(test)]

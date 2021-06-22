@@ -31,54 +31,57 @@ use syn::*;
 //
 // ```
 // pub fn global(globals_builder: &mut GlobalsBuilder) {
-//     fn cc_binary<'v, 'a>(
-//         eval: &mut starlark::eval::Evaluator<'v, 'a>,
-//         #[allow(unused_variables)]
-//         this: Option<starlark::values::Value<'v>>,
-//         args: starlark::eval::ParametersParser,
-//     ) -> anyhow::Result<starlark::values::Value<'v>> {
-//         fn inner<'v, 'a, 'a2>(
-//             #[allow(unused_variables)]
+//     fn build(globals_builder: &mut GlobalsBuilder) {
+//         fn cc_binary<'v, 'a>(
 //             eval: &mut starlark::eval::Evaluator<'v, 'a>,
 //             #[allow(unused_variables)]
 //             this: Option<starlark::values::Value<'v>>,
-//             #[allow(unused_mut)]
-//             #[allow(unused_variables)]
-//             mut args: starlark::eval::ParametersParser,
-//         ) -> anyhow::Result<String> {
-//             #[allow(unused_mut)]
-//             let mut name: &str = args.next("name", eval)?;
-//             #[allow(unused_mut)]
-//             let mut srcs: Vec<&str> = args.next("srcs", eval)?;
-//             Ok({
-//                 let res = ::alloc::fmt::format(::core::fmt::Arguments::new_v1(
-//                     &["", " "],
-//                     &match (&name, &srcs) {
-//                         (arg0, arg1) => [
-//                             ::core::fmt::ArgumentV1::new(arg0, ::core::fmt::Debug::fmt),
-//                             ::core::fmt::ArgumentV1::new(arg1, ::core::fmt::Debug::fmt),
-//                         ],
-//                     },
-//                 ));
-//                 res
-//             })
+//             args: starlark::eval::ParametersParser,
+//         ) -> anyhow::Result<starlark::values::Value<'v>> {
+//             fn inner<'v, 'a, 'a2>(
+//                 #[allow(unused_variables)]
+//                 eval: &mut starlark::eval::Evaluator<'v, 'a>,
+//                 #[allow(unused_variables)]
+//                 this: Option<starlark::values::Value<'v>>,
+//                 #[allow(unused_mut)]
+//                 #[allow(unused_variables)]
+//                 mut args: starlark::eval::ParametersParser,
+//             ) -> anyhow::Result<String> {
+//                 #[allow(unused_mut)]
+//                 let mut name: &str = args.next("name", eval)?;
+//                 #[allow(unused_mut)]
+//                 let mut srcs: Vec<&str> = args.next("srcs", eval)?;
+//                 Ok({
+//                     let res = ::alloc::fmt::format(::core::fmt::Arguments::new_v1(
+//                         &["", " "],
+//                         &match (&name, &srcs) {
+//                             (arg0, arg1) => [
+//                                 ::core::fmt::ArgumentV1::new(arg0, ::core::fmt::Debug::fmt),
+//                                 ::core::fmt::ArgumentV1::new(arg1, ::core::fmt::Debug::fmt),
+//                             ],
+//                         },
+//                     ));
+//                     res
+//                 })
+//             }
+//             match inner(eval, this, args) {
+//                 Ok(v) => Ok(eval.heap().alloc(v)),
+//                 Err(e) => Err(e),
+//             }
 //         }
-//         match inner(eval, this, args) {
-//             Ok(v) => Ok(eval.heap().alloc(v)),
-//             Err(e) => Err(e),
+//         {
+//             #[allow(unused_mut)]
+//             let mut signature = starlark::eval::ParametersSpec::with_capcity("cc_binary".to_owned(), 2);
+//             signature.required("name");
+//             signature.required("srcs");
+//             globals_builder.set(
+//                 name,
+//                 starlark::values::function::NativeFunction::new(cc_binary, signature),
+//             );
 //         }
 //     }
-//     {
-//         #[allow(unused_mut)]
-//         let mut signature = starlark::eval::ParametersSpec::with_capcity("cc_binary".to_owned(), 2);
-//         signature.required("name");
-//         signature.required("srcs");
-//         globals_builder.set(
-//             name,
-//             starlark::values::function::NativeFunction::new(cc_binary, signature),
-//         );
-//     }
-//     globals_builder
+//     static RES: starlark::environment::GlobalsStatic = starlark::environment::GlobalsStatic::new();
+//     RES.populate(build, globals_builder);
 // }
 // ```
 
@@ -140,7 +143,11 @@ pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
     let body = input.block.stmts.map(add_stmt);
     let result = quote! {
         #visibility fn #name(globals_builder: #arg_ty) {
-            #( #body )*
+            fn build(globals_builder: #arg_ty) {
+                #( #body )*
+            }
+            static RES: starlark::environment::GlobalsStatic = starlark::environment::GlobalsStatic::new();
+            RES.populate(build, globals_builder);
         }
     };
     result.into()

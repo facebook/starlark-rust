@@ -24,8 +24,8 @@ use crate::{
     eval::Evaluator,
     syntax::{AstModule, Dialect},
     values::{
-        any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue,
-        UnpackValue, Value, ValueLike, Walker,
+        any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, OwnedFrozenValue,
+        SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike, Walker,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -1041,6 +1041,20 @@ fn test_frozen_equality() {
     let mut a = Assert::new();
     a.module("saved", &format!("val = {}", program));
     a.is_true(&format!("load('saved', 'val'); val == {}", program));
+}
+
+#[test]
+fn test_equality_multiple_globals() {
+    fn mk_repr() -> OwnedFrozenValue {
+        let mut a = Assert::new();
+        let globals = GlobalsBuilder::extended().build();
+        a.globals(globals);
+        a.pass("repr")
+    }
+
+    // Do things that compare by pointer still work if you
+    // create fresh Globals for each of them.
+    assert_eq!(mk_repr().value(), mk_repr().value());
 }
 
 #[test]
