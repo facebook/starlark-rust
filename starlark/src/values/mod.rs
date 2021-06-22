@@ -124,6 +124,12 @@ pub trait AllocValue<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v>;
 }
 
+impl<'v> AllocValue<'v> for FrozenValue {
+    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+        self.to_value()
+    }
+}
+
 impl<'v> AllocValue<'v> for Value<'v> {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
         self
@@ -133,6 +139,12 @@ impl<'v> AllocValue<'v> for Value<'v> {
 /// Trait for things that can be allocated on a [`FrozenHeap`] producing a [`FrozenValue`].
 pub trait AllocFrozenValue {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue;
+}
+
+impl AllocFrozenValue for FrozenValue {
+    fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
+        self
+    }
 }
 
 impl FrozenHeap {
