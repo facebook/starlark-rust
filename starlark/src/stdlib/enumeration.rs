@@ -125,5 +125,30 @@ assert_eq(enum_val, enum_type("option1"))
 assert_ne(enum_val, enum_type(True))
 "#,
         );
+
+        a = Assert::new();
+        a.module(
+            "m1",
+            r#"
+rt = enum(1)
+"#,
+        );
+        a.module(
+            "m2",
+            r#"
+rt = enum(1, 2)
+"#,
+        );
+        a.pass(
+            r#"
+load('m1', r1='rt')
+load('m2', r2='rt')
+rt = enum(1)
+diff = enum(1)
+assert_eq(r1(1), rt(1))
+assert_ne(rt(1), r2(1))
+assert_ne(rt(1), diff(1))
+"#,
+        );
     }
 }

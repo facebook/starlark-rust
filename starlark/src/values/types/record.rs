@@ -311,6 +311,24 @@ where
             None
         }
     }
+
+    fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
+        match RecordType::from_value(other) {
+            Some(other) if self.typ == other.typ && self.fields.len() == other.fields.len() => {
+                for ((k1, t1), (k2, t2)) in self.fields.iter().zip(other.fields.iter()) {
+                    // We require that the types and defaults are both equal.
+                    if k1 != k2
+                        || !t1.0.typ.equals(t2.0.typ)?
+                        || t1.0.default.map(ValueLike::to_value) != t2.0.default
+                    {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
 }
 
 impl<'v> ComplexValue<'v> for Record<'v> {
@@ -360,8 +378,6 @@ where
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        // The type uses reference equality, since we didn't define an equals() for RecordType.
-        // That's very probably the right thing to do.
         match Record::from_value(other) {
             Some(other) if self.typ.equals(other.typ)? => {
                 equals_slice(&self.values, &other.values, |x, y| x.equals(*y))

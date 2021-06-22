@@ -153,5 +153,22 @@ assert_eq(rec_val, rec_type(host="s"))
 assert_ne(rec_val, rec_type(host="t"))
 "#,
         );
+
+        a = Assert::new();
+        a.module(
+            "m",
+            r#"
+rt = record(host=str.type)
+"#,
+        );
+        a.pass(
+            r#"
+load('m', r1='rt')
+rt = record(host=str.type)
+diff = record(host=str.type)
+assert_eq(r1(host="test"), rt(host="test"))
+assert_ne(r1(host="test"), diff(host="test"))
+"#,
+        );
     }
 }

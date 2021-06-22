@@ -252,6 +252,20 @@ where
             None
         }
     }
+
+    fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
+        match EnumType::from_value(other) {
+            Some(other) if self.typ == other.typ && self.elements.len() == other.elements.len() => {
+                for (k1, k2) in self.elements.keys().zip(other.elements.keys()) {
+                    if !k1.to_value().equals(*k2)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
 }
 
 impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for EnumTypeGen<V> {
@@ -282,8 +296,6 @@ where
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        // The type uses reference equality, since we didn't define an equals() for EnumType.
-        // That's very probably the right thing to do.
         match EnumValue::from_value(other) {
             Some(other) if self.typ.equals(other.typ)? => Ok(self.index == other.index),
             _ => Ok(false),
