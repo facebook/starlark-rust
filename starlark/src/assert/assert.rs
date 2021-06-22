@@ -60,6 +60,14 @@ fn assert_equals<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
     }
 }
 
+fn assert_different<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
+    if a.equals(b)? {
+        Err(anyhow!("assert_ne: but {} == {}", a, b))
+    } else {
+        Ok(NoneType)
+    }
+}
+
 /// How often we garbage collection _should_ be transparent to the tests,
 /// so we run each test in three configurations.
 #[derive(Clone, Copy, Dupe, Debug)]
@@ -77,15 +85,7 @@ fn assert_star(builder: &mut GlobalsBuilder) {
     }
 
     fn ne(a: Value, b: Value) -> NoneType {
-        if a.equals(b)? {
-            Err(anyhow!(
-                "assert.ne: expected {} and {} different, but the same",
-                a,
-                b
-            ))
-        } else {
-            Ok(NoneType)
-        }
+        assert_different(a, b)
     }
 
     fn contains(xs: Value, x: Value) -> NoneType {
@@ -130,6 +130,10 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 
     fn assert_eq(a: Value, b: Value) -> NoneType {
         assert_equals(a, b)
+    }
+
+    fn assert_ne(a: Value, b: Value) -> NoneType {
+        assert_different(a, b)
     }
 
     // This is only safe to call at the top-level of a Starlark module
