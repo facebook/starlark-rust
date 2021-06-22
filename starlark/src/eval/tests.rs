@@ -1032,6 +1032,18 @@ x = repr; y = repr; x == y
 }
 
 #[test]
+fn test_frozen_equality() {
+    let program = "(str, (), 1, range(4), True, None, [8], {'test':3})";
+    let a = assert::pass(program);
+    let b = assert::pass(program);
+    assert_eq!(a.value(), b.value());
+
+    let mut a = Assert::new();
+    a.module("saved", &format!("val = {}", program));
+    a.is_true(&format!("load('saved', 'val'); val == {}", program));
+}
+
+#[test]
 fn test_comparison() {
     assert::all_true(
         r#"
