@@ -62,7 +62,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert;
+    use crate::assert::{self, Assert};
 
     #[test]
     fn test_record() {
@@ -124,6 +124,34 @@ assert_eq(rec_type(host="localhost", mask=255), rec_type(host="localhost", port=
 heap_string = "test{}".format(42)
 rec_type = record(test_gc=field(str.type, heap_string))
 assert_eq(rec_type().test_gc, "test42")"#,
+        );
+    }
+
+    #[test]
+    fn test_record_equality() {
+        assert::pass(
+            r#"
+rec_type = record(host=str.type, port=field(int.type, 80))
+assert_eq(rec_type(host="s"), rec_type(host="s"))
+assert_eq(rec_type(host="s"), rec_type(host="s", port=80))
+assert_ne(rec_type(host="s"), rec_type(host="t"))
+"#,
+        );
+
+        let mut a = Assert::new();
+        a.module(
+            "m",
+            r#"
+rec_type = record(host=str.type, port=field(int.type, 80))
+rec_val = rec_type(host="s")
+"#,
+        );
+        a.pass(
+            r#"
+load('m', 'rec_type', 'rec_val')
+assert_eq(rec_val, rec_type(host="s"))
+assert_ne(rec_val, rec_type(host="t"))
+"#,
         );
     }
 }

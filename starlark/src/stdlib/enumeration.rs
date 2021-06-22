@@ -32,7 +32,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert;
+    use crate::assert::{self, Assert};
 
     #[test]
     fn test_enum() {
@@ -95,6 +95,34 @@ assert_eq(str(x), "\"option1\"")
             r#"
 enum_type = enum("option1","option2")
 repr(enum_type) # Check it is finite
+"#,
+        );
+    }
+
+    #[test]
+    fn test_enum_equality() {
+        assert::pass(
+            r#"
+enum_type = enum("option1", "option2", True)
+assert_eq(enum_type("option1"), enum_type("option1"))
+assert_eq(enum_type(True), enum_type(True))
+assert_ne(enum_type("option1"), enum_type(True))
+"#,
+        );
+
+        let mut a = Assert::new();
+        a.module(
+            "m",
+            r#"
+enum_type = enum("option1", "option2", True)
+enum_val = enum_type("option1")
+"#,
+        );
+        a.pass(
+            r#"
+load('m', 'enum_type', 'enum_val')
+assert_eq(enum_val, enum_type("option1"))
+assert_ne(enum_val, enum_type(True))
 "#,
         );
     }
