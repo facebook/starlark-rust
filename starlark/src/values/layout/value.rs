@@ -97,8 +97,8 @@ assert_eq_size!(ValueMem, [usize; 4]);
 pub(crate) enum FrozenValueMem {
     #[allow(dead_code)] // That's the whole point of it
     Uninitialized(Void), // Never created (see Value::Uninitialized)
-    Blackhole, // Only occurs during a GC
     Str(Box<str>),
+    Blackhole, // Only occurs during a GC
     Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
 }
 
@@ -116,14 +116,14 @@ pub(crate) enum ValueMem<'v> {
     // and give a workable error message
     #[allow(dead_code)] // That's the whole point of it
     Uninitialized(Void),
+    // A literal string
+    Str(Box<str>),
     // Occurs during freezing (for the to-space) - never encountered normally.
     Forward(FrozenValue),
     // Occurs during GC (for the to-space) - never encountered normally.
     Copied(Value<'v>),
     // Only occurs during GC
     Blackhole,
-    // A literal string
-    Str(Box<str>),
     // Things that aren't mutable and don't point to other Value's
     Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
     // Mutable things in my heap that aren't `is_mutable()`
