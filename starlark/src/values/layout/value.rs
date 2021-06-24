@@ -116,8 +116,7 @@ pub(crate) enum ValueMem<'v> {
     // and give a workable error message
     #[allow(dead_code)] // That's the whole point of it
     Uninitialized(Void),
-    // Occurs during freezing (for the to-space).
-    // Could be encountered normally if someone freezes incrementally
+    // Occurs during freezing (for the to-space) - never encountered normally.
     Forward(FrozenValue),
     // Occurs during GC (for the to-space) - never encountered normally.
     Copied(Value<'v>),
@@ -156,7 +155,6 @@ impl<'v> ValueMem<'v> {
     fn unpack_box_str(&self) -> Option<&Box<str>> {
         match self {
             Self::Str(x) => Some(x),
-            Self::Forward(x) => x.unpack_box_str(),
             _ => None,
         }
     }
@@ -164,7 +162,6 @@ impl<'v> ValueMem<'v> {
     fn unpack_str(&self) -> Option<&str> {
         match self {
             Self::Str(x) => Some(x),
-            Self::Forward(x) => x.unpack_str(),
             _ => None,
         }
     }
@@ -204,7 +201,6 @@ impl<'v> ValueMem<'v> {
 
     fn get_ref(&self) -> Option<&dyn StarlarkValue<'v>> {
         match self {
-            Self::Forward(x) => Some(x.get_ref()),
             Self::Str(x) => Some(x),
             Self::Simple(x) => Some(simple_starlark_value(Box::as_ref(x))),
             Self::Immutable(x) => Some(x.as_starlark_value()),
@@ -217,7 +213,6 @@ impl<'v> ValueMem<'v> {
     #[inline(always)] // There are only two callers
     pub(crate) fn get_aref(&'v self) -> ARef<'v, dyn StarlarkValue<'v>> {
         match self {
-            Self::Forward(x) => ARef::new_ptr(x.get_ref()),
             Self::Str(x) => ARef::new_ptr(x),
             Self::Simple(x) => ARef::new_ptr(simple_starlark_value(Box::as_ref(x))),
             Self::Immutable(x) => ARef::new_ptr(x.as_starlark_value()),
@@ -447,15 +442,6 @@ impl FrozenValue {
     pub(crate) fn unpack_str<'v>(&'v self) -> Option<&'v str> {
         match self.0.unpack_ptr1() {
             Some(x) => x.unpack_str(),
-            _ => None,
-        }
-    }
-
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    #[allow(clippy::borrowed_box)]
-    pub(crate) fn unpack_box_str<'v>(&'v self) -> Option<&'v Box<str>> {
-        match self.0.unpack_ptr1() {
-            Some(x) => x.unpack_box_str(),
             _ => None,
         }
     }
