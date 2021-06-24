@@ -36,7 +36,6 @@ use std::{
 
 /// Define the dictionary type. See [`Dict`] and [`FrozenDict`] as the two aliases.
 #[derive(Clone, Default_, Debug)]
-#[repr(transparent)]
 pub struct DictGen<V> {
     /// The data stored by the dictionary. The keys must all be hashable values.
     pub content: SmallMap<V, V>,
@@ -62,11 +61,6 @@ impl<V> DictGen<V> {
     /// Create a new [`DictGen`].
     pub fn new(content: SmallMap<V, V>) -> Self {
         Self { content }
-    }
-
-    pub(crate) fn from_box(x: Box<SmallMap<V, V>>) -> Box<Self> {
-        // Safe because we used repr(transparent) on the Dict
-        unsafe { transmute!(Box<SmallMap<V, V>>, Box<DictGen<V>>, x) }
     }
 }
 

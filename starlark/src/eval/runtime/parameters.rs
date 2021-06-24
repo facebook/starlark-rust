@@ -345,7 +345,7 @@ struct ParametersCollect<'v, 'a> {
     args: Vec<Value<'v>>,
     // A SmallMap is relatively large (10 words), so we don't want it in our data
     // structure in most cases as it isn't used.
-    kwargs: Option<Box<SmallMap<Value<'v>, Value<'v>>>>,
+    kwargs: Option<Box<Dict<'v>>>,
     // We defer errors right until the end, to simplify the API
     err: Option<anyhow::Error>,
 }
@@ -381,9 +381,9 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         }
     }
 
-    fn kwargs(&mut self) -> &mut SmallMap<Value<'v>, Value<'v>> {
+    fn kwargs(&mut self) -> &mut Dict<'v> {
         if self.kwargs.is_none() {
-            self.kwargs = Some(box SmallMap::default());
+            self.kwargs = Some(box Dict::new(SmallMap::default()));
         }
         self.kwargs.as_mut().unwrap()
     }
@@ -400,7 +400,7 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
         let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
         let repeated = match self.params.0.names.get_hashed(name_hash) {
             None => {
-                let old = self.kwargs().insert_hashed(name_value, val);
+                let old = self.kwargs().content.insert_hashed(name_value, val);
                 old.is_some()
             }
             Some(i) => {
@@ -504,13 +504,13 @@ impl<'v, 'a> ParametersCollect<'v, 'a> {
                 }
                 ParameterKind::KWargs => {
                     let kwargs = self.kwargs.take().unwrap_or_default();
-                    slot.set(eval.heap().alloc_complex_box(Dict::from_box(kwargs)))
+                    slot.set(eval.heap().alloc_complex_box(kwargs))
                 }
             }
         }
         if let Some(kwargs) = &self.kwargs {
             return Err(FunctionError::ExtraNamedParameters {
-                names: kwargs.keys().map(|x| x.to_str()).collect(),
+                names: kwargs.keys().map(|x| x.to_str()),
                 function: self.params.signature(),
             }
             .into());
