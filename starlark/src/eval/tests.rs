@@ -1326,6 +1326,27 @@ fn test_escape_characters() {
 }
 
 #[test]
+fn test_empty_args_kwargs() {
+    // This was a bug that was introduced in the past, so make sure you don't forget
+    assert::pass(
+        r#"
+def f(x, *args, **kwargs):
+    assert_eq(args, ())
+    assert_eq(kwargs, {})
+f(1)
+"#,
+    );
+    assert::fail(
+        r#"
+def f(x, *, y):
+    pass
+f(1)
+"#,
+        "Missing parameter `y`",
+    );
+}
+
+#[test]
 fn test_deallocation() {
     // Check that we really do deallocate values we create
     static COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));

@@ -284,6 +284,9 @@ impl<'v> ParametersSpec<Value<'v>> {
             && params.args.is_none()
             && params.kwargs.is_none()
         {
+            // because len == both spec.kinds and spec.positional, there can't be
+            // no_args, *args or **kwargs
+
             // fast path for saturated length only positional
             for (i, x) in params.pos.iter().enumerate() {
                 eval.local_variables.get_slot_at(slots, i).set_direct(*x)
