@@ -63,7 +63,7 @@ pub enum LibraryExtension {
     /// Add a function `debug(x)` which shows the Rust [`Debug`](std::fmt::Debug) representation of a value.
     /// Useful when debugging, but the output should not be considered stable.
     Debug,
-    /// Add a function `print(x)` which prints to stdout.
+    /// Add a function `print(x)` which prints to stderr.
     Print,
     /// Add a function `breakpoint()` which will drop into a console-module evaluation prompt.
     Breakpoint,
