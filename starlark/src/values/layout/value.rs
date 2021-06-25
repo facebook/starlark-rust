@@ -517,10 +517,6 @@ impl<'v> ValueRef<'v> {
         self.0.get()
     }
 
-    pub(crate) fn is_unassigned(&self) -> bool {
-        self.get().is_none()
-    }
-
     pub fn get(&self) -> Option<Value<'v>> {
         self.get_cell().get()
     }

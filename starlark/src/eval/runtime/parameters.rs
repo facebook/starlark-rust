@@ -26,7 +26,7 @@ use crate::{
     },
 };
 use gazebo::prelude::*;
-use std::{cmp, mem};
+use std::cmp;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -275,36 +275,194 @@ impl<'v> ParametersSpec<Value<'v>> {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<LocalSlotBase> {
-        let len = self.0.kinds.len();
-        let slots = eval.local_variables.reserve(cmp::max(slots, len));
-
-        if len == params.pos.len()
-            && len == self.0.positional
-            && params.named.is_empty()
-            && params.args.is_none()
-            && params.kwargs.is_none()
-        {
-            // because len == both spec.kinds and spec.positional, there can't be
-            // no_args, *args or **kwargs
-
-            // fast path for saturated length only positional
-            for (i, x) in params.pos.iter().enumerate() {
-                eval.local_variables.get_slot_at(slots, i).set_direct(*x)
+        // Return true if the value is a duplicate
+        #[inline(always)]
+        fn add_kwargs<'v>(
+            kwargs: &mut Option<Box<Dict<'v>>>,
+            key: Hashed<Value<'v>>,
+            val: Value<'v>,
+        ) -> bool {
+            match kwargs {
+                None => {
+                    // pick 11 as its the largest Vec we might need, but not yet a SmallMap
+                    let mut mp = SmallMap::with_capacity(11);
+                    mp.insert_hashed(key, val);
+                    *kwargs = Some(box Dict::new(mp));
+                    false
+                }
+                Some(mp) => mp.content.insert_hashed(key, val).is_some(),
             }
-            Ok(slots)
-        } else {
-            let mut collect = ParametersCollect {
-                params: self,
-                slots,
-                only_positional: true,
-                next_position: 0,
-                args: Vec::new(),
-                kwargs: None,
-                err: None,
-            };
-            collect.push_params(params, eval);
-            collect.done(eval)
         }
+
+        let len = self.0.kinds.len();
+        let slot_base = eval.local_variables.reserve(cmp::max(slots, len));
+        let slots = eval.local_variables.get_slots_at(slot_base);
+
+        let mut args = Vec::new();
+        let mut kwargs = None;
+        let mut next_position = 0;
+
+        // First deal with positional parameters
+        if params.pos.len() <= self.0.positional {
+            // fast path for when we don't need to bounce down to filling in args
+            for (v, s) in params.pos.iter().zip(slots.iter()) {
+                s.set_direct(*v);
+            }
+            if params.pos.len() == self.0.positional
+                && params.pos.len() == self.0.kinds.len()
+                && params.named.is_empty()
+                && params.args.is_none()
+                && params.kwargs.is_none()
+            {
+                // If the arguments equal the length and the kinds, and we don't have any other args,
+                // then no_args, *args and **kwargs must all be unset,
+                // and we don't have to crate args/kwargs objects, we can skip everything else
+                return Ok(slot_base);
+            }
+            next_position = params.pos.len();
+        } else {
+            for v in params.pos {
+                if next_position < self.0.positional {
+                    slots[next_position].set_direct(*v);
+                    next_position += 1;
+                } else {
+                    args.push(*v);
+                }
+            }
+        }
+
+        // Next deal with named parameters
+        // The lowest position at which we've written a name.
+        // If at the end lowest_name is less than next_position, we got the same variable twice.
+        // So no duplicate checking until after all positional arguments
+        let mut lowest_name = usize::MAX;
+        // Avoid a lot of loop setup etc in the common case
+        if !params.names.is_empty() {
+            for ((name, name_value), v) in params.names.iter().zip(params.named) {
+                // Safe to use new_unchecked because hash for the Value and str are the same
+                let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
+                match self.0.names.get_hashed(name_hash) {
+                    None => {
+                        add_kwargs(&mut kwargs, *name_value, *v);
+                    }
+                    Some(i) => {
+                        slots[*i].set_direct(*v);
+                        lowest_name = cmp::min(lowest_name, *i);
+                    }
+                }
+            }
+        }
+
+        // Next up are the *args parameters
+        if let Some(param_args) = params.args {
+            match param_args.iterate(eval.heap()) {
+                Err(_) => return Err(FunctionError::ArgsArrayIsNotIterable.into()),
+                Ok(iter) => {
+                    for v in &iter {
+                        if next_position < self.0.positional {
+                            slots[next_position].set_direct(v);
+                            next_position += 1;
+                        } else {
+                            args.push(v);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check if the named arguments clashed with the positional arguments
+        if next_position > lowest_name {
+            return Err(FunctionError::RepeatedParameter {
+                name: self.param_name_at(lowest_name),
+            }
+            .into());
+        }
+
+        // Now insert the kwargs, if there are any
+        if let Some(param_kwargs) = params.kwargs {
+            match Dict::from_value(param_kwargs) {
+                Some(y) => {
+                    for (k, v) in y.iter_hashed() {
+                        match k.key().unpack_str() {
+                            None => return Err(FunctionError::ArgsValueIsNotString.into()),
+                            Some(s) => {
+                                let name_hash = BorrowHashed::new_unchecked(k.hash(), s);
+                                let repeat = match self.0.names.get_hashed(name_hash) {
+                                    None => add_kwargs(&mut kwargs, k, v),
+                                    Some(i) => {
+                                        let this_slot = &slots[*i];
+                                        let repeat = this_slot.get_direct().is_some();
+                                        this_slot.set_direct(v);
+                                        repeat
+                                    }
+                                };
+                                if repeat {
+                                    return Err(FunctionError::RepeatedParameter {
+                                        name: s.to_owned(),
+                                    }
+                                    .into());
+                                }
+                            }
+                        }
+                    }
+                }
+                None => return Err(FunctionError::KwArgsIsNotDict.into()),
+            }
+        }
+
+        // We have moved parameters into all the relevant slots, so need to finalise things.
+        // We need to set default values and error if any required values are missing
+        let kinds = &self.0.kinds;
+        // This code is very hot, and setting up iterators was a noticeable bottleneck.
+        for index in next_position..kinds.len() {
+            // The number of locals must be at least the number of parameters, see `collect`
+            // which reserves `max(_, kinds.len())`.
+            let slot = unsafe { slots.get_unchecked(index) };
+            let def = unsafe { kinds.get_unchecked(index) };
+
+            // We know that up to next_position got filled positionally, so we don't need to check those
+            if slot.get_direct().is_some() {
+                continue;
+            }
+            match def {
+                ParameterKind::Required => {
+                    return Err(FunctionError::MissingParameter {
+                        name: self.param_name_at(index),
+                        function: self.signature(),
+                    }
+                    .into());
+                }
+                ParameterKind::Defaulted(x) => {
+                    slot.set_direct(*x);
+                }
+                _ => {}
+            }
+        }
+
+        // Now set the kwargs/args slots, if they are requested, and fail it they are absent but used
+        // Note that we deliberately give warnings about missing parameters _before_ giving warnings
+        // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
+        if let Some(args_pos) = self.0.args {
+            slots[args_pos].set_direct(eval.heap().alloc(Tuple::new(args)));
+        } else if !args.is_empty() {
+            return Err(FunctionError::ExtraPositionalParameters {
+                count: args.len(),
+                function: self.signature(),
+            }
+            .into());
+        }
+
+        if let Some(kwargs_pos) = self.0.kwargs {
+            let kwargs = kwargs.take().unwrap_or_default();
+            slots[kwargs_pos].set_direct(eval.heap().alloc_complex_box(kwargs));
+        } else if let Some(kwargs) = kwargs {
+            return Err(FunctionError::ExtraNamedParameters {
+                names: kwargs.keys().map(|x| x.to_str()),
+                function: self.signature(),
+            }
+            .into());
+        }
+        Ok(slot_base)
     }
 }
 
@@ -334,198 +492,6 @@ impl<'v> ParametersSpec<Value<'v>> {
     /// Used when performing garbage collection over a [`ParametersSpec`].
     pub fn walk(&mut self, walker: &Walker<'v>) {
         self.0.kinds.iter_mut().for_each(|x| x.walk(walker))
-    }
-}
-
-struct ParametersCollect<'v, 'a> {
-    params: &'a ParametersSpec<Value<'v>>,
-    slots: LocalSlotBase,
-
-    /// Initially true, becomes false once we see something not-positional.
-    /// Required since we can fast-path positional if there are no conflicts.
-    only_positional: bool,
-    next_position: usize,
-    args: Vec<Value<'v>>,
-    // A SmallMap is relatively large (10 words), so we don't want it in our data
-    // structure in most cases as it isn't used.
-    kwargs: Option<Box<Dict<'v>>>,
-    // We defer errors right until the end, to simplify the API
-    err: Option<anyhow::Error>,
-}
-
-impl<'v, 'a> ParametersCollect<'v, 'a> {
-    fn set_err(&mut self, err: anyhow::Error) {
-        if self.err.is_none() {
-            self.err = Some(err);
-        }
-    }
-
-    pub fn push_pos(&mut self, val: Value<'v>, eval: &mut Evaluator<'v, '_>) {
-        if self.next_position < self.params.0.positional {
-            // Checking unassigned is moderately expensive, so use only_positional
-            // which knows we have never set anything below next_position
-            let val_ref = eval
-                .local_variables
-                .get_slot_at(self.slots, self.next_position);
-            if self.only_positional || val_ref.get_direct().is_none() {
-                val_ref.set_direct(val);
-                self.next_position += 1;
-            } else {
-                // Occurs if we have def f(a), then a=1, *[2]
-                self.set_err(
-                    FunctionError::RepeatedParameter {
-                        name: self.params.param_name_at(self.next_position),
-                    }
-                    .into(),
-                );
-            }
-        } else {
-            self.args.push(val);
-        }
-    }
-
-    fn kwargs(&mut self) -> &mut Dict<'v> {
-        if self.kwargs.is_none() {
-            self.kwargs = Some(box Dict::new(SmallMap::default()));
-        }
-        self.kwargs.as_mut().unwrap()
-    }
-
-    pub fn push_named(
-        &mut self,
-        name: &str,
-        name_value: Hashed<Value<'v>>,
-        val: Value<'v>,
-        eval: &mut Evaluator<'v, '_>,
-    ) {
-        self.only_positional = false;
-        // Safe to use new_unchecked because hash for the Value and str are the same
-        let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
-        let repeated = match self.params.0.names.get_hashed(name_hash) {
-            None => {
-                let old = self.kwargs().content.insert_hashed(name_value, val);
-                old.is_some()
-            }
-            Some(i) => {
-                let val_ref = eval.local_variables.get_slot_at(self.slots, *i);
-                let res = val_ref.get_direct().is_some();
-                val_ref.set_direct(val);
-                res
-            }
-        };
-        if repeated {
-            self.set_err(
-                FunctionError::RepeatedParameter {
-                    name: name.to_owned(),
-                }
-                .into(),
-            );
-        }
-    }
-
-    pub fn push_args(&mut self, val: Value<'v>, eval: &mut Evaluator<'v, '_>) {
-        match val.iterate(eval.heap()) {
-            Err(_) => self.set_err(FunctionError::ArgsArrayIsNotIterable.into()),
-            Ok(iter) => {
-                // It might be tempting to avoid iterating if it's going into the *args directly
-                // But because lists are mutable that becomes observable behaviour, so we have
-                // to copy the array
-                for x in &iter {
-                    self.push_pos(x, eval);
-                }
-            }
-        }
-    }
-
-    pub fn push_kwargs(&mut self, val: Value<'v>, eval: &mut Evaluator<'v, '_>) {
-        let res = try {
-            match Dict::from_value(val) {
-                Some(y) => {
-                    for (n, v) in y.iter_hashed() {
-                        match n.key().unpack_str() {
-                            None => Err(FunctionError::ArgsValueIsNotString)?,
-                            Some(s) => self.push_named(s, n, v, eval),
-                        }
-                    }
-                }
-                None => Err(FunctionError::KwArgsIsNotDict)?,
-            }
-        };
-        match res {
-            Err(v) => self.set_err(v),
-            _ => {}
-        }
-    }
-
-    pub fn push_params(&mut self, params: Parameters<'v, '_>, eval: &mut Evaluator<'v, '_>) {
-        for x in params.pos {
-            self.push_pos(*x, eval);
-        }
-        for ((name1, name2), x) in params.names.iter().zip(params.named.iter()) {
-            self.push_named(name1, name2.to_hashed_value(), *x, eval);
-        }
-        if let Some(x) = params.args {
-            self.push_args(x, eval);
-        }
-        if let Some(x) = params.kwargs {
-            self.push_kwargs(x, eval);
-        }
-    }
-
-    pub(crate) fn done(&mut self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<LocalSlotBase> {
-        if let Some(err) = self.err.take() {
-            return Err(err);
-        }
-        let locals = eval.local_variables.get_slots_at(self.slots);
-        let kinds = &self.params.0.kinds;
-        // This code is very hot, and setting up iterators was a noticeable bottleneck.
-        for index in self.next_position..kinds.len() {
-            // The number of locals must be at least the number of parameters, see `collect`
-            // which reserves `max(_, kinds.len())`.
-            let slot = unsafe { locals.get_unchecked(index) };
-            let def = unsafe { kinds.get_unchecked(index) };
-
-            // We know that up to next_position got filled positionally, so we don't need to check those
-            if !slot.is_unassigned() {
-                continue;
-            }
-            match def {
-                ParameterKind::Required => {
-                    return Err(FunctionError::MissingParameter {
-                        name: self.params.param_name_at(index),
-                        function: self.params.signature(),
-                    }
-                    .into());
-                }
-                ParameterKind::Optional => {}
-                ParameterKind::Defaulted(x) => {
-                    slot.set(*x);
-                }
-                ParameterKind::Args => {
-                    let args = mem::take(&mut self.args);
-                    slot.set(eval.heap().alloc(Tuple::new(args)));
-                }
-                ParameterKind::KWargs => {
-                    let kwargs = self.kwargs.take().unwrap_or_default();
-                    slot.set(eval.heap().alloc_complex_box(kwargs))
-                }
-            }
-        }
-        if let Some(kwargs) = &self.kwargs {
-            return Err(FunctionError::ExtraNamedParameters {
-                names: kwargs.keys().map(|x| x.to_str()),
-                function: self.params.signature(),
-            }
-            .into());
-        }
-        if !self.args.is_empty() {
-            return Err(FunctionError::ExtraPositionalParameters {
-                count: self.args.len(),
-                function: self.params.signature(),
-            }
-            .into());
-        }
-        Ok(self.slots)
     }
 }
 
