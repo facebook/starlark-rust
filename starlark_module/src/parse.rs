@@ -84,6 +84,9 @@ fn process_attributes(xs: Vec<Attribute>) -> (bool, Option<NestedMeta>, Vec<Attr
             rest.push(x);
         }
     }
+    if attribute {
+        assert!(typ.is_none(), "Can't be an attribute with a .type");
+    }
     (attribute, typ, rest)
 }
 
