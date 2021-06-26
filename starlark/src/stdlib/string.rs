@@ -939,7 +939,23 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         Ok(List::new(match (sep.into_option(), maxsplit) {
             (None, None) => this.split_whitespace().map(|x| heap.alloc(x)).collect(),
             (None, Some(maxsplit)) => splitn_whitespace(this, maxsplit).map(|x| heap.alloc(x)),
-            (Some(sep), None) => this.split(sep).map(|x| heap.alloc(x)).collect(),
+            (Some(sep), None) => {
+                if sep.len() == 1 {
+                    // If we are searching for a 1-byte string, we can provide a much faster path.
+                    // Since it is one byte, given how UTF8 works, all the resultant slices must be UTF8 too.
+                    let b = sep.as_bytes()[0];
+                    let count = this.as_bytes().iter().filter(|x| **x == b).count();
+                    let mut res = Vec::with_capacity(count + 1);
+                    res.extend(
+                        this.as_bytes()
+                            .split(|x| *x == b)
+                            .map(|x| heap.alloc(unsafe { std::str::from_utf8_unchecked(x) })),
+                    );
+                    res
+                } else {
+                    this.split(sep).map(|x| heap.alloc(x)).collect()
+                }
+            }
             (Some(sep), Some(maxsplit)) => {
                 this.splitn(maxsplit, sep).map(|x| heap.alloc(x)).collect()
             }
