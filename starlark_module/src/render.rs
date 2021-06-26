@@ -56,6 +56,8 @@ fn render_const(x: StarConst) -> TokenStream {
 
 // Add a function to the `GlobalsModule` named `globals_builder`.
 fn render_fun(x: StarFun) -> TokenStream {
+    let signature = render_signature(&x);
+
     let StarFun {
         name,
         is_attribute,
@@ -66,9 +68,8 @@ fn render_fun(x: StarFun) -> TokenStream {
         body,
     } = x;
     let name_str = ident_string(&name);
-    let args_count = args.len();
     let bind_args = args.map(bind_argument);
-    let signature = args.map(record_argument);
+
     let setter = if is_attribute {
         quote! {
             let func = globals_builder.alloc(
@@ -124,15 +125,13 @@ fn render_fun(x: StarFun) -> TokenStream {
             }
         }
         {
-            #[allow(unused_mut)]
-            let mut signature = starlark::eval::ParametersSpecBuilder::with_capacity(#name_str.to_owned(), #args_count);
-            #( #signature )*
-            let signature = signature.build();
+            #signature
             #setter
         }
     }
 }
 
+// Create a binding for an argument given
 fn bind_argument(arg: &StarArg) -> TokenStream {
     let name = &arg.name;
     let name_str = ident_string(name);
@@ -166,7 +165,21 @@ fn bind_argument(arg: &StarArg) -> TokenStream {
     }
 }
 
-fn record_argument(arg: &StarArg) -> TokenStream {
+// Given the arguments, create a variable `signature` with a `ParametersSpec` object.
+fn render_signature(x: &StarFun) -> TokenStream {
+    let name_str = ident_string(&x.name);
+    let args_count = x.args.len();
+    let sig_args = x.args.map(render_signature_arg);
+    quote! {
+        #[allow(unused_mut)]
+        let mut signature = starlark::eval::ParametersSpecBuilder::with_capacity(#name_str.to_owned(), #args_count);
+        #( #sig_args )*
+        let signature = signature.build();
+    }
+}
+
+// Generate a statement that modifies signature to add a new argument in.
+fn render_signature_arg(arg: &StarArg) -> TokenStream {
     let mut name_str_full = (if arg.by_ref { "$" } else { "" }).to_owned();
     name_str_full += &ident_string(&arg.name);
     let name_str = name_str_full.trim_matches('_');
