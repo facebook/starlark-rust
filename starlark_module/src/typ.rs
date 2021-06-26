@@ -30,8 +30,9 @@ pub(crate) struct StarModule {
 
 #[derive(Debug)]
 pub(crate) enum StarStmt {
-    Fun(StarFun),
     Const(StarConst),
+    Fun(StarFun),
+    Attr(StarAttr),
 }
 
 #[derive(Debug)]
@@ -44,10 +45,18 @@ pub(crate) struct StarConst {
 #[derive(Debug)]
 pub(crate) struct StarFun {
     pub name: Ident,
-    pub is_attribute: bool,
     pub type_attribute: Option<NestedMeta>,
     pub attrs: Vec<Attribute>,
     pub args: Vec<StarArg>,
+    pub return_type: Type,
+    pub body: Block,
+}
+
+#[derive(Debug)]
+pub(crate) struct StarAttr {
+    pub name: Ident,
+    pub arg: Type,
+    pub attrs: Vec<Attribute>,
     pub return_type: Type,
     pub body: Block,
 }

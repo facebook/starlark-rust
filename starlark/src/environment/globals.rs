@@ -16,13 +16,11 @@
  */
 
 use crate::{
-    self as starlark,
     collections::SmallMap,
     stdlib,
     values::{
-        function::{FrozenBoundMethod, NativeAttribute},
-        structs::FrozenStruct,
-        AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value,
+        function::NativeAttribute, structs::FrozenStruct, AllocFrozenValue, FrozenHeap,
+        FrozenHeapRef, FrozenValue, Value,
     },
 };
 use gazebo::prelude::*;
@@ -188,28 +186,14 @@ impl GlobalsBuilder {
     /// [`StarlarkValue::get_methods`](crate::values::StarlarkValue::get_methods).
     pub fn set_attribute<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
         // We want to build an attribute, that ignores its self argument, and does no subsequent allocation.
-        // To fake that, we put a constant function in a WrapperMethod with the value of interest.
-
-        #[starlark_module]
-        fn constant_function(builder: &mut GlobalsBuilder) {
-            // Used by set_attribute
-            fn f(this: Value<'v>) -> Value<'v> {
-                Ok(this)
-            }
-        }
-        static CONSTANT: GlobalsStatic = GlobalsStatic::new();
-        let constant = CONSTANT.function(constant_function);
-
-        let name = name.to_owned();
-        let value = value.alloc_frozen_value(&self.heap);
-        let val = self.heap.alloc(FrozenBoundMethod {
-            this: value,
-            method: constant,
+        let value = self.alloc(value);
+        let func = self.alloc(NativeAttribute {
+            function: box move |_, _| Ok(value.to_value()),
         });
-        let x = self.heap.alloc(NativeAttribute::new(val));
+        let name = name.to_owned();
         match &mut self.struct_fields {
-            None => self.variables.insert(name, x),
-            Some(fields) => fields.insert(name, x),
+            None => self.variables.insert(name, func),
+            Some(fields) => fields.insert(name, func),
         };
     }
 

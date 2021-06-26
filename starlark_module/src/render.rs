@@ -41,8 +41,9 @@ pub(crate) fn render(x: StarModule) -> TokenStream {
 
 fn render_stmt(x: StarStmt) -> TokenStream {
     match x {
-        StarStmt::Fun(x) => render_fun(x),
         StarStmt::Const(x) => render_const(x),
+        StarStmt::Attr(x) => render_attr(x),
+        StarStmt::Fun(x) => render_fun(x),
     }
 }
 
@@ -54,13 +55,51 @@ fn render_const(x: StarConst) -> TokenStream {
     }
 }
 
-// Add a function to the `GlobalsModule` named `globals_builder`.
+fn render_attr(x: StarAttr) -> TokenStream {
+    let StarAttr {
+        name,
+        arg,
+        attrs,
+        return_type,
+        body,
+    } = x;
+    let name_str = ident_string(&name);
+    quote! {
+        #( #attrs )*
+        #[allow(non_snake_case)] // Starlark doesn't have this convention
+        fn #name<'v, 'a>(
+            #[allow(unused_variables)]
+            this: starlark::values::Value<'v>,
+            eval: &mut starlark::eval::Evaluator<'v, 'a>,
+        ) -> anyhow::Result<starlark::values::Value<'v>> {
+             fn inner<'v, 'a>(
+                this: Value<'v>,
+                #[allow(unused_variables)]
+                eval: &mut starlark::eval::Evaluator<'v, 'a>,
+            ) -> anyhow::Result<#return_type> {
+                #[allow(unused_variables)]
+                let heap = eval.heap();
+                #[allow(unused_variables)]
+                let this: #arg = match starlark::values::UnpackValue::unpack_value(this) {
+                    None => return Err(starlark::values::ValueError::IncorrectParameterTypeNamed("this".to_owned()).into()),
+                    Some(v) => v,
+                };
+                #body
+            }
+            Ok(eval.heap().alloc(inner(this, eval)?))
+        }
+        globals_builder.set(
+            #name_str,
+            starlark::values::function::NativeAttribute::new(#name),
+        );
+    }
+}
+
 fn render_fun(x: StarFun) -> TokenStream {
     let signature = render_signature(&x);
 
     let StarFun {
         name,
-        is_attribute,
         type_attribute,
         attrs,
         args,
@@ -70,17 +109,7 @@ fn render_fun(x: StarFun) -> TokenStream {
     let name_str = ident_string(&name);
     let bind_args = args.map(bind_argument);
 
-    let setter = if is_attribute {
-        quote! {
-            let func = globals_builder.alloc(
-                starlark::values::function::NativeFunction::new(#name, signature),
-            );
-            globals_builder.set(
-                #name_str,
-                starlark::values::function::NativeAttribute::new(func),
-            );
-        }
-    } else if let Some(typ) = type_attribute {
+    let setter = if let Some(typ) = type_attribute {
         quote! {
             static TYPE: starlark::values::ConstFrozenValue =
                 starlark::values::ConstFrozenValue::new(#typ);

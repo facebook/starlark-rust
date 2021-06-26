@@ -55,6 +55,20 @@ impl<T> NativeFunc for T where
 {
 }
 
+/// A native function that can be evaluated.
+pub trait NativeAttr:
+    for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> + Send + Sync + 'static
+{
+}
+
+impl<T> NativeAttr for T where
+    T: for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>
+        + Send
+        + Sync
+        + 'static
+{
+}
+
 /// Starlark representation of native (Rust) functions.
 ///
 /// Almost always created with [`#[starlark_module]`](macro@starlark_module).
@@ -153,15 +167,28 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
 
 /// Used by the `#[attribute]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
-#[derive(Debug)]
-pub struct NativeAttribute(FrozenValue); // Must be a NativeFunction
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct NativeAttribute {
+    #[derivative(Debug = "ignore")]
+    pub(crate) function: Box<dyn NativeAttr>,
+}
 
 starlark_simple_value!(NativeAttribute);
 
 impl NativeAttribute {
-    /// Argument _must_ be a [`NativeFunction`] which takes one argument.
-    pub fn new(x: FrozenValue) -> Self {
-        NativeAttribute(x)
+    /// Create a new [`NativeFunction`] from the Rust function, plus the parameter specification.
+    pub fn new<F>(function: F) -> Self
+    where
+        // If I switch this to the trait alias then it fails to resolve the usages
+        F: for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        NativeAttribute {
+            function: box function,
+        }
     }
 
     pub(crate) fn call<'v>(
@@ -169,12 +196,7 @@ impl NativeAttribute {
         value: Value<'v>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let function = self.0.to_value();
-        let params = Parameters {
-            this: Some(value),
-            ..Parameters::default()
-        };
-        function.invoke(None, params, eval)
+        (self.function)(value, eval)
     }
 }
 

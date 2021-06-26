@@ -36,7 +36,7 @@ pub(crate) fn parse(mut input: ItemFn) -> StarModule {
 
 fn parse_stmt(stmt: Stmt) -> StarStmt {
     match stmt {
-        Stmt::Item(Item::Fn(x)) => StarStmt::Fun(parse_fun(x)),
+        Stmt::Item(Item::Fn(x)) => parse_fun(x),
         Stmt::Item(Item::Const(x)) => StarStmt::Const(parse_const(x)),
         _ => panic!("Can only put constants and functions inside a #[starlark_module]"),
     }
@@ -91,7 +91,7 @@ fn process_attributes(xs: Vec<Attribute>) -> (bool, Option<NestedMeta>, Vec<Attr
 }
 
 // Add a function to the `GlobalsModule` named `globals_builder`.
-fn parse_fun(func: ItemFn) -> StarFun {
+fn parse_fun(func: ItemFn) -> StarStmt {
     let (is_attribute, type_attribute, attrs) = process_attributes(func.attrs);
 
     let return_type = match func.sig.output {
@@ -101,16 +101,33 @@ fn parse_fun(func: ItemFn) -> StarFun {
         ),
         ReturnType::Type(_, x) => x,
     };
-    let args = func.sig.inputs.into_iter().map(parse_arg).collect();
+    let mut args = func
+        .sig
+        .inputs
+        .into_iter()
+        .map(parse_arg)
+        .collect::<Vec<_>>();
 
-    StarFun {
-        name: func.sig.ident,
-        is_attribute,
-        type_attribute,
-        attrs,
-        args,
-        return_type: *return_type,
-        body: *func.block,
+    if is_attribute {
+        assert_eq!(args.len(), 1);
+        let arg = args.pop().unwrap();
+        assert!(arg.is_this() && arg.default.is_none());
+        StarStmt::Attr(StarAttr {
+            name: func.sig.ident,
+            arg: arg.ty,
+            attrs,
+            return_type: *return_type,
+            body: *func.block,
+        })
+    } else {
+        StarStmt::Fun(StarFun {
+            name: func.sig.ident,
+            type_attribute,
+            attrs,
+            args,
+            return_type: *return_type,
+            body: *func.block,
+        })
     }
 }
 
