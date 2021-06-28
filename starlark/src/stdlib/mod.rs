@@ -69,6 +69,8 @@ pub enum LibraryExtension {
     Breakpoint,
     /// Add a function `json()` which will generate JSON for a module.
     Json,
+    /// Add a function `abs()` which will take the absolute value of an int.
+    Abs,
     // Make sure if you add anything new, you add it to `all` below.
 }
 
@@ -78,7 +80,7 @@ impl LibraryExtension {
         use LibraryExtension::*;
         &[
             StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Print,
-            Breakpoint, Json,
+            Breakpoint, Json, Abs,
         ]
     }
 
@@ -97,6 +99,7 @@ impl LibraryExtension {
             Print => extra::print(builder),
             Breakpoint => breakpoint::global(builder),
             Json => extra::json(builder),
+            Abs => extra::abs(builder),
         }
     }
 }

@@ -132,6 +132,13 @@ pub fn json(builder: &mut GlobalsBuilder) {
     }
 }
 
+#[starlark_module]
+pub fn abs(builder: &mut GlobalsBuilder) {
+    fn abs(ref x: i32) -> i32 {
+        Ok(x.abs())
+    }
+}
+
 #[derive(Debug)]
 struct PartialGen<V> {
     func: V,
