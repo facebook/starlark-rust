@@ -216,14 +216,18 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.len() as i32, start, end);
-        let mut counter = 0i32;
-        let mut s = this.get(start..end).unwrap();
-        while let Some(offset) = s.find(needle) {
-            counter += 1;
-            s = s.get(offset + needle.len()..).unwrap_or("");
+        if start.is_none() && end.is_none() {
+            if needle.len() == 1 {
+                let b = needle.as_bytes()[0];
+                Ok(this.as_bytes().iter().filter(|x| **x == b).count() as i32)
+            } else {
+                Ok(this.matches(needle).count() as i32)
+            }
+        } else {
+            let (start, end) = convert_indices(this.len() as i32, start, end);
+            // FIXME: This unwrap can be triggered by users, should bubble up an error
+            Ok(this.get(start..end).unwrap().matches(needle).count() as i32)
         }
-        Ok(counter)
     }
 
     /// [string.endswith](
