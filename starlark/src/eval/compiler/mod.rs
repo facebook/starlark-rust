@@ -22,7 +22,7 @@ use crate::{
     environment::Globals,
     errors::Diagnostic,
     eval::{compiler::scope::Scope, Evaluator},
-    values::{FrozenHeap, Value},
+    values::{FrozenHeap, FrozenValue, Value},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -31,6 +31,19 @@ use std::fmt::Debug;
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
 >;
+pub(crate) enum ExprCompiledValue {
+    Value(FrozenValue),
+    Compiled(ExprCompiled),
+}
+
+impl ExprCompiledValue {
+    pub fn as_compiled(self) -> ExprCompiled {
+        match self {
+            Self::Value(x) => box move |_| Ok(x.to_value()),
+            Self::Compiled(x) => x,
+        }
+    }
+}
 
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;

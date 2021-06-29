@@ -22,7 +22,7 @@ use crate::{
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{
-        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled},
+        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
         runtime::evaluator::Evaluator,
         Parameters,
     },
@@ -50,10 +50,10 @@ pub(crate) enum EvalError {
 
 fn eval_compare(
     span: Span,
-    l: ExprCompiled,
-    r: ExprCompiled,
+    l: ExprCompiledValue,
+    r: ExprCompiledValue,
     cmp: fn(Ordering) -> bool,
-) -> ExprCompiled {
+) -> ExprCompiledValue {
     expr!(l, r, |eval| {
         Value::new_bool(cmp(throw(l.compare(r), span, eval)?))
     })
@@ -61,10 +61,10 @@ fn eval_compare(
 
 fn eval_equals(
     span: Span,
-    l: ExprCompiled,
-    r: ExprCompiled,
+    l: ExprCompiledValue,
+    r: ExprCompiledValue,
     cmp: fn(bool) -> bool,
-) -> ExprCompiled {
+) -> ExprCompiledValue {
     expr!(l, r, |eval| {
         Value::new_bool(cmp(throw(l.equals(r), span, eval)?))
     })
@@ -72,11 +72,14 @@ fn eval_equals(
 
 fn eval_slice(
     span: Span,
-    collection: ExprCompiled,
-    start: Option<ExprCompiled>,
-    stop: Option<ExprCompiled>,
-    stride: Option<ExprCompiled>,
-) -> ExprCompiled {
+    collection: ExprCompiledValue,
+    start: Option<ExprCompiledValue>,
+    stop: Option<ExprCompiledValue>,
+    stride: Option<ExprCompiledValue>,
+) -> ExprCompiledValue {
+    let start = start.map(ExprCompiledValue::as_compiled);
+    let stop = stop.map(ExprCompiledValue::as_compiled);
+    let stride = stride.map(ExprCompiledValue::as_compiled);
     expr!(collection, |eval| {
         let start = match start {
             Some(ref e) => Some(e(eval)?),
@@ -107,7 +110,7 @@ impl Compiler<'_> {
             + Send
             + Sync,
     > {
-        let v = v.into_map(|x| self.expr(x));
+        let v = v.into_map(|x| self.expr(x).as_compiled());
         box move |eval| {
             let mut r = Vec::with_capacity(v.len());
             for s in &v {
@@ -337,7 +340,7 @@ impl ArgsCompiled {
 }
 
 impl Compiler<'_> {
-    pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<ExprCompiled> {
+    pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<ExprCompiledValue> {
         expr.map(|v| self.expr(*v))
     }
 
@@ -345,7 +348,7 @@ impl Compiler<'_> {
         let mut res = ArgsCompiled::default();
         for x in args {
             match x.node {
-                Argument::Positional(x) => res.pos_named.push(self.expr(x)),
+                Argument::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
                 Argument::Named(name, value) => {
                     let name_value = self
                         .heap
@@ -353,16 +356,16 @@ impl Compiler<'_> {
                         .get_hashed()
                         .expect("String is Hashable");
                     res.names.push((name.node, name_value));
-                    res.pos_named.push(self.expr(value));
+                    res.pos_named.push(self.expr(value).as_compiled());
                 }
-                Argument::Args(x) => res.args = Some(self.expr(x)),
-                Argument::KwArgs(x) => res.kwargs = Some(self.expr(x)),
+                Argument::Args(x) => res.args = Some(self.expr(x).as_compiled()),
+                Argument::KwArgs(x) => res.kwargs = Some(self.expr(x).as_compiled()),
             }
         }
         res
     }
 
-    pub fn expr(&mut self, expr: AstExpr) -> ExprCompiled {
+    pub fn expr(&mut self, expr: AstExpr) -> ExprCompiledValue {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
@@ -395,7 +398,9 @@ impl Compiler<'_> {
                                     )
                                 };
                                 self.errors.push(mk_err());
-                                box move |_eval| Err(EvalException::Error(mk_err()))
+                                ExprCompiledValue::Compiled(box move |_eval| {
+                                    Err(EvalException::Error(mk_err()))
+                                })
                             }
                         }
                     }
@@ -420,7 +425,7 @@ impl Compiler<'_> {
                     span: expr.span,
                     node: Stmt::Return(Some(inner)),
                 };
-                self.function("lambda", params, None, suite)
+                ExprCompiledValue::Compiled(self.function("lambda", params, None, suite))
             }
             Expr::List(exprs) => {
                 if let Some(lits) = exprs
@@ -462,7 +467,8 @@ impl Compiler<'_> {
                     }
                 }
 
-                let v = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                let v = exprs
+                    .into_map(|(k, v)| (self.expr(k).as_compiled(), self.expr(v).as_compiled()));
                 expr!(|eval| {
                     let mut r = SmallMap::with_capacity(v.len());
                     for (k, v) in v.iter() {
@@ -480,8 +486,8 @@ impl Compiler<'_> {
             }
             Expr::If(box (cond, then_expr, else_expr)) => {
                 let cond = self.expr(cond);
-                let then_expr = self.expr(then_expr);
-                let else_expr = self.expr(else_expr);
+                let then_expr = self.expr(then_expr).as_compiled();
+                let else_expr = self.expr(else_expr).as_compiled();
                 expr!(cond, |eval| {
                     if cond.to_bool() {
                         then_expr(eval)?
@@ -584,12 +590,18 @@ impl Compiler<'_> {
                     let l = self.expr(*left);
                     let r = self.expr(*right);
                     match op {
-                        BinOp::Or => expr!(l, |eval| {
-                            if l.to_bool() { l } else { r(eval)? }
-                        }),
-                        BinOp::And => expr!(l, |eval| {
-                            if !l.to_bool() { l } else { r(eval)? }
-                        }),
+                        BinOp::Or => {
+                            let r = r.as_compiled();
+                            expr!(l, |eval| {
+                                if l.to_bool() { l } else { r(eval)? }
+                            })
+                        }
+                        BinOp::And => {
+                            let r = r.as_compiled();
+                            expr!(l, |eval| {
+                                if !l.to_bool() { l } else { r(eval)? }
+                            })
+                        }
                         BinOp::Equal => eval_equals(span, l, r, |x| x),
                         BinOp::NotEqual => eval_equals(span, l, r, |x| !x),
                         BinOp::Less => eval_compare(span, l, r, |x| x == Ordering::Less),

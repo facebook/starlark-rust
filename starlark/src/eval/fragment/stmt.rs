@@ -26,7 +26,7 @@ use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
     eval::{
-        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, StmtCompiled},
+        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
@@ -85,13 +85,13 @@ impl Compiler<'_> {
         let span = expr.span;
         match expr.node {
             Assign::Dot(e, s) => {
-                let e = self.expr(*e);
+                let e = self.expr(*e).as_compiled();
                 let s = s.node;
                 box move |value, eval| throw(e(eval)?.set_attr(&s, value, eval.heap()), span, eval)
             }
             Assign::ArrayIndirection(box (e, idx)) => {
-                let e = self.expr(e);
-                let idx = self.expr(idx);
+                let e = self.expr(e).as_compiled();
+                let idx = self.expr(idx).as_compiled();
                 box move |value, eval| {
                     throw(e(eval)?.set_at(idx(eval)?, value, eval.heap()), span, eval)
                 }
@@ -119,14 +119,15 @@ impl Compiler<'_> {
         &mut self,
         span_stmt: Span,
         lhs: AstAssign,
-        rhs: ExprCompiled,
+        rhs: ExprCompiledValue,
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
     ) -> StmtCompiled {
         let span_lhs = lhs.span;
         match lhs.node {
             Assign::Dot(e, s) => {
-                let e = self.expr(*e);
+                let e = self.expr(*e).as_compiled();
                 let s = s.node;
+                let rhs = rhs.as_compiled();
                 box move |eval| {
                     before_stmt(span_stmt, eval);
                     let e: Value = e(eval)?;
@@ -141,8 +142,9 @@ impl Compiler<'_> {
                 }
             }
             Assign::ArrayIndirection(box (e, idx)) => {
-                let e = self.expr(e);
-                let idx = self.expr(idx);
+                let e = self.expr(e).as_compiled();
+                let idx = self.expr(idx).as_compiled();
+                let rhs = rhs.as_compiled();
                 box move |eval| {
                     before_stmt(span_stmt, eval);
                     let e: Value = e(eval)?;
@@ -160,22 +162,28 @@ impl Compiler<'_> {
             Assign::Identifier(ident) => {
                 let name = ident.node;
                 match self.scope.get_name_or_panic(&name) {
-                    Slot::Local(slot) => box move |eval| {
-                        before_stmt(span_stmt, eval);
-                        let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
-                        let rhs = rhs(eval)?;
-                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                        eval.set_slot_local(slot, v);
-                        Ok(())
-                    },
-                    Slot::Module(slot) => box move |eval| {
-                        before_stmt(span_stmt, eval);
-                        let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
-                        let rhs = rhs(eval)?;
-                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                        eval.set_slot_module(slot, v);
-                        Ok(())
-                    },
+                    Slot::Local(slot) => {
+                        let rhs = rhs.as_compiled();
+                        box move |eval| {
+                            before_stmt(span_stmt, eval);
+                            let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
+                            let rhs = rhs(eval)?;
+                            let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                            eval.set_slot_local(slot, v);
+                            Ok(())
+                        }
+                    }
+                    Slot::Module(slot) => {
+                        let rhs = rhs.as_compiled();
+                        box move |eval| {
+                            before_stmt(span_stmt, eval);
+                            let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
+                            let rhs = rhs(eval)?;
+                            let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                            eval.set_slot_module(slot, v);
+                            Ok(())
+                        }
+                    }
                 }
             }
             Assign::Tuple(_) => {
@@ -373,7 +381,7 @@ impl Compiler<'_> {
             Stmt::For(var, box (over, body)) => {
                 let over_span = over.span;
                 let var = self.assign(var);
-                let over = self.expr(over);
+                let over = self.expr(over).as_compiled();
                 let st = self.stmt(body, false);
                 box move |eval| {
                     before_stmt(span, eval);
@@ -393,7 +401,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Return(Some(e)) => {
-                let e = self.expr(e);
+                let e = self.expr(e).as_compiled();
                 box move |eval| {
                     before_stmt(span, eval);
                     Err(EvalException::Return(e(eval)?))
@@ -404,7 +412,7 @@ impl Compiler<'_> {
                 Err(EvalException::Return(Value::new_none()))
             },
             Stmt::If(cond, box then_block) => {
-                let cond = self.expr(cond);
+                let cond = self.expr(cond).as_compiled();
                 let then_block = self.stmt(then_block, allow_gc);
                 box move |eval| {
                     before_stmt(span, eval);
@@ -416,7 +424,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::IfElse(cond, box (then_block, else_block)) => {
-                let cond = self.expr(cond);
+                let cond = self.expr(cond).as_compiled();
                 let then_block = self.stmt(then_block, allow_gc);
                 let else_block = self.stmt(else_block, allow_gc);
                 box move |eval| {
@@ -445,7 +453,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Expression(e) => {
-                let e = self.expr(e);
+                let e = self.expr(e).as_compiled();
                 box move |eval| {
                     before_stmt(span, eval);
                     e(eval)?;
@@ -453,7 +461,7 @@ impl Compiler<'_> {
                 }
             }
             Stmt::Assign(lhs, rhs) => {
-                let rhs = self.expr(*rhs);
+                let rhs = self.expr(*rhs).as_compiled();
                 let lhs = self.assign(lhs);
                 box move |eval| {
                     before_stmt(span, eval);

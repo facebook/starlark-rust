@@ -19,30 +19,33 @@ macro_rules! expr {
     (|$eval:ident| $body:expr) => {{
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| Ok($body);
-        res
+        ExprCompiledValue::Compiled(res)
     }};
     ($v1:ident, |$eval:ident| $body:expr) => {{
+        let $v1 = $v1.as_compiled();
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| {
             let $v1 = $v1($eval)?;
             Ok($body)
         };
-        res
+        ExprCompiledValue::Compiled(res)
     }};
     ($v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
+        let $v1 = $v1.as_compiled();
+        let $v2 = $v2.as_compiled();
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| {
             let $v1 = $v1($eval)?;
             let $v2 = $v2($eval)?;
             Ok($body)
         };
-        res
+        ExprCompiledValue::Compiled(res)
     }};
 }
 
 macro_rules! value {
     ($v:expr) => {
-        box move |_eval| Ok(Value::new_frozen($v))
+        ExprCompiledValue::Value($v)
     };
 }
 

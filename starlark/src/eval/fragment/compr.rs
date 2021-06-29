@@ -21,7 +21,7 @@ use crate::{
     codemap::Span,
     collections::SmallMap,
     eval::{
-        compiler::{throw, Compiler, EvalException, ExprCompiled},
+        compiler::{throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
         fragment::stmt::AssignCompiled,
         runtime::evaluator::Evaluator,
     },
@@ -36,10 +36,10 @@ impl Compiler<'_> {
         x: AstExpr,
         for_: ForClause,
         clauses: Vec<Clause>,
-    ) -> ExprCompiled {
+    ) -> ExprCompiledValue {
         self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
-        let x = self.expr(x);
+        let x = self.expr(x).as_compiled();
         self.scope.exit_compr();
         eval_list(x, clauses)
     }
@@ -50,11 +50,11 @@ impl Compiler<'_> {
         v: AstExpr,
         for_: ForClause,
         clauses: Vec<Clause>,
-    ) -> ExprCompiled {
+    ) -> ExprCompiledValue {
         self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
-        let k = self.expr(k);
-        let v = self.expr(v);
+        let k = self.expr(k).as_compiled();
+        let v = self.expr(v).as_compiled();
         self.scope.exit_compr();
         eval_dict(k, v, clauses)
     }
@@ -73,7 +73,7 @@ fn compile_ifs(
                 return (Some(f), ifs);
             }
             Clause::If(x) => {
-                ifs.push(compiler.expr(x));
+                ifs.push(compiler.expr(x).as_compiled());
             }
         }
     }
@@ -107,7 +107,7 @@ fn compile_clauses(
             None => {
                 res.push(ClauseCompiled {
                     var: compiler.assign(for_.var),
-                    over,
+                    over: over.as_compiled(),
                     over_span,
                     ifs,
                 });
@@ -116,7 +116,7 @@ fn compile_clauses(
             Some(f) => {
                 let over_span = f.over.span;
                 res.push(ClauseCompiled {
-                    over: compiler.expr(f.over),
+                    over: compiler.expr(f.over).as_compiled(),
                     var: compiler.assign(f.var),
                     over_span,
                     ifs,
@@ -126,7 +126,7 @@ fn compile_clauses(
     }
 }
 
-fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
+fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
     let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
         let x = x(eval)?;
         me.push(x);
@@ -140,7 +140,7 @@ fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
     })
 }
 
-fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiled {
+fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
     let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, eval| {
         let k = k(eval)?;
         let v = v(eval)?;

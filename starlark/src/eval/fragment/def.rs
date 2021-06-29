@@ -21,7 +21,10 @@ use crate::{
     codemap::{CodeMap, Span},
     environment::FrozenModuleValue,
     eval::{
-        compiler::{scope::ScopeNames, Compiler, EvalException, ExprCompiled, StmtCompiled},
+        compiler::{
+            scope::ScopeNames, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+            StmtCompiled,
+        },
         runtime::{
             evaluator::Evaluator,
             parameters::ParametersSpec,
@@ -82,13 +85,24 @@ struct DefInfo {
 impl Compiler<'_> {
     fn parameter(&mut self, x: AstParameter) -> ParameterCompiled<ExprCompiled> {
         match x.node {
-            Parameter::Normal(x, t) => ParameterCompiled::Normal(x.node, self.expr_opt(t)),
-            Parameter::WithDefaultValue(x, t, v) => {
-                ParameterCompiled::WithDefaultValue(x.node, self.expr_opt(t), self.expr(*v))
-            }
+            Parameter::Normal(x, t) => ParameterCompiled::Normal(
+                x.node,
+                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+            ),
+            Parameter::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
+                x.node,
+                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                self.expr(*v).as_compiled(),
+            ),
             Parameter::NoArgs => ParameterCompiled::NoArgs,
-            Parameter::Args(x, t) => ParameterCompiled::Args(x.node, self.expr_opt(t)),
-            Parameter::KwArgs(x, t) => ParameterCompiled::KwArgs(x.node, self.expr_opt(t)),
+            Parameter::Args(x, t) => ParameterCompiled::Args(
+                x.node,
+                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+            ),
+            Parameter::KwArgs(x, t) => ParameterCompiled::KwArgs(
+                x.node,
+                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+            ),
         }
     }
 
@@ -105,7 +119,9 @@ impl Compiler<'_> {
         // The parameters run in the scope of the parent, so compile them with the outer
         // scope
         let params = params.into_map(|x| self.parameter(x));
-        let return_type = self.expr_opt(return_type);
+        let return_type = self
+            .expr_opt(return_type)
+            .map(ExprCompiledValue::as_compiled);
 
         self.scope
             .enter_def(params.iter().flat_map(ParameterCompiled::name), &suite);
