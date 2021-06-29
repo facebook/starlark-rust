@@ -33,9 +33,9 @@ def benchmark_multiply():
 
 def benchmark_call_native_1pos():
     y = 0
-    xs = []
+    xs = 3
     for _x in range(REPEAT_100M):
-        y = len(xs)
+        y = abs(xs)
     return y
 
 
