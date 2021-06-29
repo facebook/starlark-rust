@@ -42,7 +42,7 @@ macro_rules! expr {
 
 macro_rules! value {
     ($v:expr) => {
-        box move |_eval| Ok($v.to_value())
+        box move |_eval| Ok(Value::new_frozen($v))
     };
 }
 

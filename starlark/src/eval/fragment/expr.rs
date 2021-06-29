@@ -657,7 +657,7 @@ impl Compiler<'_> {
             }
             Expr::Literal(x) => {
                 let val = x.compile(self.heap);
-                value!(Value::new_frozen(val))
+                value!(val)
             }
         }
     }
