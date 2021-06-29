@@ -20,7 +20,7 @@
 
 use crate::{
     codemap::{Span, Spanned},
-    eval::compiler::{scope::Scope, Compiler, EvalException},
+    eval::compiler::{scope::Scope, Compiler, Constants, EvalException},
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::Value,
 };
@@ -87,6 +87,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             globals: self.globals,
             errors: Vec::new(),
             codemap: codemap.dupe(),
+            constants: Constants::new(),
         };
         let stmt = compiler.stmt(statement, true);
 

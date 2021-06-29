@@ -208,6 +208,15 @@ struct ArgsCompiled {
     kwargs: Option<ExprCompiled>,
 }
 
+impl ArgsCompiled {
+    fn is_one_pos(&self) -> bool {
+        self.pos_named.len() == 1
+            && self.names.is_empty()
+            && self.args.is_none()
+            && self.kwargs.is_none()
+    }
+}
+
 // Helper that creates some specialised argument calls
 macro_rules! args {
     ($args:ident, $e:expr) => {
@@ -512,7 +521,7 @@ impl Compiler<'_> {
                 })
             }
             Expr::Call(left, args) => {
-                let args = self.args(args);
+                let mut args = self.args(args);
                 match left.node {
                     Expr::Dot(box e, s) => {
                         let e = self.expr(e);
@@ -531,14 +540,36 @@ impl Compiler<'_> {
                     }
                     _ => {
                         let left = self.expr(*left);
-                        args!(
-                            args,
-                            expr!(left, |eval| {
-                                args.with_params(None, eval, |params, eval| {
-                                    throw(left.invoke(Some(span), params, eval), span, eval)
-                                })?
-                            })
-                        )
+                        match left {
+                            ExprCompiledValue::Value(v)
+                                if self.constants.fn_type == v && args.is_one_pos() =>
+                            {
+                                let x = args.pos_named.pop().unwrap();
+                                ExprCompiledValue::Compiled(box move |eval| {
+                                    Ok(x(eval)?.get_aref().get_type_value().unpack().to_value())
+                                })
+                            }
+                            ExprCompiledValue::Value(v)
+                                if self.constants.fn_len == v && args.is_one_pos() =>
+                            {
+                                let x = args.pos_named.pop().unwrap();
+                                // Technically the length command _could_ call other functions,
+                                // and we'd not get entries on the call stack, which would be bad.
+                                // But `len()` is super common, and no one expects it to call other functions,
+                                // so let's just ignore that corner case for additional perf.
+                                ExprCompiledValue::Compiled(box move |eval| {
+                                    Ok(Value::new_int(x(eval)?.length()?))
+                                })
+                            }
+                            _ => args!(
+                                args,
+                                expr!(left, |eval| {
+                                    args.with_params(None, eval, |params, eval| {
+                                        throw(left.invoke(Some(span), params, eval), span, eval)
+                                    })?
+                                })
+                            ),
+                        }
                     }
                 }
             }

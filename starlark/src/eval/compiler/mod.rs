@@ -26,6 +26,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
+use once_cell::sync::Lazy;
 use std::fmt::Debug;
 
 pub(crate) type ExprCompiled = Box<
@@ -110,4 +111,24 @@ pub(crate) struct Compiler<'a> {
     pub(crate) globals: &'a Globals,
     pub(crate) errors: Vec<anyhow::Error>,
     pub(crate) codemap: CodeMap,
+    pub(crate) constants: Constants,
+}
+
+#[derive(Clone, Copy, Dupe)]
+pub(crate) struct Constants {
+    pub(crate) fn_len: FrozenValue,
+    pub(crate) fn_type: FrozenValue,
+}
+
+impl Constants {
+    pub fn new() -> Self {
+        static RES: Lazy<Constants> = Lazy::new(|| {
+            let g = Globals::standard();
+            Constants {
+                fn_len: g.get_frozen("len").unwrap(),
+                fn_type: g.get_frozen("type").unwrap(),
+            }
+        });
+        *Lazy::force(&RES)
+    }
 }
