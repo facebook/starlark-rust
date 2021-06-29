@@ -111,13 +111,7 @@ impl Compiler<'_> {
             + Sync,
     > {
         let v = v.into_map(|x| self.expr(x).as_compiled());
-        box move |eval| {
-            let mut r = Vec::with_capacity(v.len());
-            for s in &v {
-                r.push(s(eval)?)
-            }
-            Ok(r)
-        }
+        box move |eval| v.try_map(|s| s(eval))
     }
 }
 
