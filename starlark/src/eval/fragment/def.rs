@@ -35,7 +35,7 @@ use crate::{
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
         function::FUNCTION_TYPE, typing::TypeCompiled, AllocValue, ComplexValue, Freezer,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, ValueRef, Walker,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value, ValueLike, ValueRef,
     },
 };
 use derivative::Derivative;
@@ -248,7 +248,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.parameters.walk(walker);
         for (_, _, v, _) in self.parameter_types.iter_mut() {
             walker.walk(v)

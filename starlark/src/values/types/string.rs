@@ -24,7 +24,7 @@ use crate::{
     values::{
         fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
         ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkIterable,
-        StarlarkValue, UnpackValue, Value, ValueError, ValueLike, Walker,
+        StarlarkValue, Tracer, UnpackValue, Value, ValueError, ValueLike,
     },
 };
 use std::{
@@ -358,7 +358,7 @@ impl<'v> ComplexValue<'v> for StringIterator<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         walker.walk(&mut self.string);
     }
 }

@@ -308,18 +308,18 @@ impl Heap {
     }
 
     /// Garbage collect any values that are unused. This function is _unsafe_ in
-    /// the sense that any `Value<'v>` not returned by `Walker` _will become
+    /// the sense that any `Value<'v>` not returned by `Tracer` _will become
     /// invalid_. Furthermore, any references to values, e.g `&'v str` will
     /// also become invalid.
-    pub(crate) unsafe fn garbage_collect<'v>(&'v self, f: impl FnOnce(&Walker<'v>)) {
+    pub(crate) unsafe fn garbage_collect<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
         self.garbage_collect_internal(f)
     }
 
-    fn garbage_collect_internal<'v>(&'v self, f: impl FnOnce(&Walker<'v>)) {
+    fn garbage_collect_internal<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
         // Must rewrite all Value's so they point at the new heap
         let mut arena = self.arena().borrow_mut();
 
-        let walker = Walker::<'v> {
+        let walker = Tracer::<'v> {
             arena: Arena::new(),
         };
         f(&walker);
@@ -328,14 +328,14 @@ impl Heap {
 }
 
 /// Used to perform garbage collection by [`ComplexValue::walk`].
-pub struct Walker<'v> {
+pub struct Tracer<'v> {
     arena: Arena<ValueMem<'v>>,
 }
 
-impl<'v> Walker<'v> {
+impl<'v> Tracer<'v> {
     /// Walk over a dictionary key that is immutable, but that we want to mutate anyway.
     /// Safe because the [`Value`] has an identical [`Hash`]/[`Eq`] etc after garbage collection,
-    /// but where possible, prefer [`walk`](Walker::walk).
+    /// but where possible, prefer [`walk`](Tracer::walk).
     #[allow(clippy::trivially_copy_pass_by_ref)] // we unsafely make it a mut pointer, so the pointer matters
     pub fn walk_dictionary_key(&self, value: &Value<'v>) {
         let new_value = self.adjust(*value);

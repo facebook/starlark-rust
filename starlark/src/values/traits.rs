@@ -34,7 +34,7 @@ use crate::{
     eval::{Evaluator, Parameters},
     values::{
         function::FUNCTION_TYPE, ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable,
-        Value, ValueError, Walker,
+        Tracer, Value, ValueError,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -98,7 +98,7 @@ impl<T: SimpleValue> AsSimpleValue for T {
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
-/// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Walker};
+/// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Tracer};
 /// use starlark::{starlark_complex_value, starlark_type};
 ///
 /// #[derive(Debug)]
@@ -119,7 +119,7 @@ impl<T: SimpleValue> AsSimpleValue for T {
 ///         Ok(Box::new(OneGen(self.0.freeze(freezer)?)))
 ///     }
 ///
-///     unsafe fn walk(&mut self, walker: &Walker<'v>) {
+///     unsafe fn walk(&mut self, walker: &Tracer<'v>) {
 ///         // If there are any `Value`s we don't call `walk` on, its segfault time!
 ///         walker.walk(&mut self.0);
 ///     }
@@ -203,7 +203,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 
     /// Called by the garbage collection, and must walk over every contained `Value` in the type.
     /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
-    unsafe fn walk(&mut self, walker: &Walker<'v>);
+    unsafe fn walk(&mut self, walker: &Tracer<'v>);
 
     /// Called when exporting a value under a specific name,
     /// only applies to things that return [`true`] for [`is_mutable()`](ComplexValue::is_mutable).

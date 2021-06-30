@@ -22,7 +22,7 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
     },
 };
 use derivative::Derivative;
@@ -241,7 +241,7 @@ impl<'v> ComplexValue<'v> for BoundMethod<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         walker.walk(&mut self.method);
         walker.walk(&mut self.this);
     }

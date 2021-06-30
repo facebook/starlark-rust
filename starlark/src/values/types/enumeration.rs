@@ -41,8 +41,8 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Value,
-        ValueLike, Walker,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Tracer, Value,
+        ValueLike,
     },
 };
 use derivative::Derivative;
@@ -102,7 +102,7 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.elements.iter_mut().for_each(|(k, v)| {
             walker.walk_dictionary_key(k);
             walker.walk(v);
@@ -126,7 +126,7 @@ impl<'v> ComplexValue<'v> for EnumValue<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         walker.walk(&mut self.typ);
         walker.walk(&mut self.value);
     }

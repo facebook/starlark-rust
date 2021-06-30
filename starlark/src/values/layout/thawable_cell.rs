@@ -16,7 +16,7 @@
  */
 
 use crate::values::layout::{
-    heap::Walker,
+    heap::Tracer,
     value::{FrozenValue, FrozenValueMem, Value},
 };
 use either::Either;
@@ -50,7 +50,7 @@ impl<'v> ThawableCell<'v> {
         }
     }
 
-    pub fn walk(&self, walker: &Walker<'v>) {
+    pub fn walk(&self, walker: &Tracer<'v>) {
         let mut ptr = self.0.borrow_mut();
         walker.walk(&mut *ptr)
     }

@@ -25,7 +25,7 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{
         any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, OwnedFrozenValue,
-        SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike, Walker,
+        SimpleValue, StarlarkValue, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -809,7 +809,7 @@ len(xs) == 0
 fn test_export_as() {
     use crate as starlark;
     use crate::values::{
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, Walker,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value,
     };
     use gazebo::any::AnyLifetime;
 
@@ -846,7 +846,7 @@ fn test_export_as() {
             Ok(self)
         }
 
-        unsafe fn walk(&mut self, _walker: &Walker) {}
+        unsafe fn walk(&mut self, _walker: &Tracer) {}
 
         fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
             self.named = variable_name.to_owned();
@@ -1759,7 +1759,7 @@ fn test_label_assign() {
             Ok(box WrapperGen(res))
         }
 
-        unsafe fn walk(&mut self, walker: &Walker<'v>) {
+        unsafe fn walk(&mut self, walker: &Tracer<'v>) {
             self.0.values_mut().for_each(|x| walker.walk(x))
         }
 

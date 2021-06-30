@@ -40,8 +40,8 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike,
-        Walker,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        ValueLike,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -105,7 +105,7 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
         Ok(box FrozenStruct { fields: frozen })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.fields.values_mut().for_each(|v| walker.walk(v))
     }
 }

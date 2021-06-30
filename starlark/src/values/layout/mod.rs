@@ -28,7 +28,7 @@ mod thawable_cell;
 mod value;
 
 pub use constant::ConstFrozenValue;
-pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Walker};
+pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
 pub(crate) use value::ValueRef;
 pub use value::{FrozenValue, Value};

@@ -22,7 +22,7 @@ use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
     eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, UnpackValue, Value, ValueError, Walker,
+        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Tracer, UnpackValue, Value, ValueError,
     },
 };
 use gazebo::prelude::*;
@@ -70,7 +70,7 @@ impl<'v> ParameterKind<Value<'v>> {
         })
     }
 
-    fn walk(&mut self, walker: &Walker<'v>) {
+    fn walk(&mut self, walker: &Tracer<'v>) {
         match self {
             Self::Defaulted(v) => walker.walk(v),
             _ => {}
@@ -490,7 +490,7 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 
     /// Used when performing garbage collection over a [`ParametersSpec`].
-    pub fn walk(&mut self, walker: &Walker<'v>) {
+    pub fn walk(&mut self, walker: &Tracer<'v>) {
         self.0.kinds.iter_mut().for_each(|x| x.walk(walker))
     }
 }

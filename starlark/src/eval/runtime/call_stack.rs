@@ -27,7 +27,7 @@
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     errors::Frame,
-    values::{ControlError, Value, Walker},
+    values::{ControlError, Tracer, Value},
 };
 use gazebo::prelude::*;
 use std::{fmt, fmt::Debug};
@@ -131,7 +131,7 @@ impl<'v> CallStack<'v> {
         }
     }
 
-    pub(crate) fn walk(&mut self, walker: &Walker<'v>) {
+    pub(crate) fn walk(&mut self, walker: &Tracer<'v>) {
         for x in self.stack[0..self.count].iter_mut() {
             walker.walk(&mut x.function);
         }

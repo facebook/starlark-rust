@@ -25,7 +25,7 @@ use crate::{
         index::{convert_index, convert_slice_indices},
         iter::StarlarkIterable,
         tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike, Walker,
+        SimpleValue, StarlarkValue, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -83,7 +83,7 @@ impl<'v> ComplexValue<'v> for List<'v> {
         Ok(box FrozenList { content })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.content.iter_mut().for_each(|x| walker.walk(x))
     }
 

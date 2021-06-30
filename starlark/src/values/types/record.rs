@@ -49,7 +49,7 @@ use crate::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
         typing::TypeCompiled,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -105,7 +105,7 @@ impl<'v> Field<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         walker.walk(&mut self.typ);
         walker.walk_opt(&mut self.default);
     }
@@ -202,7 +202,7 @@ impl<'v> ComplexValue<'v> for Field<'v> {
         Ok(box (*self).freeze(freezer)?)
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.walk(walker)
     }
 }
@@ -252,7 +252,7 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.fields.values_mut().for_each(|v| v.0.walk(walker));
         walker.walk(&mut self.constructor);
     }
@@ -339,7 +339,7 @@ impl<'v> ComplexValue<'v> for Record<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         walker.walk(&mut self.typ);
         self.values.iter_mut().for_each(|v| walker.walk(v));
     }

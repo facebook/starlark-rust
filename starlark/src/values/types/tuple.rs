@@ -20,8 +20,8 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue,
-    UnpackValue, Value, ValueError, ValueLike, Walker,
+    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Tracer,
+    UnpackValue, Value, ValueError, ValueLike,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -99,7 +99,7 @@ impl<'v> ComplexValue<'v> for Tuple<'v> {
         Ok(box FrozenTuple { content: frozen })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.content.iter_mut().for_each(|x| walker.walk(x))
     }
 }

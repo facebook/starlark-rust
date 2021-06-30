@@ -23,7 +23,7 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
         string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, UnpackValue, Value, ValueLike, Walker,
+        StarlarkValue, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -168,7 +168,7 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
         Ok(box FrozenDict { content })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         self.content.iter_mut().for_each(|(k, v)| {
             walker.walk_dictionary_key(k);
             walker.walk(v);

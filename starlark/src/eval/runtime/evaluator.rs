@@ -30,7 +30,7 @@ use crate::{
         },
         FileLoader,
     },
-    values::{FrozenHeap, Heap, Value, ValueRef, Walker},
+    values::{FrozenHeap, Heap, Tracer, Value, ValueRef},
 };
 use gazebo::{any::AnyLifetime, cast};
 use once_cell::sync::Lazy;
@@ -279,7 +279,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         res
     }
 
-    pub(crate) fn walk(&mut self, walker: &Walker<'v>) {
+    pub(crate) fn walk(&mut self, walker: &Tracer<'v>) {
         let mut roots = self.module_env.slots().get_slots_mut();
         for x in roots.iter_mut() {
             walker.walk_opt(x);

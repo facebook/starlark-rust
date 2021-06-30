@@ -23,7 +23,7 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
         dict::Dict, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, ComplexValue, Freezer,
-        SimpleValue, StarlarkValue, Value, ValueLike, Walker,
+        SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -163,7 +163,7 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Walker<'v>) {
+    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
         walker.walk(&mut self.func);
         self.pos.iter_mut().for_each(|x| walker.walk(x));
         self.named.iter_mut().for_each(|x| walker.walk(x));

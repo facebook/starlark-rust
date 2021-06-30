@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::values::{Heap, Value, ValueRef, Walker};
+use crate::values::{Heap, Tracer, Value, ValueRef};
 use gazebo::prelude::*;
 use std::mem;
 
@@ -110,7 +110,7 @@ impl<'v> LocalSlots<'v> {
         self.slots[self.base.0 + slot.0] = value_ref;
     }
 
-    pub(crate) fn walk(&mut self, walker: &Walker<'v>) {
+    pub(crate) fn walk(&mut self, walker: &Tracer<'v>) {
         self.slots.iter_mut().for_each(|x| walker.walk_ref(x))
     }
 }
