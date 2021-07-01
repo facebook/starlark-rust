@@ -105,6 +105,24 @@ pub fn len(x: &str) -> usize {
     }
 }
 
+/// Find the number of times a `needle` byte occurs within a string.
+/// If the needle represents a complete character, this will be equivalent to doing
+/// search for that character in the string.
+pub fn count_matches_byte(x: &str, needle: u8) -> usize {
+    x.as_bytes().iter().filter(|x| **x == needle).count()
+}
+
+/// Find the number of times a `needle` occurs within a string, non-overlapping.
+pub fn count_matches(x: &str, needle: &str) -> usize {
+    if needle.len() == 1 {
+        // If we are searching for a 1-byte string, we can provide a much faster path.
+        // Since it is one byte, given how UTF8 works, all the resultant slices must be UTF8 too.
+        count_matches_byte(x, needle.as_bytes()[0])
+    } else {
+        x.matches(needle).count()
+    }
+}
+
 /// Apppend two strings together.
 /// Inline because it's a hot-spot, and often length checks will be done just before.
 #[inline]

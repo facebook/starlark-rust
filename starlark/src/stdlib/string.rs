@@ -22,7 +22,10 @@ use crate::{
     collections::SmallMap,
     environment::GlobalsBuilder,
     stdlib::util::convert_indices,
-    values::{interpolation, list::List, none::NoneOr, string, UnpackValue, Value, ValueError},
+    values::{
+        fast_string, interpolation, list::List, none::NoneOr, string, UnpackValue, Value,
+        ValueError,
+    },
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -211,23 +214,17 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn count(
-        this: &str,
+        mut this: &str,
         ref needle: &str,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        if start.is_none() && end.is_none() {
-            if needle.len() == 1 {
-                let b = needle.as_bytes()[0];
-                Ok(this.as_bytes().iter().filter(|x| **x == b).count() as i32)
-            } else {
-                Ok(this.matches(needle).count() as i32)
-            }
-        } else {
+        if !start.is_none() || !end.is_none() {
             let (start, end) = convert_indices(this.len() as i32, start, end);
             // FIXME: This unwrap can be triggered by users, should bubble up an error
-            Ok(this.get(start..end).unwrap().matches(needle).count() as i32)
+            this = this.get(start..end).unwrap();
         }
+        Ok(fast_string::count_matches(this, needle) as i32)
     }
 
     /// [string.endswith](
@@ -948,7 +945,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                     // If we are searching for a 1-byte string, we can provide a much faster path.
                     // Since it is one byte, given how UTF8 works, all the resultant slices must be UTF8 too.
                     let b = sep.as_bytes()[0];
-                    let count = this.as_bytes().iter().filter(|x| **x == b).count();
+                    let count = fast_string::count_matches_byte(this, b);
                     let mut res = Vec::with_capacity(count + 1);
                     res.extend(
                         this.as_bytes()
