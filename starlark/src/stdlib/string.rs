@@ -952,6 +952,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                             .split(|x| *x == b)
                             .map(|x| heap.alloc(unsafe { std::str::from_utf8_unchecked(x) })),
                     );
+                    debug_assert_eq!(res.len(), count + 1);
                     res
                 } else {
                     this.split(sep).map(|x| heap.alloc(x)).collect()
