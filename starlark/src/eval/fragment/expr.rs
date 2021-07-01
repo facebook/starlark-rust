@@ -33,7 +33,7 @@ use crate::{
         dict::FrozenDict,
         fast_string,
         function::{BoundMethod, NativeAttribute},
-        list::FrozenList,
+        list::{FrozenList, List},
         tuple::FrozenTuple,
         FrozenHeap, FrozenValue, Value, *,
     },
@@ -441,7 +441,7 @@ impl Compiler<'_> {
                     expr!(|eval| eval.heap().alloc_thaw_on_write(result))
                 } else {
                     let exprs = self.exprs(exprs);
-                    expr!(|eval| eval.heap().alloc(exprs(eval)?))
+                    expr!(|eval| eval.heap().alloc(List::new(exprs(eval)?)))
                 }
             }
             Expr::Dict(exprs) => {

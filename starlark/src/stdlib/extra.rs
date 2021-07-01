@@ -22,8 +22,8 @@ use crate::{
     environment::GlobalsBuilder,
     eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
-        dict::Dict, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, ComplexValue, Freezer,
-        SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
+        dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
+        ComplexValue, Freezer, SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -32,7 +32,7 @@ use std::collections::HashSet;
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
-    fn filter(ref func: Value, ref seq: Value) -> Vec<Value<'v>> {
+    fn filter(ref func: Value, ref seq: Value) -> List<'v> {
         let mut res = Vec::new();
 
         for v in &seq.iterate(heap)? {
@@ -44,20 +44,20 @@ pub fn filter(builder: &mut GlobalsBuilder) {
                 res.push(v);
             }
         }
-        Ok(res)
+        Ok(List::new(res))
     }
 }
 
 #[starlark_module]
 pub fn map(builder: &mut GlobalsBuilder) {
-    fn map(ref func: Value, ref seq: Value) -> Vec<Value<'v>> {
+    fn map(ref func: Value, ref seq: Value) -> List<'v> {
         let it = seq.iterate(heap)?;
         let it = it.into_iter();
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
             res.push(func.invoke_pos(None, &[v], eval)?);
         }
-        Ok(res)
+        Ok(List::new(res))
     }
 }
 
@@ -102,7 +102,7 @@ pub fn debug(builder: &mut GlobalsBuilder) {
 pub fn dedupe(builder: &mut GlobalsBuilder) {
     /// Remove duplicates in a list. Uses identity of value (pointer),
     /// rather than by equality.
-    fn dedupe(ref val: Value) -> Value<'v> {
+    fn dedupe(ref val: Value) -> List<'v> {
         let mut seen = HashSet::new();
         let mut res = Vec::new();
         for v in &val.iterate(heap)? {
@@ -112,7 +112,7 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
                 res.push(v);
             }
         }
-        Ok(heap.alloc(res))
+        Ok(List::new(res))
     }
 }
 

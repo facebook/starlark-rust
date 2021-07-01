@@ -26,7 +26,7 @@ use crate::{
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{AstExpr, Clause, ForClause},
-    values::{dict::Dict, Value},
+    values::{dict::Dict, list::List, Value},
 };
 use std::mem;
 
@@ -136,7 +136,7 @@ fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiledValue
     expr!(|eval| {
         let mut r = Vec::new();
         clauses(&mut r, eval)?;
-        eval.heap().alloc(r)
+        eval.heap().alloc(List::new(r))
     })
 }
 
