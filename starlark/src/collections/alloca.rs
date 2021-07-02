@@ -64,6 +64,7 @@ impl Alloca {
         let pointer = unsafe { alloc(layout) };
         self.buffers.borrow_mut().push((pointer, layout));
         self.alloc.set(pointer);
+        self.last_size.set(size);
         self.end.set(pointer.wrapping_add(size));
     }
 
