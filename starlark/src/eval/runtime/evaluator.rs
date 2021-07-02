@@ -19,7 +19,7 @@ use crate::{
     codemap::{CodeMap, FileSpan, Span},
     collections::alloca::Alloca,
     environment::{
-        slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, FrozenModuleValue, Globals, Module,
+        slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleValue, Globals, Module,
     },
     errors::{Diagnostic, Frame},
     eval::{
@@ -55,7 +55,7 @@ pub struct Evaluator<'v, 'a> {
     // The module-level variables in scope at the moment.
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
-    pub(crate) module_variables: Option<FrozenModuleRef>,
+    pub(crate) module_variables: Option<&'static FrozenModuleData>,
     // Local variables for this function, and older stack frames too.
     pub(crate) local_variables: LocalSlots<'v>,
     // Globals used to resolve global variables.

@@ -28,7 +28,7 @@ use crate::{
     },
     values::{
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
-        StarlarkValue, Value, ValueLike,
+        StarlarkValue, Value,
     },
 };
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -101,7 +101,7 @@ impl FrozenModule {
 
     /// Iterate through all the names defined in this module.
     pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.1.names()
+        self.1.0.names()
     }
 
     /// Obtain the [`FrozenHeapRef`] which owns the storage of all values defined in this module.
@@ -111,32 +111,31 @@ impl FrozenModule {
 
     /// Print out some approximation of the module definitions.
     pub fn describe(&self) -> String {
-        self.1.describe()
+        self.1.0.describe()
     }
 }
 
-impl FrozenModuleRef {
+impl FrozenModuleData {
     pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.0.names.symbols().map(|x| x.0.as_str())
+        self.names.symbols().map(|x| x.0.as_str())
     }
 
     pub fn describe(&self) -> String {
-        self.0
-            .names
+        self.names
             .symbols()
-            .filter_map(|(name, slot)| Some((name, self.0.slots.get_slot(*slot)?)))
+            .filter_map(|(name, slot)| Some((name, self.slots.get_slot(*slot)?)))
             .map(|(name, val)| val.to_value().describe(name))
             .join("\n")
     }
 
     pub(crate) fn get_slot(&self, slot: ModuleSlotId) -> Option<FrozenValue> {
-        self.0.slots.get_slot(slot)
+        self.slots.get_slot(slot)
     }
 
     /// Try and go back from a slot to a name.
     /// Inefficient - only use in error paths.
     pub(crate) fn get_slot_name(&self, slot: ModuleSlotId) -> Option<String> {
-        for (s, i) in self.0.names.symbols() {
+        for (s, i) in self.names.symbols() {
             if *i == slot {
                 return Some(s.clone());
             }
@@ -160,8 +159,14 @@ impl FrozenModuleValue {
         freezer.set_magic(val.dupe())
     }
 
-    pub fn get(self) -> FrozenModuleRef {
-        self.0.downcast_ref::<FrozenModuleRef>().unwrap().dupe()
+    pub fn get<'v>(self) -> &'v FrozenModuleData {
+        &self
+            .0
+            .get_ref()
+            .as_dyn_any()
+            .downcast_ref::<FrozenModuleRef>()
+            .unwrap()
+            .0
     }
 }
 

@@ -48,7 +48,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         // Push all the frozen variables into the module
         if let Some(frozen) = &self.module_variables {
-            for (name, slot) in frozen.0.names.symbols() {
+            for (name, slot) in frozen.names.symbols() {
                 if let Some(value) = frozen.get_slot(*slot) {
                     self.module_env.set(name, value.to_value())
                 }
