@@ -25,6 +25,9 @@ use std::{
 /// so define our own wrapper.
 /// We use a single continuous buffer. When it needs upgrading, we double it and keep the old one around.
 pub(crate) struct Alloca {
+    // An alternative design would be to bake the <T> into the type, so all allocations are of the same type.
+    // Benchmarking that, even if the most optimistic scenario (just reallocating a single element)
+    // the performance difference is only 2%, so keep the flexibility of not needing to predeclare the type.
     alloc: Cell<*mut u8>,
     end: Cell<*mut u8>,
     last_size: Cell<usize>,
