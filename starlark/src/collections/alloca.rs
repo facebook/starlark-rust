@@ -18,7 +18,8 @@
 use std::{
     alloc::{alloc, dealloc, Layout},
     cell::{Cell, RefCell},
-    ptr, slice,
+    mem::MaybeUninit,
+    slice,
 };
 
 /// We'd love to use the real `alloca`, but don't want to blow through the stack space,
@@ -72,7 +73,11 @@ impl Alloca {
     }
 
     #[inline(always)]
-    pub fn alloca<T: Copy, R>(&self, len: usize, default: T, f: impl FnOnce(&mut [T]) -> R) -> R {
+    pub fn alloca_uninit<T: Copy, R>(
+        &self,
+        len: usize,
+        f: impl FnOnce(&mut [MaybeUninit<T>]) -> R,
+    ) -> R {
         let layout = Layout::array::<T>(len).unwrap();
         let mut offset = self.alloc.get().align_offset(layout.align());
         let mut start = self.alloc.get().wrapping_add(offset);
@@ -85,17 +90,23 @@ impl Alloca {
         }
         let old = self.alloc.get();
         self.alloc.set(stop);
-        let data = start as *mut T;
-        for i in 0..len {
-            unsafe {
-                ptr::write(data.add(i), default)
-            };
-        }
+        let data = start as *mut MaybeUninit<T>;
         let slice = unsafe { slice::from_raw_parts_mut(data, len) };
         let res = f(slice);
-
         self.alloc.set(old);
         res
+    }
+
+    #[allow(dead_code)] // Dead, but morally a sensible API to provide, and useful for testing
+    #[inline(always)]
+    pub fn alloca_fill<T: Copy, R>(&self, len: usize, fill: T, f: impl FnOnce(&mut [T]) -> R) -> R {
+        self.alloca_uninit(len, |data| {
+            for x in data.iter_mut() {
+                x.write(fill);
+            }
+            let data = unsafe { MaybeUninit::slice_assume_init_mut(data) };
+            f(data)
+        })
     }
 }
 
@@ -107,15 +118,15 @@ mod tests {
     fn test_alloca() {
         // Use a small capacity to encourage overflow behaviour
         let a = Alloca::with_capacity(100);
-        a.alloca(3, 8usize, |xs| {
+        a.alloca_fill(3, 8usize, |xs| {
             xs[0] = 5;
             xs[2] = xs[0] + xs[1] + 15;
-            a.alloca(200, 18usize, |ys| {
+            a.alloca_fill(200, 18usize, |ys| {
                 assert_eq!(xs[2], 8 + 5 + 15);
                 assert_eq!(ys[0], 18);
                 assert_eq!(ys[200 - 1], 18);
             });
-            a.alloca(3, 1u8, |_| {});
+            a.alloca_fill(3, 1u8, |_| {});
             assert_eq!(xs[2], 8 + 5 + 15);
         })
     }

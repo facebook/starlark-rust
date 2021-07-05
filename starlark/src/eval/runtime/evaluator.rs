@@ -34,7 +34,10 @@ use crate::{
 };
 use gazebo::{any::AnyLifetime, cast};
 use once_cell::sync::Lazy;
-use std::{mem, path::Path};
+use std::{
+    mem::{self, MaybeUninit},
+    path::Path,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -373,17 +376,15 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.next_gc_level = 0;
     }
 
-    #[allow(dead_code)]
     #[inline(always)]
-    pub(crate) fn alloca<T: Copy, R>(
+    pub(crate) fn alloca_uninit<T: Copy, R>(
         &mut self,
         len: usize,
-        default: T,
-        f: impl FnOnce(&mut [T], &mut Self) -> R,
+        f: impl FnOnce(&mut [MaybeUninit<T>], &mut Self) -> R,
     ) -> R {
         // We want to be able to access the evaluator underneath the alloca.
         // We know that the alloca will be used in a stacked way, so that's fine.
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
-        alloca.alloca(len, default, |xs| f(xs, self))
+        alloca.alloca_uninit(len, |xs| f(xs, self))
     }
 }

@@ -39,7 +39,7 @@ use crate::{
     },
 };
 use gazebo::prelude::*;
-use std::{cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap, mem::MaybeUninit};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -316,10 +316,14 @@ impl ArgsCompiled {
         eval: &mut Evaluator<'v, '_>,
         f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
     ) -> Result<R, EvalException<'v>> {
-        eval.alloca(self.pos_named.len(), Value::new_none(), |xs, eval| {
+        eval.alloca_uninit(self.pos_named.len(), |xs, eval| {
+            // because Value has no drop, we don't need to worry about failures before assume_init
             for (x, arg) in xs.iter_mut().zip(&self.pos_named) {
-                *x = arg(eval)?;
+                x.write(arg(eval)?);
             }
+            // because we allocated `pos_named` elements and filled them all, we can assume it is now init
+            let xs = unsafe { MaybeUninit::slice_assume_init_ref(xs) };
+
             let args = match &self.args {
                 None => None,
                 Some(f) => Some(f(eval)?),

@@ -347,6 +347,8 @@
 #![feature(box_syntax)]
 #![feature(cell_filter_map)]
 #![feature(hash_set_entry)]
+#![feature(maybe_uninit_extra)]
+#![feature(maybe_uninit_slice)]
 #![feature(try_blocks)]
 #![feature(vec_extend_from_within)]
 //
