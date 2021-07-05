@@ -30,12 +30,12 @@ use crate::{
         Argument, AstArgument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility,
     },
     values::{
-        dict::FrozenDict,
+        dict::{Dict, FrozenDict},
         fast_string,
         function::{BoundMethod, NativeAttribute},
         list::{FrozenList, List},
-        tuple::FrozenTuple,
-        FrozenHeap, FrozenValue, Value, *,
+        tuple::{FrozenTuple, Tuple},
+        AttrType, FrozenHeap, FrozenValue, Value, ValueLike,
     },
 };
 use gazebo::prelude::*;
@@ -420,7 +420,7 @@ impl Compiler<'_> {
                     value!(result)
                 } else {
                     let exprs = self.exprs(exprs);
-                    expr!(|eval| eval.heap().alloc(tuple::Tuple::new(exprs(eval)?)))
+                    expr!(|eval| eval.heap().alloc(Tuple::new(exprs(eval)?)))
                 }
             }
             Expr::Lambda(params, box inner) => {
@@ -484,7 +484,7 @@ impl Compiler<'_> {
                             )?;
                         }
                     }
-                    eval.heap().alloc(dict::Dict::new(r))
+                    eval.heap().alloc(Dict::new(r))
                 })
             }
             Expr::If(box (cond, then_expr, else_expr)) => {
