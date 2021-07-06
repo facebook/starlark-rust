@@ -35,6 +35,7 @@ use crate::{
     eval::{Evaluator, Parameters},
     values::function::FUNCTION_TYPE,
 };
+use gazebo::coerce::{Coerce, CoerceKey};
 pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use indexmap::Equivalent;
 use std::{
@@ -60,6 +61,9 @@ mod traits;
 mod types;
 pub(crate) mod typing;
 mod unpack;
+
+unsafe impl<'v> Coerce<Value<'v>> for FrozenValue {}
+unsafe impl<'v> CoerceKey<Value<'v>> for FrozenValue {}
 
 impl Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

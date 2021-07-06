@@ -28,7 +28,10 @@ use crate::collections::{
         VecMap, THRESHOLD,
     },
 };
-use gazebo::prelude::*;
+use gazebo::{
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
 use indexmap::{Equivalent, IndexMap};
 use std::{
     cmp::Ordering,
@@ -325,6 +328,13 @@ impl<K, V> Default for MapHolder<K, V> {
 #[derive(Clone, Default_)]
 pub struct SmallMap<K, V> {
     state: MapHolder<K, V>,
+}
+
+unsafe impl<FromK, FromV, ToK, ToV> Coerce<SmallMap<ToK, ToV>> for SmallMap<FromK, FromV>
+where
+    FromK: CoerceKey<ToK>,
+    FromV: Coerce<ToV>,
+{
 }
 
 impl<K: Debug, V: Debug> Debug for SmallMap<K, V> {
