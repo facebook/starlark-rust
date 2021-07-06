@@ -111,18 +111,6 @@ impl AstLiteral {
 }
 
 impl Expr {
-    // We could actually treat tuples as immutable literals,
-    // but no great evidence of nested tuples of tuples being common.
-    fn unpack_immutable_literal(&self) -> Option<&AstLiteral> {
-        match self {
-            Expr::Literal(x) => match x {
-                AstLiteral::IntLiteral(_) => Some(x),
-                AstLiteral::StringLiteral(_) => Some(x),
-            },
-            _ => None,
-        }
-    }
-
     fn unpack_int_literal(&self) -> Option<i32> {
         match self {
             Expr::Literal(AstLiteral::IntLiteral(i)) => Some(i.node),
@@ -429,36 +417,34 @@ impl Compiler<'_> {
                 }
             }
             Expr::Dict(exprs) => {
-                if let Some(lits) = exprs
+                let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                if xs
                     .iter()
-                    .map(|(k, v)| {
-                        Some((k.unpack_immutable_literal()?, v.unpack_immutable_literal()?))
-                    })
-                    .collect::<Option<Vec<_>>>()
+                    .all(|(k, v)| k.as_value().is_some() && v.as_value().is_some())
                 {
                     let mut res = SmallMap::new();
-                    for (k, v) in lits.iter() {
+                    for (k, v) in xs.iter() {
                         res.insert_hashed(
-                            k.compile(self.heap)
+                            k.as_value()
+                                .unwrap()
                                 .get_hashed()
                                 .expect("Dictionary literals are hashable"),
-                            v.compile(self.heap),
+                            v.as_value().unwrap(),
                         );
                     }
                     // If we lost some elements, then there are duplicates, so don't take the fast-literal
                     // path and go down the slow runtime path (which will raise the error).
                     // We have a lint that will likely fire on this issue (and others).
-                    if res.len() == lits.len() {
+                    if res.len() == xs.len() {
                         let result = self.heap.alloc(FrozenDict::new(res));
                         return expr!(|eval| eval.heap().alloc_thaw_on_write(result));
                     }
                 }
 
-                let v = exprs
-                    .into_map(|(k, v)| (self.expr(k).as_compiled(), self.expr(v).as_compiled()));
+                let xs = xs.into_map(|(k, v)| (k.as_compiled(), v.as_compiled()));
                 expr!(|eval| {
-                    let mut r = SmallMap::with_capacity(v.len());
-                    for (k, v) in v.iter() {
+                    let mut r = SmallMap::with_capacity(xs.len());
+                    for (k, v) in &xs {
                         let k = k(eval)?;
                         if r.insert_hashed(k.get_hashed()?, v(eval)?).is_some() {
                             throw(
