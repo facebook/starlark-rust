@@ -501,7 +501,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#, "not supported");
     /// ```
     fn len(ref a: Value) -> i32 {
-        Ok(a.length()?)
+        a.length()
     }
 
     /// [list](
