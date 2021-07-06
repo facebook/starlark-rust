@@ -307,7 +307,7 @@ assert_eq(
     #[test]
     fn test_debug() {
         assert::pass(
-            r#"assert_eq(debug([1,2]), "Value(ListGen { content: [FrozenValue(1), FrozenValue(2)] })")"#,
+            r#"assert_eq(debug([1,2]), "Value(ListGen { content: [Value(1), Value(2)] })")"#,
         );
     }
 

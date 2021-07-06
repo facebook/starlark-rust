@@ -262,6 +262,7 @@ impl Heap {
     }
 
     /// Invariant: Must be called on Dict or List
+    #[allow(dead_code)]
     pub(crate) fn alloc_thaw_on_write<'v>(&'v self, x: FrozenValue) -> Value<'v> {
         self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
     }

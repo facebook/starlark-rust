@@ -30,15 +30,15 @@ use crate::{
         Argument, AstArgument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility,
     },
     values::{
-        dict::{Dict, FrozenDict},
+        dict::Dict,
         fast_string,
         function::{BoundMethod, NativeAttribute},
-        list::{FrozenList, List},
+        list::List,
         tuple::{FrozenTuple, Tuple},
         AttrType, FrozenHeap, FrozenValue, Value, ValueLike,
     },
 };
-use gazebo::prelude::*;
+use gazebo::{coerce::coerce_ref, prelude::*};
 use std::{cmp::Ordering, collections::HashMap, mem::MaybeUninit};
 use thiserror::Error;
 
@@ -409,8 +409,10 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self.heap.alloc(FrozenList { content });
-                    expr!(|eval| eval.heap().alloc_thaw_on_write(result))
+                    expr!(|eval| {
+                        let content = coerce_ref(&content).clone();
+                        eval.heap().alloc(List::new(content))
+                    })
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());
                     expr!(|eval| eval.heap().alloc(List::new(xs.try_map(|x| x(eval))?)))
@@ -434,8 +436,10 @@ impl Compiler<'_> {
                         // path and go down the slow runtime path (which will raise the error).
                         // We have a lint that will likely fire on this issue (and others).
                         if res.len() == xs.len() {
-                            let result = self.heap.alloc(FrozenDict::new(res));
-                            return expr!(|eval| eval.heap().alloc_thaw_on_write(result));
+                            return expr!(|eval| {
+                                let res = coerce_ref(&res).clone();
+                                eval.heap().alloc(Dict::new(res))
+                            });
                         }
                     } else {
                         // The keys are all constant, but the variables change.
