@@ -407,7 +407,9 @@ impl Compiler<'_> {
             }
             Expr::List(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
-                if xs.iter().all(|x| x.as_value().is_some()) {
+                if xs.is_empty() {
+                    expr!(|eval| eval.heap().alloc(List::default()))
+                } else if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
                     expr!(|eval| {
                         let content = coerce_ref(&content).clone();
@@ -420,6 +422,9 @@ impl Compiler<'_> {
             }
             Expr::Dict(exprs) => {
                 let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                if xs.is_empty() {
+                    return expr!(|eval| eval.heap().alloc(Dict::default()));
+                }
                 if xs.iter().all(|(k, _)| k.as_value().is_some()) {
                     if xs.iter().all(|(_, v)| v.as_value().is_some()) {
                         let mut res = SmallMap::new();
