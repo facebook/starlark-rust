@@ -327,23 +327,13 @@ impl<'v> Value<'v> {
     }
 
     /// Forwards to [`ComplexValue::set_attr`].
-    pub fn set_attr(
-        self,
-        attribute: &str,
-        alloc_value: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<()> {
-        self.get_ref_mut(heap)?.set_attr(attribute, alloc_value)
+    pub fn set_attr(self, attribute: &str, alloc_value: Value<'v>) -> anyhow::Result<()> {
+        self.get_ref_mut()?.set_attr(attribute, alloc_value)
     }
 
     /// Forwards to [`ComplexValue::set_at`].
-    pub fn set_at(
-        self,
-        index: Value<'v>,
-        alloc_value: Value<'v>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<()> {
-        self.get_ref_mut(heap)?.set_at(self, index, alloc_value)
+    pub fn set_at(self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
+        self.get_ref_mut()?.set_at(self, index, alloc_value)
     }
 
     /// Return the contents of an iterable collection, as an owned vector.
@@ -400,11 +390,8 @@ impl<'v> Value<'v> {
     /// While this reference is active, any [`get_aref`](Value::get_aref) or similar on the value will
     /// _cause a panic_. Therefore, it's super important not to call any Starlark operations,
     /// even as simple as equality, while holding the [`RefMut`].
-    pub fn downcast_mut<T: AnyLifetime<'v>>(
-        self,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Option<RefMut<'_, T>>> {
-        let vref = self.get_ref_mut(heap)?;
+    pub fn downcast_mut<T: AnyLifetime<'v>>(self) -> anyhow::Result<Option<RefMut<'v, T>>> {
+        let vref = self.get_ref_mut()?;
         Ok(RefMut::filter_map(vref, |v| v.as_dyn_any_mut().downcast_mut::<T>()).ok())
     }
 

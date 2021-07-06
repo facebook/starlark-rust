@@ -48,7 +48,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn clear(this: Value) -> NoneType {
-        let mut this = Dict::from_value_mut(this, heap)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?.unwrap();
         this.content.clear();
         Ok(NoneType)
     }
@@ -165,7 +165,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#, "not found");
     /// ```
     fn pop(this: Value, ref key: Value, ref default: Option<Value>) -> Value<'v> {
-        let mut me = Dict::from_value_mut(this, heap)?.unwrap();
+        let mut me = Dict::from_value_mut(this)?.unwrap();
         match me.content.remove_hashed(key.get_hashed()?.borrow()) {
             Some(x) => Ok(x),
             None => match default {
@@ -214,7 +214,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#, "empty dict");
     /// ```
     fn popitem(this: Value) -> (Value<'v>, Value<'v>) {
-        let mut this = Dict::from_value_mut(this, heap)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?.unwrap();
 
         let key = this
             .content
@@ -259,7 +259,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # )"#)
     /// ```
     fn setdefault(this: Value, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
-        let mut this = Dict::from_value_mut(this, heap)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?.unwrap();
         let key = key.get_hashed()?;
         if let Some(r) = this.content.get_hashed(key.borrow()) {
             return Ok(*r);
@@ -309,7 +309,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
             pairs
         };
 
-        let mut this = Dict::from_value_mut(this, heap)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?.unwrap();
         if let Some(pairs) = pairs {
             if let Some(dict) = Dict::from_value(pairs) {
                 for (k, v) in dict.iter_hashed() {

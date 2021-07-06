@@ -155,7 +155,7 @@ impl<'v> EnumType<'v> {
         }
 
         // Here we tie the cycle
-        let mut t = EnumType::from_value_mut(typ, heap)?.unwrap();
+        let mut t = EnumType::from_value_mut(typ)?.unwrap();
         t.elements = res;
         Ok(typ)
     }

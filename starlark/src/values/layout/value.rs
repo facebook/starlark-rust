@@ -171,7 +171,7 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref_mut(&self, _heap: &'v Heap) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
+    fn get_ref_mut(&self) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
         match self {
             Self::Mutable(x) => match x.try_borrow_mut() {
                 // Could be called by something else having the ref locked, but iteration is
@@ -351,12 +351,9 @@ impl<'v> Value<'v> {
         self.0.unpack_ptr2().and_then(|x| x.get_ref_mut_already())
     }
 
-    pub(crate) fn get_ref_mut(
-        self,
-        heap: &'v Heap,
-    ) -> anyhow::Result<RefMut<'v, dyn ComplexValue<'v>>> {
+    pub(crate) fn get_ref_mut(self) -> anyhow::Result<RefMut<'v, dyn ComplexValue<'v>>> {
         if let Some(x) = self.0.unpack_ptr2() {
-            return x.get_ref_mut(heap);
+            return x.get_ref_mut();
         }
         Err(ControlError::CannotMutateImmutableValue.into())
     }

@@ -52,7 +52,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn append(this: Value, ref el: Value) -> NoneType {
-        let mut this = List::from_value_mut(this, heap)?.unwrap();
+        let mut this = List::from_value_mut(this)?.unwrap();
         this.push(el);
         Ok(NoneType)
     }
@@ -74,7 +74,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn clear(this: Value) -> NoneType {
-        let mut this = List::from_value_mut(this, heap)?.unwrap();
+        let mut this = List::from_value_mut(this)?.unwrap();
         this.clear();
         Ok(NoneType)
     }
@@ -100,7 +100,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn extend(this: Value, ref other: Value) -> NoneType {
-        let mut res = List::from_value_mut(this, heap)?.unwrap();
+        let mut res = List::from_value_mut(this)?.unwrap();
         if this.ptr_eq(other) {
             // If the types alias, we can't borrow the `other` for iteration.
             // But we can do something smarter to double the elements
@@ -183,7 +183,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn insert(this: Value, ref index: i32, ref el: Value) -> NoneType {
-        let mut this = List::from_value_mut(this, heap)?.unwrap();
+        let mut this = List::from_value_mut(this)?.unwrap();
         let index = convert_index(this.len() as i32, index);
         this.content.insert(index, el);
         Ok(NoneType)
@@ -218,7 +218,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
             None => None,
         };
 
-        let mut this = List::from_value_mut(this, heap)?.unwrap();
+        let mut this = List::from_value_mut(this)?.unwrap();
         let index = index.unwrap_or_else(|| (this.len() as i32) - 1);
         if index < 0 || index >= this.len() as i32 {
             return Err(ValueError::IndexOutOfBound(index).into());
@@ -269,7 +269,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         // 3. Get it mutably and remove from it.
         {
             // This downcast_mut makes it a List, whether it's a List or a FrozenList
-            List::from_value_mut(this, heap)?.unwrap();
+            List::from_value_mut(this)?.unwrap();
         }
         let position = {
             // We can be sure it's not a FrozenList here, so downcast_ref it
@@ -285,7 +285,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         };
         {
             // now mutate it with no further value calls
-            let mut this = List::from_value_mut(this, heap)?.unwrap();
+            let mut this = List::from_value_mut(this)?.unwrap();
             this.content.remove(position);
             Ok(NoneType)
         }

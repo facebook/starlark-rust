@@ -87,14 +87,12 @@ impl Compiler<'_> {
             Assign::Dot(e, s) => {
                 let e = self.expr(*e).as_compiled();
                 let s = s.node;
-                box move |value, eval| throw(e(eval)?.set_attr(&s, value, eval.heap()), span, eval)
+                box move |value, eval| throw(e(eval)?.set_attr(&s, value), span, eval)
             }
             Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e).as_compiled();
                 let idx = self.expr(idx).as_compiled();
-                box move |value, eval| {
-                    throw(e(eval)?.set_at(idx(eval)?, value, eval.heap()), span, eval)
-                }
+                box move |value, eval| throw(e(eval)?.set_at(idx(eval)?, value), span, eval)
             }
             Assign::Tuple(v) => {
                 let v = v.into_map(|x| self.assign(x));
@@ -134,7 +132,7 @@ impl Compiler<'_> {
                     let (_, v) = throw(e.get_attr_error(&s, eval.heap()), span_lhs, eval)?;
                     let rhs = rhs(eval)?;
                     throw(
-                        e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),
+                        e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?),
                         span_stmt,
                         eval,
                     )?;
@@ -152,7 +150,7 @@ impl Compiler<'_> {
                     let v = throw(e.at(idx, eval.heap()), span_lhs, eval)?;
                     let rhs = rhs(eval)?;
                     throw(
-                        e.set_at(idx, throw(op(v, rhs, eval), span_stmt, eval)?, eval.heap()),
+                        e.set_at(idx, throw(op(v, rhs, eval), span_stmt, eval)?),
                         span_stmt,
                         eval,
                     )?;
@@ -290,7 +288,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     if lhs_ty == TypeId::of::<List>() || lhs_ty == TypeId::of::<FrozenList>() {
         mem::drop(lhs_aref);
         // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
-        let mut list = List::from_value_mut(lhs, heap)?
+        let mut list = List::from_value_mut(lhs)?
             .ok_or_else(|| anyhow!(ControlError::CannotMutateImmutableValue))?;
         if lhs.ptr_eq(rhs) {
             list.content.extend_from_within(..);

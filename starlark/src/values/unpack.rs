@@ -17,7 +17,7 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use crate::values::{list::List, tuple::Tuple, ComplexValue, Heap, Value};
+use crate::values::{list::List, tuple::Tuple, ComplexValue, Value};
 use gazebo::cell::ARef;
 use std::{cell::RefMut, marker::PhantomData, ops::Deref};
 
@@ -126,8 +126,8 @@ impl<'v, T: ComplexValue<'v>> ValueOfMut<'v, T> {
     /// Get the value for mutation. Note that while the value is held for mutation,
     /// any other operation that accesses the value for non-mutable purposes
     /// might panic, so try and scope access as tightly as possible.
-    pub fn get_ref_mut(&self, heap: &'v Heap) -> anyhow::Result<RefMut<'v, T>> {
-        let vref = self.value.get_ref_mut(heap)?;
+    pub fn get_ref_mut(&self) -> anyhow::Result<RefMut<'v, T>> {
+        let vref = self.value.get_ref_mut()?;
         Ok(RefMut::map(vref, |any| {
             // The `unwrap` won't fail because we checked at construction time.
             any.as_dyn_any_mut().downcast_mut::<T>().unwrap()
