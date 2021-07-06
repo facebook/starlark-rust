@@ -418,26 +418,51 @@ impl Compiler<'_> {
             }
             Expr::Dict(exprs) => {
                 let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
-                if xs
-                    .iter()
-                    .all(|(k, v)| k.as_value().is_some() && v.as_value().is_some())
-                {
-                    let mut res = SmallMap::new();
-                    for (k, v) in xs.iter() {
-                        res.insert_hashed(
-                            k.as_value()
-                                .unwrap()
-                                .get_hashed()
-                                .expect("Dictionary literals are hashable"),
-                            v.as_value().unwrap(),
-                        );
-                    }
-                    // If we lost some elements, then there are duplicates, so don't take the fast-literal
-                    // path and go down the slow runtime path (which will raise the error).
-                    // We have a lint that will likely fire on this issue (and others).
-                    if res.len() == xs.len() {
-                        let result = self.heap.alloc(FrozenDict::new(res));
-                        return expr!(|eval| eval.heap().alloc_thaw_on_write(result));
+                if xs.iter().all(|(k, _)| k.as_value().is_some()) {
+                    if xs.iter().all(|(_, v)| v.as_value().is_some()) {
+                        let mut res = SmallMap::new();
+                        for (k, v) in xs.iter() {
+                            res.insert_hashed(
+                                k.as_value()
+                                    .unwrap()
+                                    .get_hashed()
+                                    .expect("Dictionary literals are hashable"),
+                                v.as_value().unwrap(),
+                            );
+                        }
+                        // If we lost some elements, then there are duplicates, so don't take the fast-literal
+                        // path and go down the slow runtime path (which will raise the error).
+                        // We have a lint that will likely fire on this issue (and others).
+                        if res.len() == xs.len() {
+                            let result = self.heap.alloc(FrozenDict::new(res));
+                            return expr!(|eval| eval.heap().alloc_thaw_on_write(result));
+                        }
+                    } else {
+                        // The keys are all constant, but the variables change.
+                        // At least we can pre-hash these values.
+                        let xs = xs.into_map(|(k, v)| {
+                            (
+                                k.as_value()
+                                    .unwrap()
+                                    .get_hashed()
+                                    .expect("Dictionary literals are hashable"),
+                                v.as_compiled(),
+                            )
+                        });
+                        return expr!(|eval| {
+                            let mut r = SmallMap::with_capacity(xs.len());
+                            for (k, v) in &xs {
+                                if r.insert_hashed(k.to_hashed_value(), v(eval)?).is_some() {
+                                    throw(
+                                        Err(EvalError::DuplicateDictionaryKey(k.key().to_string())
+                                            .into()),
+                                        span,
+                                        eval,
+                                    )?;
+                                }
+                            }
+                            eval.heap().alloc(Dict::new(r))
+                        });
                     }
                 }
 
