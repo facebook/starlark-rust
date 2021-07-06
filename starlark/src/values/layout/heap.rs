@@ -23,7 +23,6 @@ use crate::values::{
     layout::{
         arena::Arena,
         pointer::Pointer,
-        thawable_cell::ThawableCell,
         value::{FrozenValue, FrozenValueMem, Value, ValueMem},
         ValueRef,
     },
@@ -182,7 +181,6 @@ impl Freezer {
         let value = value.0.unpack_ptr2().unwrap();
         match value {
             ValueMem::Forward(x) => return Ok(*x),
-            ValueMem::ThawOnWrite(x) => return self.freeze(x.get_value()),
             _ => {}
         }
 
@@ -207,7 +205,7 @@ impl Freezer {
             }
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
-                // We don't expect Forward or ThawOnWrite since they are handled in step 2.
+                // We don't expect Forward since that is handled in step 2.
                 // We don't expect Copied or Blackhole because that only happens during GC.
                 // We don't expect CallEnter/CallExit as that is only during profiling on the heap, and not referenced.
                 // We don't expect Ref, because that only occurs inside ValueRef, and that has a custom freeze.
@@ -259,12 +257,6 @@ impl Heap {
     /// Allocate a [`SimpleValue`] on the [`Heap`].
     pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
         self.alloc_raw(ValueMem::Simple(box x))
-    }
-
-    /// Invariant: Must be called on Dict or List
-    #[allow(dead_code)]
-    pub(crate) fn alloc_thaw_on_write<'v>(&'v self, x: FrozenValue) -> Value<'v> {
-        self.alloc_raw(ValueMem::ThawOnWrite(ThawableCell::new(x)))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
@@ -408,7 +400,6 @@ impl<'v> Tracer<'v> {
             ValueMem::Mutable(x) => unsafe {
                 x.borrow_mut().walk(self)
             },
-            ValueMem::ThawOnWrite(x) => x.walk(self),
             ValueMem::Immutable(x) => unsafe {
                 x.walk(self)
             },

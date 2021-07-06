@@ -34,12 +34,10 @@ use crate::values::{
         heap::{Freezer, Heap},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
-        thawable_cell::ThawableCell,
     },
     none::NoneType,
     ComplexValue, ControlError, StarlarkValue,
 };
-use either::Either;
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
 use std::{
@@ -130,9 +128,6 @@ pub(crate) enum ValueMem<'v> {
     Immutable(Box<dyn ComplexValue<'v>>),
     // Mutable things that are in my heap and are `is_mutable()`
     Mutable(RefCell<Box<dyn ComplexValue<'v>>>),
-    // Thaw on write things that are in my heap and are list or dict
-    // They are either frozen pointers (to be thaw'ed) or normal (point at Mutable)
-    ThawOnWrite(ThawableCell<'v>),
     // Used references in slots - usually wrapped in ValueRef
     // Never points at a Ref, must point directly at a real value,
     // but might be unassigned (None)
@@ -172,28 +167,17 @@ impl<'v> ValueMem<'v> {
                 Err(_) => None,
                 Ok(state) => Some(RefMut::map(state, |x| &mut **x)),
             },
-            Self::ThawOnWrite(state) => match state.get_thawed() {
-                Some(v) => v.get_ref_mut_already(),
-                None => None,
-            },
             _ => None,
         }
     }
 
-    fn get_ref_mut(&self, heap: &'v Heap) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
+    fn get_ref_mut(&self, _heap: &'v Heap) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
         match self {
             Self::Mutable(x) => match x.try_borrow_mut() {
                 // Could be called by something else having the ref locked, but iteration is
                 // definitely most likely
                 Err(_) => Err(ControlError::MutationDuringIteration.into()),
                 Ok(state) => Ok(RefMut::map(state, |x| &mut **x)),
-            },
-            Self::ThawOnWrite(state) => match state.get_thawed() {
-                Some(v) => v.get_ref_mut(heap),
-                None => match state.thaw(|fv| heap.alloc_complex_box(fv.thaw())) {
-                    None => Err(ControlError::MutationDuringIteration.into()),
-                    Some(v) => v.get_ref_mut(heap),
-                },
             },
             _ => Err(ControlError::CannotMutateImmutableValue.into()),
         }
@@ -205,7 +189,6 @@ impl<'v> ValueMem<'v> {
             Self::Simple(x) => Some(simple_starlark_value(Box::as_ref(x))),
             Self::Immutable(x) => Some(x.as_starlark_value()),
             Self::Mutable(_) => None,
-            Self::ThawOnWrite(_) => None,
             _ => self.unexpected("get_ref"),
         }
     }
@@ -217,10 +200,6 @@ impl<'v> ValueMem<'v> {
             Self::Simple(x) => ARef::new_ptr(simple_starlark_value(Box::as_ref(x))),
             Self::Immutable(x) => ARef::new_ptr(x.as_starlark_value()),
             Self::Mutable(x) => ARef::new_ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
-            Self::ThawOnWrite(state) => match state.get_ref() {
-                Either::Left(fv) => ARef::new_ref(Ref::map(fv, |fv| fv.get_ref())),
-                Either::Right(v) => v.get_aref(),
-            },
             _ => self.unexpected("get_aref"),
         }
     }
@@ -455,20 +434,6 @@ impl FrozenValue {
             PointerUnpack::Bool(true) => &VALUE_TRUE,
             PointerUnpack::Bool(false) => &VALUE_FALSE,
             PointerUnpack::Int(x) => PointerI32::new(x),
-        }
-    }
-
-    // Invariant: Only list and dict can be frozen/thaw'ed
-    pub(crate) fn thaw<'v>(self) -> Box<dyn ComplexValue<'v> + 'v> {
-        if let Some(x) = crate::values::list::FrozenList::from_frozen_value(&self) {
-            x.thaw()
-        } else if let Some(x) = crate::values::dict::FrozenDict::from_frozen_value(&self) {
-            x.thaw()
-        } else {
-            panic!(
-                "FrozenValue.thaw called on a type that wasn't List or Dict, type {}",
-                self.get_ref().get_type()
-            )
         }
     }
 }

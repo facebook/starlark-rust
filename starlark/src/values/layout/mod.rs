@@ -24,7 +24,6 @@ mod heap;
 mod pointer;
 mod pointer_i32;
 mod profiling;
-mod thawable_cell;
 mod value;
 
 pub use constant::ConstFrozenValue;

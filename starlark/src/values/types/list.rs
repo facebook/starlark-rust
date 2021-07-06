@@ -103,14 +103,6 @@ impl<'v> ComplexValue<'v> for List<'v> {
     }
 }
 
-impl FrozenList {
-    pub(crate) fn thaw<'v>(&self) -> Box<dyn ComplexValue<'v> + 'v> {
-        // We know all the contents of the list will themselves be immutable
-        let vals = self.content.map(|e| e.to_value());
-        box List { content: vals }
-    }
-}
-
 impl<'v, V: ValueLike<'v>> ListGen<V> {
     /// Create a new list.
     pub fn new(content: Vec<V>) -> Self {

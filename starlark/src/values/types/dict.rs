@@ -195,17 +195,6 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
     }
 }
 
-impl FrozenDict {
-    pub(crate) fn thaw<'v>(&self) -> Box<dyn ComplexValue<'v> + 'v> {
-        let mut items = SmallMap::with_capacity(self.content.len());
-        // We know all the contents of the dictionary will themselves be immutable
-        for (k, v) in self.content.iter_hashed() {
-            items.insert_hashed(k.unborrow_copy().to_hashed_value(), v.to_value());
-        }
-        box Dict { content: items }
-    }
-}
-
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DictGen<V>
 where
     Value<'v>: Equivalent<V>,
