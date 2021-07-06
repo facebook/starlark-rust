@@ -101,20 +101,6 @@ fn eval_slice(
     })
 }
 
-impl Compiler<'_> {
-    fn exprs(
-        &mut self,
-        v: Vec<AstExpr>,
-    ) -> Box<
-        dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Vec<Value<'v>>, EvalException<'v>>
-            + Send
-            + Sync,
-    > {
-        let v = v.into_map(|x| self.expr(x).as_compiled());
-        box move |eval| v.try_map(|s| s(eval))
-    }
-}
-
 impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
@@ -413,20 +399,6 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::Tuple(exprs) => {
-                if let Some(lits) = exprs
-                    .iter()
-                    .map(|e| e.unpack_immutable_literal())
-                    .collect::<Option<Vec<_>>>()
-                {
-                    let vals: Vec<FrozenValue> = lits.map(|v| v.compile(self.heap));
-                    let result = self.heap.alloc(FrozenTuple { content: vals });
-                    value!(result)
-                } else {
-                    let exprs = self.exprs(exprs);
-                    expr!(|eval| eval.heap().alloc(Tuple::new(exprs(eval)?)))
-                }
-            }
             Expr::Lambda(params, box inner) => {
                 let suite = Spanned {
                     span: expr.span,
@@ -434,18 +406,26 @@ impl Compiler<'_> {
                 };
                 ExprCompiledValue::Compiled(self.function("lambda", params, None, suite))
             }
+            Expr::Tuple(exprs) => {
+                let xs = exprs.into_map(|x| self.expr(x));
+                if xs.iter().all(|x| x.as_value().is_some()) {
+                    let content = xs.map(|v| v.as_value().unwrap());
+                    let result = self.heap.alloc(FrozenTuple { content });
+                    value!(result)
+                } else {
+                    let xs = xs.into_map(|x| x.as_compiled());
+                    expr!(|eval| eval.heap().alloc(Tuple::new(xs.try_map(|x| x(eval))?)))
+                }
+            }
             Expr::List(exprs) => {
-                if let Some(lits) = exprs
-                    .iter()
-                    .map(|e| e.unpack_immutable_literal())
-                    .collect::<Option<Vec<_>>>()
-                {
-                    let vals: Vec<FrozenValue> = lits.map(|v| v.compile(self.heap));
-                    let result = self.heap.alloc(FrozenList { content: vals });
+                let xs = exprs.into_map(|x| self.expr(x));
+                if xs.iter().all(|x| x.as_value().is_some()) {
+                    let content = xs.map(|v| v.as_value().unwrap());
+                    let result = self.heap.alloc(FrozenList { content });
                     expr!(|eval| eval.heap().alloc_thaw_on_write(result))
                 } else {
-                    let exprs = self.exprs(exprs);
-                    expr!(|eval| eval.heap().alloc(List::new(exprs(eval)?)))
+                    let xs = xs.into_map(|x| x.as_compiled());
+                    expr!(|eval| eval.heap().alloc(List::new(xs.try_map(|x| x(eval))?)))
                 }
             }
             Expr::Dict(exprs) => {

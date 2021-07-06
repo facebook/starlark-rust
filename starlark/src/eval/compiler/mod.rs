@@ -38,6 +38,13 @@ pub(crate) enum ExprCompiledValue {
 }
 
 impl ExprCompiledValue {
+    pub fn as_value(&self) -> Option<FrozenValue> {
+        match self {
+            Self::Value(x) => Some(*x),
+            Self::Compiled(_) => None,
+        }
+    }
+
     pub fn as_compiled(self) -> ExprCompiled {
         match self {
             Self::Value(x) => box move |_| Ok(x.to_value()),
