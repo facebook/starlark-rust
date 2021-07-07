@@ -36,7 +36,7 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    ComplexValue, ControlError, StarlarkValue,
+    ComplexValue, ControlError, SimpleValue, StarlarkValue,
 };
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -508,6 +508,91 @@ impl<'v> ValueRef<'v> {
 
     pub fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Option<FrozenValue>> {
         self.get_cell().get().into_try_map(|x| freezer.freeze(x))
+    }
+}
+
+/// A ['FrozenRef'] is essentially a ['FrozenValue'], and has the same memory and access guarantees
+/// as it. However, this keeps the type of the type `T` of the actual ['FrozenValue'] as a owned
+/// reference, allowing manipulation of the actual typed data.
+#[derive(Clone_, Dupe_, Copy_, Debug)]
+pub struct FrozenRef<T: 'static + ?Sized> {
+    value: &'static T,
+}
+
+impl FrozenValue {
+    pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
+        self.get_ref::<'static>()
+            .as_dyn_any()
+            .downcast_ref::<T>()
+            .map(|t| FrozenRef { value: t })
+    }
+}
+
+mod std_traits {
+    use crate::values::layout::value::FrozenRef;
+    use std::{
+        borrow::Borrow,
+        cmp::Ordering,
+        hash::{Hash, Hasher},
+        ops::Deref,
+    };
+
+    impl<T: ?Sized> Deref for FrozenRef<T> {
+        type Target = T;
+
+        fn deref(&self) -> &T {
+            self.value
+        }
+    }
+
+    impl<T: ?Sized> AsRef<T> for FrozenRef<T> {
+        fn as_ref(&self) -> &T {
+            &*self
+        }
+    }
+
+    impl<T: ?Sized> Borrow<T> for FrozenRef<T> {
+        fn borrow(&self) -> &T {
+            &*self
+        }
+    }
+
+    impl<T: ?Sized> PartialEq for FrozenRef<T>
+    where
+        T: PartialEq,
+    {
+        fn eq(&self, other: &Self) -> bool {
+            (&*self as &T).eq(&*other as &T)
+        }
+    }
+
+    impl<T: ?Sized> Eq for FrozenRef<T> where T: Eq {}
+
+    impl<T: ?Sized> PartialOrd for FrozenRef<T>
+    where
+        T: PartialOrd,
+    {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            (&*self as &T).partial_cmp(&*other as &T)
+        }
+    }
+
+    impl<T: ?Sized> Ord for FrozenRef<T>
+    where
+        T: Ord,
+    {
+        fn cmp(&self, other: &Self) -> Ordering {
+            (&*self as &T).cmp(&*other as &T)
+        }
+    }
+
+    impl<T: ?Sized> Hash for FrozenRef<T>
+    where
+        T: Hash,
+    {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            (&*self as &T).hash(state);
+        }
     }
 }
 
