@@ -92,11 +92,9 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 
 impl<'v> ComplexValue<'v> for Tuple<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        let mut frozen = Vec::with_capacity(self.content.len());
-        for v in self.content {
-            frozen.push(v.freeze(freezer)?)
-        }
-        Ok(box FrozenTuple { content: frozen })
+        Ok(box FrozenTuple {
+            content: self.content.into_try_map(|v| v.freeze(freezer))?,
+        })
     }
 
     unsafe fn walk(&mut self, walker: &Tracer<'v>) {
