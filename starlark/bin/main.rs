@@ -22,6 +22,8 @@
 #![cfg_attr(feature = "custom_linter", feature(plugin))]
 #![cfg_attr(feature = "custom_linter", allow(deprecated))] // :(
 #![cfg_attr(feature = "custom_linter", plugin(linter))]
+// Disagree these are good hints
+#![allow(clippy::type_complexity)]
 
 use crate::types::{LintMessage, Message, Severity};
 use anyhow::anyhow;

@@ -368,6 +368,10 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::type_complexity)]
 #![allow(clippy::needless_lifetimes)]
+#![allow(clippy::comparison_to_empty)]
+#![allow(clippy::wrong_self_convention)]
+#![allow(clippy::comparison_chain)]
+#![allow(clippy::missing_safety_doc)]
 // FIXME: Temporary
 #![allow(clippy::useless_transmute)] // Seems to be a clippy bug, but we should be using less transmute anyway
 
