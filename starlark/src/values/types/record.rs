@@ -105,9 +105,9 @@ impl<'v> Field<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        walker.walk(&mut self.typ);
-        walker.walk_opt(&mut self.default);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.typ);
+        tracer.trace_opt(&mut self.default);
     }
 }
 
@@ -202,8 +202,8 @@ impl<'v> ComplexValue<'v> for Field<'v> {
         Ok(box (*self).freeze(freezer)?)
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        self.walk(walker)
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.trace(tracer)
     }
 }
 
@@ -252,9 +252,9 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        self.fields.values_mut().for_each(|v| v.0.walk(walker));
-        walker.walk(&mut self.constructor);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.fields.values_mut().for_each(|v| v.0.trace(tracer));
+        tracer.trace(&mut self.constructor);
     }
 
     fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
@@ -339,9 +339,9 @@ impl<'v> ComplexValue<'v> for Record<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        walker.walk(&mut self.typ);
-        self.values.iter_mut().for_each(|v| walker.walk(v));
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.typ);
+        self.values.iter_mut().for_each(|v| tracer.trace(v));
     }
 }
 

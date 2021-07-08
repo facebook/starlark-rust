@@ -163,14 +163,14 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        walker.walk(&mut self.func);
-        self.pos.iter_mut().for_each(|x| walker.walk(x));
-        self.named.iter_mut().for_each(|x| walker.walk(x));
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.func);
+        self.pos.iter_mut().for_each(|x| tracer.trace(x));
+        self.named.iter_mut().for_each(|x| tracer.trace(x));
         self.names
             .iter_mut()
-            .for_each(|x| walker.walk(x.1.key_mut()));
-        self.signature.walk(walker);
+            .for_each(|x| tracer.trace(x.1.key_mut()));
+        self.signature.trace(tracer);
     }
 }
 

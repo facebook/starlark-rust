@@ -358,8 +358,8 @@ impl<'v> ComplexValue<'v> for StringIterator<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        walker.walk(&mut self.string);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.string);
     }
 }
 

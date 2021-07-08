@@ -241,9 +241,9 @@ impl<'v> ComplexValue<'v> for BoundMethod<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        walker.walk(&mut self.method);
-        walker.walk(&mut self.this);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.method);
+        tracer.trace(&mut self.this);
     }
 }
 

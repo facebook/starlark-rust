@@ -282,13 +282,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         res
     }
 
-    pub(crate) fn walk(&mut self, walker: &Tracer<'v>) {
+    pub(crate) fn trace(&mut self, tracer: &Tracer<'v>) {
         let mut roots = self.module_env.slots().get_slots_mut();
         for x in roots.iter_mut() {
-            walker.walk_opt(x);
+            tracer.trace_opt(x);
         }
-        self.local_variables.walk(walker);
-        self.call_stack.walk(walker);
+        self.local_variables.trace(tracer);
+        self.call_stack.trace(tracer);
     }
 
     /// The active heap where [`Value`]s are allocated.

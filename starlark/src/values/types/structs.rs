@@ -105,8 +105,8 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
         Ok(box FrozenStruct { fields: frozen })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        self.fields.values_mut().for_each(|v| walker.walk(v))
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.fields.values_mut().for_each(|v| tracer.trace(v))
     }
 }
 

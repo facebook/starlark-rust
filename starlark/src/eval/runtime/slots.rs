@@ -110,7 +110,7 @@ impl<'v> LocalSlots<'v> {
         self.slots[self.base.0 + slot.0] = value_ref;
     }
 
-    pub(crate) fn walk(&mut self, walker: &Tracer<'v>) {
-        self.slots.iter_mut().for_each(|x| walker.walk_ref(x))
+    pub(crate) fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.slots.iter_mut().for_each(|x| tracer.trace_ref(x))
     }
 }

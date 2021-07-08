@@ -248,16 +248,16 @@ impl<'v> ComplexValue<'v> for Def<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        self.parameters.walk(walker);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.parameters.trace(tracer);
         for (_, _, v, _) in self.parameter_types.iter_mut() {
-            walker.walk(v)
+            tracer.trace(v)
         }
         for (v, _) in self.return_type.iter_mut() {
-            walker.walk(v)
+            tracer.trace(v)
         }
         for x in self.captured.iter() {
-            walker.walk_ref(x)
+            tracer.trace_ref(x)
         }
     }
 }

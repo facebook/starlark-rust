@@ -97,8 +97,8 @@ impl<'v> ComplexValue<'v> for Tuple<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|x| walker.walk(x))
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.content.iter_mut().for_each(|x| tracer.trace(x))
     }
 }
 

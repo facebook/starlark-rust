@@ -70,9 +70,9 @@ impl<'v> ParameterKind<Value<'v>> {
         })
     }
 
-    fn walk(&mut self, walker: &Tracer<'v>) {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
         match self {
-            Self::Defaulted(v) => walker.walk(v),
+            Self::Defaulted(v) => tracer.trace(v),
             _ => {}
         }
     }
@@ -490,8 +490,8 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 
     /// Used when performing garbage collection over a [`ParametersSpec`].
-    pub fn walk(&mut self, walker: &Tracer<'v>) {
-        self.0.kinds.iter_mut().for_each(|x| x.walk(walker))
+    pub fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.kinds.iter_mut().for_each(|x| x.trace(tracer))
     }
 }
 

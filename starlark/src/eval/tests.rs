@@ -846,7 +846,7 @@ fn test_export_as() {
             Ok(self)
         }
 
-        unsafe fn walk(&mut self, _walker: &Tracer) {}
+        unsafe fn trace(&mut self, _walker: &Tracer) {}
 
         fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
             self.named = variable_name.to_owned();
@@ -1759,8 +1759,8 @@ fn test_label_assign() {
             Ok(box WrapperGen(res))
         }
 
-        unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-            self.0.values_mut().for_each(|x| walker.walk(x))
+        unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+            self.0.values_mut().for_each(|x| tracer.trace(x))
         }
 
         fn set_attr(&mut self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {

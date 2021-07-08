@@ -168,10 +168,10 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
         Ok(box FrozenDict { content })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
         self.content.iter_mut().for_each(|(k, v)| {
-            walker.walk_dictionary_key(k);
-            walker.walk(v);
+            tracer.trace_dictionary_key(k);
+            tracer.trace(v);
         })
     }
 

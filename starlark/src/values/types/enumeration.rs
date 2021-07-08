@@ -102,12 +102,12 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
         self.elements.iter_mut().for_each(|(k, v)| {
-            walker.walk_dictionary_key(k);
-            walker.walk(v);
+            tracer.trace_dictionary_key(k);
+            tracer.trace(v);
         });
-        walker.walk(&mut self.constructor);
+        tracer.trace(&mut self.constructor);
     }
 
     fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
@@ -126,9 +126,9 @@ impl<'v> ComplexValue<'v> for EnumValue<'v> {
         })
     }
 
-    unsafe fn walk(&mut self, walker: &Tracer<'v>) {
-        walker.walk(&mut self.typ);
-        walker.walk(&mut self.value);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.typ);
+        tracer.trace(&mut self.value);
     }
 }
 

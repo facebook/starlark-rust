@@ -312,15 +312,15 @@ impl Heap {
         // Must rewrite all Value's so they point at the new heap
         let mut arena = self.arena().borrow_mut();
 
-        let walker = Tracer::<'v> {
+        let traceer = Tracer::<'v> {
             arena: Arena::new(),
         };
-        f(&walker);
-        *arena = walker.arena;
+        f(&traceer);
+        *arena = traceer.arena;
     }
 }
 
-/// Used to perform garbage collection by [`ComplexValue::walk`].
+/// Used to perform garbage collection by [`ComplexValue::trace`].
 pub struct Tracer<'v> {
     arena: Arena<ValueMem<'v>>,
 }
@@ -328,9 +328,9 @@ pub struct Tracer<'v> {
 impl<'v> Tracer<'v> {
     /// Walk over a dictionary key that is immutable, but that we want to mutate anyway.
     /// Safe because the [`Value`] has an identical [`Hash`]/[`Eq`] etc after garbage collection,
-    /// but where possible, prefer [`walk`](Tracer::walk).
+    /// but where possible, prefer [`trace`](Tracer::trace).
     #[allow(clippy::trivially_copy_pass_by_ref)] // we unsafely make it a mut pointer, so the pointer matters
-    pub fn walk_dictionary_key(&self, value: &Value<'v>) {
+    pub fn trace_dictionary_key(&self, value: &Value<'v>) {
         let new_value = self.adjust(*value);
         // We are going to replace it, but promise morally it's the same Value
         // so things like Hash/Ord/Eq will work the same
@@ -341,24 +341,24 @@ impl<'v> Tracer<'v> {
     }
 
     // These references might be shared by multiple people, so important we only GC
-    // them once per walk, or we move them twice
-    pub(crate) fn walk_ref(&self, value: &ValueRef<'v>) {
-        self.walk_cell(&value.0)
+    // them once per trace, or we move them twice
+    pub(crate) fn trace_ref(&self, value: &ValueRef<'v>) {
+        self.trace_cell(&value.0)
     }
 
     /// Walk over an optional value during garbage collection.
-    pub fn walk_opt(&self, value: &mut Option<Value<'v>>) {
+    pub fn trace_opt(&self, value: &mut Option<Value<'v>>) {
         if let Some(d) = value {
-            self.walk(d)
+            self.trace(d)
         }
     }
 
-    fn walk_cell(&self, value: &Cell<Option<Value<'v>>>) {
+    fn trace_cell(&self, value: &Cell<Option<Value<'v>>>) {
         value.set(value.get().map(|x| self.adjust(x)))
     }
 
     /// Walk over a value during garbage collection.
-    pub fn walk(&self, value: &mut Value<'v>) {
+    pub fn trace(&self, value: &mut Value<'v>) {
         *value = self.adjust(*value)
     }
 
@@ -396,12 +396,12 @@ impl<'v> Tracer<'v> {
         let mut old_mem = unsafe { ptr::replace(old_mem, ValueMem::Copied(new_val)) };
 
         match &mut old_mem {
-            ValueMem::Ref(x) => self.walk_cell(x),
+            ValueMem::Ref(x) => self.trace_cell(x),
             ValueMem::Mutable(x) => unsafe {
-                x.borrow_mut().walk(self)
+                x.borrow_mut().trace(self)
             },
             ValueMem::Immutable(x) => unsafe {
-                x.walk(self)
+                x.trace(self)
             },
             _ => {} // Doesn't contain Value pointers
         }

@@ -119,9 +119,9 @@ impl<T: SimpleValue> AsSimpleValue for T {
 ///         Ok(Box::new(OneGen(self.0.freeze(freezer)?)))
 ///     }
 ///
-///     unsafe fn walk(&mut self, walker: &Tracer<'v>) {
+///     unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
 ///         // If there are any `Value`s we don't call `walk` on, its segfault time!
-///         walker.walk(&mut self.0);
+///         tracer.trace(&mut self.0);
 ///     }
 /// }
 /// ```
@@ -203,7 +203,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
 
     /// Called by the garbage collection, and must walk over every contained `Value` in the type.
     /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
-    unsafe fn walk(&mut self, walker: &Tracer<'v>);
+    unsafe fn trace(&mut self, tracer: &Tracer<'v>);
 
     /// Called when exporting a value under a specific name,
     /// only applies to things that return [`true`] for [`is_mutable()`](ComplexValue::is_mutable).

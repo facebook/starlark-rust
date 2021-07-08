@@ -254,7 +254,7 @@ fn possible_gc(eval: &mut Evaluator) {
         // references to all values, so walking covers everything and the unsafe
         // is satisfied.
         unsafe {
-            eval.heap().garbage_collect(|walker| eval.walk(walker))
+            eval.heap().garbage_collect(|tracer| eval.trace(tracer))
         }
         eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
     }

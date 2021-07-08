@@ -131,9 +131,9 @@ impl<'v> CallStack<'v> {
         }
     }
 
-    pub(crate) fn walk(&mut self, walker: &Tracer<'v>) {
+    pub(crate) fn trace(&mut self, tracer: &Tracer<'v>) {
         for x in self.stack[0..self.count].iter_mut() {
-            walker.walk(&mut x.function);
+            tracer.trace(&mut x.function);
         }
         // Not required, but since we are chosing not to walk those above
         // the current stack depth, it's good practice to blank those values out
