@@ -89,6 +89,18 @@ pub unsafe trait Trace<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>);
 }
 
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for Vec<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.iter_mut().for_each(|x| x.trace(tracer));
+    }
+}
+
+unsafe impl<'v> Trace<'v> for Value<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(self)
+    }
+}
+
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.
 ///
@@ -107,7 +119,7 @@ pub unsafe trait Trace<'v> {
 /// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer};
 /// use starlark::{starlark_complex_value, starlark_type};
 ///
-/// #[derive(Debug)]
+/// #[derive(Debug, Trace)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
 ///
@@ -118,13 +130,6 @@ pub unsafe trait Trace<'v> {
 ///
 ///     // To implement methods which are work for both `One` and `FrozenOne`,
 ///     // use the `ValueLike` trait.
-/// }
-///
-/// unsafe impl<'v> Trace<'v> for One<'v> {
-///     fn trace(&mut self, tracer: &Tracer<'v>) {
-///         // If there are any `Value`s we don't call `walk` on, its segfault time!
-///         tracer.trace(&mut self.0);
-///     }
 /// }
 ///
 /// impl<'v> ComplexValue<'v> for One<'v> {
@@ -138,6 +143,7 @@ pub unsafe trait Trace<'v> {
 ///
 /// ```
 /// # use crate::starlark::values::*;
+/// # #[derive(Debug, Trace)]
 /// # struct OneGen<V>(V);
 /// type One<'v> = OneGen<Value<'v>>;
 /// type FrozenOne = OneGen<FrozenValue>;

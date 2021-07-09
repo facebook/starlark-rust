@@ -27,6 +27,7 @@ use syn::*;
 
 mod parse;
 mod render;
+mod trace;
 mod typ;
 mod util;
 
@@ -79,4 +80,10 @@ pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     assert!(attr.is_empty());
     render::render(parse::parse(input)).into()
+}
+
+/// Derive the `Trace` trait.
+#[proc_macro_derive(Trace)]
+pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    trace::derive_trace(input)
 }

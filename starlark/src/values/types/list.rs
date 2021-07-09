@@ -17,6 +17,7 @@
 
 //! The list type, a mutable sequence of values.
 
+use crate as starlark;
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
@@ -25,14 +26,14 @@ use crate::{
         index::{convert_index, convert_slice_indices},
         iter::StarlarkIterable,
         tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
+        SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use std::{cmp::Ordering, marker::PhantomData, ops::Deref};
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
-#[derive(Clone, Default_, Debug)]
+#[derive(Clone, Default_, Trace, Debug)]
 pub struct ListGen<V> {
     /// The data stored by the list.
     pub content: Vec<V>,
@@ -67,12 +68,6 @@ impl FrozenList {
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
     pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenList>> {
         x.downcast_ref::<FrozenList>()
-    }
-}
-
-unsafe impl<'v> Trace<'v> for List<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|x| tracer.trace(x))
     }
 }
 

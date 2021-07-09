@@ -38,6 +38,7 @@ use crate::{
 use gazebo::coerce::{Coerce, CoerceKey};
 pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
 use indexmap::Equivalent;
+pub use starlark_module::Trace;
 use std::{
     cell::RefMut,
     cmp::Ordering,
