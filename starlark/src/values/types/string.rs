@@ -24,7 +24,7 @@ use crate::{
     values::{
         fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
         ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkIterable,
-        StarlarkValue, Tracer, UnpackValue, Value, ValueError, ValueLike,
+        StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueError, ValueLike,
     },
 };
 use std::{
@@ -350,16 +350,18 @@ impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for StringIteratorGen<T> {
     }
 }
 
+unsafe impl<'v> Trace<'v> for StringIterator<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.string);
+    }
+}
+
 impl<'v> ComplexValue<'v> for StringIterator<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box FrozenStringIterator {
             string: freezer.freeze(self.string)?,
             produce_char: self.produce_char,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.string);
     }
 }
 

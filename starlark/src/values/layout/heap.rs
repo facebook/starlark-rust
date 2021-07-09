@@ -320,7 +320,7 @@ impl Heap {
     }
 }
 
-/// Used to perform garbage collection by [`ComplexValue::trace`].
+/// Used to perform garbage collection by [`Trace::trace`](crate::values::Trace::trace).
 pub struct Tracer<'v> {
     arena: Arena<ValueMem<'v>>,
 }
@@ -397,12 +397,8 @@ impl<'v> Tracer<'v> {
 
         match &mut old_mem {
             ValueMem::Ref(x) => self.trace_cell(x),
-            ValueMem::Mutable(x) => unsafe {
-                x.borrow_mut().trace(self)
-            },
-            ValueMem::Immutable(x) => unsafe {
-                x.trace(self)
-            },
+            ValueMem::Mutable(x) => x.borrow_mut().trace(self),
+            ValueMem::Immutable(x) => x.trace(self),
             _ => {} // Doesn't contain Value pointers
         }
         unsafe {

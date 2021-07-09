@@ -23,7 +23,7 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
-        ComplexValue, Freezer, SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
+        ComplexValue, Freezer, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -150,6 +150,18 @@ struct PartialGen<V> {
 
 starlark_complex_value!(Partial);
 
+unsafe impl<'v> Trace<'v> for Partial<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.func);
+        self.pos.iter_mut().for_each(|x| tracer.trace(x));
+        self.named.iter_mut().for_each(|x| tracer.trace(x));
+        self.names
+            .iter_mut()
+            .for_each(|x| tracer.trace(x.1.key_mut()));
+        self.signature.trace(tracer);
+    }
+}
+
 impl<'v> ComplexValue<'v> for Partial<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box FrozenPartial {
@@ -161,16 +173,6 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
                 .into_try_map(|(s, x)| Ok::<_, anyhow::Error>((s, x.freeze(freezer)?)))?,
             signature: self.signature.freeze(freezer)?,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.func);
-        self.pos.iter_mut().for_each(|x| tracer.trace(x));
-        self.named.iter_mut().for_each(|x| tracer.trace(x));
-        self.names
-            .iter_mut()
-            .for_each(|x| tracer.trace(x.1.key_mut()));
-        self.signature.trace(tracer);
     }
 }
 

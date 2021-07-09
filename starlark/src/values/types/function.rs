@@ -22,7 +22,7 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 use derivative::Derivative;
@@ -233,17 +233,19 @@ impl<'v> BoundMethod<'v> {
     }
 }
 
+unsafe impl<'v> Trace<'v> for BoundMethod<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.method);
+        tracer.trace(&mut self.this);
+    }
+}
+
 impl<'v> ComplexValue<'v> for BoundMethod<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box BoundMethodGen {
             method: self.method.freeze(freezer)?,
             this: self.this.freeze(freezer)?,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.method);
-        tracer.trace(&mut self.this);
     }
 }
 

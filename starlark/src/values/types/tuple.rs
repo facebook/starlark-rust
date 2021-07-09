@@ -20,8 +20,8 @@
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Tracer,
-    UnpackValue, Value, ValueError, ValueLike,
+    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace,
+    Tracer, UnpackValue, Value, ValueError, ValueLike,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -90,15 +90,17 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
     }
 }
 
+unsafe impl<'v> Trace<'v> for Tuple<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.content.iter_mut().for_each(|x| tracer.trace(x))
+    }
+}
+
 impl<'v> ComplexValue<'v> for Tuple<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box FrozenTuple {
             content: self.content.into_try_map(|v| v.freeze(freezer))?,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|x| tracer.trace(x))
     }
 }
 

@@ -35,7 +35,7 @@ use crate::{
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
         function::FUNCTION_TYPE, typing::TypeCompiled, AllocValue, ComplexValue, Freezer,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value, ValueLike, ValueRef,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike, ValueRef,
     },
 };
 use derivative::Derivative;
@@ -227,6 +227,21 @@ impl<T1, T2> DefGen<T1, T2> {
 
 impl SimpleValue for FrozenDef {}
 
+unsafe impl<'v> Trace<'v> for Def<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.parameters.trace(tracer);
+        for (_, _, v, _) in self.parameter_types.iter_mut() {
+            tracer.trace(v)
+        }
+        for (v, _) in self.return_type.iter_mut() {
+            tracer.trace(v)
+        }
+        for x in self.captured.iter() {
+            tracer.trace_ref(x)
+        }
+    }
+}
+
 impl<'v> ComplexValue<'v> for Def<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let parameters = self.parameters.freeze(freezer)?;
@@ -246,19 +261,6 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             captured,
             module: Some(FrozenModuleValue::new(freezer)),
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.parameters.trace(tracer);
-        for (_, _, v, _) in self.parameter_types.iter_mut() {
-            tracer.trace(v)
-        }
-        for (v, _) in self.return_type.iter_mut() {
-            tracer.trace(v)
-        }
-        for x in self.captured.iter() {
-            tracer.trace_ref(x)
-        }
     }
 }
 

@@ -25,7 +25,7 @@ use crate::{
         index::{convert_index, convert_slice_indices},
         iter::StarlarkIterable,
         tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Tracer, UnpackValue, Value, ValueLike,
+        SimpleValue, StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -70,6 +70,12 @@ impl FrozenList {
     }
 }
 
+unsafe impl<'v> Trace<'v> for List<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.content.iter_mut().for_each(|x| tracer.trace(x))
+    }
+}
+
 impl<'v> ComplexValue<'v> for List<'v> {
     fn is_mutable(&self) -> bool {
         true
@@ -79,10 +85,6 @@ impl<'v> ComplexValue<'v> for List<'v> {
         Ok(box FrozenList {
             content: self.content.into_try_map(|v| v.freeze(freezer))?,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|x| tracer.trace(x))
     }
 
     fn set_at(

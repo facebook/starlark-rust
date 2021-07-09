@@ -40,7 +40,7 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value,
         ValueLike,
     },
 };
@@ -95,6 +95,12 @@ impl<'v> StructBuilder<'v> {
     }
 }
 
+unsafe impl<'v> Trace<'v> for Struct<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.fields.values_mut().for_each(|v| tracer.trace(v))
+    }
+}
+
 impl<'v> ComplexValue<'v> for Struct<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
@@ -103,10 +109,6 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
             frozen.insert_hashed(k, v.freeze(freezer)?);
         }
         Ok(box FrozenStruct { fields: frozen })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.fields.values_mut().for_each(|v| tracer.trace(v))
     }
 }
 

@@ -49,7 +49,7 @@ use crate::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
         typing::TypeCompiled,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value, ValueLike,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -105,7 +105,7 @@ impl<'v> Field<'v> {
         })
     }
 
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
         tracer.trace(&mut self.typ);
         tracer.trace_opt(&mut self.default);
     }
@@ -197,13 +197,15 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
     }
 }
 
+unsafe impl<'v> Trace<'v> for Field<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.trace(tracer)
+    }
+}
+
 impl<'v> ComplexValue<'v> for Field<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box (*self).freeze(freezer)?)
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.trace(tracer)
     }
 }
 
@@ -234,6 +236,13 @@ where
     }
 }
 
+unsafe impl<'v> Trace<'v> for RecordType<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.fields.values_mut().for_each(|v| v.0.trace(tracer));
+        tracer.trace(&mut self.constructor);
+    }
+}
+
 impl<'v> ComplexValue<'v> for RecordType<'v> {
     // So we can get the name set
     fn is_mutable(&self) -> bool {
@@ -250,11 +259,6 @@ impl<'v> ComplexValue<'v> for RecordType<'v> {
             fields,
             constructor: self.constructor.freeze(freezer)?,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.fields.values_mut().for_each(|v| v.0.trace(tracer));
-        tracer.trace(&mut self.constructor);
     }
 
     fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
@@ -331,17 +335,19 @@ where
     }
 }
 
+unsafe impl<'v> Trace<'v> for Record<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.typ);
+        self.values.iter_mut().for_each(|v| tracer.trace(v));
+    }
+}
+
 impl<'v> ComplexValue<'v> for Record<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box FrozenRecord {
             typ: self.typ.freeze(freezer)?,
             values: self.values.try_map(|v| v.freeze(freezer))?,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.typ);
-        self.values.iter_mut().for_each(|v| tracer.trace(v));
     }
 }
 

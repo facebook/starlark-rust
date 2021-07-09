@@ -25,7 +25,7 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{
         any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, OwnedFrozenValue,
-        SimpleValue, StarlarkValue, Tracer, UnpackValue, Value, ValueLike,
+        SimpleValue, StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -809,7 +809,7 @@ len(xs) == 0
 fn test_export_as() {
     use crate as starlark;
     use crate::values::{
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value,
     };
     use gazebo::any::AnyLifetime;
 
@@ -836,6 +836,10 @@ fn test_export_as() {
         }
     }
 
+    unsafe impl<'v> Trace<'v> for Exporter {
+        fn trace(&mut self, _walker: &Tracer) {}
+    }
+
     impl<'v> ComplexValue<'v> for Exporter {
         fn is_mutable(&self) -> bool {
             self.mutable
@@ -845,8 +849,6 @@ fn test_export_as() {
             self.mutable = false;
             Ok(self)
         }
-
-        unsafe fn trace(&mut self, _walker: &Tracer) {}
 
         fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
             self.named = variable_name.to_owned();
@@ -1746,6 +1748,12 @@ fn test_label_assign() {
         }
     }
 
+    unsafe impl<'v> Trace<'v> for Wrapper<'v> {
+        fn trace(&mut self, tracer: &Tracer<'v>) {
+            self.0.values_mut().for_each(|x| tracer.trace(x))
+        }
+    }
+
     impl<'v> ComplexValue<'v> for Wrapper<'v> {
         fn is_mutable(&self) -> bool {
             true
@@ -1757,10 +1765,6 @@ fn test_label_assign() {
                 res.insert_hashed(key, val.freeze(freezer)?);
             }
             Ok(box WrapperGen(res))
-        }
-
-        unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-            self.0.values_mut().for_each(|x| tracer.trace(x))
         }
 
         fn set_attr(&mut self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {

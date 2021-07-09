@@ -41,8 +41,8 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Tracer, Value,
-        ValueLike,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace, Tracer,
+        Value, ValueLike,
     },
 };
 use derivative::Derivative;
@@ -84,6 +84,16 @@ pub struct EnumValueGen<V> {
 starlark_complex_value!(pub EnumType);
 starlark_complex_value!(pub EnumValue);
 
+unsafe impl<'v> Trace<'v> for EnumType<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.elements.iter_mut().for_each(|(k, v)| {
+            tracer.trace_dictionary_key(k);
+            tracer.trace(v);
+        });
+        tracer.trace(&mut self.constructor);
+    }
+}
+
 impl<'v> ComplexValue<'v> for EnumType<'v> {
     // So we can get the name set and tie the cycle
     fn is_mutable(&self) -> bool {
@@ -102,18 +112,17 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         })
     }
 
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.elements.iter_mut().for_each(|(k, v)| {
-            tracer.trace_dictionary_key(k);
-            tracer.trace(v);
-        });
-        tracer.trace(&mut self.constructor);
-    }
-
     fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
         if self.typ.is_none() {
             self.typ = Some(variable_name.to_owned())
         }
+    }
+}
+
+unsafe impl<'v> Trace<'v> for EnumValue<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.typ);
+        tracer.trace(&mut self.value);
     }
 }
 
@@ -124,11 +133,6 @@ impl<'v> ComplexValue<'v> for EnumValue<'v> {
             value: self.value.freeze(freezer)?,
             index: self.index,
         })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.typ);
-        tracer.trace(&mut self.value);
     }
 }
 

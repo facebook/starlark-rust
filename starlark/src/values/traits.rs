@@ -83,6 +83,12 @@ impl<T: SimpleValue> AsSimpleValue for T {
     }
 }
 
+/// Called by the garbage collection, and must walk over every contained `Value` in the type.
+/// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
+pub unsafe trait Trace<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>);
+}
+
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.
 ///
@@ -98,7 +104,7 @@ impl<T: SimpleValue> AsSimpleValue for T {
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
-/// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Tracer};
+/// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer};
 /// use starlark::{starlark_complex_value, starlark_type};
 ///
 /// #[derive(Debug)]
@@ -114,14 +120,16 @@ impl<T: SimpleValue> AsSimpleValue for T {
 ///     // use the `ValueLike` trait.
 /// }
 ///
+/// unsafe impl<'v> Trace<'v> for One<'v> {
+///     fn trace(&mut self, tracer: &Tracer<'v>) {
+///         // If there are any `Value`s we don't call `walk` on, its segfault time!
+///         tracer.trace(&mut self.0);
+///     }
+/// }
+///
 /// impl<'v> ComplexValue<'v> for One<'v> {
 ///     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
 ///         Ok(Box::new(OneGen(self.0.freeze(freezer)?)))
-///     }
-///
-///     unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-///         // If there are any `Value`s we don't call `walk` on, its segfault time!
-///         tracer.trace(&mut self.0);
 ///     }
 /// }
 /// ```
@@ -188,7 +196,7 @@ impl<T: SimpleValue> AsSimpleValue for T {
 /// * If your type doesn't contain any [`Value`] types, but instead implements this trait for mutability.
 /// * If the difference between frozen and non-frozen is more complex, e.g. a [`Cell`](std::cell::Cell)
 ///   when non-frozen and a direct value when frozen.
-pub trait ComplexValue<'v>: StarlarkValue<'v> {
+pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
     /// Can this value be mutated using a `&mut self` parameter?
     /// Defaults to [`false`].
     /// The result of this value should be consistent for the duration of the
@@ -200,10 +208,6 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> {
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>>;
-
-    /// Called by the garbage collection, and must walk over every contained `Value` in the type.
-    /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>);
 
     /// Called when exporting a value under a specific name,
     /// only applies to things that return [`true`] for [`is_mutable()`](ComplexValue::is_mutable).

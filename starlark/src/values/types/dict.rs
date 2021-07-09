@@ -23,7 +23,7 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
         string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Tracer, UnpackValue, Value, ValueLike,
+        StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -154,6 +154,15 @@ where
     }
 }
 
+unsafe impl<'v> Trace<'v> for Dict<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.content.iter_mut().for_each(|(k, v)| {
+            tracer.trace_dictionary_key(k);
+            tracer.trace(v);
+        })
+    }
+}
+
 impl<'v> ComplexValue<'v> for Dict<'v> {
     fn is_mutable(&self) -> bool {
         true
@@ -166,13 +175,6 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
             content.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
         Ok(box FrozenDict { content })
-    }
-
-    unsafe fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|(k, v)| {
-            tracer.trace_dictionary_key(k);
-            tracer.trace(v);
-        })
     }
 
     fn set_at(
