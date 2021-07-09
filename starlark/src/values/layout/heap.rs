@@ -326,20 +326,6 @@ pub struct Tracer<'v> {
 }
 
 impl<'v> Tracer<'v> {
-    /// Walk over a dictionary key that is immutable, but that we want to mutate anyway.
-    /// Safe because the [`Value`] has an identical [`Hash`]/[`Eq`] etc after garbage collection,
-    /// but where possible, prefer [`trace`](Tracer::trace).
-    #[allow(clippy::trivially_copy_pass_by_ref)] // we unsafely make it a mut pointer, so the pointer matters
-    pub fn trace_dictionary_key(&self, value: &Value<'v>) {
-        let new_value = self.adjust(*value);
-        // We are going to replace it, but promise morally it's the same Value
-        // so things like Hash/Ord/Eq will work the same
-        let v = value as *const Value as *mut Value;
-        unsafe {
-            *v = new_value
-        };
-    }
-
     // These references might be shared by multiple people, so important we only GC
     // them once per trace, or we move them twice
     pub(crate) fn trace_ref(&self, value: &ValueRef<'v>) {
