@@ -17,13 +17,14 @@
 
 //! The dictionary type, a mutable associative-map, which iterates in insertion order.
 
+use crate as starlark;
 use crate::{
     collections::{Hashed, SmallMap},
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
         string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
+        StarlarkValue, Trace, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -35,7 +36,7 @@ use std::{
 };
 
 /// Define the dictionary type. See [`Dict`] and [`FrozenDict`] as the two aliases.
-#[derive(Clone, Default_, Debug)]
+#[derive(Clone, Default_, Debug, Trace)]
 pub struct DictGen<V> {
     /// The data stored by the dictionary. The keys must all be hashable values.
     pub content: SmallMap<V, V>,
@@ -151,15 +152,6 @@ where
             .get(&ValueStr(key))
             .copied()
             .map(ValueLike::to_value)
-    }
-}
-
-unsafe impl<'v> Trace<'v> for Dict<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|(k, v)| {
-            tracer.trace_dictionary_key(k);
-            tracer.trace(v);
-        })
     }
 }
 

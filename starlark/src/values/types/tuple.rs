@@ -17,11 +17,12 @@
 
 //! The list type, an immutable sequence of values.
 
+use crate as starlark;
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
     AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace,
-    Tracer, UnpackValue, Value, ValueError, ValueLike,
+    UnpackValue, Value, ValueError, ValueLike,
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -62,7 +63,7 @@ pub(crate) fn slice_vector<'a, 'v, V: ValueLike<'v> + 'a, I: Iterator<Item = &'a
 }
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
-#[derive(Clone, Default_, Debug)]
+#[derive(Clone, Default_, Debug, Trace)]
 pub struct TupleGen<V> {
     /// The data stored by the tuple.
     pub content: Vec<V>,
@@ -87,12 +88,6 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
         'v: 'a,
     {
         self.content.iter().map(|e| e.to_value())
-    }
-}
-
-unsafe impl<'v> Trace<'v> for Tuple<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.content.iter_mut().for_each(|x| tracer.trace(x))
     }
 }
 

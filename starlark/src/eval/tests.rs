@@ -25,7 +25,7 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{
         any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, OwnedFrozenValue,
-        SimpleValue, StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
+        SimpleValue, StarlarkValue, Trace, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -809,11 +809,11 @@ len(xs) == 0
 fn test_export_as() {
     use crate as starlark;
     use crate::values::{
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
     };
     use gazebo::any::AnyLifetime;
 
-    #[derive(AnyLifetime, Debug)]
+    #[derive(AnyLifetime, Debug, Trace)]
     struct Exporter {
         mutable: bool,
         named: String,
@@ -834,10 +834,6 @@ fn test_export_as() {
         fn alloc_value(self, heap: &Heap) -> Value {
             heap.alloc_complex(self)
         }
-    }
-
-    unsafe impl<'v> Trace<'v> for Exporter {
-        fn trace(&mut self, _walker: &Tracer) {}
     }
 
     impl<'v> ComplexValue<'v> for Exporter {
@@ -1733,7 +1729,7 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug)]
+    #[derive(Debug, Trace)]
     struct WrapperGen<V>(SmallMap<String, V>);
     starlark_complex_value!(Wrapper);
 
@@ -1745,12 +1741,6 @@ fn test_label_assign() {
 
         fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
             Some(self.0.get(attribute).unwrap().to_value())
-        }
-    }
-
-    unsafe impl<'v> Trace<'v> for Wrapper<'v> {
-        fn trace(&mut self, tracer: &Tracer<'v>) {
-            self.0.values_mut().for_each(|x| tracer.trace(x))
         }
     }
 

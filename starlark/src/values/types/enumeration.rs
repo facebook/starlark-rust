@@ -34,6 +34,7 @@
 //! assert_eq([v.value for v in Colors], ["Red", "Green", "Blue"])
 //! # "#);
 //! ```
+use crate as starlark;
 use crate::{
     codemap::Span,
     collections::SmallMap,
@@ -41,8 +42,8 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace, Tracer,
-        Value, ValueLike,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace, Value,
+        ValueLike,
     },
 };
 use derivative::Derivative;
@@ -58,7 +59,7 @@ enum EnumError {
 }
 
 /// The type of an enumeration, created by `enum()`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace)]
 // Deliberately store fully populated values
 // for each entry, so we can produce enum values with zero allocation.
 pub struct EnumTypeGen<V> {
@@ -71,7 +72,7 @@ pub struct EnumTypeGen<V> {
 }
 
 /// A value from an enumeration.
-#[derive(Clone, Derivative)]
+#[derive(Clone, Derivative, Trace)]
 #[derivative(Debug)]
 pub struct EnumValueGen<V> {
     // Must ignore value.typ or type.elements, since they are circular
@@ -83,16 +84,6 @@ pub struct EnumValueGen<V> {
 
 starlark_complex_value!(pub EnumType);
 starlark_complex_value!(pub EnumValue);
-
-unsafe impl<'v> Trace<'v> for EnumType<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.elements.iter_mut().for_each(|(k, v)| {
-            tracer.trace_dictionary_key(k);
-            tracer.trace(v);
-        });
-        tracer.trace(&mut self.constructor);
-    }
-}
 
 impl<'v> ComplexValue<'v> for EnumType<'v> {
     // So we can get the name set and tie the cycle
@@ -116,13 +107,6 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
         if self.typ.is_none() {
             self.typ = Some(variable_name.to_owned())
         }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for EnumValue<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.typ);
-        tracer.trace(&mut self.value);
     }
 }
 

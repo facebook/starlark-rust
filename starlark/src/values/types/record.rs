@@ -41,6 +41,7 @@
 //! # "#);
 //! ```
 
+use crate as starlark;
 use crate::{
     codemap::Span,
     collections::SmallMap,
@@ -49,7 +50,7 @@ use crate::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
         typing::TypeCompiled,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
@@ -60,14 +61,14 @@ use std::{
 };
 
 /// The result of `field()`.
-#[derive(Clone, Debug, Dupe)]
+#[derive(Clone, Debug, Dupe, Trace)]
 pub struct FieldGen<V> {
     pub(crate) typ: V,
     default: Option<V>,
 }
 
 /// The result of `record()`, being the type of records.
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct RecordTypeGen<V> {
     /// The name of this type, e.g. MyRecord
     typ: Option<String>,
@@ -81,7 +82,7 @@ pub struct RecordTypeGen<V> {
 }
 
 /// An actual record.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace)]
 pub struct RecordGen<V> {
     typ: V, // Must be RecordType
     values: Vec<V>,
@@ -103,11 +104,6 @@ impl<'v> Field<'v> {
             typ: self.typ.freeze(freezer)?,
             default: self.default.into_try_map(|x| x.freeze(freezer))?,
         })
-    }
-
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.typ);
-        tracer.trace_opt(&mut self.default);
     }
 }
 
@@ -197,12 +193,6 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
     }
 }
 
-unsafe impl<'v> Trace<'v> for Field<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.trace(tracer)
-    }
-}
-
 impl<'v> ComplexValue<'v> for Field<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box (*self).freeze(freezer)?)
@@ -233,13 +223,6 @@ where
             s.write_u64(d.get_hash()?);
         }
         Ok(s.finish())
-    }
-}
-
-unsafe impl<'v> Trace<'v> for RecordType<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.fields.values_mut().for_each(|v| v.0.trace(tracer));
-        tracer.trace(&mut self.constructor);
     }
 }
 
@@ -332,13 +315,6 @@ where
             }
             _ => Ok(false),
         }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for Record<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.typ);
-        self.values.iter_mut().for_each(|v| tracer.trace(v));
     }
 }
 

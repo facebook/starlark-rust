@@ -17,16 +17,16 @@
 
 //! The string type. All strings must be valid UTF8.
 
-use gazebo::any::AnyLifetime;
-
+use crate as starlark;
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
         ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkIterable,
-        StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueError, ValueLike,
+        StarlarkValue, Trace, UnpackValue, Value, ValueError, ValueLike,
     },
 };
+use gazebo::any::AnyLifetime;
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
@@ -303,7 +303,7 @@ impl<'v, 'a> AllocFrozenValue for &'a str {
 }
 
 /// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 struct StringIteratorGen<V> {
     string: V,
     produce_char: bool, // if not char, then int
@@ -347,12 +347,6 @@ impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for StringIteratorGen<T> {
         } else {
             box s.map(|x| Value::new_int(u32::from(x) as i32))
         }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for StringIterator<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.string);
     }
 }
 

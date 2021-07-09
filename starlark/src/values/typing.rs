@@ -15,18 +15,17 @@
  * limitations under the License.
  */
 
-use std::fmt::{self, Debug};
-
 use crate::{
     collections::{BorrowHashed, Hashed},
     values::{
         dict::{Dict, ValueStr},
         list::List,
         tuple::Tuple,
-        Value,
+        Trace, Tracer, Value,
     },
 };
 use gazebo::prelude::*;
+use std::fmt::{self, Debug};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -40,6 +39,12 @@ enum TypingError {
 }
 
 pub(crate) struct TypeCompiled(Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>);
+
+unsafe impl<'v> Trace<'v> for TypeCompiled {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {
+        // Nothing stored here
+    }
+}
 
 impl Debug for TypeCompiled {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

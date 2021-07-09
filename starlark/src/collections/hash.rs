@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use crate as starlark;
 use gazebo::prelude::*;
 use indexmap::Equivalent;
 use std::{
@@ -23,11 +24,11 @@ use std::{
 };
 
 /// A hash result.
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default)]
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default, Trace)]
 pub struct SmallHashResult(u32);
 
 /// A key and its hash.
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Trace)]
 pub struct Hashed<K> {
     hash: SmallHashResult,
     key: K,

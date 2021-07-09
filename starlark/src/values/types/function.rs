@@ -17,12 +17,13 @@
 
 //! Function types, including native functions and `object.member` functions.
 
+use crate as starlark;
 use crate::{
     codemap::Span,
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use derivative::Derivative;
@@ -217,7 +218,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 }
 
 /// A wrapper for a method with a self object already bound.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace)]
 pub struct BoundMethodGen<V> {
     pub(crate) method: V,
     pub(crate) this: V,
@@ -230,13 +231,6 @@ impl<'v> BoundMethod<'v> {
     /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
     pub fn new(this: Value<'v>, method: Value<'v>) -> Self {
         BoundMethod { method, this }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for BoundMethod<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.method);
-        tracer.trace(&mut self.this);
     }
 }
 

@@ -30,6 +30,7 @@
 //! hold several values.
 use crate::{
     codemap::Span,
+    collections::SmallMap,
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
@@ -95,10 +96,54 @@ unsafe impl<'v, T: Trace<'v>> Trace<'v> for Vec<T> {
     }
 }
 
+unsafe impl<'v, K: Trace<'v>, V: Trace<'v>> Trace<'v> for SmallMap<K, V> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.iter_mut().for_each(|(k, v)| {
+            // We are going to replace it, but promise morally it's the same Value
+            // so things like Hash/Ord/Eq will work the same
+            #[allow(clippy::cast_ref_to_mut)]
+            let k_mut = unsafe { &mut *(k as *const K as *mut K) };
+            k_mut.trace(tracer);
+            v.trace(tracer);
+        })
+    }
+}
+
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for Option<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        if let Some(x) = self {
+            x.trace(tracer)
+        }
+    }
+}
+
+unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>> Trace<'v> for (T1, T2) {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
+    }
+}
+
 unsafe impl<'v> Trace<'v> for Value<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         tracer.trace(self)
     }
+}
+
+unsafe impl<'v> Trace<'v> for String {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+unsafe impl<'v> Trace<'v> for i32 {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+unsafe impl<'v> Trace<'v> for u32 {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+unsafe impl<'v> Trace<'v> for bool {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 
 /// A trait for values which are more complex - because they are either mutable,

@@ -34,13 +34,14 @@
 //! # "#);
 //! ```
 
+use crate as starlark;
 use crate::{
     collections::SmallMap,
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value,
+        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
         ValueLike,
     },
 };
@@ -64,7 +65,7 @@ impl<V> StructGen<V> {
 starlark_complex_value!(pub Struct);
 
 /// The result of calling `struct()`.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Trace)]
 pub struct StructGen<V> {
     /// The fields in a struct.
     pub fields: SmallMap<String, V>,
@@ -92,12 +93,6 @@ impl<'v> StructBuilder<'v> {
     /// Finish building and produce a [`Struct`].
     pub fn build(self) -> Struct<'v> {
         Struct { fields: self.1 }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for Struct<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.fields.values_mut().for_each(|v| tracer.trace(v))
     }
 }
 
