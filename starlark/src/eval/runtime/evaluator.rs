@@ -30,7 +30,7 @@ use crate::{
         },
         FileLoader,
     },
-    values::{FrozenHeap, Heap, Tracer, Value, ValueRef},
+    values::{FrozenHeap, Heap, Trace, Tracer, Value, ValueRef},
 };
 use gazebo::{any::AnyLifetime, cast};
 use once_cell::sync::Lazy;
@@ -88,6 +88,17 @@ pub struct Evaluator<'v, 'a> {
     // The Starlark-level call-stack of functions.
     // Must go last because it's quite a big structure
     pub(crate) call_stack: CallStack<'v>,
+}
+
+unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        let mut roots = self.module_env.slots().get_slots_mut();
+        for x in roots.iter_mut() {
+            tracer.trace_opt(x);
+        }
+        self.local_variables.trace(tracer);
+        self.call_stack.trace(tracer);
+    }
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {
@@ -280,15 +291,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
         res
-    }
-
-    pub(crate) fn trace(&mut self, tracer: &Tracer<'v>) {
-        let mut roots = self.module_env.slots().get_slots_mut();
-        for x in roots.iter_mut() {
-            tracer.trace_opt(x);
-        }
-        self.local_variables.trace(tracer);
-        self.call_stack.trace(tracer);
     }
 
     /// The active heap where [`Value`]s are allocated.

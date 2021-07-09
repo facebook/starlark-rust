@@ -230,14 +230,14 @@ impl SimpleValue for FrozenDef {}
 unsafe impl<'v> Trace<'v> for Def<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.parameters.trace(tracer);
-        for (_, _, v, _) in self.parameter_types.iter_mut() {
-            tracer.trace(v)
+        for (_, _, x, _) in self.parameter_types.iter_mut() {
+            x.trace(tracer);
         }
-        for (v, _) in self.return_type.iter_mut() {
-            tracer.trace(v)
+        for (x, _) in self.return_type.iter_mut() {
+            x.trace(tracer);
         }
-        for x in self.captured.iter() {
-            tracer.trace_ref(x)
+        for x in self.captured.iter_mut() {
+            x.trace(tracer);
         }
     }
 }

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::values::{Heap, Tracer, Value, ValueRef};
+use crate::values::{Heap, Trace, Tracer, Value, ValueRef};
 use gazebo::prelude::*;
 use std::mem;
 
@@ -48,6 +48,12 @@ pub(crate) struct LocalSlots<'v> {
     slots: Vec<ValueRef<'v>>,
     // The current index at which LocalSlotId is relative to
     base: LocalSlotBase,
+}
+
+unsafe impl<'v> Trace<'v> for LocalSlots<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.slots.trace(tracer);
+    }
 }
 
 impl<'v> LocalSlots<'v> {
@@ -108,9 +114,5 @@ impl<'v> LocalSlots<'v> {
 
     pub fn set_slot_ref(&mut self, slot: LocalSlotId, value_ref: ValueRef<'v>) {
         self.slots[self.base.0 + slot.0] = value_ref;
-    }
-
-    pub(crate) fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.slots.iter_mut().for_each(|x| tracer.trace_ref(x))
     }
 }

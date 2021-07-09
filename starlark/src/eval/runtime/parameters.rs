@@ -22,7 +22,8 @@ use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
     eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Tracer, UnpackValue, Value, ValueError,
+        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Trace, Tracer, UnpackValue, Value,
+        ValueError,
     },
 };
 use gazebo::prelude::*;
@@ -59,6 +60,15 @@ enum ParameterKind<V> {
     KWargs,
 }
 
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for ParameterKind<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        match self {
+            Self::Defaulted(v) => v.trace(tracer),
+            _ => {}
+        }
+    }
+}
+
 impl<'v> ParameterKind<Value<'v>> {
     fn freeze(&self, freezer: &Freezer) -> anyhow::Result<ParameterKind<FrozenValue>> {
         Ok(match self {
@@ -68,13 +78,6 @@ impl<'v> ParameterKind<Value<'v>> {
             Self::Args => ParameterKind::Args,
             Self::KWargs => ParameterKind::KWargs,
         })
-    }
-
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        match self {
-            Self::Defaulted(v) => tracer.trace(v),
-            _ => {}
-        }
     }
 }
 
@@ -475,6 +478,12 @@ impl ParametersSpec<FrozenValue> {
     }
 }
 
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for ParametersSpec<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.kinds.iter_mut().for_each(|x| x.trace(tracer))
+    }
+}
+
 impl<'v> ParametersSpec<Value<'v>> {
     /// Used to freeze a [`ParametersSpec`].
     pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<ParametersSpec<FrozenValue>> {
@@ -487,11 +496,6 @@ impl<'v> ParametersSpec<Value<'v>> {
             args: self.0.args,
             kwargs: self.0.kwargs,
         }))
-    }
-
-    /// Used when performing garbage collection over a [`ParametersSpec`].
-    pub fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.0.kinds.iter_mut().for_each(|x| x.trace(tracer))
     }
 }
 

@@ -27,7 +27,7 @@
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     errors::Frame,
-    values::{ControlError, Tracer, Value},
+    values::{ControlError, Trace, Tracer, Value},
 };
 use gazebo::prelude::*;
 use std::{fmt, fmt::Debug};
@@ -92,6 +92,20 @@ impl<'v> Default for CallStack<'v> {
 // low...)
 const MAX_CALLSTACK_RECURSION: usize = 40;
 
+unsafe impl<'v> Trace<'v> for CallStack<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        for x in self.stack[0..self.count].iter_mut() {
+            x.function.trace(tracer);
+        }
+        // Not required, but since we are chosing not to walk those above
+        // the current stack depth, it's good practice to blank those values out
+        for x in self.stack[self.count..].iter_mut() {
+            x.function = Value::new_none();
+            x.file = None;
+        }
+    }
+}
+
 impl<'v> CallStack<'v> {
     /// Push an element to the stack. It is important the each `push` is paired
     /// with a `pop`.
@@ -128,18 +142,6 @@ impl<'v> CallStack<'v> {
             None
         } else {
             self.stack[self.count - 1].location()
-        }
-    }
-
-    pub(crate) fn trace(&mut self, tracer: &Tracer<'v>) {
-        for x in self.stack[0..self.count].iter_mut() {
-            tracer.trace(&mut x.function);
-        }
-        // Not required, but since we are chosing not to walk those above
-        // the current stack depth, it's good practice to blank those values out
-        for x in self.stack[self.count..].iter_mut() {
-            x.function = Value::new_none();
-            x.file = None;
         }
     }
 

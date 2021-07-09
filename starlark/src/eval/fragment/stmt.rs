@@ -33,7 +33,7 @@ use crate::{
     values::{
         fast_string,
         list::{FrozenList, List},
-        ControlError, Heap, Value,
+        ControlError, Heap, Trace, Value,
     },
 };
 use anyhow::anyhow;

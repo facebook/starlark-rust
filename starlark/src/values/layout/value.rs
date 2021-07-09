@@ -36,7 +36,7 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    ComplexValue, ControlError, SimpleValue, StarlarkValue,
+    ComplexValue, ControlError, SimpleValue, StarlarkValue, Trace, Tracer,
 };
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -432,6 +432,12 @@ impl FrozenValue {
             PointerUnpack::Bool(false) => &VALUE_FALSE,
             PointerUnpack::Int(x) => PointerI32::new(x),
         }
+    }
+}
+
+unsafe impl<'v> Trace<'v> for ValueRef<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace_ref(self)
     }
 }
 
