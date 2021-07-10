@@ -392,7 +392,7 @@ impl Compiler<'_> {
                     span: expr.span,
                     node: Stmt::Return(Some(inner)),
                 };
-                ExprCompiledValue::Compiled(self.function("lambda", params, None, suite))
+                self.function("lambda", params, None, suite)
             }
             Expr::Tuple(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
@@ -543,8 +543,8 @@ impl Compiler<'_> {
                                 if self.constants.fn_type == v && args.is_one_pos() =>
                             {
                                 let x = args.pos_named.pop().unwrap();
-                                ExprCompiledValue::Compiled(box move |eval| {
-                                    Ok(x(eval)?.get_aref().get_type_value().unpack().to_value())
+                                expr!(|eval| {
+                                    x(eval)?.get_aref().get_type_value().unpack().to_value()
                                 })
                             }
                             ExprCompiledValue::Value(v)
@@ -555,9 +555,7 @@ impl Compiler<'_> {
                                 // and we'd not get entries on the call stack, which would be bad.
                                 // But `len()` is super common, and no one expects it to call other functions,
                                 // so let's just ignore that corner case for additional perf.
-                                ExprCompiledValue::Compiled(box move |eval| {
-                                    Ok(Value::new_int(x(eval)?.length()?))
-                                })
+                                expr!(|eval| Value::new_int(x(eval)?.length()?))
                             }
                             _ => args!(
                                 args,

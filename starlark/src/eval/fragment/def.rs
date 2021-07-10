@@ -112,7 +112,7 @@ impl Compiler<'_> {
         params: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
         suite: AstStmt,
-    ) -> ExprCompiled {
+    ) -> ExprCompiledValue {
         let file = self.codemap.file_span(suite.span);
         let function_name = format!("{}.{}", file.file.filename(), name);
 
@@ -130,7 +130,7 @@ impl Compiler<'_> {
 
         let info = Arc::new(DefInfo { scope_names, body });
 
-        box move |eval| {
+        expr!(|eval| {
             let mut parameters =
                 ParametersSpecBuilder::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
@@ -159,15 +159,15 @@ impl Compiler<'_> {
                     Some((v, TypeCompiled::new(v)?))
                 }
             };
-            Ok(Def::new(
+            Def::new(
                 parameters.build(),
                 parameter_types,
                 return_type,
                 info.dupe(),
                 eval.codemap.dupe(),
                 eval,
-            ))
-        }
+            )
+        })
     }
 }
 

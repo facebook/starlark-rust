@@ -365,7 +365,9 @@ impl Compiler<'_> {
         let span = stmt.span;
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
-                let rhs = self.function(&name.node, params, return_type, *suite);
+                let rhs = self
+                    .function(&name.node, params, return_type, *suite)
+                    .as_compiled();
                 let lhs = self.assign(Spanned {
                     span: name.span,
                     node: Assign::Identifier(name),
