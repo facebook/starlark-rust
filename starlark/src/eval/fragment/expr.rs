@@ -585,7 +585,7 @@ impl Compiler<'_> {
             }
             Expr::Not(expr) => {
                 let expr = self.expr(*expr);
-                expr!(expr, |eval| Value::new_bool(!expr.to_bool()))
+                expr!(expr, |_eval| Value::new_bool(!expr.to_bool()))
             }
             Expr::Minus(expr) => match expr.unpack_int_literal().and_then(i32::checked_neg) {
                 None => {
