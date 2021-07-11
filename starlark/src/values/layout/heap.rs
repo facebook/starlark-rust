@@ -261,14 +261,10 @@ impl Heap {
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        self.alloc_complex_box(box x)
-    }
-
-    pub(crate) fn alloc_complex_box<'v>(&'v self, x: Box<dyn ComplexValue<'v> + 'v>) -> Value<'v> {
         if x.is_mutable() {
-            self.alloc_raw(ValueMem::Mutable(RefCell::new(x)))
+            self.alloc_raw(ValueMem::Mutable(RefCell::new(box x)))
         } else {
-            self.alloc_raw(ValueMem::Immutable(x))
+            self.alloc_raw(ValueMem::Immutable(box x))
         }
     }
 
