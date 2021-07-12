@@ -52,6 +52,18 @@ macro_rules! value {
     };
 }
 
+macro_rules! stmt {
+    ($name:expr, $span:ident, |$eval:ident| $body:expr) => {{
+        let _: &'static str = $name;
+        box move |$eval| {
+            before_stmt($span, $eval);
+            $body;
+            #[allow(unreachable_code)]
+            Ok(())
+        }
+    }};
+}
+
 pub(crate) mod compr;
 pub(crate) mod def;
 pub(crate) mod expr;

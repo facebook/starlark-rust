@@ -126,8 +126,7 @@ impl Compiler<'_> {
                 let e = self.expr(*e).as_compiled();
                 let s = s.node;
                 let rhs = rhs.as_compiled();
-                box move |eval| {
-                    before_stmt(span_stmt, eval);
+                stmt!("assign_dot", span_stmt, |eval| {
                     let e: Value = e(eval)?;
                     let (_, v) = throw(e.get_attr_error(&s, eval.heap()), span_lhs, eval)?;
                     let rhs = rhs(eval)?;
@@ -136,15 +135,13 @@ impl Compiler<'_> {
                         span_stmt,
                         eval,
                     )?;
-                    Ok(())
-                }
+                })
             }
             Assign::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e).as_compiled();
                 let idx = self.expr(idx).as_compiled();
                 let rhs = rhs.as_compiled();
-                box move |eval| {
-                    before_stmt(span_stmt, eval);
+                stmt!("assign_array", span_stmt, |eval| {
                     let e: Value = e(eval)?;
                     let idx = idx(eval)?;
                     let v = throw(e.at(idx, eval.heap()), span_lhs, eval)?;
@@ -154,33 +151,28 @@ impl Compiler<'_> {
                         span_stmt,
                         eval,
                     )?;
-                    Ok(())
-                }
+                })
             }
             Assign::Identifier(ident) => {
                 let name = ident.node;
                 match self.scope.get_name_or_panic(&name) {
                     Slot::Local(slot) => {
                         let rhs = rhs.as_compiled();
-                        box move |eval| {
-                            before_stmt(span_stmt, eval);
+                        stmt!("assign_local", span_stmt, |eval| {
                             let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
                             let rhs = rhs(eval)?;
                             let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                             eval.set_slot_local(slot, v);
-                            Ok(())
-                        }
+                        })
                     }
                     Slot::Module(slot) => {
                         let rhs = rhs.as_compiled();
-                        box move |eval| {
-                            before_stmt(span_stmt, eval);
+                        stmt!("assign_module", span_stmt, |eval| {
                             let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
                             let rhs = rhs(eval)?;
                             let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                             eval.set_slot_module(slot, v);
-                            Ok(())
-                        }
+                        })
                     }
                 }
             }
@@ -372,19 +364,16 @@ impl Compiler<'_> {
                     span: name.span,
                     node: Assign::Identifier(name),
                 });
-                box move |eval| {
-                    before_stmt(span, eval);
+                stmt!("define_def", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
-                    Ok(())
-                }
+                })
             }
             Stmt::For(var, box (over, body)) => {
                 let over_span = over.span;
                 let var = self.assign(var);
                 let over = self.expr(over).as_compiled();
                 let st = self.stmt(body, false);
-                box move |eval| {
-                    before_stmt(span, eval);
+                stmt!("for", span, |eval| {
                     let iterable = over(eval)?;
                     let freeze_for_iteration = iterable.get_aref();
                     for v in &throw(iterable.iterate(eval.heap()), over_span, eval)? {
@@ -397,44 +386,33 @@ impl Compiler<'_> {
                         }
                     }
                     mem::drop(freeze_for_iteration);
-                    Ok(())
-                }
+                })
             }
             Stmt::Return(Some(e)) => {
                 let e = self.expr(e).as_compiled();
-                box move |eval| {
-                    before_stmt(span, eval);
-                    Err(EvalException::Return(e(eval)?))
-                }
+                stmt!("return_value", span, |eval| {
+                    return Err(EvalException::Return(e(eval)?));
+                })
             }
-            Stmt::Return(None) => box move |eval| {
-                before_stmt(span, eval);
-                Err(EvalException::Return(Value::new_none()))
-            },
+            Stmt::Return(None) => stmt!("return", span, |eval| {
+                return Err(EvalException::Return(Value::new_none()));
+            }),
             Stmt::If(cond, box then_block) => {
                 let cond = self.expr(cond).as_compiled();
                 let then_block = self.stmt(then_block, allow_gc);
-                box move |eval| {
-                    before_stmt(span, eval);
-                    if cond(eval)?.to_bool() {
-                        then_block(eval)
-                    } else {
-                        Ok(())
-                    }
-                }
+                stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
+                    then_block(eval)?
+                })
             }
             Stmt::IfElse(cond, box (then_block, else_block)) => {
                 let cond = self.expr(cond).as_compiled();
                 let then_block = self.stmt(then_block, allow_gc);
                 let else_block = self.stmt(else_block, allow_gc);
-                box move |eval| {
-                    before_stmt(span, eval);
-                    if cond(eval)?.to_bool() {
-                        then_block(eval)
-                    } else {
-                        else_block(eval)
-                    }
-                }
+                stmt!("if_then_else", span, |eval| if cond(eval)?.to_bool() {
+                    then_block(eval)?
+                } else {
+                    else_block(eval)?
+                })
             }
             Stmt::Statements(stmts) => {
                 // No need to do before_stmt on these statements as they are
@@ -454,20 +432,16 @@ impl Compiler<'_> {
             }
             Stmt::Expression(e) => {
                 let e = self.expr(e).as_compiled();
-                box move |eval| {
-                    before_stmt(span, eval);
+                stmt!("expression", span, |eval| {
                     e(eval)?;
-                    Ok(())
-                }
+                })
             }
             Stmt::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs).as_compiled();
                 let lhs = self.assign(lhs);
-                box move |eval| {
-                    before_stmt(span, eval);
+                stmt!("assign", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
-                    Ok(())
-                }
+                })
             }
             Stmt::AssignModify(lhs, op, rhs) => {
                 let rhs = self.expr(*rhs);
@@ -506,8 +480,7 @@ impl Compiler<'_> {
                         x.span.merge(y.span),
                     )
                 });
-                box move |eval| {
-                    before_stmt(span, eval);
+                stmt!("load", span, |eval| {
                     let loadenv = match eval.loader.as_mut() {
                         None => {
                             return Err(EvalException::Error(
@@ -527,21 +500,11 @@ impl Compiler<'_> {
                             Slot::Module(slot) => eval.set_slot_module(*slot, value),
                         }
                     }
-                    Ok(())
-                }
+                })
             }
-            Stmt::Pass => box move |eval| {
-                before_stmt(span, eval);
-                Ok(())
-            },
-            Stmt::Break => box move |eval| {
-                before_stmt(span, eval);
-                Err(EvalException::Break)
-            },
-            Stmt::Continue => box move |eval| {
-                before_stmt(span, eval);
-                Err(EvalException::Continue)
-            },
+            Stmt::Pass => stmt!("pass", span, |eval| {}),
+            Stmt::Break => stmt!("break", span, |eval| return Err(EvalException::Break)),
+            Stmt::Continue => stmt!("continue", span, |eval| return Err(EvalException::Continue)),
         }
     }
 }
