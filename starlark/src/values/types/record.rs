@@ -150,6 +150,7 @@ impl<'v> RecordType<'v> {
                 parameters.required(name);
             }
         }
+        let parameters = parameters.build();
 
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.
@@ -179,7 +180,8 @@ impl<'v> RecordType<'v> {
                 }
                 Ok(eval.heap().alloc_complex(Record { typ: this, values }))
             },
-            parameters.build(),
+            parameters.signature(),
+            parameters,
         )
     }
 }

@@ -114,15 +114,17 @@ fn render_fun(x: StarFun) -> TokenStream {
         quote! {
             static TYPE: starlark::values::ConstFrozenValue =
                 starlark::values::ConstFrozenValue::new(#typ);
-            let mut func = starlark::values::function::NativeFunction::new(#name, signature);
+            let signature_str = signature.signature();
+            let mut func = starlark::values::function::NativeFunction::new(#name, signature_str, signature);
             func.set_type(&TYPE);
             globals_builder.set(#name_str, func);
         }
     } else {
         quote! {
+            let signature_str = signature.signature();
             globals_builder.set(
                 #name_str,
-                starlark::values::function::NativeFunction::new(#name, signature),
+                starlark::values::function::NativeFunction::new(#name, signature_str, signature),
             );
         }
     };

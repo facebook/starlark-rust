@@ -78,6 +78,7 @@ impl<T> NativeAttr for T where
 pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
     function: Box<dyn NativeFunc>,
+    name: String,
     parameters: ParametersSpec<FrozenValue>,
     typ: Option<FrozenValue>,
 }
@@ -90,7 +91,7 @@ impl AllocFrozenValue for NativeFunction {
 
 impl NativeFunction {
     /// Create a new [`NativeFunction`] from the Rust function, plus the parameter specification.
-    pub fn new<F>(function: F, parameters: ParametersSpec<FrozenValue>) -> Self
+    pub fn new<F>(function: F, name: String, parameters: ParametersSpec<FrozenValue>) -> Self
     where
         // If I switch this to the trait alias then it fails to resolve the usages
         F: for<'v> Fn(
@@ -104,6 +105,7 @@ impl NativeFunction {
     {
         NativeFunction {
             function: box function,
+            name,
             parameters,
             typ: None,
         }
@@ -128,7 +130,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        self.parameters.collect_repr(s)
+        s.push_str(&self.name)
     }
 
     fn invoke(
