@@ -16,12 +16,14 @@
  */
 
 macro_rules! expr {
-    (|$eval:ident| $body:expr) => {{
+    ($name:expr, |$eval:ident| $body:expr) => {{
+        let _: &'static str = $name;
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| Ok($body);
         ExprCompiledValue::Compiled(res)
     }};
-    ($v1:ident, |$eval:ident| $body:expr) => {{
+    ($name:expr, $v1:ident, |$eval:ident| $body:expr) => {{
+        let _: &'static str = $name;
         let $v1 = $v1.as_compiled();
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| {
@@ -30,7 +32,8 @@ macro_rules! expr {
         };
         ExprCompiledValue::Compiled(res)
     }};
-    ($v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
+    ($name:expr, $v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
+        let _: &'static str = $name;
         let $v1 = $v1.as_compiled();
         let $v2 = $v2.as_compiled();
         #[allow(clippy::needless_question_mark)]

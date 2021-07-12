@@ -130,7 +130,7 @@ impl Compiler<'_> {
 
         let info = Arc::new(DefInfo { scope_names, body });
 
-        expr!(|eval| {
+        expr!("def", |eval| {
             let mut parameters =
                 ParametersSpecBuilder::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();

@@ -54,7 +54,7 @@ fn eval_compare(
     r: ExprCompiledValue,
     cmp: fn(Ordering) -> bool,
 ) -> ExprCompiledValue {
-    expr!(l, r, |eval| {
+    expr!("compare", l, r, |eval| {
         Value::new_bool(cmp(throw(l.compare(r), span, eval)?))
     })
 }
@@ -65,7 +65,7 @@ fn eval_equals(
     r: ExprCompiledValue,
     cmp: fn(bool) -> bool,
 ) -> ExprCompiledValue {
-    expr!(l, r, |eval| {
+    expr!("equals", l, r, |eval| {
         Value::new_bool(cmp(throw(l.equals(r), span, eval)?))
     })
 }
@@ -80,7 +80,7 @@ fn eval_slice(
     let start = start.map(ExprCompiledValue::as_compiled);
     let stop = stop.map(ExprCompiledValue::as_compiled);
     let stride = stride.map(ExprCompiledValue::as_compiled);
-    expr!(collection, |eval| {
+    expr!("slice", collection, |eval| {
         let start = match start {
             Some(ref e) => Some(e(eval)?),
             None => None,
@@ -357,12 +357,20 @@ impl Compiler<'_> {
                     Some(Slot::Local(slot)) => {
                         // We can't look up the local variabless in advance, because they are different each time
                         // we go through a new function call.
-                        expr!(|eval| throw(eval.get_slot_local(slot, &name), span, eval)?)
+                        expr!("local", |eval| throw(
+                            eval.get_slot_local(slot, &name),
+                            span,
+                            eval
+                        )?)
                     }
                     Some(Slot::Module(slot)) => {
                         // We can't look up the module variables in advance because the first time around they are
                         // mutables, but after freezing they point at a different set of frozen slots.
-                        expr!(|eval| throw(eval.get_slot_module(slot), span, eval)?)
+                        expr!("module", |eval| throw(
+                            eval.get_slot_module(slot),
+                            span,
+                            eval
+                        )?)
                     }
                     None => {
                         // Must be a global, since we know all variables
@@ -402,28 +410,32 @@ impl Compiler<'_> {
                     value!(result)
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());
-                    expr!(|eval| eval.heap().alloc(Tuple::new(xs.try_map(|x| x(eval))?)))
+                    expr!("tuple", |eval| eval
+                        .heap()
+                        .alloc(Tuple::new(xs.try_map(|x| x(eval))?)))
                 }
             }
             Expr::List(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.is_empty() {
-                    expr!(|eval| eval.heap().alloc(List::default()))
+                    expr!("list_empty", |eval| eval.heap().alloc(List::default()))
                 } else if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    expr!(|eval| {
+                    expr!("list_static", |eval| {
                         let content = coerce_ref(&content).clone();
                         eval.heap().alloc(List::new(content))
                     })
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());
-                    expr!(|eval| eval.heap().alloc(List::new(xs.try_map(|x| x(eval))?)))
+                    expr!("list", |eval| eval
+                        .heap()
+                        .alloc(List::new(xs.try_map(|x| x(eval))?)))
                 }
             }
             Expr::Dict(exprs) => {
                 let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
                 if xs.is_empty() {
-                    return expr!(|eval| eval.heap().alloc(Dict::default()));
+                    return expr!("dict_empty", |eval| eval.heap().alloc(Dict::default()));
                 }
                 if xs.iter().all(|(k, _)| k.as_value().is_some()) {
                     if xs.iter().all(|(_, v)| v.as_value().is_some()) {
@@ -441,7 +453,7 @@ impl Compiler<'_> {
                         // path and go down the slow runtime path (which will raise the error).
                         // We have a lint that will likely fire on this issue (and others).
                         if res.len() == xs.len() {
-                            return expr!(|eval| {
+                            return expr!("dict_static", |eval| {
                                 let res = coerce_ref(&res).clone();
                                 eval.heap().alloc(Dict::new(res))
                             });
@@ -458,7 +470,7 @@ impl Compiler<'_> {
                                 v.as_compiled(),
                             )
                         });
-                        return expr!(|eval| {
+                        return expr!("dict_static_key", |eval| {
                             let mut r = SmallMap::with_capacity(xs.len());
                             for (k, v) in &xs {
                                 if r.insert_hashed(k.to_hashed_value(), v(eval)?).is_some() {
@@ -476,7 +488,7 @@ impl Compiler<'_> {
                 }
 
                 let xs = xs.into_map(|(k, v)| (k.as_compiled(), v.as_compiled()));
-                expr!(|eval| {
+                expr!("dict", |eval| {
                     let mut r = SmallMap::with_capacity(xs.len());
                     for (k, v) in &xs {
                         let k = k(eval)?;
@@ -495,7 +507,7 @@ impl Compiler<'_> {
                 let cond = self.expr(cond);
                 let then_expr = self.expr(then_expr).as_compiled();
                 let else_expr = self.expr(else_expr).as_compiled();
-                expr!(cond, |eval| {
+                expr!("if_expr", cond, |eval| {
                     if cond.to_bool() {
                         then_expr(eval)?
                     } else {
@@ -506,7 +518,7 @@ impl Compiler<'_> {
             Expr::Dot(left, right) => {
                 let left = self.expr(*left);
                 let s = right.node;
-                expr!(left, |eval| {
+                expr!("dot", left, |eval| {
                     let (attr_type, v) = throw(left.get_attr_error(&s, eval.heap()), span, eval)?;
                     if attr_type == AttrType::Field {
                         v
@@ -525,7 +537,7 @@ impl Compiler<'_> {
                         let e = self.expr(e);
                         args!(
                             args,
-                            expr!(e, |eval| {
+                            expr!("call_method", e, |eval| {
                                 // We don't need to worry about whether it's an attribute, method or field
                                 // since those that don't want the `this` just ignore it
                                 let fun =
@@ -543,7 +555,7 @@ impl Compiler<'_> {
                                 if self.constants.fn_type == v && args.is_one_pos() =>
                             {
                                 let x = args.pos_named.pop().unwrap();
-                                expr!(|eval| {
+                                expr!("type", |eval| {
                                     x(eval)?.get_aref().get_type_value().unpack().to_value()
                                 })
                             }
@@ -555,11 +567,11 @@ impl Compiler<'_> {
                                 // and we'd not get entries on the call stack, which would be bad.
                                 // But `len()` is super common, and no one expects it to call other functions,
                                 // so let's just ignore that corner case for additional perf.
-                                expr!(|eval| Value::new_int(x(eval)?.length()?))
+                                expr!("len", |eval| Value::new_int(x(eval)?.length()?))
                             }
                             _ => args!(
                                 args,
-                                expr!(left, |eval| {
+                                expr!("call", left, |eval| {
                                     args.with_params(None, eval, |params, eval| {
                                         throw(left.invoke(Some(span), params, eval), span, eval)
                                     })?
@@ -572,7 +584,7 @@ impl Compiler<'_> {
             Expr::ArrayIndirection(box (array, index)) => {
                 let array = self.expr(array);
                 let index = self.expr(index);
-                expr!(array, index, |eval| {
+                expr!("index", array, index, |eval| {
                     throw(array.at(index, eval.heap()), span, eval)?
                 })
             }
@@ -585,12 +597,16 @@ impl Compiler<'_> {
             }
             Expr::Not(expr) => {
                 let expr = self.expr(*expr);
-                expr!(expr, |_eval| Value::new_bool(!expr.to_bool()))
+                expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool()))
             }
             Expr::Minus(expr) => match expr.unpack_int_literal().and_then(i32::checked_neg) {
                 None => {
                     let expr = self.expr(*expr);
-                    expr!(expr, |eval| throw(expr.minus(eval.heap()), span, eval)?)
+                    expr!("minus", expr, |eval| throw(
+                        expr.minus(eval.heap()),
+                        span,
+                        eval
+                    )?)
                 }
                 Some(x) => {
                     value!(FrozenValue::new_int(x))
@@ -599,7 +615,11 @@ impl Compiler<'_> {
             Expr::Plus(expr) => match expr.unpack_int_literal() {
                 None => {
                     let expr = self.expr(*expr);
-                    expr!(expr, |eval| throw(expr.plus(eval.heap()), span, eval)?)
+                    expr!("plus", expr, |eval| throw(
+                        expr.plus(eval.heap()),
+                        span,
+                        eval
+                    )?)
                 }
                 Some(x) => {
                     value!(FrozenValue::new_int(x))
@@ -607,7 +627,7 @@ impl Compiler<'_> {
             },
             Expr::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                expr!(expr, |_eval| Value::new_int(!expr.to_int()?))
+                expr!("bit_not", expr, |_eval| Value::new_int(!expr.to_int()?))
             }
             Expr::Op(left, op, right) => {
                 if let Some(x) = Expr::reduces_to_string(op, &left, &right) {
@@ -619,13 +639,13 @@ impl Compiler<'_> {
                     match op {
                         BinOp::Or => {
                             let r = r.as_compiled();
-                            expr!(l, |eval| {
+                            expr!("or", l, |eval| {
                                 if l.to_bool() { l } else { r(eval)? }
                             })
                         }
                         BinOp::And => {
                             let r = r.as_compiled();
-                            expr!(l, |eval| {
+                            expr!("and", l, |eval| {
                                 if !l.to_bool() { l } else { r(eval)? }
                             })
                         }
@@ -635,16 +655,20 @@ impl Compiler<'_> {
                         BinOp::Greater => eval_compare(span, l, r, |x| x == Ordering::Greater),
                         BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
                         BinOp::GreaterOrEqual => eval_compare(span, l, r, |x| x != Ordering::Less),
-                        BinOp::In => expr!(r, l, |eval| {
+                        BinOp::In => expr!("in", r, l, |eval| {
                             throw(r.is_in(l).map(Value::new_bool), span, eval)?
                         }),
-                        BinOp::NotIn => expr!(r, l, |eval| {
+                        BinOp::NotIn => expr!("not_in", r, l, |eval| {
                             throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
                         }),
                         BinOp::Subtract => {
-                            expr!(l, r, |eval| throw(l.sub(r, eval.heap()), span, eval)?)
+                            expr!("subtract", l, r, |eval| throw(
+                                l.sub(r, eval.heap()),
+                                span,
+                                eval
+                            )?)
                         }
-                        BinOp::Add => expr!(l, r, |eval| {
+                        BinOp::Add => expr!("add", l, r, |eval| {
                             // Addition of string is super common and pretty cheap, so have a special case for it.
                             if let Some(ls) = l.unpack_str() {
                                 if let Some(rs) = r.unpack_str() {
@@ -662,28 +686,40 @@ impl Compiler<'_> {
                             throw(Value::add(l, r, eval.heap()), span, eval)?
                         }),
                         BinOp::Multiply => {
-                            expr!(l, r, |eval| throw(l.mul(r, eval.heap()), span, eval)?)
+                            expr!("multiply", l, r, |eval| throw(
+                                l.mul(r, eval.heap()),
+                                span,
+                                eval
+                            )?)
                         }
-                        BinOp::Percent => expr!(l, r, |eval| {
+                        BinOp::Percent => expr!("percent", l, r, |eval| {
                             throw(l.percent(r, eval.heap()), span, eval)?
                         }),
-                        BinOp::FloorDivide => expr!(l, r, |eval| {
+                        BinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
                             throw(l.floor_div(r, eval.heap()), span, eval)?
                         }),
                         BinOp::BitAnd => {
-                            expr!(l, r, |eval| throw(l.bit_and(r), span, eval)?)
+                            expr!("bit_and", l, r, |eval| throw(l.bit_and(r), span, eval)?)
                         }
                         BinOp::BitOr => {
-                            expr!(l, r, |eval| throw(l.bit_or(r), span, eval)?)
+                            expr!("bit_or", l, r, |eval| throw(l.bit_or(r), span, eval)?)
                         }
                         BinOp::BitXor => {
-                            expr!(l, r, |eval| throw(l.bit_xor(r), span, eval)?)
+                            expr!("bit_xor", l, r, |eval| throw(l.bit_xor(r), span, eval)?)
                         }
                         BinOp::LeftShift => {
-                            expr!(l, r, |eval| throw(l.left_shift(r), span, eval)?)
+                            expr!("left_shift", l, r, |eval| throw(
+                                l.left_shift(r),
+                                span,
+                                eval
+                            )?)
                         }
                         BinOp::RightShift => {
-                            expr!(l, r, |eval| throw(l.right_shift(r), span, eval)?)
+                            expr!("right_shift", l, r, |eval| throw(
+                                l.right_shift(r),
+                                span,
+                                eval
+                            )?)
                         }
                     }
                 }
