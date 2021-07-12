@@ -17,30 +17,27 @@
 
 macro_rules! expr {
     ($name:expr, |$eval:ident| $body:expr) => {{
-        let _: &'static str = $name;
         #[allow(clippy::needless_question_mark)]
-        let res: ExprCompiled = box move |$eval| Ok($body);
+        let res: ExprCompiled = box move |$eval| $eval.ann($name, |$eval| Ok($body));
         ExprCompiledValue::Compiled(res)
     }};
     ($name:expr, $v1:ident, |$eval:ident| $body:expr) => {{
-        let _: &'static str = $name;
         let $v1 = $v1.as_compiled();
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| {
             let $v1 = $v1($eval)?;
-            Ok($body)
+            $eval.ann($name, |$eval| Ok($body))
         };
         ExprCompiledValue::Compiled(res)
     }};
     ($name:expr, $v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
-        let _: &'static str = $name;
         let $v1 = $v1.as_compiled();
         let $v2 = $v2.as_compiled();
         #[allow(clippy::needless_question_mark)]
         let res: ExprCompiled = box move |$eval| {
             let $v1 = $v1($eval)?;
             let $v2 = $v2($eval)?;
-            Ok($body)
+            $eval.ann($name, |$eval| Ok($body))
         };
         ExprCompiledValue::Compiled(res)
     }};
@@ -54,12 +51,13 @@ macro_rules! value {
 
 macro_rules! stmt {
     ($name:expr, $span:ident, |$eval:ident| $body:expr) => {{
-        let _: &'static str = $name;
         box move |$eval| {
-            before_stmt($span, $eval);
-            $body;
-            #[allow(unreachable_code)]
-            Ok(())
+            $eval.ann($name, |$eval| {
+                before_stmt($span, $eval);
+                $body;
+                #[allow(unreachable_code)]
+                Ok(())
+            })
         }
     }};
 }

@@ -107,6 +107,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         body,
     } = x;
     let name_str = ident_string(&name);
+    let native_name_str = format!("native_{}", name_str);
     let bind_args = args.map(bind_argument);
 
     let setter = if let Some(typ) = type_attribute {
@@ -145,8 +146,10 @@ fn render_fun(x: StarFun) -> TokenStream {
             ) -> anyhow::Result<#return_type> {
                 #[allow(unused_variables)]
                 let heap = eval.heap();
-                #( #bind_args )*
-                #body
+                eval.ann(#native_name_str, |eval| {
+                    #( #bind_args )*
+                    #body
+                })
             }
             match inner(eval, this, starlark_args) {
                 Ok(v) => Ok(eval.heap().alloc(v)),

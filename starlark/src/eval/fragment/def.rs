@@ -286,9 +286,13 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let slots = self.stmt.scope_names.used;
-        let slots = self.parameters.promote().collect(slots, params, eval)?;
-        eval.with_call_stack(me, location, |eval| self.invoke_raw(slots, eval))
+        eval.ann("invoke_frozen_def", |eval| {
+            let slots = self.stmt.scope_names.used;
+            let slots = self.parameters.promote().collect(slots, params, eval)?;
+            eval.with_call_stack(me, location, |eval| {
+                eval.ann("invoke_frozen_def_raw", |eval| self.invoke_raw(slots, eval))
+            })
+        })
     }
 }
 
@@ -306,9 +310,13 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let slots = self.stmt.scope_names.used;
-        let slots = self.parameters.collect(slots, params, eval)?;
-        eval.with_call_stack(me, location, |eval| self.invoke_raw(slots, eval))
+        eval.ann("invoke_def", |eval| {
+            let slots = self.stmt.scope_names.used;
+            let slots = self.parameters.collect(slots, params, eval)?;
+            eval.with_call_stack(me, location, |eval| {
+                eval.ann("invoke_def_raw", |eval| self.invoke_raw(slots, eval))
+            })
+        })
     }
 }
 

@@ -138,13 +138,15 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let this = params.this;
-        let slots = self.parameters.promote().collect(0, params, eval)?;
-        eval.with_call_stack(me, location, |eval| {
-            let parser = ParametersParser::new(slots);
-            let res = (self.function)(eval, this, parser);
-            eval.local_variables.release_after(slots);
-            res
+        eval.ann("invoke_native", |eval| {
+            let this = params.this;
+            let slots = self.parameters.promote().collect(0, params, eval)?;
+            eval.with_call_stack(me, location, |eval| {
+                let parser = ParametersParser::new(slots);
+                let res = (self.function)(eval, this, parser);
+                eval.local_variables.release_after(slots);
+                res
+            })
         })
     }
 
