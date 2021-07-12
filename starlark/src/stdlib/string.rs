@@ -23,8 +23,8 @@ use crate::{
     environment::GlobalsBuilder,
     stdlib::util::convert_indices,
     values::{
-        fast_string, interpolation, list::List, none::NoneOr, string, UnpackValue, Value,
-        ValueError,
+        fast_string, interpolation, list::List, none::NoneOr, string, tuple::Tuple, UnpackValue,
+        Value, ValueError,
     },
 };
 use anyhow::anyhow;
@@ -95,7 +95,12 @@ impl<'v> UnpackValue<'v> for StringOrTuple<'v> {
         if let Some(s) = value.unpack_str() {
             Some(Self::String(s))
         } else {
-            Some(Self::Tuple(UnpackValue::unpack_value(value)?))
+            Some(Self::Tuple(
+                Tuple::from_value(value)?
+                    .iter()
+                    .map(|x| x.unpack_str())
+                    .collect::<Option<_>>()?,
+            ))
         }
     }
 }
@@ -1025,6 +1030,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "filename.sky".startswith("filename") == True
+    /// "filename.sky".startswith("sky") == False
+    /// 'abc'.startswith(('a', 'A')) == True
+    /// 'ABC'.startswith(('a', 'A')) == True
+    /// 'def'.startswith(('a', 'A')) == False
     /// # "#);
     /// ```
     fn startswith(this: &str, ref prefix: StringOrTuple) -> bool {
