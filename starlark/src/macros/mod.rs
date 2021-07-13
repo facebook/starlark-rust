@@ -43,6 +43,9 @@ macro_rules! starlark_complex_value {
             $crate::__macro_refs::any_lifetime!($x<'v>);
             $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
 
+            // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
+            unsafe impl<'v> $crate::__macro_refs::Coerce<$x<'v>> for [< Frozen $x >] {}
+
             impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
                     heap.alloc_complex(self)
@@ -65,18 +68,12 @@ macro_rules! starlark_complex_value {
 
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
-                    fn promote<'v>(x: & [< Frozen $x >]) -> & $x<'v> {
-                        unsafe {
-                            // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
-                            &*(x as *const [< Frozen $x >] as *const $x)
-                        }
-                    }
-
                     let aref = $crate::values::ARef::map(x.get_aref(), |e| e.as_dyn_any());
                     match $crate::values::ARef::filter_map(aref, |e| e.downcast_ref::< $x<'v> >()) {
                         Ok(res) => Some(res),
                         Err(aref) => {
-                            $crate::values::ARef::filter_map(aref, |e| e.downcast_ref::< [< Frozen $x >] >().map(promote)).ok()
+                            $crate::values::ARef::filter_map(aref,
+                                |e| e.downcast_ref::< [< Frozen $x >] >().map($crate::__macro_refs::coerce_ref)).ok()
                         }
                     }
                 }
