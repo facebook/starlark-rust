@@ -34,8 +34,8 @@ use crate::{
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
-        function::FUNCTION_TYPE, typing::TypeCompiled, AllocValue, ComplexValue, Freezer,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike, ValueRef,
+        function::FUNCTION_TYPE, typing::TypeCompiled, ComplexValue, Freezer, FrozenValue,
+        SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike, ValueRef,
     },
 };
 use derivative::Derivative;
@@ -191,8 +191,7 @@ pub(crate) struct DefGen<V, RefV> {
 pub(crate) type Def<'v> = DefGen<Value<'v>, ValueRef<'v>>;
 pub(crate) type FrozenDef = DefGen<FrozenValue, Option<FrozenValue>>;
 
-any_lifetime!(Def<'v>);
-any_lifetime!(FrozenDef);
+starlark_complex_values!(Def);
 
 impl<'v> Def<'v> {
     fn new(
@@ -224,8 +223,6 @@ impl<T1, T2> DefGen<T1, T2> {
         &self.stmt.scope_names
     }
 }
-
-impl SimpleValue for FrozenDef {}
 
 unsafe impl<'v> Trace<'v> for Def<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
@@ -261,12 +258,6 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             captured,
             module: Some(FrozenModuleValue::new(freezer)),
         })
-    }
-}
-
-impl<'v> AllocValue<'v> for Def<'v> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(self)
     }
 }
 
