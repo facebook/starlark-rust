@@ -58,12 +58,6 @@ macro_rules! starlark_complex_value {
                 }
             }
 
-            impl<'v> $crate::values::AllocValue<'v> for [< Frozen $x >] {
-                fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
-                    heap.alloc_simple(self)
-                }
-            }
-
             impl $crate::values::SimpleValue for [< Frozen $x >] {}
 
             impl<'v> $x<'v> {
