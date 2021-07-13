@@ -544,6 +544,13 @@ impl FrozenValue {
             .downcast_ref::<T>()
             .map(|t| FrozenRef { value: t })
     }
+
+    /// Note: see docs about ['Value::unpack_box_str'] about instability
+    pub fn downcast_frozen_str(self) -> Option<FrozenRef<Box<str>>> {
+        self.to_value().unpack_box_str().map(|s| FrozenRef {
+            value: unsafe { transmute!(&Box<str>, &'static Box<str>, s) },
+        })
+    }
 }
 
 mod std_traits {
