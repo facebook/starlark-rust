@@ -525,6 +525,18 @@ pub struct FrozenRef<T: 'static + ?Sized> {
     value: &'static T,
 }
 
+impl<T: 'static + ?Sized> FrozenRef<T> {
+    /// Converts `self` into a new reference that points at something reachable from the previous.
+    pub fn map<F, U: 'static + ?Sized>(self, f: F) -> FrozenRef<U>
+    where
+        for<'v> F: FnOnce(&'v T) -> &'v U,
+    {
+        FrozenRef {
+            value: f(self.value),
+        }
+    }
+}
+
 impl FrozenValue {
     pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
         self.get_ref::<'static>()
