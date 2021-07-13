@@ -62,13 +62,10 @@ macro_rules! starlark_complex_value {
 
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
-                    let aref = $crate::values::ARef::map(x.get_aref(), |e| e.as_dyn_any());
-                    match $crate::values::ARef::filter_map(aref, |e| e.downcast_ref::< $x<'v> >()) {
-                        Ok(res) => Some(res),
-                        Err(aref) => {
-                            $crate::values::ARef::filter_map(aref,
-                                |e| e.downcast_ref::< [< Frozen $x >] >().map($crate::__macro_refs::coerce_ref)).ok()
-                        }
+                    if x.unpack_frozen().is_some() {
+                        x.downcast_ref::< [< Frozen $x >] >().map(|x| $crate::values::ARef::map(x, $crate::__macro_refs::coerce_ref))
+                    } else {
+                        x.downcast_ref::< $x<'v> >()
                     }
                 }
 
