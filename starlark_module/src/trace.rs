@@ -27,15 +27,23 @@ pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let tick_v = GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'v", Span::call_site())));
 
     let bound: TypeParamBound = parse_quote!(starlark::values::Trace<'v>);
+    let mut has_tick_v = false;
     for param in &mut input.generics.params {
-        if let GenericParam::Type(ref mut type_param) = *param {
+        if let GenericParam::Type(type_param) = param {
             type_param.bounds.push(bound.clone());
+        }
+        if let GenericParam::Lifetime(t) = param {
+            if t.lifetime.ident == "v" {
+                has_tick_v = true;
+            }
         }
     }
     let mut generics2 = input.generics.clone();
 
     let (_, ty_generics, where_clause) = input.generics.split_for_impl();
-    generics2.params.insert(0, tick_v);
+    if !has_tick_v {
+        generics2.params.insert(0, tick_v);
+    }
     let (impl_generics, _, _) = generics2.split_for_impl();
 
     let name = &input.ident;
