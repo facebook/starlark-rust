@@ -721,4 +721,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     fn right_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, ">>", other)
     }
+
+    /// Called when exporting a value under a specific name,
+    /// only used for things that are not [`ComplexValue`] or return [`false`] for [`is_mutable()`](ComplexValue::is_mutable).
+    fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
+        // Most data types ignore how they are exported
+        // but rules/providers like to use it as a helpful hint for users
+    }
 }

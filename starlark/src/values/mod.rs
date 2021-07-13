@@ -413,7 +413,9 @@ impl<'v> Value<'v> {
     /// Otherwise, does nothing.
     pub fn export_as(self, variable_name: &str, eval: &mut Evaluator<'v, '_>) {
         if let Some(mut mv) = self.get_ref_mut_opt() {
-            mv.export_as(variable_name, eval)
+            ComplexValue::export_as(&mut *mv, variable_name, eval)
+        } else {
+            StarlarkValue::export_as(&*self.get_aref(), variable_name, eval)
         }
     }
 
