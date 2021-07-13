@@ -40,6 +40,7 @@ use crate::{
 };
 use gazebo::any::AnyLifetime;
 use std::{
+    cell::RefCell,
     cmp::Ordering,
     fmt::{Debug, Write},
 };
@@ -114,6 +115,12 @@ unsafe impl<'v, T: Trace<'v>> Trace<'v> for Option<T> {
         if let Some(x) = self {
             x.trace(tracer)
         }
+    }
+}
+
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for RefCell<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.get_mut().trace(tracer)
     }
 }
 
