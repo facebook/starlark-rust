@@ -243,6 +243,12 @@ unsafe impl<'v> Trace<'v> for bool {
 /// To enable mutability return [`true`] from [`is_mutable`](ComplexValue::is_mutable),
 /// then the `from_value_mut` function will work.
 ///
+/// ## Different types
+///
+/// If the types are different between the frozen and non-frozen values you can define your own
+/// type specialisations as `type One<'v> = OneGen<Value<'v>>` and `type FrozenOne = OneGen<String>`
+/// and use [`starlark_complex_values!`] which will provide similar facilities to [`starlark_complex_value!`].
+///
 /// ## Other types
 ///
 /// The macro [`starlark_complex_value!`] is applicable when there is a single base type,

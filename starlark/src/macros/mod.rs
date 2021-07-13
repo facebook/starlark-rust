@@ -86,6 +86,45 @@ macro_rules! starlark_complex_value {
     };
 }
 
+/// Reduce boilerplate when making types instances of [`ComplexValue`](crate::values::ComplexValue)
+/// - see the [`ComplexValue`](crate::values::ComplexValue) docs for an example.
+#[macro_export]
+macro_rules! starlark_complex_values {
+    ($x:ident) => {
+        $crate::__macro_refs::item! {
+            $crate::__macro_refs::any_lifetime!($x<'v>);
+            $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
+
+            impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
+                fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
+                    heap.alloc_complex(self)
+                }
+            }
+
+            impl $crate::values::AllocFrozenValue for [< Frozen $x >] {
+                fn alloc_frozen_value(self, heap: &$crate::values::FrozenHeap) -> $crate::values::FrozenValue {
+                    heap.alloc_simple(self)
+                }
+            }
+
+            impl $crate::values::SimpleValue for [< Frozen $x >] {}
+
+            impl<'v> $x<'v> {
+                #[allow(dead_code)]
+                fn from_value(
+                    x: $crate::values::Value<'v>,
+                ) -> Option<$crate::__macro_refs::Either<$crate::values::ARef<'v, Self>, $crate::values::ARef<'v, [< Frozen $x >]>>> {
+                    if x.unpack_frozen().is_some() {
+                        x.downcast_ref().map($crate::__macro_refs::Either::Right)
+                    } else {
+                        x.downcast_ref().map($crate::__macro_refs::Either::Left)
+                    }
+                }
+            }
+        }
+    };
+}
+
 /// Reduce boilerplate when making types instances of [`SimpleValue`](crate::values::SimpleValue)
 /// - see the [`SimpleValue`](crate::values::SimpleValue) docs for an example.
 #[macro_export]
