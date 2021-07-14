@@ -149,6 +149,10 @@ unsafe impl<'v> Trace<'v> for String {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 
+unsafe impl<'v> Trace<'v> for usize {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
 unsafe impl<'v> Trace<'v> for i32 {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
