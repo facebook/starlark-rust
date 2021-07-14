@@ -24,13 +24,12 @@ use crate::values::{
         arena::Arena,
         pointer::Pointer,
         value::{FrozenValue, FrozenValueMem, Value, ValueMem},
-        ValueRef,
     },
-    AllocFrozenValue, ComplexValue, SimpleValue,
+    AllocFrozenValue, ComplexValue, SimpleValue, Trace,
 };
 use gazebo::{cast, prelude::*};
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     collections::HashSet,
     fmt,
     fmt::{Debug, Formatter},
@@ -322,16 +321,6 @@ pub struct Tracer<'v> {
 }
 
 impl<'v> Tracer<'v> {
-    // These references might be shared by multiple people, so important we only GC
-    // them once per trace, or we move them twice
-    pub(crate) fn trace_ref(&self, value: &ValueRef<'v>) {
-        self.trace_cell(&value.0)
-    }
-
-    fn trace_cell(&self, value: &Cell<Option<Value<'v>>>) {
-        value.set(value.get().map(|x| self.adjust(x)))
-    }
-
     /// Walk over a value during garbage collection.
     pub fn trace(&self, value: &mut Value<'v>) {
         *value = self.adjust(*value)
@@ -371,7 +360,7 @@ impl<'v> Tracer<'v> {
         let mut old_mem = unsafe { ptr::replace(old_mem, ValueMem::Copied(new_val)) };
 
         match &mut old_mem {
-            ValueMem::Ref(x) => self.trace_cell(x),
+            ValueMem::Ref(x) => x.trace(self),
             ValueMem::Mutable(x) => x.borrow_mut().trace(self),
             ValueMem::Immutable(x) => x.trace(self),
             _ => {} // Doesn't contain Value pointers

@@ -29,6 +29,7 @@
 // our val_ref requires a pointer to the value. We need to put that pointer
 // somewhere. The solution is to have a separate value storage vs vtable.
 
+use crate as starlark;
 use crate::values::{
     layout::{
         heap::{Freezer, Heap},
@@ -36,7 +37,7 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    ComplexValue, SimpleValue, StarlarkValue, Trace, Tracer, ValueError,
+    ComplexValue, SimpleValue, StarlarkValue, Trace, ValueError,
 };
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -67,7 +68,7 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 /// to indicate whether a value is a `Ref` (and must be dereffed a lot),
 /// or just a normal `Value` (much cheaper).
 /// A normal `Value` cannot be `ValueMem::Ref`, but this one might be.
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
@@ -432,12 +433,6 @@ impl FrozenValue {
             PointerUnpack::Bool(false) => &VALUE_FALSE,
             PointerUnpack::Int(x) => PointerI32::new(x),
         }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for ValueRef<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace_ref(self)
     }
 }
 
