@@ -311,7 +311,7 @@ impl ArgsCompiled {
                 this,
                 pos,
                 named,
-                names: Parameters::promote_names(&self.names),
+                names: coerce_ref(&self.names),
                 args,
                 kwargs,
             };
