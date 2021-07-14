@@ -93,9 +93,7 @@ pub struct Evaluator<'v, 'a> {
 unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         let mut roots = self.module_env.slots().get_slots_mut();
-        for x in roots.iter_mut() {
-            tracer.trace_opt(x);
-        }
+        roots.trace(tracer);
         self.local_variables.trace(tracer);
         self.call_stack.trace(tracer);
     }

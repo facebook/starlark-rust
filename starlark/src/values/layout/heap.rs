@@ -328,13 +328,6 @@ impl<'v> Tracer<'v> {
         self.trace_cell(&value.0)
     }
 
-    /// Walk over an optional value during garbage collection.
-    pub fn trace_opt(&self, value: &mut Option<Value<'v>>) {
-        if let Some(d) = value {
-            self.trace(d)
-        }
-    }
-
     fn trace_cell(&self, value: &Cell<Option<Value<'v>>>) {
         value.set(value.get().map(|x| self.adjust(x)))
     }
