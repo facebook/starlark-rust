@@ -86,7 +86,7 @@ fn skip_at_most_1byte(x: &str, n: usize) -> usize {
 
 /// Find the character at position `i`.
 pub fn at(x: &str, i: usize) -> Option<char> {
-    let n = skip_at_most_1byte(x, i);
+    let n = skip_at_most_1byte(x, min(i, x.len()));
     let s = unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) };
     s.chars().nth(i - n)
 }

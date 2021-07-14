@@ -1799,6 +1799,12 @@ assert_eq(len(count), 1)
 }
 
 #[test]
+fn test_string_corruption() {
+    assert::fail("'U4V6'[93]", "out of bound");
+    assert::fail("''[2]", "out of bound");
+}
+
+#[test]
 fn test_joe() {
     // Based on discussions at https://github.com/facebookexperimental/starlark-rust/issues/22
     let code = r#"
