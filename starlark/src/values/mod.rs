@@ -23,7 +23,7 @@
 //!   Starlark. When frozen, they become [`FrozenValue`].
 //! * Values are garbage-collected, so a given [`Value`] lives on a [`Heap`].
 //! * Rust values (e.g. [`String`], [`Vec`]) can be added to the [`Heap`] with [`AllocValue`],
-//!   and deconstructed from a [`Value`] with
+//!   and deconstructed from a [`Value`] with [`FromValue`] (or specialised methods like [`unpack_str`](Value::unpack_str)).
 //! * To define your own Rust data type that can live in a [`Value`] it must implement the [`StarlarkValue`]
 //!   trait.
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
