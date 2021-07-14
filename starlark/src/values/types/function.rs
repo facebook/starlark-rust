@@ -33,11 +33,7 @@ pub const FUNCTION_TYPE: &str = "function";
 
 /// A native function that can be evaluated.
 pub trait NativeFunc:
-    for<'v> Fn(
-        &mut Evaluator<'v, '_>,
-        Option<Value<'v>>,
-        ParametersParser,
-    ) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, Parameters<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -45,11 +41,7 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(
-            &mut Evaluator<'v, '_>,
-            Option<Value<'v>>,
-            ParametersParser,
-        ) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(&mut Evaluator<'v, '_>, Parameters<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -79,7 +71,6 @@ pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
     function: Box<dyn NativeFunc>,
     name: String,
-    parameters: ParametersSpec<FrozenValue>,
     typ: Option<FrozenValue>,
 }
 
@@ -90,10 +81,26 @@ impl AllocFrozenValue for NativeFunction {
 }
 
 impl NativeFunction {
+    /// Create a new [`NativeFunction`] from the Rust function which works directly on the parameters.
+    /// The called function is responsible for validating the parameters are correct.
+    pub fn new_direct<F>(function: F, name: String) -> Self
+    where
+        // If I switch this to the trait alias then it fails to resolve the usages
+        F: for<'v> Fn(&mut Evaluator<'v, '_>, Parameters<'v, '_>) -> anyhow::Result<Value<'v>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        NativeFunction {
+            function: box function,
+            name,
+            typ: None,
+        }
+    }
+
     /// Create a new [`NativeFunction`] from the Rust function, plus the parameter specification.
     pub fn new<F>(function: F, name: String, parameters: ParametersSpec<FrozenValue>) -> Self
     where
-        // If I switch this to the trait alias then it fails to resolve the usages
         F: for<'v> Fn(
                 &mut Evaluator<'v, '_>,
                 Option<Value<'v>>,
@@ -104,9 +111,15 @@ impl NativeFunction {
             + 'static,
     {
         NativeFunction {
-            function: box function,
+            function: box move |eval, params| {
+                let this = params.this;
+                let slots = parameters.promote().collect(0, params, eval)?;
+                let parser = ParametersParser::new(slots);
+                let res = function(eval, this, parser);
+                eval.local_variables.release_after(slots);
+                res
+            },
             name,
-            parameters,
             typ: None,
         }
     }
@@ -141,14 +154,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         eval.ann("invoke_native", |eval| {
-            let this = params.this;
-            let slots = self.parameters.promote().collect(0, params, eval)?;
-            eval.with_call_stack(me, location, |eval| {
-                let parser = ParametersParser::new(slots);
-                let res = (self.function)(eval, this, parser);
-                eval.local_variables.release_after(slots);
-                res
-            })
+            eval.with_call_stack(me, location, |eval| (self.function)(eval, params))
         })
     }
 
