@@ -43,18 +43,18 @@ pub enum ValueError {
     IndexOutOfBound(i32),
     #[error("Key `{0}` was not found")]
     KeyNotFound(String),
+    #[error("Immutable")]
+    CannotMutateImmutableValue,
+    #[error("This operation mutate an iterable for an iterator while iterating.")]
+    MutationDuringIteration,
 }
 
 #[derive(Debug, Error)]
 pub(crate) enum ControlError {
-    #[error("Immutable")]
-    CannotMutateImmutableValue,
     #[error("Value of type `{0}` is not hashable")]
     NotHashableValue(String),
     #[error("Too many recursion levels")]
     TooManyRecursionLevel,
-    #[error("This operation mutate an iterable for an iterator while iterating.")]
-    MutationDuringIteration,
 }
 
 impl ValueError {

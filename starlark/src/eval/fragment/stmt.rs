@@ -33,7 +33,7 @@ use crate::{
     values::{
         fast_string,
         list::{FrozenList, List},
-        ControlError, Heap, Trace, Value,
+        Heap, Trace, Value, ValueError,
     },
 };
 use anyhow::anyhow;
@@ -283,7 +283,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
         mem::drop(lhs_aref);
         // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
         let mut list = List::from_value_mut(lhs)?
-            .ok_or_else(|| anyhow!(ControlError::CannotMutateImmutableValue))?;
+            .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
         if lhs.ptr_eq(rhs) {
             list.content.extend_from_within(..);
         } else {

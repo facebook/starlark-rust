@@ -36,7 +36,7 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    ComplexValue, ControlError, SimpleValue, StarlarkValue, Trace, Tracer,
+    ComplexValue, SimpleValue, StarlarkValue, Trace, Tracer, ValueError,
 };
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -176,10 +176,10 @@ impl<'v> ValueMem<'v> {
             Self::Mutable(x) => match x.try_borrow_mut() {
                 // Could be called by something else having the ref locked, but iteration is
                 // definitely most likely
-                Err(_) => Err(ControlError::MutationDuringIteration.into()),
+                Err(_) => Err(ValueError::MutationDuringIteration.into()),
                 Ok(state) => Ok(RefMut::map(state, |x| &mut **x)),
             },
-            _ => Err(ControlError::CannotMutateImmutableValue.into()),
+            _ => Err(ValueError::CannotMutateImmutableValue.into()),
         }
     }
 
@@ -355,7 +355,7 @@ impl<'v> Value<'v> {
         if let Some(x) = self.0.unpack_ptr2() {
             return x.get_ref_mut();
         }
-        Err(ControlError::CannotMutateImmutableValue.into())
+        Err(ValueError::CannotMutateImmutableValue.into())
     }
 
     /// Are two [`Value`]s equal, looking at only their underlying pointer. This function is
