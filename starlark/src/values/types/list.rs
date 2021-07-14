@@ -30,7 +30,7 @@ use crate::{
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
-use std::{cmp::Ordering, marker::PhantomData, ops::Deref};
+use std::{cmp, cmp::Ordering, marker::PhantomData, ops::Deref};
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
 #[derive(Clone, Default_, Trace, Debug)]
@@ -48,9 +48,7 @@ starlark_complex_value!(pub List);
 
 impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(List {
-            content: self.into_map(|x| x.alloc_value(heap)),
-        })
+        heap.alloc_complex(List::new(self.into_map(|x| x.alloc_value(heap))))
     }
 }
 
@@ -99,11 +97,6 @@ impl<'v> ComplexValue<'v> for List<'v> {
 }
 
 impl<'v, V: ValueLike<'v>> ListGen<V> {
-    /// Create a new list.
-    pub fn new(content: Vec<V>) -> Self {
-        Self { content }
-    }
-
     /// Obtain the length of the list.
     pub fn len(&self) -> usize {
         self.content.len()
@@ -119,23 +112,22 @@ impl<'v, V: ValueLike<'v>> ListGen<V> {
 }
 
 impl<'v> List<'v> {
+    pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
+        Self { content }
+    }
+
     /// Append a single element to the end of the list.
-    pub fn push(&mut self, value: Value<'v>) {
+    pub(crate) fn push(&mut self, value: Value<'v>) {
         self.content.push(value);
     }
 
-    /// Append a series of elements to the end of the list.
-    pub fn extend(&mut self, other: Vec<Value<'v>>) {
-        self.content.extend(other);
-    }
-
     /// Clear all elements in the list.
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.content.clear();
     }
 
     /// Find the position of a given element in the list.
-    pub fn position(&self, needle: Value<'v>) -> Option<usize> {
+    pub(crate) fn position(&self, needle: Value<'v>) -> Option<usize> {
         self.content.iter().position(|v| v == &needle)
     }
 }
@@ -153,11 +145,8 @@ where
 
     fn collect_repr(&self, s: &mut String) {
         s.push('[');
-        let mut first = true;
-        for v in &self.content {
-            if first {
-                first = false;
-            } else {
+        for (i, v) in self.iter().enumerate() {
+            if i != 0 {
                 s.push_str(", ");
             }
             v.collect_repr(s);
@@ -168,7 +157,7 @@ where
     fn to_json(&self) -> anyhow::Result<String> {
         let mut res = String::new();
         res.push('[');
-        for (i, e) in self.content.iter().enumerate() {
+        for (i, e) in self.iter().enumerate() {
             if i != 0 {
                 res.push_str(", ");
             }
@@ -179,7 +168,7 @@ where
     }
 
     fn to_bool(&self) -> bool {
-        !self.content.is_empty()
+        self.len() != 0
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -202,11 +191,11 @@ where
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(self.content.len() as i32)
+        Ok(self.len() as i32)
     }
 
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        for x in self.content.iter() {
+        for x in self.iter() {
             if x.equals(other)? {
                 return Ok(true);
             }
@@ -223,8 +212,7 @@ where
     ) -> anyhow::Result<Value<'v>> {
         let (start, stop, stride) = convert_slice_indices(self.len() as i32, start, stop, stride)?;
         let vec = tuple::slice_vector(start, stop, stride, self.content.iter());
-
-        Ok(heap.alloc(List { content: vec }))
+        Ok(heap.alloc(List::new(vec)))
     }
 
     fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
@@ -233,16 +221,10 @@ where
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
-            let mut result = List {
-                content: Vec::with_capacity(self.len() + other.len()),
-            };
-            for x in &self.content {
-                result.content.push(x.to_value());
-            }
-            for x in other.iter() {
-                result.content.push(x);
-            }
-            Ok(heap.alloc(result))
+            let mut result = Vec::with_capacity(self.len() + other.len());
+            result.extend(self.iter());
+            result.extend(other.iter());
+            Ok(heap.alloc(List::new(result)))
         } else {
             ValueError::unsupported_with(self, "+", other)
         }
@@ -251,15 +233,11 @@ where
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
-                let mut result = List {
-                    content: Vec::new(),
-                };
-                for _i in 0..l {
-                    result
-                        .content
-                        .extend(self.content.iter().map(|x| ValueLike::to_value(*x)));
+                let mut result = Vec::with_capacity(self.len() * cmp::max(0, l) as usize);
+                for _ in 0..l {
+                    result.extend(self.iter());
                 }
-                Ok(heap.alloc(result))
+                Ok(heap.alloc(List::new(result)))
             }
             None => Err(ValueError::IncorrectParameterType.into()),
         }
