@@ -71,7 +71,17 @@ pub(crate) struct StarArg {
     pub default: Option<Pat>,
 }
 
+impl StarFun {
+    pub fn is_parameters(&self) -> bool {
+        self.args.len() == 1 && self.args[0].is_parameters()
+    }
+}
+
 impl StarArg {
+    pub fn is_parameters(&self) -> bool {
+        is_type_name(&self.ty, "Parameters")
+    }
+
     pub fn is_option(&self) -> bool {
         is_type_name(&self.ty, "Option")
     }

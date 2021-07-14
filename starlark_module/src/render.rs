@@ -96,71 +96,117 @@ fn render_attr(x: StarAttr) -> TokenStream {
 }
 
 fn render_fun(x: StarFun) -> TokenStream {
-    let signature = render_signature(&x);
-
-    let StarFun {
-        name,
-        type_attribute,
-        attrs,
-        args,
-        return_type,
-        body,
-    } = x;
-    let name_str = ident_string(&name);
+    let name_str = ident_string(&x.name);
     let native_name_str = format!("native_{}", name_str);
-    let bind_args = args.map(bind_argument);
 
-    let setter = if let Some(typ) = type_attribute {
+    if x.is_parameters() {
+        let StarFun {
+            name,
+            type_attribute,
+            attrs,
+            args,
+            return_type,
+            body,
+        } = x;
+        let param_name = &args[0].name;
+        let param_type = &args[0].ty;
+        assert!(type_attribute.is_none());
         quote! {
-            static TYPE: starlark::values::ConstFrozenValue =
-                starlark::values::ConstFrozenValue::new(#typ);
-            let signature_str = signature.signature();
-            let mut func = starlark::values::function::NativeFunction::new(#name, signature_str, signature);
-            func.set_type(&TYPE);
-            globals_builder.set(#name_str, func);
+            #( #attrs )*
+            #[allow(non_snake_case)] // Starlark doesn't have this convention
+            fn #name<'v, 'a>(
+                eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                #[allow(unused_variables)]
+                parameters: starlark::eval::Parameters<'v, '_>,
+            ) -> anyhow::Result<starlark::values::Value<'v>> {
+                 fn inner<'v, 'a>(
+                    #[allow(unused_variables)]
+                    eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                    #[allow(unused_variables)]
+                    #param_name: #param_type,
+                ) -> anyhow::Result<#return_type> {
+                    let heap = eval.heap();
+                    eval.ann(#native_name_str, |eval| {
+                        #body
+                    })
+                }
+                match inner(eval, parameters) {
+                    Ok(v) => Ok(eval.heap().alloc(v)),
+                    Err(e) => Err(e),
+                }
+            }
+            {
+                globals_builder.set(
+                    #name_str,
+                    starlark::values::function::NativeFunction::new_direct(#name, #name_str.to_owned()),
+                );
+            }
         }
     } else {
+        let signature = render_signature(&x);
+
+        let StarFun {
+            name,
+            type_attribute,
+            attrs,
+            args,
+            return_type,
+            body,
+        } = x;
+        let bind_args = args.map(bind_argument);
+
+        let setter = if let Some(typ) = type_attribute {
+            quote! {
+                static TYPE: starlark::values::ConstFrozenValue =
+                    starlark::values::ConstFrozenValue::new(#typ);
+                let signature_str = signature.signature();
+                let mut func = starlark::values::function::NativeFunction::new(#name, signature_str, signature);
+                func.set_type(&TYPE);
+                globals_builder.set(#name_str, func);
+            }
+        } else {
+            quote! {
+                let signature_str = signature.signature();
+                globals_builder.set(
+                    #name_str,
+                    starlark::values::function::NativeFunction::new(#name, signature_str, signature),
+                );
+            }
+        };
         quote! {
-            let signature_str = signature.signature();
-            globals_builder.set(
-                #name_str,
-                starlark::values::function::NativeFunction::new(#name, signature_str, signature),
-            );
-        }
-    };
-    quote! {
-        #( #attrs )*
-        #[allow(non_snake_case)] // Starlark doesn't have this convention
-        fn #name<'v, 'a>(
-            eval: &mut starlark::eval::Evaluator<'v, 'a>,
-            #[allow(unused_variables)]
-            this: Option<starlark::values::Value<'v>>,
-            starlark_args: starlark::eval::ParametersParser,
-        ) -> anyhow::Result<starlark::values::Value<'v>> {
-             fn inner<'v, 'a>(
-                #[allow(unused_variables)]
+            #( #attrs )*
+            #[allow(non_snake_case)] // Starlark doesn't have this convention
+            fn #name<'v, 'a>(
                 eval: &mut starlark::eval::Evaluator<'v, 'a>,
                 #[allow(unused_variables)]
                 this: Option<starlark::values::Value<'v>>,
-                #[allow(unused_mut)]
-                #[allow(unused_variables)]
-                mut starlark_args: starlark::eval::ParametersParser,
-            ) -> anyhow::Result<#return_type> {
-                #[allow(unused_variables)]
-                let heap = eval.heap();
-                eval.ann(#native_name_str, |eval| {
-                    #( #bind_args )*
-                    #body
-                })
+                starlark_args: starlark::eval::ParametersParser,
+            ) -> anyhow::Result<starlark::values::Value<'v>> {
+                 fn inner<'v, 'a>(
+                    #[allow(unused_variables)]
+                    eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                    #[allow(unused_variables)]
+                    this: Option<starlark::values::Value<'v>>,
+                    #[allow(unused_mut)]
+                    #[allow(unused_variables)]
+                    mut starlark_args: starlark::eval::ParametersParser,
+                ) -> anyhow::Result<#return_type> {
+                    #[allow(unused_variables)]
+                    let heap = eval.heap();
+                    eval.ann(#native_name_str, |eval| {
+                        #( #bind_args )*
+                        #body
+                    })
+                }
+                match inner(eval, this, starlark_args) {
+                    Ok(v) => Ok(eval.heap().alloc(v)),
+                    Err(e) => Err(e),
+                }
             }
-            match inner(eval, this, starlark_args) {
-                Ok(v) => Ok(eval.heap().alloc(v)),
-                Err(e) => Err(e),
+            {
+                #signature
+                #setter
             }
-        }
-        {
-            #signature
-            #setter
         }
     }
 }
