@@ -263,17 +263,10 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#, "not found");
     /// ```
     fn remove(this: Value, ref needle: Value) -> NoneType {
-        // Important that we don't hold on to a mutable value for too long, so we:
-        // 1. Make sure it is a mut value, which may do a thaw_on_write.
-        // 2. Get it as a list, and search normally.
-        // 3. Get it mutably and remove from it.
-        {
-            // This downcast_mut makes it a List, whether it's a List or a FrozenList
-            List::from_value_mut(this)?.unwrap();
-        }
+        // Written in two separate blocks so we ensure we give up the
+        // immutable borrow before making the mutable borrow.
         let position = {
-            // We can be sure it's not a FrozenList here, so downcast_ref it
-            let this = this.downcast_ref::<List>().unwrap();
+            let this = List::from_value(this).unwrap();
             match this.position(needle) {
                 Some(i) => i,
                 None => {
