@@ -24,7 +24,7 @@ use crate::values::{
     AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace,
     UnpackValue, Value, ValueError, ValueLike,
 };
-use gazebo::{any::AnyLifetime, prelude::*};
+use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
 
 /// Used by both list and tuple to implement the slice function
@@ -63,7 +63,8 @@ pub(crate) fn slice_vector<'a, 'v, V: ValueLike<'v> + 'a, I: Iterator<Item = &'a
 }
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
-#[derive(Clone, Default_, Debug, Trace)]
+#[derive(Clone, Default_, Debug, Trace, Coerce)]
+#[repr(transparent)]
 pub struct TupleGen<V> {
     /// The data stored by the tuple.
     pub content: Vec<V>,

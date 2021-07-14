@@ -43,9 +43,6 @@ macro_rules! starlark_complex_value {
             $crate::__macro_refs::any_lifetime!($x<'v>);
             $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
 
-            // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
-            unsafe impl<'v> $crate::__macro_refs::Coerce<$x<'v>> for [< Frozen $x >] {}
-
             impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
                     heap.alloc_complex(self)

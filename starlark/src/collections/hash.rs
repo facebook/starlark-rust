@@ -16,7 +16,7 @@
  */
 
 use crate as starlark;
-use gazebo::prelude::*;
+use gazebo::{coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 use std::{
     collections::hash_map::DefaultHasher,
@@ -28,7 +28,8 @@ use std::{
 pub struct SmallHashResult(u32);
 
 /// A key and its hash.
-#[derive(PartialEq, Eq, Debug, Clone, Copy, Trace)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Trace, Coerce)]
+#[repr(C)]
 pub struct Hashed<K> {
     hash: SmallHashResult,
     key: K,

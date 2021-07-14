@@ -43,6 +43,7 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
+#[repr(C)]
 enum MapHolder<K, V> {
     // As of indexmap-1.6 and THRESHOLD=12 both VecMap and IndexMap take 9 words
 
@@ -325,6 +326,7 @@ impl<K, V> Default for MapHolder<K, V> {
 /// * Variants which take an already hashed value, e.g. [`get_hashed`](SmallMap::get_hashed).
 ///
 /// * Functions which work with the position, e.g. [`get_index_of`](SmallMap::get_index_of).
+#[repr(C)]
 #[derive(Clone, Default_)]
 pub struct SmallMap<K, V> {
     state: MapHolder<K, V>,

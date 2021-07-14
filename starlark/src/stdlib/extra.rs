@@ -26,7 +26,7 @@ use crate::{
         ComplexValue, Freezer, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
+use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use itertools::Itertools;
 use std::collections::HashSet;
 
@@ -139,7 +139,8 @@ pub fn abs(builder: &mut GlobalsBuilder) {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Coerce)]
+#[repr(C)]
 struct PartialGen<V> {
     func: V,
     pos: Vec<V>,

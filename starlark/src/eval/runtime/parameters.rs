@@ -26,7 +26,7 @@ use crate::{
         ValueError,
     },
 };
-use gazebo::prelude::*;
+use gazebo::{coerce::Coerce, prelude::*};
 use std::cmp;
 use thiserror::Error;
 
@@ -51,7 +51,8 @@ pub(crate) enum FunctionError {
     KwArgsIsNotDict,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Coerce)]
+#[repr(C)]
 enum ParameterKind<V> {
     Required,
     Optional,
@@ -83,6 +84,7 @@ impl<'v> ParameterKind<Value<'v>> {
 
 // V = Value, or FrozenValue
 #[derive(Debug, Clone)]
+#[repr(C)]
 pub struct ParametersSpecRaw<V> {
     /// Only used in error messages
     function_name: String,
@@ -107,13 +109,17 @@ pub struct ParametersSpecRaw<V> {
     kwargs: Option<usize>,
 }
 
+// Can't derive this since we don't want ParameterKind to be public
+unsafe impl<From: Coerce<To>, To> Coerce<ParametersSpecRaw<To>> for ParametersSpecRaw<From> {}
+
 /// A builder for [`ParametersSpec`].
 #[derive(Debug, Clone)]
 pub struct ParametersSpecBuilder<V>(ParametersSpecRaw<V>);
 
 /// Define a list of parameters. This code assumes that all names are distinct and that
 /// `*args`/`**kwargs` occur in well-formed locations.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Coerce)]
+#[repr(transparent)]
 // V = Value, or FrozenValue
 pub struct ParametersSpec<V>(ParametersSpecRaw<V>);
 

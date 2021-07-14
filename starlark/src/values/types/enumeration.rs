@@ -47,7 +47,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{any::AnyLifetime, cell::ARef};
+use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -59,7 +59,8 @@ enum EnumError {
 }
 
 /// The type of an enumeration, created by `enum()`.
-#[derive(Clone, Debug, Trace)]
+#[derive(Clone, Debug, Trace, Coerce)]
+#[repr(C)]
 // Deliberately store fully populated values
 // for each entry, so we can produce enum values with zero allocation.
 pub struct EnumTypeGen<V> {
@@ -72,7 +73,8 @@ pub struct EnumTypeGen<V> {
 }
 
 /// A value from an enumeration.
-#[derive(Clone, Derivative, Trace)]
+#[derive(Clone, Derivative, Trace, Coerce)]
+#[repr(C)]
 #[derivative(Debug)]
 pub struct EnumValueGen<V> {
     // Must ignore value.typ or type.elements, since they are circular

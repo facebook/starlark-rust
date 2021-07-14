@@ -35,8 +35,8 @@ use crate::{
     eval::{Evaluator, Parameters},
     values::function::FUNCTION_TYPE,
 };
-use gazebo::coerce::{Coerce, CoerceKey};
-pub use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
+use gazebo::coerce::CoerceKey;
+pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 pub use starlark_module::Trace;
 use std::{

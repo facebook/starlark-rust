@@ -26,7 +26,7 @@ use crate::{
         StarlarkValue, Trace, UnpackValue, Value, ValueError, ValueLike,
     },
 };
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
@@ -303,7 +303,8 @@ impl<'v, 'a> AllocFrozenValue for &'a str {
 }
 
 /// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, Coerce)]
+#[repr(C)]
 struct StringIteratorGen<V> {
     string: V,
     produce_char: bool, // if not char, then int

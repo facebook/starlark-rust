@@ -27,7 +27,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -228,7 +228,8 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 }
 
 /// A wrapper for a method with a self object already bound.
-#[derive(Clone, Debug, Trace)]
+#[derive(Clone, Debug, Trace, Coerce)]
+#[repr(C)]
 pub struct BoundMethodGen<V> {
     pub(crate) method: V,
     pub(crate) this: V,

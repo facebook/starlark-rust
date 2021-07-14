@@ -45,7 +45,7 @@ use crate::{
         ValueLike,
     },
 };
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
@@ -65,7 +65,8 @@ impl<V> StructGen<V> {
 starlark_complex_value!(pub Struct);
 
 /// The result of calling `struct()`.
-#[derive(Clone, Default, Debug, Trace)]
+#[derive(Clone, Default, Debug, Trace, Coerce)]
+#[repr(transparent)]
 pub struct StructGen<V> {
     /// The fields in a struct.
     pub fields: SmallMap<String, V>,

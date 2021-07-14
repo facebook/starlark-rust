@@ -29,11 +29,12 @@ use crate::{
         SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
+use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use std::{cmp, cmp::Ordering, marker::PhantomData, ops::Deref};
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
-#[derive(Clone, Default_, Trace, Debug)]
+#[derive(Clone, Default_, Trace, Debug, Coerce)]
+#[repr(transparent)]
 pub struct ListGen<V> {
     /// The data stored by the list.
     pub content: Vec<V>,

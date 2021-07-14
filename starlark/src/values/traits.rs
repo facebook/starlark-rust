@@ -180,10 +180,11 @@ unsafe impl<'v> Trace<'v> for bool {
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
-/// use starlark::values::{AnyLifetime, ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer};
+/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer};
 /// use starlark::{starlark_complex_value, starlark_type};
 ///
-/// #[derive(Debug, Trace)]
+/// #[derive(Debug, Trace, Coerce)]
+/// #[repr(C)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
 ///
@@ -203,7 +204,8 @@ unsafe impl<'v> Trace<'v> for bool {
 /// }
 /// ```
 ///
-/// The [`starlark_complex_value!`] macro defines two type aliases.
+/// The [`starlark_complex_value!`] requires that the type have an instance for `Coerce`,
+/// then the macro defines two type aliases.
 ///
 /// ```
 /// # use crate::starlark::values::*;

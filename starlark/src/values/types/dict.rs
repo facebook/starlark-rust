@@ -27,7 +27,7 @@ use crate::{
         StarlarkValue, Trace, UnpackValue, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
+use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 use std::{
     hash::{Hash, Hasher},
@@ -36,7 +36,8 @@ use std::{
 };
 
 /// Define the dictionary type. See [`Dict`] and [`FrozenDict`] as the two aliases.
-#[derive(Clone, Default_, Debug, Trace)]
+#[derive(Clone, Default_, Debug, Trace, Coerce)]
+#[repr(transparent)]
 pub struct DictGen<V> {
     /// The data stored by the dictionary. The keys must all be hashable values.
     pub content: SmallMap<V, V>,

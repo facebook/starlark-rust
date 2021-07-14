@@ -28,7 +28,7 @@ use crate::{
         SimpleValue, StarlarkValue, Trace, UnpackValue, Value, ValueLike,
     },
 };
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::{
@@ -1729,7 +1729,8 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug, Trace)]
+    #[derive(Debug, Trace, Coerce)]
+    #[repr(transparent)]
     struct WrapperGen<V>(SmallMap<String, V>);
     starlark_complex_value!(Wrapper);
 

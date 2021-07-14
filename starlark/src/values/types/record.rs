@@ -53,7 +53,7 @@ use crate::{
         ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, prelude::*};
+use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use std::{
     collections::hash_map::DefaultHasher,
     fmt::Debug,
@@ -66,6 +66,9 @@ pub struct FieldGen<V> {
     pub(crate) typ: V,
     default: Option<V>,
 }
+
+// Manual because no instance for Option<V>
+unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 
 /// The result of `record()`, being the type of records.
 #[derive(Debug, Trace)]
@@ -81,8 +84,12 @@ pub struct RecordTypeGen<V> {
     constructor: V,
 }
 
+// Manual because no instance for such as weird SmallMap
+unsafe impl<From: Coerce<To>, To> Coerce<RecordTypeGen<To>> for RecordTypeGen<From> {}
+
 /// An actual record.
-#[derive(Clone, Debug, Trace)]
+#[derive(Clone, Debug, Trace, Coerce)]
+#[repr(C)]
 pub struct RecordGen<V> {
     typ: V, // Must be RecordType
     values: Vec<V>,
