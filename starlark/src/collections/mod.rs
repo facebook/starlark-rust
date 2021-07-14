@@ -22,7 +22,7 @@
 
 pub use crate::collections::{
     hash::{BorrowHashed, Hashed, SmallHashResult},
-    small_map::SmallMap,
+    small_map::{MHIntoIter, MHIter, MHIterMut, SmallMap},
     small_set::SmallSet,
 };
 
