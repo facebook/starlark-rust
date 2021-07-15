@@ -748,4 +748,23 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users
     }
+
+    /// Set the value at `index` with the new value.
+    ///
+    /// ```rust
+    /// # starlark::assert::is_true(r#"
+    /// v = [1, 2, 3]
+    /// v[1] = 1
+    /// v[2] = [2,3]
+    /// v == [1, 1, [2, 3]]
+    /// # "#);
+    /// ```
+    fn set_at(
+        &self,
+        _me: Value<'v>,
+        _index: Value<'v>,
+        _new_value: Value<'v>,
+    ) -> anyhow::Result<()> {
+        Err(ValueError::CannotMutateImmutableValue.into())
+    }
 }
