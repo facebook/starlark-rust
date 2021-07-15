@@ -23,13 +23,20 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
-        string::hash_string_value, ComplexValue, Freezer, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Trace, UnpackValue, Value, ValueLike,
+        string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
+        FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
+        ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
+use gazebo::{
+    any::AnyLifetime,
+    cell::ARef,
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
 use indexmap::Equivalent;
 use std::{
+    cell::RefMut,
     hash::{Hash, Hasher},
     marker::PhantomData,
     ops::Deref,
@@ -43,7 +50,46 @@ pub struct DictGen<V> {
     pub content: SmallMap<V, V>,
 }
 
-starlark_complex_value!(pub Dict);
+pub type Dict<'v> = DictGen<Value<'v>>;
+pub type FrozenDict = DictGen<FrozenValue>;
+any_lifetime!(Dict<'v>);
+any_lifetime!(FrozenDict);
+
+impl<'v> AllocValue<'v> for Dict<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex(self)
+    }
+}
+
+impl AllocFrozenValue for FrozenDict {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
+        heap.alloc_simple(self)
+    }
+}
+
+impl SimpleValue for FrozenDict {}
+
+impl<'v> Dict<'v> {
+    pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+        if x.unpack_frozen().is_some() {
+            x.downcast_ref::<FrozenDict>()
+                .map(|x| ARef::map(x, coerce_ref))
+        } else {
+            x.downcast_ref::<Dict<'v>>()
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
+        x.downcast_mut::<Dict<'v>>()
+    }
+}
+
+impl<'v> FromValue<'v> for Dict<'v> {
+    fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+        Dict::from_value(x)
+    }
+}
 
 impl FrozenDict {
     /// Obtain the [`FrozenDict`] pointed at by a [`FrozenValue`].
