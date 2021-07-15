@@ -61,7 +61,11 @@ impl TypeCompiled {
 
         // Dictionary with a single element
         fn unpack_singleton_dictionary<'v>(x: &Dict<'v>) -> Option<(Value<'v>, Value<'v>)> {
-            if x.len() == 1 { x.iter().next() } else { None }
+            if x.content.len() == 1 {
+                x.iter().next()
+            } else {
+                None
+            }
         }
 
         fn f(ty: Value) -> anyhow::Result<Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>> {

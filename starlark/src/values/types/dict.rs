@@ -43,11 +43,6 @@ pub struct DictGen<V> {
     pub content: SmallMap<V, V>,
 }
 
-impl<V> DictGen<V> {
-    /// The result of calling `type()` on dictionaries.
-    pub const TYPE: &'static str = "dict";
-}
-
 starlark_complex_value!(pub Dict);
 
 impl FrozenDict {
@@ -60,6 +55,9 @@ impl FrozenDict {
 }
 
 impl<V> DictGen<V> {
+    /// The result of calling `type()` on dictionaries.
+    pub const TYPE: &'static str = "dict";
+
     /// Create a new [`DictGen`].
     pub fn new(content: SmallMap<V, V>) -> Self {
         Self { content }
@@ -93,29 +91,6 @@ where
     Value<'v>: Equivalent<V>,
     for<'a> ValueStr<'a>: Equivalent<V>,
 {
-    /// The number of elements in the dictionary.
-    pub fn len(&self) -> usize {
-        self.content.len()
-    }
-
-    /// The list of key/value pairs in the dictionary.
-    pub fn items(&self) -> Vec<(Value<'v>, Value<'v>)> {
-        self.content
-            .iter()
-            .map(|(k, v)| (k.to_value(), v.to_value()))
-            .collect()
-    }
-
-    /// The list of values in the dictionary.
-    pub fn values(&self) -> Vec<Value<'v>> {
-        self.content.values().map(|e| e.to_value()).collect()
-    }
-
-    /// The list of keys in the dictionary.
-    pub fn keys(&self) -> Vec<Value<'v>> {
-        self.content.keys().map(|e| e.to_value()).collect()
-    }
-
     /// Iterate through the key/value pairs in the dictionary.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
     where
@@ -149,10 +124,7 @@ where
     /// Get the value associated with a particular string. Equivalent to allocating the
     /// string on the heap, turning it into a value, and looking up using that.
     pub fn get_str(&self, key: &str) -> Option<Value<'v>> {
-        self.content
-            .get(&ValueStr(key))
-            .copied()
-            .map(ValueLike::to_value)
+        self.content.get(&ValueStr(key)).map(|x| x.to_value())
     }
 }
 

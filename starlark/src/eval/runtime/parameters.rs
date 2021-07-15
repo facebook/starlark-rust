@@ -466,7 +466,7 @@ impl<'v> ParametersSpec<Value<'v>> {
             slots[kwargs_pos].set_direct(eval.heap().alloc_complex(*kwargs));
         } else if let Some(kwargs) = kwargs {
             return Err(FunctionError::ExtraNamedParameters {
-                names: kwargs.keys().map(|x| x.to_str()),
+                names: kwargs.content.keys().map(|x| x.to_str()).collect(),
                 function: self.signature(),
             }
             .into());

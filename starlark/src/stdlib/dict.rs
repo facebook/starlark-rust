@@ -126,7 +126,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn keys(this: ARef<Dict>) -> List<'v> {
-        Ok(List::new(this.keys()))
+        Ok(List::new(this.content.keys().copied().collect()))
     }
 
     /// [dict.pop](
@@ -355,7 +355,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn values(this: ARef<Dict>) -> List<'v> {
-        Ok(List::new(this.values()))
+        Ok(List::new(this.content.values().copied().collect()))
     }
 }
 

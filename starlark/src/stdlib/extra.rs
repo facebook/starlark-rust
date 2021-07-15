@@ -82,7 +82,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
         Ok(Partial {
             func,
             pos: args.content.clone(),
-            named: kwargs.values(),
+            named: kwargs.content.values().copied().collect(),
             names,
             signature: signature.build(),
         })
