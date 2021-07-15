@@ -127,6 +127,7 @@ macro_rules! def_exact_size_iter {
     };
 }
 
+#[derive(Clone_)]
 enum MHKeys<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMKeys<'a, K, V>),
@@ -149,6 +150,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHKeys<'a, K, V> {
     def_exact_size_iter!();
 }
 
+#[derive(Clone_)]
 enum MHValues<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMValues<'a, K, V>),
@@ -193,6 +195,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValuesMut<'a, K, V> {
     def_exact_size_iter!();
 }
 
+#[derive(Clone_)]
 pub enum MHIter<'a, K: 'a, V: 'a> {
     Empty,
     Vec(VMIter<'a, K, V>),
@@ -356,7 +359,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> {
+    pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> + Clone {
         match self.state {
             MapHolder::Empty => MHKeys::Empty,
             MapHolder::Vec(ref v) => MHKeys::Vec(v.keys()),
@@ -364,7 +367,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    pub fn values(&self) -> impl ExactSizeIterator<Item = &V> {
+    pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + Clone {
         match self.state {
             MapHolder::Empty => MHValues::Empty,
             MapHolder::Vec(ref v) => MHValues::Vec(v.values()),
@@ -838,6 +841,10 @@ mod tests {
         assert_eq!(m1.get_index(2), None);
 
         assert_ne!(m1, smallmap! { 0 => 'a', 1 => 'c' });
+
+        let iter = m1.iter();
+        let (values1, values2): (Vec<_>, Vec<_>) = (iter.clone().collect(), iter.collect());
+        assert_eq!(values1, values2);
     }
 
     #[test]
@@ -878,6 +885,10 @@ mod tests {
             m
         };
         assert_ne!(m1, not_m1);
+
+        let iter = m1.iter();
+        let (values1, values2): (Vec<_>, Vec<_>) = (iter.clone().collect(), iter.collect());
+        assert_eq!(values1, values2);
     }
 
     #[test]
@@ -887,6 +898,28 @@ mod tests {
         assert_eq!(i.next(), Some((1, "a")));
         assert_eq!(i.next(), Some((3, "b")));
         assert_eq!(i.next(), None);
+    }
+
+    #[test]
+    fn test_clone() {
+        let map = smallmap![1 => "a", 3 => "b"];
+        let iter = map.iter();
+        let values1: Vec<_> = iter.clone().collect();
+        let values2: Vec<_> = iter.collect();
+        assert_eq!(vec![(&1, &"a"), (&3, &"b")], values1);
+        assert_eq!(values1, values2);
+
+        let iter = map.keys();
+        let values1: Vec<_> = iter.clone().collect();
+        let values2: Vec<_> = iter.collect();
+        assert_eq!(vec![&1, &3], values1);
+        assert_eq!(values1, values2);
+
+        let iter = map.values();
+        let values1: Vec<_> = iter.clone().collect();
+        let values2: Vec<_> = iter.collect();
+        assert_eq!(vec![&"a", &"b"], values1);
+        assert_eq!(values1, values2);
     }
 
     #[test]

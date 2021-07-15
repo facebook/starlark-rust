@@ -93,7 +93,7 @@ impl<T> SmallSet<T> {
         Self(SmallMap::with_capacity(n))
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub fn iter(&self) -> impl Iterator<Item = &T> + Clone {
         self.0.keys()
     }
 

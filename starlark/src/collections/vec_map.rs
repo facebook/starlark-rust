@@ -63,6 +63,7 @@ pub struct VecMap<K, V> {
     values: Vec<(K, V)>,
 }
 
+#[derive(Clone_)]
 pub struct VMKeys<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, (K, V)>,
 }
@@ -85,6 +86,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMKeys<'a, K, V> {
     }
 }
 
+#[derive(Clone_)]
 pub struct VMValues<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, (K, V)>,
 }
@@ -129,6 +131,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValuesMut<'a, K, V> {
     }
 }
 
+#[derive(Clone_)]
 pub struct VMIter<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, (K, V)>,
 }
