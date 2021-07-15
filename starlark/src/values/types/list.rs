@@ -160,21 +160,6 @@ impl<'v> List<'v> {
     pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }
-
-    /// Append a single element to the end of the list.
-    pub(crate) fn push(&mut self, value: Value<'v>) {
-        self.content.push(value);
-    }
-
-    /// Clear all elements in the list.
-    pub(crate) fn clear(&mut self) {
-        self.content.clear();
-    }
-
-    /// Find the position of a given element in the list.
-    pub(crate) fn position(&self, needle: Value<'v>) -> Option<usize> {
-        self.content.iter().position(|v| v == &needle)
-    }
 }
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for ListGen<V>

@@ -53,7 +53,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// ```
     fn append(this: Value, ref el: Value) -> NoneType {
         let mut this = List::from_value_mut(this)?.unwrap();
-        this.push(el);
+        this.content.push(el);
         Ok(NoneType)
     }
 
@@ -75,7 +75,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// ```
     fn clear(this: Value) -> NoneType {
         let mut this = List::from_value_mut(this)?.unwrap();
-        this.clear();
+        this.content.clear();
         Ok(NoneType)
     }
 
@@ -267,7 +267,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         // immutable borrow before making the mutable borrow.
         let position = {
             let this = List::from_value(this).unwrap();
-            match this.position(needle) {
+            match this.content.iter().position(|v| *v == needle) {
                 Some(i) => i,
                 None => {
                     let mut s = String::new();
