@@ -35,21 +35,25 @@ use gazebo::{
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
-use std::{cmp, cmp::Ordering, marker::PhantomData, ops::Deref};
+use std::{any::TypeId, cmp, cmp::Ordering, fmt::Debug, marker::PhantomData, ops::Deref};
 
-/// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
-#[derive(Clone, Default_, Trace, Debug, Coerce)]
+/// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
+#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
 #[repr(transparent)]
-pub struct ListGen<V> {
+pub struct List<'v> {
     /// The data stored by the list.
-    pub content: Vec<V>,
+    pub content: Vec<Value<'v>>,
 }
 
-pub type List<'v> = ListGen<Value<'v>>;
-pub type FrozenList = ListGen<FrozenValue>;
+/// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
+#[derive(Clone, Default, Debug, AnyLifetime)]
+#[repr(transparent)]
+pub struct FrozenList {
+    /// The data stored by the list.
+    pub content: Vec<FrozenValue>,
+}
 
-any_lifetime!(List<'v>);
-any_lifetime!(FrozenList);
+unsafe impl<'v> Coerce<List<'v>> for FrozenList {}
 
 impl<'v> AllocValue<'v> for List<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
@@ -77,6 +81,10 @@ impl<'v> List<'v> {
 
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
         x.downcast_mut::<List<'v>>()
+    }
+
+    pub(crate) fn is_list_type(x: TypeId) -> bool {
+        x == TypeId::of::<List>() || x == TypeId::of::<FrozenList>()
     }
 }
 
@@ -130,24 +138,9 @@ impl<'v> ComplexValue<'v> for List<'v> {
             // since me is a list, index must be a list, which isn't right
             return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
         }
-        let i = convert_index(index, self.len() as i32)? as usize;
+        let i = convert_index(index, self.content.len() as i32)? as usize;
         self.content[i] = alloc_value;
         Ok(())
-    }
-}
-
-impl<'v, V: ValueLike<'v>> ListGen<V> {
-    /// Obtain the length of the list.
-    pub fn len(&self) -> usize {
-        self.content.len()
-    }
-
-    /// Iterate over the elements in the list.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
-    where
-        'v: 'a,
-    {
-        self.content.iter().map(|e| e.to_value())
     }
 }
 
@@ -158,9 +151,66 @@ impl<'v> List<'v> {
     pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }
+
+    /// Obtain the length of the list.
+    pub fn len(&self) -> usize {
+        self.content.len()
+    }
+
+    /// Iterate over the elements in the list.
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
+    where
+        'v: 'a,
+    {
+        self.content.iter().copied()
+    }
+
+    pub fn to_repr(&self) -> String {
+        let mut s = String::new();
+        collect_repr(&self.content, &mut s);
+        s
+    }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for ListGen<V>
+impl FrozenList {
+    /// Iterate over the elements in the list.
+    pub fn iter<'a, 'v>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
+    where
+        'v: 'a,
+    {
+        self.content.iter().map(|e| e.to_value())
+    }
+}
+
+#[doc(hidden)]
+pub trait ListLike<'v>: Debug {
+    fn content(&self) -> &[Value<'v>];
+}
+
+impl<'v> ListLike<'v> for List<'v> {
+    fn content(&self) -> &[Value<'v>] {
+        &self.content
+    }
+}
+
+impl<'v> ListLike<'v> for FrozenList {
+    fn content(&self) -> &[Value<'v>] {
+        coerce_ref(&self.content)
+    }
+}
+
+fn collect_repr(xs: &[Value], s: &mut String) {
+    s.push('[');
+    for (i, v) in xs.iter().enumerate() {
+        if i != 0 {
+            s.push_str(", ");
+        }
+        v.collect_repr(s);
+    }
+    s.push(']');
+}
+
+impl<'v, T: ListLike<'v>> StarlarkValue<'v> for T
 where
     Self: AnyLifetime<'v>,
 {
@@ -172,20 +222,13 @@ where
     }
 
     fn collect_repr(&self, s: &mut String) {
-        s.push('[');
-        for (i, v) in self.iter().enumerate() {
-            if i != 0 {
-                s.push_str(", ");
-            }
-            v.collect_repr(s);
-        }
-        s.push(']');
+        collect_repr(self.content(), s)
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
         let mut res = String::new();
         res.push('[');
-        for (i, e) in self.iter().enumerate() {
+        for (i, e) in self.content().iter().enumerate() {
             if i != 0 {
                 res.push_str(", ");
             }
@@ -196,34 +239,34 @@ where
     }
 
     fn to_bool(&self) -> bool {
-        self.len() != 0
+        !self.content().is_empty()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match List::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_slice(&self.content, &other.content, |x, y| x.equals(*y)),
+            Some(other) => equals_slice(self.content(), &other.content, |x, y| x.equals(*y)),
         }
     }
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match List::from_value(other) {
             None => ValueError::unsupported_with(self, "cmp()", other),
-            Some(other) => compare_slice(&self.content, &other.content, |x, y| x.compare(*y)),
+            Some(other) => compare_slice(self.content(), &other.content, |x, y| x.compare(*y)),
         }
     }
 
     fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        let i = convert_index(index, self.len() as i32)? as usize;
-        Ok(self.content[i].to_value())
+        let i = convert_index(index, self.content().len() as i32)? as usize;
+        Ok(self.content()[i])
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(self.len() as i32)
+        Ok(self.content().len() as i32)
     }
 
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        for x in self.iter() {
+        for x in self.content().iter() {
             if x.equals(other)? {
                 return Ok(true);
             }
@@ -238,8 +281,9 @@ where
         stride: Option<Value>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        let (start, stop, stride) = convert_slice_indices(self.len() as i32, start, stop, stride)?;
-        let vec = tuple::slice_vector(start, stop, stride, self.content.iter());
+        let (start, stop, stride) =
+            convert_slice_indices(self.content().len() as i32, start, stop, stride)?;
+        let vec = tuple::slice_vector(start, stop, stride, self.content().iter());
         Ok(heap.alloc(List::new(vec)))
     }
 
@@ -249,8 +293,8 @@ where
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
-            let mut result = Vec::with_capacity(self.len() + other.len());
-            result.extend(self.iter());
+            let mut result = Vec::with_capacity(self.content().len() + other.len());
+            result.extend(self.content().iter());
             result.extend(other.iter());
             Ok(heap.alloc(List::new(result)))
         } else {
@@ -261,9 +305,9 @@ where
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
-                let mut result = Vec::with_capacity(self.len() * cmp::max(0, l) as usize);
+                let mut result = Vec::with_capacity(self.content().len() * cmp::max(0, l) as usize);
                 for _ in 0..l {
-                    result.extend(self.iter());
+                    result.extend(self.content().iter());
                 }
                 Ok(heap.alloc(List::new(result)))
             }
@@ -272,12 +316,12 @@ where
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for ListGen<V> {
+impl<'v, T: ListLike<'v>> StarlarkIterable<'v> for T {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,
     {
-        box self.iter()
+        box self.content().iter().copied()
     }
 }
 

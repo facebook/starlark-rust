@@ -240,8 +240,8 @@ impl Heap {
         )?;
         let trim_namespace = Regex::new("[a-z_]+::").unwrap();
         for x in &columns {
-            // Given: starlark::values::list::ListGen<starlark::gc::value::Value>
-            // We'd like: ListGen<Value>
+            // Given: starlark::values::list::List<starlark::gc::value::Value>
+            // We'd like: List<Value>
             write!(file, ",{}", trim_namespace.replace_all(x.0, ""))?;
         }
         writeln!(file)?;

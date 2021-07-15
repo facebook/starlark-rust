@@ -24,7 +24,7 @@ use crate::{
     values::{
         list::List,
         none::{NoneOr, NoneType},
-        StarlarkValue, Value, ValueError,
+        Value, ValueError,
     },
 };
 use anyhow::anyhow;
@@ -270,9 +270,11 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
             match this.content.iter().position(|v| *v == needle) {
                 Some(i) => i,
                 None => {
-                    let mut s = String::new();
-                    this.collect_repr(&mut s);
-                    return Err(anyhow!("Element '{}' not found in list '{}'", needle, s));
+                    return Err(anyhow!(
+                        "Element '{}' not found in list '{}'",
+                        needle,
+                        this.to_repr()
+                    ));
                 }
             }
         };

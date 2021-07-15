@@ -30,15 +30,11 @@ use crate::{
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
-    values::{
-        fast_string,
-        list::{FrozenList, List},
-        Heap, Trace, Value, ValueError,
-    },
+    values::{fast_string, list::List, Heap, Trace, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::{any::TypeId, collections::HashMap, mem};
+use std::{collections::HashMap, mem};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -273,13 +269,11 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     // The Starlark spec says list += mutates, while nothing else does.
     // When mutating, be careful if they alias, so we don't have `lhs`
     // mutably borrowed when we iterate over `rhs`, as they might alias.
-    // We also have to deal with frozen lists, in case they are
-    // copy-on-write.
 
     let lhs_aref = lhs.get_aref();
     let lhs_ty = lhs_aref.as_dyn_any().static_type_of();
 
-    if lhs_ty == TypeId::of::<List>() || lhs_ty == TypeId::of::<FrozenList>() {
+    if List::is_list_type(lhs_ty) {
         mem::drop(lhs_aref);
         // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
         let mut list = List::from_value_mut(lhs)?
