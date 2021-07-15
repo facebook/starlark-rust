@@ -88,13 +88,13 @@ impl<'v> FromValue<'v> for List<'v> {
 
 impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(List::new(self.into_map(|x| x.alloc_value(heap))))
+        heap.alloc(List::new(self.into_map(|x| x.alloc_value(heap))))
     }
 }
 
 impl<'v, V: AllocFrozenValue> AllocFrozenValue for Vec<V> {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(FrozenList {
+        heap.alloc(FrozenList {
             content: self.into_map(|x| x.alloc_frozen_value(heap)),
         })
     }
