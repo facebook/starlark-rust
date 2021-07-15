@@ -33,7 +33,10 @@ fn is_1bytes(x: u64) -> bool {
 
 /// Skip at most n 1byte characters from the prefix of the string, return how many you skipped.
 /// The result will be between 0 and n.
+/// The string _must_ have at least n bytes in it.
 fn skip_at_most_1byte(x: &str, n: usize) -> usize {
+    debug_assert!(x.len() >= n);
+
     // Multi-byte UTF8 characters have 0x80 set.
     // We first process enough characters so we align on an 8-byte boundary,
     // then process 8 bytes at a time.
@@ -86,7 +89,13 @@ fn skip_at_most_1byte(x: &str, n: usize) -> usize {
 
 /// Find the character at position `i`.
 pub fn at(x: &str, i: usize) -> Option<char> {
-    let n = skip_at_most_1byte(x, min(i, x.len()));
+    if i >= x.len() {
+        // Important that skip_at_most_1byte gets called with all valid character.
+        // If the index is outside the length even under the best assumptions,
+        // can immediately return None.
+        return None;
+    }
+    let n = skip_at_most_1byte(x, i);
     let s = unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) };
     s.chars().nth(i - n)
 }
