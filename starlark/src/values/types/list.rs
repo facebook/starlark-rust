@@ -45,11 +45,6 @@ pub struct ListGen<V> {
     pub content: Vec<V>,
 }
 
-impl<V> ListGen<V> {
-    /// The result of calling `type()` on lists.
-    pub const TYPE: &'static str = "list";
-}
-
 pub type List<'v> = ListGen<Value<'v>>;
 pub type FrozenList = ListGen<FrozenValue>;
 
@@ -157,6 +152,9 @@ impl<'v, V: ValueLike<'v>> ListGen<V> {
 }
 
 impl<'v> List<'v> {
+    /// The result of calling `type()` on lists.
+    pub const TYPE: &'static str = "list";
+
     pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }
