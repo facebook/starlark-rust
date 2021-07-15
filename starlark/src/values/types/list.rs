@@ -31,11 +31,21 @@ use crate::{
 };
 use gazebo::{
     any::AnyLifetime,
+    cast,
     cell::ARef,
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
-use std::{any::TypeId, cmp, cmp::Ordering, fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{
+    any::TypeId,
+    cell::{Ref, RefCell, RefMut},
+    cmp,
+    cmp::Ordering,
+    fmt::Debug,
+    marker::PhantomData,
+    ops::Deref,
+    slice,
+};
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
 #[derive(Clone, Default, Trace, Debug, AnyLifetime)]
@@ -53,11 +63,14 @@ pub struct FrozenList {
     pub content: Vec<FrozenValue>,
 }
 
+#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
+struct MutableList<'v>(RefCell<List<'v>>);
+
 unsafe impl<'v> Coerce<List<'v>> for FrozenList {}
 
 impl<'v> AllocValue<'v> for List<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(self)
+        heap.alloc_complex(MutableList(RefCell::new(self)))
     }
 }
 
@@ -75,16 +88,30 @@ impl<'v> List<'v> {
             x.downcast_ref::<FrozenList>()
                 .map(|x| ARef::map(x, coerce_ref))
         } else {
-            x.downcast_ref::<List<'v>>()
+            let ptr = x.get_ref()?;
+            let ptr = ptr.as_dyn_any().downcast_ref::<MutableList<'v>>()?;
+            Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
 
-    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
-        x.downcast_mut::<List<'v>>()
+    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
+        if x.unpack_frozen().is_some() {
+            return Err(ValueError::CannotMutateImmutableValue.into());
+        }
+        let ptr = x
+            .get_ref()
+            .and_then(|x| x.as_dyn_any().downcast_ref::<MutableList<'v>>());
+        match ptr {
+            None => Ok(None),
+            Some(ptr) => match ptr.0.try_borrow_mut() {
+                Ok(x) => Ok(Some(x)),
+                Err(_) => Err(ValueError::MutationDuringIteration.into()),
+            },
+        }
     }
 
     pub(crate) fn is_list_type(x: TypeId) -> bool {
-        x == TypeId::of::<List>() || x == TypeId::of::<FrozenList>()
+        x == TypeId::of::<MutableList>() || x == TypeId::of::<FrozenList>()
     }
 }
 
@@ -117,30 +144,15 @@ impl FrozenList {
     }
 }
 
-impl<'v> ComplexValue<'v> for List<'v> {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
+impl<'v> ComplexValue<'v> for MutableList<'v> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         Ok(box FrozenList {
-            content: self.content.into_try_map(|v| v.freeze(freezer))?,
+            content: self
+                .0
+                .into_inner()
+                .content
+                .into_try_map(|v| v.freeze(freezer))?,
         })
-    }
-
-    fn set_at(
-        &mut self,
-        me: Value<'v>,
-        index: Value<'v>,
-        alloc_value: Value<'v>,
-    ) -> anyhow::Result<()> {
-        if me.ptr_eq(index) {
-            // since me is a list, index must be a list, which isn't right
-            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
-        }
-        let i = convert_index(index, self.content.len() as i32)? as usize;
-        self.content[i] = alloc_value;
-        Ok(())
     }
 }
 
@@ -184,18 +196,33 @@ impl FrozenList {
 
 #[doc(hidden)]
 pub trait ListLike<'v>: Debug {
-    fn content(&self) -> &[Value<'v>];
+    fn content(&self) -> ARef<[Value<'v>]>;
+    fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
 }
 
-impl<'v> ListLike<'v> for List<'v> {
-    fn content(&self) -> &[Value<'v>] {
-        &self.content
+impl<'v> ListLike<'v> for MutableList<'v> {
+    fn content(&self) -> ARef<[Value<'v>]> {
+        ARef::new_ref(Ref::map(self.0.borrow(), |x| x.content.as_slice()))
+    }
+
+    fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
+        match self.0.try_borrow_mut() {
+            Ok(mut xs) => {
+                xs.content[i] = v;
+                Ok(())
+            }
+            Err(_) => Err(ValueError::MutationDuringIteration.into()),
+        }
     }
 }
 
 impl<'v> ListLike<'v> for FrozenList {
-    fn content(&self) -> &[Value<'v>] {
-        coerce_ref(&self.content)
+    fn content(&self) -> ARef<[Value<'v>]> {
+        ARef::new_ptr(coerce_ref(&self.content).as_slice())
+    }
+
+    fn set_at(&self, _i: usize, _v: Value<'v>) -> anyhow::Result<()> {
+        Err(ValueError::CannotMutateImmutableValue.into())
     }
 }
 
@@ -222,7 +249,7 @@ where
     }
 
     fn collect_repr(&self, s: &mut String) {
-        collect_repr(self.content(), s)
+        collect_repr(&*self.content(), s)
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
@@ -245,14 +272,14 @@ where
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match List::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_slice(self.content(), &other.content, |x, y| x.equals(*y)),
+            Some(other) => equals_slice(&*self.content(), &other.content, |x, y| x.equals(*y)),
         }
     }
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match List::from_value(other) {
             None => ValueError::unsupported_with(self, "cmp()", other),
-            Some(other) => compare_slice(self.content(), &other.content, |x, y| x.compare(*y)),
+            Some(other) => compare_slice(&*self.content(), &other.content, |x, y| x.compare(*y)),
         }
     }
 
@@ -314,6 +341,39 @@ where
             None => Err(ValueError::IncorrectParameterType.into()),
         }
     }
+
+    fn set_at(
+        &self,
+        me: Value<'v>,
+        index: Value<'v>,
+        alloc_value: Value<'v>,
+    ) -> anyhow::Result<()> {
+        if me.ptr_eq(index) {
+            // since me is a list, index must be a list, which isn't right
+            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
+        }
+        let i = convert_index(index, self.content().len() as i32)? as usize;
+        self.set_at(i, alloc_value)
+    }
+}
+
+struct It<'a, 'v> {
+    // Required for its lifetime properties
+    #[allow(dead_code)]
+    aref: ARef<'a, [Value<'v>]>,
+    iter: slice::Iter<'a, Value<'v>>,
+}
+
+impl<'a, 'v> Iterator for It<'a, 'v> {
+    type Item = Value<'v>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().copied()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
 }
 
 impl<'v, T: ListLike<'v>> StarlarkIterable<'v> for T {
@@ -321,7 +381,12 @@ impl<'v, T: ListLike<'v>> StarlarkIterable<'v> for T {
     where
         'v: 'a,
     {
-        box self.content().iter().copied()
+        let aref = self.content();
+        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
+        let iter = aref_ptr.iter();
+        // We need to create an iterator based on this ARef, and keep the iterator alive.
+        // This, plus the unsafe above, ensures the ARef stays alive long enough.
+        box It { aref, iter }
     }
 }
 

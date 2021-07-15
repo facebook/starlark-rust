@@ -309,7 +309,9 @@ assert_eq(
 
     #[test]
     fn test_debug() {
-        assert::pass(r#"assert_eq(debug([1,2]), "Value(List { content: [Value(1), Value(2)] })")"#);
+        assert::pass(
+            r#"assert_eq(debug([1,2]), "Value(MutableList(RefCell { value: List { content: [Value(1), Value(2)] } }))")"#,
+        );
     }
 
     #[test]

@@ -1246,7 +1246,7 @@ fn test_display_debug() {
     assert_eq!(val.to_str(), "([1, 2], \"test\", True)");
     assert_eq!(
         format!("{:?}", val),
-        "Value(TupleGen { content: [Value(List { content: [Value(1), Value(2)] }), Value(\"test\"), Value(true)] })"
+        "Value(TupleGen { content: [Value(MutableList(RefCell { value: List { content: [Value(1), Value(2)] } })), Value(\"test\"), Value(true)] })"
     );
     assert_eq!(
         format!("{:#?}", val),
@@ -1254,16 +1254,20 @@ fn test_display_debug() {
     TupleGen {
         content: [
             Value(
-                List {
-                    content: [
-                        Value(
-                            1,
-                        ),
-                        Value(
-                            2,
-                        ),
-                    ],
-                },
+                MutableList(
+                    RefCell {
+                        value: List {
+                            content: [
+                                Value(
+                                    1,
+                                ),
+                                Value(
+                                    2,
+                                ),
+                            ],
+                        },
+                    },
+                ),
             ),
             Value(
                 "test",
@@ -1646,7 +1650,7 @@ v1 + " " + v100 + " " + v1000
 fn test_self_assign() {
     // In Go Starlark this works.
     // Doesn't seem unreasonable.
-    assert::fail("x = [1,2]\na, x[0] = x", "Immutable");
+    assert::fail("x = [1,2]\na, x[0] = x", "mutate an iterable");
     assert::fail("x = {0:0,1:1}\na, x[0] = x", "Immutable");
 }
 
