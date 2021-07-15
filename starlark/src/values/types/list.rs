@@ -25,11 +25,16 @@ use crate::{
         error::ValueError,
         index::{convert_index, convert_slice_indices},
         iter::StarlarkIterable,
-        tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
+        tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
+use gazebo::{
+    any::AnyLifetime,
+    cell::ARef,
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
 use std::{cmp, cmp::Ordering, marker::PhantomData, ops::Deref};
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two aliases.
@@ -45,7 +50,46 @@ impl<V> ListGen<V> {
     pub const TYPE: &'static str = "list";
 }
 
-starlark_complex_value!(pub List);
+pub type List<'v> = ListGen<Value<'v>>;
+pub type FrozenList = ListGen<FrozenValue>;
+
+any_lifetime!(List<'v>);
+any_lifetime!(FrozenList);
+
+impl<'v> AllocValue<'v> for List<'v> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_complex(self)
+    }
+}
+
+impl AllocFrozenValue for FrozenList {
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
+        heap.alloc_simple(self)
+    }
+}
+
+impl SimpleValue for FrozenList {}
+
+impl<'v> List<'v> {
+    pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+        if x.unpack_frozen().is_some() {
+            x.downcast_ref::<FrozenList>()
+                .map(|x| ARef::map(x, coerce_ref))
+        } else {
+            x.downcast_ref::<List<'v>>()
+        }
+    }
+
+    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
+        x.downcast_mut::<List<'v>>()
+    }
+}
+
+impl<'v> FromValue<'v> for List<'v> {
+    fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+        List::from_value(x)
+    }
+}
 
 impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
