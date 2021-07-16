@@ -463,7 +463,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 
         if let Some(kwargs_pos) = self.0.kwargs {
             let kwargs = kwargs.take().unwrap_or_default();
-            slots[kwargs_pos].set_direct(eval.heap().alloc_complex(*kwargs));
+            slots[kwargs_pos].set_direct(eval.heap().alloc(*kwargs));
         } else if let Some(kwargs) = kwargs {
             return Err(FunctionError::ExtraNamedParameters {
                 names: kwargs.content.keys().map(|x| x.to_str()).collect(),
