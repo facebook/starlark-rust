@@ -47,6 +47,9 @@ use std::{
     slice,
 };
 
+#[derive(Clone, Default, Trace, Debug)]
+struct ListGen<T>(T);
+
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
 #[derive(Clone, Default, Trace, Debug, AnyLifetime)]
 #[repr(transparent)]
@@ -63,33 +66,35 @@ pub struct FrozenList {
     pub content: Vec<FrozenValue>,
 }
 
-#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
-struct MutableList<'v>(RefCell<List<'v>>);
+unsafe impl<'v> AnyLifetime<'v> for ListGen<RefCell<List<'v>>> {
+    any_lifetime_body!(ListGen<RefCell<List<'static>>>);
+}
+any_lifetime!(ListGen<FrozenList>);
 
 unsafe impl<'v> Coerce<List<'v>> for FrozenList {}
 
 impl<'v> AllocValue<'v> for List<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(MutableList(RefCell::new(self)))
+        heap.alloc_complex(ListGen(RefCell::new(self)))
     }
 }
 
 impl AllocFrozenValue for FrozenList {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(self)
+        heap.alloc_simple(ListGen(self))
     }
 }
 
-impl SimpleValue for FrozenList {}
+impl SimpleValue for ListGen<FrozenList> {}
 
 impl<'v> List<'v> {
     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
         if x.unpack_frozen().is_some() {
-            x.downcast_ref::<FrozenList>()
-                .map(|x| ARef::map(x, coerce_ref))
+            x.downcast_ref::<ListGen<FrozenList>>()
+                .map(|x| ARef::map(x, |x| coerce_ref(&x.0)))
         } else {
             let ptr = x.get_ref()?;
-            let ptr = ptr.as_dyn_any().downcast_ref::<MutableList<'v>>()?;
+            let ptr = ptr.as_dyn_any().downcast_ref::<ListGen<RefCell<List>>>()?;
             Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
@@ -100,7 +105,7 @@ impl<'v> List<'v> {
         }
         let ptr = x
             .get_ref()
-            .and_then(|x| x.as_dyn_any().downcast_ref::<MutableList<'v>>());
+            .and_then(|x| x.as_dyn_any().downcast_ref::<ListGen<RefCell<List>>>());
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {
@@ -111,7 +116,7 @@ impl<'v> List<'v> {
     }
 
     pub(crate) fn is_list_type(x: TypeId) -> bool {
-        x == TypeId::of::<MutableList>() || x == TypeId::of::<FrozenList>()
+        x == TypeId::of::<ListGen<RefCell<List>>>() || x == TypeId::of::<ListGen<FrozenList>>()
     }
 }
 
@@ -140,19 +145,20 @@ impl FrozenList {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
     pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenList>> {
-        x.downcast_ref::<FrozenList>()
+        x.downcast_ref::<ListGen<FrozenList>>()
+            .map(|x| ARef::map(x, |x| &x.0))
     }
 }
 
-impl<'v> ComplexValue<'v> for MutableList<'v> {
+impl<'v> ComplexValue<'v> for ListGen<RefCell<List<'v>>> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box FrozenList {
+        Ok(box ListGen(FrozenList {
             content: self
                 .0
                 .into_inner()
                 .content
                 .into_try_map(|v| v.freeze(freezer))?,
-        })
+        }))
     }
 }
 
@@ -194,19 +200,18 @@ impl FrozenList {
     }
 }
 
-#[doc(hidden)]
-pub trait ListLike<'v>: Debug {
+trait ListLike<'v>: Debug {
     fn content(&self) -> ARef<[Value<'v>]>;
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
 }
 
-impl<'v> ListLike<'v> for MutableList<'v> {
+impl<'v> ListLike<'v> for RefCell<List<'v>> {
     fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ref(Ref::map(self.0.borrow(), |x| x.content.as_slice()))
+        ARef::new_ref(Ref::map(self.borrow(), |x| x.content.as_slice()))
     }
 
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
-        match self.0.try_borrow_mut() {
+        match self.try_borrow_mut() {
             Ok(mut xs) => {
                 xs.content[i] = v;
                 Ok(())
@@ -237,7 +242,7 @@ fn collect_repr(xs: &[Value], s: &mut String) {
     s.push(']');
 }
 
-impl<'v, T: ListLike<'v>> StarlarkValue<'v> for T
+impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>
 where
     Self: AnyLifetime<'v>,
 {
@@ -249,13 +254,13 @@ where
     }
 
     fn collect_repr(&self, s: &mut String) {
-        collect_repr(&*self.content(), s)
+        collect_repr(&*self.0.content(), s)
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
         let mut res = String::new();
         res.push('[');
-        for (i, e) in self.content().iter().enumerate() {
+        for (i, e) in self.0.content().iter().enumerate() {
             if i != 0 {
                 res.push_str(", ");
             }
@@ -266,34 +271,34 @@ where
     }
 
     fn to_bool(&self) -> bool {
-        !self.content().is_empty()
+        !self.0.content().is_empty()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match List::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_slice(&*self.content(), &other.content, |x, y| x.equals(*y)),
+            Some(other) => equals_slice(&*self.0.content(), &other.content, |x, y| x.equals(*y)),
         }
     }
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match List::from_value(other) {
             None => ValueError::unsupported_with(self, "cmp()", other),
-            Some(other) => compare_slice(&*self.content(), &other.content, |x, y| x.compare(*y)),
+            Some(other) => compare_slice(&*self.0.content(), &other.content, |x, y| x.compare(*y)),
         }
     }
 
     fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        let i = convert_index(index, self.content().len() as i32)? as usize;
-        Ok(self.content()[i])
+        let i = convert_index(index, self.0.content().len() as i32)? as usize;
+        Ok(self.0.content()[i])
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(self.content().len() as i32)
+        Ok(self.0.content().len() as i32)
     }
 
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        for x in self.content().iter() {
+        for x in self.0.content().iter() {
             if x.equals(other)? {
                 return Ok(true);
             }
@@ -309,8 +314,8 @@ where
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
         let (start, stop, stride) =
-            convert_slice_indices(self.content().len() as i32, start, stop, stride)?;
-        let vec = tuple::slice_vector(start, stop, stride, self.content().iter());
+            convert_slice_indices(self.0.content().len() as i32, start, stop, stride)?;
+        let vec = tuple::slice_vector(start, stop, stride, self.0.content().iter());
         Ok(heap.alloc(List::new(vec)))
     }
 
@@ -320,8 +325,8 @@ where
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
-            let mut result = Vec::with_capacity(self.content().len() + other.len());
-            result.extend(self.content().iter());
+            let mut result = Vec::with_capacity(self.0.content().len() + other.len());
+            result.extend(self.0.content().iter());
             result.extend(other.iter());
             Ok(heap.alloc(List::new(result)))
         } else {
@@ -332,9 +337,10 @@ where
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
-                let mut result = Vec::with_capacity(self.content().len() * cmp::max(0, l) as usize);
+                let mut result =
+                    Vec::with_capacity(self.0.content().len() * cmp::max(0, l) as usize);
                 for _ in 0..l {
-                    result.extend(self.content().iter());
+                    result.extend(self.0.content().iter());
                 }
                 Ok(heap.alloc(List::new(result)))
             }
@@ -352,8 +358,8 @@ where
             // since me is a list, index must be a list, which isn't right
             return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
         }
-        let i = convert_index(index, self.content().len() as i32)? as usize;
-        self.set_at(i, alloc_value)
+        let i = convert_index(index, self.0.content().len() as i32)? as usize;
+        self.0.set_at(i, alloc_value)
     }
 }
 
@@ -376,12 +382,12 @@ impl<'a, 'v> Iterator for It<'a, 'v> {
     }
 }
 
-impl<'v, T: ListLike<'v>> StarlarkIterable<'v> for T {
+impl<'v, T: ListLike<'v>> StarlarkIterable<'v> for ListGen<T> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,
     {
-        let aref = self.content();
+        let aref = self.0.content();
         let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
         let iter = aref_ptr.iter();
         // We need to create an iterator based on this ARef, and keep the iterator alive.

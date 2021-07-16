@@ -1246,7 +1246,7 @@ fn test_display_debug() {
     assert_eq!(val.to_str(), "([1, 2], \"test\", True)");
     assert_eq!(
         format!("{:?}", val),
-        "Value(TupleGen { content: [Value(MutableList(RefCell { value: List { content: [Value(1), Value(2)] } })), Value(\"test\"), Value(true)] })"
+        "Value(TupleGen { content: [Value(ListGen(RefCell { value: List { content: [Value(1), Value(2)] } })), Value(\"test\"), Value(true)] })"
     );
     assert_eq!(
         format!("{:#?}", val),
@@ -1254,7 +1254,7 @@ fn test_display_debug() {
     TupleGen {
         content: [
             Value(
-                MutableList(
+                ListGen(
                     RefCell {
                         value: List {
                             content: [
