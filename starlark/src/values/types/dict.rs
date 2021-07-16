@@ -100,16 +100,6 @@ impl FrozenDict {
     }
 }
 
-impl<V> DictGen<V> {
-    /// The result of calling `type()` on dictionaries.
-    pub const TYPE: &'static str = "dict";
-
-    /// Create a new [`DictGen`].
-    pub fn new(content: SmallMap<V, V>) -> Self {
-        Self { content }
-    }
-}
-
 /// Helper type for lookups, not useful.
 #[derive(Eq, PartialEq)]
 pub struct ValueStr<'a>(pub(crate) &'a str);
@@ -132,19 +122,21 @@ impl Equivalent<FrozenValue> for ValueStr<'_> {
     }
 }
 
-impl<'v, V: ValueLike<'v>> DictGen<V>
-where
-    Value<'v>: Equivalent<V>,
-    for<'a> ValueStr<'a>: Equivalent<V>,
-{
+impl<'v> Dict<'v> {
+    /// The result of calling `type()` on dictionaries.
+    pub const TYPE: &'static str = "dict";
+
+    /// Create a new [`DictGen`].
+    pub fn new(content: SmallMap<Value<'v>, Value<'v>>) -> Self {
+        Self { content }
+    }
+
     /// Iterate through the key/value pairs in the dictionary.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
     where
         'v: 'a,
     {
-        self.content
-            .iter()
-            .map(|(l, r)| (l.to_value(), r.to_value()))
+        self.content.iter().map(|(l, r)| (*l, *r))
     }
 
     /// Iterate through the key/value pairs in the dictionary, but retaining the hash of the keys.
@@ -154,23 +146,47 @@ where
     {
         self.content
             .iter_hashed()
-            .map(|(l, r)| (l.unborrow_copy().to_hashed_value(), r.to_value()))
+            .map(|(l, r)| (l.unborrow_copy(), *r))
     }
 
     /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
     /// and otherwise [`Some`] if the key exists in the dictionary and [`None`] otherwise.
     pub fn get(&self, key: Value<'v>) -> anyhow::Result<Option<Value<'v>>> {
-        Ok(self
-            .content
-            .get_hashed(key.get_hashed()?.borrow())
-            .copied()
-            .map(ValueLike::to_value))
+        Ok(self.content.get_hashed(key.get_hashed()?.borrow()).copied())
     }
 
     /// Get the value associated with a particular string. Equivalent to allocating the
     /// string on the heap, turning it into a value, and looking up using that.
     pub fn get_str(&self, key: &str) -> Option<Value<'v>> {
-        self.content.get(&ValueStr(key)).map(|x| x.to_value())
+        self.content.get(&ValueStr(key)).copied()
+    }
+}
+
+impl FrozenDict {
+    /// Iterate through the key/value pairs in the dictionary.
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (FrozenValue, FrozenValue)> + 'a {
+        self.content.iter().map(|(l, r)| (*l, *r))
+    }
+
+    /// Iterate through the key/value pairs in the dictionary, but retaining the hash of the keys.
+    pub fn iter_hashed<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (Hashed<FrozenValue>, FrozenValue)> + 'a {
+        self.content
+            .iter_hashed()
+            .map(|(l, r)| (l.unborrow_copy(), *r))
+    }
+
+    /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
+    /// and otherwise [`Some`] if the key exists in the dictionary and [`None`] otherwise.
+    pub fn get<'v>(&self, key: Value<'v>) -> anyhow::Result<Option<FrozenValue>> {
+        Ok(self.content.get_hashed(key.get_hashed()?.borrow()).copied())
+    }
+
+    /// Get the value associated with a particular string. Equivalent to allocating the
+    /// string on the heap, turning it into a value, and looking up using that.
+    pub fn get_str(&self, key: &str) -> Option<FrozenValue> {
+        self.content.get(&ValueStr(key)).copied()
     }
 }
 
