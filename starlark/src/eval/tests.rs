@@ -28,7 +28,7 @@ use crate::{
         OwnedFrozenValue, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
     },
 };
-use gazebo::any::AnyLifetime;
+use gazebo::{any::AnyLifetime, cell::AsARef};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::{
@@ -813,53 +813,58 @@ fn test_export_as() {
         AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
     };
     use gazebo::any::AnyLifetime;
+    use std::fmt::Debug;
 
-    #[derive(AnyLifetime, Debug, Trace)]
-    struct Exporter {
-        mutable: bool,
-        named: String,
+    #[derive(Debug, Trace)]
+    struct Exporter<T> {
+        // Either String or a RefCell therefore
+        named: T,
         value: i32,
     }
+    any_lifetime!(Exporter<RefCell<String>>);
+    any_lifetime!(Exporter<String>);
 
-    impl StarlarkValue<'_> for Exporter {
+    impl<'v, T: AsARef<String> + Debug> StarlarkValue<'v> for Exporter<T>
+    where
+        Self: AnyLifetime<'v>,
+    {
         starlark_type!("exporter");
 
         fn collect_repr(&self, collector: &mut String) {
-            collector.push_str(&self.named);
+            collector.push_str(self.named.as_aref().as_str());
             collector.push('=');
             collector.push_str(&self.value.to_string());
         }
+
+        fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
+            if let Some(named) = self.named.as_ref_cell() {
+                *named.borrow_mut() = variable_name.to_owned();
+            }
+        }
     }
 
-    impl AllocValue<'_> for Exporter {
+    impl AllocValue<'_> for Exporter<RefCell<String>> {
         fn alloc_value(self, heap: &Heap) -> Value {
             heap.alloc_complex(self)
         }
     }
 
-    impl<'v> ComplexValue<'v> for Exporter {
-        fn is_mutable(&self) -> bool {
-            self.mutable
-        }
-
-        fn freeze(mut self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-            self.mutable = false;
-            Ok(self)
-        }
-
-        fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
-            self.named = variable_name.to_owned();
+    impl<'v> ComplexValue<'v> for Exporter<RefCell<String>> {
+        fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+            Ok(box Exporter {
+                named: self.named.into_inner(),
+                value: self.value,
+            })
         }
     }
 
-    impl SimpleValue for Exporter {}
+    impl SimpleValue for Exporter<String> {}
 
     #[starlark_module]
     fn exporter(builder: &mut GlobalsBuilder) {
-        fn exporter(value: i32) -> Exporter {
+        fn exporter(value: i32) -> Exporter<RefCell<String>> {
             Ok(Exporter {
-                mutable: true,
-                named: "unnamed".to_owned(),
+                named: RefCell::new("unnamed".to_owned()),
                 value,
             })
         }
