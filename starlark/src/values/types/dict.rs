@@ -19,7 +19,7 @@
 
 use crate as starlark;
 use crate::{
-    collections::{Hashed, SmallMap},
+    collections::{Hashed, MHIter, SmallMap},
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
@@ -30,12 +30,13 @@ use crate::{
 };
 use gazebo::{
     any::AnyLifetime,
+    cast,
     cell::ARef,
     coerce::{coerce_ref, Coerce},
 };
 use indexmap::Equivalent;
 use std::{
-    cell::RefMut,
+    cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     hash::{Hash, Hasher},
     marker::PhantomData,
@@ -61,8 +62,8 @@ pub struct FrozenDict {
     pub content: SmallMap<FrozenValue, FrozenValue>,
 }
 
-unsafe impl<'v> AnyLifetime<'v> for DictGen<Dict<'v>> {
-    any_lifetime_body!(DictGen<Dict<'static>>);
+unsafe impl<'v> AnyLifetime<'v> for DictGen<RefCell<Dict<'v>>> {
+    any_lifetime_body!(DictGen<RefCell<Dict<'static>>>);
 }
 any_lifetime!(DictGen<FrozenDict>);
 
@@ -70,7 +71,7 @@ unsafe impl<'v> Coerce<Dict<'v>> for FrozenDict {}
 
 impl<'v> AllocValue<'v> for Dict<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(DictGen(self))
+        heap.alloc_complex(DictGen(RefCell::new(self)))
     }
 }
 
@@ -88,15 +89,28 @@ impl<'v> Dict<'v> {
             x.downcast_ref::<DictGen<FrozenDict>>()
                 .map(|x| ARef::map(x, |x| coerce_ref(&x.0)))
         } else {
-            x.downcast_ref::<DictGen<Dict<'v>>>()
-                .map(|x| ARef::map(x, |x| &x.0))
+            let ptr = x.get_ref()?;
+            let ptr = ptr
+                .as_dyn_any()
+                .downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
+            Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
 
-    #[allow(dead_code)]
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
-        Ok(x.downcast_mut::<DictGen<Dict<'v>>>()?
-            .map(|x| RefMut::map(x, |x| &mut x.0)))
+        if x.unpack_frozen().is_some() {
+            return Err(ValueError::CannotMutateImmutableValue.into());
+        }
+        let ptr = x
+            .get_ref()
+            .and_then(|x| x.as_dyn_any().downcast_ref::<DictGen<RefCell<Dict<'v>>>>());
+        match ptr {
+            None => Ok(None),
+            Some(ptr) => match ptr.0.try_borrow_mut() {
+                Ok(x) => Ok(Some(x)),
+                Err(_) => Err(ValueError::MutationDuringIteration.into()),
+            },
+        }
     }
 }
 
@@ -206,53 +220,45 @@ impl FrozenDict {
     }
 }
 
-impl<'v> ComplexValue<'v> for DictGen<Dict<'v>> {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
+impl<'v> ComplexValue<'v> for DictGen<RefCell<Dict<'v>>> {
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        let mut content: SmallMap<FrozenValue, FrozenValue> =
-            SmallMap::with_capacity(self.0.content.len());
-        for (k, v) in self.0.content.into_iter_hashed() {
+        let old = self.0.into_inner().content;
+        let mut content: SmallMap<FrozenValue, FrozenValue> = SmallMap::with_capacity(old.len());
+        for (k, v) in old.into_iter_hashed() {
             content.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
         Ok(box DictGen(FrozenDict { content }))
     }
-
-    fn set_at(
-        &mut self,
-        me: Value<'v>,
-        index: Value<'v>,
-        alloc_value: Value<'v>,
-    ) -> anyhow::Result<()> {
-        if me.ptr_eq(index) {
-            // since me is a dict, index must be a dict, which isn't right
-            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
-        }
-        let index = index.get_hashed()?;
-        if let Some(x) = self.0.content.get_mut_hashed(index.borrow()) {
-            *x = alloc_value;
-            return Ok(());
-        }
-        self.0.content.insert_hashed(index, alloc_value);
-        Ok(())
-    }
 }
 
 trait DictLike<'v>: Debug {
-    fn content(&self) -> &SmallMap<Value<'v>, Value<'v>>;
+    fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>>;
+    fn set_at(&self, index: Hashed<Value<'v>>, value: Value<'v>) -> anyhow::Result<()>;
 }
 
-impl<'v> DictLike<'v> for Dict<'v> {
-    fn content(&self) -> &SmallMap<Value<'v>, Value<'v>> {
-        &self.content
+impl<'v> DictLike<'v> for RefCell<Dict<'v>> {
+    fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>> {
+        ARef::new_ref(Ref::map(self.borrow(), |x| &x.content))
+    }
+
+    fn set_at(&self, index: Hashed<Value<'v>>, alloc_value: Value<'v>) -> anyhow::Result<()> {
+        match self.try_borrow_mut() {
+            Ok(mut xs) => {
+                xs.content.insert_hashed(index, alloc_value);
+                Ok(())
+            }
+            Err(_) => Err(ValueError::MutationDuringIteration.into()),
+        }
     }
 }
 
 impl<'v> DictLike<'v> for FrozenDict {
-    fn content(&self) -> &SmallMap<Value<'v>, Value<'v>> {
-        coerce_ref(&self.content)
+    fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>> {
+        ARef::new_ptr(coerce_ref(&self.content))
+    }
+
+    fn set_at(&self, _index: Hashed<Value<'v>>, _value: Value<'v>) -> anyhow::Result<()> {
+        Err(ValueError::CannotMutateImmutableValue.into())
     }
 }
 
@@ -302,7 +308,9 @@ where
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Dict::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_small_map(self.0.content(), &other.content, |x, y| x.equals(*y)),
+            Some(other) => {
+                equals_small_map(&*self.0.content(), &other.content, |x, y| x.equals(*y))
+            }
         }
     }
 
@@ -327,6 +335,39 @@ where
     fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
         Ok(self)
     }
+
+    fn set_at(
+        &self,
+        me: Value<'v>,
+        index: Value<'v>,
+        alloc_value: Value<'v>,
+    ) -> anyhow::Result<()> {
+        if me.ptr_eq(index) {
+            // since me is a dict, index must be a dict, which isn't right
+            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
+        }
+        let index = index.get_hashed()?;
+        self.0.set_at(index, alloc_value)
+    }
+}
+
+struct It<'a, 'v> {
+    // Required for its lifetime properties
+    #[allow(dead_code)]
+    aref: ARef<'a, SmallMap<Value<'v>, Value<'v>>>,
+    iter: MHIter<'a, Value<'v>, Value<'v>>,
+}
+
+impl<'a, 'v> Iterator for It<'a, 'v> {
+    type Item = Value<'v>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|x| *x.0)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
 }
 
 impl<'v, T: DictLike<'v>> StarlarkIterable<'v> for DictGen<T> {
@@ -334,7 +375,12 @@ impl<'v, T: DictLike<'v>> StarlarkIterable<'v> for DictGen<T> {
     where
         'v: 'a,
     {
-        box self.0.content().keys().copied()
+        let aref = self.0.content();
+        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
+        let iter = aref_ptr.iter();
+        // We need to create an iterator based on this ARef, and keep the iterator alive.
+        // This, plus the unsafe above, ensures the ARef stays alive long enough.
+        box It { aref, iter }
     }
 }
 
