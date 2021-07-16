@@ -24,7 +24,7 @@ use crate::{
         Trace, Tracer, Value,
     },
 };
-use gazebo::prelude::*;
+use gazebo::{coerce::Coerce, prelude::*};
 use std::fmt::{self, Debug};
 use thiserror::Error;
 
@@ -39,6 +39,8 @@ enum TypingError {
 }
 
 pub(crate) struct TypeCompiled(Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>);
+
+unsafe impl Coerce<TypeCompiled> for TypeCompiled {}
 
 unsafe impl<'v> Trace<'v> for TypeCompiled {
     fn trace(&mut self, _tracer: &Tracer<'v>) {

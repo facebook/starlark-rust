@@ -50,11 +50,19 @@ use crate::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
         typing::TypeCompiled,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
+        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value,
+        ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
+use either::Either;
+use gazebo::{
+    any::AnyLifetime,
+    cell::{ARef, AsARef},
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
 use std::{
+    cell::RefCell,
     collections::hash_map::DefaultHasher,
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -72,9 +80,10 @@ unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 
 /// The result of `record()`, being the type of records.
 #[derive(Debug, Trace)]
-pub struct RecordTypeGen<V> {
+pub struct RecordTypeGen<V, Typ> {
     /// The name of this type, e.g. MyRecord
-    typ: Option<String>,
+    /// Either `Option<String>` or a `RefCell` thereof.
+    typ: Typ,
     /// The V is the type the field must satisfy (e.g. `"string"`)
     fields: SmallMap<String, (FieldGen<V>, TypeCompiled)>,
     /// The construction function, which takes a hidden parameter (this type)
@@ -84,8 +93,8 @@ pub struct RecordTypeGen<V> {
     constructor: V,
 }
 
-// Manual because no instance for such as weird SmallMap
-unsafe impl<From: Coerce<To>, To> Coerce<RecordTypeGen<To>> for RecordTypeGen<From> {}
+pub type RecordType<'v> = RecordTypeGen<Value<'v>, RefCell<Option<String>>>;
+pub type FrozenRecordType = RecordTypeGen<FrozenValue, Option<String>>;
 
 /// An actual record.
 #[derive(Clone, Debug, Trace, Coerce)]
@@ -96,7 +105,7 @@ pub struct RecordGen<V> {
 }
 
 starlark_complex_value!(pub(crate) Field);
-starlark_complex_value!(pub RecordType);
+starlark_complex_values!(RecordType);
 starlark_complex_value!(pub Record);
 
 impl<V> FieldGen<V> {
@@ -131,6 +140,15 @@ fn collect_repr_record<'s, 't, V: 't>(
     collector.push(')');
 }
 
+fn record_fields<'v>(
+    x: Either<ARef<'v, RecordType<'v>>, ARef<'v, FrozenRecordType>>,
+) -> ARef<'v, SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>> {
+    x.either(
+        |x| ARef::map(x, |x| &x.fields),
+        |x| ARef::map(x, |x| coerce_ref(&x.fields)),
+    )
+}
+
 impl<'v> RecordType<'v> {
     pub(crate) fn new(
         fields: SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>,
@@ -138,7 +156,7 @@ impl<'v> RecordType<'v> {
     ) -> Self {
         let constructor = heap.alloc(Self::make_constructor(&fields));
         Self {
-            typ: None,
+            typ: RefCell::new(None),
             fields,
             constructor,
         }
@@ -164,9 +182,9 @@ impl<'v> RecordType<'v> {
         NativeFunction::new(
             move |eval, this, mut param_parser: ParametersParser| {
                 let this = this.unwrap();
-                let info = RecordType::from_value(this).unwrap();
-                let mut values = Vec::with_capacity(info.fields.len());
-                for (name, field) in &info.fields {
+                let fields = record_fields(RecordType::from_value(this).unwrap());
+                let mut values = Vec::with_capacity(fields.len());
+                for (name, field) in fields.iter() {
                     match field.0.default {
                         None => {
                             let v: Value = param_parser.next(name, eval)?;
@@ -196,9 +214,13 @@ impl<'v> RecordType<'v> {
 impl<'v, V: ValueLike<'v>> RecordGen<V> {
     pub const TYPE: &'static str = "record";
 
-    fn get_record_type(&self) -> ARef<'v, RecordType<'v>> {
+    fn get_record_type(&self) -> Either<ARef<'v, RecordType<'v>>, ARef<'v, FrozenRecordType>> {
         // Safe to unwrap because we always ensure typ is RecordType
         RecordType::from_value(self.typ.to_value()).unwrap()
+    }
+
+    fn get_record_fields(&self) -> ARef<'v, SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>> {
+        record_fields(self.get_record_type())
     }
 }
 
@@ -236,34 +258,24 @@ where
 }
 
 impl<'v> ComplexValue<'v> for RecordType<'v> {
-    // So we can get the name set
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
             fields.insert_hashed(k, (t.0.freeze(freezer)?, t.1));
         }
         Ok(box FrozenRecordType {
-            typ: self.typ,
+            typ: self.typ.into_inner(),
             fields,
             constructor: self.constructor.freeze(freezer)?,
         })
     }
-
-    fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
-        if self.typ.is_none() {
-            self.typ = Some(variable_name.to_owned())
-        }
-    }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<V>
+impl<'v, Typ, V: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<V, Typ>
 where
     Self: AnyLifetime<'v>,
     FieldGen<V>: AnyLifetime<'v>,
+    Typ: AsARef<Option<String>> + Debug,
 {
     starlark_type!(FUNCTION_TYPE);
 
@@ -302,27 +314,49 @@ where
 
     fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
         if attribute == "type" {
-            Some(heap.alloc(self.typ.as_deref().unwrap_or(Record::TYPE)))
+            Some(heap.alloc(self.typ.as_aref().as_deref().unwrap_or(Record::TYPE)))
         } else {
             None
         }
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        match RecordType::from_value(other) {
-            Some(other) if self.typ == other.typ && self.fields.len() == other.fields.len() => {
-                for ((k1, t1), (k2, t2)) in self.fields.iter().zip(other.fields.iter()) {
-                    // We require that the types and defaults are both equal.
-                    if k1 != k2
-                        || !t1.0.typ.equals(t2.0.typ)?
-                        || t1.0.default.map(ValueLike::to_value) != t2.0.default
-                    {
-                        return Ok(false);
-                    }
+        fn eq<'v>(
+            a: &RecordTypeGen<impl ValueLike<'v>, impl AsARef<Option<String>>>,
+            b: &RecordTypeGen<impl ValueLike<'v>, impl AsARef<Option<String>>>,
+        ) -> anyhow::Result<bool> {
+            if a.typ.as_aref() != b.typ.as_aref() {
+                return Ok(false);
+            };
+            if a.fields.len() != b.fields.len() {
+                return Ok(false);
+            };
+            for ((k1, t1), (k2, t2)) in a.fields.iter().zip(b.fields.iter()) {
+                // We require that the types and defaults are both equal.
+                if k1 != k2
+                    || !t1.0.typ.equals(t2.0.typ.to_value())?
+                    || t1.0.default.map(ValueLike::to_value)
+                        != t2.0.default.map(ValueLike::to_value)
+                {
+                    return Ok(false);
                 }
-                Ok(true)
             }
+            Ok(true)
+        }
+
+        match RecordType::from_value(other) {
+            Some(Either::Left(other)) => eq(self, &*other),
+            Some(Either::Right(other)) => eq(self, &*other),
             _ => Ok(false),
+        }
+    }
+
+    fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
+        if let Some(typ) = self.typ.as_ref_cell() {
+            let mut typ = typ.borrow_mut();
+            if typ.is_none() {
+                *typ = Some(variable_name.to_owned())
+            }
         }
     }
 }
@@ -343,14 +377,19 @@ where
     starlark_type!(Record::TYPE);
 
     fn matches_type(&self, ty: &str) -> bool {
-        ty == Record::TYPE || Some(ty) == self.get_record_type().typ.as_deref()
+        if ty == Record::TYPE {
+            return true;
+        }
+        match self.get_record_type() {
+            Either::Left(x) => Some(ty) == x.typ.borrow().as_deref(),
+            Either::Right(x) => Some(ty) == x.typ.as_deref(),
+        }
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
         let mut s = "{".to_owned();
         s += &self
-            .get_record_type()
-            .fields
+            .get_record_fields()
             .keys()
             .zip(&self.values)
             .map(|(k, v)| Ok(format!("\"{}\":{}", k, v.to_json()?)))
@@ -362,7 +401,7 @@ where
 
     fn collect_repr(&self, collector: &mut String) {
         collect_repr_record(
-            self.get_record_type().fields.keys().zip(&self.values),
+            self.get_record_fields().keys().zip(&self.values),
             |x, s| x.collect_repr(s),
             collector,
         );
@@ -378,7 +417,7 @@ where
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
-        let i = self.get_record_type().fields.get_index_of(attribute)?;
+        let i = self.get_record_fields().get_index_of(attribute)?;
         Some(self.values[i].to_value())
     }
 
@@ -392,10 +431,10 @@ where
     }
 
     fn has_attr(&self, attribute: &str) -> bool {
-        self.get_record_type().fields.contains_key(attribute)
+        self.get_record_fields().contains_key(attribute)
     }
 
     fn dir_attr(&self) -> Vec<String> {
-        self.get_record_type().fields.keys().cloned().collect()
+        self.get_record_fields().keys().cloned().collect()
     }
 }
