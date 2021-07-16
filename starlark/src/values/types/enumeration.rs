@@ -42,12 +42,18 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace, Value,
-        ValueLike,
+        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkIterable, StarlarkValue,
+        Trace, Value, ValueLike,
     },
 };
 use derivative::Derivative;
-use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce};
+use either::Either;
+use gazebo::{
+    any::AnyLifetime,
+    cell::{ARef, AsARef},
+    coerce::{coerce_ref, Coerce},
+};
+use std::{cell::RefCell, fmt::Debug};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -63,14 +69,18 @@ enum EnumError {
 #[repr(C)]
 // Deliberately store fully populated values
 // for each entry, so we can produce enum values with zero allocation.
-pub struct EnumTypeGen<V> {
-    typ: Option<String>,
+pub struct EnumTypeGen<V, Typ> {
+    // Typ = RefCell<Option<String>> or Option<String>
+    typ: Typ,
     // The key is the value of the enumeration
     // The value is a value of type EnumValue
     elements: SmallMap<V, V>,
     // Function to construct an enumeration, cached, so we don't recreate it on each invoke.
     constructor: V,
 }
+
+pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
+pub type FrozenEnumType = EnumTypeGen<FrozenValue, Option<String>>;
 
 /// A value from an enumeration.
 #[derive(Clone, Derivative, Trace, Coerce)]
@@ -84,31 +94,20 @@ pub struct EnumValueGen<V> {
     index: i32, // The index in the enumeration
 }
 
-starlark_complex_value!(pub EnumType);
+starlark_complex_values!(EnumType);
 starlark_complex_value!(pub EnumValue);
 
 impl<'v> ComplexValue<'v> for EnumType<'v> {
-    // So we can get the name set and tie the cycle
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
             elements.insert_hashed(k.freeze(freezer)?, t.freeze(freezer)?);
         }
         Ok(box FrozenEnumType {
-            typ: self.typ,
+            typ: self.typ.into_inner(),
             elements,
             constructor: self.constructor.freeze(freezer)?,
         })
-    }
-
-    fn export_as(&mut self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
-        if self.typ.is_none() {
-            self.typ = Some(variable_name.to_owned())
-        }
     }
 }
 
@@ -127,7 +126,7 @@ impl<'v> EnumType<'v> {
         // We are constructing the enum and all elements in one go.
         // They both point at each other, which adds to the complexity.
         let typ = heap.alloc(EnumType {
-            typ: None,
+            typ: RefCell::new(None),
             elements: SmallMap::new(),
             constructor: heap.alloc(Self::make_constructor()),
         });
@@ -145,8 +144,15 @@ impl<'v> EnumType<'v> {
         }
 
         // Here we tie the cycle
-        let mut t = EnumType::from_value_mut(typ)?.unwrap();
-        t.elements = res;
+        let t = typ.downcast_ref::<EnumType>().unwrap();
+        #[allow(clippy::cast_ref_to_mut)]
+        unsafe {
+            // To tie the cycle we can either have an UnsafeCell or similar, or just mutate in place.
+            // Since we only do the tie once, better to do the mutate in place.
+            // Safe because we know no one else has a copy of this reference at this point.
+            *(&t.elements as *const SmallMap<Value<'v>, Value<'v>>
+                as *mut SmallMap<Value<'v>, Value<'v>>) = res;
+        }
         Ok(typ)
     }
 
@@ -163,8 +169,11 @@ impl<'v> EnumType<'v> {
             move |eval, this, mut param_parser: ParametersParser| {
                 let this = this.unwrap();
                 let val: Value = param_parser.next("value", eval)?;
-                let typ = EnumType::from_value(this).unwrap();
-                match typ.elements.get_hashed(val.get_hashed()?.borrow()) {
+                let elements = EnumType::from_value(this).unwrap().either(
+                    |x| ARef::map(x, |x| &x.elements),
+                    |x| ARef::map(x, |x| coerce_ref(&x.elements)),
+                );
+                match elements.get_hashed(val.get_hashed()?.borrow()) {
                     Some(v) => Ok(*v),
                     None => {
                         Err(EnumError::InvalidElement(val.to_string(), this.to_string()).into())
@@ -181,15 +190,16 @@ impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
     /// The result of calling `type()` on an enum value.
     pub const TYPE: &'static str = "enum";
 
-    fn get_enum_type(&self) -> ARef<'v, EnumType<'v>> {
+    fn get_enum_type(&self) -> Either<ARef<'v, EnumType<'v>>, ARef<'v, FrozenEnumType>> {
         // Safe to unwrap because we always ensure typ is EnumType
         EnumType::from_value(self.typ.to_value()).unwrap()
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<V>
+impl<'v, Typ, V: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<V, Typ>
 where
     Self: AnyLifetime<'v>,
+    Typ: AsARef<Option<String>> + Debug,
 {
     starlark_type!(FUNCTION_TYPE);
 
@@ -239,28 +249,49 @@ where
 
     fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
         if attribute == "type" {
-            Some(heap.alloc(self.typ.as_deref().unwrap_or(EnumValue::TYPE)))
+            Some(heap.alloc(self.typ.as_aref().as_deref().unwrap_or(EnumValue::TYPE)))
         } else {
             None
         }
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        match EnumType::from_value(other) {
-            Some(other) if self.typ == other.typ && self.elements.len() == other.elements.len() => {
-                for (k1, k2) in self.elements.keys().zip(other.elements.keys()) {
-                    if !k1.to_value().equals(*k2)? {
-                        return Ok(false);
-                    }
-                }
-                Ok(true)
+        fn eq<'v>(
+            a: &EnumTypeGen<impl ValueLike<'v>, impl AsARef<Option<String>>>,
+            b: &EnumTypeGen<impl ValueLike<'v>, impl AsARef<Option<String>>>,
+        ) -> anyhow::Result<bool> {
+            if a.typ.as_aref() != b.typ.as_aref() {
+                return Ok(false);
             }
+            if a.elements.len() != b.elements.len() {
+                return Ok(false);
+            }
+            for (k1, k2) in a.elements.keys().zip(b.elements.keys()) {
+                if !k1.to_value().equals(k2.to_value())? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+
+        match EnumType::from_value(other) {
+            Some(Either::Left(other)) => eq(self, &*other),
+            Some(Either::Right(other)) => eq(self, &*other),
             _ => Ok(false),
+        }
+    }
+
+    fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
+        if let Some(typ) = self.typ.as_ref_cell() {
+            let mut typ = typ.borrow_mut();
+            if typ.is_none() {
+                *typ = Some(variable_name.to_owned())
+            }
         }
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for EnumTypeGen<V> {
+impl<'v, Typ, V: ValueLike<'v>> StarlarkIterable<'v> for EnumTypeGen<V, Typ> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,
@@ -276,7 +307,13 @@ where
     starlark_type!(EnumValue::TYPE);
 
     fn matches_type(&self, ty: &str) -> bool {
-        ty == EnumValue::TYPE || Some(ty) == self.get_enum_type().typ.as_deref()
+        if ty == EnumValue::TYPE {
+            return true;
+        }
+        match self.get_enum_type() {
+            Either::Left(x) => Some(ty) == x.typ.borrow().as_deref(),
+            Either::Right(x) => Some(ty) == x.typ.as_deref(),
+        }
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
