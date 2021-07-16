@@ -312,12 +312,6 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
     ) -> anyhow::Result<()> {
         ValueError::unsupported_with(self, "[]=", index)
     }
-
-    /// Set the attribute named `attribute` of the current value to
-    /// `value` (e.g. `a.attribute = value`).
-    fn set_attr(&mut self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
-        ValueError::unsupported(self, &format!(".{}=", attribute))
-    }
 }
 
 /// A trait representing Starlark values which are simple - they
@@ -766,5 +760,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         _new_value: Value<'v>,
     ) -> anyhow::Result<()> {
         Err(ValueError::CannotMutateImmutableValue.into())
+    }
+
+    /// Set the attribute named `attribute` of the current value to
+    /// `value` (e.g. `a.attribute = value`).
+    fn set_attr(&self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
+        ValueError::unsupported(self, &format!(".{}=", attribute))
     }
 }

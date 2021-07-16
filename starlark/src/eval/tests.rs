@@ -24,14 +24,15 @@ use crate::{
     eval::Evaluator,
     syntax::{AstModule, Dialect},
     values::{
-        any::StarlarkAny, none::NoneType, ComplexValue, Freezer, Heap, OwnedFrozenValue,
-        SimpleValue, StarlarkValue, Trace, UnpackValue, Value, ValueLike,
+        any::StarlarkAny, none::NoneType, tuple::FrozenTuple, ComplexValue, Freezer, Heap,
+        OwnedFrozenValue, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
     },
 };
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::any::AnyLifetime;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::{
+    cell::RefCell,
     collections::HashMap,
     mem,
     sync::{
@@ -1733,45 +1734,35 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug, Trace, Coerce)]
-    #[repr(transparent)]
-    struct WrapperGen<V>(SmallMap<String, V>);
-    starlark_complex_value!(Wrapper);
+    #[derive(Debug, Trace, AnyLifetime)]
+    struct Wrapper<'v>(RefCell<SmallMap<String, Value<'v>>>);
 
-    impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for WrapperGen<V>
+    impl<'v> StarlarkValue<'v> for Wrapper<'v>
     where
         Self: AnyLifetime<'v>,
     {
         starlark_type!("wrapper");
 
         fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
-            Some(self.0.get(attribute).unwrap().to_value())
+            Some(*self.0.borrow().get(attribute).unwrap())
+        }
+
+        fn set_attr(&self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
+            self.0.borrow_mut().insert(attribute.to_owned(), new_value);
+            Ok(())
         }
     }
 
     impl<'v> ComplexValue<'v> for Wrapper<'v> {
-        fn is_mutable(&self) -> bool {
-            true
-        }
-
-        fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-            let mut res = SmallMap::with_capacity(self.0.len());
-            for (key, val) in self.0.into_iter_hashed() {
-                res.insert_hashed(key, val.freeze(freezer)?);
-            }
-            Ok(box WrapperGen(res))
-        }
-
-        fn set_attr(&mut self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
-            self.0.insert(attribute.to_owned(), new_value);
-            Ok(())
+        fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+            Ok(box FrozenTuple::default())
         }
     }
 
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn wrapper() -> Wrapper<'v> {
-            Ok(WrapperGen(SmallMap::new()))
+        fn wrapper() -> Value<'v> {
+            Ok(heap.alloc_complex(Wrapper(RefCell::new(SmallMap::new()))))
         }
     }
 

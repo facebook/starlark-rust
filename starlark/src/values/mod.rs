@@ -327,9 +327,9 @@ impl<'v> Value<'v> {
         s
     }
 
-    /// Forwards to [`ComplexValue::set_attr`].
+    /// Forwards to [`StarlarkValue::set_attr`].
     pub fn set_attr(self, attribute: &str, alloc_value: Value<'v>) -> anyhow::Result<()> {
-        self.get_ref_mut()?.set_attr(attribute, alloc_value)
+        self.get_aref().set_attr(attribute, alloc_value)
     }
 
     /// Forwards to [`ComplexValue::set_at`].
