@@ -32,56 +32,71 @@ use gazebo::{
     any::AnyLifetime,
     cell::ARef,
     coerce::{coerce_ref, Coerce},
-    prelude::*,
 };
 use indexmap::Equivalent;
 use std::{
     cell::RefMut,
+    fmt::Debug,
     hash::{Hash, Hasher},
     marker::PhantomData,
     ops::Deref,
 };
 
-/// Define the dictionary type. See [`Dict`] and [`FrozenDict`] as the two aliases.
-#[derive(Clone, Default_, Debug, Trace, Coerce)]
+#[derive(Clone, Default, Trace, Debug)]
+struct DictGen<T>(T);
+
+/// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
+#[derive(Clone, Default, Trace, Debug)]
 #[repr(transparent)]
-pub struct DictGen<V> {
+pub struct Dict<'v> {
     /// The data stored by the dictionary. The keys must all be hashable values.
-    pub content: SmallMap<V, V>,
+    pub content: SmallMap<Value<'v>, Value<'v>>,
 }
 
-pub type Dict<'v> = DictGen<Value<'v>>;
-pub type FrozenDict = DictGen<FrozenValue>;
-any_lifetime!(Dict<'v>);
-any_lifetime!(FrozenDict);
+/// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
+#[derive(Clone, Default, Debug, AnyLifetime)]
+#[repr(transparent)]
+pub struct FrozenDict {
+    /// The data stored by the dictionary. The keys must all be hashable values.
+    pub content: SmallMap<FrozenValue, FrozenValue>,
+}
+
+unsafe impl<'v> AnyLifetime<'v> for DictGen<Dict<'v>> {
+    any_lifetime_body!(DictGen<Dict<'static>>);
+}
+any_lifetime!(DictGen<FrozenDict>);
+
+unsafe impl<'v> Coerce<Dict<'v>> for FrozenDict {}
 
 impl<'v> AllocValue<'v> for Dict<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(self)
+        heap.alloc_complex(DictGen(self))
     }
 }
 
 impl AllocFrozenValue for FrozenDict {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(self)
+        heap.alloc_simple(DictGen(self))
     }
 }
 
-impl SimpleValue for FrozenDict {}
+impl SimpleValue for DictGen<FrozenDict> {}
 
 impl<'v> Dict<'v> {
     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
         if x.unpack_frozen().is_some() {
-            x.downcast_ref::<FrozenDict>()
-                .map(|x| ARef::map(x, coerce_ref))
+            x.downcast_ref::<DictGen<FrozenDict>>()
+                .map(|x| ARef::map(x, |x| coerce_ref(&x.0)))
         } else {
-            x.downcast_ref::<Dict<'v>>()
+            x.downcast_ref::<DictGen<Dict<'v>>>()
+                .map(|x| ARef::map(x, |x| &x.0))
         }
     }
 
     #[allow(dead_code)]
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
-        x.downcast_mut::<Dict<'v>>()
+        Ok(x.downcast_mut::<DictGen<Dict<'v>>>()?
+            .map(|x| RefMut::map(x, |x| &mut x.0)))
     }
 }
 
@@ -96,7 +111,8 @@ impl FrozenDict {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
     pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenDict>> {
-        x.downcast_ref::<FrozenDict>()
+        x.downcast_ref::<DictGen<FrozenDict>>()
+            .map(|x| ARef::map(x, |x| &x.0))
     }
 }
 
@@ -126,7 +142,7 @@ impl<'v> Dict<'v> {
     /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
 
-    /// Create a new [`DictGen`].
+    /// Create a new [`Dict`].
     pub fn new(content: SmallMap<Value<'v>, Value<'v>>) -> Self {
         Self { content }
     }
@@ -190,18 +206,18 @@ impl FrozenDict {
     }
 }
 
-impl<'v> ComplexValue<'v> for Dict<'v> {
+impl<'v> ComplexValue<'v> for DictGen<Dict<'v>> {
     fn is_mutable(&self) -> bool {
         true
     }
 
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let mut content: SmallMap<FrozenValue, FrozenValue> =
-            SmallMap::with_capacity(self.content.len());
-        for (k, v) in self.content.into_iter_hashed() {
+            SmallMap::with_capacity(self.0.content.len());
+        for (k, v) in self.0.content.into_iter_hashed() {
             content.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
-        Ok(box FrozenDict { content })
+        Ok(box DictGen(FrozenDict { content }))
     }
 
     fn set_at(
@@ -215,19 +231,33 @@ impl<'v> ComplexValue<'v> for Dict<'v> {
             return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
         }
         let index = index.get_hashed()?;
-        if let Some(x) = self.content.get_mut_hashed(index.borrow()) {
+        if let Some(x) = self.0.content.get_mut_hashed(index.borrow()) {
             *x = alloc_value;
             return Ok(());
         }
-        self.content.insert_hashed(index, alloc_value);
+        self.0.content.insert_hashed(index, alloc_value);
         Ok(())
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DictGen<V>
+trait DictLike<'v>: Debug {
+    fn content(&self) -> &SmallMap<Value<'v>, Value<'v>>;
+}
+
+impl<'v> DictLike<'v> for Dict<'v> {
+    fn content(&self) -> &SmallMap<Value<'v>, Value<'v>> {
+        &self.content
+    }
+}
+
+impl<'v> DictLike<'v> for FrozenDict {
+    fn content(&self) -> &SmallMap<Value<'v>, Value<'v>> {
+        coerce_ref(&self.content)
+    }
+}
+
+impl<'v, T: DictLike<'v>> StarlarkValue<'v> for DictGen<T>
 where
-    Value<'v>: Equivalent<V>,
-    V: Equivalent<Value<'v>>,
     Self: AnyLifetime<'v>,
 {
     starlark_type!(Dict::TYPE);
@@ -239,7 +269,7 @@ where
 
     fn collect_repr(&self, r: &mut String) {
         r.push('{');
-        for (i, (name, value)) in self.content.iter().enumerate() {
+        for (i, (name, value)) in self.0.content().iter().enumerate() {
             if i != 0 {
                 r.push_str(", ");
             }
@@ -253,7 +283,7 @@ where
     fn to_json(&self) -> anyhow::Result<String> {
         let mut res = String::new();
         res.push('{');
-        for (i, (k, v)) in self.content.iter().enumerate() {
+        for (i, (k, v)) in self.0.content().iter().enumerate() {
             if i != 0 {
                 res.push_str(", ");
             }
@@ -266,30 +296,31 @@ where
     }
 
     fn to_bool(&self) -> bool {
-        !self.content.is_empty()
+        !self.0.content().is_empty()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Dict::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_small_map(&self.content, &other.content, |x, y| x.equals(*y)),
+            Some(other) => equals_small_map(self.0.content(), &other.content, |x, y| x.equals(*y)),
         }
     }
 
     fn at(&self, index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match self.content.get_hashed(index.get_hashed()?.borrow()) {
+        match self.0.content().get_hashed(index.get_hashed()?.borrow()) {
             Some(v) => Ok(v.to_value()),
             None => Err(ValueError::KeyNotFound(index.to_repr()).into()),
         }
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(self.content.len() as i32)
+        Ok(self.0.content().len() as i32)
     }
 
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
         Ok(self
-            .content
+            .0
+            .content()
             .contains_key_hashed(other.get_hashed()?.borrow()))
     }
 
@@ -298,12 +329,12 @@ where
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkIterable<'v> for DictGen<V> {
+impl<'v, T: DictLike<'v>> StarlarkIterable<'v> for DictGen<T> {
     fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
     where
         'v: 'a,
     {
-        box self.content.iter().map(|x| x.0.to_value())
+        box self.0.content().keys().copied()
     }
 }
 
