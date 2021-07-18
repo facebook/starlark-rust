@@ -195,12 +195,8 @@ impl Freezer {
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
             ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
-            ValueMem::Immutable(x) => {
+            ValueMem::Complex(x) => {
                 *fvmem = FrozenValueMem::Simple(x.freeze(self)?.as_box_starlark_value())
-            }
-            ValueMem::Mutable(x) => {
-                *fvmem =
-                    FrozenValueMem::Simple(x.into_inner().freeze(self)?.as_box_starlark_value())
             }
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
@@ -260,7 +256,7 @@ impl Heap {
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        self.alloc_raw(ValueMem::Immutable(box x))
+        self.alloc_raw(ValueMem::Complex(box x))
     }
 
     #[inline(never)]
@@ -357,8 +353,7 @@ impl<'v> Tracer<'v> {
 
         match &mut old_mem {
             ValueMem::Ref(x) => x.trace(self),
-            ValueMem::Mutable(x) => x.borrow_mut().trace(self),
-            ValueMem::Immutable(x) => x.trace(self),
+            ValueMem::Complex(x) => x.trace(self),
             _ => {} // Doesn't contain Value pointers
         }
         unsafe {

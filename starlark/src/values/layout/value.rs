@@ -37,14 +37,11 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    ComplexValue, SimpleValue, StarlarkValue, Trace, ValueError,
+    ComplexValue, SimpleValue, StarlarkValue, Trace,
 };
 use gazebo::{cell::ARef, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
-use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
-    time::Instant,
-};
+use std::{cell::Cell, time::Instant};
 use void::Void;
 
 // So we can provide &dyn StarlarkValue's when we need them
@@ -90,7 +87,9 @@ unsafe impl Sync for FrozenValue {}
 // We care a lot about the size of these data types, so make sure they don't
 // regress
 assert_eq_size!(FrozenValueMem, [usize; 3]);
-assert_eq_size!(ValueMem, [usize; 4]);
+
+// On Linux this data type is 4 words, on Mac, 3 words, so hard to write a static assertion
+// assert_eq_size!(ValueMem, [usize; 3]);
 
 #[derive(VariantName)]
 pub(crate) enum FrozenValueMem {
@@ -125,11 +124,8 @@ pub(crate) enum ValueMem<'v> {
     Blackhole,
     // Things that aren't mutable and don't point to other Value's
     Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
-    // Mutable things in my heap that aren't `is_mutable()`
-    Immutable(Box<dyn ComplexValue<'v>>),
-    // Mutable things that are in my heap and are `is_mutable()`
-    #[allow(dead_code)] // Delete in the next diff
-    Mutable(RefCell<Box<dyn ComplexValue<'v>>>),
+    // Complex things in my heap (may point at other Value's)
+    Complex(Box<dyn ComplexValue<'v>>),
     // Used references in slots - usually wrapped in ValueRef
     // Never points at a Ref, must point directly at a real value,
     // but might be unassigned (None)
@@ -163,24 +159,11 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref_mut(&self) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
-        match self {
-            Self::Mutable(x) => match x.try_borrow_mut() {
-                // Could be called by something else having the ref locked, but iteration is
-                // definitely most likely
-                Err(_) => Err(ValueError::MutationDuringIteration.into()),
-                Ok(state) => Ok(RefMut::map(state, |x| &mut **x)),
-            },
-            _ => Err(ValueError::CannotMutateImmutableValue.into()),
-        }
-    }
-
     fn get_ref(&self) -> Option<&dyn StarlarkValue<'v>> {
         match self {
             Self::Str(x) => Some(x),
             Self::Simple(x) => Some(simple_starlark_value(Box::as_ref(x))),
-            Self::Immutable(x) => Some(x.as_starlark_value()),
-            Self::Mutable(_) => None,
+            Self::Complex(x) => Some(x.as_starlark_value()),
             _ => self.unexpected("get_ref"),
         }
     }
@@ -190,8 +173,7 @@ impl<'v> ValueMem<'v> {
         match self {
             Self::Str(x) => ARef::new_ptr(x),
             Self::Simple(x) => ARef::new_ptr(simple_starlark_value(Box::as_ref(x))),
-            Self::Immutable(x) => ARef::new_ptr(x.as_starlark_value()),
-            Self::Mutable(x) => ARef::new_ref(Ref::map(x.borrow(), |x| x.as_starlark_value())),
+            Self::Complex(x) => ARef::new_ptr(x.as_starlark_value()),
             _ => self.unexpected("get_aref"),
         }
     }
@@ -333,13 +315,6 @@ impl<'v> Value<'v> {
             PointerUnpack::Bool(x) => ARef::new_ptr(if x { &VALUE_TRUE } else { &VALUE_FALSE }),
             PointerUnpack::Int(x) => ARef::new_ptr(PointerI32::new(x)),
         }
-    }
-
-    pub(crate) fn get_ref_mut(self) -> anyhow::Result<RefMut<'v, dyn ComplexValue<'v>>> {
-        if let Some(x) = self.0.unpack_ptr2() {
-            return x.get_ref_mut();
-        }
-        Err(ValueError::CannotMutateImmutableValue.into())
     }
 
     /// Are two [`Value`]s equal, looking at only their underlying pointer. This function is

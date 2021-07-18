@@ -40,7 +40,6 @@ pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 pub use starlark_module::Trace;
 use std::{
-    cell::RefMut,
     cmp::Ordering,
     fmt,
     fmt::{Debug, Display},
@@ -380,20 +379,6 @@ impl<'v> Value<'v> {
     /// How are two values comparable. For values of different types will return [`Err`].
     pub fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
         ValueLike::compare(self, other)
-    }
-
-    /// Get a mutable reference to underlying data or [`None`]
-    /// if contained object has different type than requested.
-    ///
-    /// This function returns an [`Err`] if the [`Value`] is already borrowed, is frozen,
-    /// or frozen for iteration.
-    ///
-    /// While this reference is active, any [`get_aref`](Value::get_aref) or similar on the value will
-    /// _cause a panic_. Therefore, it's super important not to call any Starlark operations,
-    /// even as simple as equality, while holding the [`RefMut`].
-    pub fn downcast_mut<T: AnyLifetime<'v>>(self) -> anyhow::Result<Option<RefMut<'v, T>>> {
-        let vref = self.get_ref_mut()?;
-        Ok(RefMut::filter_map(vref, |v| v.as_dyn_any_mut().downcast_mut::<T>()).ok())
     }
 
     /// Describe the value, in order to get its metadata in a way that could be used

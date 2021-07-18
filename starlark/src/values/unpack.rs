@@ -19,7 +19,7 @@
 
 use crate::values::{list::List, tuple::Tuple, ComplexValue, Value};
 use gazebo::cell::ARef;
-use std::{cell::RefMut, marker::PhantomData, ops::Deref};
+use std::{marker::PhantomData, ops::Deref};
 
 /// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {
@@ -86,10 +86,6 @@ impl<'v, T: FromValue<'v>> UnpackValue<'v> for ARef<'v, T> {
 /// A wrapper around a mutable value that implements the [`UnpackValue`] trait,
 /// allowing it to be used as an argument to [`#[starlark_module]`](macro@starlark_module)
 /// defined functions.
-///
-/// The [`UnpackValue`] implementation validates that the type is correct, but not that
-/// the value is mutable. The subsequet [`get_ref_mut`](ValueOfMut::get_ref_mut)
-/// checks the value is actually mutable.
 #[derive(Debug)]
 pub struct ValueOfMut<'v, T: ComplexValue<'v>> {
     // We can't expose this directly, since the user might change it,
@@ -121,17 +117,6 @@ impl<'v, T: ComplexValue<'v>> ValueOfMut<'v, T> {
         // The `unwrap` won't fail because we checked at construction time.
         let vref = self.value.get_aref();
         ARef::map(vref, |any| any.as_dyn_any().downcast_ref::<T>().unwrap())
-    }
-
-    /// Get the value for mutation. Note that while the value is held for mutation,
-    /// any other operation that accesses the value for non-mutable purposes
-    /// might panic, so try and scope access as tightly as possible.
-    pub fn get_ref_mut(&self) -> anyhow::Result<RefMut<'v, T>> {
-        let vref = self.value.get_ref_mut()?;
-        Ok(RefMut::map(vref, |any| {
-            // The `unwrap` won't fail because we checked at construction time.
-            any.as_dyn_any_mut().downcast_mut::<T>().unwrap()
-        }))
     }
 }
 
