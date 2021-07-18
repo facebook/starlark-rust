@@ -159,11 +159,11 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref(&self) -> Option<&dyn StarlarkValue<'v>> {
+    fn get_ref(&self) -> &dyn StarlarkValue<'v> {
         match self {
-            Self::Str(x) => Some(x),
-            Self::Simple(x) => Some(simple_starlark_value(Box::as_ref(x))),
-            Self::Complex(x) => Some(x.as_starlark_value()),
+            Self::Str(x) => x,
+            Self::Simple(x) => simple_starlark_value(Box::as_ref(x)),
+            Self::Complex(x) => x.as_starlark_value(),
             _ => self.unexpected("get_ref"),
         }
     }
@@ -295,14 +295,14 @@ impl<'v> Value<'v> {
     }
 
     /// Get a pointer to a [`StarlarkValue`].
-    pub fn get_ref(self) -> Option<&'v dyn StarlarkValue<'v>> {
+    pub fn get_ref(self) -> &'v dyn StarlarkValue<'v> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => Some(x.get_ref()),
+            PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => x.get_ref(),
-            PointerUnpack::None => Some(&VALUE_NONE),
-            PointerUnpack::Bool(true) => Some(&VALUE_TRUE),
-            PointerUnpack::Bool(false) => Some(&VALUE_FALSE),
-            PointerUnpack::Int(x) => Some(PointerI32::new(x)),
+            PointerUnpack::None => &VALUE_NONE,
+            PointerUnpack::Bool(true) => &VALUE_TRUE,
+            PointerUnpack::Bool(false) => &VALUE_FALSE,
+            PointerUnpack::Int(x) => PointerI32::new(x),
         }
     }
 

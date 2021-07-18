@@ -38,7 +38,7 @@ use gazebo::{
 };
 use std::{
     any::TypeId,
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefCell},
     cmp,
     cmp::Ordering,
     fmt::Debug,
@@ -93,19 +93,22 @@ impl<'v> List<'v> {
             x.downcast_ref::<ListGen<FrozenList>>()
                 .map(|x| ARef::map(x, |x| coerce_ref(&x.0)))
         } else {
-            let ptr = x.get_ref()?;
-            let ptr = ptr.as_dyn_any().downcast_ref::<ListGen<RefCell<List>>>()?;
+            let ptr = x
+                .get_ref()
+                .as_dyn_any()
+                .downcast_ref::<ListGen<RefCell<List>>>()?;
             Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
 
-    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
+    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
         if x.unpack_frozen().is_some() {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
         let ptr = x
             .get_ref()
-            .and_then(|x| x.as_dyn_any().downcast_ref::<ListGen<RefCell<List>>>());
+            .as_dyn_any()
+            .downcast_ref::<ListGen<RefCell<List<'v>>>>();
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {

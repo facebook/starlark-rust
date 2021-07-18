@@ -89,7 +89,7 @@ impl<'v> Dict<'v> {
             x.downcast_ref::<DictGen<FrozenDict>>()
                 .map(|x| ARef::map(x, |x| coerce_ref(&x.0)))
         } else {
-            let ptr = x.get_ref()?;
+            let ptr = x.get_ref();
             let ptr = ptr
                 .as_dyn_any()
                 .downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
@@ -103,7 +103,8 @@ impl<'v> Dict<'v> {
         }
         let ptr = x
             .get_ref()
-            .and_then(|x| x.as_dyn_any().downcast_ref::<DictGen<RefCell<Dict<'v>>>>());
+            .as_dyn_any()
+            .downcast_ref::<DictGen<RefCell<Dict<'v>>>>();
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {
