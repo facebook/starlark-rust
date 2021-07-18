@@ -77,21 +77,17 @@ impl TypeCompiled {
                 } else {
                     match s {
                         "string" => Ok(box |v| {
-                            v.unpack_str().is_some() || v.get_aref().matches_type("string")
+                            v.unpack_str().is_some() || v.get_ref().matches_type("string")
                         }),
                         "int" => {
-                            Ok(
-                                box |v| {
-                                    v.unpack_int().is_some() || v.get_aref().matches_type("int")
-                                },
-                            )
+                            Ok(box |v| v.unpack_int().is_some() || v.get_ref().matches_type("int"))
                         }
                         "bool" => Ok(box |v| {
-                            v.unpack_bool().is_some() || v.get_aref().matches_type("bool")
+                            v.unpack_bool().is_some() || v.get_ref().matches_type("bool")
                         }),
                         _ => {
                             let s = s.to_owned();
-                            Ok(box move |v| v.get_aref().matches_type(&s))
+                            Ok(box move |v| v.get_ref().matches_type(&s))
                         }
                     }
                 }

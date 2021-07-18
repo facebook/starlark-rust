@@ -39,7 +39,7 @@ use crate::values::{
     none::NoneType,
     ComplexValue, SimpleValue, StarlarkValue, Trace,
 };
-use gazebo::{cell::ARef, prelude::*, variants::VariantName};
+use gazebo::{prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
 use std::{cell::Cell, time::Instant};
 use void::Void;
@@ -159,22 +159,12 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref(&self) -> &dyn StarlarkValue<'v> {
+    pub(crate) fn get_ref(&self) -> &dyn StarlarkValue<'v> {
         match self {
             Self::Str(x) => x,
             Self::Simple(x) => simple_starlark_value(Box::as_ref(x)),
             Self::Complex(x) => x.as_starlark_value(),
             _ => self.unexpected("get_ref"),
-        }
-    }
-
-    #[inline(always)] // There are only two callers
-    pub(crate) fn get_aref(&'v self) -> ARef<'v, dyn StarlarkValue<'v>> {
-        match self {
-            Self::Str(x) => ARef::new_ptr(x),
-            Self::Simple(x) => ARef::new_ptr(simple_starlark_value(Box::as_ref(x))),
-            Self::Complex(x) => ARef::new_ptr(x.as_starlark_value()),
-            _ => self.unexpected("get_aref"),
         }
     }
 }
@@ -303,17 +293,6 @@ impl<'v> Value<'v> {
             PointerUnpack::Bool(true) => &VALUE_TRUE,
             PointerUnpack::Bool(false) => &VALUE_FALSE,
             PointerUnpack::Int(x) => PointerI32::new(x),
-        }
-    }
-
-    /// Get a pointer to a [`StarlarkValue`].
-    pub fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
-        match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => ARef::new_ptr(x.get_ref()),
-            PointerUnpack::Ptr2(x) => x.get_aref(),
-            PointerUnpack::None => ARef::new_ptr(&VALUE_NONE),
-            PointerUnpack::Bool(x) => ARef::new_ptr(if x { &VALUE_TRUE } else { &VALUE_FALSE }),
-            PointerUnpack::Int(x) => ARef::new_ptr(PointerI32::new(x)),
         }
     }
 

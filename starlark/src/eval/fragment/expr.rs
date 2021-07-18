@@ -556,7 +556,7 @@ impl Compiler<'_> {
                             {
                                 let x = args.pos_named.pop().unwrap();
                                 expr!("type", |eval| {
-                                    x(eval)?.get_aref().get_type_value().unpack().to_value()
+                                    x(eval)?.get_ref().get_type_value().unpack().to_value()
                                 })
                             }
                             ExprCompiledValue::Value(v)

@@ -270,11 +270,10 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     // When mutating, be careful if they alias, so we don't have `lhs`
     // mutably borrowed when we iterate over `rhs`, as they might alias.
 
-    let lhs_aref = lhs.get_aref();
+    let lhs_aref = lhs.get_ref();
     let lhs_ty = lhs_aref.as_dyn_any().static_type_of();
 
     if List::is_list_type(lhs_ty) {
-        mem::drop(lhs_aref);
         // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
         let mut list = List::from_value_mut(lhs)?
             .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
@@ -284,7 +283,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
             list.content.extend(rhs.iterate(heap)?.iter());
         }
         Ok(lhs)
-    } else if let Some(v) = rhs.get_aref().radd(lhs, heap) {
+    } else if let Some(v) = rhs.get_ref().radd(lhs, heap) {
         v
     } else {
         lhs_aref.add(rhs, heap)
@@ -371,7 +370,6 @@ impl Compiler<'_> {
                 let st = self.stmt(body, false);
                 stmt!("for", span, |eval| {
                     let iterable = over(eval)?;
-                    let freeze_for_iteration = iterable.get_aref();
                     for v in &throw(iterable.iterate(eval.heap()), over_span, eval)? {
                         var(v, eval)?;
                         match st(eval) {
@@ -381,7 +379,6 @@ impl Compiler<'_> {
                             _ => {}
                         }
                     }
-                    mem::drop(freeze_for_iteration);
                 })
             }
             Stmt::Return(Some(e)) => {

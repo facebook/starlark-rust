@@ -78,7 +78,7 @@ impl Display for FrozenValue {
 }
 
 fn debug_value(typ: &str, v: Value, f: &mut fmt::Formatter) -> fmt::Result {
-    f.debug_tuple(typ).field(v.get_aref().as_debug()).finish()
+    f.debug_tuple(typ).field(v.get_ref().as_debug()).finish()
 }
 
 impl Debug for Value<'_> {
@@ -175,7 +175,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
-    fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>>;
+    fn get_ref(self) -> &'v dyn StarlarkValue<'v>;
 
     fn invoke(
         self,
@@ -187,7 +187,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
     }
 
     fn get_hash(self) -> anyhow::Result<u64> {
-        self.get_aref().get_hash()
+        self.get_ref().get_hash()
     }
 
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
@@ -198,11 +198,11 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
     }
 
     fn collect_repr(self, collector: &mut String) {
-        self.get_aref().collect_repr(collector);
+        self.get_ref().collect_repr(collector);
     }
 
     fn to_json(self) -> anyhow::Result<String> {
-        self.get_aref().to_json()
+        self.get_ref().to_json()
     }
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -210,17 +210,20 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
             Ok(true)
         } else {
             let _guard = stack_guard::stack_guard()?;
-            self.get_aref().equals(other)
+            self.get_ref().equals(other)
         }
     }
 
     fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
         let _guard = stack_guard::stack_guard()?;
-        self.get_aref().compare(other)
+        self.get_ref().compare(other)
     }
 
     fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        ARef::filter_map(self.get_aref(), |e| e.as_dyn_any().downcast_ref::<T>()).ok()
+        ARef::filter_map(ARef::new_ptr(self.get_ref()), |e| {
+            e.as_dyn_any().downcast_ref::<T>()
+        })
+        .ok()
     }
 }
 
@@ -254,8 +257,8 @@ impl Default for FrozenValue {
 }
 
 impl<'v> ValueLike<'v> for Value<'v> {
-    fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
-        Value::get_aref(self)
+    fn get_ref(self) -> &'v dyn StarlarkValue<'v> {
+        Value::get_ref(self)
     }
 
     fn to_value(self) -> Value<'v> {
@@ -264,8 +267,8 @@ impl<'v> ValueLike<'v> for Value<'v> {
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
-    fn get_aref(self) -> ARef<'v, dyn StarlarkValue<'v>> {
-        ARef::new_ptr(self.get_ref())
+    fn get_ref(self) -> &'v dyn StarlarkValue<'v> {
+        self.get_ref()
     }
 
     fn to_value(self) -> Value<'v> {
@@ -298,10 +301,10 @@ impl<'v> Value<'v> {
     /// before falling back to [`add`](StarlarkValue::add).
     pub fn add(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let me = self.to_value();
-        if let Some(v) = other.get_aref().radd(me, heap) {
+        if let Some(v) = other.get_ref().radd(me, heap) {
             v
         } else {
-            self.get_aref().add(other, heap)
+            self.get_ref().add(other, heap)
         }
     }
 
@@ -328,12 +331,12 @@ impl<'v> Value<'v> {
 
     /// Forwards to [`StarlarkValue::set_attr`].
     pub fn set_attr(self, attribute: &str, alloc_value: Value<'v>) -> anyhow::Result<()> {
-        self.get_aref().set_attr(attribute, alloc_value)
+        self.get_ref().set_attr(attribute, alloc_value)
     }
 
     /// Forwards to [`StarlarkValue::set_at`].
     pub fn set_at(self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
-        self.get_aref().set_at(self, index, alloc_value)
+        self.get_ref().set_at(self, index, alloc_value)
     }
 
     /// Return the contents of an iterable collection, as an owned vector.
@@ -346,11 +349,9 @@ impl<'v> Value<'v> {
 
     /// Produce an iterable from a value.
     pub fn iterate(self, heap: &'v Heap) -> anyhow::Result<RefIterable<'v>> {
-        let me: ARef<'v, dyn StarlarkValue> = self.get_aref();
-        me.iterate()?;
         Ok(RefIterable::new(
             heap,
-            ARef::map(me, |e| e.iterate().unwrap()),
+            ARef::new_ptr(self.get_ref().iterate()?),
         ))
     }
 
@@ -397,7 +398,7 @@ impl<'v> Value<'v> {
     /// Call `export_as` on the underlying value, but only if the type is mutable.
     /// Otherwise, does nothing.
     pub fn export_as(self, variable_name: &str, eval: &mut Evaluator<'v, '_>) {
-        self.get_aref().export_as(variable_name, eval)
+        self.get_ref().export_as(variable_name, eval)
     }
 
     /// Return the attribute with the given name. Returns a pair of a boolean and the value.
@@ -407,7 +408,7 @@ impl<'v> Value<'v> {
     /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
     /// argument to the function, e.g. `object.attribute(object, argument)`.
     pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> Option<(AttrType, Value<'v>)> {
-        let aref = self.get_aref();
+        let aref = self.get_ref();
         if let Some(methods) = aref.get_methods() {
             if let Some(v) = methods.get(attribute) {
                 return Some((AttrType::Method, v));
@@ -433,7 +434,7 @@ impl<'v> Value<'v> {
     /// Query whether an attribute exists on a type. Should be equivalent to whether
     /// [`get_attr`](Value::get_attr) succeeds, but potentially more efficient.
     pub fn has_attr(self, attribute: &str) -> bool {
-        let aref = self.get_aref();
+        let aref = self.get_ref();
         if let Some(methods) = aref.get_methods() {
             if methods.get(attribute).is_some() {
                 return true;
@@ -445,7 +446,7 @@ impl<'v> Value<'v> {
     /// Get a list of all the attributes this function supports, used to implement the
     /// `dir()` function.
     pub fn dir_attr(self) -> Vec<String> {
-        let aref = self.get_aref();
+        let aref = self.get_ref();
         let mut result = if let Some(methods) = aref.get_methods() {
             let mut res = methods.names();
             res.extend(aref.dir_attr());
@@ -461,14 +462,14 @@ impl<'v> Value<'v> {
 /// Methods that just forward to the underlying [`StarlarkValue`].
 impl<'v> Value<'v> {
     pub fn get_type(self) -> &'static str {
-        self.get_aref().get_type()
+        self.get_ref().get_type()
     }
     pub fn to_bool(self) -> bool {
         // Fast path for the common case
         if let Some(x) = self.unpack_bool() {
             x
         } else {
-            self.get_aref().to_bool()
+            self.get_ref().to_bool()
         }
     }
     pub fn to_int(self) -> anyhow::Result<i32> {
@@ -476,11 +477,11 @@ impl<'v> Value<'v> {
         if let Some(x) = self.unpack_int() {
             Ok(x)
         } else {
-            self.get_aref().to_int()
+            self.get_ref().to_int()
         }
     }
     pub fn at(self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().at(index, heap)
+        self.get_ref().at(index, heap)
     }
 
     pub fn slice(
@@ -490,55 +491,55 @@ impl<'v> Value<'v> {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        self.get_aref().slice(start, stop, stride, heap)
+        self.get_ref().slice(start, stop, stride, heap)
     }
 
     pub fn length(self) -> anyhow::Result<i32> {
-        self.get_aref().length()
+        self.get_ref().length()
     }
 
     pub fn is_in(self, other: Value<'v>) -> anyhow::Result<bool> {
-        self.get_aref().is_in(other)
+        self.get_ref().is_in(other)
     }
 
     pub fn plus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().plus(heap)
+        self.get_ref().plus(heap)
     }
 
     pub fn minus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().minus(heap)
+        self.get_ref().minus(heap)
     }
 
     pub fn sub(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().sub(other, heap)
+        self.get_ref().sub(other, heap)
     }
 
     pub fn mul(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().mul(other, heap)
+        self.get_ref().mul(other, heap)
     }
 
     pub fn percent(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().percent(other, heap)
+        self.get_ref().percent(other, heap)
     }
 
     pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get_aref().floor_div(other, heap)
+        self.get_ref().floor_div(other, heap)
     }
 
     pub fn bit_and(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().bit_and(other)
+        self.get_ref().bit_and(other)
     }
     pub fn bit_or(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().bit_or(other)
+        self.get_ref().bit_or(other)
     }
     pub fn bit_xor(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().bit_xor(other)
+        self.get_ref().bit_xor(other)
     }
     pub fn left_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().left_shift(other)
+        self.get_ref().left_shift(other)
     }
     pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_aref().right_shift(other)
+        self.get_ref().right_shift(other)
     }
 
     pub fn invoke(
@@ -547,7 +548,7 @@ impl<'v> Value<'v> {
         params: Parameters<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.get_aref().invoke(self, location, params, eval)
+        self.get_ref().invoke(self, location, params, eval)
     }
 
     /// Invoke a function with only positional arguments.
@@ -565,6 +566,6 @@ impl<'v> Value<'v> {
     }
 
     pub fn get_type_value(self) -> &'static ConstFrozenValue {
-        self.get_aref().get_type_value()
+        self.get_ref().get_type_value()
     }
 }

@@ -182,7 +182,7 @@ impl Info {
                 // Therefore the true cost is just the reference itself.
                 let typ = match x {
                     ValueMem::Ref(_) => "reference",
-                    _ => x.get_aref().type_name(),
+                    _ => x.get_ref().type_name(),
                 };
                 *self.top_info().allocs.entry(typ).or_insert(0) += 1;
             }
