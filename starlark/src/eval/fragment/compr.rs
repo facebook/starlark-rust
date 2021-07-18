@@ -28,7 +28,6 @@ use crate::{
     syntax::ast::{AstExpr, Clause, ForClause},
     values::{dict::Dict, list::List, Value},
 };
-use std::mem;
 
 impl Compiler<'_> {
     pub fn list_comprehension(
@@ -188,7 +187,6 @@ fn eval_one_dimensional_comprehension_dict(
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
-            let freeze_for_iteration = iterable.get_aref();
             'f: for i in &throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
@@ -198,7 +196,6 @@ fn eval_one_dimensional_comprehension_dict(
                 }
                 rest(accumulator, eval)?;
             }
-            mem::drop(freeze_for_iteration);
             Ok(())
         }
     } else {
@@ -223,7 +220,6 @@ fn eval_one_dimensional_comprehension_list(
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
-            let freeze_for_iteration = iterable.get_aref();
             'f: for i in &throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
@@ -233,7 +229,6 @@ fn eval_one_dimensional_comprehension_list(
                 }
                 rest(accumulator, eval)?;
             }
-            mem::drop(freeze_for_iteration);
             Ok(())
         }
     } else {
