@@ -762,14 +762,14 @@ xs == [1, 2, 3, 1, 2, 3]
 xs = []
 xs[xs]
 "#,
-        "Type of parameters mismatch",
+        "Type of parameter",
     );
     assert::fail(
         r#"
 xs = []
 xs[xs] = xs
 "#,
-        "Type of parameter `index` doesn't match",
+        "Type of parameter",
     );
 }
 
@@ -788,7 +788,7 @@ xs[xs]
 xs = {}
 xs[xs] = 1
 "#,
-        "Type of parameter `index` doesn't match",
+        "not hashable",
     );
     assert::is_true(
         r#"

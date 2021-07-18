@@ -339,14 +339,10 @@ where
 
     fn set_at(
         &self,
-        me: Value<'v>,
+        _me: Value<'v>,
         index: Value<'v>,
         alloc_value: Value<'v>,
     ) -> anyhow::Result<()> {
-        if me.ptr_eq(index) {
-            // since me is a dict, index must be a dict, which isn't right
-            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
-        }
         let index = index.get_hashed()?;
         self.0.set_at(index, alloc_value)
     }
