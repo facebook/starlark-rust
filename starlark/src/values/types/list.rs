@@ -351,16 +351,7 @@ where
         }
     }
 
-    fn set_at(
-        &self,
-        me: Value<'v>,
-        index: Value<'v>,
-        alloc_value: Value<'v>,
-    ) -> anyhow::Result<()> {
-        if me.ptr_eq(index) {
-            // since me is a list, index must be a list, which isn't right
-            return Err(ValueError::IncorrectParameterTypeNamed("index".to_owned()).into());
-        }
+    fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let i = convert_index(index, self.0.content().len() as i32)? as usize;
         self.0.set_at(i, alloc_value)
     }

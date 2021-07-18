@@ -337,12 +337,7 @@ where
         Ok(self)
     }
 
-    fn set_at(
-        &self,
-        _me: Value<'v>,
-        index: Value<'v>,
-        alloc_value: Value<'v>,
-    ) -> anyhow::Result<()> {
+    fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let index = index.get_hashed()?;
         self.0.set_at(index, alloc_value)
     }

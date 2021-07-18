@@ -699,12 +699,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// v == [1, 1, [2, 3]]
     /// # "#);
     /// ```
-    fn set_at(
-        &self,
-        _me: Value<'v>,
-        _index: Value<'v>,
-        _new_value: Value<'v>,
-    ) -> anyhow::Result<()> {
+    fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
         Err(ValueError::CannotMutateImmutableValue.into())
     }
 
