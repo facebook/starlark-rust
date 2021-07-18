@@ -19,17 +19,17 @@
 
 use crate as starlark;
 use crate::{
-    collections::{Hashed, MHIter, SmallMap},
+    collections::{Hashed, SmallMap},
     environment::{Globals, GlobalsStatic},
     values::{
-        comparison::equals_small_map, error::ValueError, string::hash_string_value,
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap, FrozenValue,
-        Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value, ValueLike,
+        comparison::equals_small_map, error::ValueError, iter::ARefIterator,
+        string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
+        FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
+        ValueLike,
     },
 };
 use gazebo::{
     any::AnyLifetime,
-    cast,
     cell::ARef,
     coerce::{coerce_ref, Coerce},
 };
@@ -336,36 +336,14 @@ where
         &'v self,
         _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        let aref = self.0.content();
-        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
-        let iter = aref_ptr.iter();
-        // We need to create an iterator based on this ARef, and keep the iterator alive.
-        // This, plus the unsafe above, ensures the ARef stays alive long enough.
-        Ok(box It { aref, iter })
+        Ok(box ARefIterator::new(self.0.content(), |x| {
+            x.keys().copied()
+        }))
     }
 
     fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let index = index.get_hashed()?;
         self.0.set_at(index, alloc_value)
-    }
-}
-
-struct It<'a, 'v> {
-    // Required for its lifetime properties
-    #[allow(dead_code)]
-    aref: ARef<'a, SmallMap<Value<'v>, Value<'v>>>,
-    iter: MHIter<'a, Value<'v>, Value<'v>>,
-}
-
-impl<'a, 'v> Iterator for It<'a, 'v> {
-    type Item = Value<'v>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().map(|x| *x.0)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
     }
 }
 

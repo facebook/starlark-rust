@@ -53,6 +53,7 @@ mod error;
 pub(crate) mod fast_string;
 mod index;
 pub(crate) mod interpolation;
+pub(crate) mod iter;
 mod layout;
 mod owned;
 mod stack_guard;

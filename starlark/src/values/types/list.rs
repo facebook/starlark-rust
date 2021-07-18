@@ -24,13 +24,13 @@ use crate::{
         comparison::{compare_slice, equals_slice},
         error::ValueError,
         index::{convert_index, convert_slice_indices},
+        iter::ARefIterator,
         tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
         FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{
     any::AnyLifetime,
-    cast,
     cell::ARef,
     coerce::{coerce_ref, Coerce},
     prelude::*,
@@ -43,7 +43,6 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     ops::Deref,
-    slice,
 };
 
 #[derive(Clone, Default, Trace, Debug)]
@@ -325,12 +324,9 @@ where
         &'v self,
         _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        let aref = self.0.content();
-        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
-        let iter = aref_ptr.iter();
-        // We need to create an iterator based on this ARef, and keep the iterator alive.
-        // This, plus the unsafe above, ensures the ARef stays alive long enough.
-        Ok(box It { aref, iter })
+        Ok(box ARefIterator::new(self.0.content(), |x| {
+            x.iter().copied()
+        }))
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -361,25 +357,6 @@ where
     fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         let i = convert_index(index, self.0.content().len() as i32)? as usize;
         self.0.set_at(i, alloc_value)
-    }
-}
-
-struct It<'a, 'v> {
-    // Required for its lifetime properties
-    #[allow(dead_code)]
-    aref: ARef<'a, [Value<'v>]>,
-    iter: slice::Iter<'a, Value<'v>>,
-}
-
-impl<'a, 'v> Iterator for It<'a, 'v> {
-    type Item = Value<'v>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next().copied()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
     }
 }
 
