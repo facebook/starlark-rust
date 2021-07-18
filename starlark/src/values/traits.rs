@@ -286,32 +286,6 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>>;
-
-    /// Called when exporting a value under a specific name,
-    /// only applies to things that return [`true`] for [`is_mutable()`](ComplexValue::is_mutable).
-    fn export_as(&mut self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
-        // Most data types ignore how they are exported
-        // but rules/providers like to use it as a helpful hint for users
-    }
-
-    /// Set the value at `index` with the new value.
-    ///
-    /// ```rust
-    /// # starlark::assert::is_true(r#"
-    /// v = [1, 2, 3]
-    /// v[1] = 1
-    /// v[2] = [2,3]
-    /// v == [1, 1, [2, 3]]
-    /// # "#);
-    /// ```
-    fn set_at(
-        &mut self,
-        _me: Value<'v>,
-        index: Value<'v>,
-        _new_value: Value<'v>,
-    ) -> anyhow::Result<()> {
-        ValueError::unsupported_with(self, "[]=", index)
-    }
 }
 
 /// A trait representing Starlark values which are simple - they

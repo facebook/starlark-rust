@@ -162,16 +162,6 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    fn get_ref_mut_opt(&self) -> Option<RefMut<dyn ComplexValue<'v>>> {
-        match self {
-            Self::Mutable(x) => match x.try_borrow_mut() {
-                Err(_) => None,
-                Ok(state) => Some(RefMut::map(state, |x| &mut **x)),
-            },
-            _ => None,
-        }
-    }
-
     fn get_ref_mut(&self) -> anyhow::Result<RefMut<dyn ComplexValue<'v>>> {
         match self {
             Self::Mutable(x) => match x.try_borrow_mut() {
@@ -345,11 +335,6 @@ impl<'v> Value<'v> {
             PointerUnpack::Bool(x) => ARef::new_ptr(if x { &VALUE_TRUE } else { &VALUE_FALSE }),
             PointerUnpack::Int(x) => ARef::new_ptr(PointerI32::new(x)),
         }
-    }
-
-    // Like get_ref_mut, but only returns a mutable value if it's already mutable
-    pub(crate) fn get_ref_mut_opt(self) -> Option<RefMut<'v, dyn ComplexValue<'v>>> {
-        self.0.unpack_ptr2().and_then(|x| x.get_ref_mut_opt())
     }
 
     pub(crate) fn get_ref_mut(self) -> anyhow::Result<RefMut<'v, dyn ComplexValue<'v>>> {

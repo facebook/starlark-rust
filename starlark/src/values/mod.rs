@@ -332,13 +332,9 @@ impl<'v> Value<'v> {
         self.get_aref().set_attr(attribute, alloc_value)
     }
 
-    /// Forwards to [`ComplexValue::set_at`].
+    /// Forwards to [`StarlarkValue::set_at`].
     pub fn set_at(self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
-        if let Some(mut mv) = self.get_ref_mut_opt() {
-            ComplexValue::set_at(&mut *mv, self, index, alloc_value)
-        } else {
-            StarlarkValue::set_at(&*self.get_aref(), self, index, alloc_value)
-        }
+        self.get_aref().set_at(self, index, alloc_value)
     }
 
     /// Return the contents of an iterable collection, as an owned vector.
@@ -416,11 +412,7 @@ impl<'v> Value<'v> {
     /// Call `export_as` on the underlying value, but only if the type is mutable.
     /// Otherwise, does nothing.
     pub fn export_as(self, variable_name: &str, eval: &mut Evaluator<'v, '_>) {
-        if let Some(mut mv) = self.get_ref_mut_opt() {
-            ComplexValue::export_as(&mut *mv, variable_name, eval)
-        } else {
-            StarlarkValue::export_as(&*self.get_aref(), variable_name, eval)
-        }
+        self.get_aref().export_as(variable_name, eval)
     }
 
     /// Return the attribute with the given name. Returns a pair of a boolean and the value.
