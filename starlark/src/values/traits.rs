@@ -34,8 +34,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        function::FUNCTION_TYPE, ConstFrozenValue, ControlError, Freezer, Heap, StarlarkIterable,
-        Tracer, Value, ValueError,
+        function::FUNCTION_TYPE, ConstFrozenValue, ControlError, Freezer, Heap, Tracer, Value,
+        ValueError,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -491,7 +491,10 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
 
     /// Returns an iterable over the value of this container if this value holds
     /// an iterable container.
-    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
+    fn iterate(
+        &'v self,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
         ValueError::unsupported(self, "(iter)")
     }
 

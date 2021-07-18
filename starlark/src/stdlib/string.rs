@@ -609,7 +609,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     fn join(this: &str, ref to_join: Value) -> String {
         let mut r = String::new();
         let to_join_iter = to_join.iterate(heap)?;
-        for (index, item) in to_join_iter.iter().enumerate() {
+        for (index, item) in to_join_iter.enumerate() {
             if index != 0 {
                 r.push_str(this);
             }

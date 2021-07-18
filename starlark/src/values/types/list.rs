@@ -322,8 +322,11 @@ where
         Ok(heap.alloc(List::new(vec)))
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
-        Ok(self)
+    fn iterate(
+        &'v self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+        Ok(self.to_iter(heap))
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

@@ -187,7 +187,7 @@ fn eval_one_dimensional_comprehension_dict(
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
-            'f: for i in &throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+            'f: for i in throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
                     if !ifc(eval)?.to_bool() {
@@ -220,7 +220,7 @@ fn eval_one_dimensional_comprehension_list(
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
-            'f: for i in &throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+            'f: for i in throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
                     if !ifc(eval)?.to_bool() {

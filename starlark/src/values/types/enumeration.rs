@@ -42,8 +42,9 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkIterable, StarlarkValue,
-        Trace, Value, ValueLike,
+        iter::StarlarkIterable,
+        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value,
+        ValueLike,
     },
 };
 use derivative::Derivative;
@@ -235,8 +236,11 @@ where
         Ok(self.elements.get_index(i).map(|x| *x.1).unwrap().to_value())
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
-        Ok(self)
+    fn iterate(
+        &'v self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+        Ok(self.to_iter(heap))
     }
 
     fn dir_attr(&self) -> Vec<String> {

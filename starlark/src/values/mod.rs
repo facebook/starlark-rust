@@ -28,7 +28,7 @@
 //!   trait.
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
-pub use crate::values::{error::*, iter::*, layout::*, owned::*, traits::*, types::*, unpack::*};
+pub use crate::values::{error::*, layout::*, owned::*, traits::*, types::*, unpack::*};
 use crate::{
     codemap::Span,
     collections::{Hashed, SmallHashResult},
@@ -344,15 +344,15 @@ impl<'v> Value<'v> {
         // You might reasonably think this is mostly called on lists (I think it is),
         // and thus that a fast-path here would speed things up. But in my experiments
         // it's completely irrelevant (you pay a bit for the check, you save a bit on each step).
-        Ok(self.iterate(heap)?.iter().collect())
+        Ok(self.iterate(heap)?.collect())
     }
 
     /// Produce an iterable from a value.
-    pub fn iterate(self, heap: &'v Heap) -> anyhow::Result<RefIterable<'v>> {
-        Ok(RefIterable::new(
-            heap,
-            ARef::new_ptr(self.get_ref().iterate()?),
-        ))
+    pub fn iterate(
+        self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+        self.get_ref().iterate(heap)
     }
 
     /// Get the [`Hashed`] version of this [`Value`].

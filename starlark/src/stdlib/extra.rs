@@ -35,7 +35,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
     fn filter(ref func: Value, ref seq: Value) -> List<'v> {
         let mut res = Vec::new();
 
-        for v in &seq.iterate(heap)? {
+        for v in seq.iterate(heap)? {
             if func.is_none() {
                 if !v.is_none() {
                     res.push(v);
@@ -52,7 +52,6 @@ pub fn filter(builder: &mut GlobalsBuilder) {
 pub fn map(builder: &mut GlobalsBuilder) {
     fn map(ref func: Value, ref seq: Value) -> List<'v> {
         let it = seq.iterate(heap)?;
-        let it = it.into_iter();
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
             res.push(func.invoke_pos(None, &[v], eval)?);
@@ -105,7 +104,7 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
     fn dedupe(ref val: Value) -> List<'v> {
         let mut seen = HashSet::new();
         let mut res = Vec::new();
-        for v in &val.iterate(heap)? {
+        for v in val.iterate(heap)? {
             let p = v.ptr_value();
             if !seen.contains(&p) {
                 seen.insert(p);

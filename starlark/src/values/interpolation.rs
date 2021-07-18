@@ -256,8 +256,7 @@ mod tests {
         let args = vec![heap.alloc("1"), heap.alloc("2"), heap.alloc("3")];
         let mut kwargs = SmallMap::new();
         let it = heap.alloc(args.clone());
-        let it = it.iterate(&heap).unwrap();
-        let mut it = it.iter();
+        let mut it = it.iterate(&heap).unwrap();
         let mut captured_by_index = false;
         let mut captured_by_order = false;
 
@@ -337,8 +336,7 @@ mod tests {
         );
         captured_by_order = false;
         let it = heap.alloc(args.clone());
-        let it = it.iterate(&heap).unwrap();
-        let mut it = it.iter();
+        let mut it = it.iterate(&heap).unwrap();
         assert_eq!(
             format_capture(
                 "{1",

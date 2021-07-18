@@ -187,8 +187,11 @@ impl<'v> StarlarkValue<'v> for Range {
         }));
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
-        Ok(self)
+    fn iterate(
+        &'v self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+        Ok(self.to_iter(heap))
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
@@ -314,7 +317,7 @@ mod tests {
 
         let heap = Heap::new();
         for x in &ranges {
-            let full: Vec<Value> = x.iterate().unwrap().to_iter(&heap).collect();
+            let full: Vec<Value> = x.iterate(&heap).unwrap().collect();
             assert_eq!(x.length().unwrap(), full.len() as i32);
             for (i, v) in full.iter().enumerate() {
                 assert_eq!(x.at(Value::new_int(i as i32), &heap).unwrap(), *v);
@@ -326,10 +329,7 @@ mod tests {
             for y in &ranges {
                 assert_eq!(
                     x == y,
-                    Iterator::eq(
-                        x.iterate().unwrap().to_iter(&heap),
-                        y.iterate().unwrap().to_iter(&heap)
-                    )
+                    Iterator::eq(x.iterate(&heap).unwrap(), y.iterate(&heap).unwrap())
                 )
             }
         }

@@ -316,9 +316,8 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
                     this.content.insert_hashed(k, v);
                 }
             } else {
-                for v in &pairs.iterate(heap)? {
-                    let it = v.iterate(heap)?;
-                    let mut it = it.into_iter();
+                for v in pairs.iterate(heap)? {
+                    let mut it = v.iterate(heap)?;
                     let k = it.next();
                     let v = if k.is_some() { it.next() } else { None };
                     if v.is_none() || it.next().is_some() {

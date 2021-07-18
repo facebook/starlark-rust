@@ -21,8 +21,9 @@ use crate as starlark;
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkIterable, StarlarkValue, Trace,
-    UnpackValue, Value, ValueError, ValueLike,
+    iter::StarlarkIterable,
+    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
+    ValueError, ValueLike,
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -200,8 +201,11 @@ where
         ))))
     }
 
-    fn iterate(&self) -> anyhow::Result<&(dyn StarlarkIterable<'v> + 'v)> {
-        Ok(self)
+    fn iterate(
+        &'v self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+        Ok(self.to_iter(heap))
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

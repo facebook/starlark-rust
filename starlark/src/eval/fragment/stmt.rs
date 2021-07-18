@@ -67,8 +67,7 @@ fn eval_assign_list<'v>(
     } else {
         let mut it1 = lvalues.iter();
         // TODO: the span here should probably include the rvalue
-        let it2 = throw(value.iterate(eval.heap()), span, eval)?;
-        let mut it2 = it2.iter();
+        let mut it2 = throw(value.iterate(eval.heap()), span, eval)?;
         for _ in 0..l {
             it1.next().unwrap()(it2.next().unwrap(), eval)?;
         }
@@ -280,7 +279,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
         if lhs.ptr_eq(rhs) {
             list.content.extend_from_within(..);
         } else {
-            list.content.extend(rhs.iterate(heap)?.iter());
+            list.content.extend(rhs.iterate(heap)?);
         }
         Ok(lhs)
     } else if let Some(v) = rhs.get_ref().radd(lhs, heap) {
@@ -370,7 +369,7 @@ impl Compiler<'_> {
                 let st = self.stmt(body, false);
                 stmt!("for", span, |eval| {
                     let iterable = over(eval)?;
-                    for v in &throw(iterable.iterate(eval.heap()), over_span, eval)? {
+                    for v in throw(iterable.iterate(eval.heap()), over_span, eval)? {
                         var(v, eval)?;
                         match st(eval) {
                             Err(EvalException::Break) => break,

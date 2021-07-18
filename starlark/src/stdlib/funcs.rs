@@ -41,8 +41,7 @@ use std::{cmp::Ordering, num::NonZeroI32};
 
 fn unpack_pair<'v>(it: Value<'v>, heap: &'v Heap) -> anyhow::Result<(Value<'v>, Value<'v>)> {
     match it.iterate(heap) {
-        Ok(it) => {
-            let mut it = it.iter();
+        Ok(mut it) => {
             let first = it.next();
             let second = it.next();
             let third = it.next();
@@ -94,7 +93,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn any(ref x: Value) -> bool {
-        for i in &x.iterate(heap)? {
+        for i in x.iterate(heap)? {
             if i.to_bool() {
                 return Ok(true);
             }
@@ -122,7 +121,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn all(ref x: Value) -> bool {
-        for i in &x.iterate(heap)? {
+        for i in x.iterate(heap)? {
             if !i.to_bool() {
                 return Ok(false);
             }
@@ -229,7 +228,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     Some(mp) => mp.content.clone(),
                     None => {
                         let mut result = SmallMap::new();
-                        for el in &a.iterate(heap)? {
+                        for el in a.iterate(heap)? {
                             let (k, v) = unpack_pair(el, heap)?;
                             result.insert_hashed(k.get_hashed()?, v);
                         }
@@ -285,7 +284,6 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn enumerate(ref it: Value, start @ 0: i32) -> List<'v> {
         let v = it
             .iterate(heap)?
-            .iter()
             .enumerate()
             .map(|(k, v)| heap.alloc((k as i32 + start, v)))
             .collect();
@@ -526,7 +524,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn list(ref a: Option<Value>) -> List<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
-            l.extend(&a.iterate(heap)?);
+            l.extend(a.iterate(heap)?);
         }
         Ok(List::new(l))
     }
@@ -556,8 +554,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
         } else {
             heap.alloc(args)
         };
-        let it = args.iterate(heap)?;
-        let mut it = it.iter();
+        let mut it = args.iterate(heap)?;
         let mut max = match it.next() {
             Some(x) => x,
             None => {
@@ -610,8 +607,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
         } else {
             heap.alloc(args)
         };
-        let it = args.iterate(heap)?;
-        let mut it = it.iter();
+        let mut it = args.iterate(heap)?;
         let mut min = match it.next() {
             Some(x) => x,
             None => {
@@ -758,7 +754,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn reversed(ref a: Value) -> List<'v> {
-        let mut v: Vec<Value> = a.iterate(heap)?.iter().collect();
+        let mut v: Vec<Value> = a.iterate(heap)?.collect();
         v.reverse();
         Ok(List::new(v))
     }
@@ -787,12 +783,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     fn sorted(ref x: Value, key: Option<Value>, reverse @ false: Value) -> List<'v> {
         let it = x.iterate(heap)?;
-        let x = it.iter();
         let mut it = match key {
-            None => x.map(|x| (x, x)).collect(),
+            None => it.map(|x| (x, x)).collect(),
             Some(key) => {
                 let mut v = Vec::new();
-                for el in x {
+                for el in it {
                     v.push((el, key.invoke_pos(None, &[el], eval)?));
                 }
                 v
@@ -864,7 +859,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn tuple(ref a: Option<Value>) -> Tuple<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
-            l.extend(&a.iterate(heap)?);
+            l.extend(a.iterate(heap)?);
         }
         Ok(Tuple::new(l))
     }
@@ -909,7 +904,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
         let mut first = true;
         for arg in args {
             let mut idx = 0;
-            for e in &arg.iterate(heap)? {
+            for e in arg.iterate(heap)? {
                 if first {
                     v.push(heap.alloc((e,)));
                     idx += 1;

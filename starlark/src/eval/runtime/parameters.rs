@@ -367,7 +367,7 @@ impl<'v> ParametersSpec<Value<'v>> {
             match param_args.iterate(eval.heap()) {
                 Err(_) => return Err(FunctionError::ArgsArrayIsNotIterable.into()),
                 Ok(iter) => {
-                    for v in &iter {
+                    for v in iter {
                         if next_position < self.0.positional {
                             slots[next_position].set_direct(v);
                             next_position += 1;
