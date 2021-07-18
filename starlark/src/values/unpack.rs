@@ -17,9 +17,9 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use crate::values::{list::List, tuple::Tuple, ComplexValue, Value};
+use crate::values::{list::List, tuple::Tuple, Value};
 use gazebo::cell::ARef;
-use std::{marker::PhantomData, ops::Deref};
+use std::ops::Deref;
 
 /// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {
@@ -80,43 +80,6 @@ pub trait FromValue<'v> {
 impl<'v, T: FromValue<'v>> UnpackValue<'v> for ARef<'v, T> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         T::from_value(value)
-    }
-}
-
-/// A wrapper around a mutable value that implements the [`UnpackValue`] trait,
-/// allowing it to be used as an argument to [`#[starlark_module]`](macro@starlark_module)
-/// defined functions.
-#[derive(Debug)]
-pub struct ValueOfMut<'v, T: ComplexValue<'v>> {
-    // We can't expose this directly, since the user might change it,
-    // negating the check we did when constructing
-    value: Value<'v>,
-    phantom: PhantomData<T>,
-}
-
-impl<'v, T: ComplexValue<'v>> UnpackValue<'v> for ValueOfMut<'v, T> {
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        if value.get_aref().as_dyn_any().is::<T>() {
-            Some(ValueOfMut {
-                value,
-                phantom: PhantomData,
-            })
-        } else {
-            None
-        }
-    }
-}
-
-impl<'v, T: ComplexValue<'v>> ValueOfMut<'v, T> {
-    /// Get the underlying [`Value`] on the original heap.
-    pub fn value(&self) -> Value<'v> {
-        self.value
-    }
-
-    pub fn get_aref(&self) -> ARef<'v, T> {
-        // The `unwrap` won't fail because we checked at construction time.
-        let vref = self.value.get_aref();
-        ARef::map(vref, |any| any.as_dyn_any().downcast_ref::<T>().unwrap())
     }
 }
 
