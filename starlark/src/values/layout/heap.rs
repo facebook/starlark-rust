@@ -260,11 +260,7 @@ impl Heap {
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        if x.is_mutable() {
-            self.alloc_raw(ValueMem::Mutable(RefCell::new(box x)))
-        } else {
-            self.alloc_raw(ValueMem::Immutable(box x))
-        }
+        self.alloc_raw(ValueMem::Immutable(box x))
     }
 
     #[inline(never)]

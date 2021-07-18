@@ -65,13 +65,6 @@ macro_rules! starlark_complex_value {
                         x.downcast_ref::< $x<'v> >()
                     }
                 }
-
-                #[allow(dead_code)]
-                pub fn from_value_mut(
-                    x: $crate::values::Value<'v>,
-                ) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
-                    x.downcast_mut::<$x<'v>>()
-                }
             }
 
             impl<'v> $crate::values::FromValue<'v> for $x<'v> {

@@ -239,23 +239,8 @@ unsafe impl<'v> Trace<'v> for bool {
 ///         ...
 /// # "#);
 ///     }
-///
-///     // Obtain a mutable reference to `One` from a `Value`,
-///     // but only works if the object returns `true` from `is_mutable`.
-///     pub fn from_value_mut(x: Value<'v>, heap: &'v Heap) -> anyhow::Result<Option<RefMut<'v, Self>>> {
-/// # unimplemented!(
-/// # r#"
-///         ...
-/// # "#);
-///     }
 /// }
 /// ```
-///
-/// ## Mutable types containing [`Value`]
-///
-/// If a container is mutable, [`starlark_complex_value!`] still works.
-/// To enable mutability return [`true`] from [`is_mutable`](ComplexValue::is_mutable),
-/// then the `from_value_mut` function will work.
 ///
 /// ## Different types
 ///
@@ -275,14 +260,6 @@ unsafe impl<'v> Trace<'v> for bool {
 /// * If the difference between frozen and non-frozen is more complex, e.g. a [`Cell`](std::cell::Cell)
 ///   when non-frozen and a direct value when frozen.
 pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
-    /// Can this value be mutated using a `&mut self` parameter?
-    /// Defaults to [`false`].
-    /// The result of this value should be consistent for the duration of the
-    /// value's life.
-    fn is_mutable(&self) -> bool {
-        false
-    }
-
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>>;
@@ -711,7 +688,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     }
 
     /// Called when exporting a value under a specific name,
-    /// only used for things that are not [`ComplexValue`] or return [`false`] for [`is_mutable()`](ComplexValue::is_mutable).
     fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
         // Most data types ignore how they are exported
         // but rules/providers like to use it as a helpful hint for users

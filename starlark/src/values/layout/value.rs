@@ -128,6 +128,7 @@ pub(crate) enum ValueMem<'v> {
     // Mutable things in my heap that aren't `is_mutable()`
     Immutable(Box<dyn ComplexValue<'v>>),
     // Mutable things that are in my heap and are `is_mutable()`
+    #[allow(dead_code)] // Delete in the next diff
     Mutable(RefCell<Box<dyn ComplexValue<'v>>>),
     // Used references in slots - usually wrapped in ValueRef
     // Never points at a Ref, must point directly at a real value,
@@ -311,10 +312,7 @@ impl<'v> Value<'v> {
         }
     }
 
-    /// Get a pointer to a [`StarlarkValue`]. Will be [`None`] only when
-    /// the underlying value is a [`ComplexValue`] which is marked
-    /// [`is_mutable`](ComplexValue::is_mutable). If you want it to always
-    /// produce a value, see [`get_aref`](Value::get_aref).
+    /// Get a pointer to a [`StarlarkValue`].
     pub fn get_ref(self) -> Option<&'v dyn StarlarkValue<'v>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => Some(x.get_ref()),
