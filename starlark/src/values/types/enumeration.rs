@@ -42,7 +42,6 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        iter::StarlarkIterable,
         ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value,
         ValueLike,
     },
@@ -238,9 +237,9 @@ where
 
     fn iterate(
         &'v self,
-        heap: &'v Heap,
+        _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        Ok(self.to_iter(heap))
+        Ok(box self.elements.values().map(|x| x.to_value()))
     }
 
     fn dir_attr(&self) -> Vec<String> {
@@ -292,15 +291,6 @@ where
                 *typ = Some(variable_name.to_owned())
             }
         }
-    }
-}
-
-impl<'v, Typ, V: ValueLike<'v>> StarlarkIterable<'v> for EnumTypeGen<V, Typ> {
-    fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
-    where
-        'v: 'a,
-    {
-        box self.elements.values().map(|x| x.to_value())
     }
 }
 

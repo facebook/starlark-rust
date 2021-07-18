@@ -24,7 +24,6 @@ use crate::{
         comparison::{compare_slice, equals_slice},
         error::ValueError,
         index::{convert_index, convert_slice_indices},
-        iter::StarlarkIterable,
         tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
         FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
@@ -324,9 +323,14 @@ where
 
     fn iterate(
         &'v self,
-        heap: &'v Heap,
+        _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        Ok(self.to_iter(heap))
+        let aref = self.0.content();
+        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
+        let iter = aref_ptr.iter();
+        // We need to create an iterator based on this ARef, and keep the iterator alive.
+        // This, plus the unsafe above, ensures the ARef stays alive long enough.
+        Ok(box It { aref, iter })
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -376,20 +380,6 @@ impl<'a, 'v> Iterator for It<'a, 'v> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
-    }
-}
-
-impl<'v, T: ListLike<'v>> StarlarkIterable<'v> for ListGen<T> {
-    fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
-    where
-        'v: 'a,
-    {
-        let aref = self.0.content();
-        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
-        let iter = aref_ptr.iter();
-        // We need to create an iterator based on this ARef, and keep the iterator alive.
-        // This, plus the unsafe above, ensures the ARef stays alive long enough.
-        box It { aref, iter }
     }
 }
 

@@ -21,9 +21,9 @@ use crate as starlark;
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
-        fast_string, index::convert_slice_indices, interpolation, iter::StarlarkIterable,
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Trace, UnpackValue, Value, ValueError, ValueLike,
+        fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
+        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
+        UnpackValue, Value, ValueError, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce};
@@ -336,20 +336,11 @@ where
         &'v self,
         heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        Ok(self.to_iter(heap))
-    }
-}
-
-impl<'v, T: ValueLike<'v>> StarlarkIterable<'v> for StringIteratorGen<T> {
-    fn to_iter<'a>(&'a self, heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
-    where
-        'v: 'a,
-    {
         let s = self.string.to_value().unpack_str().unwrap().chars();
         if self.produce_char {
-            box s.map(move |x| heap.alloc(x))
+            Ok(box s.map(move |x| heap.alloc(x)))
         } else {
-            box s.map(|x| Value::new_int(u32::from(x) as i32))
+            Ok(box s.map(|x| Value::new_int(u32::from(x) as i32)))
         }
     }
 }

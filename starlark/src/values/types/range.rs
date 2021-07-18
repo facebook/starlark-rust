@@ -19,7 +19,6 @@
 
 use crate::values::{
     index::{convert_index, convert_slice_indices},
-    iter::StarlarkIterable,
     Heap, StarlarkValue, Value, ValueError,
 };
 use gazebo::prelude::*;
@@ -189,9 +188,9 @@ impl<'v> StarlarkValue<'v> for Range {
 
     fn iterate(
         &'v self,
-        heap: &'v Heap,
+        _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        Ok(self.to_iter(heap))
+        Ok(box RangeIterator::<'v>(*self, PhantomData))
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
@@ -233,15 +232,6 @@ impl<'v> StarlarkValue<'v> for Range {
 impl PartialEq for Range {
     fn eq(&self, other: &Range) -> bool {
         self.equals_range(other).unwrap()
-    }
-}
-
-impl<'v> StarlarkIterable<'v> for Range {
-    fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
-    where
-        'v: 'a,
-    {
-        box RangeIterator::<'v>(*self, PhantomData)
     }
 }
 

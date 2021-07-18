@@ -21,7 +21,6 @@ use crate as starlark;
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    iter::StarlarkIterable,
     AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
     ValueError, ValueLike,
 };
@@ -203,9 +202,9 @@ where
 
     fn iterate(
         &'v self,
-        heap: &'v Heap,
+        _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        Ok(self.to_iter(heap))
+        Ok(box self.iter())
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -240,15 +239,6 @@ where
             }
             None => Err(ValueError::IncorrectParameterType.into()),
         }
-    }
-}
-
-impl<'v, V: ValueLike<'v> + 'v> StarlarkIterable<'v> for TupleGen<V> {
-    fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
-    where
-        'v: 'a,
-    {
-        box self.iter()
     }
 }
 

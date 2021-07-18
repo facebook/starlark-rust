@@ -22,10 +22,9 @@ use crate::{
     collections::{Hashed, MHIter, SmallMap},
     environment::{Globals, GlobalsStatic},
     values::{
-        comparison::equals_small_map, error::ValueError, iter::StarlarkIterable,
-        string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
-        FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
-        ValueLike,
+        comparison::equals_small_map, error::ValueError, string::hash_string_value,
+        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap, FrozenValue,
+        Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{
@@ -335,9 +334,14 @@ where
 
     fn iterate(
         &'v self,
-        heap: &'v Heap,
+        _heap: &'v Heap,
     ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        Ok(self.to_iter(heap))
+        let aref = self.0.content();
+        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
+        let iter = aref_ptr.iter();
+        // We need to create an iterator based on this ARef, and keep the iterator alive.
+        // This, plus the unsafe above, ensures the ARef stays alive long enough.
+        Ok(box It { aref, iter })
     }
 
     fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
@@ -362,20 +366,6 @@ impl<'a, 'v> Iterator for It<'a, 'v> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
-    }
-}
-
-impl<'v, T: DictLike<'v>> StarlarkIterable<'v> for DictGen<T> {
-    fn to_iter<'a>(&'a self, _heap: &'v Heap) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
-    where
-        'v: 'a,
-    {
-        let aref = self.0.content();
-        let aref_ptr = unsafe { cast::ptr_lifetime(aref.deref()) };
-        let iter = aref_ptr.iter();
-        // We need to create an iterator based on this ARef, and keep the iterator alive.
-        // This, plus the unsafe above, ensures the ARef stays alive long enough.
-        box It { aref, iter }
     }
 }
 
