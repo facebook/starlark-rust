@@ -477,15 +477,6 @@ impl<'v> ParametersSpec<Value<'v>> {
     }
 }
 
-impl ParametersSpec<FrozenValue> {
-    pub(crate) fn promote<'v>(&self) -> &ParametersSpec<Value<'v>> {
-        unsafe {
-            // Safe because we know Value and FrozenValue have the same bit patterns where they overlap
-            &*(self as *const ParametersSpec<FrozenValue> as *const ParametersSpec<Value<'v>>)
-        }
-    }
-}
-
 unsafe impl<'v, T: Trace<'v>> Trace<'v> for ParametersSpec<T> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.0.kinds.iter_mut().for_each(|x| x.trace(tracer))

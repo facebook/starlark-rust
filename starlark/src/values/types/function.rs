@@ -27,7 +27,10 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::{
+    any::AnyLifetime,
+    coerce::{coerce_ref, Coerce},
+};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -113,7 +116,7 @@ impl NativeFunction {
         NativeFunction {
             function: box move |eval, params| {
                 let this = params.this;
-                let slots = parameters.promote().collect(0, params, eval)?;
+                let slots = coerce_ref(&parameters).collect(0, params, eval)?;
                 let parser = ParametersParser::new(slots);
                 let res = function(eval, this, parser);
                 eval.local_variables.release_after(slots);

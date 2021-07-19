@@ -39,7 +39,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::prelude::*;
+use gazebo::{coerce::coerce_ref, prelude::*};
 use std::sync::Arc;
 
 enum ParameterCompiled<T> {
@@ -279,7 +279,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
     ) -> anyhow::Result<Value<'v>> {
         eval.ann("invoke_frozen_def", |eval| {
             let slots = self.stmt.scope_names.used;
-            let slots = self.parameters.promote().collect(slots, params, eval)?;
+            let slots = coerce_ref(&self.parameters).collect(slots, params, eval)?;
             eval.with_call_stack(me, location, |eval| {
                 eval.ann("invoke_frozen_def_raw", |eval| self.invoke_raw(slots, eval))
             })
