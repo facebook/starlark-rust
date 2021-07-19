@@ -23,7 +23,7 @@ use crate::{
     eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
-        ValueError,
+        ValueError, ValueRef,
     },
 };
 use gazebo::{coerce::Coerce, prelude::*};
@@ -278,14 +278,20 @@ impl<V> ParametersSpec<V> {
     }
 }
 
+impl<V> ParametersSpec<V> {
+    pub fn len(&self) -> usize {
+        self.0.kinds.len()
+    }
+}
+
 impl<'v> ParametersSpec<Value<'v>> {
     #[inline(always)]
     pub(crate) fn collect(
         &self,
-        slots: usize,
+        slots: &[ValueRef<'v>],
         params: Parameters<'v, '_>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<LocalSlotBase> {
+        heap: &'v Heap,
+    ) -> anyhow::Result<()> {
         // Return true if the value is a duplicate
         #[inline(always)]
         fn add_kwargs<'v>(
@@ -306,8 +312,8 @@ impl<'v> ParametersSpec<Value<'v>> {
         }
 
         let len = self.0.kinds.len();
-        let slot_base = eval.local_variables.reserve(cmp::max(slots, len));
-        let slots = eval.local_variables.get_slots_at(slot_base);
+        // We might do unchecked stuff later on, so make sure we have as many slots as we expect
+        assert!(slots.len() >= len);
 
         let mut args = Vec::new();
         let mut kwargs = None;
@@ -328,7 +334,7 @@ impl<'v> ParametersSpec<Value<'v>> {
                 // If the arguments equal the length and the kinds, and we don't have any other args,
                 // then no_args, *args and **kwargs must all be unset,
                 // and we don't have to crate args/kwargs objects, we can skip everything else
-                return Ok(slot_base);
+                return Ok(());
             }
             next_position = params.pos.len();
         } else {
@@ -366,7 +372,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 
         // Next up are the *args parameters
         if let Some(param_args) = params.args {
-            match param_args.iterate(eval.heap()) {
+            match param_args.iterate(heap) {
                 Err(_) => return Err(FunctionError::ArgsArrayIsNotIterable.into()),
                 Ok(iter) => {
                     for v in iter {
@@ -454,7 +460,7 @@ impl<'v> ParametersSpec<Value<'v>> {
         // Note that we deliberately give warnings about missing parameters _before_ giving warnings
         // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
         if let Some(args_pos) = self.0.args {
-            slots[args_pos].set_direct(eval.heap().alloc(Tuple::new(args)));
+            slots[args_pos].set_direct(heap.alloc(Tuple::new(args)));
         } else if !args.is_empty() {
             return Err(FunctionError::ExtraPositionalParameters {
                 count: args.len(),
@@ -465,7 +471,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 
         if let Some(kwargs_pos) = self.0.kwargs {
             let kwargs = kwargs.take().unwrap_or_default();
-            slots[kwargs_pos].set_direct(eval.heap().alloc(*kwargs));
+            slots[kwargs_pos].set_direct(heap.alloc(*kwargs));
         } else if let Some(kwargs) = kwargs {
             return Err(FunctionError::ExtraNamedParameters {
                 names: kwargs.content.keys().map(|x| x.to_str()).collect(),
@@ -473,7 +479,7 @@ impl<'v> ParametersSpec<Value<'v>> {
             }
             .into());
         }
-        Ok(slot_base)
+        Ok(())
     }
 }
 

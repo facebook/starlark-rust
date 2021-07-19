@@ -116,10 +116,12 @@ impl NativeFunction {
         NativeFunction {
             function: box move |eval, params| {
                 let this = params.this;
-                let slots = coerce_ref(&parameters).collect(0, params, eval)?;
-                let parser = ParametersParser::new(slots);
+                let slot_base = eval.local_variables.reserve(parameters.len());
+                let slots = eval.local_variables.get_slots_at(slot_base);
+                coerce_ref(&parameters).collect(slots, params, eval.heap())?;
+                let parser = ParametersParser::new(slot_base);
                 let res = function(eval, this, parser);
-                eval.local_variables.release_after(slots);
+                eval.local_variables.release_after(slot_base);
                 res
             },
             name,
