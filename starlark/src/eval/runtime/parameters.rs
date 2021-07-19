@@ -22,12 +22,12 @@ use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
     eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Trace, Tracer, UnpackValue, Value,
+        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
         ValueError,
     },
 };
 use gazebo::{coerce::Coerce, prelude::*};
-use std::cmp;
+use std::{cmp, convert::TryInto};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -49,6 +49,8 @@ pub(crate) enum FunctionError {
     ArgsArrayIsNotIterable,
     #[error("The argument provided for **kwargs is not a dictionary")]
     KwArgsIsNotDict,
+    #[error("Wrong number of positional parameters, expected between {0} and {0}, got {1}")]
+    WrongNumberOfParameters(usize, usize, usize),
 }
 
 #[derive(Debug, Clone, Coerce)]
@@ -575,4 +577,234 @@ pub struct Parameters<'v, 'a> {
     pub names: &'a [(String, Hashed<Value<'v>>)],
     pub args: Option<Value<'v>>,
     pub kwargs: Option<Value<'v>>,
+}
+
+impl<'v, 'a> Parameters<'v, 'a> {
+    /// Produce [`Err`] if there are any named (i.e. non-positional) arguments.
+    #[inline(always)]
+    fn pos_only(&self) -> anyhow::Result<()> {
+        #[cold]
+        #[inline(never)]
+        fn bad(x: &Parameters) -> anyhow::Result<()> {
+            // We might have a empty kwargs dictionary, but probably have an error
+            let mut extra = Vec::new();
+            extra.extend(x.names.iter().map(|x| x.0.clone()));
+            if let Some(kwargs) = x.kwargs {
+                match Dict::from_value(kwargs) {
+                    None => return Err(FunctionError::KwArgsIsNotDict.into()),
+                    Some(x) => {
+                        for k in x.content.keys() {
+                            match k.unpack_str() {
+                                None => return Err(FunctionError::ArgsValueIsNotString.into()),
+                                Some(k) => extra.push(k.to_owned()),
+                            }
+                        }
+                    }
+                }
+            }
+            if extra.is_empty() {
+                Ok(())
+            } else {
+                // Would be nice to give a better name here, but it's in the call stack, so no big deal
+                Err(FunctionError::ExtraNamedParameters {
+                    names: extra,
+                    function: "function".to_owned(),
+                }
+                .into())
+            }
+        }
+
+        if self.named.is_empty() && self.kwargs.is_none() {
+            Ok(())
+        } else {
+            bad(self)
+        }
+    }
+
+    /// Collect exactly `N` positional arguments from the [`Parameters`], failing if there are too many/few
+    /// arguments, or if there are any named arguments.
+    #[inline(always)]
+    pub fn positional<const N: usize>(&self, heap: &'v Heap) -> anyhow::Result<[Value<'v>; N]> {
+        #[cold]
+        #[inline(never)]
+        fn rare<'v, const N: usize>(
+            x: &Parameters<'v, '_>,
+            heap: &'v Heap,
+        ) -> anyhow::Result<[Value<'v>; N]> {
+            // Very sad that we allocate into a vector, but I expect calling into a small positional argument
+            // with a *args is very rare.
+            let xs = x
+                .pos
+                .iter()
+                .copied()
+                .chain(x.args.unwrap().iterate(heap)?)
+                .collect::<Vec<_>>();
+            xs.as_slice()
+                .try_into()
+                .map_err(|_| FunctionError::WrongNumberOfParameters(N, N, x.pos.len()).into())
+        }
+
+        self.pos_only()?;
+        if self.args.is_none() {
+            self.pos
+                .try_into()
+                .map_err(|_| FunctionError::WrongNumberOfParameters(N, N, self.pos.len()).into())
+        } else {
+            rare(self, heap)
+        }
+    }
+
+    /// Collect exactly `REQUIRED` positional arguments, plus at most `OPTIONAL` positional arguments
+    /// from the [`Parameters`], failing if there are too many/few arguments, or if there are any named arguments.
+    /// The `OPTIONAL` array will never have a [`Some`] after a [`None`].
+    #[inline(always)]
+    pub fn optional<const REQUIRED: usize, const OPTIONAL: usize>(
+        &self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<([Value<'v>; REQUIRED], [Option<Value<'v>>; OPTIONAL])> {
+        #[cold]
+        #[inline(never)]
+        fn rare<'v, const REQUIRED: usize, const OPTIONAL: usize>(
+            x: &Parameters<'v, '_>,
+            heap: &'v Heap,
+        ) -> anyhow::Result<([Value<'v>; REQUIRED], [Option<Value<'v>>; OPTIONAL])> {
+            // Very sad that we allocate into a vector, but I expect calling into a small positional argument
+            // with a *args is very rare.
+            let args = match x.args {
+                None => box None.into_iter(),
+                Some(args) => args.iterate(heap)?,
+            };
+            let xs = x.pos.iter().copied().chain(args).collect::<Vec<_>>();
+            if xs.len() >= REQUIRED && xs.len() <= REQUIRED + OPTIONAL {
+                let required = xs[0..REQUIRED].try_into().unwrap();
+                let mut optional = [None; OPTIONAL];
+                for (a, b) in optional.iter_mut().zip(&xs[REQUIRED..]) {
+                    *a = Some(*b);
+                }
+                Ok((required, optional))
+            } else {
+                Err(
+                    FunctionError::WrongNumberOfParameters(REQUIRED, REQUIRED + OPTIONAL, xs.len())
+                        .into(),
+                )
+            }
+        }
+
+        self.pos_only()?;
+        if self.args.is_none()
+            && self.pos.len() >= REQUIRED
+            && self.pos.len() <= REQUIRED + OPTIONAL
+        {
+            let required = self.pos[0..REQUIRED].try_into().unwrap();
+            let mut optional = [None; OPTIONAL];
+            for (a, b) in optional.iter_mut().zip(&self.pos[REQUIRED..]) {
+                *a = Some(*b);
+            }
+            Ok((required, optional))
+        } else {
+            rare(self, heap)
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_parameter_unpack() {
+        let heap = Heap::new();
+        fn f<'v, F: Fn(&Parameters<'v, '_>), const N: usize>(heap: &'v Heap, op: F) {
+            for i in 0..=N {
+                let mut p = Parameters::default();
+                let pos = (0..i).map(|x| Value::new_int(x as i32)).collect::<Vec<_>>();
+                let args = (i..N).map(|x| Value::new_int(x as i32)).collect::<Vec<_>>();
+                let empty_args = args.is_empty();
+                p.pos = &pos;
+                p.args = Some(heap.alloc(args));
+                op(&p);
+                if empty_args {
+                    p.args = None;
+                    op(&p);
+                }
+            }
+        }
+
+        f::<_, 0>(&heap, |p| {
+            assert_eq!(&p.positional::<0>(&heap).unwrap(), &[]);
+            assert!(&p.positional::<1>(&heap).is_err());
+            assert!(&p.positional::<2>(&heap).is_err());
+            assert_eq!(&p.optional::<0, 1>(&heap).unwrap(), &([], [None]));
+            assert!(&p.optional::<1, 1>(&heap).is_err());
+            assert_eq!(&p.optional::<0, 2>(&heap).unwrap(), &([], [None, None]));
+        });
+        f::<_, 1>(&heap, |p| {
+            assert!(&p.positional::<0>(&heap).is_err());
+            assert_eq!(&p.positional::<1>(&heap).unwrap(), &[Value::new_int(0)]);
+            assert!(&p.positional::<2>(&heap).is_err());
+            assert_eq!(
+                &p.optional::<0, 1>(&heap).unwrap(),
+                &([], [Some(Value::new_int(0))])
+            );
+            assert_eq!(
+                &p.optional::<1, 1>(&heap).unwrap(),
+                &([Value::new_int(0)], [None])
+            );
+            assert_eq!(
+                &p.optional::<0, 2>(&heap).unwrap(),
+                &([], [Some(Value::new_int(0)), None])
+            );
+        });
+        f::<_, 2>(&heap, |p| {
+            assert!(&p.positional::<0>(&heap).is_err());
+            assert!(&p.positional::<1>(&heap).is_err());
+            assert_eq!(
+                &p.positional::<2>(&heap).unwrap(),
+                &[Value::new_int(0), Value::new_int(1)]
+            );
+            assert!(p.optional::<0, 1>(&heap).is_err());
+            assert_eq!(
+                &p.optional::<1, 1>(&heap).unwrap(),
+                &([Value::new_int(0)], [Some(Value::new_int(1))])
+            );
+            assert_eq!(
+                &p.optional::<0, 2>(&heap).unwrap(),
+                &([], [Some(Value::new_int(0)), Some(Value::new_int(1))])
+            );
+        });
+        f::<_, 3>(&heap, |p| {
+            assert!(&p.positional::<0>(&heap).is_err());
+            assert!(&p.positional::<1>(&heap).is_err());
+            assert!(&p.positional::<2>(&heap).is_err());
+            assert!(p.optional::<0, 1>(&heap).is_err());
+            assert!(p.optional::<1, 1>(&heap).is_err());
+            assert!(p.optional::<0, 2>(&heap).is_err());
+        });
+    }
+
+    #[test]
+    fn test_parameter_unpack_named() {
+        let heap = Heap::new();
+        let mut p = Parameters::default();
+        assert!(p.positional::<0>(&heap).is_ok());
+
+        // Test lots of forms of kwargs work properly
+        p.kwargs = Some(Value::new_none());
+        assert!(p.positional::<0>(&heap).is_err());
+        p.kwargs = Some(heap.alloc(Dict::default()));
+        assert!(p.positional::<0>(&heap).is_ok());
+        let mut sm = SmallMap::new();
+        sm.insert_hashed(heap.alloc("test").get_hashed().unwrap(), Value::new_none());
+        p.kwargs = Some(heap.alloc(Dict::new(sm)));
+        assert!(p.positional::<0>(&heap).is_err());
+
+        // Test named arguments work properly
+        p.kwargs = None;
+        let named = [Value::new_none()];
+        p.named = &named;
+        let names = [("test".to_owned(), heap.alloc("test").get_hashed().unwrap())];
+        p.names = &names;
+        assert!(p.positional::<0>(&heap).is_err());
+        assert!(p.positional::<1>(&heap).is_err());
+    }
 }
