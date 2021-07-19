@@ -110,10 +110,19 @@ fn render_fun(x: StarFun) -> TokenStream {
         body,
     } = x;
 
+    let set_type = if let Some(typ) = type_attribute {
+        quote! {
+            static TYPE: starlark::values::ConstFrozenValue =
+                starlark::values::ConstFrozenValue::new(#typ);
+            func.set_type(&TYPE);
+        }
+    } else {
+        quote! {}
+    };
+
     if is_parameters {
         let param_name = &args[0].name;
         let param_type = &args[0].ty;
-        assert!(type_attribute.is_none());
         quote! {
             #( #attrs )*
             #[allow(non_snake_case)] // Starlark doesn't have this convention
@@ -139,24 +148,15 @@ fn render_fun(x: StarFun) -> TokenStream {
                 }
             }
             {
-                globals_builder.set(
-                    #name_str,
-                    starlark::values::function::NativeFunction::new_direct(#name, #name_str.to_owned()),
-                );
+                #[allow(unused_mut)]
+                let mut func = starlark::values::function::NativeFunction::new_direct(#name, #name_str.to_owned());
+                #set_type
+                globals_builder.set(#name_str, func);
             }
         }
     } else {
         let bind_args = args.map(bind_argument);
 
-        let set_type = if let Some(typ) = type_attribute {
-            quote! {
-                static TYPE: starlark::values::ConstFrozenValue =
-                    starlark::values::ConstFrozenValue::new(#typ);
-                func.set_type(&TYPE);
-            }
-        } else {
-            quote! {}
-        };
         quote! {
             #( #attrs )*
             #[allow(non_snake_case)] // Starlark doesn't have this convention
