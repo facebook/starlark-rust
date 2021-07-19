@@ -23,7 +23,7 @@ use crate::{
     eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
-        ValueError, ValueRef,
+        ValueError, ValueLike, ValueRef,
     },
 };
 use gazebo::{coerce::Coerce, prelude::*};
@@ -284,7 +284,7 @@ impl<V> ParametersSpec<V> {
     }
 }
 
-impl<'v> ParametersSpec<Value<'v>> {
+impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     #[inline(always)]
     pub(crate) fn collect(
         &self,
@@ -450,7 +450,7 @@ impl<'v> ParametersSpec<Value<'v>> {
                     .into());
                 }
                 ParameterKind::Defaulted(x) => {
-                    slot.set_direct(*x);
+                    slot.set_direct(x.to_value());
                 }
                 _ => {}
             }

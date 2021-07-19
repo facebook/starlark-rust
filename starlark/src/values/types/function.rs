@@ -27,10 +27,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{
-    any::AnyLifetime,
-    coerce::{coerce_ref, Coerce},
-};
+use gazebo::{any::AnyLifetime, coerce::Coerce};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -118,7 +115,7 @@ impl NativeFunction {
                 let this = params.this;
                 let slot_base = eval.local_variables.reserve(parameters.len());
                 let slots = eval.local_variables.get_slots_at(slot_base);
-                coerce_ref(&parameters).collect(slots, params, eval.heap())?;
+                parameters.collect(slots, params, eval.heap())?;
                 let parser = ParametersParser::new(slot_base);
                 let res = function(eval, this, parser);
                 eval.local_variables.release_after(slot_base);
