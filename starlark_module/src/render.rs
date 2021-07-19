@@ -98,16 +98,19 @@ fn render_attr(x: StarAttr) -> TokenStream {
 fn render_fun(x: StarFun) -> TokenStream {
     let name_str = ident_string(&x.name);
     let native_name_str = format!("native_{}", name_str);
+    let signature = render_signature(&x);
+    let is_parameters = x.is_parameters();
 
-    if x.is_parameters() {
-        let StarFun {
-            name,
-            type_attribute,
-            attrs,
-            args,
-            return_type,
-            body,
-        } = x;
+    let StarFun {
+        name,
+        type_attribute,
+        attrs,
+        args,
+        return_type,
+        body,
+    } = x;
+
+    if is_parameters {
         let param_name = &args[0].name;
         let param_type = &args[0].ty;
         assert!(type_attribute.is_none());
@@ -143,35 +146,16 @@ fn render_fun(x: StarFun) -> TokenStream {
             }
         }
     } else {
-        let signature = render_signature(&x);
-
-        let StarFun {
-            name,
-            type_attribute,
-            attrs,
-            args,
-            return_type,
-            body,
-        } = x;
         let bind_args = args.map(bind_argument);
 
-        let setter = if let Some(typ) = type_attribute {
+        let set_type = if let Some(typ) = type_attribute {
             quote! {
                 static TYPE: starlark::values::ConstFrozenValue =
                     starlark::values::ConstFrozenValue::new(#typ);
-                let signature_str = signature.signature();
-                let mut func = starlark::values::function::NativeFunction::new(#name, signature_str, signature);
                 func.set_type(&TYPE);
-                globals_builder.set(#name_str, func);
             }
         } else {
-            quote! {
-                let signature_str = signature.signature();
-                globals_builder.set(
-                    #name_str,
-                    starlark::values::function::NativeFunction::new(#name, signature_str, signature),
-                );
-            }
+            quote! {}
         };
         quote! {
             #( #attrs )*
@@ -205,7 +189,11 @@ fn render_fun(x: StarFun) -> TokenStream {
             }
             {
                 #signature
-                #setter
+                let signature_str = signature.signature();
+                #[allow(unused_mut)]
+                let mut func = starlark::values::function::NativeFunction::new(#name, signature_str, signature);
+                #set_type
+                globals_builder.set(#name_str, func);
             }
         }
     }
