@@ -72,12 +72,10 @@ impl Alloca {
         self.end.set(pointer.wrapping_add(size));
     }
 
+    /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
+    /// or you call it yourself.
     #[inline(always)]
-    pub fn alloca_uninit<T: Copy, R>(
-        &self,
-        len: usize,
-        f: impl FnOnce(&mut [MaybeUninit<T>]) -> R,
-    ) -> R {
+    pub fn alloca_uninit<T, R>(&self, len: usize, f: impl FnOnce(&mut [MaybeUninit<T>]) -> R) -> R {
         let layout = Layout::array::<T>(len).unwrap();
         let mut offset = self.alloc.get().align_offset(layout.align());
         let mut start = self.alloc.get().wrapping_add(offset);

@@ -382,8 +382,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.next_gc_level = 0;
     }
 
+    /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
+    /// or you call it yourself.
     #[inline(always)]
-    pub(crate) fn alloca_uninit<T: Copy, R>(
+    pub(crate) fn alloca_uninit<T, R>(
         &mut self,
         len: usize,
         f: impl FnOnce(&mut [MaybeUninit<T>], &mut Self) -> R,
