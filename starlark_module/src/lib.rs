@@ -79,7 +79,9 @@ mod util;
 pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
     assert!(attr.is_empty());
-    render::render(parse::parse(input)).into()
+    let mut x = parse::parse(input);
+    x.resolve();
+    render::render(x).into()
 }
 
 /// Derive the `Trace` trait.

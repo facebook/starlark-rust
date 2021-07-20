@@ -50,6 +50,7 @@ pub(crate) struct StarFun {
     pub args: Vec<StarArg>,
     pub return_type: Type,
     pub body: Block,
+    pub source: StarFunSource,
 }
 
 #[derive(Debug)]
@@ -69,11 +70,87 @@ pub(crate) struct StarArg {
     pub name: Ident,
     pub ty: Type,
     pub default: Option<Pat>,
+    pub source: StarArgSource,
+}
+
+#[derive(Debug)]
+pub(crate) enum StarArgSource {
+    Unknown,
+    This,
+    Parameters,
+    Argument(usize),
+    Required(usize),
+    Optional(usize),
+}
+
+#[derive(Debug)]
+pub(crate) enum StarFunSource {
+    Unknown,
+    Parameters,
+    Argument(usize),
+    Positional(usize, usize),
+}
+
+impl StarModule {
+    pub fn resolve(&mut self) {
+        for x in &mut self.stmts {
+            match x {
+                StarStmt::Fun(x) => x.resolve(),
+                _ => {}
+            }
+        }
+    }
 }
 
 impl StarFun {
-    pub fn is_parameters(&self) -> bool {
-        self.args.len() == 1 && self.args[0].is_parameters()
+    #[allow(clippy::branches_sharing_code)] // False positive
+    pub fn resolve(&mut self) {
+        fn requires_signature(x: &StarArg) -> bool {
+            // We need to use a signature if something has a name
+            // There are *args or **kwargs
+            // There is a default that needs promoting to a Value (since the signature stores that value)
+            !x.by_ref || x.is_args() || x.is_kwargs() || (x.is_value() && x.default.is_some())
+        }
+
+        if self.args.len() == 1 && self.args[0].is_parameters() {
+            self.args[0].source = StarArgSource::Parameters;
+            self.source = StarFunSource::Parameters;
+        } else {
+            let use_arguments = self
+                .args
+                .iter()
+                .filter(|x| !x.is_this())
+                .any(requires_signature);
+            if use_arguments {
+                let mut argument = 0;
+                for x in &mut self.args {
+                    if x.is_this() {
+                        x.source = StarArgSource::This;
+                    } else {
+                        x.source = StarArgSource::Argument(argument);
+                        argument += 1;
+                    }
+                }
+                self.source = StarFunSource::Argument(argument);
+            } else {
+                let mut required = 0;
+                let mut optional = 0;
+                for x in &mut self.args {
+                    if x.is_this() {
+                        x.source = StarArgSource::This;
+                        continue;
+                    }
+                    if optional == 0 && x.default.is_none() && !x.is_option() {
+                        x.source = StarArgSource::Required(required);
+                        required += 1;
+                    } else {
+                        x.source = StarArgSource::Optional(optional);
+                        optional += 1;
+                    }
+                }
+                self.source = StarFunSource::Positional(required, optional);
+            }
+        }
     }
 }
 

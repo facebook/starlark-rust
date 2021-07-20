@@ -204,13 +204,10 @@ fn test_extra_args_native() {
     // In this module to use String functions as a test suite.
     assert::is_true(r#"("bonbon".find("on") == 1)"#);
     // Should fail because find declares #needle, so hide the parameter
-    assert::fail(
-        r#"("bonbon".find(needle = "on") == 1)"#,
-        "Missing parameter",
-    );
-    assert::fail(r#""bonbon".find("on", 2, 3, 4)"#, "extra positional");
+    assert::fail(r#"("bonbon".find(needle = "on") == 1)"#, "extra named");
+    assert::fail(r#""bonbon".find("on", 2, 3, 4)"#, "Wrong number of");
     assert::fail(r#""bonbon".find("on", needless="on")"#, "extra named");
-    assert::fail(r#""bonbon".find()"#, "Missing parameter");
+    assert::fail(r#""bonbon".find()"#, "Wrong number of");
 }
 
 #[test]

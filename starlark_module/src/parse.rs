@@ -127,6 +127,7 @@ fn parse_fun(func: ItemFn) -> StarStmt {
             args,
             return_type: *return_type,
             body: *func.block,
+            source: StarFunSource::Unknown,
         })
     }
 }
@@ -145,6 +146,7 @@ fn parse_arg(x: FnArg) -> StarArg {
             by_ref: ident.by_ref.is_some(),
             ty,
             default: ident.subpat.map(|x| *x.1),
+            source: StarArgSource::Unknown,
         },
         arg => panic!("Unexpected argument, {:?}", arg),
     }
