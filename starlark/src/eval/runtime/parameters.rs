@@ -518,10 +518,10 @@ impl<'v> ParametersSpec<Value<'v>> {
 }
 
 /// Parse a series of parameters which were specified by [`ParametersSpec`].
-pub struct ParametersParser<'v, 'a>(std::slice::Iter<'a, ValueRef<'v>>);
+pub struct ParametersParser<'v, 'a>(std::slice::Iter<'a, Cell<Option<Value<'v>>>>);
 
 impl<'v, 'a> ParametersParser<'v, 'a> {
-    pub(crate) fn new(slots: &'a [ValueRef<'v>]) -> Self {
+    pub fn new(slots: &'a [Cell<Option<Value<'v>>>]) -> Self {
         Self(slots.iter())
     }
 
@@ -535,7 +535,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
             .0
             .next()
             .expect("ParametersParser: wrong number of requested arguments");
-        v.get_direct()
+        v.get()
     }
 
     pub fn this<T: UnpackValue<'v>>(&self, this: Option<Value<'v>>) -> anyhow::Result<T> {

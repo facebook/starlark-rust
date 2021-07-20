@@ -27,7 +27,10 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::{
+    any::AnyLifetime,
+    coerce::{coerce, Coerce},
+};
 use std::mem::MaybeUninit;
 
 pub const FUNCTION_TYPE: &str = "function";
@@ -122,7 +125,7 @@ impl NativeFunction {
 
                     let this = params.this;
                     parameters.collect_inline(params, slots, eval.heap())?;
-                    let parser = ParametersParser::new(slots);
+                    let parser = ParametersParser::new(coerce(slots));
                     function(eval, this, parser)
                 })
             },
