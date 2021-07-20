@@ -154,8 +154,14 @@ fn render_fun(x: StarFun) -> TokenStream {
         }
     } else {
         // Might be higher than we need by one if `this` is used, but not a big deal
-        let args_count = args.len();
-        let bind_args = args.map(bind_argument);
+        let has_this = !args.is_empty() && args[0].is_this();
+        let this_count = if has_this { 1 } else { 0 };
+        let args_count = args.len() - this_count;
+        let bind_args = args
+            .iter()
+            .enumerate()
+            .map(|(i, x)| bind_argument(x, if i > 0 { i - this_count } else { 0 }))
+            .collect::<Vec<_>>();
 
         quote! {
             #( #attrs )*
@@ -170,9 +176,8 @@ fn render_fun(x: StarFun) -> TokenStream {
                     eval: &mut starlark::eval::Evaluator<'v, '_>,
                     #[allow(unused_variables)]
                     this: Option<starlark::values::Value<'v>>,
-                    #[allow(unused_mut)]
                     #[allow(unused_variables)]
-                    mut starlark_args: starlark::eval::ParametersParser<'v, '_>,
+                    starlark_args: &[std::cell::Cell<Option<starlark::values::Value<'v>>>; #args_count],
                 ) -> anyhow::Result<#return_type> {
                     #[allow(unused_variables)]
                     let heap = eval.heap();
@@ -183,8 +188,7 @@ fn render_fun(x: StarFun) -> TokenStream {
                 }
                 let this = parameters.this;
                 let args: [_; #args_count] = signature.collect_into(parameters, eval.heap())?;
-                let starlark_args = starlark::eval::ParametersParser::new(&args);
-                match inner(eval, this, starlark_args) {
+                match inner(eval, this, &args) {
                     Ok(v) => Ok(eval.heap().alloc(v)),
                     Err(e) => Err(e),
                 }
@@ -205,29 +209,29 @@ fn render_fun(x: StarFun) -> TokenStream {
 }
 
 // Create a binding for an argument given
-fn bind_argument(arg: &StarArg) -> TokenStream {
+fn bind_argument(arg: &StarArg, index: usize) -> TokenStream {
     let name = &arg.name;
     let name_str = ident_string(name);
     let ty = &arg.ty;
 
     // Rust doesn't have powerful enough nested if yet
     let next = if arg.is_this() {
-        quote! { starlark_args.this(this)? }
+        quote! { starlark::eval::Parameters::check_this(this)? }
     } else if arg.is_option() {
         assert!(
             arg.default.is_none(),
             "Can't have Option argument with a default, for `{}`",
             name_str
         );
-        quote! { starlark_args.next_opt(#name_str)? }
+        quote! { starlark::eval::Parameters::check_optional(#name_str, starlark_args[#index].get())? }
     } else if !arg.is_value() && arg.default.is_some() {
         let default = arg
             .default
             .as_ref()
             .unwrap_or_else(|| unreachable!("Checked on the line above"));
-        quote! { starlark_args.next_opt(#name_str)?.unwrap_or(#default) }
+        quote! { starlark::eval::Parameters::check_optional(#name_str, starlark_args[#index].get())?.unwrap_or(#default) }
     } else {
-        quote! { starlark_args.next(#name_str)? }
+        quote! { starlark::eval::Parameters::check_required(#name_str, starlark_args[#index].get())? }
     };
 
     let mutability = mut_token(arg.mutable);

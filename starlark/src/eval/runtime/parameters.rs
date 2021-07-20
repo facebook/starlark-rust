@@ -715,6 +715,37 @@ impl<'v, 'a> Parameters<'v, 'a> {
     }
 }
 
+// Utility for improving the error message with more information
+fn named_err<T>(name: &str, x: Option<T>) -> anyhow::Result<T> {
+    x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
+}
+
+impl Parameters<'_, '_> {
+    /// Utility for checking a `this` parameter matches what you expect.
+    pub fn check_this<'v, T: UnpackValue<'v>>(this: Option<Value<'v>>) -> anyhow::Result<T> {
+        named_err("this", this.and_then(T::unpack_value))
+    }
+
+    /// Utility for checking a required parameter matches what you expect.
+    pub fn check_required<'v, T: UnpackValue<'v>>(
+        name: &str,
+        x: Option<Value<'v>>,
+    ) -> anyhow::Result<T> {
+        named_err(name, x.and_then(T::unpack_value))
+    }
+
+    /// Utility for checking an optional parameter matches what you expect.
+    pub fn check_optional<'v, T: UnpackValue<'v>>(
+        name: &str,
+        x: Option<Value<'v>>,
+    ) -> anyhow::Result<Option<T>> {
+        match x {
+            None => Ok(None),
+            Some(x) => named_err(name, T::unpack_value(x).map(Some)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
