@@ -38,7 +38,7 @@ use crate as starlark;
 use crate::{
     codemap::Span,
     collections::SmallMap,
-    eval::{Evaluator, Parameters, ParametersParser, ParametersSpecBuilder},
+    eval::{Evaluator, Parameters},
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
@@ -159,16 +159,12 @@ impl<'v> EnumType<'v> {
     // The constructor is actually invariant in the enum type it works for, so we could try and allocate it
     // once for all enumerations. But that seems like a lot of work for not much benefit.
     fn make_constructor() -> NativeFunction {
-        let mut signature = ParametersSpecBuilder::with_capacity("enum".to_owned(), 2);
-        signature.required("$value");
-        let signature = signature.build();
-
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between therads - so we create the NativeFunction and apply it later.
-        NativeFunction::new(
-            move |eval, this, mut param_parser: ParametersParser| {
-                let this = this.unwrap();
-                let val: Value = param_parser.next("value", eval)?;
+        NativeFunction::new_direct(
+            move |eval, params| {
+                let this = params.this.unwrap();
+                let [val] = params.positional(eval.heap())?;
                 let elements = EnumType::from_value(this)
                     .unwrap()
                     .either(|x| &x.elements, |x| coerce_ref(&x.elements));
@@ -179,8 +175,7 @@ impl<'v> EnumType<'v> {
                     }
                 }
             },
-            signature.signature(),
-            signature,
+            "enum(value)".to_owned(),
         )
     }
 }
