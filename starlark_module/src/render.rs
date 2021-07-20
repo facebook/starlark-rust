@@ -177,31 +177,26 @@ fn render_binding(x: &StarFun) -> TokenStream {
         } = &x.args[0];
         quote! { #( #attrs )* let #name : #ty = __parameters; }
     } else {
-        let args = &x.args;
-        let has_this = !args.is_empty() && args[0].is_this();
-        let this_count = if has_this { 1 } else { 0 };
-        let args_count = args.len() - this_count;
-        let bind_args = args
-            .iter()
-            .enumerate()
-            .map(|(i, x)| render_binding_arg(x, if i > 0 { i - this_count } else { 0 }))
-            .collect::<Vec<_>>();
+        let mut arg_count = 0;
+        let bind_args = x.args.map(|x| render_binding_arg(x, &mut arg_count));
         quote! {
             let __this = __parameters.this;
-            let __args: [_; #args_count] = __signature.collect_into(__parameters, eval.heap())?;
+            let __args: [_; #arg_count] = __signature.collect_into(__parameters, eval.heap())?;
             #( #bind_args )*
         }
     }
 }
 
-// Create a binding for an argument given
-fn render_binding_arg(arg: &StarArg, index: usize) -> TokenStream {
+// Create a binding for an argument given. If it requires an index, take from the index
+fn render_binding_arg(arg: &StarArg, index: &mut usize) -> TokenStream {
     let name = &arg.name;
     let name_str = ident_string(name);
     let ty = &arg.ty;
 
     // Rust doesn't have powerful enough nested if yet
+    let mut increment_index = true;
     let next = if arg.is_this() {
+        increment_index = false;
         quote! { starlark::eval::Parameters::check_this(__this)? }
     } else if arg.is_option() {
         assert!(
@@ -219,6 +214,10 @@ fn render_binding_arg(arg: &StarArg, index: usize) -> TokenStream {
     } else {
         quote! { starlark::eval::Parameters::check_required(#name_str, __args[#index].get())? }
     };
+
+    if increment_index {
+        *index += 1;
+    }
 
     let mutability = mut_token(arg.mutable);
     let attrs = &arg.attrs;
