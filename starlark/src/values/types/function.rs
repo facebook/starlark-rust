@@ -23,11 +23,12 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike, ValueRef,
     },
 };
 use derivative::Derivative;
 use gazebo::{any::AnyLifetime, coerce::Coerce};
+use std::mem::MaybeUninit;
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -104,7 +105,7 @@ impl NativeFunction {
         F: for<'v> Fn(
                 &mut Evaluator<'v, '_>,
                 Option<Value<'v>>,
-                ParametersParser,
+                ParametersParser<'v, '_>,
             ) -> anyhow::Result<Value<'v>>
             + Send
             + Sync
@@ -112,14 +113,18 @@ impl NativeFunction {
     {
         NativeFunction {
             function: box move |eval, params| {
-                let this = params.this;
-                let slot_base = eval.local_variables.reserve(parameters.len());
-                let slots = eval.local_variables.get_slots_at(slot_base);
-                parameters.collect_inline(params, slots, eval.heap())?;
-                let parser = ParametersParser::new(slot_base);
-                let res = function(eval, this, parser);
-                eval.local_variables.release_after(slot_base);
-                res
+                eval.alloca_uninit(parameters.len(), |slots, eval| {
+                    // Fill in all the slots, because ValueRef lacks a Clone or similar
+                    for slot in slots.iter_mut() {
+                        slot.write(ValueRef::new_unassigned());
+                    }
+                    let slots = unsafe { MaybeUninit::slice_assume_init_ref(slots) };
+
+                    let this = params.this;
+                    parameters.collect_inline(params, slots, eval.heap())?;
+                    let parser = ParametersParser::new(slots);
+                    function(eval, this, parser)
+                })
             },
             name,
             typ: None,

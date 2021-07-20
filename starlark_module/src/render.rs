@@ -126,14 +126,14 @@ fn render_fun(x: StarFun) -> TokenStream {
         quote! {
             #( #attrs )*
             #[allow(non_snake_case)] // Starlark doesn't have this convention
-            fn #name<'v, 'a>(
-                eval: &mut starlark::eval::Evaluator<'v, 'a>,
+            fn #name<'v>(
+                eval: &mut starlark::eval::Evaluator<'v, '_>,
                 #[allow(unused_variables)]
                 parameters: starlark::eval::Parameters<'v, '_>,
             ) -> anyhow::Result<starlark::values::Value<'v>> {
                  fn inner<'v, 'a>(
                     #[allow(unused_variables)]
-                    eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                    eval: &mut starlark::eval::Evaluator<'v, '_>,
                     #[allow(unused_variables)]
                     #param_name: #param_type,
                 ) -> anyhow::Result<#return_type> {
@@ -160,20 +160,20 @@ fn render_fun(x: StarFun) -> TokenStream {
         quote! {
             #( #attrs )*
             #[allow(non_snake_case)] // Starlark doesn't have this convention
-            fn #name<'v, 'a>(
-                eval: &mut starlark::eval::Evaluator<'v, 'a>,
+            fn #name<'v>(
+                eval: &mut starlark::eval::Evaluator<'v, '_>,
                 #[allow(unused_variables)]
                 this: Option<starlark::values::Value<'v>>,
-                starlark_args: starlark::eval::ParametersParser,
+                starlark_args: starlark::eval::ParametersParser<'v, '_>,
             ) -> anyhow::Result<starlark::values::Value<'v>> {
-                 fn inner<'v, 'a>(
+                 fn inner<'v>(
                     #[allow(unused_variables)]
-                    eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                    eval: &mut starlark::eval::Evaluator<'v, '_>,
                     #[allow(unused_variables)]
                     this: Option<starlark::values::Value<'v>>,
                     #[allow(unused_mut)]
                     #[allow(unused_variables)]
-                    mut starlark_args: starlark::eval::ParametersParser,
+                    mut starlark_args: starlark::eval::ParametersParser<'v, '_>,
                 ) -> anyhow::Result<#return_type> {
                     #[allow(unused_variables)]
                     let heap = eval.heap();
@@ -214,15 +214,15 @@ fn bind_argument(arg: &StarArg) -> TokenStream {
             "Can't have Option argument with a default, for `{}`",
             name_str
         );
-        quote! { starlark_args.next_opt(#name_str, eval)? }
+        quote! { starlark_args.next_opt(#name_str)? }
     } else if !arg.is_value() && arg.default.is_some() {
         let default = arg
             .default
             .as_ref()
             .unwrap_or_else(|| unreachable!("Checked on the line above"));
-        quote! { starlark_args.next_opt(#name_str, eval)?.unwrap_or(#default) }
+        quote! { starlark_args.next_opt(#name_str)?.unwrap_or(#default) }
     } else {
-        quote! { starlark_args.next(#name_str, eval)? }
+        quote! { starlark_args.next(#name_str)? }
     };
 
     let mutability = mut_token(arg.mutable);

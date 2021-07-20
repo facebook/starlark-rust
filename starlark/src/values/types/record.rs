@@ -184,12 +184,12 @@ impl<'v> RecordType<'v> {
                 for (name, field) in fields.iter() {
                     match field.0.default {
                         None => {
-                            let v: Value = param_parser.next(name, eval)?;
+                            let v: Value = param_parser.next(name)?;
                             v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
                             values.push(v);
                         }
                         Some(default) => {
-                            let v: Option<Value> = param_parser.next_opt(name, eval)?;
+                            let v: Option<Value> = param_parser.next_opt(name)?;
                             match v {
                                 None => values.push(default),
                                 Some(v) => {

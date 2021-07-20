@@ -89,10 +89,6 @@ impl<'v> LocalSlots<'v> {
         self.base = new_base;
     }
 
-    pub fn get_slot_at(&self, base: LocalSlotBase, i: usize) -> &ValueRef<'v> {
-        &self.slots[base.0 + i]
-    }
-
     pub fn get_slots_at(&self, base: LocalSlotBase) -> &[ValueRef<'v>] {
         &self.slots[base.0..]
     }

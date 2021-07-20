@@ -20,7 +20,6 @@
 /// parameters into slots.
 use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
-    eval::{runtime::slots::LocalSlotBase, Evaluator},
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
         ValueError, ValueLike, ValueRef,
@@ -519,14 +518,11 @@ impl<'v> ParametersSpec<Value<'v>> {
 }
 
 /// Parse a series of parameters which were specified by [`ParametersSpec`].
-pub struct ParametersParser {
-    base: LocalSlotBase,
-    next: usize,
-}
+pub struct ParametersParser<'v, 'a>(std::slice::Iter<'a, ValueRef<'v>>);
 
-impl ParametersParser {
-    pub(crate) fn new(base: LocalSlotBase) -> Self {
-        Self { base, next: 0 }
+impl<'v, 'a> ParametersParser<'v, 'a> {
+    pub(crate) fn new(slots: &'a [ValueRef<'v>]) -> Self {
+        Self(slots.iter())
     }
 
     // Utility for improving the error message with more information
@@ -534,28 +530,23 @@ impl ParametersParser {
         x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
     }
 
-    fn get_next<'v>(&mut self, eval: &Evaluator<'v, '_>) -> Option<Value<'v>> {
-        let v = eval
-            .local_variables
-            .get_slot_at(self.base, self.next)
-            .get_direct();
-        self.next += 1;
-        v
+    fn get_next(&mut self) -> Option<Value<'v>> {
+        let v = self
+            .0
+            .next()
+            .expect("ParametersParser: wrong number of requested arguments");
+        v.get_direct()
     }
 
-    pub fn this<'v, T: UnpackValue<'v>>(&self, this: Option<Value<'v>>) -> anyhow::Result<T> {
+    pub fn this<T: UnpackValue<'v>>(&self, this: Option<Value<'v>>) -> anyhow::Result<T> {
         Self::named_err("this", this.and_then(T::unpack_value))
     }
 
     /// Obtain the next parameter, corresponding to [`ParametersSpecBuilder::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next_opt<'v, T: UnpackValue<'v>>(
-        &mut self,
-        name: &str,
-        eval: &Evaluator<'v, '_>,
-    ) -> anyhow::Result<Option<T>> {
-        match self.get_next(eval) {
+    pub fn next_opt<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<Option<T>> {
+        match self.get_next() {
             None => Ok(None),
             Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(v))?)),
         }
@@ -564,18 +555,14 @@ impl ParametersParser {
     /// Obtain the next parameter, which can't be defined by [`ParametersSpecBuilder::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
-    pub fn next<'v, T: UnpackValue<'v>>(
-        &mut self,
-        name: &str,
-        eval: &Evaluator<'v, '_>,
-    ) -> anyhow::Result<T> {
+    pub fn next<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<T> {
         // After ParametersCollect.done() all variables will be Some,
         // apart from those where we called ParametersSpec.optional(),
         // and for those we chould call next_opt()
 
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
-        let v = self.get_next(eval).unwrap();
+        let v = self.get_next().unwrap();
         Self::named_err(name, T::unpack_value(v))
     }
 }
