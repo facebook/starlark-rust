@@ -155,8 +155,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark_type(BOOL_TYPE)]
-    fn bool(ref x @ false: Value) -> bool {
-        Ok(x.to_bool())
+    fn bool(ref x: Option<Value>) -> bool {
+        match x {
+            None => Ok(false),
+            Some(x) => Ok(x.to_bool()),
+        }
     }
 
     /// [chr](
@@ -781,7 +784,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// sorted(["two", "three", "four"], key=len, reverse=True)  == ["three", "four", "two"] # longest to shortest
     /// # "#);
     /// ```
-    fn sorted(ref x: Value, key: Option<Value>, reverse @ false: Value) -> List<'v> {
+    fn sorted(ref x: Value, key: Option<Value>, reverse: Option<Value>) -> List<'v> {
         let it = x.iterate(heap)?;
         let mut it = match key {
             None => it.map(|x| (x, x)).collect(),
@@ -796,7 +799,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
 
         let mut compare_ok = Ok(());
 
-        let reverse = reverse.to_bool();
+        let reverse = reverse.map_or(false, |x| x.to_bool());
         it.sort_by(|x: &(Value, Value), y: &(Value, Value)| {
             let ord_or_err = if reverse {
                 x.1.compare(y.1).map(Ordering::reverse)

@@ -77,9 +77,9 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// x.get("three", 0) == 0
     /// # )"#);
     /// ```
-    fn get(this: ARef<Dict>, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
+    fn get(this: ARef<Dict>, ref key: Value, ref default: Option<Value>) -> Value<'v> {
         match this.get(key)? {
-            None => Ok(default),
+            None => Ok(default.unwrap_or_else(Value::new_none)),
             Some(x) => Ok(x),
         }
     }
@@ -258,14 +258,15 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// x == {"one": 1, "two": 2, "three": 0, "four": None}
     /// # )"#)
     /// ```
-    fn setdefault(this: Value, ref key: Value, ref default @ NoneType: Value) -> Value<'v> {
+    fn setdefault(this: Value, ref key: Value, ref default: Option<Value>) -> Value<'v> {
         let mut this = Dict::from_value_mut(this)?.unwrap();
         let key = key.get_hashed()?;
         if let Some(r) = this.content.get_hashed(key.borrow()) {
             return Ok(*r);
         }
-        this.content.insert_hashed(key, default);
-        Ok(default)
+        let def = default.unwrap_or_else(Value::new_none);
+        this.content.insert_hashed(key, def);
+        Ok(def)
     }
 
     /// [dict.update](
