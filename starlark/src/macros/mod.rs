@@ -58,9 +58,9 @@ macro_rules! starlark_complex_value {
             impl $crate::values::SimpleValue for [< Frozen $x >] {}
 
             impl<'v> $x<'v> {
-                pub fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
+                pub fn from_value(x: $crate::values::Value<'v>) -> Option<&'v Self> {
                     if x.unpack_frozen().is_some() {
-                        x.downcast_ref::< [< Frozen $x >] >().map(|x| $crate::values::ARef::map(x, $crate::__macro_refs::coerce_ref))
+                        x.downcast_ref::< [< Frozen $x >] >().map($crate::__macro_refs::coerce_ref)
                     } else {
                         x.downcast_ref::< $x<'v> >()
                     }
@@ -69,7 +69,7 @@ macro_rules! starlark_complex_value {
 
             impl<'v> $crate::values::FromValue<'v> for $x<'v> {
                 fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
-                    $x::from_value(x)
+                    $x::from_value(x).map(|x| $crate::values::ARef::new_ptr(x))
                 }
             }
         }
@@ -103,7 +103,7 @@ macro_rules! starlark_complex_values {
                 #[allow(dead_code)]
                 fn from_value(
                     x: $crate::values::Value<'v>,
-                ) -> Option<$crate::__macro_refs::Either<$crate::values::ARef<'v, Self>, $crate::values::ARef<'v, [< Frozen $x >]>>> {
+                ) -> Option<$crate::__macro_refs::Either<&'v Self, &'v [< Frozen $x >]>> {
                     if x.unpack_frozen().is_some() {
                         x.downcast_ref().map($crate::__macro_refs::Either::Right)
                     } else {
@@ -138,14 +138,14 @@ macro_rules! starlark_simple_value {
             impl $crate::values::SimpleValue for $x {}
 
             impl $x {
-                pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
+                pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<&'v Self> {
                     x.downcast_ref::< $x >()
                 }
             }
 
             impl<'v> $crate::values::FromValue<'v> for $x {
                 fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
-                    $x::from_value(x)
+                    $x::from_value(x).map(|x| $crate::values::ARef::new_ptr(x))
                 }
             }
         }

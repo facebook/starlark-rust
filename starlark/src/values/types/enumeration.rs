@@ -50,7 +50,7 @@ use derivative::Derivative;
 use either::Either;
 use gazebo::{
     any::AnyLifetime,
-    cell::{ARef, AsARef},
+    cell::AsARef,
     coerce::{coerce_ref, Coerce},
 };
 use std::{cell::RefCell, fmt::Debug};
@@ -169,10 +169,9 @@ impl<'v> EnumType<'v> {
             move |eval, this, mut param_parser: ParametersParser| {
                 let this = this.unwrap();
                 let val: Value = param_parser.next("value", eval)?;
-                let elements = EnumType::from_value(this).unwrap().either(
-                    |x| ARef::map(x, |x| &x.elements),
-                    |x| ARef::map(x, |x| coerce_ref(&x.elements)),
-                );
+                let elements = EnumType::from_value(this)
+                    .unwrap()
+                    .either(|x| &x.elements, |x| coerce_ref(&x.elements));
                 match elements.get_hashed(val.get_hashed()?.borrow()) {
                     Some(v) => Ok(*v),
                     None => {
@@ -190,7 +189,7 @@ impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
     /// The result of calling `type()` on an enum value.
     pub const TYPE: &'static str = "enum";
 
-    fn get_enum_type(&self) -> Either<ARef<'v, EnumType<'v>>, ARef<'v, FrozenEnumType>> {
+    fn get_enum_type(&self) -> Either<&'v EnumType<'v>, &'v FrozenEnumType> {
         // Safe to unwrap because we always ensure typ is EnumType
         EnumType::from_value(self.typ.to_value()).unwrap()
     }

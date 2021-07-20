@@ -367,8 +367,8 @@ impl<'v> Value<'v> {
     ///
     /// In many cases you may wish to call [`FromValue`] instead, as that can
     /// get a non-frozen value from an underlying frozen value.
-    pub fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        ValueLike::downcast_ref(self)
+    pub fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
+        self.get_ref().as_dyn_any().downcast_ref::<T>()
     }
 
     /// Are two values equal. If the values are of different types it will

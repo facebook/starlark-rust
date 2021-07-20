@@ -86,7 +86,7 @@ impl<'v> Dict<'v> {
     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
         if x.unpack_frozen().is_some() {
             x.downcast_ref::<DictGen<FrozenDict>>()
-                .map(|x| ARef::map(x, |x| coerce_ref(&x.0)))
+                .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
         } else {
             let ptr = x.get_ref();
             let ptr = ptr

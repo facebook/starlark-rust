@@ -61,7 +61,6 @@ use crate::{
     starlark_simple_value,
     values::{StarlarkValue, Value},
 };
-use gazebo::cell::ARef;
 use std::{
     any::Any,
     fmt::{self, Debug},
@@ -103,15 +102,10 @@ impl StarlarkAny {
 
     /// Extract from a [`Value`] that contains a [`StarlarkAny`] underneath. Returns [`None`] if
     /// the value does not match the expected type.
-    pub fn get<'v, T: Any + Debug + Send + Sync>(x: Value<'v>) -> Option<ARef<'v, T>> {
-        let x: ARef<'v, Self> = x.downcast_ref()?;
-        let x: ARef<'v, dyn Any> = ARef::map(x, |x| x.0.as_ref().as_any());
-        if x.is::<T>() {
-            // We checked it works first, so the downcast_ref can't fail
-            Some(ARef::map(x, |x| x.downcast_ref::<T>().unwrap()))
-        } else {
-            None
-        }
+    pub fn get<'v, T: Any + Debug + Send + Sync>(x: Value<'v>) -> Option<&'v T> {
+        let x: &'v Self = x.downcast_ref()?;
+        let x: &'v dyn Any = x.0.as_ref().as_any();
+        x.downcast_ref::<T>()
     }
 }
 

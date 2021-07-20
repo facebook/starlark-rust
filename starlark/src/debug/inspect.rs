@@ -20,14 +20,12 @@ use crate::{
     eval::{Def, Evaluator, FrozenDef, ScopeNames},
     values::Value,
 };
-use gazebo::cell::ARef;
 
-pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<ARef<'v, ScopeNames>> {
-    if let Some(x) = x.downcast_ref::<Def<'v>>() {
-        Some(ARef::map(x, |x| x.scope_names()))
+pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<&'v ScopeNames> {
+    if x.unpack_frozen().is_some() {
+        x.downcast_ref::<FrozenDef>().map(|x| x.scope_names())
     } else {
-        x.downcast_ref::<FrozenDef>()
-            .map(|x| ARef::map(x, |x| x.scope_names()))
+        x.downcast_ref::<Def>().map(|x| x.scope_names())
     }
 }
 

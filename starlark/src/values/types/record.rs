@@ -57,7 +57,7 @@ use crate::{
 use either::Either;
 use gazebo::{
     any::AnyLifetime,
-    cell::{ARef, AsARef},
+    cell::AsARef,
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
@@ -141,12 +141,9 @@ fn collect_repr_record<'s, 't, V: 't>(
 }
 
 fn record_fields<'v>(
-    x: Either<ARef<'v, RecordType<'v>>, ARef<'v, FrozenRecordType>>,
-) -> ARef<'v, SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>> {
-    x.either(
-        |x| ARef::map(x, |x| &x.fields),
-        |x| ARef::map(x, |x| coerce_ref(&x.fields)),
-    )
+    x: Either<&'v RecordType<'v>, &'v FrozenRecordType>,
+) -> &'v SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)> {
+    x.either(|x| &x.fields, |x| coerce_ref(&x.fields))
 }
 
 impl<'v> RecordType<'v> {
@@ -214,12 +211,12 @@ impl<'v> RecordType<'v> {
 impl<'v, V: ValueLike<'v>> RecordGen<V> {
     pub const TYPE: &'static str = "record";
 
-    fn get_record_type(&self) -> Either<ARef<'v, RecordType<'v>>, ARef<'v, FrozenRecordType>> {
+    fn get_record_type(&self) -> Either<&'v RecordType<'v>, &'v FrozenRecordType> {
         // Safe to unwrap because we always ensure typ is RecordType
         RecordType::from_value(self.typ.to_value()).unwrap()
     }
 
-    fn get_record_fields(&self) -> ARef<'v, SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>> {
+    fn get_record_fields(&self) -> &'v SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)> {
         record_fields(self.get_record_type())
     }
 }

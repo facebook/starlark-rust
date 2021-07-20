@@ -26,6 +26,7 @@ use crate::{
         Value,
     },
 };
+use gazebo::prelude::*;
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
@@ -35,7 +36,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
         for (k, v) in kwargs.into_iter_hashed() {
             let field = match Field::from_value(v) {
                 None => Field::new(v, None),
-                Some(v) => v.clone(),
+                Some(v) => v.dupe(),
             };
             let compiled = TypeCompiled::new(field.typ)?;
             mp.insert_hashed(k, (field, compiled));
