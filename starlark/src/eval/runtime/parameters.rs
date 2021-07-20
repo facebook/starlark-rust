@@ -296,6 +296,16 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         self.collect_inline(params, coerce(slots), heap)
     }
 
+    pub fn collect_into<const N: usize>(
+        &self,
+        params: Parameters<'v, '_>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<[Cell<Option<Value<'v>>>; N]> {
+        let slots = [(); N].map(|_| Cell::new(None));
+        self.collect(params, &slots, heap)?;
+        Ok(slots)
+    }
+
     /// A variant of collect that is always inlined
     /// for Def and NativeFunction that are hot-spots
     #[inline(always)]

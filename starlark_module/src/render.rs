@@ -128,13 +128,11 @@ fn render_fun(x: StarFun) -> TokenStream {
             #[allow(non_snake_case)] // Starlark doesn't have this convention
             fn #name<'v>(
                 eval: &mut starlark::eval::Evaluator<'v, '_>,
-                #[allow(unused_variables)]
                 parameters: starlark::eval::Parameters<'v, '_>,
             ) -> anyhow::Result<starlark::values::Value<'v>> {
                  fn inner<'v, 'a>(
                     #[allow(unused_variables)]
                     eval: &mut starlark::eval::Evaluator<'v, '_>,
-                    #[allow(unused_variables)]
                     #param_name: #param_type,
                 ) -> anyhow::Result<#return_type> {
                     let heap = eval.heap();
@@ -155,6 +153,8 @@ fn render_fun(x: StarFun) -> TokenStream {
             }
         }
     } else {
+        // Might be higher than we need by one if `this` is used, but not a big deal
+        let args_count = args.len();
         let bind_args = args.map(bind_argument);
 
         quote! {
@@ -162,9 +162,8 @@ fn render_fun(x: StarFun) -> TokenStream {
             #[allow(non_snake_case)] // Starlark doesn't have this convention
             fn #name<'v>(
                 eval: &mut starlark::eval::Evaluator<'v, '_>,
-                #[allow(unused_variables)]
-                this: Option<starlark::values::Value<'v>>,
-                starlark_args: starlark::eval::ParametersParser<'v, '_>,
+                parameters: starlark::eval::Parameters<'v, '_>,
+                signature: &starlark::eval::ParametersSpec<starlark::values::FrozenValue>,
             ) -> anyhow::Result<starlark::values::Value<'v>> {
                  fn inner<'v>(
                     #[allow(unused_variables)]
@@ -182,6 +181,9 @@ fn render_fun(x: StarFun) -> TokenStream {
                         #body
                     })
                 }
+                let this = parameters.this;
+                let args: [_; #args_count] = signature.collect_into(parameters, eval.heap())?;
+                let starlark_args = starlark::eval::ParametersParser::new(&args);
                 match inner(eval, this, starlark_args) {
                     Ok(v) => Ok(eval.heap().alloc(v)),
                     Err(e) => Err(e),
@@ -191,7 +193,10 @@ fn render_fun(x: StarFun) -> TokenStream {
                 #signature
                 let signature_str = signature.signature();
                 #[allow(unused_mut)]
-                let mut func = starlark::values::function::NativeFunction::new(#name, signature_str, signature);
+                let mut func = starlark::values::function::NativeFunction::new_direct(
+                    move |eval, parameters| #name(eval, parameters, &signature),
+                    signature_str,
+                );
                 #set_type
                 globals_builder.set(#name_str, func);
             }

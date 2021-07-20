@@ -342,6 +342,7 @@
 //! ```
 
 // Features we use
+#![feature(array_map)]
 #![feature(backtrace)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
