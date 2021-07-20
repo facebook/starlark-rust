@@ -1170,7 +1170,7 @@ add3(8)"#,
 * assert.bzl.add3(z) (called from assert.bzl:5:1-8)
 * imported.bzl.add2(z) (called from assert.bzl:4:5-12)
 * imported.bzl.add(z) (called from imported.bzl:9:3-9)
-* append(el) (called from imported.bzl:11:3-14)
+* append (called from imported.bzl:11:3-14)
 error: Immutable
   --> imported.bzl:11:3
    |
@@ -1193,7 +1193,7 @@ f()
 "#,
         "bad",
     );
-    assert!(d.to_string().contains("* fail(msg)"));
+    assert!(d.to_string().contains("* fail"));
 }
 
 #[test]

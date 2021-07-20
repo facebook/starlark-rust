@@ -195,11 +195,10 @@ fn render_fun(x: StarFun) -> TokenStream {
             }
             {
                 #signature
-                let signature_str = signature.signature();
                 #[allow(unused_mut)]
                 let mut func = starlark::values::function::NativeFunction::new_direct(
                     move |eval, parameters| #name(eval, parameters, &signature),
-                    signature_str,
+                    #name_str.to_owned(),
                 );
                 #set_type
                 globals_builder.set(#name_str, func);
