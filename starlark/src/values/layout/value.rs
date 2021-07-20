@@ -39,7 +39,7 @@ use crate::values::{
     none::NoneType,
     ComplexValue, SimpleValue, StarlarkValue, Trace,
 };
-use gazebo::{prelude::*, variants::VariantName};
+use gazebo::{coerce::Coerce, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
 use std::{cell::Cell, time::Instant};
 use void::Void;
@@ -65,7 +65,8 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 /// to indicate whether a value is a `Ref` (and must be dereffed a lot),
 /// or just a normal `Value` (much cheaper).
 /// A normal `Value` cannot be `ValueMem::Ref`, but this one might be.
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, Coerce)]
+#[repr(transparent)]
 pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).

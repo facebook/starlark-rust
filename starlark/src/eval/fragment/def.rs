@@ -281,7 +281,7 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
             let local_slots = self.stmt.scope_names.used;
             let slot_base = eval.local_variables.reserve(local_slots);
             let slots = eval.local_variables.get_slots_at(slot_base);
-            self.parameters.collect(slots, params, eval.heap())?;
+            self.parameters.collect_inline(params, slots, eval.heap())?;
             eval.with_call_stack(me, location, |eval| {
                 eval.ann("invoke_frozen_def_raw", |eval| {
                     self.invoke_raw(slot_base, eval)
@@ -309,7 +309,7 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
             let local_slots = self.stmt.scope_names.used;
             let slot_base = eval.local_variables.reserve(local_slots);
             let slots = eval.local_variables.get_slots_at(slot_base);
-            self.parameters.collect(slots, params, eval.heap())?;
+            self.parameters.collect_inline(params, slots, eval.heap())?;
             eval.with_call_stack(me, location, |eval| {
                 eval.ann("invoke_def_raw", |eval| self.invoke_raw(slot_base, eval))
             })

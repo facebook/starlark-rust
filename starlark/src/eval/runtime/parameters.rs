@@ -26,8 +26,11 @@ use crate::{
         ValueError, ValueLike, ValueRef,
     },
 };
-use gazebo::{coerce::Coerce, prelude::*};
-use std::{cmp, convert::TryInto};
+use gazebo::{
+    coerce::{coerce, Coerce},
+    prelude::*,
+};
+use std::{cell::Cell, cmp, convert::TryInto};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -278,18 +281,29 @@ impl<V> ParametersSpec<V> {
     }
 }
 
-impl<V> ParametersSpec<V> {
+impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     pub fn len(&self) -> usize {
         self.0.kinds.len()
     }
-}
 
-impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
-    #[inline(always)]
-    pub(crate) fn collect(
+    /// Move parameters from [`Parameters`] to a list of [`Value`],
+    /// using the supplied [`ParametersSpec`].
+    pub fn collect(
         &self,
-        slots: &[ValueRef<'v>],
         params: Parameters<'v, '_>,
+        slots: &[Cell<Option<Value<'v>>>],
+        heap: &'v Heap,
+    ) -> anyhow::Result<()> {
+        self.collect_inline(params, coerce(slots), heap)
+    }
+
+    /// A variant of collect that is always inlined
+    /// for Def and NativeFunction that are hot-spots
+    #[inline(always)]
+    pub(crate) fn collect_inline(
+        &self,
+        params: Parameters<'v, '_>,
+        slots: &[ValueRef<'v>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
         // Return true if the value is a duplicate

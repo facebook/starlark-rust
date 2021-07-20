@@ -115,7 +115,7 @@ impl NativeFunction {
                 let this = params.this;
                 let slot_base = eval.local_variables.reserve(parameters.len());
                 let slots = eval.local_variables.get_slots_at(slot_base);
-                parameters.collect(slots, params, eval.heap())?;
+                parameters.collect_inline(params, slots, eval.heap())?;
                 let parser = ParametersParser::new(slot_base);
                 let res = function(eval, this, parser);
                 eval.local_variables.release_after(slot_base);
