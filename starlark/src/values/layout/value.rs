@@ -515,6 +515,12 @@ mod std_traits {
         }
     }
 
+    impl<T: ?Sized> Borrow<T> for FrozenRef<Box<T>> {
+        fn borrow(&self) -> &T {
+            &*self
+        }
+    }
+
     impl<T: ?Sized> PartialEq for FrozenRef<T>
     where
         T: PartialEq,
