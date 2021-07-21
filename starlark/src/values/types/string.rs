@@ -134,17 +134,22 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
-        let mut escaped = self.as_ref().to_owned();
-        // Escape as per ECMA-404 standard
-        escaped = escaped.replace("\u{005C}", "\\\\");
-        escaped = escaped.replace("\u{0022}", "\\\"");
-        escaped = escaped.replace("\u{002F}", "\\/");
-        escaped = escaped.replace("\u{0008}", "\\b");
-        escaped = escaped.replace("\u{000C}", "\\f");
-        escaped = escaped.replace("\u{000A}", "\\n");
-        escaped = escaped.replace("\u{000D}", "\\r");
-        escaped = escaped.replace("\u{0009}", "\\t");
-        Ok(format!("\"{}\"", escaped))
+        let mut escaped = Vec::with_capacity(self.len());
+        for c in self.bytes() {
+            // Escape as per ECMA-404 standard
+            match c {
+                b'\\' => escaped.extend(b"\\\\".iter()),
+                b'"' => escaped.extend(b"\\\"".iter()),
+                b'/' => escaped.extend(b"\\/".iter()),
+                0x08u8 => escaped.extend(b"\\b".iter()),
+                0x0Cu8 => escaped.extend(b"\\f".iter()),
+                b'\n' => escaped.extend(b"\\n".iter()),
+                b'\r' => escaped.extend(b"\\r".iter()),
+                b'\t' => escaped.extend(b"\\t".iter()),
+                x => escaped.push(x),
+            }
+        }
+        unsafe { Ok(format!("\"{}\"", String::from_utf8_unchecked(escaped))) }
     }
 
     fn to_bool(&self) -> bool {
