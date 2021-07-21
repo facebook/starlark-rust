@@ -141,6 +141,26 @@ impl<'v, V: AllocFrozenValue> AllocFrozenValue for Vec<V> {
     }
 }
 
+impl<'a, 'v, V: 'a> AllocValue<'v> for &'a [V]
+where
+    &'a V: AllocValue<'v>,
+{
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc(List::new(self.map(|x| x.alloc_value(heap))))
+    }
+}
+
+impl<'a, 'v, V: 'a> AllocFrozenValue for &'a [V]
+where
+    &'a V: AllocFrozenValue,
+{
+    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
+        heap.alloc(FrozenList {
+            content: self.map(|x| x.alloc_frozen_value(heap)),
+        })
+    }
+}
+
 impl FrozenList {
     /// Obtain the [`FrozenList`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
