@@ -187,7 +187,7 @@ impl<'v> List<'v> {
     /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 
-    pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
+    pub fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }
 
