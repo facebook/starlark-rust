@@ -19,6 +19,7 @@
 // Encoding none, bool etc in the pointer of frozen value
 
 mod arena;
+mod avalue;
 mod constant;
 mod heap;
 mod pointer;

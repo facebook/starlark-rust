@@ -22,6 +22,7 @@
 use crate::values::{
     layout::{
         arena::Arena,
+        avalue::{complex, simple, AValue},
         pointer::Pointer,
         value::{FrozenValue, FrozenValueMem, Value, ValueMem},
     },
@@ -34,6 +35,7 @@ use std::{
     fmt,
     fmt::{Debug, Formatter},
     hash::{Hash, Hasher},
+    mem,
     ops::Deref,
     ptr,
     sync::Arc,
@@ -194,6 +196,9 @@ impl Freezer {
 
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
+            ValueMem::AValue(x) => {
+                *fvmem = FrozenValueMem::Simple(x.into_simple(self)?.as_box_starlark_value())
+            }
             ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
             ValueMem::Complex(x) => {
                 *fvmem = FrozenValueMem::Simple(x.freeze(self)?.as_box_starlark_value())
@@ -251,12 +256,15 @@ impl Heap {
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
     pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
-        self.alloc_raw(ValueMem::Simple(box x))
+        let x: Box<dyn AValue<'static>> = box simple(x);
+        // Safe because we know we can restrict an AValue
+        let x: Box<dyn AValue<'v>> = unsafe { mem::transmute(x) };
+        self.alloc_raw(ValueMem::AValue(x))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        self.alloc_raw(ValueMem::Complex(box x))
+        self.alloc_raw(ValueMem::AValue(box complex(x)))
     }
 
     #[inline(never)]
@@ -354,6 +362,7 @@ impl<'v> Tracer<'v> {
         match &mut old_mem {
             ValueMem::Ref(x) => x.trace(self),
             ValueMem::Complex(x) => x.trace(self),
+            ValueMem::AValue(x) => x.trace(self),
             _ => {} // Doesn't contain Value pointers
         }
         unsafe {

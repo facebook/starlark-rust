@@ -32,6 +32,7 @@
 use crate as starlark;
 use crate::values::{
     layout::{
+        avalue::AValue,
         heap::{Freezer, Heap},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
@@ -65,7 +66,7 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 /// to indicate whether a value is a `Ref` (and must be dereffed a lot),
 /// or just a normal `Value` (much cheaper).
 /// A normal `Value` cannot be `ValueMem::Ref`, but this one might be.
-#[derive(Debug, Trace, Coerce)]
+#[derive(Debug, Trace, Coerce, Clone, Dupe)]
 #[repr(transparent)]
 pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
 
@@ -123,9 +124,13 @@ pub(crate) enum ValueMem<'v> {
     Copied(Value<'v>),
     // Only occurs during GC
     Blackhole,
+    // Things that have a StarlarkValue instance
+    AValue(Box<dyn AValue<'v>>),
     // Things that aren't mutable and don't point to other Value's
+    #[allow(dead_code)]
     Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
     // Complex things in my heap (may point at other Value's)
+    #[allow(dead_code)]
     Complex(Box<dyn ComplexValue<'v>>),
     // Used references in slots - usually wrapped in ValueRef
     // Never points at a Ref, must point directly at a real value,
@@ -163,6 +168,7 @@ impl<'v> ValueMem<'v> {
     pub(crate) fn get_ref(&self) -> &dyn StarlarkValue<'v> {
         match self {
             Self::Str(x) => x,
+            Self::AValue(x) => x.as_starlark_value(),
             Self::Simple(x) => simple_starlark_value(Box::as_ref(x)),
             Self::Complex(x) => x.as_starlark_value(),
             _ => self.unexpected("get_ref"),
@@ -510,12 +516,6 @@ mod std_traits {
     }
 
     impl<T: ?Sized> Borrow<T> for FrozenRef<T> {
-        fn borrow(&self) -> &T {
-            &*self
-        }
-    }
-
-    impl<T: ?Sized> Borrow<T> for FrozenRef<Box<T>> {
         fn borrow(&self) -> &T {
             &*self
         }
