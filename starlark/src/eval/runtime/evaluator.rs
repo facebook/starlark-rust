@@ -42,8 +42,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum EvaluatorError {
-    #[error("Can't call `write_profile` unless you first call `enable_profile`.")]
-    ProfilingNotEnabled,
+    #[error("Can't call `write_heap_profile` unless you first call `enable_heap_profile`.")]
+    HeapProfilingNotEnabled,
     #[error("Can't call `write_stmt_profile` unless you first call `enable_stmt_profile`.")]
     StmtProfilingNotEnabled,
 }
@@ -68,7 +68,7 @@ pub struct Evaluator<'v, 'a> {
     // The codemap that corresponds to this module.
     pub(crate) codemap: &'v CodeMap,
     // Should we enable profiling or not
-    pub(crate) profiling: bool,
+    pub(crate) heap_profile: bool,
     // Is GC disabled for some reason
     pub(crate) disable_gc: bool,
     // Size of the heap when we should next perform a GC.
@@ -122,7 +122,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             next_gc_level: GC_THRESHOLD,
             disable_gc: false,
             alloca: Alloca::new(),
-            profiling: false,
+            heap_profile: false,
             stmt_profile: StmtProfile::new(),
             before_stmt: Vec::new(),
         }
@@ -142,48 +142,48 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.loader = Some(loader);
     }
 
-    /// Enable profiling, allowing [`Evaluator::write_profile`] to be used.
+    /// Enable profiling, allowing [`Evaluator::write_heap_profile`] to be used.
     /// Has the side effect of disabling garbage-collection.
     ///
     /// Starlark contains two types of profile information - `profile` and `stmt_profile`.
-    /// These must be enabled _before_ execution with [`enable_profile`](Evaluator::enable_profile)/
+    /// These must be enabled _before_ execution with [`enable_heap_profile`](Evaluator::enable_heap_profile)/
     /// [`enable_stmt_profile`](Evaluator::enable_stmt_profile), then after execution the
-    /// profiles can be written to a file using [`write_profile`](Evaluator::write_profile)/
+    /// profiles can be written to a file using [`write_heap_profile`](Evaluator::write_heap_profile)/
     /// [`write_stmt_profile`](Evaluator::write_stmt_profile). These profiling modes both have
     /// some overhead, so while they _can_ be used simultaneously, it's usually better to run the
     /// code twice if that's possible.
     ///
-    /// * The `profile` mode provides information about the time spent in each function and allocations
+    /// * The `heap_profile` mode provides information about the time spent in each function and allocations
     ///   performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     ///   This profiling mode is the recommended one.
     /// * The `stmt_profile` mode provides information about time spent in each statement.
-    pub fn enable_profile(&mut self) {
-        self.profiling = true;
+    pub fn enable_heap_profile(&mut self) {
+        self.heap_profile = true;
         // Disable GC because otherwise why lose the profile records, as we use the heap
         // to store a complete list of what happened in linear order.
         self.disable_gc = true;
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_stmt_profile`] to be used.
-    /// See [`Evaluator::enable_profile`] for details about the two types of Starlark profiles.
+    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
         self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
     }
 
     /// Write a profile (as a `.csv` file) to a file.
-    /// Only valid if [`enable_profile`](Evaluator::enable_profile) was called before execution began.
-    /// See [`Evaluator::enable_profile`] for details about the two types of Starlark profiles.
-    pub fn write_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        if !self.profiling {
-            return Err(EvaluatorError::ProfilingNotEnabled.into());
+    /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
+    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
+    pub fn write_heap_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        if !self.heap_profile {
+            return Err(EvaluatorError::HeapProfilingNotEnabled.into());
         }
         self.heap().write_profile(filename.as_ref())
     }
 
     /// Write a profile (as a `.csv` file) to a file.
     /// Only valid if [`enable_stmt_profile`](Evaluator::enable_stmt_profile) was called before execution began.
-    /// See [`Evaluator::enable_profile`] for details about the two types of Starlark profiles.
+    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
     pub fn write_stmt_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
         self.stmt_profile
             .write(filename.as_ref())
@@ -249,13 +249,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             span.unwrap_or_default(),
             span.map(|_| self.codemap),
         )?;
-        if self.profiling {
+        if self.heap_profile {
             self.heap().record_call_enter(function);
         }
         // Must always call .pop regardless
         let res = within(self).map_err(|e| add_diagnostics(e, self));
         self.call_stack.pop();
-        if self.profiling {
+        if self.heap_profile {
             self.heap().record_call_exit();
         }
         res

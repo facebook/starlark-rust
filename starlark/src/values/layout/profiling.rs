@@ -196,7 +196,7 @@ impl Heap {
         let file = File::create(filename).with_context(|| {
             format!("When creating profile output file `{}`", filename.display())
         })?;
-        self.write_profile_to(file).with_context(|| {
+        self.write_heap_profile_to(file).with_context(|| {
             format!(
                 "When writing to profile output file `{}`",
                 filename.display()
@@ -204,7 +204,7 @@ impl Heap {
         })
     }
 
-    fn write_profile_to(&self, mut file: impl Write) -> io::Result<()> {
+    fn write_heap_profile_to(&self, mut file: impl Write) -> io::Result<()> {
         let mut ids = FunctionIds::default();
         let root = ids.get_string("(root)".to_owned());
         let start = Instant::now();
@@ -301,26 +301,26 @@ f
         let globals = Globals::standard();
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
-        eval.enable_profile();
+        eval.enable_heap_profile();
         let f = eval.eval_module(ast)?;
         // first check module profiling works
-        module.heap().write_profile_to(&mut Vec::new())?;
+        module.heap().write_heap_profile_to(&mut Vec::new())?;
 
         // second check function profiling works
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
-        eval.enable_profile();
+        eval.enable_heap_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
-        module.heap().write_profile_to(&mut Vec::new())?;
+        module.heap().write_heap_profile_to(&mut Vec::new())?;
 
         // finally, check a user can add values into the heap before/after
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
         module.heap().alloc("Thing that goes before");
-        eval.enable_profile();
+        eval.enable_heap_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         module.heap().alloc("Thing that goes after");
-        module.heap().write_profile_to(&mut Vec::new())?;
+        module.heap().write_heap_profile_to(&mut Vec::new())?;
 
         Ok(())
     }
