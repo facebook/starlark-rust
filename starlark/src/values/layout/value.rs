@@ -36,7 +36,6 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    SimpleValue,
 };
 use gazebo::{prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -340,110 +339,6 @@ impl FrozenValue {
             PointerUnpack::Bool(true) => basic(&VALUE_TRUE),
             PointerUnpack::Bool(false) => basic(&VALUE_FALSE),
             PointerUnpack::Int(x) => basic(PointerI32::new(x)),
-        }
-    }
-}
-
-/// A [`FrozenRef`] is essentially a [`FrozenValue`], and has the same memory and access guarantees
-/// as it. However, this keeps the type of the type `T` of the actual [`FrozenValue`] as a
-/// reference, allowing manipulation of the actual typed data.
-#[derive(Clone_, Dupe_, Copy_, Debug)]
-pub struct FrozenRef<T: 'static + ?Sized> {
-    value: &'static T,
-}
-
-impl<T: 'static + ?Sized> FrozenRef<T> {
-    /// Converts `self` into a new reference that points at something reachable from the previous.
-    pub fn map<F, U: 'static + ?Sized>(self, f: F) -> FrozenRef<U>
-    where
-        for<'v> F: FnOnce(&'v T) -> &'v U,
-    {
-        FrozenRef {
-            value: f(self.value),
-        }
-    }
-}
-
-impl FrozenValue {
-    pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
-        self.get_ref::<'static>()
-            .as_dyn_any()
-            .downcast_ref::<T>()
-            .map(|t| FrozenRef { value: t })
-    }
-
-    /// Note: see docs about ['Value::unpack_box_str'] about instability
-    pub fn downcast_frozen_str(self) -> Option<FrozenRef<Box<str>>> {
-        self.to_value().unpack_box_str().map(|s| FrozenRef {
-            value: unsafe { transmute!(&Box<str>, &'static Box<str>, s) },
-        })
-    }
-}
-
-mod std_traits {
-    use crate::values::layout::value::FrozenRef;
-    use std::{
-        borrow::Borrow,
-        cmp::Ordering,
-        hash::{Hash, Hasher},
-        ops::Deref,
-    };
-
-    impl<T: ?Sized> Deref for FrozenRef<T> {
-        type Target = T;
-
-        fn deref(&self) -> &T {
-            self.value
-        }
-    }
-
-    impl<T: ?Sized> AsRef<T> for FrozenRef<T> {
-        fn as_ref(&self) -> &T {
-            &*self
-        }
-    }
-
-    impl<T: ?Sized> Borrow<T> for FrozenRef<T> {
-        fn borrow(&self) -> &T {
-            &*self
-        }
-    }
-
-    impl<T: ?Sized> PartialEq for FrozenRef<T>
-    where
-        T: PartialEq,
-    {
-        fn eq(&self, other: &Self) -> bool {
-            (&*self as &T).eq(&*other as &T)
-        }
-    }
-
-    impl<T: ?Sized> Eq for FrozenRef<T> where T: Eq {}
-
-    impl<T: ?Sized> PartialOrd for FrozenRef<T>
-    where
-        T: PartialOrd,
-    {
-        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-            (&*self as &T).partial_cmp(&*other as &T)
-        }
-    }
-
-    impl<T: ?Sized> Ord for FrozenRef<T>
-    where
-        T: Ord,
-    {
-        fn cmp(&self, other: &Self) -> Ordering {
-            (&*self as &T).cmp(&*other as &T)
-        }
-    }
-
-    impl<T: ?Sized> Hash for FrozenRef<T>
-    where
-        T: Hash,
-    {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            (&*self as &T).hash(state);
         }
     }
 }

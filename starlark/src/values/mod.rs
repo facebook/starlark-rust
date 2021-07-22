@@ -28,7 +28,9 @@
 //!   trait.
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
-pub use crate::values::{error::*, layout::*, owned::*, traits::*, types::*, unpack::*};
+pub use crate::values::{
+    error::*, frozen_ref::*, layout::*, owned::*, traits::*, types::*, unpack::*,
+};
 use crate::{
     codemap::Span,
     collections::{Hashed, SmallHashResult},
@@ -51,6 +53,7 @@ mod comparison;
 // Submodules
 mod error;
 pub(crate) mod fast_string;
+mod frozen_ref;
 mod index;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
