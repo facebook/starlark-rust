@@ -38,7 +38,7 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    ComplexValue, SimpleValue, StarlarkValue, Trace,
+    SimpleValue, StarlarkValue, Trace,
 };
 use gazebo::{coerce::Coerce, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -126,12 +126,6 @@ pub(crate) enum ValueMem<'v> {
     Blackhole,
     // Things that have a StarlarkValue instance
     AValue(Box<dyn AValue<'v>>),
-    // Things that aren't mutable and don't point to other Value's
-    #[allow(dead_code)]
-    Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
-    // Complex things in my heap (may point at other Value's)
-    #[allow(dead_code)]
-    Complex(Box<dyn ComplexValue<'v>>),
     // Used references in slots - usually wrapped in ValueRef
     // Never points at a Ref, must point directly at a real value,
     // but might be unassigned (None)
@@ -169,8 +163,6 @@ impl<'v> ValueMem<'v> {
         match self {
             Self::Str(x) => x,
             Self::AValue(x) => x.as_starlark_value(),
-            Self::Simple(x) => simple_starlark_value(Box::as_ref(x)),
-            Self::Complex(x) => x.as_starlark_value(),
             _ => self.unexpected("get_ref"),
         }
     }

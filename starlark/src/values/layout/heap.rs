@@ -199,10 +199,6 @@ impl Freezer {
             ValueMem::AValue(x) => {
                 *fvmem = FrozenValueMem::Simple(x.into_simple(self)?.as_box_starlark_value())
             }
-            ValueMem::Simple(x) => *fvmem = FrozenValueMem::Simple(x),
-            ValueMem::Complex(x) => {
-                *fvmem = FrozenValueMem::Simple(x.freeze(self)?.as_box_starlark_value())
-            }
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
                 // We don't expect Forward since that is handled in step 2.
@@ -361,7 +357,6 @@ impl<'v> Tracer<'v> {
 
         match &mut old_mem {
             ValueMem::Ref(x) => x.trace(self),
-            ValueMem::Complex(x) => x.trace(self),
             ValueMem::AValue(x) => x.trace(self),
             _ => {} // Doesn't contain Value pointers
         }
