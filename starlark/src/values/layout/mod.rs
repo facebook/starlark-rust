@@ -25,10 +25,12 @@ mod heap;
 mod pointer;
 mod pointer_i32;
 mod value;
+mod value_ref;
 
 pub use avalue::AValue;
 pub use constant::ConstFrozenValue;
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
+pub(crate) use value::ValueMem;
 pub use value::{FrozenRef, FrozenValue, Value};
-pub(crate) use value::{ValueMem, ValueRef};
+pub(crate) use value_ref::ValueRef;
