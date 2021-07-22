@@ -25,6 +25,7 @@ use crate::{
 };
 use gazebo::{
     any::AnyLifetime,
+    cast,
     coerce::{coerce, Coerce},
 };
 use std::{
@@ -33,7 +34,8 @@ use std::{
     fmt::{self, Debug},
 };
 
-/// A trait that covers [`StarlarkValue`]. If you need a real [`StarlarkValue`] see `as_starlark_value`.
+/// A trait that covers [`StarlarkValue`].
+/// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub trait AValue<'v>: StarlarkValue<'v> {
     #[doc(hidden)]
     fn trace(&mut self, tracer: &Tracer<'v>);
@@ -45,6 +47,12 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>>;
 }
 
+pub(crate) fn basic<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
+    // These are the same representation, so safe to convert
+    let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
+    x
+}
+
 pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> + Send + Sync {
     Wrapper(Simple, x)
 }
@@ -52,6 +60,10 @@ pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> + Send + Sync 
 pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v> {
     Wrapper(Complex, x)
 }
+
+// A type that implements StarlarkValue but nothing else, so will never be stored
+// in the heap (e.g. bool, None)
+struct Basic;
 
 // A type that implements SimpleValue.
 struct Simple;
@@ -66,9 +78,22 @@ struct Complex;
 #[repr(C)]
 struct Wrapper<Mode, T>(Mode, T);
 
-// Safe because Complex/Simple are ZST
-unsafe impl<T> Coerce<T> for Wrapper<Complex, T> {}
+// Safe because Simple/Complex are ZST
 unsafe impl<T> Coerce<T> for Wrapper<Simple, T> {}
+unsafe impl<T> Coerce<T> for Wrapper<Complex, T> {}
+
+impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {
+        unreachable!("Basic types don't appear in the heap")
+    }
+
+    fn into_simple(
+        self: Box<Self>,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
+        unreachable!("Basic types don't appear in the heap")
+    }
+}
 
 impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
 where

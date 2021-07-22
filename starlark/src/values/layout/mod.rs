@@ -27,6 +27,7 @@ mod pointer_i32;
 mod profiling;
 mod value;
 
+pub use avalue::AValue;
 pub use constant::ConstFrozenValue;
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;

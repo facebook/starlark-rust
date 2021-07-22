@@ -32,13 +32,13 @@
 use crate as starlark;
 use crate::values::{
     layout::{
-        avalue::AValue,
+        avalue::{basic, AValue},
         heap::{Freezer, Heap},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
     },
     none::NoneType,
-    SimpleValue, StarlarkValue, Trace,
+    SimpleValue, Trace,
 };
 use gazebo::{coerce::Coerce, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
@@ -52,7 +52,7 @@ const VALUE_FALSE: bool = false;
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`] it is stored on.
 ///
-/// Many of the methods simply forward to the underlying [`StarlarkValue`].
+/// Many of the methods simply forward to the underlying [`crate::values::StarlarkValue`].
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
 // Will not be a `ValueMem::Ref` (see `ValueRef` for that).
@@ -102,17 +102,8 @@ pub(crate) enum FrozenValueMem {
     Simple(Box<dyn AValue<'static> + Send + Sync>),
 }
 
-fn simple_starlark_value<'a, 'v>(
-    x: &'a (dyn AValue<'static> + Send + Sync),
-) -> &'a dyn StarlarkValue<'v> {
-    let x: &'a dyn AValue<'static> = x;
-    unsafe {
-        transmute!(
-            &'a dyn StarlarkValue<'static>,
-            &'a dyn StarlarkValue<'v>,
-            x.as_starlark_value()
-        )
-    }
+fn simple_avalue<'a, 'v>(x: &'a dyn AValue<'static>) -> &'a dyn AValue<'v> {
+    unsafe { transmute!(&'a dyn AValue<'static>, &'a dyn AValue<'v>, x) }
 }
 
 #[derive(VariantName)]
@@ -165,10 +156,10 @@ impl<'v> ValueMem<'v> {
         }
     }
 
-    pub(crate) fn get_ref(&self) -> &dyn StarlarkValue<'v> {
+    pub(crate) fn get_ref(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => x,
-            Self::AValue(x) => x.as_starlark_value(),
+            Self::Str(x) => basic(x),
+            Self::AValue(x) => &**x,
             _ => self.unexpected("get_ref"),
         }
     }
@@ -198,10 +189,10 @@ impl FrozenValueMem {
         }
     }
 
-    fn get_ref<'v>(&self) -> &dyn StarlarkValue<'v> {
+    fn get_ref<'v>(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => x,
-            Self::Simple(x) => simple_starlark_value(Box::as_ref(x)),
+            Self::Str(x) => basic(x),
+            Self::Simple(x) => simple_avalue(&**x),
             _ => self.unexpected("get_ref"),
         }
     }
@@ -289,15 +280,15 @@ impl<'v> Value<'v> {
         }
     }
 
-    /// Get a pointer to a [`StarlarkValue`].
-    pub fn get_ref(self) -> &'v dyn StarlarkValue<'v> {
+    /// Get a pointer to a [`AValue`].
+    pub fn get_ref(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => x.get_ref(),
-            PointerUnpack::None => &VALUE_NONE,
-            PointerUnpack::Bool(true) => &VALUE_TRUE,
-            PointerUnpack::Bool(false) => &VALUE_FALSE,
-            PointerUnpack::Int(x) => PointerI32::new(x),
+            PointerUnpack::None => basic(&VALUE_NONE),
+            PointerUnpack::Bool(true) => basic(&VALUE_TRUE),
+            PointerUnpack::Bool(false) => basic(&VALUE_FALSE),
+            PointerUnpack::Int(x) => basic(PointerI32::new(x)),
         }
     }
 
@@ -365,15 +356,15 @@ impl FrozenValue {
         }
     }
 
-    /// Get a pointer to the [`StarlarkValue`] object this value represents.
-    pub fn get_ref<'v>(self) -> &'v dyn StarlarkValue<'v> {
+    /// Get a pointer to the [`AValue`] object this value represents.
+    pub fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),
-            PointerUnpack::None => &VALUE_NONE,
-            PointerUnpack::Bool(true) => &VALUE_TRUE,
-            PointerUnpack::Bool(false) => &VALUE_FALSE,
-            PointerUnpack::Int(x) => PointerI32::new(x),
+            PointerUnpack::None => basic(&VALUE_NONE),
+            PointerUnpack::Bool(true) => basic(&VALUE_TRUE),
+            PointerUnpack::Bool(false) => basic(&VALUE_FALSE),
+            PointerUnpack::Int(x) => basic(PointerI32::new(x)),
         }
     }
 }

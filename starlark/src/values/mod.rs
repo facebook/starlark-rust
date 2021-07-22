@@ -175,7 +175,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
-    fn get_ref(self) -> &'v dyn StarlarkValue<'v>;
+    fn get_ref(self) -> &'v dyn AValue<'v>;
 
     fn invoke(
         self,
@@ -257,7 +257,7 @@ impl Default for FrozenValue {
 }
 
 impl<'v> ValueLike<'v> for Value<'v> {
-    fn get_ref(self) -> &'v dyn StarlarkValue<'v> {
+    fn get_ref(self) -> &'v dyn AValue<'v> {
         Value::get_ref(self)
     }
 
@@ -267,7 +267,7 @@ impl<'v> ValueLike<'v> for Value<'v> {
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
-    fn get_ref(self) -> &'v dyn StarlarkValue<'v> {
+    fn get_ref(self) -> &'v dyn AValue<'v> {
         self.get_ref()
     }
 
