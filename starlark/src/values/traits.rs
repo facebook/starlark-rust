@@ -150,6 +150,10 @@ unsafe impl<'v> Trace<'v> for bool {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 
+unsafe impl<'v> Trace<'v> for std::time::Instant {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.
 ///

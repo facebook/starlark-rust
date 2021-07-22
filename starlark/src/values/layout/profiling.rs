@@ -15,12 +15,14 @@
  * limitations under the License.
  */
 
+use crate as starlark;
 use crate::values::{
     layout::{heap::Heap, value::ValueMem},
-    Value,
+    tuple::FrozenTuple,
+    ComplexValue, SimpleValue, StarlarkValue, Trace, Value,
 };
 use anyhow::Context;
-use gazebo::prelude::*;
+use gazebo::{any::AnyLifetime, prelude::*};
 use regex::Regex;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -30,6 +32,29 @@ use std::{
     path::Path,
     time::{Duration, Instant},
 };
+
+#[derive(AnyLifetime, Trace, Debug)]
+struct CallEnter<'v>(Value<'v>, Instant);
+
+impl<'v> ComplexValue<'v> for CallEnter<'v> {
+    type Frozen = FrozenTuple;
+    fn freeze(self: Box<Self>, _freezer: &super::Freezer) -> anyhow::Result<Self::Frozen> {
+        unreachable!("Should never end up freezing a CallEnter")
+    }
+}
+
+impl<'v> StarlarkValue<'v> for CallEnter<'v> {
+    starlark_type!("call_enter");
+}
+
+#[derive(AnyLifetime, Debug)]
+struct CallExit(Instant);
+
+impl SimpleValue for CallExit {}
+
+impl<'v> StarlarkValue<'v> for CallExit {
+    starlark_type!("call_exit");
+}
 
 #[derive(Copy, Clone, Dupe, Debug, Eq, PartialEq, Hash)]
 struct FunctionId(usize);
@@ -159,38 +184,51 @@ impl Info {
 
     /// Process each ValueMem in their chronological order
     fn process<'v>(&mut self, x: &'v ValueMem<'v>) {
-        match x {
-            ValueMem::CallEnter(function, now) => {
-                let id = self.ids.get_value(*function);
-                self.ensure(id);
-                self.change(*now);
+        fn try_downcast<'v, T: AnyLifetime<'v>>(x: &'v ValueMem<'v>) -> Option<&'v T> {
+            match x {
+                ValueMem::AValue(x) => x.as_dyn_any().downcast_ref(),
+                _ => None,
+            }
+        }
 
-                let top = self.top_id();
-                let mut me = &mut self.info[id.0];
-                me.calls += 1;
-                *me.callers.entry(top).or_insert(0) += 1;
-                self.call_stack.push((id, me.time_rec, *now));
-            }
-            ValueMem::CallExit(now) => {
-                self.change(*now);
-                let (name, time_rec, start) = self.call_stack.pop().unwrap();
-                self.info[name.0].time_rec =
-                    time_rec + now.checked_duration_since(start).unwrap_or_default();
-            }
-            _ => {
-                // For references, the type they point at isn't held by this object, but another heap value.
-                // Therefore the true cost is just the reference itself.
-                let typ = match x {
-                    ValueMem::Ref(_) => "reference",
-                    _ => x.get_ref().type_name(),
-                };
-                *self.top_info().allocs.entry(typ).or_insert(0) += 1;
-            }
+        if let Some(CallEnter(function, now)) = try_downcast(x) {
+            let id = self.ids.get_value(*function);
+            self.ensure(id);
+            self.change(*now);
+
+            let top = self.top_id();
+            let mut me = &mut self.info[id.0];
+            me.calls += 1;
+            *me.callers.entry(top).or_insert(0) += 1;
+            self.call_stack.push((id, me.time_rec, *now));
+        } else if let Some(CallExit(now)) = try_downcast(x) {
+            self.change(*now);
+            let (name, time_rec, start) = self.call_stack.pop().unwrap();
+            self.info[name.0].time_rec =
+                time_rec + now.checked_duration_since(start).unwrap_or_default();
+        } else {
+            // For references, the type they point at isn't held by this object, but another heap value.
+            // Therefore the true cost is just the reference itself.
+            let typ = match x {
+                ValueMem::Ref(_) => "reference",
+                _ => x.get_ref().type_name(),
+            };
+            *self.top_info().allocs.entry(typ).or_insert(0) += 1;
         }
     }
 }
 
 impl Heap {
+    #[inline(never)]
+    pub(crate) fn record_call_enter<'v>(&'v self, function: Value<'v>) {
+        self.alloc_complex(CallEnter(function, Instant::now()));
+    }
+
+    #[inline(never)]
+    pub(crate) fn record_call_exit(&self) {
+        self.alloc_simple(CallExit(Instant::now()));
+    }
+
     // We could expose profile on the Heap, but it's an implementation detail that it works here.
     pub(crate) fn write_profile(&self, filename: &Path) -> anyhow::Result<()> {
         let file = File::create(filename).with_context(|| {

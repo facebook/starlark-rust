@@ -39,7 +39,6 @@ use std::{
     ops::Deref,
     ptr,
     sync::Arc,
-    time::Instant,
 };
 
 /// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
@@ -259,20 +258,6 @@ impl Heap {
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
         self.alloc_raw(ValueMem::AValue(box complex(x)))
-    }
-
-    #[inline(never)]
-    pub(crate) fn record_call_enter<'v>(&'v self, function: Value<'v>) {
-        // Deliberately don't return anything - no one should ever get a Value to this
-        // entry
-        self.alloc_raw(ValueMem::CallEnter(function, Instant::now()));
-    }
-
-    #[inline(never)]
-    pub(crate) fn record_call_exit(&self) {
-        // Deliberately don't return anything - no one should ever get a Value to this
-        // entry
-        self.alloc_raw(ValueMem::CallExit(Instant::now()));
     }
 
     pub(crate) fn for_each<'v>(&'v self, f: impl FnMut(&'v ValueMem<'v>)) {

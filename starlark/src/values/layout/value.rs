@@ -42,7 +42,7 @@ use crate::values::{
 };
 use gazebo::{coerce::Coerce, prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
-use std::{cell::Cell, time::Instant};
+use std::cell::Cell;
 use void::Void;
 
 // So we can provide &dyn StarlarkValue's when we need them
@@ -89,9 +89,7 @@ unsafe impl Sync for FrozenValue {}
 // We care a lot about the size of these data types, so make sure they don't
 // regress
 assert_eq_size!(FrozenValueMem, [usize; 3]);
-
-// On Linux this data type is 4 words, on Mac, 3 words, so hard to write a static assertion
-// assert_eq_size!(ValueMem, [usize; 3]);
+assert_eq_size!(ValueMem, [usize; 3]);
 
 #[derive(VariantName)]
 pub(crate) enum FrozenValueMem {
@@ -127,9 +125,6 @@ pub(crate) enum ValueMem<'v> {
     // Never points at a Ref, must point directly at a real value,
     // but might be unassigned (None)
     Ref(Cell<Option<Value<'v>>>),
-    // Used for profiling
-    CallEnter(Value<'v>, Instant),
-    CallExit(Instant),
 }
 
 impl<'v> ValueMem<'v> {
