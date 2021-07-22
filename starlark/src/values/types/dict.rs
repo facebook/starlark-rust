@@ -221,13 +221,14 @@ impl FrozenDict {
 }
 
 impl<'v> ComplexValue<'v> for DictGen<RefCell<Dict<'v>>> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+    type Frozen = DictGen<FrozenDict>;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let old = self.0.into_inner().content;
         let mut content: SmallMap<FrozenValue, FrozenValue> = SmallMap::with_capacity(old.len());
         for (k, v) in old.into_iter_hashed() {
             content.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
-        Ok(box DictGen(FrozenDict { content }))
+        Ok(DictGen(FrozenDict { content }))
     }
 }
 

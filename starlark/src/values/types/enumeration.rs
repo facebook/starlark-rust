@@ -42,8 +42,7 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value,
-        ValueLike,
+        ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use derivative::Derivative;
@@ -98,12 +97,13 @@ starlark_complex_values!(EnumType);
 starlark_complex_value!(pub EnumValue);
 
 impl<'v> ComplexValue<'v> for EnumType<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+    type Frozen = FrozenEnumType;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
             elements.insert_hashed(k.freeze(freezer)?, t.freeze(freezer)?);
         }
-        Ok(box FrozenEnumType {
+        Ok(FrozenEnumType {
             typ: self.typ.into_inner(),
             elements,
             constructor: self.constructor.freeze(freezer)?,
@@ -112,8 +112,9 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
 }
 
 impl<'v> ComplexValue<'v> for EnumValue<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box FrozenEnumValue {
+    type Frozen = FrozenEnumValue;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(FrozenEnumValue {
             typ: self.typ.freeze(freezer)?,
             value: self.value.freeze(freezer)?,
             index: self.index,

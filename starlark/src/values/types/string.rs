@@ -22,8 +22,8 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
-        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
-        UnpackValue, Value, ValueError, ValueLike,
+        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue,
+        Value, ValueError, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce};
@@ -351,8 +351,9 @@ where
 }
 
 impl<'v> ComplexValue<'v> for StringIterator<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box FrozenStringIterator {
+    type Frozen = FrozenStringIterator;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(FrozenStringIterator {
             string: freezer.freeze(self.string)?,
             produce_char: self.produce_char,
         })

@@ -89,7 +89,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
     fn into_simple(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
         let x: Box<T> = coerce(self);
         let res = x.freeze(freezer)?;
-        Ok(res)
+        Ok(box res)
     }
 }
 

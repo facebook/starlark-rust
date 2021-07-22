@@ -23,7 +23,7 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
-        ComplexValue, Freezer, SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        ComplexValue, Freezer, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
@@ -163,8 +163,9 @@ unsafe impl<'v> Trace<'v> for Partial<'v> {
 }
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box FrozenPartial {
+    type Frozen = FrozenPartial;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(FrozenPartial {
             func: self.func.freeze(freezer)?,
             pos: self.pos.try_map(|x| x.freeze(freezer))?,
             named: self.named.try_map(|x| x.freeze(freezer))?,

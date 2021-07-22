@@ -50,8 +50,7 @@ use crate::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
         typing::TypeCompiled,
-        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value,
-        ValueLike,
+        ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use either::Either;
@@ -222,8 +221,9 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
 }
 
 impl<'v> ComplexValue<'v> for Field<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box (*self).freeze(freezer)?)
+    type Frozen = FrozenField;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        (*self).freeze(freezer)
     }
 }
 
@@ -255,12 +255,13 @@ where
 }
 
 impl<'v> ComplexValue<'v> for RecordType<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+    type Frozen = FrozenRecordType;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
             fields.insert_hashed(k, (t.0.freeze(freezer)?, t.1));
         }
-        Ok(box FrozenRecordType {
+        Ok(FrozenRecordType {
             typ: self.typ.into_inner(),
             fields,
             constructor: self.constructor.freeze(freezer)?,
@@ -359,8 +360,9 @@ where
 }
 
 impl<'v> ComplexValue<'v> for Record<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box FrozenRecord {
+    type Frozen = FrozenRecord;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(FrozenRecord {
             typ: self.typ.freeze(freezer)?,
             values: self.values.try_map(|v| v.freeze(freezer))?,
         })

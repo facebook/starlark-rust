@@ -194,8 +194,9 @@ unsafe impl<'v> Trace<'v> for bool {
 /// }
 ///
 /// impl<'v> ComplexValue<'v> for One<'v> {
-///     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-///         Ok(Box::new(OneGen(self.0.freeze(freezer)?)))
+///     type Frozen = FrozenOne;
+///     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+///         Ok(OneGen(self.0.freeze(freezer)?))
 ///     }
 /// }
 /// ```
@@ -256,9 +257,11 @@ unsafe impl<'v> Trace<'v> for bool {
 /// * If the difference between frozen and non-frozen is more complex, e.g. a [`Cell`](std::cell::Cell)
 ///   when non-frozen and a direct value when frozen.
 pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
+    type Frozen: SimpleValue;
+
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>>;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen>;
 }
 
 /// A trait representing Starlark values which are simple - they

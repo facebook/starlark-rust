@@ -35,7 +35,7 @@ use crate::{
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
         function::FUNCTION_TYPE, typing::TypeCompiled, ComplexValue, Freezer, FrozenValue,
-        SimpleValue, StarlarkValue, Trace, Tracer, Value, ValueLike, ValueRef,
+        StarlarkValue, Trace, Tracer, Value, ValueLike, ValueRef,
     },
 };
 use derivative::Derivative;
@@ -240,7 +240,9 @@ unsafe impl<'v> Trace<'v> for Def<'v> {
 }
 
 impl<'v> ComplexValue<'v> for Def<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+    type Frozen = FrozenDef;
+
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let parameters = self.parameters.freeze(freezer)?;
         let parameter_types = self
             .parameter_types
@@ -249,7 +251,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             .return_type
             .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
-        Ok(box FrozenDef {
+        Ok(FrozenDef {
             parameters,
             parameter_types,
             return_type,

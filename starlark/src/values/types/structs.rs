@@ -41,8 +41,7 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
-        ValueLike,
+        AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce};
@@ -98,13 +97,14 @@ impl<'v> StructBuilder<'v> {
 }
 
 impl<'v> ComplexValue<'v> for Struct<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+    type Frozen = FrozenStruct;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
 
         for (k, v) in self.fields.into_iter_hashed() {
             frozen.insert_hashed(k, v.freeze(freezer)?);
         }
-        Ok(box FrozenStruct { fields: frozen })
+        Ok(FrozenStruct { fields: frozen })
     }
 }
 

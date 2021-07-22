@@ -21,8 +21,8 @@ use crate as starlark;
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{convert_index, convert_slice_indices},
-    AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
-    ValueError, ValueLike,
+    AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError,
+    ValueLike,
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::*};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
@@ -93,8 +93,9 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 }
 
 impl<'v> ComplexValue<'v> for Tuple<'v> {
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        Ok(box FrozenTuple {
+    type Frozen = FrozenTuple;
+    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(FrozenTuple {
             content: self.content.into_try_map(|v| v.freeze(freezer))?,
         })
     }
