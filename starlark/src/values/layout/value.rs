@@ -99,14 +99,20 @@ pub(crate) enum FrozenValueMem {
     Uninitialized(Void), // Never created (see Value::Uninitialized)
     Str(Box<str>),
     Blackhole, // Only occurs during a GC
-    Simple(Box<dyn StarlarkValue<'static> + Send + Sync>),
+    Simple(Box<dyn AValue<'static> + Send + Sync>),
 }
 
 fn simple_starlark_value<'a, 'v>(
-    x: &'a (dyn StarlarkValue<'static> + Send + Sync),
+    x: &'a (dyn AValue<'static> + Send + Sync),
 ) -> &'a dyn StarlarkValue<'v> {
-    let x: &'a dyn StarlarkValue<'static> = x;
-    unsafe { transmute!(&'a dyn StarlarkValue<'static>, &'a dyn StarlarkValue<'v>, x) }
+    let x: &'a dyn AValue<'static> = x;
+    unsafe {
+        transmute!(
+            &'a dyn StarlarkValue<'static>,
+            &'a dyn StarlarkValue<'v>,
+            x.as_starlark_value()
+        )
+    }
 }
 
 #[derive(VariantName)]

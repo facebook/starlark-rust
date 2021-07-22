@@ -136,7 +136,7 @@ impl FrozenHeap {
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
-        self.alloc_raw(FrozenValueMem::Simple(box val))
+        self.alloc_raw(FrozenValueMem::Simple(box simple(val)))
     }
 }
 
@@ -159,7 +159,7 @@ impl Freezer {
     pub(crate) fn set_magic(&self, val: impl SimpleValue) {
         let p = self.1.0.unpack_ptr1().unwrap();
         let p = p as *const FrozenValueMem as *mut FrozenValueMem;
-        unsafe { ptr::write(p, FrozenValueMem::Simple(box val)) }
+        unsafe { ptr::write(p, FrozenValueMem::Simple(box simple(val))) }
     }
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {
@@ -196,9 +196,7 @@ impl Freezer {
 
         match v {
             ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
-            ValueMem::AValue(x) => {
-                *fvmem = FrozenValueMem::Simple(x.into_simple(self)?.as_box_starlark_value())
-            }
+            ValueMem::AValue(x) => *fvmem = FrozenValueMem::Simple(x.into_simple(self)?),
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
                 // We don't expect Forward since that is handled in step 2.

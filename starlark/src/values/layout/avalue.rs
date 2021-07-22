@@ -39,10 +39,13 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>);
 
     #[doc(hidden)]
-    fn into_simple(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>>;
+    fn into_simple(
+        self: Box<Self>,
+        freezer: &Freezer,
+    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>>;
 }
 
-pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> {
+pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> + Send + Sync {
     Wrapper(Simple, x)
 }
 
@@ -75,9 +78,11 @@ where
         // Nothing to do
     }
 
-    fn into_simple(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
-        let x: Box<T> = coerce(self);
-        Ok(x)
+    fn into_simple(
+        self: Box<Self>,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
+        Ok(self)
     }
 }
 
@@ -86,10 +91,13 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         self.1.trace(tracer)
     }
 
-    fn into_simple(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Box<dyn SimpleValue>> {
+    fn into_simple(
+        self: Box<Self>,
+        freezer: &Freezer,
+    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
         let x: Box<T> = coerce(self);
         let res = x.freeze(freezer)?;
-        Ok(box res)
+        Ok(box simple(res))
     }
 }
 
