@@ -358,14 +358,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         None
     }
 
-    /// Helper to use [`collect_repr`](StarlarkValue::collect_repr),
-    /// do not implement it (the default value always works).
-    fn to_repr(&self) -> String {
-        let mut s = String::new();
-        self.collect_repr(&mut s);
-        s
-    }
-
     /// Return a string representation of self, as returned by the repr()
     /// function.
     /// Defaults to the `Debug` instance, but most types should override this method.

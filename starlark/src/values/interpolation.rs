@@ -20,7 +20,7 @@
 
 use crate::{
     collections::SmallMap,
-    values::{tuple::Tuple, StarlarkValue, Value, ValueError, ValueLike},
+    values::{tuple::Tuple, Value, ValueError, ValueLike},
 };
 use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
@@ -239,7 +239,7 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
             ));
         }
         match kwargs.get(n) {
-            None => Err(ValueError::KeyNotFound(Box::<str>::from(n).to_repr()).into()),
+            None => Err(ValueError::KeyNotFound(n.to_owned()).into()),
             Some(v) => Ok(conv(*v)),
         }
     }
