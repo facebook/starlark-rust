@@ -344,8 +344,8 @@ impl FrozenValue {
     }
 }
 
-/// A ['FrozenRef'] is essentially a ['FrozenValue'], and has the same memory and access guarantees
-/// as it. However, this keeps the type of the type `T` of the actual ['FrozenValue'] as a owned
+/// A [`FrozenRef`] is essentially a [`FrozenValue`], and has the same memory and access guarantees
+/// as it. However, this keeps the type of the type `T` of the actual [`FrozenValue`] as a
 /// reference, allowing manipulation of the actual typed data.
 #[derive(Clone_, Dupe_, Copy_, Debug)]
 pub struct FrozenRef<T: 'static + ?Sized> {
