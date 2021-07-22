@@ -40,7 +40,6 @@ use crate::values::{
 };
 use gazebo::{prelude::*, variants::VariantName};
 use static_assertions::assert_eq_size;
-use std::cell::Cell;
 use void::Void;
 
 // So we can provide &dyn StarlarkValue's when we need them
@@ -106,10 +105,6 @@ pub(crate) enum ValueMem<'v> {
     Blackhole,
     // Things that have a StarlarkValue instance
     AValue(Box<dyn AValue<'v>>),
-    // Used references in slots - usually wrapped in ValueRef
-    // Never points at a Ref, must point directly at a real value,
-    // but might be unassigned (None)
-    Ref(Cell<Option<Value<'v>>>),
 }
 
 impl<'v> ValueMem<'v> {

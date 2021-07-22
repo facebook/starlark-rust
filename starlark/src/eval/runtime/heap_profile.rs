@@ -210,12 +210,7 @@ impl Info {
             self.info[name.0].time_rec =
                 time_rec + now.checked_duration_since(start).unwrap_or_default();
         } else {
-            // For references, the type they point at isn't held by this object, but another heap value.
-            // Therefore the true cost is just the reference itself.
-            let typ = match x {
-                ValueMem::Ref(_) => "reference",
-                _ => x.get_ref().type_name(),
-            };
+            let typ = x.get_ref().type_name();
             *self.top_info().allocs.entry(typ).or_insert(0) += 1;
         }
     }

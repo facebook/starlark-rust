@@ -19,34 +19,54 @@ use crate as starlark;
 use crate::values::{
     layout::{
         heap::{Freezer, Heap},
-        value::{FrozenValue, Value, ValueMem},
+        value::{FrozenValue, Value},
     },
-    Trace,
+    tuple::FrozenTuple,
+    ComplexValue, StarlarkValue, Trace,
 };
-use gazebo::{coerce::Coerce, prelude::*};
+use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::*};
 use std::cell::Cell;
 
 /// A value that might have reference semantics.
 /// References are required when a lambda captures an outer variable,
 /// as all subsequent modifications of the outer variable will be
 /// reflected in the inner.
+///
 /// However, most values captured are not by reference, so use the user_tag
-/// to indicate whether a value is a `Ref` (and must be dereffed a lot),
+/// to indicate whether a value is a reference (and must be dereffed a lot),
 /// or just a normal `Value` (much cheaper).
-/// A normal `Value` cannot be `ValueMem::Ref`, but this one might be.
-#[derive(Debug, Trace, Coerce, Clone, Dupe)]
+///
+/// If the value is a reference, it points at a `ValueRef` on the heap.
+/// However, it is never the case that a `ValueRef` on the heap points at a
+/// `ValueRef` - there can be at most one hop.
+#[derive(Debug, Trace, Coerce, Clone, Dupe, AnyLifetime)]
 #[repr(transparent)]
 pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
+
+impl<'v> ComplexValue<'v> for ValueRef<'v> {
+    type Frozen = FrozenTuple;
+
+    fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        unreachable!("Should never be freezing a ValueRef on the heap")
+    }
+}
+
+impl<'v> StarlarkValue<'v> for ValueRef<'v> {
+    starlark_type!("value_ref");
+}
 
 impl<'v> ValueRef<'v> {
     // Get the cell, chasing down any forwarding if it exists.
     // We have the invariant that if we have a ref we always set the user tag
     fn get_cell(&self) -> &Cell<Option<Value<'v>>> {
         match self.0.get() {
-            Some(v) if v.0.get_user_tag() => match v.0.unpack_ptr2() {
-                Some(ValueMem::Ref(cell)) => cell,
-                _ => unreachable!(),
-            },
+            Some(v) if v.0.get_user_tag() => {
+                &v.get_ref()
+                    .as_dyn_any()
+                    .downcast_ref::<ValueRef>()
+                    .unwrap()
+                    .0
+            }
             _ => &self.0,
         }
     }
@@ -90,12 +110,9 @@ impl<'v> ValueRef<'v> {
     /// Updates to either will result in both changing.
     pub fn clone_reference(&self, heap: &'v Heap) -> ValueRef<'v> {
         match self.0.get() {
-            Some(v) if v.0.get_user_tag() => match v.0.unpack_ptr2() {
-                Some(ValueMem::Ref(_)) => Self(Cell::new(Some(v))),
-                _ => panic!(),
-            },
+            Some(v) if v.0.get_user_tag() => Self(Cell::new(Some(v))),
             v => {
-                let reffed = Value(heap.alloc_raw(ValueMem::Ref(Cell::new(v))).0.set_user_tag());
+                let reffed = Value(heap.alloc_complex(ValueRef(Cell::new(v))).0.set_user_tag());
                 self.0.set(Some(reffed));
                 Self(Cell::new(Some(reffed)))
             }

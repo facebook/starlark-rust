@@ -26,7 +26,7 @@ use crate::values::{
         pointer::Pointer,
         value::{FrozenValue, FrozenValueMem, Value, ValueMem},
     },
-    AllocFrozenValue, ComplexValue, SimpleValue, Trace,
+    AllocFrozenValue, ComplexValue, SimpleValue,
 };
 use gazebo::{cast, prelude::*};
 use std::{
@@ -339,7 +339,6 @@ impl<'v> Tracer<'v> {
         let mut old_mem = unsafe { ptr::replace(old_mem, ValueMem::Copied(new_val)) };
 
         match &mut old_mem {
-            ValueMem::Ref(x) => x.trace(self),
             ValueMem::AValue(x) => x.trace(self),
             _ => {} // Doesn't contain Value pointers
         }
