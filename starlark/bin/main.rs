@@ -201,8 +201,6 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    gazebo::terminate_on_panic();
-
     let args = Args::from_args();
     let ext = args
         .extension
