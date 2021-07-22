@@ -17,9 +17,8 @@
 
 use crate as starlark;
 use crate::values::{
-    layout::{heap::Heap, value::ValueMem},
-    tuple::FrozenTuple,
-    ComplexValue, SimpleValue, StarlarkValue, Trace, Value,
+    tuple::FrozenTuple, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
+    ValueMem,
 };
 use anyhow::Context;
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -33,12 +32,16 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub(crate) struct HeapProfile {
+    enabled: bool,
+}
+
 #[derive(AnyLifetime, Trace, Debug)]
 struct CallEnter<'v>(Value<'v>, Instant);
 
 impl<'v> ComplexValue<'v> for CallEnter<'v> {
     type Frozen = FrozenTuple;
-    fn freeze(self: Box<Self>, _freezer: &super::Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         unreachable!("Should never end up freezing a CallEnter")
     }
 }
@@ -218,23 +221,55 @@ impl Info {
     }
 }
 
-impl Heap {
-    #[inline(never)]
-    pub(crate) fn record_call_enter<'v>(&'v self, function: Value<'v>) {
-        self.alloc_complex(CallEnter(function, Instant::now()));
+impl HeapProfile {
+    pub(crate) fn new() -> Self {
+        Self { enabled: false }
     }
 
-    #[inline(never)]
-    pub(crate) fn record_call_exit(&self) {
-        self.alloc_simple(CallExit(Instant::now()));
+    pub(crate) fn enable(&mut self) {
+        self.enabled = true;
+    }
+
+    #[inline(always)]
+    pub(crate) fn record_call_enter<'v>(&self, function: Value<'v>, heap: &'v Heap) {
+        #[inline(never)]
+        #[cold]
+        fn f<'v>(function: Value<'v>, heap: &'v Heap) {
+            heap.alloc_complex(CallEnter(function, Instant::now()));
+        }
+
+        if self.enabled {
+            f(function, heap);
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn record_call_exit<'v>(&self, heap: &'v Heap) {
+        #[inline(never)]
+        #[cold]
+        fn f<'v>(heap: &'v Heap) {
+            heap.alloc_simple(CallExit(Instant::now()));
+        }
+
+        if self.enabled {
+            f(heap);
+        }
     }
 
     // We could expose profile on the Heap, but it's an implementation detail that it works here.
-    pub(crate) fn write_profile(&self, filename: &Path) -> anyhow::Result<()> {
+    pub(crate) fn write(&self, filename: &Path, heap: &Heap) -> Option<anyhow::Result<()>> {
+        if !self.enabled {
+            None
+        } else {
+            Some(Self::write_enabled(filename, heap))
+        }
+    }
+
+    pub(crate) fn write_enabled(filename: &Path, heap: &Heap) -> anyhow::Result<()> {
         let file = File::create(filename).with_context(|| {
             format!("When creating profile output file `{}`", filename.display())
         })?;
-        self.write_heap_profile_to(file).with_context(|| {
+        Self::write_heap_profile_to(file, heap).with_context(|| {
             format!(
                 "When writing to profile output file `{}`",
                 filename.display()
@@ -242,7 +277,7 @@ impl Heap {
         })
     }
 
-    fn write_heap_profile_to(&self, mut file: impl Write) -> io::Result<()> {
+    fn write_heap_profile_to(mut file: impl Write, heap: &Heap) -> io::Result<()> {
         let mut ids = FunctionIds::default();
         let root = ids.get_string("(root)".to_owned());
         let start = Instant::now();
@@ -253,7 +288,7 @@ impl Heap {
             call_stack: vec![(root, Duration::default(), start)],
         };
         info.ensure(root);
-        self.for_each(|x| info.process(x));
+        heap.for_each(|x| info.process(x));
         // Just has root left on it
         assert!(info.call_stack.len() == 1);
 
@@ -315,6 +350,7 @@ impl Heap {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::{
         environment::{Globals, Module},
         eval::Evaluator,
@@ -342,14 +378,14 @@ f
         eval.enable_heap_profile();
         let f = eval.eval_module(ast)?;
         // first check module profiling works
-        module.heap().write_heap_profile_to(&mut Vec::new())?;
+        HeapProfile::write_heap_profile_to(&mut Vec::new(), module.heap())?;
 
         // second check function profiling works
         let module = Module::new();
         let mut eval = Evaluator::new(&module, &globals);
         eval.enable_heap_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
-        module.heap().write_heap_profile_to(&mut Vec::new())?;
+        HeapProfile::write_heap_profile_to(&mut Vec::new(), module.heap())?;
 
         // finally, check a user can add values into the heap before/after
         let module = Module::new();
@@ -358,7 +394,7 @@ f
         eval.enable_heap_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         module.heap().alloc("Thing that goes after");
-        module.heap().write_heap_profile_to(&mut Vec::new())?;
+        HeapProfile::write_heap_profile_to(&mut Vec::new(), module.heap())?;
 
         Ok(())
     }

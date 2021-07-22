@@ -25,6 +25,7 @@ use crate::{
     eval::{
         runtime::{
             call_stack::CallStack,
+            heap_profile::HeapProfile,
             slots::{LocalSlotId, LocalSlots},
             stmt_profile::StmtProfile,
         },
@@ -68,7 +69,7 @@ pub struct Evaluator<'v, 'a> {
     // The codemap that corresponds to this module.
     pub(crate) codemap: &'v CodeMap,
     // Should we enable profiling or not
-    pub(crate) heap_profile: bool,
+    pub(crate) heap_profile: HeapProfile,
     // Is GC disabled for some reason
     pub(crate) disable_gc: bool,
     // Size of the heap when we should next perform a GC.
@@ -122,7 +123,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             next_gc_level: GC_THRESHOLD,
             disable_gc: false,
             alloca: Alloca::new(),
-            heap_profile: false,
+            heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
             before_stmt: Vec::new(),
         }
@@ -158,7 +159,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ///   This profiling mode is the recommended one.
     /// * The `stmt_profile` mode provides information about time spent in each statement.
     pub fn enable_heap_profile(&mut self) {
-        self.heap_profile = true;
+        self.heap_profile.enable();
         // Disable GC because otherwise why lose the profile records, as we use the heap
         // to store a complete list of what happened in linear order.
         self.disable_gc = true;
@@ -175,10 +176,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
     /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
     pub fn write_heap_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        if !self.heap_profile {
-            return Err(EvaluatorError::HeapProfilingNotEnabled.into());
-        }
-        self.heap().write_profile(filename.as_ref())
+        self.heap_profile
+            .write(filename.as_ref(), self.heap())
+            .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
     }
 
     /// Write a profile (as a `.csv` file) to a file.
@@ -249,15 +249,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             span.unwrap_or_default(),
             span.map(|_| self.codemap),
         )?;
-        if self.heap_profile {
-            self.heap().record_call_enter(function);
-        }
+        self.heap_profile.record_call_enter(function, self.heap());
         // Must always call .pop regardless
         let res = within(self).map_err(|e| add_diagnostics(e, self));
         self.call_stack.pop();
-        if self.heap_profile {
-            self.heap().record_call_exit();
-        }
+        self.heap_profile.record_call_exit(self.heap());
         res
     }
 

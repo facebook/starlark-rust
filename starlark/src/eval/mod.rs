@@ -113,18 +113,15 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack
             .push(Value::new_none(), span, Some(codemap))
             .unwrap();
-        if self.heap_profile {
-            self.heap().record_call_enter(Value::new_none());
-        }
+        self.heap_profile
+            .record_call_enter(Value::new_none(), self.heap());
 
         // Evaluation
         let res = stmt(self);
 
         // Clean up the world, putting everything back
         self.call_stack.pop();
-        if self.heap_profile {
-            self.heap().record_call_exit();
-        }
+        self.heap_profile.record_call_exit(self.heap());
         self.set_codemap(old_codemap);
         self.local_variables.release(old_locals);
 
