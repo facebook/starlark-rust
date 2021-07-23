@@ -32,7 +32,7 @@ use crate::{
         range::Range,
         string::STRING_TYPE,
         tuple::Tuple,
-        AttrType, Heap, Value, ValueError,
+        AttrType, Heap, Value, ValueError, ValueLike,
     },
 };
 use anyhow::anyhow;
@@ -71,9 +71,20 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # starlark::assert::fail(r#"
     /// fail("this is an error")  # error: this is an error
     /// # "#, "this is an error");
+    /// # starlark::assert::fail(r#"
+    /// fail("oops", 1, False)  # error: oops 1 False
+    /// # "#, "oops 1 False");
     /// ```
-    fn fail(ref msg: Value) -> NoneType {
-        Err(anyhow!("fail(): {}", msg))
+    fn fail(args: Vec<Value>) -> NoneType {
+        let mut s = String::new();
+        for x in args {
+            s.push(' ');
+            match x.unpack_str() {
+                Some(x) => s.push_str(x),
+                None => x.collect_repr(&mut s),
+            }
+        }
+        Err(anyhow!("fail:{}", s))
     }
 
     /// [any](
