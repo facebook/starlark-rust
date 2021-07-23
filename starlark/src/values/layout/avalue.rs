@@ -45,6 +45,13 @@ pub trait AValue<'v>: StarlarkValue<'v> {
         self: Box<Self>,
         freezer: &Freezer,
     ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>>;
+
+    fn unpack_str(&self) -> Option<&str> {
+        self.unpack_box_str().map(|x| &**x)
+    }
+
+    #[allow(clippy::borrowed_box)]
+    fn unpack_box_str(&self) -> Option<&Box<str>>;
 }
 
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
@@ -93,6 +100,10 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
     ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
         unreachable!("Basic types don't appear in the heap")
     }
+
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        None
+    }
 }
 
 impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
@@ -109,6 +120,15 @@ where
     ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
         Ok(self)
     }
+
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        // Do this entirely statically for best performance
+        if T::static_type_id() == TypeId::of::<Box<str>>() {
+            unsafe { Some(cast::ptr(&self.0)) }
+        } else {
+            None
+        }
+    }
 }
 
 impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
@@ -123,6 +143,10 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         let x: Box<T> = coerce(self);
         let res = x.freeze(freezer)?;
         Ok(box simple(res))
+    }
+
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        None
     }
 }
 
