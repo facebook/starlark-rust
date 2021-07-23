@@ -270,7 +270,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     // mutably borrowed when we iterate over `rhs`, as they might alias.
 
     let lhs_aref = lhs.get_ref();
-    let lhs_ty = lhs_aref.as_dyn_any().static_type_of();
+    let lhs_ty = lhs_aref.static_type_of();
 
     if List::is_list_type(lhs_ty) {
         // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
