@@ -47,7 +47,7 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>>;
 }
 
-pub(crate) fn basic<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
+pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
     // These are the same representation, so safe to convert
     let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
     x

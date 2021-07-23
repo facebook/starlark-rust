@@ -31,7 +31,7 @@
 
 use crate::values::{
     layout::{
-        avalue::{basic, AValue},
+        avalue::{basic_ref, AValue},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
     },
@@ -132,7 +132,7 @@ impl<'v> ValueMem<'v> {
 
     pub(crate) fn get_ref(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => basic(x),
+            Self::Str(x) => basic_ref(x),
             Self::AValue(x) => &**x,
             _ => self.unexpected("get_ref"),
         }
@@ -165,7 +165,7 @@ impl FrozenValueMem {
 
     fn get_ref<'v>(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => basic(x),
+            Self::Str(x) => basic_ref(x),
             Self::Simple(x) => simple_avalue(&**x),
             _ => self.unexpected("get_ref"),
         }
@@ -259,10 +259,10 @@ impl<'v> Value<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => x.get_ref(),
-            PointerUnpack::None => basic(&VALUE_NONE),
-            PointerUnpack::Bool(true) => basic(&VALUE_TRUE),
-            PointerUnpack::Bool(false) => basic(&VALUE_FALSE),
-            PointerUnpack::Int(x) => basic(PointerI32::new(x)),
+            PointerUnpack::None => basic_ref(&VALUE_NONE),
+            PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
+            PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),
+            PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
         }
     }
 
@@ -335,10 +335,10 @@ impl FrozenValue {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.get_ref(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),
-            PointerUnpack::None => basic(&VALUE_NONE),
-            PointerUnpack::Bool(true) => basic(&VALUE_TRUE),
-            PointerUnpack::Bool(false) => basic(&VALUE_FALSE),
-            PointerUnpack::Int(x) => basic(PointerI32::new(x)),
+            PointerUnpack::None => basic_ref(&VALUE_NONE),
+            PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
+            PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),
+            PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
         }
     }
 }
