@@ -189,7 +189,7 @@ impl Info {
     fn process<'v>(&mut self, x: &'v ValueMem<'v>) {
         fn try_downcast<'v, T: AnyLifetime<'v>>(x: &'v ValueMem<'v>) -> Option<&'v T> {
             match x {
-                ValueMem::AValue(x) => x.as_dyn_any().downcast_ref(),
+                ValueMem::AValue(x) => x.downcast_ref(),
                 _ => None,
             }
         }

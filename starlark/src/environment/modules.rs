@@ -163,7 +163,6 @@ impl FrozenModuleValue {
         &self
             .0
             .get_ref()
-            .as_dyn_any()
             .downcast_ref::<FrozenModuleRef>()
             .unwrap()
             .0

@@ -60,13 +60,7 @@ impl<'v> ValueRef<'v> {
     // We have the invariant that if we have a ref we always set the user tag
     fn get_cell(&self) -> &Cell<Option<Value<'v>>> {
         match self.0.get() {
-            Some(v) if v.0.get_user_tag() => {
-                &v.get_ref()
-                    .as_dyn_any()
-                    .downcast_ref::<ValueRef>()
-                    .unwrap()
-                    .0
-            }
+            Some(v) if v.0.get_user_tag() => &v.get_ref().downcast_ref::<ValueRef>().unwrap().0,
             _ => &self.0,
         }
     }

@@ -223,10 +223,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default {
     }
 
     fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        ARef::filter_map(ARef::new_ptr(self.get_ref()), |e| {
-            e.as_dyn_any().downcast_ref::<T>()
-        })
-        .ok()
+        ARef::filter_map(ARef::new_ptr(self.get_ref()), |e| e.downcast_ref::<T>()).ok()
     }
 }
 
@@ -371,7 +368,7 @@ impl<'v> Value<'v> {
     /// In many cases you may wish to call [`FromValue`] instead, as that can
     /// get a non-frozen value from an underlying frozen value.
     pub fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
-        self.get_ref().as_dyn_any().downcast_ref::<T>()
+        self.get_ref().downcast_ref::<T>()
     }
 
     /// Are two values equal. If the values are of different types it will

@@ -47,7 +47,6 @@ impl<T: 'static + ?Sized> FrozenRef<T> {
 impl FrozenValue {
     pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
         self.get_ref::<'static>()
-            .as_dyn_any()
             .downcast_ref::<T>()
             .map(|t| FrozenRef { value: t })
     }

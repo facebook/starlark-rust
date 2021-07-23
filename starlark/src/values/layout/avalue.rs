@@ -54,6 +54,20 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     fn unpack_box_str(&self) -> Option<&Box<str>>;
 }
 
+impl<'v> dyn AValue<'v> {
+    /// Downcast a reference to type `T`, or return [`None`](None) if it is not the
+    /// right type.
+    // We'd love to reuse the type from as_dyn_any, but that doesn't seem to have the right vtable-ness
+    pub fn downcast_ref<T: AnyLifetime<'v>>(&self) -> Option<&T> {
+        if self.static_type_of() == T::static_type_id() {
+            // SAFETY: just checked whether we are pointing to the correct type.
+            unsafe { Some(&*(self as *const Self as *const T)) }
+        } else {
+            None
+        }
+    }
+}
+
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
     // These are the same representation, so safe to convert
     let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
