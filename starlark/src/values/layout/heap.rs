@@ -286,7 +286,7 @@ impl Heap {
         self.alloc_raw(ValueMem::AValue(box complex(x)))
     }
 
-    pub(crate) fn for_each<'v>(&'v self, f: impl FnMut(&'v ValueMem<'v>)) {
+    pub(crate) fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
         let mut arena_ref = self.arena().borrow_mut();
         let arena = &mut *arena_ref;
 
@@ -297,7 +297,7 @@ impl Heap {
         let arena =
             unsafe { transmute!(&mut Arena<ValueMem<'v>>, &'v mut Arena<ValueMem<'v>>, arena) };
 
-        arena.for_each(f);
+        arena.for_each(|x| f(Value(Pointer::new_ptr2(x))));
     }
 
     /// Garbage collect any values that are unused. This function is _unsafe_ in

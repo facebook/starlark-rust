@@ -18,7 +18,6 @@
 use crate as starlark;
 use crate::values::{
     tuple::FrozenTuple, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
-    ValueMem,
 };
 use anyhow::Context;
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -186,15 +185,8 @@ impl Info {
     }
 
     /// Process each ValueMem in their chronological order
-    fn process<'v>(&mut self, x: &'v ValueMem<'v>) {
-        fn try_downcast<'v, T: AnyLifetime<'v>>(x: &'v ValueMem<'v>) -> Option<&'v T> {
-            match x {
-                ValueMem::AValue(x) => x.downcast_ref(),
-                _ => None,
-            }
-        }
-
-        if let Some(CallEnter(function, now)) = try_downcast(x) {
+    fn process<'v>(&mut self, x: Value<'v>) {
+        if let Some(CallEnter(function, now)) = x.downcast_ref() {
             let id = self.ids.get_value(*function);
             self.ensure(id);
             self.change(*now);
@@ -204,7 +196,7 @@ impl Info {
             me.calls += 1;
             *me.callers.entry(top).or_insert(0) += 1;
             self.call_stack.push((id, me.time_rec, *now));
-        } else if let Some(CallExit(now)) = try_downcast(x) {
+        } else if let Some(CallExit(now)) = x.downcast_ref() {
             self.change(*now);
             let (name, time_rec, start) = self.call_stack.pop().unwrap();
             self.info[name.0].time_rec =
@@ -283,7 +275,7 @@ impl HeapProfile {
             call_stack: vec![(root, Duration::default(), start)],
         };
         info.ensure(root);
-        heap.for_each(|x| info.process(x));
+        heap.for_each_ordered(|x| info.process(x));
         // Just has root left on it
         assert!(info.call_stack.len() == 1);
 
