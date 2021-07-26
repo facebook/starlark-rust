@@ -350,6 +350,7 @@
 #![feature(hash_set_entry)]
 #![feature(maybe_uninit_extra)]
 #![feature(maybe_uninit_slice)]
+#![feature(ptr_metadata)]
 #![feature(try_blocks)]
 #![feature(vec_extend_from_within)]
 //

@@ -22,9 +22,10 @@
 use crate::values::{
     layout::{
         arena::Arena,
+        arena2::{AValuePtr, Arena2, Reservation},
         avalue::{complex, simple, AValue},
         pointer::Pointer,
-        value::{FrozenValue, FrozenValueMem, Value, ValueMem},
+        value::{FrozenValue, Value, ValueMem},
     },
     AllocFrozenValue, ComplexValue, SimpleValue,
 };
@@ -63,7 +64,7 @@ impl Debug for Heap {
 /// Can be kept alive by a [`FrozenHeapRef`].
 #[derive(Default)]
 pub struct FrozenHeap {
-    arena: Arena<FrozenValueMem>,          // My memory
+    arena: Arena2,                         // My memory
     refs: RefCell<HashSet<FrozenHeapRef>>, // Memory I depend on
 }
 
@@ -123,19 +124,19 @@ impl FrozenHeap {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
 
-    fn alloc_raw(&self, x: FrozenValueMem) -> FrozenValue {
-        let v: &mut FrozenValueMem = self.arena.alloc(x);
+    fn alloc_raw(&self, x: impl AValue<'static>) -> FrozenValue {
+        let v: &AValuePtr = self.arena.alloc(x);
         FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(v) }))
     }
 
     pub(crate) fn alloc_str(&self, x: Box<str>) -> FrozenValue {
-        self.alloc_raw(FrozenValueMem::Simple(box simple(x)))
+        self.alloc_raw(simple(x))
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
-        self.alloc_raw(FrozenValueMem::Simple(box simple(val)))
+        self.alloc_raw(simple(val))
     }
 }
 
@@ -143,22 +144,39 @@ impl FrozenHeap {
 // A freezer is a pair of the FrozenHeap and a "magic" value,
 // which we happen to use for the slots (see `FrozenSlotsRef`)
 // but could be used for anything.
-pub struct Freezer(FrozenHeap, FrozenValue);
+pub struct Freezer(FrozenHeap, FrozenValue, Option<Reservation<'static>>);
 
 impl Freezer {
-    pub(crate) fn new(x: FrozenHeap) -> Self {
-        let fv = x.alloc_raw(FrozenValueMem::Blackhole);
-        Self(x, fv)
+    pub(crate) fn new<T: SimpleValue>(heap: FrozenHeap) -> Self {
+        fn reserve<'v, 'v2, T>(heap: &'v FrozenHeap, _ty: Option<T>) -> Reservation<'v>
+        where
+            'v2: 'v,
+            T: AValue<'v2>,
+        {
+            heap.arena.reserve::<T>()
+        }
+
+        // Slightly odd construction as we want to produce a reservation with type
+        // simple(T), but simple is a function with an opaque impl return, so fake up
+        // an empty Option containing the right type.
+        let ty: Option<T> = None;
+        let ty = ty.map(simple);
+        let reservation = reserve(&heap, ty);
+        // Morally the type is tied to the heap, but we want to have them both next to each other
+        let reservation = unsafe { transmute!(Reservation, Reservation<'static>, reservation) };
+        let fv = FrozenValue(Pointer::new_ptr1(unsafe {
+            cast::ptr_lifetime(reservation.ptr())
+        }));
+        Self(heap, fv, Some(reservation))
+    }
+
+    pub(crate) fn set_magic(&mut self, val: impl SimpleValue) {
+        let reservation = self.2.take().expect("Can only call set_magic once");
+        reservation.fill(simple(val))
     }
 
     pub(crate) fn get_magic(&self) -> FrozenValue {
         self.1
-    }
-
-    pub(crate) fn set_magic(&self, val: impl SimpleValue) {
-        let p = self.1.0.unpack_ptr1().unwrap();
-        let p = p as *const FrozenValueMem as *mut FrozenValueMem;
-        unsafe { ptr::write(p, FrozenValueMem::Simple(box simple(val))) }
     }
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {
@@ -168,6 +186,13 @@ impl Freezer {
     /// Allocate a new value while freezing. Usually not a great idea.
     pub fn alloc<'v, T: AllocFrozenValue>(&'v self, val: T) -> FrozenValue {
         val.alloc_frozen_value(&self.0)
+    }
+
+    pub(crate) fn reserve<'v, 'v2, T: AValue<'v2>>(&'v self) -> Reservation<'v>
+    where
+        'v2: 'v,
+    {
+        self.0.arena.reserve::<T>()
     }
 
     /// Freeze a nested value while freezing yourself.
@@ -186,16 +211,18 @@ impl Freezer {
 
         // Case 3: We need to be moved to the new heap
         // Invariant: After this method completes ValueMem must be of type Forward
+        let reservation = value.get_ref().reserve_simple(self);
         let value_mut = value as *const ValueMem as *mut ValueMem;
-        let fvmem: &mut FrozenValueMem = self.0.arena.alloc(FrozenValueMem::Blackhole);
-        let fv = FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(fvmem) }));
+        let fv = FrozenValue(Pointer::new_ptr1(unsafe {
+            cast::ptr_lifetime(reservation.0.ptr())
+        }));
         // Important we allocate the location for the frozen value _before_ we copy it
         // so that cycles still work
         let v = unsafe { ptr::replace(value_mut, ValueMem::Forward(fv)) };
 
         match v {
-            ValueMem::Str(x) => *fvmem = FrozenValueMem::Simple(box simple(x)),
-            ValueMem::AValue(x) => *fvmem = FrozenValueMem::Simple(x.into_simple(self)?),
+            ValueMem::Str(x) => reservation.0.fill(simple(x)),
+            ValueMem::AValue(x) => x.fill_simple(reservation, self)?,
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
                 // We don't expect Forward since that is handled in step 2.

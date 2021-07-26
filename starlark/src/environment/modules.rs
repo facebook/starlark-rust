@@ -155,7 +155,7 @@ impl FrozenModuleValue {
         Self(freezer.get_magic())
     }
 
-    pub fn set(freezer: &Freezer, val: &FrozenModuleRef) {
+    pub fn set(freezer: &mut Freezer, val: &FrozenModuleRef) {
         freezer.set_magic(val.dupe())
     }
 
@@ -223,13 +223,13 @@ impl Module {
         // Note that we even freeze anonymous slots, since they are accessed by
         // slot-index in the code, and we don't walk into them, so don't know if
         // they are used.
-        let freezer = Freezer::new(frozen_heap);
+        let mut freezer = Freezer::new::<FrozenModuleRef>(frozen_heap);
         let slots = slots.freeze(&freezer)?;
         let rest = FrozenModuleRef(Arc::new(FrozenModuleData {
             names: names.freeze(),
             slots,
         }));
-        FrozenModuleValue::set(&freezer, &rest);
+        FrozenModuleValue::set(&mut freezer, &rest);
         // The values MUST be alive up until this point (as the above line uses them),
         // but can now be dropped
         mem::drop(heap);

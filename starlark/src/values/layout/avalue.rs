@@ -20,7 +20,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        ComplexValue, ConstFrozenValue, Freezer, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        layout::arena2::Reservation, ComplexValue, ConstFrozenValue, Freezer, Heap, SimpleValue,
+        StarlarkValue, Tracer, Value,
     },
 };
 use gazebo::{
@@ -32,19 +33,33 @@ use std::{
     any::TypeId,
     cmp::Ordering,
     fmt::{self, Debug},
+    mem,
 };
+
+/// Occurs in "private" AValue methods, so has to be public, but don't tell anyone
+#[doc(hidden)]
+pub struct HiddenReservation<'v>(pub(crate) Reservation<'v>);
 
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub trait AValue<'v>: StarlarkValue<'v> {
     #[doc(hidden)]
+    // How much memory I take up on the heap.
+    // Included to allow unsized types to live on the heap.
+    fn memory_size(&self) -> usize;
+
+    #[doc(hidden)]
     fn trace(&mut self, tracer: &Tracer<'v>);
 
     #[doc(hidden)]
-    fn into_simple(
+    fn reserve_simple<'a>(&self, freezer: &'a Freezer) -> HiddenReservation<'a>;
+
+    #[doc(hidden)]
+    fn fill_simple(
         self: Box<Self>,
+        reservation: HiddenReservation,
         freezer: &Freezer,
-    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>>;
+    ) -> anyhow::Result<()>;
 
     fn unpack_str(&self) -> Option<&str> {
         self.unpack_box_str().map(|x| &**x)
@@ -71,6 +86,12 @@ impl<'v> dyn AValue<'v> {
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
     // These are the same representation, so safe to convert
     let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
+    x
+}
+
+pub(crate) fn simple_ref<T: SimpleValue>(x: &T) -> &dyn AValue<'static> {
+    // These are the same representation, so safe to convert
+    let x: &Wrapper<Simple, T> = unsafe { cast::ptr(x) };
     x
 }
 
@@ -104,14 +125,23 @@ unsafe impl<T> Coerce<T> for Wrapper<Simple, T> {}
 unsafe impl<T> Coerce<T> for Wrapper<Complex, T> {}
 
 impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
+    fn memory_size(&self) -> usize {
+        mem::size_of::<Self>()
+    }
+
     fn trace(&mut self, _tracer: &Tracer<'v>) {
         unreachable!("Basic types don't appear in the heap")
     }
 
-    fn into_simple(
+    fn reserve_simple<'a>(&self, _freezer: &'a Freezer) -> HiddenReservation<'a> {
+        unreachable!("Basic types don't appear in the heap")
+    }
+
+    fn fill_simple(
         self: Box<Self>,
+        _reservation: HiddenReservation,
         _freezer: &Freezer,
-    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         unreachable!("Basic types don't appear in the heap")
     }
 
@@ -124,15 +154,25 @@ impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
 where
     'v: 'static,
 {
+    fn memory_size(&self) -> usize {
+        mem::size_of::<Self>()
+    }
+
     fn trace(&mut self, _tracer: &Tracer<'v>) {
         // Nothing to do
     }
 
-    fn into_simple(
+    fn reserve_simple<'a>(&self, freezer: &'a Freezer) -> HiddenReservation<'a> {
+        HiddenReservation(freezer.reserve::<Self>())
+    }
+
+    fn fill_simple(
         self: Box<Self>,
+        reservation: HiddenReservation,
         _freezer: &Freezer,
-    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
-        Ok(self)
+    ) -> anyhow::Result<()> {
+        reservation.0.fill(*self);
+        Ok(())
     }
 
     fn unpack_box_str(&self) -> Option<&Box<str>> {
@@ -146,17 +186,27 @@ where
 }
 
 impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
+    fn memory_size(&self) -> usize {
+        mem::size_of::<Self>()
+    }
+
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.1.trace(tracer)
     }
 
-    fn into_simple(
+    fn reserve_simple<'a>(&self, freezer: &'a Freezer) -> HiddenReservation<'a> {
+        HiddenReservation(freezer.reserve::<Wrapper<Simple, T::Frozen>>())
+    }
+
+    fn fill_simple(
         self: Box<Self>,
+        reservation: HiddenReservation,
         freezer: &Freezer,
-    ) -> anyhow::Result<Box<dyn AValue<'static> + Send + Sync>> {
+    ) -> anyhow::Result<()> {
         let x: Box<T> = coerce(self);
         let res = x.freeze(freezer)?;
-        Ok(box simple(res))
+        reservation.0.fill(simple(res));
+        Ok(())
     }
 
     fn unpack_box_str(&self) -> Option<&Box<str>> {
@@ -184,6 +234,65 @@ unsafe impl<'v, Mode: 'static, T: AnyLifetime<'v>> AnyLifetime<'v> for Wrapper<M
     fn static_type_of(&self) -> std::any::TypeId {
         Self::static_type_id()
     }
+}
+
+#[derive(Debug, AnyLifetime)]
+pub(crate) struct BlackHole0;
+
+#[derive(Debug, AnyLifetime)]
+pub(crate) struct BlackHole(pub(crate) usize);
+
+impl<'v> AValue<'v> for BlackHole0 {
+    fn memory_size(&self) -> usize {
+        0
+    }
+    fn trace(&mut self, _tracer: &Tracer<'v>) {
+        unreachable!()
+    }
+    fn reserve_simple<'a>(&self, _freezer: &'a Freezer) -> HiddenReservation<'a> {
+        unreachable!()
+    }
+    fn fill_simple(
+        self: Box<Self>,
+        _reservation: HiddenReservation,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<()> {
+        unreachable!()
+    }
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        unreachable!()
+    }
+}
+
+impl<'v> AValue<'v> for BlackHole {
+    fn memory_size(&self) -> usize {
+        self.0
+    }
+
+    fn trace(&mut self, _tracer: &Tracer<'v>) {
+        unreachable!()
+    }
+    fn reserve_simple<'a>(&self, _freezer: &'a Freezer) -> HiddenReservation<'a> {
+        unreachable!()
+    }
+    fn fill_simple(
+        self: Box<Self>,
+        _reservation: HiddenReservation,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<()> {
+        unreachable!()
+    }
+    fn unpack_box_str(&self) -> Option<&Box<str>> {
+        unreachable!()
+    }
+}
+
+impl<'v> StarlarkValue<'v> for BlackHole0 {
+    starlark_type!("BlackHole0");
+}
+
+impl<'v> StarlarkValue<'v> for BlackHole {
+    starlark_type!("BlackHole");
 }
 
 impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode, T> {

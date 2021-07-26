@@ -31,7 +31,8 @@
 
 use crate::values::{
     layout::{
-        avalue::{basic_ref, AValue},
+        arena2::AValuePtr,
+        avalue::{basic_ref, simple_ref, AValue},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
     },
@@ -51,7 +52,7 @@ const VALUE_FALSE: bool = false;
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
-pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
+pub struct Value<'v>(pub(crate) Pointer<'v, 'v, AValuePtr, ValueMem<'v>>);
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
 ///
@@ -62,7 +63,7 @@ pub struct Value<'v>(pub(crate) Pointer<'v, 'v, FrozenValueMem, ValueMem<'v>>);
 /// for a little bit more safety.
 #[derive(Clone, Copy, Dupe)]
 // One possible change: moving from Blackhole during GC
-pub struct FrozenValue(pub(crate) Pointer<'static, 'static, FrozenValueMem, Void>);
+pub struct FrozenValue(pub(crate) Pointer<'static, 'static, AValuePtr, Void>);
 
 // These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
 // it having variance.
@@ -71,20 +72,7 @@ unsafe impl Sync for FrozenValue {}
 
 // We care a lot about the size of these data types, so make sure they don't
 // regress
-assert_eq_size!(FrozenValueMem, [usize; 2]);
 assert_eq_size!(ValueMem, [usize; 3]);
-
-#[derive(VariantName)]
-pub(crate) enum FrozenValueMem {
-    #[allow(dead_code)] // That's the whole point of it
-    Uninitialized(Void), // Never created (see Value::Uninitialized)
-    Blackhole, // Only occurs during a GC
-    Simple(Box<dyn AValue<'static> + Send + Sync>),
-}
-
-fn simple_avalue<'a, 'v>(x: &'a dyn AValue<'static>) -> &'a dyn AValue<'v> {
-    unsafe { transmute!(&'a dyn AValue<'static>, &'a dyn AValue<'v>, x) }
-}
 
 #[derive(VariantName)]
 pub(crate) enum ValueMem<'v> {
@@ -131,34 +119,11 @@ impl<'v> ValueMem<'v> {
 
     pub(crate) fn get_ref(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => basic_ref(x),
+            Self::Str(x) => {
+                // Safe because we can promote AValue
+                unsafe { transmute!(&dyn AValue<'static>, &dyn AValue<'v>, simple_ref(x)) }
+            }
             Self::AValue(x) => &**x,
-            _ => self.unexpected("get_ref"),
-        }
-    }
-}
-
-impl FrozenValueMem {
-    fn unexpected(&self, method: &str) -> ! {
-        panic!(
-            "FrozenValueMem::{}, unexpected variant {}",
-            method,
-            self.variant_name()
-        )
-    }
-
-    fn unpack_str(&self) -> Option<&str> {
-        self.unpack_box_str().map(|x| &**x)
-    }
-
-    #[allow(clippy::borrowed_box)]
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
-        self.get_ref().as_dyn_any().downcast_ref::<Box<str>>()
-    }
-
-    fn get_ref<'v>(&self) -> &dyn AValue<'v> {
-        match self {
-            Self::Simple(x) => simple_avalue(&**x),
             _ => self.unexpected("get_ref"),
         }
     }
@@ -187,8 +152,8 @@ impl<'v> Value<'v> {
         // That property is NOT statically checked.
         let p = unsafe {
             transmute!(
-                Pointer<'static, 'static, FrozenValueMem, Void>,
-                Pointer<'v, 'static, FrozenValueMem, Void>,
+                Pointer<'static, 'static, AValuePtr, Void>,
+                Pointer<'v, 'static, AValuePtr, Void>,
                 x.0
             )
         };
@@ -199,8 +164,8 @@ impl<'v> Value<'v> {
     pub fn unpack_frozen(self) -> Option<FrozenValue> {
         unsafe {
             transmute!(
-                Option<Pointer<'v, 'v, FrozenValueMem, Void>>,
-                Option<Pointer<'static, 'static, FrozenValueMem, Void>>,
+                Option<Pointer<'v, 'v, AValuePtr, Void>>,
+                Option<Pointer<'static, 'static, AValuePtr, Void>>,
                 self.0.coerce_opt()
             )
             .map(FrozenValue)
@@ -231,7 +196,7 @@ impl<'v> Value<'v> {
     #[allow(clippy::borrowed_box)]
     pub fn unpack_box_str(self) -> Option<&'v Box<str>> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack_box_str(),
+            PointerUnpack::Ptr1(x) => x.unpack().unpack_box_str(),
             PointerUnpack::Ptr2(x) => x.unpack_box_str(),
             _ => None,
         }
@@ -240,7 +205,7 @@ impl<'v> Value<'v> {
     /// Obtain the underlying `str` if it is a string.
     pub fn unpack_str(self) -> Option<&'v str> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack_str(),
+            PointerUnpack::Ptr1(x) => x.unpack().unpack_str(),
             PointerUnpack::Ptr2(x) => x.unpack_str(),
             _ => None,
         }
@@ -249,7 +214,7 @@ impl<'v> Value<'v> {
     /// Get a pointer to a [`AValue`].
     pub fn get_ref(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.get_ref(),
+            PointerUnpack::Ptr1(x) => x.unpack(),
             PointerUnpack::Ptr2(x) => x.get_ref(),
             PointerUnpack::None => basic_ref(&VALUE_NONE),
             PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
@@ -317,7 +282,7 @@ impl FrozenValue {
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub(crate) fn unpack_str<'v>(&'v self) -> Option<&'v str> {
         match self.0.unpack_ptr1() {
-            Some(x) => x.unpack_str(),
+            Some(x) => x.unpack().unpack_str(),
             _ => None,
         }
     }
@@ -325,7 +290,7 @@ impl FrozenValue {
     /// Get a pointer to the [`AValue`] object this value represents.
     pub fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.get_ref(),
+            PointerUnpack::Ptr1(x) => x.unpack(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),
             PointerUnpack::None => basic_ref(&VALUE_NONE),
             PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
