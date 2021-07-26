@@ -71,14 +71,13 @@ unsafe impl Sync for FrozenValue {}
 
 // We care a lot about the size of these data types, so make sure they don't
 // regress
-assert_eq_size!(FrozenValueMem, [usize; 3]);
+assert_eq_size!(FrozenValueMem, [usize; 2]);
 assert_eq_size!(ValueMem, [usize; 3]);
 
 #[derive(VariantName)]
 pub(crate) enum FrozenValueMem {
     #[allow(dead_code)] // That's the whole point of it
     Uninitialized(Void), // Never created (see Value::Uninitialized)
-    Str(Box<str>),
     Blackhole, // Only occurs during a GC
     Simple(Box<dyn AValue<'static> + Send + Sync>),
 }
@@ -149,23 +148,16 @@ impl FrozenValueMem {
     }
 
     fn unpack_str(&self) -> Option<&str> {
-        match self {
-            Self::Str(x) => Some(x),
-            _ => None,
-        }
+        self.unpack_box_str().map(|x| &**x)
     }
 
     #[allow(clippy::borrowed_box)]
     fn unpack_box_str(&self) -> Option<&Box<str>> {
-        match self {
-            Self::Str(x) => Some(x),
-            _ => None,
-        }
+        self.get_ref().as_dyn_any().downcast_ref::<Box<str>>()
     }
 
     fn get_ref<'v>(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => basic_ref(x),
             Self::Simple(x) => simple_avalue(&**x),
             _ => self.unexpected("get_ref"),
         }

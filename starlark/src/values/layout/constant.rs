@@ -16,6 +16,7 @@
  */
 
 use crate::values::layout::{
+    avalue::simple,
     pointer::Pointer,
     value::{FrozenValue, FrozenValueMem},
 };
@@ -45,7 +46,7 @@ impl ConstFrozenValue {
     pub fn unpack(&'static self) -> FrozenValue {
         let v = self
             .1
-            .get_or_init(|| FrozenValueMem::Str(Box::from(self.0)));
+            .get_or_init(|| FrozenValueMem::Simple(box simple(Box::from(self.0))));
         FrozenValue(Pointer::new_ptr1(v))
     }
 }

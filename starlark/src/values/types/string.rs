@@ -22,8 +22,8 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
-        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue,
-        Value, ValueError, ValueLike,
+        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
+        UnpackValue, Value, ValueError, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce};
@@ -76,6 +76,8 @@ impl<'v> UnpackValue<'v> for String {
 pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
     x.hash(state)
 }
+
+impl SimpleValue for Box<str> {}
 
 impl<'v> StarlarkValue<'v> for Box<str> {
     starlark_type!(STRING_TYPE);

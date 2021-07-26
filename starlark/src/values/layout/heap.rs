@@ -129,7 +129,7 @@ impl FrozenHeap {
     }
 
     pub(crate) fn alloc_str(&self, x: Box<str>) -> FrozenValue {
-        self.alloc_raw(FrozenValueMem::Str(x))
+        self.alloc_raw(FrozenValueMem::Simple(box simple(x)))
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -194,7 +194,7 @@ impl Freezer {
         let v = unsafe { ptr::replace(value_mut, ValueMem::Forward(fv)) };
 
         match v {
-            ValueMem::Str(i) => *fvmem = FrozenValueMem::Str(i),
+            ValueMem::Str(x) => *fvmem = FrozenValueMem::Simple(box simple(x)),
             ValueMem::AValue(x) => *fvmem = FrozenValueMem::Simple(x.into_simple(self)?),
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
