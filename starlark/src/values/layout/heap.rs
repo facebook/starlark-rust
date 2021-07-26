@@ -221,7 +221,6 @@ impl Freezer {
         let v = unsafe { ptr::replace(value_mut, ValueMem::Forward(fv)) };
 
         match v {
-            ValueMem::Str(x) => reservation.0.fill(simple(x)),
             ValueMem::AValue(x) => x.fill_simple(reservation, self)?,
             _ => {
                 // We don't expect Unitialized, because that is not a real value.
@@ -271,7 +270,7 @@ impl Heap {
     }
 
     pub(crate) fn alloc_str(&self, x: Box<str>) -> Value {
-        self.alloc_raw(ValueMem::Str(x))
+        self.alloc_simple(x)
     }
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].

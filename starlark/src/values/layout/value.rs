@@ -32,7 +32,7 @@
 use crate::values::{
     layout::{
         arena2::AValuePtr,
-        avalue::{basic_ref, simple_ref, AValue},
+        avalue::{basic_ref, AValue},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
     },
@@ -81,8 +81,6 @@ pub(crate) enum ValueMem<'v> {
     // and give a workable error message
     #[allow(dead_code)] // That's the whole point of it
     Uninitialized(Void),
-    // A literal string
-    Str(Box<str>),
     // Occurs during freezing (for the to-space) - never encountered normally.
     Forward(FrozenValue),
     // Occurs during GC (for the to-space) - never encountered normally.
@@ -104,25 +102,15 @@ impl<'v> ValueMem<'v> {
 
     #[allow(clippy::borrowed_box)]
     fn unpack_box_str(&self) -> Option<&Box<str>> {
-        match self {
-            Self::Str(x) => Some(x),
-            _ => None,
-        }
+        self.get_ref().unpack_box_str()
     }
 
     fn unpack_str(&self) -> Option<&str> {
-        match self {
-            Self::Str(x) => Some(x),
-            _ => None,
-        }
+        self.get_ref().unpack_str()
     }
 
     pub(crate) fn get_ref(&self) -> &dyn AValue<'v> {
         match self {
-            Self::Str(x) => {
-                // Safe because we can promote AValue
-                unsafe { transmute!(&dyn AValue<'static>, &dyn AValue<'v>, simple_ref(x)) }
-            }
             Self::AValue(x) => &**x,
             _ => self.unexpected("get_ref"),
         }

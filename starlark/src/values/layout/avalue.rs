@@ -89,12 +89,6 @@ pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
     x
 }
 
-pub(crate) fn simple_ref<T: SimpleValue>(x: &T) -> &dyn AValue<'static> {
-    // These are the same representation, so safe to convert
-    let x: &Wrapper<Simple, T> = unsafe { cast::ptr(x) };
-    x
-}
-
 pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> + Send + Sync {
     Wrapper(Simple, x)
 }
