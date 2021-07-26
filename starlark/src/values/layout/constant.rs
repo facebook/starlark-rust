@@ -15,11 +15,7 @@
  * limitations under the License.
  */
 
-use crate::values::layout::{
-    avalue::simple,
-    pointer::Pointer,
-    value::{FrozenValue, FrozenValueMem},
-};
+use crate::values::{layout::value::FrozenValue, OwnedFrozenValue};
 use once_cell::sync::OnceCell;
 
 /// Define a `&'static` [`str`] that can be converted to a [`FrozenValue`].
@@ -34,7 +30,7 @@ use once_cell::sync::OnceCell;
 ///     RES.unpack()
 /// }
 /// ```
-pub struct ConstFrozenValue(&'static str, OnceCell<FrozenValueMem>);
+pub struct ConstFrozenValue(&'static str, OnceCell<OwnedFrozenValue>);
 
 impl ConstFrozenValue {
     /// Create a new [`ConstFrozenValue`].
@@ -44,9 +40,8 @@ impl ConstFrozenValue {
 
     /// Obtain the underlying [`FrozenValue`]. Will only allocate on the first call.
     pub fn unpack(&'static self) -> FrozenValue {
-        let v = self
-            .1
-            .get_or_init(|| FrozenValueMem::Simple(box simple(Box::from(self.0))));
-        FrozenValue(Pointer::new_ptr1(v))
+        let v = self.1.get_or_init(|| OwnedFrozenValue::alloc(self.0));
+        // Safe because we keep the ownership in the OnceCell forever
+        unsafe { v.unchecked_frozen_value() }
     }
 }
