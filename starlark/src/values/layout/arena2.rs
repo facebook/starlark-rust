@@ -26,7 +26,7 @@ use std::{
     alloc::Layout,
     any::TypeId,
     marker::PhantomData,
-    mem,
+    mem::{self, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
 };
 
@@ -139,43 +139,48 @@ impl Arena2 {
         }
     }
 
-    fn iter_chunks(&mut self) -> impl Iterator<Item = Vec<&AValuePtr>> {
-        self.0.iter_allocated_chunks().map(|chunk| {
-            // We only allocate trait ptr then a payload immediately after
-            // so find the first trait ptr, see how big it is, and keep skipping.
-            let mut res = Vec::new();
-            let mut p = chunk.as_ptr();
-            let end = unsafe { chunk.as_ptr().add(chunk.len()) };
-            while p < end {
-                let ptr: &AValuePtr = unsafe { &*(p as *const AValuePtr) };
-                res.push(ptr);
-                let n = ptr.unpack().memory_size();
-                unsafe {
-                    p = p.add(mem::size_of::<AValuePtr>() + n);
-                    // We know the alignment requirements will never be greater than AValuePtr
-                    // since we check that in allocate_empty
-                    p = p.add(p.align_offset(mem::align_of::<AValuePtr>()));
-                }
+    fn iter_chunk<'a>(chunk: &'a [MaybeUninit<u8>], mut f: impl FnMut(&'a AValuePtr)) {
+        // We only allocate trait ptr then a payload immediately after
+        // so find the first trait ptr, see how big it is, and keep skipping.
+        let mut p = chunk.as_ptr();
+        let end = unsafe { chunk.as_ptr().add(chunk.len()) };
+        while p < end {
+            let ptr: &AValuePtr = unsafe { &*(p as *const AValuePtr) };
+            f(ptr);
+            let n = ptr.unpack().memory_size();
+            unsafe {
+                p = p.add(mem::size_of::<AValuePtr>() + n);
+                // We know the alignment requirements will never be greater than AValuePtr
+                // since we check that in allocate_empty
+                p = p.add(p.align_offset(mem::align_of::<AValuePtr>()));
             }
-            res
-        })
+        }
     }
 
-    // Iterate over the chunks in the heap in the order they
+    // Iterate over the values in the heap in the order they
     // were added.
     // Requires relying on internal bumpalo invariants, since
     // there is no spec to the resulting order.
+    #[allow(dead_code)] // Used in tests, will be used in heap profiling
     pub fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValuePtr)) {
-        let chunks = self.iter_chunks().collect::<Vec<_>>();
-        chunks
-            .iter()
-            .rev()
-            .for_each(|xs| xs.iter().rev().for_each(|x| f(x)))
+        // It seems that we get the chunks from most newest to oldest.
+        // And within each chunk, the values are filled newest to oldest.
+        // So need to do two sets of reversing.
+        let chunks = self.0.iter_allocated_chunks().collect::<Vec<_>>();
+        // Use a single buffer to reduce allocations, but clear it after use
+        let mut buffer = Vec::new();
+        for chunk in chunks.iter().rev() {
+            Self::iter_chunk(chunk, |x| buffer.push(x));
+            buffer.iter().rev().for_each(|x| f(*x));
+            buffer.clear();
+        }
     }
 
-    // FIXME: Could optimise if we don't care about ordering (e.g. drop)
-    pub fn for_each_unordered<'a>(&'a mut self, f: impl FnMut(&'a AValuePtr)) {
-        self.for_each_ordered(f)
+    // Iterate over the values in the heap in any order
+    pub fn for_each_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValuePtr)) {
+        self.0
+            .iter_allocated_chunks()
+            .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
     }
 }
 
@@ -190,7 +195,6 @@ impl AValuePtr {
 
 impl Drop for Arena2 {
     fn drop(&mut self) {
-        // todo!() drop with a simpler loop
         self.for_each_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
             let x = x.unpack() as *const dyn AValue as *mut dyn AValue;
@@ -256,6 +260,9 @@ mod test {
             assert_eq!(s, format!("\"{}\"", j));
             j += 1;
         });
+        assert_eq!(j, LIMIT);
+        j = 0;
+        arena.for_each_unordered(|_| j += 1);
         assert_eq!(j, LIMIT);
     }
 
