@@ -257,7 +257,7 @@ impl<'v> BoundMethod<'v> {
 
 impl<'v> ComplexValue<'v> for BoundMethod<'v> {
     type Frozen = FrozenBoundMethod;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(BoundMethodGen {
             method: self.method.freeze(freezer)?,
             this: self.this.freeze(freezer)?,

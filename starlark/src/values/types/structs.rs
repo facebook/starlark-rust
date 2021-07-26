@@ -98,7 +98,7 @@ impl<'v> StructBuilder<'v> {
 
 impl<'v> ComplexValue<'v> for Struct<'v> {
     type Frozen = FrozenStruct;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
 
         for (k, v) in self.fields.into_iter_hashed() {

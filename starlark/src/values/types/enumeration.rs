@@ -98,7 +98,7 @@ starlark_complex_value!(pub EnumValue);
 
 impl<'v> ComplexValue<'v> for EnumType<'v> {
     type Frozen = FrozenEnumType;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
         for (k, t) in self.elements.into_iter_hashed() {
             elements.insert_hashed(k.freeze(freezer)?, t.freeze(freezer)?);
@@ -113,7 +113,7 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
 
 impl<'v> ComplexValue<'v> for EnumValue<'v> {
     type Frozen = FrozenEnumValue;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenEnumValue {
             typ: self.typ.freeze(freezer)?,
             value: self.value.freeze(freezer)?,

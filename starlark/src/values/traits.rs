@@ -188,7 +188,7 @@ unsafe impl<'v> Trace<'v> for std::time::Instant {
 ///
 /// impl<'v> ComplexValue<'v> for One<'v> {
 ///     type Frozen = FrozenOne;
-///     fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+///     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
 ///         Ok(OneGen(self.0.freeze(freezer)?))
 ///     }
 /// }
@@ -254,7 +254,7 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
 
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen>;
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen>;
 }
 
 /// A trait representing Starlark values which are simple - they

@@ -164,7 +164,7 @@ unsafe impl<'v> Trace<'v> for Partial<'v> {
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
     type Frozen = FrozenPartial;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenPartial {
             func: self.func.freeze(freezer)?,
             pos: self.pos.try_map(|x| x.freeze(freezer))?,

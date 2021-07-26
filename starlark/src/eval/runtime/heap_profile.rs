@@ -40,7 +40,7 @@ struct CallEnter<'v>(Value<'v>, Instant);
 
 impl<'v> ComplexValue<'v> for CallEnter<'v> {
     type Frozen = FrozenTuple;
-    fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         unreachable!("Should never end up freezing a CallEnter")
     }
 }

@@ -167,7 +167,7 @@ impl FrozenList {
 
 impl<'v> ComplexValue<'v> for ListGen<RefCell<List<'v>>> {
     type Frozen = ListGen<FrozenList>;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(ListGen(FrozenList {
             content: self
                 .0

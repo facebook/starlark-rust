@@ -24,11 +24,7 @@ use crate::{
         StarlarkValue, Tracer, Value,
     },
 };
-use gazebo::{
-    any::AnyLifetime,
-    cast,
-    coerce::{coerce, Coerce},
-};
+use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
 use std::{
     any::TypeId,
     cmp::Ordering,
@@ -197,8 +193,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         reservation: HiddenReservation,
         freezer: &Freezer,
     ) -> anyhow::Result<()> {
-        let x: Box<T> = coerce(self);
-        let res = x.freeze(freezer)?;
+        let res = self.1.freeze(freezer)?;
         reservation.0.fill(simple(res));
         Ok(())
     }

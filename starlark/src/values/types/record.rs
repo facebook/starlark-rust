@@ -113,15 +113,6 @@ impl<V> FieldGen<V> {
     }
 }
 
-impl<'v> Field<'v> {
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenField> {
-        Ok(FrozenField {
-            typ: self.typ.freeze(freezer)?,
-            default: self.default.into_try_map(|x| x.freeze(freezer))?,
-        })
-    }
-}
-
 fn collect_repr_record<'s, 't, V: 't>(
     items: impl Iterator<Item = (&'s String, &'t V)>,
     add: impl Fn(&'t V, &mut String),
@@ -222,8 +213,11 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
 
 impl<'v> ComplexValue<'v> for Field<'v> {
     type Frozen = FrozenField;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        (*self).freeze(freezer)
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(FrozenField {
+            typ: self.typ.freeze(freezer)?,
+            default: self.default.into_try_map(|x| x.freeze(freezer))?,
+        })
     }
 }
 
@@ -256,7 +250,7 @@ where
 
 impl<'v> ComplexValue<'v> for RecordType<'v> {
     type Frozen = FrozenRecordType;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
         for (k, t) in self.fields.into_iter_hashed() {
             fields.insert_hashed(k, (t.0.freeze(freezer)?, t.1));
@@ -361,7 +355,7 @@ where
 
 impl<'v> ComplexValue<'v> for Record<'v> {
     type Frozen = FrozenRecord;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenRecord {
             typ: self.typ.freeze(freezer)?,
             values: self.values.try_map(|v| v.freeze(freezer))?,

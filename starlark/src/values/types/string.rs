@@ -354,7 +354,7 @@ where
 
 impl<'v> ComplexValue<'v> for StringIterator<'v> {
     type Frozen = FrozenStringIterator;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenStringIterator {
             string: freezer.freeze(self.string)?,
             produce_char: self.produce_char,

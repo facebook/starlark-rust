@@ -242,7 +242,7 @@ unsafe impl<'v> Trace<'v> for Def<'v> {
 impl<'v> ComplexValue<'v> for Def<'v> {
     type Frozen = FrozenDef;
 
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let parameters = self.parameters.freeze(freezer)?;
         let parameter_types = self
             .parameter_types

@@ -94,7 +94,7 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 
 impl<'v> ComplexValue<'v> for Tuple<'v> {
     type Frozen = FrozenTuple;
-    fn freeze(self: Box<Self>, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenTuple {
             content: self.content.into_try_map(|v| v.freeze(freezer))?,
         })

@@ -46,7 +46,7 @@ pub(crate) struct ValueRef<'v>(pub(crate) Cell<Option<Value<'v>>>);
 impl<'v> ComplexValue<'v> for ValueRef<'v> {
     type Frozen = FrozenTuple;
 
-    fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+    fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         unreachable!("Should never be freezing a ValueRef on the heap")
     }
 }

@@ -848,7 +848,7 @@ fn test_export_as() {
 
     impl<'v> ComplexValue<'v> for Exporter<RefCell<String>> {
         type Frozen = Exporter<String>;
-        fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
             Ok(Exporter {
                 named: self.named.into_inner(),
                 value: self.value,
@@ -1758,7 +1758,7 @@ fn test_label_assign() {
 
     impl<'v> ComplexValue<'v> for Wrapper<'v> {
         type Frozen = FrozenTuple;
-        fn freeze(self: Box<Self>, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
             Ok(FrozenTuple::default())
         }
     }
