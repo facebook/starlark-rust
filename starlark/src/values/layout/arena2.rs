@@ -17,16 +17,18 @@
 
 //! A heap storing AValue traits. The heap is a sequence of the
 //! AValue vtable, followed by the payload.
+//! Every payload must be at least 1 usize large (even ZST).
 //! Some elements are created using reserve, in which case they point
 //! to a BlackHole until they are filled in.
 
-use crate::values::layout::avalue::{AValue, BlackHole, BlackHole0};
+use crate::values::layout::avalue::{AValue, BlackHole};
 use bumpalo::Bump;
 use std::{
     alloc::Layout,
     any::TypeId,
+    cmp,
     marker::PhantomData,
-    mem::{self, MaybeUninit},
+    mem::{self, ManuallyDrop, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
 };
 
@@ -75,14 +77,21 @@ impl Arena2 {
         'v2: 'v,
         T: AValue<'v2>,
     {
-        let layout = Layout::new::<(AValuePtr, T)>();
+        union OrUsize<T> {
+            _a: ManuallyDrop<T>,
+            // The usize is used for blackholing, so ensure it's
+            // always enough space.
+            // For ZST this will mean we double the size. But no one stores ZST's
+            // in a heap...
+            _b: usize,
+        }
+
+        let layout = Layout::new::<(AValuePtr, OrUsize<T>)>();
         assert_eq!(
             layout.align(),
             mem::align_of::<AValuePtr>(),
             "Unexpected alignment in Starlark arena"
         );
-        // Make sure there is enough space for the BlackHole to go
-        let layout = layout.pad_to_align();
         let p = self.0.alloc_layout(layout);
         p.as_ptr() as *mut (AValuePtr, T)
     }
@@ -96,25 +105,13 @@ impl Arena2 {
         let p = self.alloc_empty::<T>();
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
-        let sz = mem::size_of::<T>();
-        if sz == 0 {
-            // For ZST we have space for a vtable, but nothing more, so use blackhole0
-            // which guarantees it is also a ZST
-            let x = BlackHole0;
-            let t: &dyn AValue<'static> = &x;
-            let metadata: DynMetadata<dyn AValue<'static>> = metadata(t);
-            unsafe {
-                ptr::write(p as *mut AValuePtr, AValuePtr(metadata))
-            };
-        } else {
-            // We must have at least one pointer worth of space, so can write in a one-ST blackhole
-            let x = BlackHole(sz);
-            let t: &dyn AValue<'static> = &x;
-            let metadata: DynMetadata<dyn AValue<'static>> = metadata(t);
-            unsafe {
-                ptr::write(p as *mut (AValuePtr, BlackHole), (AValuePtr(metadata), x))
-            };
-        }
+        // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
+        let x = BlackHole(mem::size_of::<T>());
+        let t: &dyn AValue<'static> = &x;
+        let metadata: DynMetadata<dyn AValue<'static>> = metadata(t);
+        unsafe {
+            ptr::write(p as *mut (AValuePtr, BlackHole), (AValuePtr(metadata), x))
+        };
 
         Reservation {
             typ: T::static_type_id(),
@@ -147,7 +144,7 @@ impl Arena2 {
         while p < end {
             let ptr: &AValuePtr = unsafe { &*(p as *const AValuePtr) };
             f(ptr);
-            let n = ptr.unpack().memory_size();
+            let n = cmp::max(ptr.unpack().memory_size(), mem::size_of::<usize>());
             unsafe {
                 p = p.add(mem::size_of::<AValuePtr>() + n);
                 // We know the alignment requirements will never be greater than AValuePtr

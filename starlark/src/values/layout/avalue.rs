@@ -226,32 +226,7 @@ unsafe impl<'v, Mode: 'static, T: AnyLifetime<'v>> AnyLifetime<'v> for Wrapper<M
 }
 
 #[derive(Debug, AnyLifetime)]
-pub(crate) struct BlackHole0;
-
-#[derive(Debug, AnyLifetime)]
 pub(crate) struct BlackHole(pub(crate) usize);
-
-impl<'v> AValue<'v> for BlackHole0 {
-    fn memory_size(&self) -> usize {
-        0
-    }
-    fn trace(&mut self, _tracer: &Tracer<'v>) {
-        unreachable!()
-    }
-    fn reserve_simple<'a>(&self, _freezer: &'a Freezer) -> HiddenReservation<'a> {
-        unreachable!()
-    }
-    fn fill_simple(
-        self: Box<Self>,
-        _reservation: HiddenReservation,
-        _freezer: &Freezer,
-    ) -> anyhow::Result<()> {
-        unreachable!()
-    }
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
-        unreachable!()
-    }
-}
 
 impl<'v> AValue<'v> for BlackHole {
     fn memory_size(&self) -> usize {
@@ -274,10 +249,6 @@ impl<'v> AValue<'v> for BlackHole {
     fn unpack_box_str(&self) -> Option<&Box<str>> {
         unreachable!()
     }
-}
-
-impl<'v> StarlarkValue<'v> for BlackHole0 {
-    starlark_type!("BlackHole0");
 }
 
 impl<'v> StarlarkValue<'v> for BlackHole {
