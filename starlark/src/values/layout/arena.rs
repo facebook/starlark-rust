@@ -111,7 +111,6 @@ impl Arena {
         }
     }
 
-    #[allow(clippy::mut_from_ref)] // This is fine for arenas
     pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValuePtr {
         let p = self.alloc_empty::<T>();
         unsafe {
