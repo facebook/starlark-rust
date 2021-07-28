@@ -55,10 +55,7 @@ pub(crate) struct Reservation<'v> {
 }
 
 impl<'v> Reservation<'v> {
-    pub(crate) fn fill<'v2, T: AValue<'v2>>(self, x: T)
-    where
-        'v2: 'v,
-    {
+    pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
         assert_eq!(self.typ, T::static_type_id());
         unsafe {
             let p = self.pointer as *mut (AValuePtr, T);
@@ -76,11 +73,7 @@ impl Arena {
         self.0.allocated_bytes()
     }
 
-    fn alloc_empty<'v, 'v2, T>(&'v self) -> *mut (AValuePtr, T)
-    where
-        'v2: 'v,
-        T: AValue<'v2>,
-    {
+    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> *mut (AValuePtr, T) {
         union OrUsize<T> {
             _a: ManuallyDrop<T>,
             // The usize is used for blackholing, so ensure it's
@@ -101,11 +94,7 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub fn reserve<'v, 'v2, T>(&'v self) -> Reservation<'v>
-    where
-        'v2: 'v,
-        T: AValue<'v2>,
-    {
+    pub fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
         let p = self.alloc_empty::<T>();
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
@@ -123,11 +112,7 @@ impl Arena {
     }
 
     #[allow(clippy::mut_from_ref)] // This is fine for arenas
-    pub(crate) fn alloc<'v, 'v2, T>(&'v self, x: T) -> &'v AValuePtr
-    where
-        'v2: 'v,
-        T: AValue<'v2>,
-    {
+    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValuePtr {
         let p = self.alloc_empty::<T>();
         unsafe {
             ptr::write(p, (AValuePtr::new(&x), x));
@@ -256,11 +241,7 @@ mod test {
     }
 
     fn reserve_str<'v>(arena: &'v Arena) -> Reservation<'v> {
-        fn f<'v, 'v2, T>(arena: &'v Arena, _: T) -> Reservation<'v>
-        where
-            'v2: 'v,
-            T: AValue<'v2>,
-        {
+        fn f<'v, 'v2: 'v, T: AValue<'v2>>(arena: &'v Arena, _: T) -> Reservation<'v> {
             arena.reserve::<T>()
         }
         f(arena, mk_str(""))

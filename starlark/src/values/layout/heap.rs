@@ -147,11 +147,10 @@ pub struct Freezer(FrozenHeap, FrozenValue, Option<Reservation<'static>>);
 
 impl Freezer {
     pub(crate) fn new<T: SimpleValue>(heap: FrozenHeap) -> Self {
-        fn reserve<'v, 'v2, T>(heap: &'v FrozenHeap, _ty: Option<T>) -> Reservation<'v>
-        where
-            'v2: 'v,
-            T: AValue<'v2>,
-        {
+        fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(
+            heap: &'v FrozenHeap,
+            _ty: Option<T>,
+        ) -> Reservation<'v> {
             heap.arena.reserve::<T>()
         }
 
@@ -187,10 +186,7 @@ impl Freezer {
         val.alloc_frozen_value(&self.0)
     }
 
-    pub(crate) fn reserve<'v, 'v2, T: AValue<'v2>>(&'v self) -> (FrozenValue, Reservation<'v>)
-    where
-        'v2: 'v,
-    {
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> (FrozenValue, Reservation<'v>) {
         let r = self.0.arena.reserve::<T>();
         let fv = FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(r.ptr()) }));
         (fv, r)
@@ -222,10 +218,7 @@ impl Heap {
         self.arena.borrow().allocated_bytes()
     }
 
-    fn alloc_raw<'v, 'v2>(&'v self, x: impl AValue<'v2> + 'v2) -> Value<'v>
-    where
-        'v2: 'v,
-    {
+    fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
         let v: &AValuePtr = arena.alloc(x);
@@ -294,11 +287,9 @@ impl<'v> Tracer<'v> {
         *value = self.adjust(*value)
     }
 
-    pub(crate) fn reserve<'a, 'v2, T: AValue<'v2>>(&'a self) -> (Value<'v>, Reservation<'a>)
-    where
-        'v2: 'v,
-        'v2: 'a,
-    {
+    pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
+        &'a self,
+    ) -> (Value<'v>, Reservation<'a>) {
         let r = self.arena.reserve::<T>();
         let v = Value(Pointer::new_ptr2(unsafe { cast::ptr_lifetime(r.ptr()) }));
         (v, r)
