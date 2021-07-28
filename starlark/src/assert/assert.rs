@@ -143,12 +143,12 @@ fn test_methods(builder: &mut GlobalsBuilder) {
     }
 
     fn assert_type(v: Value, ty: Value) -> NoneType {
-        v.check_type(ty, Some("v"))?;
+        v.check_type(ty, Some("v"), heap)?;
         Ok(NoneType)
     }
 
     fn is_type(v: Value, ty: Value) -> bool {
-        v.is_type(ty)
+        v.is_type(ty, heap)
     }
 }
 

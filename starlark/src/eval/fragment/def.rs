@@ -139,7 +139,7 @@ impl Compiler<'_> {
                 if let Some(t) = x.ty() {
                     let v = t(eval)?;
                     let name = x.name().unwrap_or("unknown").to_owned();
-                    parameter_types.push((i, name, v, TypeCompiled::new(v)?));
+                    parameter_types.push((i, name, v, TypeCompiled::new(v, eval.heap())?));
                 }
 
                 match x {
@@ -156,7 +156,7 @@ impl Compiler<'_> {
                 None => None,
                 Some(v) => {
                     let v = v(eval)?;
-                    Some((v, TypeCompiled::new(v)?))
+                    Some((v, TypeCompiled::new(v, eval.heap())?))
                 }
             };
             Def::new(

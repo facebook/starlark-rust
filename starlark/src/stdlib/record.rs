@@ -38,7 +38,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
                 None => Field::new(v, None),
                 Some(v) => v.dupe(),
             };
-            let compiled = TypeCompiled::new(field.typ)?;
+            let compiled = TypeCompiled::new(field.typ, heap)?;
             mp.insert_hashed(k, (field, compiled));
         }
         Ok(RecordType::new(mp, heap))

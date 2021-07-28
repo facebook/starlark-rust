@@ -21,7 +21,7 @@ use crate::{
         dict::{Dict, ValueStr},
         list::List,
         tuple::Tuple,
-        Trace, Tracer, Value,
+        Heap, Trace, Tracer, Value,
     },
 };
 use gazebo::{coerce::Coerce, prelude::*};
@@ -36,6 +36,10 @@ enum TypingError {
     /// The given type annotation does not represent a type
     #[error("Type `{0}` is not a valid type annotation")]
     InvalidTypeAnnotation(String),
+    /// The given type annotation does not exist, but the user might have forgotten quotes around
+    /// it
+    #[error(r#"Found `{0}` instead of a valid type annotation. Perhaps you meant `"{1}"`?"#)]
+    PerhapsYouMeant(String, String),
 }
 
 pub(crate) struct TypeCompiled(Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>);
@@ -55,7 +59,7 @@ impl Debug for TypeCompiled {
 }
 
 impl TypeCompiled {
-    pub(crate) fn new(ty: Value) -> anyhow::Result<Self> {
+    pub(crate) fn new<'h>(ty: Value<'h>, heap: &'h Heap) -> anyhow::Result<Self> {
         // Types that are "" are start with "_" are wildcard - they match everything
         fn is_wildcard(x: &str) -> bool {
             x == "" || x.starts_with('_')
@@ -70,7 +74,10 @@ impl TypeCompiled {
             }
         }
 
-        fn f(ty: Value) -> anyhow::Result<Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>> {
+        fn f<'h>(
+            ty: Value<'h>,
+            heap: &'h Heap,
+        ) -> anyhow::Result<Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>> {
             if let Some(s) = ty.unpack_str() {
                 if is_wildcard(s) {
                     Ok(box |_| true)
@@ -94,7 +101,7 @@ impl TypeCompiled {
             } else if ty.is_none() {
                 Ok(box |v| v.is_none())
             } else if let Some(t) = Tuple::from_value(ty) {
-                let ts = t.content.try_map(|t| f(*t))?;
+                let ts = t.content.try_map(|t| f(*t, heap))?;
                 Ok(box move |v| match Tuple::from_value(v) {
                     Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| t(v)),
                     _ => false,
@@ -110,7 +117,7 @@ impl TypeCompiled {
                             // Any type - so avoid the inner iteration
                             Ok(box |v| List::from_value(v).is_some())
                         } else {
-                            let t = f(t)?;
+                            let t = f(t, heap)?;
                             Ok(box move |v| match List::from_value(v) {
                                 None => false,
                                 Some(v) => v.iter().all(|v| t(v)),
@@ -119,13 +126,13 @@ impl TypeCompiled {
                     }
                     2 => {
                         // A union type, can match either - special case of the arbitrary choice to go slightly faster
-                        let t1 = f(t.content[0])?;
-                        let t2 = f(t.content[1])?;
+                        let t1 = f(t.content[0], heap)?;
+                        let t2 = f(t.content[1], heap)?;
                         Ok(box move |v| t1(v) || t2(v))
                     }
                     _ => {
                         // A union type, can match any
-                        let ts = t.content.try_map(|t| f(*t))?;
+                        let ts = t.content.try_map(|t| f(*t, heap))?;
                         Ok(box move |v| ts.iter().any(|t| t(v)))
                     }
                 }
@@ -134,8 +141,8 @@ impl TypeCompiled {
                     Ok(box |v| Dict::from_value(v).is_some())
                 } else if let Some((tk, tv)) = unpack_singleton_dictionary(&t) {
                     // Dict of the form {k: v} must all match the k/v types
-                    let tk = f(tk)?;
-                    let tv = f(tv)?;
+                    let tk = f(tk, heap)?;
+                    let tv = f(tv, heap)?;
                     Ok(box move |v| match Dict::from_value(v) {
                         None => false,
                         Some(v) => v.content.iter().all(|(k, v)| tk(*k) && tv(*v)),
@@ -154,7 +161,7 @@ impl TypeCompiled {
                                 }
                                 Some(s) => Hashed::new_unchecked(k.hash(), s.to_owned()),
                             };
-                            let kt = f(kt)?;
+                            let kt = f(kt, heap)?;
                             Ok((k_str, kt))
                         })
                         .collect::<anyhow::Result<Vec<_>>>()?;
@@ -179,17 +186,25 @@ impl TypeCompiled {
                     })
                 }
             } else {
-                Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into())
+                Err(invalid_type_annotation(ty, heap).into())
             }
         }
 
-        Ok(Self(f(ty)?))
+        Ok(Self(f(ty, heap)?))
+    }
+}
+
+fn invalid_type_annotation<'h>(ty: Value<'h>, heap: &'h Heap) -> TypingError {
+    if let Some(name) = ty.get_attr("type", heap).and_then(|(_, v)| v.unpack_str()) {
+        TypingError::PerhapsYouMeant(ty.to_str(), name.into())
+    } else {
+        TypingError::InvalidTypeAnnotation(ty.to_str())
     }
 }
 
 impl<'v> Value<'v> {
-    pub(crate) fn is_type(self, ty: Value<'v>) -> anyhow::Result<bool> {
-        Ok(TypeCompiled::new(ty)?.0(self))
+    pub(crate) fn is_type(self, ty: Value<'v>, heap: &'v Heap) -> anyhow::Result<bool> {
+        Ok(TypeCompiled::new(ty, heap)?.0(self))
     }
 
     #[inline(never)]
@@ -206,8 +221,13 @@ impl<'v> Value<'v> {
         .into())
     }
 
-    pub(crate) fn check_type(self, ty: Value<'v>, arg_name: Option<&str>) -> anyhow::Result<()> {
-        if self.is_type(ty)? {
+    pub(crate) fn check_type(
+        self,
+        ty: Value<'v>,
+        arg_name: Option<&str>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<()> {
+        if self.is_type(ty, heap)? {
             Ok(())
         } else {
             Self::check_type_error(self, ty, arg_name)
@@ -250,6 +270,20 @@ f(8) == False"#,
         a.fails(
             "def f(i: bool.type):\n pass\nf(1)",
             &["type annotation", "`1`", "`int`", "`bool`", "`i`"],
+        );
+        // Type errors should be caught when the user forgets quotes around a valid type
+        a.fail("def f(v: bool):\n pass\n", r#"Perhaps you meant `"bool"`"#);
+        a.fails(
+            r#"Foo = record(value=int.type)
+def f(v: bool.type) -> Foo:
+    return Foo(value=1)"#,
+            &[r#"record(value=field("int"))"#, "Foo"],
+        );
+        a.fails(
+            r#"Bar = enum("bar")
+def f(v: Bar):
+  pass"#,
+            &[r#"enum("bar")"#, "Bar"],
         );
         // Type errors should be caught in return positions
         a.fails(
