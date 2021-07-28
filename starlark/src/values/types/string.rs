@@ -28,6 +28,7 @@ use crate::{
 };
 use gazebo::{any::AnyLifetime, coerce::Coerce};
 use std::{
+    cmp,
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -288,9 +289,9 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
-                let mut result = String::new();
+                let mut result = String::with_capacity(self.len() * cmp::max(0, l) as usize);
                 for _i in 0..l {
-                    result += self
+                    result.push_str(self)
                 }
                 Ok(heap.alloc(result))
             }
