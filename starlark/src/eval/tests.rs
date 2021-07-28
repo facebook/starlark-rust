@@ -1951,3 +1951,48 @@ fn test_go() {
         ],
     ));
 }
+
+#[test]
+fn test_derive_attrs() {
+    #[derive(Debug, StarlarkAttrs)]
+    struct Example {
+        hello: String,
+        #[starlark(skip)]
+        answer: i64,
+        #[starlark(clone)]
+        nested: Nested,
+    }
+    starlark_simple_value!(Example);
+    impl<'v> StarlarkValue<'v> for Example {
+        starlark_type!("example");
+        starlark_attrs!();
+    }
+
+    #[derive(Debug, Clone, StarlarkAttrs)]
+    struct Nested {
+        foo: String,
+    }
+    starlark_simple_value!(Nested);
+    impl<'v> StarlarkValue<'v> for Nested {
+        starlark_type!("nested");
+        starlark_attrs!();
+    }
+
+    let mut a = Assert::new();
+    a.globals_add(|gb| {
+        gb.set(
+            "example",
+            Example {
+                hello: "world".to_owned(),
+                answer: 42,
+                nested: Nested {
+                    foo: "bar".to_owned(),
+                },
+            },
+        )
+    });
+    a.eq("example.hello", "\"world\"");
+    a.eq("dir(example)", "[\"hello\", \"nested\"]");
+    a.is_true("not hasattr(example, \"answer\")");
+    a.eq("example.nested.foo", "\"bar\"");
+}
