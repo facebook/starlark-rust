@@ -20,8 +20,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        layout::arena2::Reservation, ComplexValue, ConstFrozenValue, Freezer, Heap, SimpleValue,
-        StarlarkValue, Tracer, Value,
+        layout::arena2::AValuePtr, ComplexValue, ConstFrozenValue, Freezer, FrozenValue, Heap,
+        SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
@@ -32,10 +32,6 @@ use std::{
     mem,
 };
 
-/// Occurs in "private" AValue methods, so has to be public, but don't tell anyone
-#[doc(hidden)]
-pub struct HiddenReservation<'v>(pub(crate) Reservation<'v>);
-
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub trait AValue<'v>: StarlarkValue<'v> {
@@ -45,17 +41,10 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     fn memory_size(&self) -> usize;
 
     #[doc(hidden)]
-    fn trace(&mut self, tracer: &Tracer<'v>);
+    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
 
     #[doc(hidden)]
-    fn reserve_simple<'a>(&self, freezer: &'a Freezer) -> HiddenReservation<'a>;
-
-    #[doc(hidden)]
-    fn fill_simple(
-        self: Box<Self>,
-        reservation: HiddenReservation,
-        freezer: &Freezer,
-    ) -> anyhow::Result<()>;
+    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v>;
 
     fn unpack_str(&self) -> Option<&str> {
         self.unpack_box_str().map(|x| &**x)
@@ -114,24 +103,23 @@ struct Wrapper<Mode, T>(Mode, T);
 unsafe impl<T> Coerce<T> for Wrapper<Simple, T> {}
 unsafe impl<T> Coerce<T> for Wrapper<Complex, T> {}
 
+/// The overwrite operation in the heap requires that the LSB not be set.
+/// For FrozenValue this is the case, but for Value the LSB is always set.
+/// Fortunately, the consumer of the overwritten value reapplies the
+/// FrozenValue/Value tags, so we can freely discard it here.
+fn clear_lsb(x: usize) -> usize {
+    x & !1
+}
+
 impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Self>()
     }
 
-    fn trace(&mut self, _tracer: &Tracer<'v>) {
+    fn heap_freeze(&self, _me: &AValuePtr, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         unreachable!("Basic types don't appear in the heap")
     }
-
-    fn reserve_simple<'a>(&self, _freezer: &'a Freezer) -> HiddenReservation<'a> {
-        unreachable!("Basic types don't appear in the heap")
-    }
-
-    fn fill_simple(
-        self: Box<Self>,
-        _reservation: HiddenReservation,
-        _freezer: &Freezer,
-    ) -> anyhow::Result<()> {
+    fn heap_copy(&self, _me: &AValuePtr, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!("Basic types don't appear in the heap")
     }
 
@@ -148,21 +136,18 @@ where
         mem::size_of::<Self>()
     }
 
-    fn trace(&mut self, _tracer: &Tracer<'v>) {
-        // Nothing to do
+    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        let (fv, r) = freezer.reserve::<Self>();
+        let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
+        r.fill(x);
+        Ok(fv)
     }
 
-    fn reserve_simple<'a>(&self, freezer: &'a Freezer) -> HiddenReservation<'a> {
-        HiddenReservation(freezer.reserve::<Self>())
-    }
-
-    fn fill_simple(
-        self: Box<Self>,
-        reservation: HiddenReservation,
-        _freezer: &Freezer,
-    ) -> anyhow::Result<()> {
-        reservation.0.fill(*self);
-        Ok(())
+    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v> {
+        let (v, r) = tracer.reserve::<Self>();
+        let x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
+        r.fill(x);
+        v
     }
 
     fn unpack_box_str(&self) -> Option<&Box<str>> {
@@ -180,22 +165,21 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         mem::size_of::<Self>()
     }
 
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.1.trace(tracer)
+    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
+        let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
+        let res = x.1.freeze(freezer)?;
+        r.fill(simple(res));
+        Ok(fv)
     }
 
-    fn reserve_simple<'a>(&self, freezer: &'a Freezer) -> HiddenReservation<'a> {
-        HiddenReservation(freezer.reserve::<Wrapper<Simple, T::Frozen>>())
-    }
-
-    fn fill_simple(
-        self: Box<Self>,
-        reservation: HiddenReservation,
-        freezer: &Freezer,
-    ) -> anyhow::Result<()> {
-        let res = self.1.freeze(freezer)?;
-        reservation.0.fill(simple(res));
-        Ok(())
+    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v> {
+        let (v, r) = tracer.reserve::<Self>();
+        let mut x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
+        // We have to put the forwarding node in _before_ we trace in case there are cycles
+        x.1.trace(tracer);
+        r.fill(x);
+        v
     }
 
     fn unpack_box_str(&self) -> Option<&Box<str>> {
@@ -233,17 +217,10 @@ impl<'v> AValue<'v> for BlackHole {
         self.0
     }
 
-    fn trace(&mut self, _tracer: &Tracer<'v>) {
+    fn heap_freeze(&self, _me: &AValuePtr, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         unreachable!()
     }
-    fn reserve_simple<'a>(&self, _freezer: &'a Freezer) -> HiddenReservation<'a> {
-        unreachable!()
-    }
-    fn fill_simple(
-        self: Box<Self>,
-        _reservation: HiddenReservation,
-        _freezer: &Freezer,
-    ) -> anyhow::Result<()> {
+    fn heap_copy(&self, _me: &AValuePtr, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!()
     }
     fn unpack_box_str(&self) -> Option<&Box<str>> {

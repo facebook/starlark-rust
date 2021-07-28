@@ -21,14 +21,14 @@
 
 use crate::values::{
     layout::{
-        arena::Arena,
         arena2::{AValuePtr, Arena2, Reservation},
         avalue::{complex, simple, AValue},
         pointer::Pointer,
-        value::{FrozenValue, Value, ValueMem},
+        value::{FrozenValue, Value},
     },
     AllocFrozenValue, ComplexValue, SimpleValue,
 };
+use either::Either;
 use gazebo::{cast, prelude::*};
 use std::{
     cell::RefCell,
@@ -36,7 +36,7 @@ use std::{
     fmt,
     fmt::{Debug, Formatter},
     hash::{Hash, Hasher},
-    mem,
+    marker::PhantomData,
     ops::Deref,
     ptr,
     sync::Arc,
@@ -45,8 +45,7 @@ use std::{
 /// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
 #[derive(Default)]
 pub struct Heap {
-    // Should really be ValueMem<'v>, where &'v self
-    arena: RefCell<Arena<ValueMem<'static>>>,
+    arena: RefCell<Arena2>,
 }
 
 impl Debug for Heap {
@@ -54,7 +53,7 @@ impl Debug for Heap {
         let mut x = f.debug_struct("Heap");
         x.field(
             "bytes",
-            &self.arena().try_borrow().map(|x| x.allocated_bytes()),
+            &self.arena.try_borrow().map(|x| x.allocated_bytes()),
         );
         x.finish()
     }
@@ -188,11 +187,13 @@ impl Freezer {
         val.alloc_frozen_value(&self.0)
     }
 
-    pub(crate) fn reserve<'v, 'v2, T: AValue<'v2>>(&'v self) -> Reservation<'v>
+    pub(crate) fn reserve<'v, 'v2, T: AValue<'v2>>(&'v self) -> (FrozenValue, Reservation<'v>)
     where
         'v2: 'v,
     {
-        self.0.arena.reserve::<T>()
+        let r = self.0.arena.reserve::<T>();
+        let fv = FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(r.ptr()) }));
+        (fv, r)
     }
 
     /// Freeze a nested value while freezing yourself.
@@ -202,36 +203,12 @@ impl Freezer {
             return Ok(x);
         }
 
-        // Case 2: We have already been replaced with a Forward node
+        // Case 2: We have already been replaced with a forwarding, or need to freeze
         let value = value.0.unpack_ptr2().unwrap();
-        match value {
-            ValueMem::Forward(x) => return Ok(*x),
-            _ => {}
+        match value.unpack_overwrite() {
+            Either::Left(x) => Ok(FrozenValue(Pointer::new_ptr1_usize(x))),
+            Either::Right(v) => v.heap_freeze(value, self),
         }
-
-        // Case 3: We need to be moved to the new heap
-        // Invariant: After this method completes ValueMem must be of type Forward
-        let reservation = value.get_ref().reserve_simple(self);
-        let value_mut = value as *const ValueMem as *mut ValueMem;
-        let fv = FrozenValue(Pointer::new_ptr1(unsafe {
-            cast::ptr_lifetime(reservation.0.ptr())
-        }));
-        // Important we allocate the location for the frozen value _before_ we copy it
-        // so that cycles still work
-        let v = unsafe { ptr::replace(value_mut, ValueMem::Forward(fv)) };
-
-        match v {
-            ValueMem::AValue(x) => x.fill_simple(reservation, self)?,
-            _ => {
-                // We don't expect Unitialized, because that is not a real value.
-                // We don't expect Forward since that is handled in step 2.
-                // We don't expect Copied or Blackhole because that only happens during GC.
-                // We don't expect CallEnter/CallExit as that is only during profiling on the heap, and not referenced.
-                // We don't expect Ref, because that only occurs inside ValueRef, and that has a custom freeze.
-                v.unexpected("FrozenHeap::freeze case 3")
-            }
-        }
-        Ok(fv)
     }
 }
 
@@ -241,32 +218,23 @@ impl Heap {
         Self::default()
     }
 
-    fn arena<'v>(&'v self) -> &'v RefCell<Arena<ValueMem<'v>>> {
-        // Not totally safe because variance on &self might mean we create ValueMem
-        // at a smaller lifetime than it has to be. But approximately correct.
-        unsafe {
-            transmute!(
-                &'v RefCell<Arena<ValueMem<'static>>>,
-                &'v RefCell<Arena<ValueMem<'v>>>,
-                &self.arena
-            )
-        }
-    }
-
     pub(crate) fn allocated_bytes(&self) -> usize {
-        self.arena().borrow().allocated_bytes()
+        self.arena.borrow().allocated_bytes()
     }
 
-    pub(crate) fn alloc_raw<'v>(&'v self, v: ValueMem<'v>) -> Value<'v> {
-        let arena_ref = self.arena().borrow_mut();
+    fn alloc_raw<'v, 'v2>(&'v self, x: impl AValue<'v2> + 'v2) -> Value<'v>
+    where
+        'v2: 'v,
+    {
+        let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
+        let v: &AValuePtr = arena.alloc(x);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        let arena = unsafe { transmute!(&Arena<ValueMem<'v>>, &'v Arena<ValueMem<'v>>, arena) };
-
-        Value(Pointer::new_ptr2(arena.alloc(v)))
+        let v = unsafe { transmute!(&AValuePtr, &'v AValuePtr, v) };
+        Value(Pointer::new_ptr2(v))
     }
 
     pub(crate) fn alloc_str(&self, x: Box<str>) -> Value {
@@ -275,29 +243,22 @@ impl Heap {
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
     pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
-        let x: Box<dyn AValue<'static>> = box simple(x);
-        // Safe because we know we can restrict an AValue
-        let x: Box<dyn AValue<'v>> = unsafe { mem::transmute(x) };
-        self.alloc_raw(ValueMem::AValue(x))
+        self.alloc_raw(simple(x))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        self.alloc_raw(ValueMem::AValue(box complex(x)))
+        self.alloc_raw(complex(x))
     }
 
     pub(crate) fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
-        let mut arena_ref = self.arena().borrow_mut();
-        let arena = &mut *arena_ref;
-
-        // We have an arena inside a RefCell which stores ValueMem<'static>
-        // However, we promise not to clear the RefCell other than for GC
-        // and we promise the ValueMem's are only valid for 'v
-        // so we cast the `arena` to how we actually know it works
-        let arena =
-            unsafe { transmute!(&mut Arena<ValueMem<'v>>, &'v mut Arena<ValueMem<'v>>, arena) };
-
-        arena.for_each(|x| f(Value(Pointer::new_ptr2(x))));
+        self.arena.borrow_mut().for_each_ordered(|x| {
+            // Otherwise the Value is constrainted by the borrow_mut, when
+            // we consider values to be kept alive permanently, other than
+            // when a GC happens
+            let x = unsafe { transmute!(&AValuePtr, &'v AValuePtr, x) };
+            f(Value(Pointer::new_ptr2(x)))
+        })
     }
 
     /// Garbage collect any values that are unused. This function is _unsafe_ in
@@ -310,19 +271,21 @@ impl Heap {
 
     fn garbage_collect_internal<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
         // Must rewrite all Value's so they point at the new heap
-        let mut arena = self.arena().borrow_mut();
+        let mut arena = self.arena.borrow_mut();
 
-        let traceer = Tracer::<'v> {
-            arena: Arena::new(),
+        let tracer = Tracer::<'v> {
+            arena: Arena2::default(),
+            phantom: PhantomData,
         };
-        f(&traceer);
-        *arena = traceer.arena;
+        f(&tracer);
+        *arena = tracer.arena;
     }
 }
 
 /// Used to perform garbage collection by [`Trace::trace`](crate::values::Trace::trace).
 pub struct Tracer<'v> {
-    arena: Arena<ValueMem<'v>>,
+    arena: Arena2,
+    phantom: PhantomData<&'v ()>,
 }
 
 impl<'v> Tracer<'v> {
@@ -331,47 +294,36 @@ impl<'v> Tracer<'v> {
         *value = self.adjust(*value)
     }
 
+    pub(crate) fn reserve<'a, 'v2, T: AValue<'v2>>(&'a self) -> (Value<'v>, Reservation<'a>)
+    where
+        'v2: 'v,
+        'v2: 'a,
+    {
+        let r = self.arena.reserve::<T>();
+        let v = Value(Pointer::new_ptr2(unsafe { cast::ptr_lifetime(r.ptr()) }));
+        (v, r)
+    }
+
     fn adjust(&self, value: Value<'v>) -> Value<'v> {
         let old_val = value.0.unpack_ptr2();
         // Case 1, doesn't point at the old arena
-        if old_val.is_none() {
-            return value;
-        }
-
-        // Case 2: We have already been replaced with a Copied node
-        let old_val = old_val.unwrap();
-        if let ValueMem::Copied(v) = old_val {
-            return *v;
-        }
-
-        // Case 3: We need to be moved to the new heap
-        // Invariant: After this method completes ValueMem must be of type Copied
-        let old_mem = old_val as *const ValueMem<'v> as *mut ValueMem<'v>;
-        // We know the arena we are allocating into will live for 'v
-        let new_mem = unsafe {
-            transmute!(
-                &mut ValueMem<'v>,
-                &'v mut ValueMem<'v>,
-                self.arena.alloc(ValueMem::Blackhole)
-            )
+        let old_val = match old_val {
+            None => return value,
+            Some(x) => x,
         };
-        let mut new_val: Value<'v> = Value(Pointer::new_ptr2(new_mem));
+
+        // Case 2: We have already been replaced with a forwarding, or need to freeze
+        let mut res = match old_val.unpack_overwrite() {
+            Either::Left(x) => Value(Pointer::new_ptr2_usize(x)),
+            Either::Right(v) => v.heap_copy(old_val, self),
+        };
+
         if value.0.get_user_tag() {
             // SUPER IMPORTANT:
             // There are invariants around user tags (whether something is a Ref), so make sure they get copied over.
-            new_val = Value(new_val.0.set_user_tag());
+            res = Value(res.0.set_user_tag());
         }
-
-        let mut old_mem = unsafe { ptr::replace(old_mem, ValueMem::Copied(new_val)) };
-
-        match &mut old_mem {
-            ValueMem::AValue(x) => x.trace(self),
-            _ => {} // Doesn't contain Value pointers
-        }
-        unsafe {
-            ptr::replace(new_mem as *const ValueMem<'v> as *mut ValueMem<'v>, old_mem)
-        };
-        new_val
+        res
     }
 }
 

@@ -52,7 +52,7 @@ const VALUE_FALSE: bool = false;
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
-pub struct Value<'v>(pub(crate) Pointer<'v, 'v, AValuePtr, ValueMem<'v>>);
+pub struct Value<'v>(pub(crate) Pointer<'v, 'v, AValuePtr, AValuePtr>);
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
 ///
@@ -74,6 +74,7 @@ unsafe impl Sync for FrozenValue {}
 // regress
 assert_eq_size!(ValueMem, [usize; 3]);
 
+#[allow(dead_code)] // Clean up in the next diff
 #[derive(VariantName)]
 pub(crate) enum ValueMem<'v> {
     // Never created, but we often get to ValueMem via dereferencing pointers
@@ -91,6 +92,7 @@ pub(crate) enum ValueMem<'v> {
     AValue(Box<dyn AValue<'v>>),
 }
 
+#[allow(dead_code)] // Remove in the next diff
 impl<'v> ValueMem<'v> {
     pub fn unexpected(&self, method: &str) -> ! {
         panic!(
@@ -185,7 +187,7 @@ impl<'v> Value<'v> {
     pub fn unpack_box_str(self) -> Option<&'v Box<str>> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack().unpack_box_str(),
-            PointerUnpack::Ptr2(x) => x.unpack_box_str(),
+            PointerUnpack::Ptr2(x) => x.unpack().unpack_box_str(),
             _ => None,
         }
     }
@@ -194,7 +196,7 @@ impl<'v> Value<'v> {
     pub fn unpack_str(self) -> Option<&'v str> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack().unpack_str(),
-            PointerUnpack::Ptr2(x) => x.unpack_str(),
+            PointerUnpack::Ptr2(x) => x.unpack().unpack_str(),
             _ => None,
         }
     }
@@ -203,7 +205,7 @@ impl<'v> Value<'v> {
     pub fn get_ref(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack(),
-            PointerUnpack::Ptr2(x) => x.get_ref(),
+            PointerUnpack::Ptr2(x) => x.unpack(),
             PointerUnpack::None => basic_ref(&VALUE_NONE),
             PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
             PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),

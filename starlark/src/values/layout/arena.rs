@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#![allow(dead_code)] // Clean up in the next diff
+
 use bumpalo::Bump;
 use gazebo::prelude::*;
 use std::{marker::PhantomData, mem::MaybeUninit, ptr};

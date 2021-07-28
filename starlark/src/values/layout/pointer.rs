@@ -110,6 +110,14 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         Self::new(tag_int(x))
     }
 
+    pub fn new_ptr1_usize(p1: usize) -> Self {
+        Self::new(p1 | TAG_P1)
+    }
+
+    pub fn new_ptr2_usize(p2: usize) -> Self {
+        Self::new(p2 | TAG_P2)
+    }
+
     pub fn new_ptr1(p1: &'p1 P1) -> Self {
         Self::new(unsafe { tag_pointer(p1, TAG_P1) })
     }

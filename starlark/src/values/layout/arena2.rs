@@ -20,9 +20,15 @@
 //! Every payload must be at least 1 usize large (even ZST).
 //! Some elements are created using reserve, in which case they point
 //! to a BlackHole until they are filled in.
+//!
+//! Some elements can be overwritten (typically during GC) by a usize.
+//! In these cases the bottom bit of the usize as used by the heap
+//! to tag it as being a usize, and the word after is the size of the
+//! item it replaced.
 
 use crate::values::layout::avalue::{AValue, BlackHole};
 use bumpalo::Bump;
+use either::Either;
 use std::{
     alloc::Layout,
     any::TypeId,
@@ -35,8 +41,9 @@ use std::{
 #[derive(Default)]
 pub(crate) struct Arena2(Bump);
 
+#[doc(hidden)] // Appears in a trait, but don't want it to
 #[repr(transparent)]
-pub(crate) struct AValuePtr(DynMetadata<dyn AValue<'static>>);
+pub struct AValuePtr(DynMetadata<dyn AValue<'static>>);
 
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
@@ -54,11 +61,8 @@ impl<'v> Reservation<'v> {
     {
         assert_eq!(self.typ, T::static_type_id());
         unsafe {
-            let t: &dyn AValue<'v2> = &x;
-            let t: &dyn AValue<'static> = mem::transmute(t);
-            let metadata: DynMetadata<dyn AValue<'static>> = metadata(t);
             let p = self.pointer as *mut (AValuePtr, T);
-            ptr::write(p, (AValuePtr(metadata), x));
+            ptr::write(p, (AValuePtr::new(&x), x));
         }
     }
 
@@ -107,10 +111,8 @@ impl Arena2 {
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
         let x = BlackHole(mem::size_of::<T>());
-        let t: &dyn AValue<'static> = &x;
-        let metadata: DynMetadata<dyn AValue<'static>> = metadata(t);
         unsafe {
-            ptr::write(p as *mut (AValuePtr, BlackHole), (AValuePtr(metadata), x))
+            ptr::write(p as *mut (AValuePtr, BlackHole), (AValuePtr::new(&x), x))
         };
 
         Reservation {
@@ -128,10 +130,7 @@ impl Arena2 {
     {
         let p = self.alloc_empty::<T>();
         unsafe {
-            let t: &dyn AValue<'v2> = &x;
-            let t: &dyn AValue<'static> = mem::transmute(t);
-            let metadata: DynMetadata<dyn AValue<'static>> = metadata(t);
-            ptr::write(p, (AValuePtr(metadata), x));
+            ptr::write(p, (AValuePtr::new(&x), x));
             &(*p).0
         }
     }
@@ -142,9 +141,16 @@ impl Arena2 {
         let mut p = chunk.as_ptr();
         let end = unsafe { chunk.as_ptr().add(chunk.len()) };
         while p < end {
-            let ptr: &AValuePtr = unsafe { &*(p as *const AValuePtr) };
-            f(ptr);
-            let n = cmp::max(ptr.unpack().memory_size(), mem::size_of::<usize>());
+            let val = unsafe { *(p as *const usize) };
+            let n = if val & 1 == 1 {
+                // Overwritten, so the next word will be the size of the memory
+                unsafe { *(p as *const usize).add(1) }
+            } else {
+                let ptr: &AValuePtr = unsafe { &*(p as *const AValuePtr) };
+                f(ptr);
+                ptr.unpack().memory_size()
+            };
+            let n = cmp::max(n, mem::size_of::<usize>());
             unsafe {
                 p = p.add(mem::size_of::<AValuePtr>() + n);
                 // We know the alignment requirements will never be greater than AValuePtr
@@ -182,11 +188,48 @@ impl Arena2 {
 }
 
 impl AValuePtr {
+    pub(crate) fn new<'a, 'b>(x: &'a dyn AValue<'b>) -> Self
+    where
+        'b: 'a,
+    {
+        let metadata: DynMetadata<dyn AValue> = metadata(x);
+        // The vtable is invariant based on the lifetime, so this is safe
+        let metadata: DynMetadata<dyn AValue<'static>> = unsafe { mem::transmute(metadata) };
+        // Check that the LSB is not set, as we reuse that for overwrite
+        debug_assert!(unsafe { mem::transmute::<_, usize>(metadata) } & 1 == 0);
+        AValuePtr(metadata)
+    }
+
     pub fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
         unsafe {
             let res = &*(from_raw_parts((self as *const AValuePtr).add(1) as *const (), self.0));
             mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
         }
+    }
+
+    /// Unpack something that might have been overwritten.
+    pub fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
+        let x = unsafe { *(self as *const AValuePtr as *const usize) };
+        if x & 1 == 1 {
+            Either::Left(x & !1)
+        } else {
+            Either::Right(self.unpack())
+        }
+    }
+
+    /// After performing the overwrite any existing pointers to this value
+    /// are corrupted.
+    pub unsafe fn overwrite<'v, T>(&'v self, x: usize) -> T {
+        assert!(x & 1 == 0, "Can't have the lowest bit set");
+        assert_eq!(self.0.layout(), Layout::new::<T>());
+
+        let sz = self.unpack().memory_size();
+        let p = self as *const AValuePtr as *const (AValuePtr, T);
+        let res = ptr::read(p).1;
+        let p = self as *const AValuePtr as *mut usize;
+        ptr::write(p, x | 1);
+        ptr::write(p.add(1), sz);
+        res
     }
 }
 
