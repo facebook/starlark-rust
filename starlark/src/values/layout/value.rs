@@ -38,8 +38,7 @@ use crate::values::{
     },
     none::NoneType,
 };
-use gazebo::{prelude::*, variants::VariantName};
-use static_assertions::assert_eq_size;
+use gazebo::prelude::*;
 use void::Void;
 
 // So we can provide &dyn StarlarkValue's when we need them
@@ -69,55 +68,6 @@ pub struct FrozenValue(pub(crate) Pointer<'static, 'static, AValuePtr, Void>);
 // it having variance.
 unsafe impl Send for FrozenValue {}
 unsafe impl Sync for FrozenValue {}
-
-// We care a lot about the size of these data types, so make sure they don't
-// regress
-assert_eq_size!(ValueMem, [usize; 3]);
-
-#[allow(dead_code)] // Clean up in the next diff
-#[derive(VariantName)]
-pub(crate) enum ValueMem<'v> {
-    // Never created, but we often get to ValueMem via dereferencing pointers
-    // which have a moderate chance of pointing at 0's, so detect that special case
-    // and give a workable error message
-    #[allow(dead_code)] // That's the whole point of it
-    Uninitialized(Void),
-    // Occurs during freezing (for the to-space) - never encountered normally.
-    Forward(FrozenValue),
-    // Occurs during GC (for the to-space) - never encountered normally.
-    Copied(Value<'v>),
-    // Only occurs during GC
-    Blackhole,
-    // Things that have a StarlarkValue instance
-    AValue(Box<dyn AValue<'v>>),
-}
-
-#[allow(dead_code)] // Remove in the next diff
-impl<'v> ValueMem<'v> {
-    pub fn unexpected(&self, method: &str) -> ! {
-        panic!(
-            "ValueMem::{}, unexpected variant {}",
-            method,
-            self.variant_name()
-        )
-    }
-
-    #[allow(clippy::borrowed_box)]
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
-        self.get_ref().unpack_box_str()
-    }
-
-    fn unpack_str(&self) -> Option<&str> {
-        self.get_ref().unpack_str()
-    }
-
-    pub(crate) fn get_ref(&self) -> &dyn AValue<'v> {
-        match self {
-            Self::AValue(x) => &**x,
-            _ => self.unexpected("get_ref"),
-        }
-    }
-}
 
 impl<'v> Value<'v> {
     /// Create a new `None` value.

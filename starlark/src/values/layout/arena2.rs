@@ -164,7 +164,6 @@ impl Arena2 {
     // were added.
     // Requires relying on internal bumpalo invariants, since
     // there is no spec to the resulting order.
-    #[allow(dead_code)] // Used in tests, will be used in heap profiling
     pub fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValuePtr)) {
         // It seems that we get the chunks from most newest to oldest.
         // And within each chunk, the values are filled newest to oldest.
