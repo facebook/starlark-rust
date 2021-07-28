@@ -238,11 +238,16 @@ impl Drop for Arena {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::values::layout::avalue::simple;
+    use crate::values::{any::StarlarkAny, layout::avalue::simple};
+
+    fn to_repr(x: &AValuePtr) -> String {
+        let mut s = String::new();
+        x.unpack().collect_repr(&mut s);
+        s
+    }
 
     fn mk_str(x: &str) -> impl AValue<'static> {
-        let x: Box<str> = Box::from(x);
-        simple(x)
+        simple(StarlarkAny::new(x.to_owned()))
     }
 
     fn reserve_str<'v>(arena: &'v Arena) -> Reservation<'v> {
@@ -280,9 +285,7 @@ mod test {
         );
         let mut j = 0;
         arena.for_each_ordered(|i| {
-            let mut s = String::new();
-            i.unpack().collect_repr(&mut s);
-            assert_eq!(s, format!("\"{}\"", j));
+            assert_eq!(to_repr(i), format!("\"{}\"", j));
             j += 1;
         });
         assert_eq!(j, LIMIT);
@@ -302,7 +305,7 @@ mod test {
         let mut res = Vec::new();
         arena.for_each_ordered(|x| res.push(x));
         assert_eq!(res.len(), 3);
-        assert_eq!(res[0].unpack().unpack_str(), Some("test"));
-        assert_eq!(res[2].unpack().unpack_str(), Some("hello"));
+        assert_eq!(to_repr(res[0]), "\"test\"");
+        assert_eq!(to_repr(res[2]), "\"hello\"");
     }
 }
