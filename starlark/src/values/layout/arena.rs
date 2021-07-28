@@ -34,7 +34,7 @@ use std::{
     any::TypeId,
     cmp,
     marker::PhantomData,
-    mem::{self, ManuallyDrop, MaybeUninit},
+    mem::{self, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
 };
 
@@ -73,29 +73,25 @@ impl Arena {
         self.0.allocated_bytes()
     }
 
-    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> *mut (AValuePtr, T) {
-        union OrUsize<T> {
-            _a: ManuallyDrop<T>,
-            // The usize is used for blackholing, so ensure it's
-            // always enough space.
-            // For ZST this will mean we double the size. But no one stores ZST's
-            // in a heap...
-            _b: usize,
-        }
-
-        let layout = Layout::new::<(AValuePtr, OrUsize<T>)>();
-        assert_eq!(
-            layout.align(),
-            mem::align_of::<AValuePtr>(),
-            "Unexpected alignment in Starlark arena"
+    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, extra: usize) -> *mut (AValuePtr, T) {
+        assert!(
+            mem::align_of::<T>() <= mem::align_of::<AValuePtr>(),
+            "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
+            std::any::type_name::<T>(),
+            mem::align_of::<T>(),
+            mem::align_of::<AValuePtr>()
         );
+        // We require at least usize space available for overwrite/blackhole
+        let size = mem::size_of::<AValuePtr>()
+            + cmp::max(mem::size_of::<T>() + extra, mem::size_of::<usize>());
+        let layout = Layout::from_size_align(size, mem::align_of::<AValuePtr>()).unwrap();
         let p = self.0.alloc_layout(layout);
         p.as_ptr() as *mut (AValuePtr, T)
     }
 
     // Reservation should really be an incremental type
     pub fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
-        let p = self.alloc_empty::<T>();
+        let p = self.alloc_empty::<T>(0);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
@@ -112,7 +108,17 @@ impl Arena {
     }
 
     pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValuePtr {
-        let p = self.alloc_empty::<T>();
+        self.alloc_extra(x, 0)
+    }
+
+    /// Allocate a type `T` plus `extra` bytes. It is important that
+    /// `memory_size` for the type `T` include those `extra` bytes/
+    pub(crate) fn alloc_extra<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+        x: T,
+        extra: usize,
+    ) -> &'v AValuePtr {
+        let p = self.alloc_empty::<T>(extra);
         unsafe {
             ptr::write(p, (AValuePtr::new(&x), x));
             &(*p).0
