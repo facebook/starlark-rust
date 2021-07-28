@@ -667,7 +667,7 @@ impl Token {
                 // The Rust {:?} is unstable, so changes between versions,
                 // instead use the JSON standard for string escapes.
                 // Reuse the StarlarkValue implementation since it's close to hand.
-                crate::values::StarlarkValue::to_json(&Box::from(x.as_str())).unwrap()
+                crate::values::string::json_escape(x.as_str())
             }
             _ => {
                 let s = self.to_string();

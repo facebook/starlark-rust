@@ -77,6 +77,25 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
     x.hash(state)
 }
 
+pub(crate) fn json_escape(x: &str) -> String {
+    let mut escaped = Vec::with_capacity(x.len());
+    for c in x.bytes() {
+        // Escape as per ECMA-404 standard
+        match c {
+            b'\\' => escaped.extend(b"\\\\".iter()),
+            b'"' => escaped.extend(b"\\\"".iter()),
+            b'/' => escaped.extend(b"\\/".iter()),
+            0x08u8 => escaped.extend(b"\\b".iter()),
+            0x0Cu8 => escaped.extend(b"\\f".iter()),
+            b'\n' => escaped.extend(b"\\n".iter()),
+            b'\r' => escaped.extend(b"\\r".iter()),
+            b'\t' => escaped.extend(b"\\t".iter()),
+            x => escaped.push(x),
+        }
+    }
+    unsafe { format!("\"{}\"", String::from_utf8_unchecked(escaped)) }
+}
+
 impl SimpleValue for Box<str> {}
 
 impl<'v> StarlarkValue<'v> for Box<str> {
@@ -136,22 +155,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
-        let mut escaped = Vec::with_capacity(self.len());
-        for c in self.bytes() {
-            // Escape as per ECMA-404 standard
-            match c {
-                b'\\' => escaped.extend(b"\\\\".iter()),
-                b'"' => escaped.extend(b"\\\"".iter()),
-                b'/' => escaped.extend(b"\\/".iter()),
-                0x08u8 => escaped.extend(b"\\b".iter()),
-                0x0Cu8 => escaped.extend(b"\\f".iter()),
-                b'\n' => escaped.extend(b"\\n".iter()),
-                b'\r' => escaped.extend(b"\\r".iter()),
-                b'\t' => escaped.extend(b"\\t".iter()),
-                x => escaped.push(x),
-            }
-        }
-        unsafe { Ok(format!("\"{}\"", String::from_utf8_unchecked(escaped))) }
+        Ok(json_escape(self))
     }
 
     fn to_bool(&self) -> bool {
