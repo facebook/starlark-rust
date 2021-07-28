@@ -18,7 +18,7 @@
 // Possible optimisations:
 // Encoding none, bool etc in the pointer of frozen value
 
-mod arena2;
+mod arena;
 mod avalue;
 mod constant;
 mod heap;

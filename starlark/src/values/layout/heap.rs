@@ -21,7 +21,7 @@
 
 use crate::values::{
     layout::{
-        arena2::{AValuePtr, Arena2, Reservation},
+        arena::{AValuePtr, Arena, Reservation},
         avalue::{complex, simple, AValue},
         pointer::Pointer,
         value::{FrozenValue, Value},
@@ -45,7 +45,7 @@ use std::{
 /// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
 #[derive(Default)]
 pub struct Heap {
-    arena: RefCell<Arena2>,
+    arena: RefCell<Arena>,
 }
 
 impl Debug for Heap {
@@ -63,7 +63,7 @@ impl Debug for Heap {
 /// Can be kept alive by a [`FrozenHeapRef`].
 #[derive(Default)]
 pub struct FrozenHeap {
-    arena: Arena2,                         // My memory
+    arena: Arena,                          // My memory
     refs: RefCell<HashSet<FrozenHeapRef>>, // Memory I depend on
 }
 
@@ -274,7 +274,7 @@ impl Heap {
         let mut arena = self.arena.borrow_mut();
 
         let tracer = Tracer::<'v> {
-            arena: Arena2::default(),
+            arena: Arena::default(),
             phantom: PhantomData,
         };
         f(&tracer);
@@ -284,7 +284,7 @@ impl Heap {
 
 /// Used to perform garbage collection by [`Trace::trace`](crate::values::Trace::trace).
 pub struct Tracer<'v> {
-    arena: Arena2,
+    arena: Arena,
     phantom: PhantomData<&'v ()>,
 }
 

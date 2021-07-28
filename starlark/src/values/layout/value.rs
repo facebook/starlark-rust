@@ -31,7 +31,7 @@
 
 use crate::values::{
     layout::{
-        arena2::AValuePtr,
+        arena::AValuePtr,
         avalue::{basic_ref, AValue},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,

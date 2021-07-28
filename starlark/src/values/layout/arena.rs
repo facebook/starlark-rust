@@ -39,7 +39,7 @@ use std::{
 };
 
 #[derive(Default)]
-pub(crate) struct Arena2(Bump);
+pub(crate) struct Arena(Bump);
 
 #[doc(hidden)] // Appears in a trait, but don't want it to
 #[repr(transparent)]
@@ -71,7 +71,7 @@ impl<'v> Reservation<'v> {
     }
 }
 
-impl Arena2 {
+impl Arena {
     pub fn allocated_bytes(&self) -> usize {
         self.0.allocated_bytes()
     }
@@ -232,7 +232,7 @@ impl AValuePtr {
     }
 }
 
-impl Drop for Arena2 {
+impl Drop for Arena {
     fn drop(&mut self) {
         self.for_each_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
@@ -255,8 +255,8 @@ mod test {
         simple(x)
     }
 
-    fn reserve_str<'v>(arena: &'v Arena2) -> Reservation<'v> {
-        fn f<'v, 'v2, T>(arena: &'v Arena2, _: T) -> Reservation<'v>
+    fn reserve_str<'v>(arena: &'v Arena) -> Reservation<'v> {
+        fn f<'v, 'v2, T>(arena: &'v Arena, _: T) -> Reservation<'v>
         where
             'v2: 'v,
             T: AValue<'v2>,
@@ -271,7 +271,7 @@ mod test {
         // We want iteration to proceed in the same order as allocation,
         // otherwise profiling won't work
         const LIMIT: usize = 10000;
-        let mut arena = Arena2::default();
+        let mut arena = Arena::default();
         let mut reserved = Vec::new();
         for i in 0..LIMIT {
             if i % 100 == 0 {
@@ -308,7 +308,7 @@ mod test {
     #[test]
     // Make sure that even if there are some blackholes when we drop, we can still walk to heap
     fn drop_with_blackhole() {
-        let mut arena = Arena2::default();
+        let mut arena = Arena::default();
         arena.alloc(mk_str("test"));
         // reserve but do not fill!
         reserve_str(&arena);

@@ -20,7 +20,7 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        layout::arena2::AValuePtr, ComplexValue, ConstFrozenValue, Freezer, FrozenValue, Heap,
+        layout::arena::AValuePtr, ComplexValue, ConstFrozenValue, Freezer, FrozenValue, Heap,
         SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
