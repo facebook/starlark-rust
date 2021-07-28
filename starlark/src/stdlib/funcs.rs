@@ -69,10 +69,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// Examples:
     /// ```
     /// # starlark::assert::fail(r#"
-    /// fail("this is an error")  # error: this is an error
+    /// fail("this is an error")  # fail: this is an error
     /// # "#, "this is an error");
     /// # starlark::assert::fail(r#"
-    /// fail("oops", 1, False)  # error: oops 1 False
+    /// fail("oops", 1, False)  # fail: oops 1 False
     /// # "#, "oops 1 False");
     /// ```
     fn fail(args: Vec<Value>) -> NoneType {
