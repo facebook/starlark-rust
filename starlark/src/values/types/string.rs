@@ -78,7 +78,8 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
 }
 
 pub(crate) fn json_escape(x: &str) -> String {
-    let mut escaped = Vec::with_capacity(x.len());
+    let mut escaped = Vec::with_capacity(x.len() + 2);
+    escaped.push(b'\"');
     for c in x.bytes() {
         // Escape as per ECMA-404 standard
         match c {
@@ -93,7 +94,8 @@ pub(crate) fn json_escape(x: &str) -> String {
             x => escaped.push(x),
         }
     }
-    unsafe { format!("\"{}\"", String::from_utf8_unchecked(escaped)) }
+    escaped.push(b'\"');
+    unsafe { String::from_utf8_unchecked(escaped) }
 }
 
 impl SimpleValue for Box<str> {}
