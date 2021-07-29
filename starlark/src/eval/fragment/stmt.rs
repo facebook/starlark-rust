@@ -368,16 +368,26 @@ impl Compiler<'_> {
                 let over = self.expr(over).as_compiled();
                 let st = self.stmt(body, false);
                 stmt!("for", span, |eval| {
+                    let heap = eval.heap();
                     let iterable = over(eval)?;
-                    for v in throw(iterable.iterate(eval.heap()), over_span, eval)? {
-                        var(v, eval)?;
-                        match st(eval) {
-                            Err(EvalException::Break) => break,
-                            Err(EvalException::Continue) => {}
-                            Err(e) => return Err(e),
-                            _ => {}
-                        }
-                    }
+                    let mut err = Ok(());
+                    throw(
+                        iterable.get_ref().for_each(
+                            &mut |v| match var(v, eval).and_then(|_| st(eval)) {
+                                Err(EvalException::Break) => None,
+                                Err(EvalException::Continue) => Some(()),
+                                Err(e) => {
+                                    err = Err(e);
+                                    None
+                                }
+                                Ok(_) => Some(()),
+                            },
+                            heap,
+                        ),
+                        over_span,
+                        eval,
+                    )?;
+                    err?;
                 })
             }
             Stmt::Return(Some(e)) => {

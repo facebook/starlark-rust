@@ -104,12 +104,19 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn any(ref x: Value) -> bool {
-        for i in x.iterate(heap)? {
-            if i.to_bool() {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+        let mut res = false;
+        x.get_ref().for_each(
+            &mut |x: Value| {
+                if x.to_bool() {
+                    res = true;
+                    None
+                } else {
+                    Some(())
+                }
+            },
+            heap,
+        )?;
+        Ok(res)
     }
 
     /// [all](
@@ -132,12 +139,19 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn all(ref x: Value) -> bool {
-        for i in x.iterate(heap)? {
-            if !i.to_bool() {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+        let mut res = true;
+        x.get_ref().for_each(
+            &mut |x: Value| {
+                if !x.to_bool() {
+                    res = false;
+                    None
+                } else {
+                    Some(())
+                }
+            },
+            heap,
+        )?;
+        Ok(res)
     }
 
     /// [bool](
@@ -538,7 +552,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     fn list(ref a: Option<Value>) -> List<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
-            l.extend(a.iterate(heap)?);
+            if let Some(xs) = List::from_value(a) {
+                l.extend(xs.iter());
+            } else {
+                l.extend(a.iterate(heap)?);
+            }
         }
         Ok(List::new(l))
     }
