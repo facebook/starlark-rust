@@ -106,32 +106,36 @@ pub(crate) fn convert_slice_indices(
     }
 }
 
-pub(crate) fn apply_slice<'v>(
-    xs: &[Value<'v>],
+pub(crate) fn apply_slice<T: Copy>(
+    xs: &[T],
     start: Option<Value>,
     stop: Option<Value>,
     stride: Option<Value>,
-) -> anyhow::Result<Vec<Value<'v>>> {
+) -> anyhow::Result<Vec<T>> {
     let (start, stop, stride) = convert_slice_indices(xs.len() as i32, start, stop, stride)?;
+    if stride == 1 {
+        if start >= stop {
+            return Ok(Vec::new());
+        } else {
+            return Ok(xs[start as usize..stop as usize].to_vec());
+        }
+    }
 
-    let (low, take, astride) = if stride < 0 {
-        (stop + 1, start - stop, -stride)
+    let (start, stop) = if stride < 0 {
+        (stop + 1, start + 1)
     } else {
-        (start, stop - start, stride)
+        (start, stop)
     };
-    if take <= 0 {
-        return Ok(Vec::new());
+    let mut res = xs[start as usize..stop as usize].to_vec();
+    if stride == -1 {
+        res.reverse();
+        return Ok(res);
     }
-    let mut v = xs
-        .iter()
-        .skip(low as usize)
-        .take(take as usize)
-        .copied()
-        .collect::<Vec<_>>();
     if stride < 0 {
-        v.reverse();
+        res.reverse();
     }
-    let res = v
+    let astride = stride.abs();
+    let res = res
         .into_iter()
         .enumerate()
         .filter_map(|x| {
@@ -171,5 +175,52 @@ mod tests {
         assert!(convert_index(heap.alloc("a"), 7).is_err());
         assert!(convert_index(Value::new_int(8), 7).is_err()); // 8 > 7 = len
         assert!(convert_index(Value::new_int(-8), 7).is_err()); // -8 + 7 = -1 < 0
+    }
+
+    #[test]
+    fn test_apply_slice() {
+        let s = &[0, 1, 2, 3, 4, 5, 6];
+
+        let x = apply_slice(s, Some(Value::new_int(-1)), None, Some(Value::new_int(-1))).unwrap();
+        assert_eq!(x, &[6, 5, 4, 3, 2, 1, 0]);
+
+        let x = apply_slice(s, Some(Value::new_int(-1)), None, Some(Value::new_int(-1))).unwrap();
+        assert_eq!(x, &[6, 5, 4, 3, 2, 1, 0]);
+
+        let x = apply_slice(
+            s,
+            Some(Value::new_int(0)),
+            Some(Value::new_int(3)),
+            Some(Value::new_int(2)),
+        )
+        .unwrap();
+        assert_eq!(x, &[0, 2]);
+
+        let x = apply_slice(
+            s,
+            Some(Value::new_int(5)),
+            Some(Value::new_int(2)),
+            Some(Value::new_int(-2)),
+        )
+        .unwrap();
+        assert_eq!(x, &[5, 3]);
+
+        let x = apply_slice(
+            s,
+            Some(Value::new_int(-1)),
+            Some(Value::new_int(-5)),
+            Some(Value::new_int(-1)),
+        )
+        .unwrap();
+        assert_eq!(x, &[6, 5, 4, 3]);
+
+        let x = apply_slice(
+            s,
+            Some(Value::new_int(-1)),
+            Some(Value::new_int(0)),
+            Some(Value::new_int(-1)),
+        )
+        .unwrap();
+        assert_eq!(x, &[6, 5, 4, 3, 2, 1]);
     }
 }
