@@ -324,7 +324,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
             if self.is_empty() {
                 Ok(other)
             } else {
-                Ok(heap.alloc(fast_string::append(self.unpack(), other_str)))
+                Ok(heap.alloc_str_concat(self.unpack(), other_str))
             }
         } else {
             ValueError::unsupported_with(self, "+", other)

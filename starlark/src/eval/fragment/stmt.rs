@@ -30,7 +30,7 @@ use crate::{
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
-    values::{fast_string, list::List, Heap, Trace, Value, ValueError},
+    values::{list::List, Heap, Trace, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -260,7 +260,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
             } else if rs.is_empty() {
                 return Ok(lhs);
             } else {
-                return Ok(heap.alloc(fast_string::append(ls, rs)));
+                return Ok(heap.alloc_str_concat(ls, rs));
             }
         }
     }

@@ -20,6 +20,7 @@
 // Encoding none, bool etc in the pointer of frozen value
 
 use crate::values::{
+    fast_string,
     layout::{
         arena::{AValuePtr, Arena, Reservation},
         avalue::{complex, simple, starlark_str, AValue},
@@ -234,7 +235,7 @@ impl Heap {
         Value(Pointer::new_ptr2(v))
     }
 
-    pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value {
+    pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
         let v: &AValuePtr = arena.alloc_extra(starlark_str(x), x.len());
@@ -249,7 +250,12 @@ impl Heap {
         Value(Pointer::new_ptr2(v))
     }
 
-    pub(crate) fn alloc_char(&self, x: char) -> Value {
+    pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {
+        // FIXME: Could save an allocation here
+        self.alloc_str(&fast_string::append(x, y))
+    }
+
+    pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
         // FIXME: Could save an allocation here
         let s = x.to_string();
         self.alloc_str(s.as_str())

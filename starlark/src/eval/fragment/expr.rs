@@ -31,7 +31,6 @@ use crate::{
     },
     values::{
         dict::Dict,
-        fast_string,
         function::{BoundMethod, NativeAttribute},
         list::List,
         tuple::{FrozenTuple, Tuple},
@@ -677,7 +676,7 @@ impl Compiler<'_> {
                                     } else if rs.is_empty() {
                                         return Ok(l);
                                     } else {
-                                        return Ok(eval.heap().alloc(fast_string::append(ls, rs)));
+                                        return Ok(eval.heap().alloc_str_concat(ls, rs));
                                     }
                                 }
                             }
