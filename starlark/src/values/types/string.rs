@@ -240,7 +240,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
                 if i >= 0 {
                     match fast_string::at(s, i as usize) {
                         None => Err(ValueError::IndexOutOfBound(i).into()),
-                        Some(c) => Ok(heap.alloc(c.to_string())),
+                        Some(c) => Ok(heap.alloc(c)),
                     }
                 } else {
                     let len = fast_string::len(s);

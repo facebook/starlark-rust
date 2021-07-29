@@ -658,10 +658,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "x!hello  ".lstrip("!x ") == "hello  "
     /// # "#);
     /// ```
-    fn lstrip(this: &str, ref chars: Option<&str>) -> String {
+    fn lstrip(this: &'v str, ref chars: Option<&str>) -> &'v str {
         match chars {
-            None => Ok(this.trim_start().to_owned()),
-            Some(s) => Ok(this.trim_start_matches(|c| s.contains(c)).to_owned()),
+            None => Ok(this.trim_start()),
+            Some(s) => Ok(this.trim_start_matches(|c| s.contains(c))),
         }
     }
 
@@ -683,19 +683,19 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "one/two/three".partition("/") == ("one", "/", "two/three")
     /// # "#);
     /// ```
-    fn partition(this: &str, ref needle @ " ": &str) -> (String, String, String) {
+    fn partition(this: &'v str, ref needle @ " ": &'v str) -> (&'v str, &'v str, &'v str) {
         if needle.is_empty() {
             return Err(anyhow!("Empty separator cannot be used for partitioning"));
         }
         if let Some(offset) = this.find(needle) {
             let offset2 = offset + needle.len();
             Ok((
-                this.get(..offset).unwrap().to_owned(),
-                needle.to_owned(),
-                this.get(offset2..).unwrap().to_owned(),
+                this.get(..offset).unwrap(),
+                needle,
+                this.get(offset2..).unwrap(),
             ))
         } else {
-            Ok((this.to_owned(), "".to_owned(), "".to_owned()))
+            Ok((this, "", ""))
         }
     }
 
@@ -807,19 +807,19 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "one/two/three".rpartition("/") == ("one/two", "/", "three")
     /// # "#);
     /// ```
-    fn rpartition(this: &str, ref needle @ " ": &str) -> (String, String, String) {
+    fn rpartition(this: &'v str, ref needle @ " ": &'v str) -> (&'v str, &'v str, &'v str) {
         if needle.is_empty() {
             return Err(anyhow!("Empty separator cannot be used for partitioning"));
         }
         if let Some(offset) = this.rfind(needle) {
             let offset2 = offset + needle.len();
             Ok((
-                this.get(..offset).unwrap().to_owned(),
-                needle.to_owned(),
-                this.get(offset2..).unwrap().to_owned(),
+                this.get(..offset).unwrap(),
+                needle,
+                this.get(offset2..).unwrap(),
             ))
         } else {
-            Ok(("".to_owned(), "".to_owned(), this.to_owned()))
+            Ok(("", "", this))
         }
     }
 
@@ -886,10 +886,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "  hello!x".rstrip(" x!") == "  hello"
     /// # "#);
     /// ```
-    fn rstrip(this: &str, ref chars: Option<&str>) -> String {
+    fn rstrip(this: &'v str, ref chars: Option<&str>) -> &'v str {
         match chars {
-            None => Ok(this.trim_end().to_owned()),
-            Some(s) => Ok(this.trim_end_matches(|c| s.contains(c)).to_owned()),
+            None => Ok(this.trim_end()),
+            Some(s) => Ok(this.trim_end_matches(|c| s.contains(c))),
         }
     }
 
@@ -1058,10 +1058,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "xxhello!!".strip("x!") == "hello"
     /// # "#);
     /// ```
-    fn strip(this: &str, ref chars: Option<&str>) -> String {
+    fn strip(this: &'v str, ref chars: Option<&str>) -> &'v str {
         match chars {
-            None => Ok(this.trim().to_owned()),
-            Some(s) => Ok(this.trim_matches(|c| s.contains(c)).to_owned()),
+            None => Ok(this.trim()),
+            Some(s) => Ok(this.trim_matches(|c| s.contains(c))),
         }
     }
 
