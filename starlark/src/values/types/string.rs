@@ -403,6 +403,20 @@ where
             Ok(box s.map(|x| Value::new_int(u32::from(x) as i32)))
         }
     }
+
+    fn for_each(
+        &'v self,
+        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<()> {
+        let mut s = self.string.to_value().unpack_str().unwrap().chars();
+        if self.produce_char {
+            s.try_for_each(move |x| f(heap.alloc(x)));
+        } else {
+            s.try_for_each(|x| f(Value::new_int(u32::from(x) as i32)));
+        }
+        Ok(())
+    }
 }
 
 impl<'v> ComplexValue<'v> for StringIterator<'v> {

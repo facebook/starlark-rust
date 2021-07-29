@@ -208,6 +208,15 @@ where
         Ok(box self.iter())
     }
 
+    fn for_each(
+        &'v self,
+        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<()> {
+        self.iter().try_for_each(f);
+        Ok(())
+    }
+
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = Tuple::from_value(other) {
             let mut result = Tuple {

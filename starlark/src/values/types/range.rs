@@ -193,6 +193,15 @@ impl<'v> StarlarkValue<'v> for Range {
         Ok(box RangeIterator::<'v>(*self, PhantomData))
     }
 
+    fn for_each(
+        &'v self,
+        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<()> {
+        RangeIterator::<'v>(*self, PhantomData).try_for_each(f);
+        Ok(())
+    }
+
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
         let other = match other.unpack_int() {
             Some(other) => other,

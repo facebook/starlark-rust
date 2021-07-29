@@ -237,6 +237,15 @@ where
         Ok(box self.elements.values().map(|x| x.to_value()))
     }
 
+    fn for_each(
+        &'v self,
+        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<()> {
+        self.elements.values().map(|x| x.to_value()).try_for_each(f);
+        Ok(())
+    }
+
     fn dir_attr(&self) -> Vec<String> {
         vec!["type".to_owned()]
     }
