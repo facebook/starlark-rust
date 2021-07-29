@@ -67,8 +67,8 @@ impl<'v> dyn AValue<'v> {
     }
 }
 
-pub(crate) fn starlark_str(x: &str) -> impl AValue<'static> + Send + Sync {
-    Wrapper(Direct, unsafe { StarlarkStr::new(x.len()) })
+pub(crate) fn starlark_str(len: usize) -> impl AValue<'static> + Send + Sync {
+    Wrapper(Direct, unsafe { StarlarkStr::new(len) })
 }
 
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {

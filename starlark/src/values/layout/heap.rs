@@ -130,7 +130,7 @@ impl FrozenHeap {
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
-        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x), x.len());
+        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x.len()), x.len());
         unsafe {
             v.write_extra(x.as_bytes())
         };
@@ -238,7 +238,7 @@ impl Heap {
     pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValuePtr = arena.alloc_extra(starlark_str(x), x.len());
+        let v: &AValuePtr = arena.alloc_extra(starlark_str(x.len()), x.len());
         unsafe {
             v.write_extra(x.as_bytes())
         };
@@ -323,7 +323,7 @@ impl<'v> Tracer<'v> {
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> Value<'v> {
-        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x), x.len());
+        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x.len()), x.len());
         unsafe {
             v.write_extra(x.as_bytes())
         };
