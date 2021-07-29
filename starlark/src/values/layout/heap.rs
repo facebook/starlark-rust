@@ -22,7 +22,7 @@
 use crate::values::{
     layout::{
         arena::{AValuePtr, Arena, Reservation},
-        avalue::{complex, simple, AValue},
+        avalue::{complex, simple, starlark_str, AValue},
         pointer::Pointer,
         value::{FrozenValue, Value},
     },
@@ -128,8 +128,12 @@ impl FrozenHeap {
         FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(v) }))
     }
 
-    pub(crate) fn alloc_str(&self, x: Box<str>) -> FrozenValue {
-        self.alloc_raw(simple(x))
+    pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
+        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x), x.len());
+        unsafe {
+            v.write_extra(x.as_bytes())
+        };
+        FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(v) }))
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -230,8 +234,25 @@ impl Heap {
         Value(Pointer::new_ptr2(v))
     }
 
-    pub(crate) fn alloc_str(&self, x: Box<str>) -> Value {
-        self.alloc_simple(x)
+    pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value {
+        let arena_ref = self.arena.borrow_mut();
+        let arena = &*arena_ref;
+        let v: &AValuePtr = arena.alloc_extra(starlark_str(x), x.len());
+        unsafe {
+            v.write_extra(x.as_bytes())
+        };
+
+        // We have an arena inside a RefCell which stores ValueMem<'v>
+        // However, we promise not to clear the RefCell other than for GC
+        // so we can make the `arena` available longer
+        let v = unsafe { transmute!(&AValuePtr, &'v AValuePtr, v) };
+        Value(Pointer::new_ptr2(v))
+    }
+
+    pub(crate) fn alloc_char(&self, x: char) -> Value {
+        // FIXME: Could save an allocation here
+        let s = x.to_string();
+        self.alloc_str(s.as_str())
     }
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
@@ -293,6 +314,14 @@ impl<'v> Tracer<'v> {
         let r = self.arena.reserve::<T>();
         let v = Value(Pointer::new_ptr2(unsafe { cast::ptr_lifetime(r.ptr()) }));
         (v, r)
+    }
+
+    pub(crate) fn alloc_str(&self, x: &str) -> Value<'v> {
+        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x), x.len());
+        unsafe {
+            v.write_extra(x.as_bytes())
+        };
+        Value(Pointer::new_ptr2(unsafe { cast::ptr_lifetime(v) }))
     }
 
     fn adjust(&self, value: Value<'v>) -> Value<'v> {

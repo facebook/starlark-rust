@@ -33,6 +33,7 @@ use std::{
     alloc::Layout,
     any::TypeId,
     cmp,
+    intrinsics::copy_nonoverlapping,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
@@ -219,6 +220,14 @@ impl AValuePtr {
         ptr::write(p, x | 1);
         ptr::write(p.add(1), sz);
         res
+    }
+
+    pub unsafe fn write_extra(&self, bytes: &[u8]) {
+        let n = self.0.size_of();
+        debug_assert_eq!(self.unpack().memory_size(), n + bytes.len());
+        let p = self as *const AValuePtr as *mut u8;
+        let dest = p.add(mem::size_of::<AValuePtr>() + n);
+        copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
     }
 }
 

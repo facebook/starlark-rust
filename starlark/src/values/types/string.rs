@@ -31,33 +31,76 @@ use std::{
     cmp,
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
+    fmt,
+    fmt::Debug,
     hash::{Hash, Hasher},
+    slice, str,
 };
 
 /// The result of calling `type()` on strings.
 pub const STRING_TYPE: &str = "string";
 
+/// A pointer to this type represents a Starlark string.
+/// Use of this type is discouraged and not considered stable.
+#[derive(AnyLifetime)]
+#[repr(C)] // We want the body to come after len
+pub struct StarlarkStr {
+    len: usize,
+    // Followed by an unsized block, meaning this type is unsized.
+    // But we can't mark it as such since we really want &StarlarkStr to
+    // take up only one word.
+    body: (),
+}
+
+impl Debug for StarlarkStr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.unpack().fmt(f)
+    }
+}
+
+impl StarlarkStr {
+    /// Unsafe because if you do `unpack` on this it will blow up
+    pub(crate) unsafe fn new(len: usize) -> Self {
+        Self { len, body: () }
+    }
+
+    pub fn unpack(&self) -> &str {
+        unsafe {
+            let slice = slice::from_raw_parts(&self.body as *const () as *const u8, self.len);
+            str::from_utf8_unchecked(slice)
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 impl<'v> AllocValue<'v> for String {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self.into_boxed_str())
+        heap.alloc_str(self.as_str())
     }
 }
 
 impl<'v> AllocValue<'v> for char {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self.to_string().into_boxed_str())
+        heap.alloc_char(self)
     }
 }
 
 impl<'v> AllocValue<'v> for &'_ String {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(Box::from(self.as_str()))
+        heap.alloc_str(self.as_str())
     }
 }
 
 impl<'v> AllocValue<'v> for &'_ str {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(Box::from(self))
+        heap.alloc_str(self)
     }
 }
 
@@ -99,9 +142,9 @@ pub(crate) fn json_escape(x: &str) -> String {
     unsafe { String::from_utf8_unchecked(escaped) }
 }
 
-impl SimpleValue for Box<str> {}
+impl SimpleValue for StarlarkStr {}
 
-impl<'v> StarlarkValue<'v> for Box<str> {
+impl<'v> StarlarkValue<'v> for StarlarkStr {
     starlark_type!(STRING_TYPE);
 
     fn get_methods(&self) -> Option<&'static Globals> {
@@ -153,12 +196,12 @@ impl<'v> StarlarkValue<'v> for Box<str> {
 
         buffer.reserve(2 + self.len());
         buffer.push('"');
-        loop_ascii(self, buffer);
+        loop_ascii(self.unpack(), buffer);
         buffer.push('"');
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
-        Ok(json_escape(self))
+        Ok(json_escape(self.unpack()))
     }
 
     fn to_bool(&self) -> bool {
@@ -167,13 +210,13 @@ impl<'v> StarlarkValue<'v> for Box<str> {
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = DefaultHasher::new();
-        hash_string_value(self.as_ref(), &mut s);
+        hash_string_value(self.unpack(), &mut s);
         Ok(s.finish())
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if let Some(other) = other.unpack_str() {
-            Ok(*self.as_ref() == *other)
+            Ok(*self.unpack() == *other)
         } else {
             Ok(false)
         }
@@ -181,7 +224,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other) = other.unpack_str() {
-            Ok(self.as_ref().cmp(other))
+            Ok(self.unpack().cmp(other))
         } else {
             ValueError::unsupported_with(self, "cmp()", other)
         }
@@ -190,24 +233,25 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     fn at(&self, index: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         // This method is disturbingly hot. Use the logic from `convert_index`,
         // but modified to be UTF8 string friendly.
+        let s = self.unpack();
         match index.to_int() {
             Err(_) => Err(ValueError::IncorrectParameterType.into()),
             Ok(i) => {
                 if i >= 0 {
-                    match fast_string::at(self, i as usize) {
+                    match fast_string::at(s, i as usize) {
                         None => Err(ValueError::IndexOutOfBound(i).into()),
                         Some(c) => Ok(heap.alloc(c.to_string())),
                     }
                 } else {
-                    let len = fast_string::len(self);
+                    let len = fast_string::len(s);
                     let ind = (-i) as usize; // Index from the end, minimum of 1
                     if ind > len {
                         Err(ValueError::IndexOutOfBound(i).into())
-                    } else if len == self.len() {
+                    } else if len == s.len() {
                         // We are a 7bit ASCII string, so take the fast-path
-                        Ok(heap.alloc(self.as_bytes()[len - ind] as char))
+                        Ok(heap.alloc(s.as_bytes()[len - ind] as char))
                     } else {
-                        Ok(heap.alloc(fast_string::at(self, len - ind).unwrap()))
+                        Ok(heap.alloc(fast_string::at(s, len - ind).unwrap()))
                     }
                 }
             }
@@ -215,12 +259,12 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(fast_string::len(self) as i32)
+        Ok(fast_string::len(self.unpack()) as i32)
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
         match other.unpack_str() {
-            Some(s) => Ok(self.contains(s)),
+            Some(s) => Ok(self.unpack().contains(s)),
             None => Err(ValueError::IncorrectParameterType.into()),
         }
     }
@@ -243,6 +287,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
         };
 
         let v: String = self
+            .unpack()
             .chars()
             .skip(low as usize)
             .take(take as usize)
@@ -279,7 +324,7 @@ impl<'v> StarlarkValue<'v> for Box<str> {
             if self.is_empty() {
                 Ok(other)
             } else {
-                Ok(heap.alloc(fast_string::append(self, other_str)))
+                Ok(heap.alloc(fast_string::append(self.unpack(), other_str)))
             }
         } else {
             ValueError::unsupported_with(self, "+", other)
@@ -289,9 +334,10 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
-                let mut result = String::with_capacity(self.len() * cmp::max(0, l) as usize);
+                let s = self.unpack();
+                let mut result = String::with_capacity(s.len() * cmp::max(0, l) as usize);
                 for _i in 0..l {
-                    result.push_str(self)
+                    result.push_str(s)
                 }
                 Ok(heap.alloc(result))
             }
@@ -300,19 +346,19 @@ impl<'v> StarlarkValue<'v> for Box<str> {
     }
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc(interpolation::percent(self, other)?))
+        Ok(heap.alloc(interpolation::percent(self.unpack(), other)?))
     }
 }
 
 impl AllocFrozenValue for String {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_str(self.into_boxed_str())
+        heap.alloc_str(self.as_str())
     }
 }
 
 impl<'v, 'a> AllocFrozenValue for &'a str {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_str(Box::from(self))
+        heap.alloc_str(self)
     }
 }
 

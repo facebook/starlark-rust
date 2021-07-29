@@ -37,6 +37,7 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     none::NoneType,
+    string::StarlarkStr,
 };
 use gazebo::prelude::*;
 use void::Void;
@@ -133,11 +134,10 @@ impl<'v> Value<'v> {
     ///
     /// Unstable and likely to be removed in future, as the presence of the `Box` is
     /// not a guaranteed part of the API.
-    #[allow(clippy::borrowed_box)]
-    pub fn unpack_box_str(self) -> Option<&'v Box<str>> {
+    pub fn unpack_starlark_str(self) -> Option<&'v StarlarkStr> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack().unpack_box_str(),
-            PointerUnpack::Ptr2(x) => x.unpack().unpack_box_str(),
+            PointerUnpack::Ptr1(x) => x.unpack().unpack_starlark_str(),
+            PointerUnpack::Ptr2(x) => x.unpack().unpack_starlark_str(),
             _ => None,
         }
     }

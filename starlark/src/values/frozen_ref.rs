@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::values::{FrozenValue, SimpleValue};
+use crate::values::{string::StarlarkStr, FrozenValue, SimpleValue};
 use gazebo::prelude::*;
 use std::{
     borrow::Borrow,
@@ -58,9 +58,9 @@ impl FrozenValue {
     }
 
     /// Note: see docs about ['Value::unpack_box_str'] about instability
-    pub fn downcast_frozen_box_str(self) -> Option<FrozenRef<Box<str>>> {
+    pub fn downcast_frozen_starlark_str(self) -> Option<FrozenRef<StarlarkStr>> {
         self.to_value()
-            .unpack_box_str()
+            .unpack_starlark_str()
             .map(|value| FrozenRef { value })
     }
 }

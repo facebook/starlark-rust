@@ -20,8 +20,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        layout::arena::AValuePtr, ComplexValue, ConstFrozenValue, Freezer, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Tracer, Value,
+        layout::arena::AValuePtr, string::StarlarkStr, ComplexValue, ConstFrozenValue, Freezer,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
@@ -47,11 +47,10 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v>;
 
     fn unpack_str(&self) -> Option<&str> {
-        self.unpack_box_str().map(|x| &**x)
+        self.unpack_starlark_str().map(|x| x.unpack())
     }
 
-    #[allow(clippy::borrowed_box)]
-    fn unpack_box_str(&self) -> Option<&Box<str>>;
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
 }
 
 impl<'v> dyn AValue<'v> {
@@ -68,6 +67,10 @@ impl<'v> dyn AValue<'v> {
     }
 }
 
+pub(crate) fn starlark_str(x: &str) -> impl AValue<'static> + Send + Sync {
+    Wrapper(Direct, unsafe { StarlarkStr::new(x.len()) })
+}
+
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
     // These are the same representation, so safe to convert
     let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
@@ -81,6 +84,9 @@ pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> + Send + Sync 
 pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v> {
     Wrapper(Complex, x)
 }
+
+// A type where the second element is in control of what instances are in scope
+struct Direct;
 
 // A type that implements StarlarkValue but nothing else, so will never be stored
 // in the heap (e.g. bool, None)
@@ -123,8 +129,36 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
         unreachable!("Basic types don't appear in the heap")
     }
 
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         None
+    }
+}
+
+impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
+    fn memory_size(&self) -> usize {
+        mem::size_of::<StarlarkStr>() + self.1.len()
+    }
+
+    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        let s = self.1.unpack();
+        let fv = freezer.alloc(s);
+        unsafe {
+            me.overwrite::<Self>(fv.0.ptr_value() & !1)
+        };
+        Ok(fv)
+    }
+
+    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v> {
+        let s = self.1.unpack();
+        let v = tracer.alloc_str(s);
+        unsafe {
+            me.overwrite::<Self>(v.0.ptr_value() & !1)
+        };
+        v
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        Some(&self.1)
     }
 }
 
@@ -150,13 +184,8 @@ where
         v
     }
 
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
-        // Do this entirely statically for best performance
-        if T::static_type_id() == TypeId::of::<Box<str>>() {
-            unsafe { Some(cast::ptr(&self.0)) }
-        } else {
-            None
-        }
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        None
     }
 }
 
@@ -182,7 +211,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         v
     }
 
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         None
     }
 }
@@ -223,7 +252,7 @@ impl<'v> AValue<'v> for BlackHole {
     fn heap_copy(&self, _me: &AValuePtr, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!()
     }
-    fn unpack_box_str(&self) -> Option<&Box<str>> {
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         unreachable!()
     }
 }
