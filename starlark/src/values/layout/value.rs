@@ -33,11 +33,12 @@ use crate::values::{
     layout::{
         arena::AValuePtr,
         avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
-        pointer::{Pointer, PointerUnpack},
+        pointer::Pointer,
         pointer_i32::PointerI32,
     },
     string::StarlarkStr,
 };
+use either::Either;
 use gazebo::{cast, coerce::Coerce, prelude::*};
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
@@ -66,23 +67,27 @@ unsafe impl Send for FrozenValue {}
 unsafe impl Sync for FrozenValue {}
 
 impl<'v> Value<'v> {
+    pub(crate) fn new_ptr(x: &'v AValuePtr) -> Self {
+        Self(Pointer::new_mutable(x))
+    }
+
+    pub(crate) fn new_ptr_usize(x: usize) -> Self {
+        Self(Pointer::new_mutable_usize(x))
+    }
+
     /// Create a new `None` value.
     pub fn new_none() -> Self {
-        Value(Pointer::new_ptr1(VALUE_NONE))
+        FrozenValue::new_none().to_value()
     }
 
     /// Create a new boolean.
     pub fn new_bool(x: bool) -> Self {
-        if x {
-            Value(Pointer::new_ptr1(VALUE_TRUE))
-        } else {
-            Value(Pointer::new_ptr1(VALUE_FALSE))
-        }
+        FrozenValue::new_bool(x).to_value()
     }
 
     /// Create a new integer.
     pub fn new_int(x: i32) -> Self {
-        Self(Pointer::new_int(x))
+        FrozenValue::new_int(x).to_value()
     }
 
     /// Turn a [`FrozenValue`] into a [`Value`]. See the safety warnings on
@@ -90,19 +95,15 @@ impl<'v> Value<'v> {
     pub fn new_frozen(x: FrozenValue) -> Self {
         // Safe if every FrozenValue must have had a reference added to its heap first.
         // That property is NOT statically checked.
-        let p = unsafe { transmute!(Pointer<'static, AValuePtr>, Pointer<'v, AValuePtr>, x.0) };
-        Self(p)
+        Self(unsafe { x.0.cast_lifetime() })
     }
 
     /// Obtain the underlying [`FrozenValue`] from inside the [`Value`], if it is one.
     pub fn unpack_frozen(self) -> Option<FrozenValue> {
-        unsafe {
-            transmute!(
-                Option<Pointer<'v, AValuePtr>>,
-                Option<Pointer<'static, AValuePtr>>,
-                self.0.coerce_opt_ptr1()
-            )
-            .map(FrozenValue)
+        if self.0.is_mutable() {
+            None
+        } else {
+            Some(FrozenValue(unsafe { self.0.cast_lifetime() }))
         }
     }
 
@@ -136,28 +137,21 @@ impl<'v> Value<'v> {
     /// Unstable and likely to be removed in future, as the presence of the `Box` is
     /// not a guaranteed part of the API.
     pub fn unpack_starlark_str(self) -> Option<&'v StarlarkStr> {
-        match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack().unpack_starlark_str(),
-            PointerUnpack::Ptr2(x) => x.unpack().unpack_starlark_str(),
-            _ => None,
-        }
+        self.0
+            .unpack_ptr()
+            .and_then(|x| x.unpack().unpack_starlark_str())
     }
 
     /// Obtain the underlying `str` if it is a string.
     pub fn unpack_str(self) -> Option<&'v str> {
-        match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack().unpack_str(),
-            PointerUnpack::Ptr2(x) => x.unpack().unpack_str(),
-            _ => None,
-        }
+        self.0.unpack_ptr().and_then(|x| x.unpack().unpack_str())
     }
 
     /// Get a pointer to a [`AValue`].
     pub fn get_ref(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack(),
-            PointerUnpack::Ptr2(x) => x.unpack(),
-            PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
+            Either::Left(x) => x.unpack(),
+            Either::Right(x) => basic_ref(PointerI32::new(x)),
         }
     }
 
@@ -183,17 +177,25 @@ impl<'v> Value<'v> {
 }
 
 impl FrozenValue {
+    pub(crate) fn new_ptr(x: &'static AValuePtr) -> Self {
+        Self(Pointer::new_frozen(x))
+    }
+
+    pub(crate) fn new_ptr_usize(x: usize) -> Self {
+        Self(Pointer::new_frozen_usize(x))
+    }
+
     /// Create a new value representing `None` in Starlark.
     pub fn new_none() -> Self {
-        FrozenValue(Pointer::new_ptr1(VALUE_NONE))
+        Self::new_ptr(VALUE_NONE)
     }
 
     /// Create a new boolean in Starlark.
     pub fn new_bool(x: bool) -> Self {
         if x {
-            FrozenValue(Pointer::new_ptr1(VALUE_TRUE))
+            Self::new_ptr(VALUE_TRUE)
         } else {
-            FrozenValue(Pointer::new_ptr1(VALUE_FALSE))
+            Self::new_ptr(VALUE_FALSE)
         }
     }
 
@@ -231,18 +233,14 @@ impl FrozenValue {
     // Because of this cheating, we don't expose it outside Starlark.
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub(crate) fn unpack_str<'v>(&'v self) -> Option<&'v str> {
-        match self.0.unpack_ptr1() {
-            Some(x) => x.unpack().unpack_str(),
-            _ => None,
-        }
+        self.0.unpack_ptr().and_then(|x| x.unpack().unpack_str())
     }
 
     /// Get a pointer to the [`AValue`] object this value represents.
     pub fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
-            PointerUnpack::Ptr1(x) => x.unpack(),
-            PointerUnpack::Ptr2(x) => x.unpack(),
-            PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
+            Either::Left(x) => x.unpack(),
+            Either::Right(x) => basic_ref(PointerI32::new(x)),
         }
     }
 }

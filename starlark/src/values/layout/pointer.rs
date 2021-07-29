@@ -16,15 +16,16 @@
  */
 
 // We use pointer tagging on the bottom three bits:
-// ?00 => ptr1
-// ?01 => ptr2
-// ?11 => int (61 bit)
+// ?00 => frozen pointer
+// ?01 => mutable pointer
+// ?10 => int (32 bit)
 // third bit is a tag set by the user (get_user_tag)
 
 // We group our bytes based on the tag info, not traditional alignment.
 // This lint is fairly new, so have to also enable unknown-clippy-lints.
 #![allow(clippy::unusual_byte_groupings)]
 
+use either::Either;
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};
 use static_assertions::assert_eq_size;
 use std::num::NonZeroUsize;
@@ -43,25 +44,14 @@ pub(crate) struct Pointer<'p, P> {
 assert_eq_size!(Pointer<'static, String>, usize);
 assert_eq_size!(Option<Pointer<'static, String>>, usize);
 
-pub(crate) enum PointerUnpack<'p, P> {
-    Ptr1(&'p P),
-    Ptr2(&'p P),
-    Int(i32),
-}
+const TAG_BITS: usize = 0b111;
 
+const TAG_INT: usize = 0b10;
+const TAG_MUTABLE: usize = 0b01;
 const TAG_USER: usize = 0b100;
 
-const TAG_BITS: usize = 0b11;
-const TAG_P1: usize = 0b000;
-const TAG_P2: usize = 0b001;
-const TAG_INT: usize = 0b11;
-
-unsafe fn tag_pointer<T>(x: &T, tag: usize) -> usize {
-    cast::ptr_to_usize(x) | tag
-}
-
 unsafe fn untag_pointer<'a, T>(x: usize) -> &'a T {
-    cast::usize_to_ptr(x & !(TAG_BITS | TAG_USER))
+    cast::usize_to_ptr(x & !TAG_BITS)
 }
 
 fn tag_int(x: i32) -> usize {
@@ -89,29 +79,32 @@ impl<'p, P> Pointer<'p, P> {
         Self::new(tag_int(x))
     }
 
-    pub fn new_ptr1_usize(p1: usize) -> Self {
-        Self::new(p1 | TAG_P1)
+    pub fn new_mutable_usize(x: usize) -> Self {
+        Self::new(x | TAG_MUTABLE)
     }
 
-    pub fn new_ptr2_usize(p2: usize) -> Self {
-        Self::new(p2 | TAG_P2)
+    pub fn new_frozen_usize(x: usize) -> Self {
+        Self::new(x)
     }
 
-    pub fn new_ptr1(p1: &'p P) -> Self {
-        Self::new(unsafe { tag_pointer(p1, TAG_P1) })
+    pub fn new_mutable(x: &'p P) -> Self {
+        Self::new_mutable_usize(cast::ptr_to_usize(x))
     }
 
-    pub fn new_ptr2(p2: &'p P) -> Self {
-        Self::new(unsafe { tag_pointer(p2, TAG_P2) })
+    pub fn new_frozen(x: &'p P) -> Self {
+        Self::new_frozen_usize(cast::ptr_to_usize(x))
     }
 
-    pub fn unpack(self) -> PointerUnpack<'p, P> {
+    pub fn is_mutable(self) -> bool {
+        self.pointer.get() & TAG_MUTABLE == TAG_MUTABLE
+    }
+
+    pub fn unpack(self) -> Either<&'p P, i32> {
         let p = self.pointer.get();
-        match p & TAG_BITS {
-            TAG_P1 => PointerUnpack::Ptr1(unsafe { untag_pointer(p) }),
-            TAG_P2 => PointerUnpack::Ptr2(unsafe { untag_pointer(p) }),
-            TAG_INT => PointerUnpack::Int(untag_int(p)),
-            _ => panic!("Corrupted pointer"),
+        if p & TAG_INT == 0 {
+            Either::Left(unsafe { untag_pointer(p) })
+        } else {
+            Either::Right(untag_int(p))
         }
     }
 
@@ -121,37 +114,19 @@ impl<'p, P> Pointer<'p, P> {
 
     pub fn unpack_int(self) -> Option<i32> {
         let p = self.pointer.get();
-        if p & TAG_BITS == TAG_INT {
+        if p & TAG_INT == 0 {
+            None
+        } else {
             Some(untag_int(p))
-        } else {
-            None
         }
     }
 
-    pub fn unpack_ptr1(self) -> Option<&'p P> {
+    pub fn unpack_ptr(self) -> Option<&'p P> {
         let p = self.pointer.get();
-        if p & TAG_BITS == TAG_P1 {
+        if p & TAG_INT == 0 {
             Some(unsafe { untag_pointer(p) })
         } else {
             None
-        }
-    }
-
-    pub fn unpack_ptr2(self) -> Option<&'p P> {
-        let p = self.pointer.get();
-        if p & TAG_BITS == TAG_P2 {
-            Some(unsafe { untag_pointer(p) })
-        } else {
-            None
-        }
-    }
-
-    pub fn coerce_opt_ptr1(self) -> Option<Pointer<'p, P>> {
-        let p = self.pointer.get();
-        if p & TAG_BITS == TAG_P2 {
-            None
-        } else {
-            Some(self)
         }
     }
 
@@ -161,6 +136,13 @@ impl<'p, P> Pointer<'p, P> {
 
     pub fn ptr_value(self) -> usize {
         self.pointer.get()
+    }
+
+    pub unsafe fn cast_lifetime<'p2>(self) -> Pointer<'p2, P> {
+        Pointer {
+            pointer: self.pointer,
+            phantom: PhantomDataInvariant::new(),
+        }
     }
 }
 

@@ -23,7 +23,6 @@ use crate::values::{
     layout::{
         arena::{AValuePtr, Arena, Reservation},
         avalue::{complex, simple, starlark_str, AValue},
-        pointer::Pointer,
         value::{FrozenValue, Value},
     },
     AllocFrozenValue, ComplexValue, SimpleValue,
@@ -127,7 +126,7 @@ impl FrozenHeap {
 
     fn alloc_raw(&self, x: impl AValue<'static>) -> FrozenValue {
         let v: &AValuePtr = self.arena.alloc(x);
-        FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(v) }))
+        FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
@@ -135,7 +134,7 @@ impl FrozenHeap {
         unsafe {
             v.write_extra(x.as_bytes())
         };
-        FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(v) }))
+        FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -168,9 +167,7 @@ impl Freezer {
         let reservation = reserve(&heap, ty);
         // Morally the type is tied to the heap, but we want to have them both next to each other
         let reservation = unsafe { transmute!(Reservation, Reservation<'static>, reservation) };
-        let fv = FrozenValue(Pointer::new_ptr1(unsafe {
-            cast::ptr_lifetime(reservation.ptr())
-        }));
+        let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(reservation.ptr()) });
         Self(heap, fv, Some(reservation))
     }
 
@@ -194,7 +191,7 @@ impl Freezer {
 
     pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> (FrozenValue, Reservation<'v>) {
         let r = self.0.arena.reserve::<T>();
-        let fv = FrozenValue(Pointer::new_ptr1(unsafe { cast::ptr_lifetime(r.ptr()) }));
+        let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (fv, r)
     }
 
@@ -206,9 +203,9 @@ impl Freezer {
         }
 
         // Case 2: We have already been replaced with a forwarding, or need to freeze
-        let value = value.0.unpack_ptr2().unwrap();
+        let value = value.0.unpack_ptr().unwrap();
         match value.unpack_overwrite() {
-            Either::Left(x) => Ok(FrozenValue(Pointer::new_ptr1_usize(x))),
+            Either::Left(x) => Ok(FrozenValue::new_ptr_usize(x)),
             Either::Right(v) => v.heap_freeze(value, self),
         }
     }
@@ -232,8 +229,7 @@ impl Heap {
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        let v = unsafe { transmute!(&AValuePtr, &'v AValuePtr, v) };
-        Value(Pointer::new_ptr2(v))
+        Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
     pub(crate) fn alloc_str_init<'v>(
@@ -249,8 +245,7 @@ impl Heap {
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        let v = unsafe { transmute!(&AValuePtr, &'v AValuePtr, v) };
-        Value(Pointer::new_ptr2(v))
+        Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
     pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
@@ -287,8 +282,7 @@ impl Heap {
             // Otherwise the Value is constrainted by the borrow_mut, when
             // we consider values to be kept alive permanently, other than
             // when a GC happens
-            let x = unsafe { transmute!(&AValuePtr, &'v AValuePtr, x) };
-            f(Value(Pointer::new_ptr2(x)))
+            f(Value::new_ptr(unsafe { cast::ptr_lifetime(x) }))
         })
     }
 
@@ -329,7 +323,7 @@ impl<'v> Tracer<'v> {
         &'a self,
     ) -> (Value<'v>, Reservation<'a>) {
         let r = self.arena.reserve::<T>();
-        let v = Value(Pointer::new_ptr2(unsafe { cast::ptr_lifetime(r.ptr()) }));
+        let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (v, r)
     }
 
@@ -338,20 +332,19 @@ impl<'v> Tracer<'v> {
         unsafe {
             v.write_extra(x.as_bytes())
         };
-        Value(Pointer::new_ptr2(unsafe { cast::ptr_lifetime(v) }))
+        Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
     fn adjust(&self, value: Value<'v>) -> Value<'v> {
-        let old_val = value.0.unpack_ptr2();
         // Case 1, doesn't point at the old arena
-        let old_val = match old_val {
-            None => return value,
-            Some(x) => x,
-        };
+        if !value.0.is_mutable() {
+            return value;
+        }
+        let old_val = value.0.unpack_ptr().unwrap();
 
         // Case 2: We have already been replaced with a forwarding, or need to freeze
         let mut res = match old_val.unpack_overwrite() {
-            Either::Left(x) => Value(Pointer::new_ptr2_usize(x)),
+            Either::Left(x) => Value::new_ptr_usize(x),
             Either::Right(v) => v.heap_copy(old_val, self),
         };
 
