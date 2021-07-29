@@ -223,11 +223,14 @@ impl AValuePtr {
     }
 
     pub unsafe fn write_extra(&self, bytes: &[u8]) {
+        debug_assert_eq!(self.unpack().memory_size(), self.0.size_of() + bytes.len());
+        copy_nonoverlapping(bytes.as_ptr(), self.get_extra(), bytes.len());
+    }
+
+    pub unsafe fn get_extra(&self) -> *mut u8 {
         let n = self.0.size_of();
-        debug_assert_eq!(self.unpack().memory_size(), n + bytes.len());
         let p = self as *const AValuePtr as *mut u8;
-        let dest = p.add(mem::size_of::<AValuePtr>() + n);
-        copy_nonoverlapping(bytes.as_ptr(), dest, bytes.len());
+        p.add(mem::size_of::<AValuePtr>() + n)
     }
 }
 

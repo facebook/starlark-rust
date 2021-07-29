@@ -131,14 +131,3 @@ pub fn count_matches(x: &str, needle: &str) -> usize {
         x.matches(needle).count()
     }
 }
-
-/// Apppend two strings together.
-/// Inline because it's a hot-spot, and often length checks will be done just before.
-#[inline]
-pub fn append(x: &str, y: &str) -> String {
-    // Optimised based on https://github.com/hoodie/concatenation_benchmarks-rs
-    let mut s = String::with_capacity(x.len() + y.len());
-    s.push_str(x);
-    s.push_str(y);
-    s
-}

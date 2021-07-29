@@ -20,7 +20,6 @@
 // Encoding none, bool etc in the pointer of frozen value
 
 use crate::values::{
-    fast_string,
     layout::{
         arena::{AValuePtr, Arena, Reservation},
         avalue::{complex, simple, starlark_str, AValue},
@@ -37,10 +36,12 @@ use std::{
     fmt,
     fmt::{Debug, Formatter},
     hash::{Hash, Hasher},
+    intrinsics::copy_nonoverlapping,
     marker::PhantomData,
     ops::Deref,
     ptr,
     sync::Arc,
+    usize,
 };
 
 /// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
@@ -235,13 +236,15 @@ impl Heap {
         Value(Pointer::new_ptr2(v))
     }
 
-    pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
+    pub(crate) fn alloc_str_init<'v>(
+        &'v self,
+        len: usize,
+        init: impl FnOnce(*mut u8),
+    ) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValuePtr = arena.alloc_extra(starlark_str(x.len()), x.len());
-        unsafe {
-            v.write_extra(x.as_bytes())
-        };
+        let v: &AValuePtr = arena.alloc_extra(starlark_str(len), len);
+        init(unsafe { v.get_extra() });
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -250,15 +253,23 @@ impl Heap {
         Value(Pointer::new_ptr2(v))
     }
 
+    pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
+        self.alloc_str_init(x.len(), |dest| unsafe {
+            copy_nonoverlapping(x.as_ptr(), dest, x.len())
+        })
+    }
+
     pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {
-        // FIXME: Could save an allocation here
-        self.alloc_str(&fast_string::append(x, y))
+        self.alloc_str_init(x.len() + y.len(), |dest| unsafe {
+            copy_nonoverlapping(x.as_ptr(), dest, x.len());
+            copy_nonoverlapping(y.as_ptr(), dest.add(x.len()), y.len())
+        })
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
-        // FIXME: Could save an allocation here
-        let s = x.to_string();
-        self.alloc_str(s.as_str())
+        let mut dst = [0; 4];
+        let res = x.encode_utf8(&mut dst);
+        self.alloc_str(res)
     }
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
