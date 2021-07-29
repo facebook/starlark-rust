@@ -39,7 +39,7 @@ use crate::values::{
     none::NoneType,
     string::StarlarkStr,
 };
-use gazebo::prelude::*;
+use gazebo::{coerce::Coerce, prelude::*};
 use void::Void;
 
 // So we can provide &dyn StarlarkValue's when we need them
@@ -53,6 +53,8 @@ const VALUE_FALSE: bool = false;
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
 pub struct Value<'v>(pub(crate) Pointer<'v, 'v, AValuePtr, AValuePtr>);
+
+unsafe impl<'v> Coerce<Value<'v>> for Value<'v> {}
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
 ///
