@@ -104,9 +104,7 @@ impl<'v> PartialEq for Value<'v> {
 
 impl PartialEq for FrozenValue {
     fn eq(&self, other: &FrozenValue) -> bool {
-        let v: Value = Value::new_frozen(*self);
-        let other: Value = Value::new_frozen(*other);
-        v.equals(other).ok() == Some(true)
+        self.to_value().eq(&other.to_value())
     }
 }
 
