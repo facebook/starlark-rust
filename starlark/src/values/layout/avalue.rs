@@ -20,8 +20,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        layout::arena::AValuePtr, string::StarlarkStr, ComplexValue, ConstFrozenValue, Freezer,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        layout::arena::AValuePtr, none::NoneType, string::StarlarkStr, ComplexValue,
+        ConstFrozenValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
@@ -30,6 +30,14 @@ use std::{
     cmp::Ordering,
     fmt::{self, Debug},
     mem,
+    ptr::metadata,
+};
+
+pub(crate) static VALUE_NONE: &AValuePtr = {
+    const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
+    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    static DATA: (AValuePtr, Wrapper<Basic, NoneType>) = (AValuePtr(metadata(DYN)), PAYLOAD);
+    &DATA.0
 };
 
 /// A trait that covers [`StarlarkValue`].

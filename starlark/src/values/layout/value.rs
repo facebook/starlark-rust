@@ -32,18 +32,16 @@
 use crate::values::{
     layout::{
         arena::AValuePtr,
-        avalue::{basic_ref, AValue},
+        avalue::{basic_ref, AValue, VALUE_NONE},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
     },
-    none::NoneType,
     string::StarlarkStr,
 };
-use gazebo::{coerce::Coerce, prelude::*};
+use gazebo::{cast, coerce::Coerce, prelude::*};
 use void::Void;
 
 // So we can provide &dyn StarlarkValue's when we need them
-const VALUE_NONE: NoneType = NoneType;
 const VALUE_TRUE: bool = true;
 const VALUE_FALSE: bool = false;
 
@@ -75,7 +73,7 @@ unsafe impl Sync for FrozenValue {}
 impl<'v> Value<'v> {
     /// Create a new `None` value.
     pub fn new_none() -> Self {
-        Self(Pointer::new_none())
+        Value(Pointer::new_ptr1(VALUE_NONE))
     }
 
     /// Create a new boolean.
@@ -117,7 +115,8 @@ impl<'v> Value<'v> {
 
     /// Is this value `None`.
     pub fn is_none(self) -> bool {
-        self.0.is_none()
+        // Safe because frozen values never have a tag
+        self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
     }
 
     /// Obtain the underlying `bool` if it is a boolean.
@@ -158,7 +157,6 @@ impl<'v> Value<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack(),
             PointerUnpack::Ptr2(x) => x.unpack(),
-            PointerUnpack::None => basic_ref(&VALUE_NONE),
             PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
             PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),
             PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
@@ -189,7 +187,7 @@ impl<'v> Value<'v> {
 impl FrozenValue {
     /// Create a new value representing `None` in Starlark.
     pub fn new_none() -> Self {
-        Self(Pointer::new_none())
+        FrozenValue(Pointer::new_ptr1(VALUE_NONE))
     }
 
     /// Create a new boolean in Starlark.
@@ -204,7 +202,8 @@ impl FrozenValue {
 
     /// Is a value a Starlark `None`.
     pub fn is_none(self) -> bool {
-        self.0.is_none()
+        // Safe because frozen values never have a tag
+        self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
     }
 
     /// Return the [`bool`] if the value is a boolean, otherwise [`None`].
@@ -234,7 +233,6 @@ impl FrozenValue {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),
-            PointerUnpack::None => basic_ref(&VALUE_NONE),
             PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
             PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),
             PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
