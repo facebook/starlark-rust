@@ -99,7 +99,7 @@ pub fn at(x: &str, i: usize) -> Option<char> {
         return None;
     }
     let n = skip_at_most_1byte(x, i);
-    let s = unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) };
+    let s = unsafe { x.get_unchecked(n..) };
     s.chars().nth(i - n)
 }
 
@@ -108,7 +108,7 @@ pub fn split_at(x: &str, i: usize) -> (&str, &str) {
         return (x, "");
     }
     let n = skip_at_most_1byte(x, i);
-    let s = unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) };
+    let s = unsafe { x.get_unchecked(n..) };
     let mut c = s.chars();
     let _ = c.advance_by(i - n); // Ignore if it advances by less than N
     x.split_at(x.len() - c.as_str().len())
@@ -121,10 +121,7 @@ pub fn len(x: &str) -> usize {
     if n == x.len() {
         n // All 1 byte
     } else {
-        unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) }
-            .chars()
-            .count()
-            + n
+        unsafe { x.get_unchecked(n..) }.chars().count() + n
     }
 }
 

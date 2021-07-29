@@ -317,8 +317,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
             Ok(heap.alloc_str(""))
         } else if s.len() == len_chars {
             // ASCII fast-path
-            let s = &s.as_bytes()[start..stop];
-            Ok(heap.alloc_str(unsafe { str::from_utf8_unchecked(s) }))
+            Ok(heap.alloc_str(s.get(start..stop).unwrap()))
         } else {
             let s = fast_string::split_at(s, start).1;
             let s = if stop == len_chars {
