@@ -25,29 +25,27 @@
 // This lint is fairly new, so have to also enable unknown-clippy-lints.
 #![allow(clippy::unusual_byte_groupings)]
 
-use std::num::NonZeroUsize;
-
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};
 use static_assertions::assert_eq_size;
-use void::Void;
+use std::num::NonZeroUsize;
 
 // A structure that is morally a `PointerUnpack`, but gets encoded in one
 // pointer sized lump. The two types P1 and P2 are arbitrary pointers (which we
 // instantiate to FrozenValueMem and ValueMem)
 #[derive(Clone_, Copy_, Dupe_)]
-pub(crate) struct Pointer<'p1, 'p2, P1, P2> {
+pub(crate) struct Pointer<'p, P> {
     pointer: NonZeroUsize,
     // Make sure we are invariant in all the types/lifetimes.
     // See https://stackoverflow.com/questions/62659221/why-does-a-program-compile-despite-an-apparent-lifetime-mismatch
-    phantom: PhantomDataInvariant<(&'p1 P1, &'p2 P2)>,
+    phantom: PhantomDataInvariant<&'p P>,
 }
 
-assert_eq_size!(Pointer<'static, 'static, String, String>, usize);
-assert_eq_size!(Option<Pointer<'static, 'static, String, String>>, usize);
+assert_eq_size!(Pointer<'static, String>, usize);
+assert_eq_size!(Option<Pointer<'static, String>>, usize);
 
-pub(crate) enum PointerUnpack<'p1, 'p2, P1, P2> {
-    Ptr1(&'p1 P1),
-    Ptr2(&'p2 P2),
+pub(crate) enum PointerUnpack<'p, P> {
+    Ptr1(&'p P),
+    Ptr2(&'p P),
     Int(i32),
 }
 
@@ -74,7 +72,7 @@ fn untag_int(x: usize) -> i32 {
     ((x as isize) >> 3) as i32
 }
 
-impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
+impl<'p, P> Pointer<'p, P> {
     fn new(pointer: usize) -> Self {
         let phantom = PhantomDataInvariant::new();
         // Never zero because the only TAG which is zero is P1, and that must be a pointer
@@ -99,15 +97,15 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         Self::new(p2 | TAG_P2)
     }
 
-    pub fn new_ptr1(p1: &'p1 P1) -> Self {
+    pub fn new_ptr1(p1: &'p P) -> Self {
         Self::new(unsafe { tag_pointer(p1, TAG_P1) })
     }
 
-    pub fn new_ptr2(p2: &'p2 P2) -> Self {
+    pub fn new_ptr2(p2: &'p P) -> Self {
         Self::new(unsafe { tag_pointer(p2, TAG_P2) })
     }
 
-    pub fn unpack(self) -> PointerUnpack<'p1, 'p2, P1, P2> {
+    pub fn unpack(self) -> PointerUnpack<'p, P> {
         let p = self.pointer.get();
         match p & TAG_BITS {
             TAG_P1 => PointerUnpack::Ptr1(unsafe { untag_pointer(p) }),
@@ -130,7 +128,7 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         }
     }
 
-    pub fn unpack_ptr1(self) -> Option<&'p1 P1> {
+    pub fn unpack_ptr1(self) -> Option<&'p P> {
         let p = self.pointer.get();
         if p & TAG_BITS == TAG_P1 {
             Some(unsafe { untag_pointer(p) })
@@ -139,7 +137,7 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         }
     }
 
-    pub fn unpack_ptr2(self) -> Option<&'p2 P2> {
+    pub fn unpack_ptr2(self) -> Option<&'p P> {
         let p = self.pointer.get();
         if p & TAG_BITS == TAG_P2 {
             Some(unsafe { untag_pointer(p) })
@@ -148,36 +146,21 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         }
     }
 
-    pub fn coerce_opt<'p2_, P2_>(self) -> Option<Pointer<'p1, 'p2_, P1, P2_>> {
+    pub fn coerce_opt_ptr1(self) -> Option<Pointer<'p, P>> {
         let p = self.pointer.get();
         if p & TAG_BITS == TAG_P2 {
             None
         } else {
-            // Safe because we aren't a P2, and other than P2, we are equal representation
-            Some(Pointer {
-                pointer: self.pointer,
-                phantom: PhantomDataInvariant::new(),
-            })
+            Some(self)
         }
     }
 
-    pub fn ptr_eq(self, other: Pointer<'_, '_, P1, P2>) -> bool {
+    pub fn ptr_eq(self, other: Pointer<'_, P>) -> bool {
         self.pointer == other.pointer
     }
 
     pub fn ptr_value(self) -> usize {
         self.pointer.get()
-    }
-}
-
-impl<'p1, P1> Pointer<'p1, '_, P1, Void> {
-    // If we have a promise the second parameter isn't used, we can coerce the
-    // pointer without unpacking it
-    pub fn coerce<'p2, P2>(self) -> Pointer<'p1, 'p2, P1, P2> {
-        Pointer {
-            pointer: self.pointer,
-            phantom: PhantomDataInvariant::new(),
-        }
     }
 }
 

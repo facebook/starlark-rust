@@ -39,14 +39,13 @@ use crate::values::{
     string::StarlarkStr,
 };
 use gazebo::{cast, coerce::Coerce, prelude::*};
-use void::Void;
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
 ///
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
-pub struct Value<'v>(pub(crate) Pointer<'v, 'v, AValuePtr, AValuePtr>);
+pub struct Value<'v>(pub(crate) Pointer<'v, AValuePtr>);
 
 unsafe impl<'v> Coerce<Value<'v>> for Value<'v> {}
 
@@ -59,7 +58,7 @@ unsafe impl<'v> Coerce<Value<'v>> for Value<'v> {}
 /// for a little bit more safety.
 #[derive(Clone, Copy, Dupe)]
 // One possible change: moving from Blackhole during GC
-pub struct FrozenValue(pub(crate) Pointer<'static, 'static, AValuePtr, Void>);
+pub struct FrozenValue(pub(crate) Pointer<'static, AValuePtr>);
 
 // These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
 // it having variance.
@@ -91,23 +90,17 @@ impl<'v> Value<'v> {
     pub fn new_frozen(x: FrozenValue) -> Self {
         // Safe if every FrozenValue must have had a reference added to its heap first.
         // That property is NOT statically checked.
-        let p = unsafe {
-            transmute!(
-                Pointer<'static, 'static, AValuePtr, Void>,
-                Pointer<'v, 'static, AValuePtr, Void>,
-                x.0
-            )
-        };
-        Self(p.coerce())
+        let p = unsafe { transmute!(Pointer<'static, AValuePtr>, Pointer<'v, AValuePtr>, x.0) };
+        Self(p)
     }
 
     /// Obtain the underlying [`FrozenValue`] from inside the [`Value`], if it is one.
     pub fn unpack_frozen(self) -> Option<FrozenValue> {
         unsafe {
             transmute!(
-                Option<Pointer<'v, 'v, AValuePtr, Void>>,
-                Option<Pointer<'static, 'static, AValuePtr, Void>>,
-                self.0.coerce_opt()
+                Option<Pointer<'v, AValuePtr>>,
+                Option<Pointer<'static, AValuePtr>>,
+                self.0.coerce_opt_ptr1()
             )
             .map(FrozenValue)
         }
@@ -248,7 +241,7 @@ impl FrozenValue {
     pub fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack(),
-            PointerUnpack::Ptr2(x) => void::unreachable(*x),
+            PointerUnpack::Ptr2(x) => x.unpack(),
             PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
         }
     }
