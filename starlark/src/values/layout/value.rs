@@ -32,7 +32,7 @@
 use crate::values::{
     layout::{
         arena::AValuePtr,
-        avalue::{basic_ref, AValue, VALUE_NONE},
+        avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
         pointer::{Pointer, PointerUnpack},
         pointer_i32::PointerI32,
     },
@@ -40,10 +40,6 @@ use crate::values::{
 };
 use gazebo::{cast, coerce::Coerce, prelude::*};
 use void::Void;
-
-// So we can provide &dyn StarlarkValue's when we need them
-const VALUE_TRUE: bool = true;
-const VALUE_FALSE: bool = false;
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
 ///
@@ -78,7 +74,11 @@ impl<'v> Value<'v> {
 
     /// Create a new boolean.
     pub fn new_bool(x: bool) -> Self {
-        Self(Pointer::new_bool(x))
+        if x {
+            Value(Pointer::new_ptr1(VALUE_TRUE))
+        } else {
+            Value(Pointer::new_ptr1(VALUE_FALSE))
+        }
     }
 
     /// Create a new integer.
@@ -121,7 +121,14 @@ impl<'v> Value<'v> {
 
     /// Obtain the underlying `bool` if it is a boolean.
     pub fn unpack_bool(self) -> Option<bool> {
-        self.0.unpack_bool()
+        let p = self.0.ptr_value();
+        if p == cast::ptr_to_usize(VALUE_TRUE) {
+            Some(true)
+        } else if p == cast::ptr_to_usize(VALUE_FALSE) {
+            Some(false)
+        } else {
+            None
+        }
     }
 
     /// Obtain the underlying `int` if it is an integer.
@@ -157,8 +164,6 @@ impl<'v> Value<'v> {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack(),
             PointerUnpack::Ptr2(x) => x.unpack(),
-            PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
-            PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),
             PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
         }
     }
@@ -192,7 +197,11 @@ impl FrozenValue {
 
     /// Create a new boolean in Starlark.
     pub fn new_bool(x: bool) -> Self {
-        Self(Pointer::new_bool(x))
+        if x {
+            FrozenValue(Pointer::new_ptr1(VALUE_TRUE))
+        } else {
+            FrozenValue(Pointer::new_ptr1(VALUE_FALSE))
+        }
     }
 
     /// Create a new int in Starlark.
@@ -208,7 +217,14 @@ impl FrozenValue {
 
     /// Return the [`bool`] if the value is a boolean, otherwise [`None`].
     pub fn unpack_bool(self) -> Option<bool> {
-        self.0.unpack_bool()
+        let p = self.0.ptr_value();
+        if p == cast::ptr_to_usize(VALUE_TRUE) {
+            Some(true)
+        } else if p == cast::ptr_to_usize(VALUE_FALSE) {
+            Some(false)
+        } else {
+            None
+        }
     }
 
     /// Return the int if the value is an integer, otherwise [`None`].
@@ -233,8 +249,6 @@ impl FrozenValue {
         match self.0.unpack() {
             PointerUnpack::Ptr1(x) => x.unpack(),
             PointerUnpack::Ptr2(x) => void::unreachable(*x),
-            PointerUnpack::Bool(true) => basic_ref(&VALUE_TRUE),
-            PointerUnpack::Bool(false) => basic_ref(&VALUE_FALSE),
             PointerUnpack::Int(x) => basic_ref(PointerI32::new(x)),
         }
     }

@@ -40,6 +40,20 @@ pub(crate) static VALUE_NONE: &AValuePtr = {
     &DATA.0
 };
 
+pub(crate) static VALUE_FALSE: &AValuePtr = {
+    const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, false);
+    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    static DATA: (AValuePtr, Wrapper<Basic, bool>) = (AValuePtr(metadata(DYN)), PAYLOAD);
+    &DATA.0
+};
+
+pub(crate) static VALUE_TRUE: &AValuePtr = {
+    const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, true);
+    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    static DATA: (AValuePtr, Wrapper<Basic, bool>) = (AValuePtr(metadata(DYN)), PAYLOAD);
+    &DATA.0
+};
+
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub trait AValue<'v>: StarlarkValue<'v> {

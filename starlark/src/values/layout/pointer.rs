@@ -18,7 +18,6 @@
 // We use pointer tagging on the bottom three bits:
 // ?00 => ptr1
 // ?01 => ptr2
-// ?10 => constants (None, True, False)
 // ?11 => int (61 bit)
 // third bit is a tag set by the user (get_user_tag)
 
@@ -49,7 +48,6 @@ assert_eq_size!(Option<Pointer<'static, 'static, String, String>>, usize);
 pub(crate) enum PointerUnpack<'p1, 'p2, P1, P2> {
     Ptr1(&'p1 P1),
     Ptr2(&'p2 P2),
-    Bool(bool),
     Int(i32),
 }
 
@@ -58,9 +56,6 @@ const TAG_USER: usize = 0b100;
 const TAG_BITS: usize = 0b11;
 const TAG_P1: usize = 0b000;
 const TAG_P2: usize = 0b001;
-// All TAG_CONST_* end with 0b010
-const TAG_CONST_FALSE: usize = 0b10_010;
-const TAG_CONST_TRUE: usize = 0b11_010;
 const TAG_INT: usize = 0b11;
 
 unsafe fn tag_pointer<T>(x: &T, tag: usize) -> usize {
@@ -92,14 +87,6 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
         Self::new(self.pointer.get() | TAG_USER)
     }
 
-    pub fn new_bool(x: bool) -> Self {
-        if x {
-            Self::new(TAG_CONST_TRUE)
-        } else {
-            Self::new(TAG_CONST_FALSE)
-        }
-    }
-
     pub fn new_int(x: i32) -> Self {
         Self::new(tag_int(x))
     }
@@ -126,27 +113,12 @@ impl<'p1, 'p2, P1, P2> Pointer<'p1, 'p2, P1, P2> {
             TAG_P1 => PointerUnpack::Ptr1(unsafe { untag_pointer(p) }),
             TAG_P2 => PointerUnpack::Ptr2(unsafe { untag_pointer(p) }),
             TAG_INT => PointerUnpack::Int(untag_int(p)),
-            _ => match p {
-                TAG_CONST_TRUE => PointerUnpack::Bool(true),
-                TAG_CONST_FALSE => PointerUnpack::Bool(false),
-                _ => panic!("Corrupted pointer"),
-            },
+            _ => panic!("Corrupted pointer"),
         }
     }
 
     pub fn get_user_tag(self) -> bool {
         self.pointer.get() & TAG_USER == TAG_USER
-    }
-
-    pub fn unpack_bool(self) -> Option<bool> {
-        let p = self.pointer.get();
-        if p == TAG_CONST_FALSE {
-            Some(false)
-        } else if p == TAG_CONST_TRUE {
-            Some(true)
-        } else {
-            None
-        }
     }
 
     pub fn unpack_int(self) -> Option<i32> {
