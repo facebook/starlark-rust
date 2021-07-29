@@ -23,10 +23,10 @@ use crate::{
     values::{
         comparison::{compare_slice, equals_slice},
         error::ValueError,
-        index::{convert_index, convert_slice_indices},
+        index::{apply_slice, convert_index},
         iter::ARefIterator,
-        tuple, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
+        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap, FrozenValue,
+        Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{
@@ -329,10 +329,9 @@ where
         stride: Option<Value>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        let (start, stop, stride) =
-            convert_slice_indices(self.0.content().len() as i32, start, stop, stride)?;
-        let vec = tuple::slice_vector(start, stop, stride, self.0.content().iter());
-        Ok(heap.alloc(List::new(vec)))
+        let xs = self.0.content();
+        let res = apply_slice(&*xs, start, stop, stride)?;
+        Ok(heap.alloc(List::new(res)))
     }
 
     fn iterate(

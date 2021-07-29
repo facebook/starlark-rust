@@ -106,6 +106,45 @@ pub(crate) fn convert_slice_indices(
     }
 }
 
+pub(crate) fn apply_slice<'v>(
+    xs: &[Value<'v>],
+    start: Option<Value>,
+    stop: Option<Value>,
+    stride: Option<Value>,
+) -> anyhow::Result<Vec<Value<'v>>> {
+    let (start, stop, stride) = convert_slice_indices(xs.len() as i32, start, stop, stride)?;
+
+    let (low, take, astride) = if stride < 0 {
+        (stop + 1, start - stop, -stride)
+    } else {
+        (start, stop - start, stride)
+    };
+    if take <= 0 {
+        return Ok(Vec::new());
+    }
+    let mut v = xs
+        .iter()
+        .skip(low as usize)
+        .take(take as usize)
+        .copied()
+        .collect::<Vec<_>>();
+    if stride < 0 {
+        v.reverse();
+    }
+    let res = v
+        .into_iter()
+        .enumerate()
+        .filter_map(|x| {
+            if 0 == (x.0 as i32 % astride) {
+                Some(x.1)
+            } else {
+                None
+            }
+        })
+        .collect();
+    Ok(res)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

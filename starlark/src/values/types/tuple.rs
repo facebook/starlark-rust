@@ -20,47 +20,16 @@
 use crate as starlark;
 use crate::values::{
     comparison::{compare_slice, equals_slice},
-    index::{convert_index, convert_slice_indices},
+    index::{apply_slice, convert_index},
     AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError,
     ValueLike,
 };
-use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::*};
+use gazebo::{
+    any::AnyLifetime,
+    coerce::{coerce, Coerce},
+    prelude::*,
+};
 use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
-
-/// Used by both list and tuple to implement the slice function
-pub(crate) fn slice_vector<'a, 'v, V: ValueLike<'v> + 'a, I: Iterator<Item = &'a V>>(
-    start: i32,
-    stop: i32,
-    stride: i32,
-    content: I,
-) -> Vec<Value<'v>> {
-    let (low, take, astride) = if stride < 0 {
-        (stop + 1, start - stop, -stride)
-    } else {
-        (start, stop - start, stride)
-    };
-    if take <= 0 {
-        return Vec::new();
-    }
-    let mut v: Vec<Value> = content
-        .skip(low as usize)
-        .take(take as usize)
-        .map(|e| e.to_value())
-        .collect();
-    if stride < 0 {
-        v.reverse();
-    }
-    v.into_iter()
-        .enumerate()
-        .filter_map(|x| {
-            if 0 == (x.0 as i32 % astride) {
-                Some(x.1)
-            } else {
-                None
-            }
-        })
-        .collect()
-}
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[derive(Clone, Default_, Debug, Trace, Coerce)]
@@ -191,14 +160,12 @@ where
         stride: Option<Value>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        let (start, stop, stride) =
-            convert_slice_indices(self.content.len() as i32, start, stop, stride)?;
-        Ok(heap.alloc(Tuple::new(slice_vector(
+        Ok(heap.alloc(Tuple::new(apply_slice(
+            coerce(self.content.as_slice()),
             start,
             stop,
             stride,
-            self.content.iter(),
-        ))))
+        )?)))
     }
 
     fn iterate(
