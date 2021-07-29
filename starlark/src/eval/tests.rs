@@ -1441,7 +1441,7 @@ mod value_of {
     };
     use itertools::Itertools;
 
-    // TODO(pjameson): Figure out default values here. ValueOf<i32> = 5 should work.
+    // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
     #[starlark_module]
     fn validate_module(builder: &mut GlobalsBuilder) {
         fn with_int(v: ValueOf<i32>) -> (Value<'v>, String) {
