@@ -463,6 +463,8 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// 'abc'[1:] == 'bc'         # Remove the first element
     /// 'abc'[:-1] == 'ab'        # Remove the last element
     /// 'abc'[1:-1] == 'b'        # Remove the first and the last element
+    /// 'abc'[-1:] == 'c'         # Take the last letter
+    /// 'abc'[:1] == 'a'          # Take the first letter
     /// 'banana'[1::2] == 'aaa'   # Select one element out of 2, skipping the first
     /// 'banana'[4::-2] == 'nnb'  # Select one element out of 2 in reverse order, starting at index 4
     /// # "#);

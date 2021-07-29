@@ -348,6 +348,7 @@
 #![feature(box_syntax)]
 #![feature(cell_filter_map)]
 #![feature(hash_set_entry)]
+#![feature(iter_advance_by)]
 #![feature(maybe_uninit_extra)]
 #![feature(maybe_uninit_slice)]
 #![feature(ptr_metadata)]

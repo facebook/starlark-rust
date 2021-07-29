@@ -21,12 +21,12 @@ use crate as starlark;
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
-        fast_string, index::convert_slice_indices, interpolation, AllocFrozenValue, AllocValue,
-        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
-        UnpackValue, Value, ValueError, ValueLike,
+        fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
+        Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue,
+        Value, ValueError, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
 use std::{
     cmp,
     cmp::Ordering,
@@ -243,15 +243,15 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
                         Some(c) => Ok(heap.alloc(c)),
                     }
                 } else {
-                    let len = fast_string::len(s);
+                    let len_chars = fast_string::len(s);
                     let ind = (-i) as usize; // Index from the end, minimum of 1
-                    if ind > len {
+                    if ind > len_chars {
                         Err(ValueError::IndexOutOfBound(i).into())
-                    } else if len == s.len() {
+                    } else if len_chars == s.len() {
                         // We are a 7bit ASCII string, so take the fast-path
-                        Ok(heap.alloc(s.as_bytes()[len - ind] as char))
+                        Ok(heap.alloc(s.as_bytes()[len_chars - ind] as char))
                     } else {
-                        Ok(heap.alloc(fast_string::at(s, len - ind).unwrap()))
+                        Ok(heap.alloc(fast_string::at(s, len_chars - ind).unwrap()))
                     }
                 }
             }
@@ -276,47 +276,58 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         stride: Option<Value>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        let (start, stop, stride) = convert_slice_indices(self.len() as i32, start, stop, stride)?;
-        let (low, take, astride) = if stride < 0 {
-            (stop + 1, start - stop, -stride)
-        } else {
-            (start, stop - start, stride)
-        };
-        if take <= 0 {
-            return Ok(heap.alloc(""));
-        };
+        let s = self.unpack();
+        if matches!(stride, Some(stride) if stride.unpack_int() != Some(1)) {
+            // The stride case is super rare and super complex, so let's do something inefficient but safe
+            let xs = s.chars().collect::<Vec<_>>();
+            let xs = apply_slice(&xs, start, stop, stride)?;
+            return Ok(heap.alloc(xs.into_iter().collect::<String>()));
+        }
 
-        let v: String = self
-            .unpack()
-            .chars()
-            .skip(low as usize)
-            .take(take as usize)
-            .collect();
-        let v: String = if stride > 0 {
-            v.chars()
-                .enumerate()
-                .filter_map(|x| {
-                    if 0 == (x.0 as i32 % astride) {
-                        Some(x.1)
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        } else {
-            v.chars()
-                .rev()
-                .enumerate()
-                .filter_map(|x| {
-                    if 0 == (x.0 as i32 % astride) {
-                        Some(x.1)
-                    } else {
-                        None
-                    }
-                })
-                .collect()
+        // We know stride == 1, so can ignore it
+        let start = start.map_or(Ok(0), |v| v.to_int())?;
+        let stop = stop.try_map(|v| v.to_int())?;
+
+        if start >= 0 {
+            match stop {
+                None => return Ok(heap.alloc_str(fast_string::split_at(s, start as usize).1)),
+                Some(stop) if stop >= 0 => {
+                    let s = fast_string::split_at(s, start as usize).1;
+                    let s = fast_string::split_at(s, cmp::max(0, stop - start) as usize).0;
+                    return Ok(heap.alloc_str(s));
+                }
+                _ => {}
+            }
+        }
+        let len_chars = fast_string::len(s);
+        let adjust = |x| {
+            cmp::min(
+                if x < 0 {
+                    cmp::max(0, x + (len_chars as i32))
+                } else {
+                    x
+                },
+                len_chars as i32,
+            ) as usize
         };
-        Ok(heap.alloc(v))
+        let start = adjust(start);
+        let stop = adjust(stop.unwrap_or(len_chars as i32));
+
+        if start >= stop {
+            Ok(heap.alloc_str(""))
+        } else if s.len() == len_chars {
+            // ASCII fast-path
+            let s = &s.as_bytes()[start..stop];
+            Ok(heap.alloc_str(unsafe { str::from_utf8_unchecked(s) }))
+        } else {
+            let s = fast_string::split_at(s, start).1;
+            let s = if stop == len_chars {
+                s
+            } else {
+                fast_string::split_at(s, cmp::max(0, stop - start)).0
+            };
+            return Ok(heap.alloc_str(s));
+        }
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -433,8 +444,23 @@ impl<'v> ComplexValue<'v> for StringIterator<'v> {
 mod tests {
     use crate::{
         assert,
-        values::{Heap, Value},
+        values::{index::apply_slice, Heap, Value},
     };
+
+    const EXAMPLES: &[&str] = &[
+        "",
+        "short",
+        "longer string which is all ASCII!#",
+        "🤗",
+        "mix of prefix ASCII and 🤗 some emjoi",
+        "🤗 and the emjoi can go first",
+        "😥🍊🍉🫐🥥🥬🥒🥑🍈🍋",
+        "© and other characters Ŕ",
+        "ça va bien merci",
+        "Диана is a name in Russia",
+        "🤗 and the emjoi can go first",
+        "😥🍊🍉🫐🥥🥬🥒🥑🍈🍋",
+    ];
 
     #[test]
     fn test_to_repr() {
@@ -467,6 +493,36 @@ len("😿") == 1
 
     #[test]
     fn test_slice_string() {
+        let heap = Heap::new();
+        for example in EXAMPLES {
+            let s = heap.alloc_str(example);
+            for i in -5..6 {
+                for j in -5..6 {
+                    let start = if i == 6 {
+                        None
+                    } else {
+                        Some(Value::new_int(i))
+                    };
+                    let stop = if j == 6 {
+                        None
+                    } else {
+                        Some(Value::new_int(j))
+                    };
+                    // Compare list slicing (comparatively simple) to string slicing (complex unicode)
+                    let res1 = apply_slice(&example.chars().collect::<Vec<_>>(), start, stop, None)
+                        .unwrap()
+                        .iter()
+                        .collect::<String>();
+                    let res2 = s
+                        .slice(start, stop, None, &heap)
+                        .unwrap()
+                        .unpack_str()
+                        .unwrap();
+                    assert_eq!(&res1, res2);
+                }
+            }
+        }
+
         assert::all_true(
             r#"
 "abc"[1:] == "bc" # Remove the first element
@@ -522,22 +578,7 @@ len("😿") == 1
             Ok(())
         }
 
-        let examples = &[
-            "",
-            "short",
-            "longer string which is all ASCII!#",
-            "🤗",
-            "mix of prefix ASCII and 🤗 some emjoi",
-            "🤗 and the emjoi can go first",
-            "😥🍊🍉🫐🥥🥬🥒🥑🍈🍋",
-            "© and other characters Ŕ",
-            "ça va bien merci",
-            "Диана is a name in Russia",
-            "🤗 and the emjoi can go first",
-            "😥🍊🍉🫐🥥🥬🥒🥑🍈🍋",
-        ];
-
-        for x in examples {
+        for x in EXAMPLES {
             // We use all trailing substrings of the test, for better coverage (especially around smart prefix algorithms)
             let mut it = x.chars();
             loop {

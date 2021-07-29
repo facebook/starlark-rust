@@ -35,6 +35,9 @@ fn is_1bytes(x: u64) -> bool {
 /// The result will be between 0 and n.
 /// The string _must_ have at least n bytes in it.
 fn skip_at_most_1byte(x: &str, n: usize) -> usize {
+    if n == 0 {
+        return 0;
+    }
     debug_assert!(x.len() >= n);
 
     // Multi-byte UTF8 characters have 0x80 set.
@@ -98,6 +101,17 @@ pub fn at(x: &str, i: usize) -> Option<char> {
     let n = skip_at_most_1byte(x, i);
     let s = unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) };
     s.chars().nth(i - n)
+}
+
+pub fn split_at(x: &str, i: usize) -> (&str, &str) {
+    if i >= x.len() {
+        return (x, "");
+    }
+    let n = skip_at_most_1byte(x, i);
+    let s = unsafe { str::from_utf8_unchecked(&x.as_bytes()[n..]) };
+    let mut c = s.chars();
+    let _ = c.advance_by(i - n); // Ignore if it advances by less than N
+    x.split_at(x.len() - c.as_str().len())
 }
 
 /// Find the length of the string in characters.
