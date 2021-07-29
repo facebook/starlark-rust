@@ -48,14 +48,20 @@ impl FrozenValue {
     pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
         self.get_ref::<'static>()
             .downcast_ref::<T>()
-            .map(|t| FrozenRef { value: t })
+            .map(|value| FrozenRef { value })
+    }
+
+    pub fn downcast_frozen_str(self) -> Option<FrozenRef<str>> {
+        self.to_value()
+            .unpack_str()
+            .map(|value| FrozenRef { value })
     }
 
     /// Note: see docs about ['Value::unpack_box_str'] about instability
-    pub fn downcast_frozen_str(self) -> Option<FrozenRef<Box<str>>> {
-        self.to_value().unpack_box_str().map(|s| FrozenRef {
-            value: unsafe { transmute!(&Box<str>, &'static Box<str>, s) },
-        })
+    pub fn downcast_frozen_box_str(self) -> Option<FrozenRef<Box<str>>> {
+        self.to_value()
+            .unpack_box_str()
+            .map(|value| FrozenRef { value })
     }
 }
 
