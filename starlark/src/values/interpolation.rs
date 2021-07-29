@@ -119,7 +119,7 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
             res.push(c);
         }
     }
-    if next_value().is_ok() {
+    if values.next().is_some() {
         Err(StringInterpolationError::TooManyParameters.into())
     } else {
         Ok(unsafe { String::from_utf8_unchecked(res) })
