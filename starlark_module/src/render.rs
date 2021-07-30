@@ -115,7 +115,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         quote! {
             static TYPE: starlark::values::ConstFrozenValue =
                 starlark::values::ConstFrozenValue::new(#x);
-            func.set_type(&TYPE);
+            func.set_type(TYPE.unpack());
         }
     });
 

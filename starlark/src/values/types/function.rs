@@ -22,8 +22,8 @@ use crate::{
     codemap::Span,
     eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
-        AllocFrozenValue, AllocValue, ComplexValue, ConstFrozenValue, Freezer, FrozenHeap,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, Value, ValueLike, ValueRef,
+        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
+        SimpleValue, StarlarkValue, Trace, Value, ValueLike, ValueRef,
     },
 };
 use derivative::Derivative;
@@ -135,8 +135,8 @@ impl NativeFunction {
     }
 
     /// A `.type` value, if one exists. Specified using `#[starlark_type("the_type")]`.
-    pub fn set_type(&mut self, typ: &'static ConstFrozenValue) {
-        self.typ = Some(typ.unpack())
+    pub fn set_type(&mut self, typ: FrozenValue) {
+        self.typ = Some(typ)
     }
 }
 
