@@ -357,7 +357,6 @@
 #![feature(maybe_uninit_slice)]
 #![feature(ptr_metadata)]
 #![feature(try_blocks)]
-#![feature(vec_extend_from_within)]
 //
 // Plugins
 #![cfg_attr(feature = "custom_linter", feature(plugin))]
