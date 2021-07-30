@@ -54,6 +54,12 @@ pub(crate) static VALUE_TRUE: &AValuePtr = {
     &DATA.0
 };
 
+pub(crate) const VALUE_STR_A_VALUE_PTR: AValuePtr = {
+    const VTABLE: Wrapper<Direct, StarlarkStr> = Wrapper(Direct, unsafe { StarlarkStr::new(0) });
+    const DYN: &dyn AValue<'static> = &VTABLE;
+    AValuePtr(metadata(DYN))
+};
+
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub trait AValue<'v>: StarlarkValue<'v> {

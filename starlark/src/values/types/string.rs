@@ -60,7 +60,7 @@ impl Debug for StarlarkStr {
 
 impl StarlarkStr {
     /// Unsafe because if you do `unpack` on this it will blow up
-    pub(crate) unsafe fn new(len: usize) -> Self {
+    pub(crate) const unsafe fn new(len: usize) -> Self {
         Self { len, body: () }
     }
 
