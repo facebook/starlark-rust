@@ -23,6 +23,7 @@ use crate::values::{
     layout::{
         arena::{AValuePtr, Arena, Reservation},
         avalue::{complex, simple, starlark_str, AValue},
+        constant::constant_string,
         value::{FrozenValue, Value},
     },
     AllocFrozenValue, ComplexValue, SimpleValue,
@@ -130,11 +131,15 @@ impl FrozenHeap {
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
-        let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x.len()), x.len());
-        unsafe {
-            v.write_extra(x.as_bytes())
-        };
-        FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
+        if let Some(x) = constant_string(x) {
+            x
+        } else {
+            let v: &AValuePtr = self.arena.alloc_extra(starlark_str(x.len()), x.len());
+            unsafe {
+                v.write_extra(x.as_bytes())
+            };
+            FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
+        }
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -249,9 +254,13 @@ impl Heap {
     }
 
     pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
-        self.alloc_str_init(x.len(), |dest| unsafe {
-            copy_nonoverlapping(x.as_ptr(), dest, x.len())
-        })
+        if let Some(x) = constant_string(x) {
+            x.to_value()
+        } else {
+            self.alloc_str_init(x.len(), |dest| unsafe {
+                copy_nonoverlapping(x.as_ptr(), dest, x.len())
+            })
+        }
     }
 
     pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {
