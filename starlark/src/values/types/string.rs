@@ -264,7 +264,14 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
         match other.unpack_str() {
-            Some(s) => Ok(self.unpack().contains(s)),
+            Some(s) => {
+                let me = self.unpack();
+                if s.len() == 1 {
+                    Ok(me.as_bytes().contains(&s.as_bytes()[0]))
+                } else {
+                    Ok(me.contains(s))
+                }
+            }
             None => Err(ValueError::IncorrectParameterType.into()),
         }
     }
