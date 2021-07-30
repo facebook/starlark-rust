@@ -28,7 +28,7 @@ mod value;
 mod value_ref;
 
 pub use avalue::AValue;
-pub use constant::{ConstFrozenString, ConstFrozenStringN, ConstFrozenValue};
+pub use constant::{ConstFrozenString, ConstFrozenStringN};
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
 pub use value::{FrozenValue, Value};

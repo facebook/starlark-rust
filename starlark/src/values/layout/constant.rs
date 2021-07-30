@@ -15,41 +15,9 @@
  * limitations under the License.
  */
 
-use crate::values::{
-    layout::{arena::AValuePtr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
-    OwnedFrozenValue,
-};
+use crate::values::layout::{arena::AValuePtr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue};
 use gazebo::prelude::*;
-use once_cell::sync::OnceCell;
 use std::intrinsics::copy_nonoverlapping;
-
-/// Define a `&'static` [`str`] that can be converted to a [`FrozenValue`].
-///
-/// Usually used as:
-///
-/// ```
-/// use starlark::values::{ConstFrozenValue, FrozenValue};
-///
-/// fn return_magic() -> FrozenValue {
-///     static RES: ConstFrozenValue = ConstFrozenValue::new("magic");
-///     RES.unpack()
-/// }
-/// ```
-pub struct ConstFrozenValue(&'static str, OnceCell<OwnedFrozenValue>);
-
-impl ConstFrozenValue {
-    /// Create a new [`ConstFrozenValue`].
-    pub const fn new(name: &'static str) -> Self {
-        ConstFrozenValue(name, OnceCell::new())
-    }
-
-    /// Obtain the underlying [`FrozenValue`]. Will only allocate on the first call.
-    pub fn unpack(&'static self) -> FrozenValue {
-        let v = self.1.get_or_init(|| OwnedFrozenValue::alloc(self.0));
-        // Safe because we keep the ownership in the OnceCell forever
-        unsafe { v.unchecked_frozen_value() }
-    }
-}
 
 /// A constant string that can be converted to a [`FrozenValue`].
 #[repr(C)] // Must match this layout on the heap
