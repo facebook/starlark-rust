@@ -23,10 +23,15 @@ use crate::{
     eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
-        ComplexValue, Freezer, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        ComplexValue, Freezer, StarlarkValue, Trace, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
+use gazebo::{
+    any::AnyLifetime,
+    cell::ARef,
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
 use itertools::Itertools;
 use std::collections::HashSet;
 
@@ -138,7 +143,7 @@ pub fn abs(builder: &mut GlobalsBuilder) {
     }
 }
 
-#[derive(Debug, Coerce)]
+#[derive(Debug, Coerce, Trace)]
 #[repr(C)]
 struct PartialGen<V> {
     func: V,
@@ -149,18 +154,6 @@ struct PartialGen<V> {
 }
 
 starlark_complex_value!(Partial);
-
-unsafe impl<'v> Trace<'v> for Partial<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(&mut self.func);
-        self.pos.iter_mut().for_each(|x| tracer.trace(x));
-        self.named.iter_mut().for_each(|x| tracer.trace(x));
-        self.names
-            .iter_mut()
-            .for_each(|x| tracer.trace(x.1.key_mut()));
-        self.signature.trace(tracer);
-    }
-}
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
     type Frozen = FrozenPartial;
@@ -192,15 +185,9 @@ where
     ) -> anyhow::Result<Value<'v>> {
         // apply the partial arguments first, then the remaining arguments I was given
 
-        // We know V must be either Value or FrozenValue, both of which have the same representation as Value
-        // so convert it directly
-        let self_pos = unsafe { &*(self.pos.as_slice() as *const [V] as *const [Value]) };
-        let self_named = unsafe { &*(self.named.as_slice() as *const [V] as *const [Value]) };
-        let self_names = unsafe {
-            &*(self.names.as_slice() as *const [(String, Hashed<V>)]
-                as *const [(String, Hashed<Value>)])
-        };
-
+        let self_pos = coerce_ref(&self.pos);
+        let self_named = coerce_ref(&self.named);
+        let self_names = coerce_ref(&self.names);
         let params = Parameters {
             this: params.this,
             pos: &[self_pos, params.pos].concat(),
