@@ -563,7 +563,7 @@ impl<'v> Value<'v> {
         self.invoke(location, params, eval)
     }
 
-    pub fn get_type_value(self) -> &'static ConstFrozenValue {
+    pub fn get_type_value(self) -> FrozenValue {
         self.get_ref().get_type_value()
     }
 }

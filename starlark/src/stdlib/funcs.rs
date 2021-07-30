@@ -910,7 +910,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn r#type(ref a: Value) -> Value<'v> {
-        Ok(a.get_type_value().unpack().to_value())
+        Ok(a.get_type_value().to_value())
     }
 
     /// [zip](

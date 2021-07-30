@@ -34,7 +34,7 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        function::FUNCTION_TYPE, ConstFrozenValue, ControlError, Freezer, Heap, Tracer, Value,
+        function::FUNCTION_TYPE, ControlError, Freezer, FrozenValue, Heap, Tracer, Value,
         ValueError,
     },
 };
@@ -334,10 +334,16 @@ pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
+    ///
+    /// Usually implemented by the [`starlark_type!`] macro.
     fn get_type(&self) -> &'static str;
 
-    /// Like get_type, but returns a reusable Value pointer to it.
-    fn get_type_value(&self) -> &'static ConstFrozenValue;
+    /// Like get_type, but returns a reusable [`FrozenValue`] pointer to it.
+    /// This function deliberately doesn't take a heap, as it would not be performant
+    /// to allocate a new value each time.
+    ///
+    /// Usually implemented by the [`starlark_type!`] macro.
+    fn get_type_value(&self) -> FrozenValue;
 
     /// Is this value a match for a named type. Usually returns `true` for
     /// values matching `get_type`, but might also work for subtypes it implements.
