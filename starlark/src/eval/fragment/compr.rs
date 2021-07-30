@@ -125,18 +125,32 @@ fn compile_clauses(
     }
 }
 
-fn eval_list(x: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
-    let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
-        let x = x(eval)?;
-        me.push(x);
-        Ok(())
-    });
-
-    expr!("list_comp", |eval| {
-        let mut r = Vec::new();
-        clauses(&mut r, eval)?;
-        eval.heap().alloc(List::new(r))
-    })
+fn eval_list(x: ExprCompiled, mut clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
+    if clauses.len() == 1 && clauses[0].ifs.is_empty() {
+        let c = clauses.pop().unwrap();
+        expr!("list_comp_map", |eval| {
+            let iterable = (c.over)(eval)?;
+            // We could do for_each, but then we wouldn't get to ask for a size_hint
+            let it = throw(iterable.iterate(eval.heap()), c.over_span, eval)?;
+            let mut res = Vec::with_capacity(it.size_hint().0);
+            for i in it {
+                (c.var)(i, eval)?;
+                res.push(x(eval)?);
+            }
+            eval.heap().alloc(List::new(res))
+        })
+    } else {
+        let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
+            let x = x(eval)?;
+            me.push(x);
+            Ok(())
+        });
+        expr!("list_comp", |eval| {
+            let mut r = Vec::new();
+            clauses(&mut r, eval)?;
+            eval.heap().alloc(List::new(r))
+        })
+    }
 }
 
 fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
