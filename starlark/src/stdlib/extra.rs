@@ -18,7 +18,7 @@
 use crate::{
     self as starlark,
     codemap::Span,
-    collections::Hashed,
+    collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
     eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
     values::{
@@ -75,11 +75,13 @@ pub fn partial(builder: &mut GlobalsBuilder) {
         signature.kwargs();
         let names = kwargs
             .content
-            .iter_hashed()
+            .keys()
             .map(|x| {
                 (
-                    x.0.key().unpack_str().unwrap().to_owned(),
-                    x.0.unborrow_copy(),
+                    // We throw away the hash and recompute it.
+                    // If this becomes hot, we should do better.
+                    Symbol::new(x.unpack_str().unwrap()),
+                    *x,
                 )
             })
             .collect();
@@ -149,7 +151,7 @@ struct PartialGen<V> {
     func: V,
     pos: Vec<V>,
     named: Vec<V>,
-    names: Vec<(String, Hashed<V>)>,
+    names: Vec<(Symbol, V)>,
     signature: ParametersSpec<V>,
 }
 
@@ -188,6 +190,7 @@ where
         let self_pos = coerce_ref(&self.pos);
         let self_named = coerce_ref(&self.named);
         let self_names = coerce_ref(&self.names);
+
         let params = Parameters {
             this: params.this,
             pos: &[self_pos, params.pos].concat(),
@@ -214,7 +217,7 @@ where
             if i != 0 {
                 collector.push(',');
             }
-            collector.push_str(&k.0);
+            collector.push_str(k.0.as_str());
             collector.push(':');
             v.collect_repr(collector);
         }

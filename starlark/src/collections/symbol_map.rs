@@ -32,7 +32,11 @@
 //! Measuring some sample strings, the P50 = 21 bytes, P75 = 27, P95 = 35,
 //! so we can reasonably expect to hit the smaller cases most often.
 
-use crate::collections::{idhasher::mix_u32, SmallHashResult};
+use crate::{
+    collections::{idhasher::mix_u32, SmallHashResult},
+    values::{Trace, Tracer},
+};
+use gazebo::coerce::Coerce;
 use hashbrown::raw::RawTable;
 use std::{
     cmp,
@@ -43,6 +47,7 @@ use std::{
 
 // We use a RawTable (the thing that underlies HashMap) so we can look up efficiently
 // and easily by Symbol and str, without being limited by `Borrow` traits.
+#[derive(Clone)]
 pub(crate) struct SymbolMap<T>(RawTable<(Symbol, T)>);
 
 impl<T: Debug> Debug for SymbolMap<T> {
@@ -57,11 +62,22 @@ fn promote_hash(x: SmallHashResult) -> u64 {
     mix_u32(x.get())
 }
 
+/// A pre-hashed string used for efficient dictionary lookup.
+#[derive(Clone)]
 pub struct Symbol {
     hash: u64,
     len: usize,
     payload: Box<[u64]>,
+    small_hash: SmallHashResult,
 }
+
+unsafe impl<'v> Trace<'v> for Symbol {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {
+        // No tracable elements
+    }
+}
+
+unsafe impl Coerce<Symbol> for Symbol {}
 
 impl Debug for Symbol {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -92,7 +108,8 @@ impl Eq for Symbol {}
 
 impl Symbol {
     pub fn new(x: &str) -> Self {
-        let hash = promote_hash(SmallHashResult::new(x));
+        let small_hash = SmallHashResult::new(x);
+        let hash = promote_hash(small_hash);
         let len = x.len();
         let len8 = (len / 8) + cmp::min(1, len % 8);
         let mut payload = vec![0; len8]; // 0 pad it at the end
@@ -103,6 +120,7 @@ impl Symbol {
             hash,
             len,
             payload: payload.into_boxed_slice(),
+            small_hash,
         }
     }
 
@@ -114,11 +132,19 @@ impl Symbol {
             str::from_utf8_unchecked(s)
         }
     }
+
+    pub fn small_hash(&self) -> SmallHashResult {
+        self.small_hash
+    }
 }
 
 impl<T> SymbolMap<T> {
     pub fn new() -> Self {
         Self(RawTable::new())
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(RawTable::with_capacity(capacity))
     }
 
     pub fn insert(&mut self, key: &str, value: T) -> Option<T> {

@@ -18,7 +18,7 @@
 //! Evaluation of an expression.
 use crate::{
     codemap::{Span, Spanned},
-    collections::{symbol_map::Symbol, Hashed, SmallMap},
+    collections::{symbol_map::Symbol, SmallMap},
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{
@@ -170,7 +170,7 @@ impl Expr {
 #[derive(Default)]
 struct ArgsCompiled {
     pos_named: Vec<ExprCompiled>,
-    names: Vec<(String, Hashed<FrozenValue>)>,
+    names: Vec<(Symbol, FrozenValue)>,
     args: Option<ExprCompiled>,
     kwargs: Option<ExprCompiled>,
 }
@@ -351,12 +351,8 @@ impl Compiler<'_> {
             match x.node {
                 Argument::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
                 Argument::Named(name, value) => {
-                    let name_value = self
-                        .heap
-                        .alloc(name.node.as_str())
-                        .get_hashed()
-                        .expect("String is Hashable");
-                    res.names.push((name.node, name_value));
+                    let fv = self.heap.alloc(name.node.as_str());
+                    res.names.push((Symbol::new(&name.node), fv));
                     res.pos_named.push(self.expr(value).as_compiled());
                 }
                 Argument::Args(x) => res.args = Some(self.expr(x).as_compiled()),

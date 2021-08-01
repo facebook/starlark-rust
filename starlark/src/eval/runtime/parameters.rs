@@ -19,7 +19,10 @@
 /// First build a Parameters structure, then use collect to collect the
 /// parameters into slots.
 use crate::{
-    collections::{BorrowHashed, Hashed, SmallMap},
+    collections::{
+        symbol_map::{Symbol, SymbolMap},
+        Hashed, SmallMap,
+    },
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
         ValueError, ValueLike, ValueRef,
@@ -99,7 +102,7 @@ pub struct ParametersSpecRaw<V> {
     /// The only entries in `kinds` which are not in `names` are Args/KWargs,
     /// and the iteration order of `names` is the same order as `types`.
     kinds: Vec<ParameterKind<V>>,
-    names: SmallMap<String, usize>,
+    names: SymbolMap<usize>,
 
     /// Number of arguments that can be filled positionally.
     /// Excludes *args/**kwargs, keyword arguments after *args
@@ -138,7 +141,7 @@ impl<V> ParametersSpecBuilder<V> {
         Self(ParametersSpecRaw {
             function_name,
             kinds: Vec::with_capacity(capacity),
-            names: SmallMap::with_capacity(capacity),
+            names: SymbolMap::with_capacity(capacity),
             positional: 0,
             no_args: false,
             args: None,
@@ -154,7 +157,7 @@ impl<V> ParametersSpecBuilder<V> {
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
         let i = self.0.kinds.len();
         self.0.kinds.push(val);
-        let old = self.0.names.insert(name.to_owned(), i);
+        let old = self.0.names.insert(name, i);
         if self.0.args.is_none() && !self.0.no_args {
             // If you've already seen `args` or `no_args`, you can't enter these
             // positionally
@@ -236,15 +239,14 @@ impl<V> ParametersSpec<V> {
             ParameterKind::KWargs => return "kwargs".to_owned(),
             _ => {}
         }
-        // We want names[#index], ignoring all the args/kwargs up until this position
-        let mut new_index = index;
-        for k in self.0.kinds.iter().take(index) {
-            match k {
-                ParameterKind::Args | ParameterKind::KWargs => new_index -= 1,
-                _ => {}
-            }
-        }
-        self.0.names.get_index(new_index).unwrap().0.clone()
+        self.0
+            .names
+            .iter()
+            .find(|x| x.1 == index)
+            .unwrap()
+            .0
+            .as_str()
+            .to_owned()
     }
 
     // Generate a good error message for it
@@ -259,7 +261,7 @@ impl<V> ParametersSpec<V> {
             // displaying the signature.
             // The `unwrap` is safe because we must have a names entry for each
             // non-Args/KWargs kind.
-            names.next().unwrap().trim_start_match('$')
+            names.next().unwrap().as_str().trim_start_match('$')
         };
 
         for (i, typ) in self.0.kinds.iter().enumerate() {
@@ -380,10 +382,13 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         if !params.names.is_empty() {
             for ((name, name_value), v) in params.names.iter().zip(params.named) {
                 // Safe to use new_unchecked because hash for the Value and str are the same
-                let name_hash = BorrowHashed::new_unchecked(name_value.hash(), name);
-                match self.0.names.get_hashed(name_hash) {
+                match self.0.names.get(name) {
                     None => {
-                        add_kwargs(&mut kwargs, *name_value, *v);
+                        add_kwargs(
+                            &mut kwargs,
+                            Hashed::new_unchecked(name.small_hash(), *name_value),
+                            *v,
+                        );
                     }
                     Some(i) => {
                         slots[*i].set_direct(*v);
@@ -426,8 +431,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                         match k.key().unpack_str() {
                             None => return Err(FunctionError::ArgsValueIsNotString.into()),
                             Some(s) => {
-                                let name_hash = BorrowHashed::new_unchecked(k.hash(), s);
-                                let repeat = match self.0.names.get_hashed(name_hash) {
+                                let repeat = match self.0.names.get_hashed_str(k.hash(), s) {
                                     None => add_kwargs(&mut kwargs, k, v),
                                     Some(i) => {
                                         let this_slot = &slots[*i];
@@ -582,7 +586,7 @@ pub struct Parameters<'v, 'a> {
     pub this: Option<Value<'v>>,
     pub pos: &'a [Value<'v>],
     pub named: &'a [Value<'v>],
-    pub names: &'a [(String, Hashed<Value<'v>>)],
+    pub names: &'a [(Symbol, Value<'v>)],
     pub args: Option<Value<'v>>,
     pub kwargs: Option<Value<'v>>,
 }
@@ -596,7 +600,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
         fn bad(x: &Parameters) -> anyhow::Result<()> {
             // We might have a empty kwargs dictionary, but probably have an error
             let mut extra = Vec::new();
-            extra.extend(x.names.iter().map(|x| x.0.clone()));
+            extra.extend(x.names.iter().map(|x| x.0.as_str().to_owned()));
             if let Some(kwargs) = x.kwargs {
                 match Dict::from_value(kwargs) {
                     None => return Err(FunctionError::KwArgsIsNotDict.into()),
@@ -841,7 +845,7 @@ mod test {
         p.kwargs = None;
         let named = [Value::new_none()];
         p.named = &named;
-        let names = [("test".to_owned(), heap.alloc("test").get_hashed().unwrap())];
+        let names = [(Symbol::new("test"), heap.alloc("test"))];
         p.names = &names;
         assert!(p.positional::<0>(&heap).is_err());
         assert!(p.positional::<1>(&heap).is_err());

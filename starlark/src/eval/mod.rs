@@ -20,6 +20,7 @@
 
 use crate::{
     codemap::{Span, Spanned},
+    collections::symbol_map::Symbol,
     eval::compiler::{scope::Scope, Compiler, Constants, EvalException},
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::Value,
@@ -140,8 +141,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         positional: &[Value<'v>],
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
-        let names =
-            named.map(|(s, _)| ((*s).to_owned(), self.heap().alloc(*s).get_hashed().unwrap()));
+        let names = named.map(|(s, _)| (Symbol::new(*s), self.heap().alloc(*s)));
         let named = named.map(|x| x.1);
         let params = Parameters {
             this: None,
