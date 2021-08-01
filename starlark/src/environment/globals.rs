@@ -16,7 +16,10 @@
  */
 
 use crate::{
-    collections::SmallMap,
+    collections::{
+        symbol_map::{Symbol, SymbolMap},
+        SmallMap,
+    },
     stdlib,
     values::{
         function::NativeAttribute, structs::FrozenStruct, AllocFrozenValue, FrozenHeap,
@@ -26,7 +29,7 @@ use crate::{
 use gazebo::prelude::*;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
-use std::{collections::HashMap, mem, sync::Arc};
+use std::{mem, sync::Arc};
 
 pub use crate::stdlib::LibraryExtension;
 
@@ -37,7 +40,7 @@ pub struct Globals(Arc<GlobalsData>);
 #[derive(Debug)]
 struct GlobalsData {
     heap: FrozenHeapRef,
-    variables: HashMap<String, FrozenValue>,
+    variables: SymbolMap<FrozenValue>,
 }
 
 /// Used to build a [`Globals`] value.
@@ -46,7 +49,7 @@ pub struct GlobalsBuilder {
     // The heap everything is allocated in
     heap: FrozenHeap,
     // Normal top-level variables, e.g. True/hash
-    variables: HashMap<String, FrozenValue>,
+    variables: SymbolMap<FrozenValue>,
     // Set to Some when we are in a struct builder, otherwise None
     struct_fields: Option<SmallMap<String, FrozenValue>>,
 }
@@ -84,12 +87,23 @@ impl Globals {
     /// This function is only safe if you first call `heap` and keep a reference to it.
     /// Therefore, don't expose it on the public API.
     pub(crate) fn get_frozen(&self, name: &str) -> Option<FrozenValue> {
+        self.0.variables.get_str(name).copied()
+    }
+
+    /// This function is only safe if you first call `heap` and keep a reference to it.
+    /// Therefore, don't expose it on the public API.
+    #[allow(dead_code)] // Used in the next diff
+    pub(crate) fn get_frozen_symbol(&self, name: &Symbol) -> Option<FrozenValue> {
         self.0.variables.get(name).copied()
     }
 
     /// Get all the names defined in this environment.
     pub fn names(&self) -> Vec<String> {
-        self.0.variables.keys().cloned().collect()
+        self.0
+            .variables
+            .keys()
+            .map(|x| x.as_str().to_owned())
+            .collect()
     }
 
     pub(crate) fn heap(&self) -> &FrozenHeapRef {
@@ -101,7 +115,7 @@ impl Globals {
         self.0
             .variables
             .iter()
-            .map(|(name, val)| val.to_value().describe(name))
+            .map(|(name, val)| val.to_value().describe(name.as_str()))
             .join("\n")
     }
 }
@@ -111,7 +125,7 @@ impl GlobalsBuilder {
     pub fn new() -> Self {
         Self {
             heap: FrozenHeap::new(),
-            variables: HashMap::new(),
+            variables: SymbolMap::new(),
             struct_fields: None,
         }
     }
@@ -174,11 +188,10 @@ impl GlobalsBuilder {
 
     /// Set a value in the [`GlobalsBuilder`].
     pub fn set<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
-        let name = name.to_owned();
         let value = value.alloc_frozen_value(&self.heap);
         match &mut self.struct_fields {
             None => self.variables.insert(name, value),
-            Some(fields) => fields.insert(name, value),
+            Some(fields) => fields.insert(name.to_owned(), value),
         };
     }
 
@@ -190,10 +203,9 @@ impl GlobalsBuilder {
         let func = self.alloc(NativeAttribute {
             function: box move |_, _| Ok(value.to_value()),
         });
-        let name = name.to_owned();
         match &mut self.struct_fields {
             None => self.variables.insert(name, func),
-            Some(fields) => fields.insert(name, func),
+            Some(fields) => fields.insert(name.to_owned(), func),
         };
     }
 
@@ -261,7 +273,7 @@ impl GlobalsStatic {
     /// only be allocated once (ensuring things like function comparison works properly).
     pub fn populate(&'static self, x: impl FnOnce(&mut GlobalsBuilder), out: &mut GlobalsBuilder) {
         let globals = self.globals(x);
-        for (name, value) in &globals.0.variables {
+        for (name, value) in globals.0.variables.iter() {
             out.set(name.as_str(), *value)
         }
     }

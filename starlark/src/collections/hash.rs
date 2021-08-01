@@ -60,6 +60,10 @@ impl SmallHashResult {
         // Not a problem because `DefaultHasher` produces well-swizzled bits.
         Self(hash as u32)
     }
+
+    pub(crate) fn get(self) -> u32 {
+        self.0
+    }
 }
 
 impl<'a, Q: ?Sized> BorrowHashed<'a, Q> {

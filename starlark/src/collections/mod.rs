@@ -32,4 +32,5 @@ mod idhasher;
 mod small_map;
 mod small_set;
 pub(crate) mod stack;
+pub(crate) mod symbol_map;
 mod vec_map;

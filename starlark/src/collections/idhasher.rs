@@ -28,6 +28,10 @@ use std::hash::{BuildHasherDefault, Hasher};
  * would all have tag 0.
  */
 
+pub(crate) fn mix_u32(n: u32) -> u64 {
+    (n as u64).wrapping_mul(0x9e3779b97f4a7c15)
+}
+
 pub(crate) type BuildIdHasher = BuildHasherDefault<IdHasher>;
 
 /// A Hasher, faster than `DefaultHasher`, but can only hash
@@ -43,7 +47,7 @@ impl Hasher for IdHasher {
 
     fn write_u32(&mut self, n: u32) {
         debug_assert_eq!(self.0, 0); // Allow one write per Hasher instance.
-        self.0 = (n as u64).wrapping_mul(0x9e3779b97f4a7c15);
+        self.0 = mix_u32(n);
     }
 
     fn finish(&self) -> u64 {
