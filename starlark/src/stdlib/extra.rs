@@ -20,7 +20,7 @@ use crate::{
     codemap::Span,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
-    eval::{Evaluator, Parameters, ParametersSpec, ParametersSpecBuilder},
+    eval::{Evaluator, Parameters, ParametersSpec},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
         ComplexValue, Freezer, StarlarkValue, Trace, Value, ValueLike,
@@ -70,7 +70,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
     fn partial(ref func: Value, args: ARef<Tuple>, kwargs: ARef<Dict>) -> Partial<'v> {
         // TODO: use func name (+ something?)
         let name = "partial_closure".to_owned();
-        let mut signature = ParametersSpecBuilder::with_capacity(name, 2);
+        let mut signature = ParametersSpec::with_capacity(name, 2);
         signature.args();
         signature.kwargs();
         let names = kwargs
@@ -90,7 +90,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
             pos: args.content.clone(),
             named: kwargs.content.values().copied().collect(),
             names,
-            signature: signature.build(),
+            signature,
         })
     }
 }

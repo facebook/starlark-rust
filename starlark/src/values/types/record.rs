@@ -45,7 +45,7 @@ use crate as starlark;
 use crate::{
     codemap::Span,
     collections::SmallMap,
-    eval::{Evaluator, Parameters, ParametersParser, ParametersSpecBuilder},
+    eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
     values::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
@@ -152,8 +152,7 @@ impl<'v> RecordType<'v> {
     fn make_constructor(
         fields: &SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>,
     ) -> NativeFunction {
-        let mut parameters =
-            ParametersSpecBuilder::with_capacity("record".to_owned(), fields.len());
+        let mut parameters = ParametersSpec::with_capacity("record".to_owned(), fields.len());
         parameters.no_args();
         for (name, field) in fields {
             if field.0.default.is_some() {
@@ -162,7 +161,6 @@ impl<'v> RecordType<'v> {
                 parameters.required(name);
             }
         }
-        let parameters = parameters.build();
 
         // We want to get the value of `me` into the function, but that doesn't work since it
         // might move between threads - so we create the NativeFunction and apply it later.

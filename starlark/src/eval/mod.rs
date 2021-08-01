@@ -33,7 +33,7 @@ pub(crate) use fragment::def::{Def, FrozenDef};
 pub use runtime::{
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
-    parameters::{Parameters, ParametersParser, ParametersSpec, ParametersSpecBuilder},
+    parameters::{Parameters, ParametersParser, ParametersSpec},
 };
 
 mod compiler;

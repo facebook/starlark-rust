@@ -259,9 +259,8 @@ fn render_signature(x: &StarFun) -> Option<TokenStream> {
         let sig_args = x.args.map(render_signature_arg);
         Some(quote! {
             #[allow(unused_mut)]
-            let mut __signature = starlark::eval::ParametersSpecBuilder::with_capacity(#name_str.to_owned(), #args_count);
+            let mut __signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
             #( #sig_args )*
-            let __signature = __signature.build();
         })
     } else {
         None

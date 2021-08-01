@@ -30,7 +30,7 @@ use crate::{
             parameters::ParametersSpec,
             slots::{LocalSlotBase, LocalSlotId},
         },
-        Parameters, ParametersSpecBuilder,
+        Parameters,
     },
     syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
@@ -132,7 +132,7 @@ impl Compiler<'_> {
 
         expr!("def", |eval| {
             let mut parameters =
-                ParametersSpecBuilder::with_capacity(function_name.to_owned(), params.len());
+                ParametersSpec::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
 
             for (i, x) in params.iter().enumerate() {
@@ -160,7 +160,7 @@ impl Compiler<'_> {
                 }
             };
             Def::new(
-                parameters.build(),
+                parameters,
                 parameter_types,
                 return_type,
                 info.dupe(),
