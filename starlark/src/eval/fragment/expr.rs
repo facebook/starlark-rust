@@ -18,7 +18,7 @@
 //! Evaluation of an expression.
 use crate::{
     codemap::{Span, Spanned},
-    collections::{Hashed, SmallMap},
+    collections::{symbol_map::Symbol, Hashed, SmallMap},
     environment::EnvironmentError,
     errors::Diagnostic,
     eval::{
@@ -34,7 +34,7 @@ use crate::{
         function::{BoundMethod, NativeAttribute},
         list::List,
         tuple::{FrozenTuple, Tuple},
-        AttrType, FrozenHeap, FrozenValue, Value, ValueLike,
+        AttrType, FrozenHeap, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
 use gazebo::{coerce::coerce_ref, prelude::*};
@@ -319,6 +319,27 @@ impl ArgsCompiled {
     }
 }
 
+fn get_attr_hashed<'v>(
+    x: Value<'v>,
+    attribute: &Symbol,
+    heap: &'v Heap,
+) -> anyhow::Result<(AttrType, Value<'v>)> {
+    let aref = x.get_ref();
+    if let Some(methods) = aref.get_methods() {
+        if let Some(v) = methods.get_frozen_symbol(attribute) {
+            return Ok((AttrType::Method, v.to_value()));
+        }
+    }
+    match aref.get_attr(attribute.as_str(), heap) {
+        None => ValueError::unsupported_owned(
+            aref.get_type(),
+            &format!(".{}", attribute.as_str()),
+            None,
+        ),
+        Some(x) => Ok((AttrType::Field, x)),
+    }
+}
+
 impl Compiler<'_> {
     pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<ExprCompiledValue> {
         expr.map(|v| self.expr(*v))
@@ -516,9 +537,9 @@ impl Compiler<'_> {
             }
             Expr::Dot(left, right) => {
                 let left = self.expr(*left);
-                let s = right.node;
+                let s = Symbol::new(&right.node);
                 expr!("dot", left, |eval| {
-                    let (attr_type, v) = throw(left.get_attr_error(&s, eval.heap()), span, eval)?;
+                    let (attr_type, v) = throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
                     if attr_type == AttrType::Field {
                         v
                     } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
@@ -534,13 +555,13 @@ impl Compiler<'_> {
                 match left.node {
                     Expr::Dot(box e, s) => {
                         let e = self.expr(e);
+                        let s = Symbol::new(&s.node);
                         args!(
                             args,
                             expr!("call_method", e, |eval| {
                                 // We don't need to worry about whether it's an attribute, method or field
                                 // since those that don't want the `this` just ignore it
-                                let fun =
-                                    throw(e.get_attr_error(&s.node, eval.heap()), span, eval)?.1;
+                                let fun = throw(get_attr_hashed(e, &s, eval.heap()), span, eval)?.1;
                                 args.with_params(Some(e), eval, |params, eval| {
                                     throw(fun.invoke(Some(span), params, eval), span, eval)
                                 })?
