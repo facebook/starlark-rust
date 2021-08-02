@@ -147,13 +147,6 @@ impl AstLiteral {
 }
 
 impl Expr {
-    fn unpack_int_literal(&self) -> Option<i32> {
-        match self {
-            Expr::Literal(AstLiteral::IntLiteral(i)) => Some(i.node),
-            _ => None,
-        }
-    }
-
     fn unpack_string_literal(&self) -> Option<&str> {
         match self {
             Expr::Literal(AstLiteral::StringLiteral(i)) => Some(&i.node),
@@ -659,32 +652,32 @@ impl Compiler<'_> {
                 let expr = self.expr(*expr);
                 expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool()))
             }
-            Expr::Minus(expr) => match expr.unpack_int_literal().and_then(i32::checked_neg) {
-                None => {
-                    let expr = self.expr(*expr);
-                    expr!("minus", expr, |eval| throw(
+            Expr::Minus(expr) => {
+                let expr = self.expr(*expr);
+                match expr
+                    .as_value()
+                    .and_then(FrozenValue::unpack_int)
+                    .and_then(i32::checked_neg)
+                {
+                    Some(i) => value!(FrozenValue::new_int(i)),
+                    _ => expr!("minus", expr, |eval| throw(
                         expr.minus(eval.heap()),
                         span,
                         eval
-                    )?)
+                    )?),
                 }
-                Some(x) => {
-                    value!(FrozenValue::new_int(x))
-                }
-            },
-            Expr::Plus(expr) => match expr.unpack_int_literal() {
-                None => {
-                    let expr = self.expr(*expr);
-                    expr!("plus", expr, |eval| throw(
+            }
+            Expr::Plus(expr) => {
+                let expr = self.expr(*expr);
+                match expr.as_value() {
+                    Some(x) if x.unpack_int().is_some() => value!(x),
+                    _ => expr!("plus", expr, |eval| throw(
                         expr.plus(eval.heap()),
                         span,
                         eval
-                    )?)
+                    )?),
                 }
-                Some(x) => {
-                    value!(FrozenValue::new_int(x))
-                }
-            },
+            }
             Expr::BitNot(expr) => {
                 let expr = self.expr(*expr);
                 expr!("bit_not", expr, |_eval| Value::new_int(!expr.to_int()?))
