@@ -130,14 +130,18 @@ fn eval_list(x: ExprCompiled, mut clauses: Vec<ClauseCompiled>) -> ExprCompiledV
         let c = clauses.pop().unwrap();
         expr!("list_comp_map", |eval| {
             let iterable = (c.over)(eval)?;
-            // We could do for_each, but then we wouldn't get to ask for a size_hint
-            let it = throw(iterable.iterate(eval.heap()), c.over_span, eval)?;
-            let mut res = Vec::with_capacity(it.size_hint().0);
-            for i in it {
-                (c.var)(i, eval)?;
-                res.push(x(eval)?);
-            }
-            eval.heap().alloc(List::new(res))
+            throw(
+                iterable.with_iterator(eval.heap(), |it| -> Result<_, EvalException> {
+                    let mut res = Vec::with_capacity(it.size_hint().0);
+                    for i in it {
+                        (c.var)(i, eval)?;
+                        res.push(x(eval)?);
+                    }
+                    Ok(eval.heap().alloc(List::new(res)))
+                }),
+                c.over_span,
+                eval,
+            )??
         })
     } else {
         let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {

@@ -106,7 +106,9 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
             // But we can do something smarter to double the elements
             res.content.extend_from_within(..);
         } else {
-            res.content.extend(other.iterate(heap)?);
+            other.with_iterator(heap, |it| {
+                res.content.extend(it);
+            })?;
         }
         Ok(NoneType)
     }

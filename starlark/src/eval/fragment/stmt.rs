@@ -279,7 +279,7 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
         if lhs.ptr_eq(rhs) {
             list.content.extend_from_within(..);
         } else {
-            list.content.extend(rhs.iterate(heap)?);
+            rhs.with_iterator(heap, |it| list.content.extend(it))?;
         }
         Ok(lhs)
     } else if let Some(v) = rhs.get_ref().radd(lhs, heap) {

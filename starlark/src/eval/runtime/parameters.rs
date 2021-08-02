@@ -384,10 +384,9 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
         // Next up are the *args parameters
         if let Some(param_args) = params.args {
-            match param_args.iterate(heap) {
-                Err(_) => return Err(FunctionError::ArgsArrayIsNotIterable.into()),
-                Ok(iter) => {
-                    for v in iter {
+            param_args
+                .with_iterator(heap, |it| {
+                    for v in it {
                         if next_position < self.positional {
                             slots[next_position].set_direct(v);
                             next_position += 1;
@@ -395,8 +394,8 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                             args.push(v);
                         }
                     }
-                }
-            }
+                })
+                .map_err(|_| FunctionError::ArgsArrayIsNotIterable)?;
         }
 
         // Check if the named arguments clashed with the positional arguments
