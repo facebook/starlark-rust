@@ -21,7 +21,6 @@ use crate::values::{
 };
 use anyhow::Context;
 use gazebo::{any::AnyLifetime, prelude::*};
-use regex::Regex;
 use std::{
     collections::{hash_map::Entry, HashMap},
     fs::File,
@@ -202,7 +201,7 @@ impl Info {
             self.info[name.0].time_rec =
                 time_rec + now.checked_duration_since(start).unwrap_or_default();
         } else {
-            let typ = x.get_ref().type_name();
+            let typ = x.get_ref().get_type();
             *self.top_info().allocs.entry(typ).or_insert(0) += 1;
         }
     }
@@ -298,11 +297,8 @@ impl HeapProfile {
             file,
             "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Allocs"
         )?;
-        let trim_namespace = Regex::new("[a-z_]+::").unwrap();
         for x in &columns {
-            // Given: starlark::values::list::List<starlark::gc::value::Value>
-            // We'd like: List<Value>
-            write!(file, ",{}", trim_namespace.replace_all(x.0, ""))?;
+            write!(file, ",\"{}\"", &x.0)?;
         }
         writeln!(file)?;
         let blank = ids.get_string("".to_owned());
