@@ -650,7 +650,12 @@ impl Compiler<'_> {
             }
             Expr::Not(expr) => {
                 let expr = self.expr(*expr);
-                expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool()))
+                match expr.as_value() {
+                    Some(x) => {
+                        value!(FrozenValue::new_bool(!x.get_ref().to_bool()))
+                    }
+                    _ => expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool())),
+                }
             }
             Expr::Minus(expr) => {
                 let expr = self.expr(*expr);
