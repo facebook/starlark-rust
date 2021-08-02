@@ -509,18 +509,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         f(&mut *self.iterate(heap)?)
     }
 
-    /// Iterate over each member - must be equivalent to calling for_each on the result of
-    /// [`iterate`](StarlarkValue::iterate). To terminate the iteration early the supplied
-    /// function should return [`None`].
-    fn for_each(
-        &'v self,
-        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<()> {
-        self.iterate(heap)?.try_for_each(f);
-        Ok(())
-    }
-
     /// Returns the length of the value, if this value is a sequence.
     fn length(&self) -> anyhow::Result<i32> {
         ValueError::unsupported(self, "len()")

@@ -354,15 +354,6 @@ where
         f(&mut self.0.content().iter().copied())
     }
 
-    fn for_each(
-        &'v self,
-        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<()> {
-        self.0.content().iter().copied().try_for_each(f);
-        Ok(())
-    }
-
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
             let mut result = Vec::with_capacity(self.0.content().len() + other.len());

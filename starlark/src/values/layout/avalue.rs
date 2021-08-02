@@ -360,13 +360,6 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     ) -> anyhow::Result<()> {
         self.1.with_iterator(heap, f)
     }
-    fn for_each(
-        &'v self,
-        f: &mut dyn FnMut(Value<'v>) -> Option<()>,
-        heap: &'v Heap,
-    ) -> anyhow::Result<()> {
-        self.1.for_each(f, heap)
-    }
     fn length(&self) -> anyhow::Result<i32> {
         self.1.length()
     }
