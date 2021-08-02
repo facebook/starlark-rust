@@ -496,7 +496,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
 unsafe impl<'v, T: Trace<'v>> Trace<'v> for ParametersSpec<T> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.kinds.iter_mut().for_each(|x| x.trace(tracer))
+        self.kinds.trace(tracer);
     }
 }
 
