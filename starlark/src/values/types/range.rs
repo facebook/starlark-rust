@@ -196,6 +196,14 @@ impl<'v> StarlarkValue<'v> for Range {
         Ok(box RangeIterator::<'v>(*self, PhantomData))
     }
 
+    fn with_iterator(
+        &self,
+        _heap: &'v Heap,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        f(&mut RangeIterator::<'v>(*self, PhantomData))
+    }
+
     fn for_each(
         &'v self,
         f: &mut dyn FnMut(Value<'v>) -> Option<()>,

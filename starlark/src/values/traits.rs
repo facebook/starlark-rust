@@ -497,6 +497,18 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         ValueError::unsupported(self, "(iter)")
     }
 
+    /// Call a function with the same iterator as would be returned from [`iterate`](StarlarkValue::iterate).
+    /// The one advantage is that the iterator does not need to be allocated in a [`Box`].
+    /// If you implement this function you must also implement [`iterate`](StarlarkValue::iterate),
+    /// but the reverse is not true (this function has a sensible default).
+    fn with_iterator(
+        &self,
+        heap: &'v Heap,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        f(&mut *self.iterate(heap)?)
+    }
+
     /// Iterate over each member - must be equivalent to calling for_each on the result of
     /// [`iterate`](StarlarkValue::iterate). To terminate the iteration early the supplied
     /// function should return [`None`].

@@ -346,6 +346,14 @@ where
         }))
     }
 
+    fn with_iterator(
+        &self,
+        _heap: &'v Heap,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        f(&mut self.0.content().iter().copied())
+    }
+
     fn for_each(
         &'v self,
         f: &mut dyn FnMut(Value<'v>) -> Option<()>,

@@ -342,7 +342,22 @@ impl<'v> Value<'v> {
         // You might reasonably think this is mostly called on lists (I think it is),
         // and thus that a fast-path here would speed things up. But in my experiments
         // it's completely irrelevant (you pay a bit for the check, you save a bit on each step).
-        Ok(self.iterate(heap)?.collect())
+        self.with_iterator(heap, |it| it.collect())
+    }
+
+    /// Operate over an iterable for a value.
+    pub fn with_iterator<T>(
+        self,
+        heap: &'v Heap,
+        mut f: impl FnMut(&mut dyn Iterator<Item = Value<'v>>) -> T,
+    ) -> anyhow::Result<T> {
+        let mut res = None;
+        self.get_ref().with_iterator(heap, &mut |it| {
+            res = Some(f(it));
+            Ok(())
+        })?;
+        // Safe because if we ran the iterator, we should have called it and set `res`
+        Ok(res.take().expect("with_iterator to call the callback"))
     }
 
     /// Produce an iterable from a value.

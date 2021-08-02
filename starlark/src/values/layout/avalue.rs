@@ -353,6 +353,13 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     {
         self.1.iterate(heap)
     }
+    fn with_iterator(
+        &self,
+        heap: &'v Heap,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        self.1.with_iterator(heap, f)
+    }
     fn for_each(
         &'v self,
         f: &mut dyn FnMut(Value<'v>) -> Option<()>,

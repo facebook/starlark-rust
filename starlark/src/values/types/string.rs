@@ -424,6 +424,19 @@ where
         }
     }
 
+    fn with_iterator(
+        &self,
+        heap: &'v Heap,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        let s = self.string.to_value().unpack_str().unwrap().chars();
+        if self.produce_char {
+            f(&mut s.map(|x| heap.alloc(x)))
+        } else {
+            f(&mut s.map(|x| Value::new_int(u32::from(x) as i32)))
+        }
+    }
+
     fn for_each(
         &'v self,
         f: &mut dyn FnMut(Value<'v>) -> Option<()>,
