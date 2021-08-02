@@ -100,6 +100,43 @@ fn eval_slice(
     })
 }
 
+/// Conditional statements are fairly common, some have literals (or imported values)
+/// and quite a few start with a `not`, so encode those options statically.
+pub(crate) enum Conditional {
+    True,
+    False,
+    Normal(ExprCompiled),
+    Negate(ExprCompiled),
+}
+
+impl Compiler<'_> {
+    pub fn conditional(&mut self, expr: AstExpr) -> Conditional {
+        let (expect, val) = match expr {
+            Spanned {
+                node: Expr::Not(box expr),
+                ..
+            } => (false, self.expr(expr)),
+            _ => (true, self.expr(expr)),
+        };
+        match val {
+            ExprCompiledValue::Value(x) => {
+                if x.get_ref().to_bool() == expect {
+                    Conditional::True
+                } else {
+                    Conditional::False
+                }
+            }
+            ExprCompiledValue::Compiled(v) => {
+                if expect {
+                    Conditional::Normal(v)
+                } else {
+                    Conditional::Negate(v)
+                }
+            }
+        }
+    }
+}
+
 impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
@@ -520,14 +557,21 @@ impl Compiler<'_> {
                 })
             }
             Expr::If(box (cond, then_expr, else_expr)) => {
-                let cond = self.expr(cond);
-                let then_expr = self.expr(then_expr).as_compiled();
-                let else_expr = self.expr(else_expr).as_compiled();
-                expr!("if_expr", cond, |eval| {
-                    if cond.to_bool() {
-                        then_expr(eval)?
+                let then_expr = self.expr(then_expr);
+                let else_expr = self.expr(else_expr);
+                let (cond, t, f) = match self.conditional(cond) {
+                    Conditional::True => return then_expr,
+                    Conditional::False => return else_expr,
+                    Conditional::Normal(cond) => (cond, then_expr, else_expr),
+                    Conditional::Negate(cond) => (cond, else_expr, then_expr),
+                };
+                let t = t.as_compiled();
+                let f = f.as_compiled();
+                expr!("if_expr", |eval| {
+                    if cond(eval)?.to_bool() {
+                        t(eval)?
                     } else {
-                        else_expr(eval)?
+                        f(eval)?
                     }
                 })
             }

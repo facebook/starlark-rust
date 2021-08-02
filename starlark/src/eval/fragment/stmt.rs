@@ -27,6 +27,7 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
+        fragment::expr::Conditional,
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
@@ -408,20 +409,35 @@ impl Compiler<'_> {
                 return Err(EvalException::Return(Value::new_none()));
             }),
             Stmt::If(cond, box then_block) => {
-                let cond = self.expr(cond).as_compiled();
                 let then_block = self.stmt(then_block, allow_gc);
-                stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
-                    then_block(eval)?
-                })
+                match self.conditional(cond) {
+                    Conditional::True => then_block,
+                    Conditional::False => stmt!("if(false)", span, |eval| {}),
+                    Conditional::Normal(cond) => {
+                        stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
+                            then_block(eval)?
+                        })
+                    }
+                    Conditional::Negate(cond) => {
+                        stmt!("if_then", span, |eval| if !cond(eval)?.to_bool() {
+                            then_block(eval)?
+                        })
+                    }
+                }
             }
             Stmt::IfElse(cond, box (then_block, else_block)) => {
-                let cond = self.expr(cond).as_compiled();
                 let then_block = self.stmt(then_block, allow_gc);
                 let else_block = self.stmt(else_block, allow_gc);
+                let (cond, t, f) = match self.conditional(cond) {
+                    Conditional::True => return then_block,
+                    Conditional::False => return else_block,
+                    Conditional::Normal(cond) => (cond, then_block, else_block),
+                    Conditional::Negate(cond) => (cond, else_block, then_block),
+                };
                 stmt!("if_then_else", span, |eval| if cond(eval)?.to_bool() {
-                    then_block(eval)?
+                    t(eval)?
                 } else {
-                    else_block(eval)?
+                    f(eval)?
                 })
             }
             Stmt::Statements(stmts) => {
