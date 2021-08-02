@@ -318,11 +318,22 @@ impl Stmt {
         }
     }
 
+    // Return statements to execute, skipping those that have no effect
+    // and flattening any nested Statements
     fn flatten_statements(xs: Vec<AstStmt>) -> Vec<AstStmt> {
+        fn has_effect(x: &Expr) -> bool {
+            match x {
+                Expr::Literal(_) => false,
+                _ => true,
+            }
+        }
+
         let mut res = Vec::with_capacity(xs.len());
         for x in xs.into_iter() {
             match x.node {
                 Stmt::Statements(x) => res.extend(Stmt::flatten_statements(x)),
+                Stmt::Pass => {}
+                Stmt::Expression(x) if !has_effect(&x) => {}
                 _ => res.push(x),
             }
         }
