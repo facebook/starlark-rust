@@ -24,7 +24,7 @@ use crate::{
     stdlib::util::convert_indices,
     values::{
         fast_string, interpolation, list::List, none::NoneOr, string, tuple::Tuple, UnpackValue,
-        Value, ValueError,
+        Value, ValueError, ValueOf,
     },
 };
 use anyhow::anyhow;
@@ -681,21 +681,26 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "one/two/three".partition("/") == ("one", "/", "two/three")
+    /// "one".partition("/") == ("one", "", "")
     /// # "#);
     /// ```
-    fn partition(this: &'v str, ref needle @ " ": &'v str) -> (&'v str, &'v str, &'v str) {
-        if needle.is_empty() {
+    fn partition(
+        this: ValueOf<'v, &str>,
+        ref needle: ValueOf<'v, &str>,
+    ) -> (Value<'v>, Value<'v>, Value<'v>) {
+        if needle.typed.is_empty() {
             return Err(anyhow!("Empty separator cannot be used for partitioning"));
         }
-        if let Some(offset) = this.find(needle) {
-            let offset2 = offset + needle.len();
+        if let Some(offset) = this.typed.find(needle.typed) {
+            let offset2 = offset + needle.typed.len();
             Ok((
-                this.get(..offset).unwrap(),
-                needle,
-                this.get(offset2..).unwrap(),
+                heap.alloc(this.typed.get(..offset).unwrap()),
+                needle.value,
+                heap.alloc(this.typed.get(offset2..).unwrap()),
             ))
         } else {
-            Ok((this, "", ""))
+            let empty = Value::new_empty_string();
+            Ok((this.value, empty, empty))
         }
     }
 
@@ -805,21 +810,26 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "one/two/three".rpartition("/") == ("one/two", "/", "three")
+    /// "one".rpartition("/") == ("", "", "one")
     /// # "#);
     /// ```
-    fn rpartition(this: &'v str, ref needle @ " ": &'v str) -> (&'v str, &'v str, &'v str) {
-        if needle.is_empty() {
+    fn rpartition(
+        this: ValueOf<'v, &str>,
+        ref needle: ValueOf<'v, &str>,
+    ) -> (Value<'v>, Value<'v>, Value<'v>) {
+        if needle.typed.is_empty() {
             return Err(anyhow!("Empty separator cannot be used for partitioning"));
         }
-        if let Some(offset) = this.rfind(needle) {
-            let offset2 = offset + needle.len();
+        if let Some(offset) = this.typed.rfind(needle.typed) {
+            let offset2 = offset + needle.typed.len();
             Ok((
-                this.get(..offset).unwrap(),
-                needle,
-                this.get(offset2..).unwrap(),
+                heap.alloc(this.typed.get(..offset).unwrap()),
+                needle.value,
+                heap.alloc(this.typed.get(offset2..).unwrap()),
             ))
         } else {
-            Ok(("", "", this))
+            let empty = Value::new_empty_string();
+            Ok((empty, empty, this.value))
         }
     }
 

@@ -33,6 +33,7 @@ use crate::values::{
     layout::{
         arena::AValuePtr,
         avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
+        constant::VALUE_EMPTY_STRING,
         pointer::Pointer,
         pointer_i32::PointerI32,
     },
@@ -88,6 +89,11 @@ impl<'v> Value<'v> {
     /// Create a new integer.
     pub fn new_int(x: i32) -> Self {
         FrozenValue::new_int(x).to_value()
+    }
+
+    /// Create a new blank string.
+    pub(crate) fn new_empty_string() -> Self {
+        FrozenValue::new_empty_string().to_value()
     }
 
     /// Turn a [`FrozenValue`] into a [`Value`]. See the safety warnings on
@@ -202,6 +208,11 @@ impl FrozenValue {
     /// Create a new int in Starlark.
     pub fn new_int(x: i32) -> Self {
         Self(Pointer::new_int(x))
+    }
+
+    /// Create a new empty string.
+    pub(crate) fn new_empty_string() -> Self {
+        VALUE_EMPTY_STRING.unpack()
     }
 
     /// Is a value a Starlark `None`.
