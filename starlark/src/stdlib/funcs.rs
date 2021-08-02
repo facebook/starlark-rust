@@ -104,19 +104,14 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn any(ref x: Value) -> bool {
-        let mut res = false;
-        x.get_ref().for_each(
-            &mut |x: Value| {
-                if x.to_bool() {
-                    res = true;
-                    None
-                } else {
-                    Some(())
+        x.with_iterator(heap, |it| {
+            for i in it {
+                if i.to_bool() {
+                    return true;
                 }
-            },
-            heap,
-        )?;
-        Ok(res)
+            }
+            false
+        })
     }
 
     /// [all](
@@ -139,19 +134,14 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn all(ref x: Value) -> bool {
-        let mut res = true;
-        x.get_ref().for_each(
-            &mut |x: Value| {
-                if !x.to_bool() {
-                    res = false;
-                    None
-                } else {
-                    Some(())
+        x.with_iterator(heap, |it| {
+            for i in it {
+                if !i.to_bool() {
+                    return false;
                 }
-            },
-            heap,
-        )?;
-        Ok(res)
+            }
+            true
+        })
     }
 
     /// [bool](

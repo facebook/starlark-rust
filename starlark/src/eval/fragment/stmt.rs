@@ -370,24 +370,21 @@ impl Compiler<'_> {
                 stmt!("for", span, |eval| {
                     let heap = eval.heap();
                     let iterable = over(eval)?;
-                    let mut err = Ok(());
                     throw(
-                        iterable.get_ref().for_each(
-                            &mut |v| match var(v, eval).and_then(|_| st(eval)) {
-                                Err(EvalException::Break) => None,
-                                Err(EvalException::Continue) => Some(()),
-                                Err(e) => {
-                                    err = Err(e);
-                                    None
+                        iterable.with_iterator(heap, |it| {
+                            for v in it {
+                                match var(v, eval).and_then(|_| st(eval)) {
+                                    Err(EvalException::Break) => break,
+                                    Err(EvalException::Continue) => {}
+                                    Err(e) => return Err(e),
+                                    _ => {}
                                 }
-                                Ok(_) => Some(()),
-                            },
-                            heap,
-                        ),
+                            }
+                            Ok(())
+                        }),
                         over_span,
                         eval,
-                    )?;
-                    err?;
+                    )??;
                 })
             }
             Stmt::Return(Some(e)) => {
