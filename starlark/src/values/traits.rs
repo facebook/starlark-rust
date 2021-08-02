@@ -487,10 +487,13 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
 
     /// Returns an iterable over the value of this container if this value holds
     /// an iterable container.
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         ValueError::unsupported(self, "(iter)")
     }
 

@@ -344,10 +344,13 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     ) -> anyhow::Result<Value<'v>> {
         self.1.slice(start, stop, stride, heap)
     }
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         self.1.iterate(heap)
     }
     fn for_each(

@@ -168,10 +168,13 @@ where
         )?)))
     }
 
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         Ok(box self.iter())
     }
 

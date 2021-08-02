@@ -409,10 +409,13 @@ where
 {
     starlark_type!("iterator");
 
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         let s = self.string.to_value().unpack_str().unwrap().chars();
         if self.produce_char {
             Ok(box s.map(move |x| heap.alloc(x)))

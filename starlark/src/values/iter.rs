@@ -20,15 +20,15 @@ use gazebo::{cast, cell::ARef};
 
 /// A relatively safe way of implementing an iterator over an ARef.
 /// If this is properly safe, why doesn't exist for Ref?
-pub(crate) struct ARefIterator<'v, T: ?Sized, I: Iterator<Item = Value<'v>>> {
+pub(crate) struct ARefIterator<'a, 'v, T: ?Sized, I: Iterator<Item = Value<'v>>> {
     // OK to be dead, since the main thing is the Drop implementation
     #[allow(dead_code)]
-    aref: ARef<'v, T>,
+    aref: ARef<'a, T>,
     iter: I,
 }
 
-impl<'v, T: ?Sized, I: Iterator<Item = Value<'v>>> ARefIterator<'v, T, I> {
-    pub fn new(aref: ARef<'v, T>, f: impl FnOnce(&'v T) -> I) -> Self {
+impl<'a, 'v, T: ?Sized, I: Iterator<Item = Value<'v>>> ARefIterator<'a, 'v, T, I> {
+    pub fn new(aref: ARef<'a, T>, f: impl FnOnce(&'a T) -> I) -> Self {
         // This is safe because we never unpack the ARefIterator
         let aref_ptr = unsafe { cast::ptr_lifetime(&*aref) };
         let iter = f(aref_ptr);
@@ -36,7 +36,7 @@ impl<'v, T: ?Sized, I: Iterator<Item = Value<'v>>> ARefIterator<'v, T, I> {
     }
 }
 
-impl<'v, T: ?Sized, I: Iterator<Item = Value<'v>>> Iterator for ARefIterator<'v, T, I> {
+impl<'a, 'v, T: ?Sized, I: Iterator<Item = Value<'v>>> Iterator for ARefIterator<'a, 'v, T, I> {
     type Item = Value<'v>;
 
     fn next(&mut self) -> Option<Self::Item> {

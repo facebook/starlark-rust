@@ -186,10 +186,13 @@ impl<'v> StarlarkValue<'v> for Range {
         }));
     }
 
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         Ok(box RangeIterator::<'v>(*self, PhantomData))
     }
 

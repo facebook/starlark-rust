@@ -328,10 +328,13 @@ where
             .contains_key_hashed(other.get_hashed()?.borrow()))
     }
 
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         Ok(box ARefIterator::new(self.0.content(), |x| {
             x.keys().copied()
         }))

@@ -230,10 +230,13 @@ where
         Ok(self.elements.get_index(i).map(|x| *x.1).unwrap().to_value())
     }
 
-    fn iterate(
-        &'v self,
+    fn iterate<'a>(
+        &'a self,
         _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
         Ok(box self.elements.values().map(|x| x.to_value()))
     }
 
