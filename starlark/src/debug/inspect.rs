@@ -63,7 +63,10 @@ fn inspect_module_variables<'v>(eval: &Evaluator<'v, '_>) -> SmallMap<String, Va
 
 #[cfg(test)]
 mod tests {
-    use crate::{self as starlark, assert, environment::GlobalsBuilder, values::structs::Struct};
+    use crate::{
+        self as starlark, assert, collections::SmallMap, environment::GlobalsBuilder,
+        values::dict::Dict,
+    };
     use gazebo::prelude::*;
 
     #[starlark_module]
@@ -72,10 +75,12 @@ mod tests {
             Ok(eval.call_stack().map(ToString::to_string))
         }
 
-        fn debug_inspect_variables() -> Struct<'v> {
-            Ok(Struct {
-                fields: eval.local_variables(),
-            })
+        fn debug_inspect_variables() -> Dict<'v> {
+            let mut sm = SmallMap::new();
+            for (k, v) in eval.local_variables() {
+                sm.insert_hashed(heap.alloc_str_hashed(&k), v);
+            }
+            Ok(Dict::new(sm))
         }
     }
 
@@ -110,9 +115,9 @@ def f(x = 1, y = "test"):
     z = x + 5
     for _magic in [False, True]:
         continue
-    assert_eq(debug_inspect_variables(), struct(x = 1, y = "hello", z = 6, _magic = True))
+    assert_eq(debug_inspect_variables(), {"x": 1, "y": "hello", "z": 6, "_magic": True})
 f(y = "hello")
-assert_eq(debug_inspect_variables(), struct(root = 12, f = f, _ignore = [True]))
+assert_eq(debug_inspect_variables(), {"root": 12, "f": f, "_ignore": [True]})
 "#,
         );
     }
