@@ -51,7 +51,7 @@ pub struct GlobalsBuilder {
     // Normal top-level variables, e.g. True/hash
     variables: SymbolMap<FrozenValue>,
     // Set to Some when we are in a struct builder, otherwise None
-    struct_fields: Option<SmallMap<String, FrozenValue>>,
+    struct_fields: Option<SmallMap<FrozenValue, FrozenValue>>,
 }
 
 impl Globals {
@@ -191,7 +191,10 @@ impl GlobalsBuilder {
         let value = value.alloc_frozen_value(&self.heap);
         match &mut self.struct_fields {
             None => self.variables.insert(name, value),
-            Some(fields) => fields.insert(name.to_owned(), value),
+            Some(fields) => {
+                let name = self.heap.alloc_str_hashed(name);
+                fields.insert_hashed(name, value)
+            }
         };
     }
 
@@ -205,7 +208,10 @@ impl GlobalsBuilder {
         });
         match &mut self.struct_fields {
             None => self.variables.insert(name, func),
-            Some(fields) => fields.insert(name.to_owned(), func),
+            Some(fields) => {
+                let name = self.heap.alloc_str_hashed(name);
+                fields.insert_hashed(name, func)
+            }
         };
     }
 

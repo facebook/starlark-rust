@@ -40,11 +40,15 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::{compare_small_map, equals_small_map},
+        dict::ValueStr,
         error::ValueError,
         AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::{
+    any::AnyLifetime,
+    coerce::{coerce_ref, Coerce},
+};
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
@@ -56,7 +60,7 @@ impl<V> StructGen<V> {
     pub const TYPE: &'static str = "struct";
 
     /// Create a new [`Struct`].
-    pub fn new(fields: SmallMap<String, V>) -> Self {
+    pub fn new(fields: SmallMap<V, V>) -> Self {
         Self { fields }
     }
 }
@@ -68,11 +72,12 @@ starlark_complex_value!(pub Struct);
 #[repr(transparent)]
 pub struct StructGen<V> {
     /// The fields in a struct.
-    pub fields: SmallMap<String, V>,
+    /// All keys _must_ be strings.
+    pub fields: SmallMap<V, V>,
 }
 
 /// A builder to create a `Struct` easily.
-pub struct StructBuilder<'v>(&'v Heap, SmallMap<String, Value<'v>>);
+pub struct StructBuilder<'v>(&'v Heap, SmallMap<Value<'v>, Value<'v>>);
 
 impl<'v> StructBuilder<'v> {
     /// Create a new [`StructBuilder`] with a given capacity.
@@ -86,8 +91,9 @@ impl<'v> StructBuilder<'v> {
     }
 
     /// Add an element to the underlying [`Struct`].
-    pub fn add(&mut self, key: impl Into<String>, val: impl AllocValue<'v>) {
-        self.1.insert(key.into(), self.0.alloc(val));
+    pub fn add(&mut self, key: &str, val: impl AllocValue<'v>) {
+        self.1
+            .insert_hashed(self.0.alloc_str_hashed(key), self.0.alloc(val));
     }
 
     /// Finish building and produce a [`Struct`].
@@ -100,9 +106,8 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
     type Frozen = FrozenStruct;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut frozen = SmallMap::with_capacity(self.fields.len());
-
         for (k, v) in self.fields.into_iter_hashed() {
-            frozen.insert_hashed(k, v.freeze(freezer)?);
+            frozen.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
         Ok(FrozenStruct { fields: frozen })
     }
@@ -124,7 +129,13 @@ where
         s += &self
             .fields
             .iter()
-            .map(|(k, v)| Ok(format!("\"{}\":{}", k, v.to_json()?)))
+            .map(|(k, v)| {
+                Ok(format!(
+                    "\"{}\":{}",
+                    k.to_value().unpack_str().unwrap(),
+                    v.to_json()?
+                ))
+            })
             .collect::<anyhow::Result<Vec<String>>>()?
             .join(",");
         s += "}";
@@ -137,7 +148,7 @@ where
             if i != 0 {
                 r.push_str(", ");
             }
-            r.push_str(name);
+            r.push_str(name.to_value().unpack_str().unwrap());
             r.push('=');
             value.collect_repr(r);
         }
@@ -147,36 +158,46 @@ where
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Struct::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_small_map(&self.fields, &other.fields, |x, y| x.equals(*y)),
+            Some(other) => {
+                equals_small_map(coerce_ref(&self.fields), &other.fields, |x, y| x.equals(*y))
+            }
         }
     }
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match Struct::from_value(other) {
             None => ValueError::unsupported_with(self, "cmp()", other),
-            Some(other) => compare_small_map(&self.fields, &other.fields, |x, y| x.compare(*y)),
+            Some(other) => compare_small_map(
+                coerce_ref(&self.fields),
+                &other.fields,
+                |k| k.unpack_str(),
+                |x, y| x.compare(*y),
+            ),
         }
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
-        Some(self.fields.get(attribute)?.to_value())
+        coerce_ref(&self.fields).get(&ValueStr(attribute)).copied()
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = DefaultHasher::new();
-        for (k, v) in self.fields.iter() {
-            k.hash(&mut s);
+        for (k, v) in self.fields.iter_hashed() {
+            Hash::hash(&k, &mut s);
             s.write_u64(v.get_hash()?);
         }
         Ok(s.finish())
     }
 
     fn has_attr(&self, attribute: &str) -> bool {
-        self.fields.contains_key(attribute)
+        coerce_ref(&self.fields).contains_key(&ValueStr(attribute))
     }
 
     fn dir_attr(&self) -> Vec<String> {
-        self.fields.keys().cloned().collect()
+        self.fields
+            .keys()
+            .map(|x| x.to_value().unpack_str().unwrap().to_owned())
+            .collect()
     }
 }
 

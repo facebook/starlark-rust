@@ -59,18 +59,19 @@ pub fn compare_slice<E, X1, X2>(
     })
 }
 
-pub fn compare_small_map<E, K: Ord + Hash, V1, V2>(
+pub fn compare_small_map<E, K, K2: Ord + Hash, V1, V2>(
     x: &SmallMap<K, V1>,
     y: &SmallMap<K, V2>,
+    key: impl Fn(&K) -> K2,
     f: impl Fn(&V1, &V2) -> Result<Ordering, E>,
 ) -> Result<Ordering, E> {
     Ok(cmp_chain! {
         x.len().cmp(&y.len()),
         x.iter()
-         .sorted_by_key(|(k, _)| *k)
-         .try_cmp_by(
-            y.iter().sorted_by_key(|(k, _)| *k),
-            |(xk, xv), (yk, yv)| Ok(cmp_chain! { xk.cmp(yk), f(xv, yv)? })
-         )?
+            .sorted_by_key(|(k, _)| key(k))
+            .try_cmp_by(
+                y.iter().sorted_by_key(|(k, _)| key(k)),
+                |(xk, xv), (yk, yv)| Ok(cmp_chain! { key(xk).cmp(&key(yk)), f(xv, yv)? })
+            )?
     })
 }

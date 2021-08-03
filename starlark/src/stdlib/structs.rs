@@ -18,16 +18,19 @@
 //! Implementation of `struct` function.
 use crate as starlark;
 use crate::{
-    collections::SmallMap,
     environment::GlobalsBuilder,
+    eval::Parameters,
     values::{structs::Struct, Value, ValueLike},
 };
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
     #[starlark_type(Struct::TYPE)]
-    fn r#struct(kwargs: SmallMap<String, Value>) -> Struct<'v> {
-        Ok(Struct { fields: kwargs })
+    fn r#struct(params: Parameters<'v, '_>) -> Struct<'v> {
+        params.no_positional_args(heap)?;
+        Ok(Struct {
+            fields: params.names()?.content,
+        })
     }
 }
 

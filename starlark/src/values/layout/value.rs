@@ -40,7 +40,11 @@ use crate::values::{
     string::StarlarkStr,
 };
 use either::Either;
-use gazebo::{cast, coerce::Coerce, prelude::*};
+use gazebo::{
+    cast,
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
 ///
@@ -50,6 +54,7 @@ use gazebo::{cast, coerce::Coerce, prelude::*};
 pub struct Value<'v>(pub(crate) Pointer<'v, AValuePtr>);
 
 unsafe impl<'v> Coerce<Value<'v>> for Value<'v> {}
+unsafe impl<'v> CoerceKey<Value<'v>> for Value<'v> {}
 
 /// A [`Value`] that can never be changed. Can be converted back to a [`Value`] with [`to_value`](FrozenValue::to_value).
 ///
