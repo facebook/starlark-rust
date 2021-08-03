@@ -135,7 +135,6 @@ pub(crate) fn json_escape(x: &str) -> String {
         match c {
             b'\\' => escaped.extend(b"\\\\".iter()),
             b'"' => escaped.extend(b"\\\"".iter()),
-            b'/' => escaped.extend(b"\\/".iter()),
             0x08u8 => escaped.extend(b"\\b".iter()),
             0x0Cu8 => escaped.extend(b"\\f".iter()),
             b'\n' => escaped.extend(b"\\n".iter()),
