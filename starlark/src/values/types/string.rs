@@ -472,8 +472,6 @@ mod tests {
         "© and other characters Ŕ",
         "ça va bien merci",
         "Диана is a name in Russia",
-        "🤗 and the emjoi can go first",
-        "😥🍊🍉🫐🥥🥬🥒🥑🍈🍋",
     ];
 
     #[test]
