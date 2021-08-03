@@ -29,6 +29,7 @@ use crate::{
     },
 };
 use gazebo::{
+    cell::ARef,
     coerce::{coerce, Coerce},
     prelude::*,
 };
@@ -575,6 +576,68 @@ pub struct Parameters<'v, 'a> {
 }
 
 impl<'v, 'a> Parameters<'v, 'a> {
+    /// Unwrap all named parameters into a dictionary,
+    pub fn names(&self) -> anyhow::Result<Dict<'v>> {
+        match self.unpack_kwargs()? {
+            None => {
+                let mut result = SmallMap::with_capacity(self.names.len());
+                for (k, v) in self.names.iter().zip(self.named) {
+                    result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
+                }
+                Ok(Dict::new(result))
+            }
+            Some(kwargs) => {
+                if self.names.is_empty() {
+                    for k in kwargs.content.keys() {
+                        Parameters::unpack_kwargs_key(*k)?;
+                    }
+                    Ok(kwargs.clone())
+                } else {
+                    // We have to insert the names before the kwargs since the iteration order is observable
+                    let mut result =
+                        SmallMap::with_capacity(self.names.len() + kwargs.content.len());
+                    for (k, v) in self.names.iter().zip(self.named) {
+                        result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
+                    }
+                    for (k, v) in kwargs.iter_hashed() {
+                        let s = Parameters::unpack_kwargs_key(*k.key())?;
+                        let old = result.insert_hashed(k, v);
+                        if old.is_some() {
+                            return Err(
+                                FunctionError::RepeatedParameter { name: s.to_owned() }.into()
+                            );
+                        }
+                    }
+                    Ok(Dict::new(result))
+                }
+            }
+        }
+    }
+
+    /// Examine the `kwargs` field, converting it to a [`Dict`] or failing.
+    /// Note that even if this operation succeeds, the keys in the kwargs
+    /// will _not_ have been validated to be strings (as they must be).
+    /// The arguments may also overlap with named, which would be an error.
+    #[inline(always)]
+    pub fn unpack_kwargs(&self) -> anyhow::Result<Option<ARef<'v, Dict<'v>>>> {
+        match self.kwargs {
+            None => Ok(None),
+            Some(kwargs) => match Dict::from_value(kwargs) {
+                None => Err(FunctionError::KwArgsIsNotDict.into()),
+                Some(x) => Ok(Some(x)),
+            },
+        }
+    }
+
+    /// Confirm that a key in the `kwargs` field is indeed a string, or [`Err`].
+    #[inline(always)]
+    pub fn unpack_kwargs_key(k: Value<'v>) -> anyhow::Result<&'v str> {
+        match k.unpack_str() {
+            None => Err(FunctionError::ArgsValueIsNotString.into()),
+            Some(k) => Ok(k),
+        }
+    }
+
     /// Produce [`Err`] if there are any positional arguments.
     #[inline(always)]
     pub fn no_positional_args(&self, heap: &'v Heap) -> anyhow::Result<()> {
@@ -591,17 +654,9 @@ impl<'v, 'a> Parameters<'v, 'a> {
             // We might have a empty kwargs dictionary, but probably have an error
             let mut extra = Vec::new();
             extra.extend(x.names.iter().map(|x| x.0.as_str().to_owned()));
-            if let Some(kwargs) = x.kwargs {
-                match Dict::from_value(kwargs) {
-                    None => return Err(FunctionError::KwArgsIsNotDict.into()),
-                    Some(x) => {
-                        for k in x.content.keys() {
-                            match k.unpack_str() {
-                                None => return Err(FunctionError::ArgsValueIsNotString.into()),
-                                Some(k) => extra.push(k.to_owned()),
-                            }
-                        }
-                    }
+            if let Some(kwargs) = x.unpack_kwargs()? {
+                for k in kwargs.content.keys() {
+                    extra.push(Parameters::unpack_kwargs_key(*k)?.to_owned());
                 }
             }
             if extra.is_empty() {
