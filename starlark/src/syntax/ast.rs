@@ -218,6 +218,19 @@ impl Argument {
             Argument::KwArgs(x) => x,
         }
     }
+
+    pub fn into_expr(self) -> AstExpr {
+        match self {
+            Argument::Positional(x) => x,
+            Argument::Named(_, x) => x,
+            Argument::Args(x) => x,
+            Argument::KwArgs(x) => x,
+        }
+    }
+
+    pub fn is_positional(&self) -> bool {
+        matches!(self, Argument::Positional(_))
+    }
 }
 
 impl Display for BinOp {
