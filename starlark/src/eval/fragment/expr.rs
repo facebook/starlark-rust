@@ -23,6 +23,7 @@ use crate::{
     errors::Diagnostic,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
+        fragment::known::Conditional,
         runtime::evaluator::Evaluator,
         Parameters,
     },
@@ -98,43 +99,6 @@ fn eval_slice(
             eval,
         )?
     })
-}
-
-/// Conditional statements are fairly common, some have literals (or imported values)
-/// and quite a few start with a `not`, so encode those options statically.
-pub(crate) enum Conditional {
-    True,
-    False,
-    Normal(ExprCompiled),
-    Negate(ExprCompiled),
-}
-
-impl Compiler<'_> {
-    pub fn conditional(&mut self, expr: AstExpr) -> Conditional {
-        let (expect, val) = match expr {
-            Spanned {
-                node: Expr::Not(box expr),
-                ..
-            } => (false, self.expr(expr)),
-            _ => (true, self.expr(expr)),
-        };
-        match val {
-            ExprCompiledValue::Value(x) => {
-                if x.get_ref().to_bool() == expect {
-                    Conditional::True
-                } else {
-                    Conditional::False
-                }
-            }
-            ExprCompiledValue::Compiled(v) => {
-                if expect {
-                    Conditional::Normal(v)
-                } else {
-                    Conditional::Negate(v)
-                }
-            }
-        }
-    }
 }
 
 impl AstLiteral {

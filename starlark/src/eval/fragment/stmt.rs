@@ -27,7 +27,7 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
-        fragment::expr::Conditional,
+        fragment::known::Conditional,
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},

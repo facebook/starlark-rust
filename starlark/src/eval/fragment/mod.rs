@@ -65,4 +65,5 @@ macro_rules! stmt {
 pub(crate) mod compr;
 pub(crate) mod def;
 pub(crate) mod expr;
+pub(crate) mod known;
 pub(crate) mod stmt;
