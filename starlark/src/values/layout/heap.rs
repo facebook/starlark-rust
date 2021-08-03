@@ -19,14 +19,18 @@
 // Preallocate int, none, bool etc slots in Value, so they are shared
 // Encoding none, bool etc in the pointer of frozen value
 
-use crate::values::{
-    layout::{
-        arena::{AValuePtr, Arena, Reservation},
-        avalue::{complex, simple, starlark_str, AValue},
-        constant::constant_string,
-        value::{FrozenValue, Value},
+use crate::{
+    collections::Hashed,
+    values::{
+        layout::{
+            arena::{AValuePtr, Arena, Reservation},
+            avalue::{complex, simple, starlark_str, AValue},
+            constant::constant_string,
+            value::{FrozenValue, Value},
+        },
+        string::hash_string_result,
+        AllocFrozenValue, ComplexValue, SimpleValue,
     },
-    AllocFrozenValue, ComplexValue, SimpleValue,
 };
 use either::Either;
 use gazebo::{cast, prelude::*};
@@ -130,6 +134,8 @@ impl FrozenHeap {
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
+    /// Allocate a string on this heap. Be careful about the warnings
+    /// around [`FrozenValue`].
     pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
         if let Some(x) = constant_string(x) {
             x
@@ -140,6 +146,13 @@ impl FrozenHeap {
             };
             FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
         }
+    }
+
+    /// Allocate a string on this heap and hash it. Be careful about the warnings
+    /// around [`FrozenValue`].
+    pub fn alloc_str_hashed(&self, x: &str) -> Hashed<FrozenValue> {
+        let h = hash_string_result(x);
+        Hashed::new_unchecked(h, self.alloc_str(x))
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -253,7 +266,8 @@ impl Heap {
         Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
-    pub(crate) fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
+    /// Allocate a string on the heap.
+    pub fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
         if let Some(x) = constant_string(x) {
             x.to_value()
         } else {
@@ -261,6 +275,12 @@ impl Heap {
                 copy_nonoverlapping(x.as_ptr(), dest, x.len())
             })
         }
+    }
+
+    /// Allocate a string on this heap and hash it.
+    pub fn alloc_str_hashed<'v>(&'v self, x: &str) -> Hashed<Value<'v>> {
+        let h = hash_string_result(x);
+        Hashed::new_unchecked(h, self.alloc_str(x))
     }
 
     pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {

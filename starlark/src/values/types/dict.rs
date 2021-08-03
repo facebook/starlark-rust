@@ -435,11 +435,11 @@ b1 and b2 and b3
     #[test]
     fn test_get_str() -> anyhow::Result<()> {
         let heap = Heap::new();
-        let k1 = heap.alloc("hello");
-        let k2 = heap.alloc("world");
+        let k1 = heap.alloc_str_hashed("hello");
+        let k2 = heap.alloc_str_hashed("world");
         let mut sm = SmallMap::new();
-        sm.insert_hashed(k1.get_hashed()?, Value::new_int(12));
-        sm.insert_hashed(k2.get_hashed()?, Value::new_int(56));
+        sm.insert_hashed(k1, Value::new_int(12));
+        sm.insert_hashed(k2, Value::new_int(56));
         let d = Dict::new(sm);
 
         assert_eq!(d.get(heap.alloc("hello"))?.unwrap().unpack_int(), Some(12));

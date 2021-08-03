@@ -19,6 +19,7 @@
 
 use crate as starlark;
 use crate::{
+    collections::SmallHashResult,
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
@@ -119,6 +120,11 @@ impl<'v> UnpackValue<'v> for String {
 /// How to hash a string in a way that is compatible with Value
 pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
     x.hash(state)
+}
+
+/// Hash a string in a way compatible with Value
+pub(crate) fn hash_string_result(x: &str) -> SmallHashResult {
+    SmallHashResult::new(x)
 }
 
 pub(crate) fn json_escape(x: &str) -> String {
@@ -469,6 +475,17 @@ mod tests {
         "🤗 and the emjoi can go first",
         "😥🍊🍉🫐🥥🥬🥒🥑🍈🍋",
     ];
+
+    #[test]
+    fn test_string_hash() {
+        let heap = Heap::new();
+        for x in EXAMPLES {
+            assert_eq!(
+                heap.alloc_str_hashed(x).hash(),
+                heap.alloc(*x).get_hashed().unwrap().hash()
+            );
+        }
+    }
 
     #[test]
     fn test_to_repr() {
