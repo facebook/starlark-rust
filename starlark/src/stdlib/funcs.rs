@@ -22,6 +22,7 @@ use crate::{
     self as starlark,
     collections::SmallMap,
     environment::GlobalsBuilder,
+    eval::Parameters,
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
@@ -39,23 +40,20 @@ use anyhow::anyhow;
 use gazebo::prelude::*;
 use std::{cmp::Ordering, num::NonZeroI32};
 
-fn unpack_pair<'v>(it: Value<'v>, heap: &'v Heap) -> anyhow::Result<(Value<'v>, Value<'v>)> {
-    match it.iterate(heap) {
-        Ok(mut it) => {
-            let first = it.next();
-            let second = it.next();
-            let third = it.next();
-            match (first, second, third) {
-                (Some(k), Some(v), None) => return Ok((k, v)),
-                _ => {}
+fn unpack_pair<'v>(pair: Value<'v>, heap: &'v Heap) -> anyhow::Result<(Value<'v>, Value<'v>)> {
+    pair.with_iterator(heap, |it| {
+        if let Some(first) = it.next() {
+            if let Some(second) = it.next() {
+                if it.next().is_none() {
+                    return Ok((first, second));
+                }
             }
         }
-        _ => {}
-    }
-    Err(anyhow!(
-        "Found a non-pair element in the positional argument of dict(): {}",
-        it.to_repr(),
-    ))
+        Err(anyhow!(
+            "Found a non-pair element in the positional argument of dict(): {}",
+            pair.to_repr(),
+        ))
+    })?
 }
 
 #[starlark_module]
@@ -237,26 +235,40 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark_type(Dict::TYPE)]
-    fn dict(ref a: Option<Value>, kwargs: Value) -> Value<'v> {
-        match a {
-            // Save to skip regenerating as we know that kwargs will always be a copy
+    fn dict(params: Parameters<'v, '_>) -> Dict<'v> {
+        // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
+        // In particular, we don't generate the kwargs if there are no positional arguments.
+        // Therefore we make it take the raw Parameters.
+        // It might have one positional argument, which could be a dict or an array of pairs.
+        // It might have named/kwargs arguments, which we copy over (afterwards).
+
+        let pos = params.optional1(heap)?;
+        let kwargs = params.names()?;
+
+        match pos {
             None => Ok(kwargs),
-            Some(a) => {
-                let mut result = match Dict::from_value(a) {
-                    Some(mp) => mp.content.clone(),
-                    None => {
-                        let mut result = SmallMap::new();
-                        for el in a.iterate(heap)? {
-                            let (k, v) = unpack_pair(el, heap)?;
-                            result.insert_hashed(k.get_hashed()?, v);
-                        }
+            Some(pos) => {
+                let mut result = match Dict::from_value(pos) {
+                    Some(pos) => {
+                        let mut result = pos.clone();
+                        result.content.reserve(kwargs.content.len());
                         result
                     }
+                    None => pos.with_iterator(heap, |it| -> anyhow::Result<_> {
+                        let mut result =
+                            SmallMap::with_capacity(it.size_hint().0 + kwargs.content.len());
+                        for el in it {
+                            let (k, v) = unpack_pair(el, heap)?;
+                            let k = k.get_hashed()?;
+                            result.insert_hashed(k, v);
+                        }
+                        Ok(Dict::new(result))
+                    })??,
                 };
-                for (k, v) in Dict::from_value(kwargs).unwrap().iter_hashed() {
-                    result.insert_hashed(k, v);
+                for (k, v) in kwargs.iter_hashed() {
+                    result.content.insert_hashed(k, v);
                 }
-                Ok(heap.alloc(Dict::new(result)))
+                Ok(result)
             }
         }
     }
