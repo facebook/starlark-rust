@@ -560,10 +560,7 @@ impl Compiler<'_> {
                         let left = self.expr(*left);
                         let one_positional = args.len() == 1 && args[0].is_positional();
                         if left.as_value() == Some(self.constants.fn_type) && one_positional {
-                            let x = self.expr(args.pop().unwrap().node.into_expr());
-                            expr!("type", x, |_eval| {
-                                x.get_ref().get_type_value().to_value()
-                            })
+                            self.fn_type(args.pop().unwrap().node.into_expr())
                         } else if left.as_value() == Some(self.constants.fn_len) && one_positional {
                             let x = self.expr(args.pop().unwrap().node.into_expr());
                             // Technically the length command _could_ call other functions,

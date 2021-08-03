@@ -21,6 +21,7 @@ use crate::{
     codemap::Spanned,
     eval::compiler::{Compiler, ExprCompiled, ExprCompiledValue},
     syntax::ast::{AstExpr, Expr},
+    values::{dict::Dict, list::List},
 };
 
 /// Conditional statements are fairly common, some have literals (or imported values)
@@ -55,6 +56,31 @@ impl Compiler<'_> {
                 } else {
                     Conditional::Negate(v)
                 }
+            }
+        }
+    }
+
+    /// Compile the operation `type(expr)`, trying to produce a constant
+    /// where possible.
+    pub fn fn_type(&mut self, expr: AstExpr) -> ExprCompiledValue {
+        // Note that `type([fail("bad")])` must still raise an exception.
+        // In practice people only really use the empty versions as constants.
+        match &expr.node {
+            Expr::Dict(xs) if xs.is_empty() => {
+                return ExprCompiledValue::Value(self.heap.alloc_str(Dict::TYPE));
+            }
+            Expr::List(xs) if xs.is_empty() => {
+                return ExprCompiledValue::Value(self.heap.alloc_str(List::TYPE));
+            }
+            // No need to handle Tuple as it will become frozen if it has no inner-calls
+            _ => {}
+        }
+        match self.expr(expr) {
+            ExprCompiledValue::Value(x) => ExprCompiledValue::Value(x.to_value().get_type_value()),
+            ExprCompiledValue::Compiled(x) => {
+                expr!("type", |eval| {
+                    x(eval)?.get_ref().get_type_value().to_value()
+                })
             }
         }
     }
