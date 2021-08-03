@@ -165,7 +165,8 @@ impl<'v> EnumType<'v> {
         NativeFunction::new_direct(
             move |eval, params| {
                 let this = params.this.unwrap();
-                let [val] = params.positional(eval.heap())?;
+                params.no_named_args()?;
+                let val = params.positional1(eval.heap())?;
                 let elements = EnumType::from_value(this)
                     .unwrap()
                     .either(|x| &x.elements, |x| coerce_ref(&x.elements));

@@ -194,12 +194,14 @@ fn render_binding(x: &StarFun) -> TokenStream {
             if optional == 0 {
                 quote! {
                     let __this = __parameters.this;
+                    __parameters.no_named_args()?;
                     let __required: [_; #required] = __parameters.positional(eval.heap())?;
                     #( #bind_args )*
                 }
             } else {
                 quote! {
                     let __this = __parameters.this;
+                    __parameters.no_named_args()?;
                     let (__required, __optional): ([_; #required], [_; #optional]) = __parameters.optional(eval.heap())?;
                     #( #bind_args )*
                 }

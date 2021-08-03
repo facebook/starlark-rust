@@ -575,9 +575,16 @@ pub struct Parameters<'v, 'a> {
 }
 
 impl<'v, 'a> Parameters<'v, 'a> {
+    /// Produce [`Err`] if there are any positional arguments.
+    #[inline(always)]
+    pub fn no_positional_args(&self, heap: &'v Heap) -> anyhow::Result<()> {
+        let [] = self.positional(heap)?;
+        Ok(())
+    }
+
     /// Produce [`Err`] if there are any named (i.e. non-positional) arguments.
     #[inline(always)]
-    fn pos_only(&self) -> anyhow::Result<()> {
+    pub fn no_named_args(&self) -> anyhow::Result<()> {
         #[cold]
         #[inline(never)]
         fn bad(x: &Parameters) -> anyhow::Result<()> {
@@ -617,7 +624,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
     }
 
     /// Collect exactly `N` positional arguments from the [`Parameters`], failing if there are too many/few
-    /// arguments, or if there are any named arguments.
+    /// arguments. Ignores named arguments.
     #[inline(always)]
     pub fn positional<const N: usize>(&self, heap: &'v Heap) -> anyhow::Result<[Value<'v>; N]> {
         #[cold]
@@ -639,7 +646,6 @@ impl<'v, 'a> Parameters<'v, 'a> {
                 .map_err(|_| FunctionError::WrongNumberOfParameters(N, N, x.pos.len()).into())
         }
 
-        self.pos_only()?;
         if self.args.is_none() {
             self.pos
                 .try_into()
@@ -650,7 +656,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
     }
 
     /// Collect exactly `REQUIRED` positional arguments, plus at most `OPTIONAL` positional arguments
-    /// from the [`Parameters`], failing if there are too many/few arguments, or if there are any named arguments.
+    /// from the [`Parameters`], failing if there are too many/few arguments. Ignores named arguments.
     /// The `OPTIONAL` array will never have a [`Some`] after a [`None`].
     #[inline(always)]
     pub fn optional<const REQUIRED: usize, const OPTIONAL: usize>(
@@ -685,7 +691,6 @@ impl<'v, 'a> Parameters<'v, 'a> {
             }
         }
 
-        self.pos_only()?;
         if self.args.is_none()
             && self.pos.len() >= REQUIRED
             && self.pos.len() <= REQUIRED + OPTIONAL
@@ -699,6 +704,24 @@ impl<'v, 'a> Parameters<'v, 'a> {
         } else {
             rare(self, heap)
         }
+    }
+
+    /// Collect 1 positional arguments from the [`Parameters`], failing if there are too many/few
+    /// arguments. Ignores named arguments.
+    #[inline(always)]
+    pub fn positional1(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        // Could be implemented more directly, let's see if profiling shows it up
+        let [x] = self.positional(heap)?;
+        Ok(x)
+    }
+
+    /// Collect up to 1 optional arguments from the [`Parameters`], failing if there are too many
+    /// arguments. Ignores named arguments.
+    #[inline(always)]
+    pub fn optional1(&self, heap: &'v Heap) -> anyhow::Result<Option<Value<'v>>> {
+        // Could be implemented more directly, let's see if profiling shows it up
+        let ([], [x]) = self.optional(heap)?;
+        Ok(x)
     }
 }
 
@@ -809,20 +832,20 @@ mod test {
     }
 
     #[test]
-    fn test_parameter_unpack_named() {
+    fn test_parameter_no_named() {
         let heap = Heap::new();
         let mut p = Parameters::default();
-        assert!(p.positional::<0>(&heap).is_ok());
+        assert!(p.no_named_args().is_ok());
 
         // Test lots of forms of kwargs work properly
         p.kwargs = Some(Value::new_none());
-        assert!(p.positional::<0>(&heap).is_err());
+        assert!(p.no_named_args().is_err());
         p.kwargs = Some(heap.alloc(Dict::default()));
-        assert!(p.positional::<0>(&heap).is_ok());
+        assert!(p.no_named_args().is_ok());
         let mut sm = SmallMap::new();
         sm.insert_hashed(heap.alloc("test").get_hashed().unwrap(), Value::new_none());
         p.kwargs = Some(heap.alloc(Dict::new(sm)));
-        assert!(p.positional::<0>(&heap).is_err());
+        assert!(p.no_named_args().is_err());
 
         // Test named arguments work properly
         p.kwargs = None;
@@ -830,7 +853,6 @@ mod test {
         p.named = &named;
         let names = [(Symbol::new("test"), heap.alloc("test"))];
         p.names = &names;
-        assert!(p.positional::<0>(&heap).is_err());
-        assert!(p.positional::<1>(&heap).is_err());
+        assert!(p.no_named_args().is_err());
     }
 }
