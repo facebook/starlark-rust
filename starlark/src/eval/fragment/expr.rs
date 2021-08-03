@@ -23,7 +23,7 @@ use crate::{
     errors::Diagnostic,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
-        fragment::known::Conditional,
+        fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::Evaluator,
         Parameters,
     },
@@ -640,8 +640,14 @@ impl Compiler<'_> {
                     let val = self.heap.alloc(x);
                     value!(val)
                 } else {
+                    let right = if op == BinOp::In || op == BinOp::NotIn {
+                        list_to_tuple(*right)
+                    } else {
+                        *right
+                    };
+
                     let l = self.expr(*left);
-                    let r = self.expr(*right);
+                    let r = self.expr(right);
                     match op {
                         BinOp::Or => {
                             let r = r.as_compiled();

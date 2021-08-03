@@ -22,7 +22,7 @@ use crate::{
     collections::SmallMap,
     eval::{
         compiler::{throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
-        fragment::stmt::AssignCompiled,
+        fragment::{known::list_to_tuple, stmt::AssignCompiled},
         runtime::evaluator::Evaluator,
     },
     syntax::ast::{AstExpr, Clause, ForClause},
@@ -87,7 +87,7 @@ fn compile_clauses(
 ) -> Vec<ClauseCompiled> {
     // The first for.over is scoped before we enter the list comp
     let over_span = for_.over.span;
-    let over = compiler.expr(for_.over);
+    let over = compiler.expr(list_to_tuple(for_.over));
 
     // Now everything else must be compiled with all the for variables in scope
     compiler.scope.add_compr(&for_.var);

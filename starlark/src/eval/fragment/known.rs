@@ -24,6 +24,24 @@ use crate::{
     values::{dict::Dict, list::List},
 };
 
+/// Convert a list into a tuple. In many cases (iteration, `in`) these types
+/// behave the same, but a list has identity and mutability, so much better to
+/// switch to tuple where it makes no difference. A tuple of constants
+/// will go on the FrozenHeap, while a list of constants will be continually
+/// reallocated.
+pub(crate) fn list_to_tuple(x: AstExpr) -> AstExpr {
+    match x {
+        Spanned {
+            node: Expr::List(x),
+            span,
+        } => Spanned {
+            node: Expr::Tuple(x),
+            span,
+        },
+        _ => x,
+    }
+}
+
 /// Conditional statements are fairly common, some have literals (or imported values)
 /// and quite a few start with a `not`, so encode those options statically.
 pub(crate) enum Conditional {

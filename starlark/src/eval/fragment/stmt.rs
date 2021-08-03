@@ -27,7 +27,7 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
-        fragment::known::Conditional,
+        fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
@@ -375,6 +375,7 @@ impl Compiler<'_> {
                 })
             }
             Stmt::For(var, box (over, body)) => {
+                let over = list_to_tuple(over);
                 let over_span = over.span;
                 let var = self.assign(var);
                 let over = self.expr(over).as_compiled();
