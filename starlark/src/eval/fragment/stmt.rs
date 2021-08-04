@@ -413,7 +413,7 @@ impl Compiler<'_> {
                 let then_block = self.stmt(then_block, allow_gc);
                 match self.conditional(cond) {
                     Conditional::True => then_block,
-                    Conditional::False => stmt!("if(false)", span, |eval| {}),
+                    Conditional::False => stmt!("if_false", span, |eval| {}),
                     Conditional::Normal(cond) => {
                         stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
                             then_block(eval)?

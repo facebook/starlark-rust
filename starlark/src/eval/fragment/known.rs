@@ -19,9 +19,12 @@
 
 use crate::{
     codemap::Spanned,
-    eval::compiler::{Compiler, ExprCompiled, ExprCompiledValue},
+    eval::{
+        compiler::{Compiler, ExprCompiled, ExprCompiledValue},
+        EvalException, Evaluator,
+    },
     syntax::ast::{AstExpr, Expr},
-    values::{dict::Dict, list::List},
+    values::{dict::Dict, list::List, Value},
 };
 
 /// Convert a list into a tuple. In many cases (iteration, `in`) these types
