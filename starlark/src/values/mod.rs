@@ -141,6 +141,18 @@ impl<'v> AllocValue<'v> for Value<'v> {
     }
 }
 
+impl<'v, T> AllocValue<'v> for Option<T>
+where
+    T: AllocValue<'v>,
+{
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        match self {
+            Some(v) => v.alloc_value(heap),
+            None => Value::new_none(),
+        }
+    }
+}
+
 /// Trait for things that can be allocated on a [`FrozenHeap`] producing a [`FrozenValue`].
 pub trait AllocFrozenValue {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue;
