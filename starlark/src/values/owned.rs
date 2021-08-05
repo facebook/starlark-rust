@@ -43,8 +43,16 @@ impl Display for OwnedFrozenValue {
 impl OwnedFrozenValue {
     /// Create an [`OwnedFrozenValue`] - generally [`OwnedFrozenValue`]s are obtained
     /// from [`FrozenModule::get`](crate::environment::FrozenModule::get).
-    /// Marked unsafe because the owner must be correct.
-    pub(crate) unsafe fn new(owner: FrozenHeapRef, value: FrozenValue) -> Self {
+    /// Safe provided the `value` (and any values it points at) are kept alive by the
+    /// `owner`, typically because the value was created on the heap.
+    ///
+    /// ```
+    /// use starlark::values::{FrozenHeap, OwnedFrozenValue};
+    /// let heap = FrozenHeap::new();
+    /// let value = heap.alloc("test");
+    /// unsafe { OwnedFrozenValue::new(heap.into_ref(), value) };
+    /// ```
+    pub unsafe fn new(owner: FrozenHeapRef, value: FrozenValue) -> Self {
         Self { owner, value }
     }
 
