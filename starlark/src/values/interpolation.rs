@@ -24,7 +24,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
-use std::{fmt::Write, str::FromStr};
+use std::{fmt::Write, slice, str::FromStr};
 use thiserror::Error;
 
 /// Operator `%` format or evaluation errors
@@ -126,14 +126,61 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
     }
 }
 
+/// The format string can either have explicit indices,
+/// or grab things sequentially, but not both.
+/// FormatArgs knows which we are doing and keeps them in mind.
+struct FormatArgs<'a, 'v> {
+    iterator: slice::Iter<'a, Value<'v>>,
+    args: &'a [Value<'v>],
+    by_index: bool,
+    by_order: bool,
+}
+
+impl<'a, 'v> FormatArgs<'a, 'v> {
+    fn new(args: &'a [Value<'v>]) -> Self {
+        Self {
+            iterator: args.iter(),
+            args,
+            by_index: false,
+            by_order: false,
+        }
+    }
+
+    fn next_ordered(&mut self) -> anyhow::Result<Value<'v>> {
+        if self.by_index {
+            Err(anyhow!(
+                "Cannot mix manual field specification and automatic field numbering in format string",
+            ))
+        } else {
+            self.by_order = true;
+            match self.iterator.next() {
+                None => Err(anyhow!("Not enough parameters in format string")),
+                Some(x) => Ok(*x),
+            }
+        }
+    }
+
+    fn by_index(&mut self, index: usize) -> anyhow::Result<Value<'v>> {
+        if self.by_order {
+            Err(anyhow!(
+                "Cannot mix manual field specification and automatic field numbering in format string",
+            ))
+        } else {
+            self.by_index = true;
+            match self.args.get(index) {
+                None => Err(ValueError::IndexOutOfBound(index as i32).into()),
+                Some(v) => Ok(*v),
+            }
+        }
+    }
+}
+
 pub(crate) fn format(
     this: &str,
     args: Vec<Value>,
     kwargs: SmallMap<&str, Value>,
 ) -> anyhow::Result<String> {
-    let mut it = args.iter().copied();
-    let mut captured_by_index = false;
-    let mut captured_by_order = false;
+    let mut args = FormatArgs::new(&args);
     let mut result = String::new();
     let mut capture = String::new();
     for c in this.chars() {
@@ -151,14 +198,7 @@ pub(crate) fn format(
                 capture.clear();
             }
             ('}', ..) => {
-                result += &format_capture(
-                    &capture,
-                    &mut it,
-                    &mut captured_by_index,
-                    &mut captured_by_order,
-                    &args,
-                    &kwargs,
-                )?;
+                result += &format_capture(&capture, &mut args, &kwargs)?;
                 capture.clear();
             }
             (.., "}") => return Err(anyhow!("Standalone '}}' in format string `{}`", this)),
@@ -172,12 +212,9 @@ pub(crate) fn format(
     }
 }
 
-fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
+fn format_capture(
     capture: &str,
-    it: &mut T,
-    captured_by_index: &mut bool,
-    captured_by_order: &mut bool,
-    args: &[Value],
+    args: &mut FormatArgs,
     kwargs: &SmallMap<&str, Value>,
 ) -> anyhow::Result<String> {
     let (n, conv) = {
@@ -203,31 +240,10 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
         }
     };
     if n.is_empty() {
-        if *captured_by_index {
-            return Err(anyhow!(
-                "Cannot mix manual field specification and automatic field numbering in format string",
-            ));
-        } else {
-            *captured_by_order = true;
-            if let Some(x) = it.next() {
-                return Ok(conv(x));
-            } else {
-                return Err(anyhow!("Not enough parameters in format string"));
-            }
-        }
+        Ok(conv(args.next_ordered()?))
     } else if n.chars().all(|c| c.is_ascii_digit()) {
-        if *captured_by_order {
-            return Err(anyhow!(
-                "Cannot mix manual field specification and automatic field numbering in format string",
-            ));
-        } else {
-            *captured_by_index = true;
-            let i = i32::from_str(n).unwrap();
-            if i < 0 || i >= (args.len() as i32) {
-                return Err(ValueError::IndexOutOfBound(i).into());
-            }
-            Ok(conv(args[i as usize]))
-        }
+        let i = usize::from_str(n).unwrap();
+        Ok(conv(args.by_index(i)?))
     } else {
         if let Some(x) = n.chars().find(|c| match c {
             '.' | ',' | '[' | ']' => true,
@@ -253,112 +269,24 @@ mod tests {
     #[test]
     fn test_format_capture() {
         let heap = Heap::new();
-        let args = vec![heap.alloc("1"), heap.alloc("2"), heap.alloc("3")];
+        let original_args = vec![heap.alloc("1"), heap.alloc("2"), heap.alloc("3")];
+        let mut args = FormatArgs::new(&original_args);
         let mut kwargs = SmallMap::new();
-        let it = heap.alloc(args.clone());
-        let mut it = it.iterate(&heap).unwrap();
-        let mut captured_by_index = false;
-        let mut captured_by_order = false;
 
         kwargs.insert("a", heap.alloc("x"));
         kwargs.insert("b", heap.alloc("y"));
         kwargs.insert("c", heap.alloc("z"));
+        assert_eq!(format_capture("{", &mut args, &kwargs,).unwrap(), "1");
+        assert_eq!(format_capture("{!s", &mut args, &kwargs,).unwrap(), "2");
+        assert_eq!(format_capture("{!r", &mut args, &kwargs,).unwrap(), "\"3\"");
         assert_eq!(
-            format_capture(
-                "{",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .unwrap(),
-            "1"
-        );
-        assert_eq!(
-            format_capture(
-                "{!s",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .unwrap(),
-            "2"
-        );
-        assert_eq!(
-            format_capture(
-                "{!r",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .unwrap(),
-            "\"3\""
-        );
-        assert_eq!(
-            format_capture(
-                "{a!r",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .unwrap(),
+            format_capture("{a!r", &mut args, &kwargs,).unwrap(),
             "\"x\""
         );
-        assert_eq!(
-            format_capture(
-                "{a!s",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .unwrap(),
-            "x"
-        );
-        assert!(
-            format_capture(
-                "{1",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .is_err()
-        );
-        captured_by_order = false;
-        let it = heap.alloc(args.clone());
-        let mut it = it.iterate(&heap).unwrap();
-        assert_eq!(
-            format_capture(
-                "{1",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .unwrap(),
-            "2"
-        );
-        assert!(
-            format_capture(
-                "{",
-                &mut it,
-                &mut captured_by_index,
-                &mut captured_by_order,
-                &args,
-                &kwargs,
-            )
-            .is_err()
-        );
+        assert_eq!(format_capture("{a!s", &mut args, &kwargs,).unwrap(), "x");
+        assert!(format_capture("{1", &mut args, &kwargs,).is_err());
+        let mut args = FormatArgs::new(&original_args);
+        assert_eq!(format_capture("{1", &mut args, &kwargs,).unwrap(), "2");
+        assert!(format_capture("{", &mut args, &kwargs,).is_err());
     }
 }
