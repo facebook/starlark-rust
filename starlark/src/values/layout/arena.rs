@@ -79,6 +79,11 @@ impl Arena {
         self.drop.allocated_bytes() + self.non_drop.allocated_bytes()
     }
 
+    /// Bytes allocated which can't be iterated over
+    pub fn allocated_bytes_inline(&self) -> usize {
+        self.non_drop.allocated_bytes()
+    }
+
     fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
         bump: &'v Bump,
         extra: usize,

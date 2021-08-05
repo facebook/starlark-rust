@@ -35,7 +35,11 @@ pub(crate) struct HeapProfile {
 }
 
 #[derive(AnyLifetime, Trace, Debug)]
-struct CallEnter<'v>(Value<'v>, Instant);
+struct CallEnter<'v> {
+    function: Value<'v>,
+    time: Instant,
+    memory: usize,
+}
 
 impl<'v> ComplexValue<'v> for CallEnter<'v> {
     type Frozen = FrozenTuple;
@@ -49,7 +53,10 @@ impl<'v> StarlarkValue<'v> for CallEnter<'v> {
 }
 
 #[derive(AnyLifetime, Debug)]
-struct CallExit(Instant);
+struct CallExit {
+    time: Instant,
+    memory: usize,
+}
 
 impl SimpleValue for CallExit {}
 
@@ -120,6 +127,8 @@ struct FuncInfo {
     callers: HashMap<FunctionId, usize>,
     /// Time spent directly in this function
     time: Duration,
+    /// Inline memory used directly in this function
+    memory: usize,
     /// Time spent directly in this function and recursive functions.
     time_rec: Duration,
     /// Allocations made by this function
@@ -132,6 +141,7 @@ impl FuncInfo {
         for x in xs {
             result.calls += x.calls;
             result.time += x.time;
+            result.memory += x.memory;
             for (k, v) in x.allocs.iter() {
                 *result.allocs.entry(k).or_insert(0) += v;
             }
@@ -154,7 +164,7 @@ struct Info {
     /// Information about all functions
     info: Vec<FuncInfo>,
     /// When the top of the stack last changed
-    last_changed: Instant,
+    last_changed: (Instant, usize),
     /// Each entry is (Function, time_rec when I started, time I started)
     /// The time_rec is recorded so that recursion doesn't screw up time_rec
     call_stack: Vec<(FunctionId, Duration, Instant)>,
@@ -177,29 +187,36 @@ impl Info {
     }
 
     /// Called before you change the top of the stack
-    fn change(&mut self, now: Instant) {
-        let start = self.last_changed;
-        self.top_info().time += now.checked_duration_since(start).unwrap_or_default();
-        self.last_changed = now;
+    fn change(&mut self, time: Instant, memory: usize) {
+        let (old_time, old_memory) = self.last_changed;
+        let ti = self.top_info();
+        ti.time += time.checked_duration_since(old_time).unwrap_or_default();
+        ti.memory += memory - old_memory;
+        self.last_changed = (time, memory);
     }
 
     /// Process each ValueMem in their chronological order
     fn process<'v>(&mut self, x: Value<'v>) {
-        if let Some(CallEnter(function, now)) = x.downcast_ref() {
+        if let Some(CallEnter {
+            function,
+            time,
+            memory,
+        }) = x.downcast_ref()
+        {
             let id = self.ids.get_value(*function);
             self.ensure(id);
-            self.change(*now);
+            self.change(*time, *memory);
 
             let top = self.top_id();
             let mut me = &mut self.info[id.0];
             me.calls += 1;
             *me.callers.entry(top).or_insert(0) += 1;
-            self.call_stack.push((id, me.time_rec, *now));
-        } else if let Some(CallExit(now)) = x.downcast_ref() {
-            self.change(*now);
+            self.call_stack.push((id, me.time_rec, *time));
+        } else if let Some(CallExit { time, memory }) = x.downcast_ref() {
+            self.change(*time, *memory);
             let (name, time_rec, start) = self.call_stack.pop().unwrap();
             self.info[name.0].time_rec =
-                time_rec + now.checked_duration_since(start).unwrap_or_default();
+                time_rec + time.checked_duration_since(start).unwrap_or_default();
         } else {
             let typ = x.get_ref().get_type();
             *self.top_info().allocs.entry(typ).or_insert(0) += 1;
@@ -221,7 +238,11 @@ impl HeapProfile {
         #[inline(never)]
         #[cold]
         fn f<'v>(function: Value<'v>, heap: &'v Heap) {
-            heap.alloc_complex(CallEnter(function, Instant::now()));
+            heap.alloc_complex(CallEnter {
+                function,
+                time: Instant::now(),
+                memory: heap.allocated_bytes_inline(),
+            });
         }
 
         if self.enabled {
@@ -234,7 +255,10 @@ impl HeapProfile {
         #[inline(never)]
         #[cold]
         fn f<'v>(heap: &'v Heap) {
-            heap.alloc_simple(CallExit(Instant::now()));
+            heap.alloc_simple(CallExit {
+                time: Instant::now(),
+                memory: heap.allocated_bytes_inline(),
+            });
         }
 
         if self.enabled {
@@ -270,7 +294,7 @@ impl HeapProfile {
         let mut info = Info {
             ids,
             info: Vec::new(),
-            last_changed: start,
+            last_changed: (start, 0),
             call_stack: vec![(root, Duration::default(), start)],
         };
         info.ensure(root);
@@ -295,7 +319,7 @@ impl HeapProfile {
 
         write!(
             file,
-            "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Allocs"
+            "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Bytes,Allocs"
         )?;
         for x in &columns {
             write!(file, ",\"{}\"", &x.0)?;
@@ -312,7 +336,7 @@ impl HeapProfile {
                 .unwrap_or((&blank, &0));
             write!(
                 file,
-                "\"{}\",{:.3},{:.3},{},{},\"{}\",{},{}",
+                "\"{}\",{:.3},{:.3},{},{},\"{}\",{},{},{}",
                 un_ids[rowname],
                 info.time.as_secs_f64(),
                 info.time_rec.as_secs_f64(),
@@ -320,6 +344,7 @@ impl HeapProfile {
                 info.callers.len(),
                 un_ids[callers.0.0],
                 callers.1,
+                info.memory,
                 allocs
             )?;
             for x in &columns {

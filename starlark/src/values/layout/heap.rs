@@ -241,6 +241,10 @@ impl Heap {
         self.arena.borrow().allocated_bytes()
     }
 
+    pub(crate) fn allocated_bytes_inline(&self) -> usize {
+        self.arena.borrow().allocated_bytes_inline()
+    }
+
     fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
