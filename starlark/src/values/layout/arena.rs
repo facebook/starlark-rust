@@ -40,7 +40,12 @@ use std::{
 };
 
 #[derive(Default)]
-pub(crate) struct Arena(Bump);
+pub(crate) struct Arena {
+    /// Arena for things which don't need dropping (e.g. strings)
+    non_drop: Bump,
+    /// Arena for things which might need dropping (e.g. Vec, with memory on heap)
+    drop: Bump,
+}
 
 #[doc(hidden)] // Appears in a trait, but don't want it to
 #[repr(transparent)]
@@ -71,10 +76,13 @@ impl<'v> Reservation<'v> {
 
 impl Arena {
     pub fn allocated_bytes(&self) -> usize {
-        self.0.allocated_bytes()
+        self.drop.allocated_bytes() + self.non_drop.allocated_bytes()
     }
 
-    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, extra: usize) -> *mut (AValuePtr, T) {
+    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
+        bump: &'v Bump,
+        extra: usize,
+    ) -> *mut (AValuePtr, T) {
         assert!(
             mem::align_of::<T>() <= mem::align_of::<AValuePtr>(),
             "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
@@ -86,13 +94,13 @@ impl Arena {
         let size = mem::size_of::<AValuePtr>()
             + cmp::max(mem::size_of::<T>() + extra, mem::size_of::<usize>());
         let layout = Layout::from_size_align(size, mem::align_of::<AValuePtr>()).unwrap();
-        let p = self.0.alloc_layout(layout);
+        let p = bump.alloc_layout(layout);
         p.as_ptr() as *mut (AValuePtr, T)
     }
 
     // Reservation should really be an incremental type
     pub fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
-        let p = self.alloc_empty::<T>(0);
+        let p = Self::alloc_empty::<T>(&self.drop, 0);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
@@ -108,18 +116,24 @@ impl Arena {
         }
     }
 
+    /// Allocate a type `T`.
     pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValuePtr {
-        self.alloc_extra(x, 0)
+        let p = Self::alloc_empty::<T>(&self.drop, 0);
+        unsafe {
+            ptr::write(p, (AValuePtr::new(&x), x));
+            &(*p).0
+        }
     }
 
-    /// Allocate a type `T` plus `extra` bytes. It is important that
-    /// `memory_size` for the type `T` include those `extra` bytes/
-    pub(crate) fn alloc_extra<'v, 'v2: 'v, T: AValue<'v2>>(
+    /// Allocate a type `T` plus `extra` bytes.
+    ///
+    /// The type `T` will never be dropped, so had better not do any memory allocation.
+    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         x: T,
         extra: usize,
     ) -> &'v AValuePtr {
-        let p = self.alloc_empty::<T>(extra);
+        let p = Self::alloc_empty::<T>(&self.non_drop, extra);
         unsafe {
             ptr::write(p, (AValuePtr::new(&x), x));
             &(*p).0
@@ -159,7 +173,7 @@ impl Arena {
         // It seems that we get the chunks from most newest to oldest.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
-        let chunks = self.0.iter_allocated_chunks().collect::<Vec<_>>();
+        let chunks = self.drop.iter_allocated_chunks().collect::<Vec<_>>();
         // Use a single buffer to reduce allocations, but clear it after use
         let mut buffer = Vec::new();
         for chunk in chunks.iter().rev() {
@@ -171,7 +185,7 @@ impl Arena {
 
     // Iterate over the values in the heap in any order
     pub fn for_each_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValuePtr)) {
-        self.0
+        self.drop
             .iter_allocated_chunks()
             .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
     }
@@ -243,7 +257,8 @@ impl Drop for Arena {
                 ptr::drop_in_place(x)
             };
         });
-        self.0.reset()
+        self.non_drop.reset();
+        self.drop.reset();
     }
 }
 
@@ -292,7 +307,7 @@ mod test {
         // Not a functional part of the test, just makes sure we go through
         // the interesting cases (last time 56 was sufficient, so 10K is plenty of margin of error)
         assert!(
-            arena.0.iter_allocated_chunks().count() > 1,
+            arena.drop.iter_allocated_chunks().count() > 1,
             "Didn't allocate enough to test properly"
         );
         let mut j = 0;
