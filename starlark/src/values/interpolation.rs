@@ -18,13 +18,10 @@
 //! String interpolation-related code.
 //! Based on <https://docs.python.org/3/library/stdtypes.html#printf-style-string-formatting>
 
-use crate::{
-    collections::SmallMap,
-    values::{tuple::Tuple, Value, ValueError, ValueLike},
-};
+use crate::values::{dict::Dict, tuple::Tuple, Value, ValueError, ValueLike};
 use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
-use std::{fmt::Write, slice, str::FromStr};
+use std::{fmt::Write, str::FromStr};
 use thiserror::Error;
 
 /// Operator `%` format or evaluation errors
@@ -129,18 +126,20 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
 /// The format string can either have explicit indices,
 /// or grab things sequentially, but not both.
 /// FormatArgs knows which we are doing and keeps them in mind.
-struct FormatArgs<'a, 'v> {
-    iterator: slice::Iter<'a, Value<'v>>,
-    args: &'a [Value<'v>],
+struct FormatArgs<'v, T: Iterator<Item = Value<'v>>> {
+    // Initially we have the iterator set and the args empty.
+    // If we ever ask by index, we decant the iterator into args.
+    iterator: T,
+    args: Vec<Value<'v>>,
     by_index: bool,
     by_order: bool,
 }
 
-impl<'a, 'v> FormatArgs<'a, 'v> {
-    fn new(args: &'a [Value<'v>]) -> Self {
+impl<'v, T: Iterator<Item = Value<'v>>> FormatArgs<'v, T> {
+    fn new(iterator: T) -> Self {
         Self {
-            iterator: args.iter(),
-            args,
+            iterator,
+            args: Vec::new(),
             by_index: false,
             by_order: false,
         }
@@ -155,7 +154,7 @@ impl<'a, 'v> FormatArgs<'a, 'v> {
             self.by_order = true;
             match self.iterator.next() {
                 None => Err(anyhow!("Not enough parameters in format string")),
-                Some(x) => Ok(*x),
+                Some(x) => Ok(x),
             }
         }
     }
@@ -166,7 +165,10 @@ impl<'a, 'v> FormatArgs<'a, 'v> {
                 "Cannot mix manual field specification and automatic field numbering in format string",
             ))
         } else {
-            self.by_index = true;
+            if !self.by_index {
+                self.args.extend(&mut self.iterator);
+                self.by_index = true;
+            }
             match self.args.get(index) {
                 None => Err(ValueError::IndexOutOfBound(index as i32).into()),
                 Some(v) => Ok(*v),
@@ -175,12 +177,12 @@ impl<'a, 'v> FormatArgs<'a, 'v> {
     }
 }
 
-pub(crate) fn format(
+pub(crate) fn format<'v>(
     this: &str,
-    args: Vec<Value>,
-    kwargs: SmallMap<&str, Value>,
+    args: impl Iterator<Item = Value<'v>>,
+    kwargs: Dict<'v>,
 ) -> anyhow::Result<String> {
-    let mut args = FormatArgs::new(&args);
+    let mut args = FormatArgs::new(args);
     let mut result = String::new();
     let mut capture = String::new();
     for c in this.chars() {
@@ -212,10 +214,10 @@ pub(crate) fn format(
     }
 }
 
-fn format_capture(
+fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
     capture: &str,
-    args: &mut FormatArgs,
-    kwargs: &SmallMap<&str, Value>,
+    args: &mut FormatArgs<'v, T>,
+    kwargs: &Dict,
 ) -> anyhow::Result<String> {
     let (n, conv) = {
         if let Some(x) = capture.find('!') {
@@ -254,9 +256,9 @@ fn format_capture(
                 x
             ));
         }
-        match kwargs.get(n) {
+        match kwargs.get_str(n) {
             None => Err(ValueError::KeyNotFound(n.to_owned()).into()),
-            Some(v) => Ok(conv(*v)),
+            Some(v) => Ok(conv(v)),
         }
     }
 }
@@ -264,18 +266,19 @@ fn format_capture(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::values::Heap;
+    use crate::{collections::SmallMap, values::Heap};
 
     #[test]
     fn test_format_capture() {
         let heap = Heap::new();
         let original_args = vec![heap.alloc("1"), heap.alloc("2"), heap.alloc("3")];
-        let mut args = FormatArgs::new(&original_args);
+        let mut args = FormatArgs::new(original_args.iter().copied());
         let mut kwargs = SmallMap::new();
 
-        kwargs.insert("a", heap.alloc("x"));
-        kwargs.insert("b", heap.alloc("y"));
-        kwargs.insert("c", heap.alloc("z"));
+        kwargs.insert_hashed(heap.alloc_str_hashed("a"), heap.alloc("x"));
+        kwargs.insert_hashed(heap.alloc_str_hashed("b"), heap.alloc("y"));
+        kwargs.insert_hashed(heap.alloc_str_hashed("c"), heap.alloc("z"));
+        let kwargs = Dict::new(kwargs);
         assert_eq!(format_capture("{", &mut args, &kwargs,).unwrap(), "1");
         assert_eq!(format_capture("{!s", &mut args, &kwargs,).unwrap(), "2");
         assert_eq!(format_capture("{!r", &mut args, &kwargs,).unwrap(), "\"3\"");
@@ -285,7 +288,7 @@ mod tests {
         );
         assert_eq!(format_capture("{a!s", &mut args, &kwargs,).unwrap(), "x");
         assert!(format_capture("{1", &mut args, &kwargs,).is_err());
-        let mut args = FormatArgs::new(&original_args);
+        let mut args = FormatArgs::new(original_args.iter().copied());
         assert_eq!(format_capture("{1", &mut args, &kwargs,).unwrap(), "2");
         assert!(format_capture("{", &mut args, &kwargs,).is_err());
     }

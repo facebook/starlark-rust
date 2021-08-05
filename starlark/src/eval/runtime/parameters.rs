@@ -28,12 +28,13 @@ use crate::{
         ValueError, ValueLike, ValueRef,
     },
 };
+use either::Either;
 use gazebo::{
     cell::ARef,
     coerce::{coerce, Coerce},
     prelude::*,
 };
-use std::{cell::Cell, cmp, convert::TryInto};
+use std::{cell::Cell, cmp, convert::TryInto, iter};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -612,6 +613,18 @@ impl<'v, 'a> Parameters<'v, 'a> {
                 }
             }
         }
+    }
+
+    /// Unpack all positional parameters into an iterator,
+    pub fn positions<'b>(
+        &'b self,
+        heap: &'v Heap,
+    ) -> anyhow::Result<impl Iterator<Item = Value<'v>> + 'b> {
+        let tail = match self.args {
+            None => Either::Left(iter::empty()),
+            Some(args) => Either::Right(args.iterate(heap)?),
+        };
+        Ok(self.pos.iter().copied().chain(tail))
     }
 
     /// Examine the `kwargs` field, converting it to a [`Dict`] or failing.
