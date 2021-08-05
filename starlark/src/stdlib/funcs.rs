@@ -870,11 +870,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     #[starlark_type(STRING_TYPE)]
     fn str(ref a: Value) -> Value<'v> {
         if a.unpack_str().is_some() {
-            // Special case that can avoid reallocating, but should be equivalent.
-            // Relies on String.to_str giving back exactly what it started with (which it does)
+            // Special case that can avoid reallocating, but is equivalent.
             Ok(a)
         } else {
-            Ok(heap.alloc(a.to_str()))
+            Ok(heap.alloc(a.to_repr()))
         }
     }
 
