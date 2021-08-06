@@ -114,15 +114,21 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack
             .push(Value::new_none(), span, Some(codemap))
             .unwrap();
-        self.heap_profile
-            .record_call_enter(Value::new_none(), self.heap());
+        if self.heap_or_flame_profile {
+            self.heap_profile
+                .record_call_enter(Value::new_none(), self.heap());
+            self.flame_profile.record_call_enter(Value::new_none());
+        }
 
         // Evaluation
         let res = stmt(self);
 
         // Clean up the world, putting everything back
         self.call_stack.pop();
-        self.heap_profile.record_call_exit(self.heap());
+        if self.heap_or_flame_profile {
+            self.heap_profile.record_call_exit(self.heap());
+            self.flame_profile.record_call_exit();
+        }
         self.set_codemap(old_codemap);
         self.local_variables.release(old_locals);
 

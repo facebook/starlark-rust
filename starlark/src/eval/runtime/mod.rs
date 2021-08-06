@@ -18,6 +18,7 @@
 pub(crate) mod call_stack;
 pub(crate) mod evaluator;
 pub(crate) mod file_loader;
+pub(crate) mod flame_profile;
 pub(crate) mod heap_profile;
 pub(crate) mod parameters;
 pub(crate) mod slots;

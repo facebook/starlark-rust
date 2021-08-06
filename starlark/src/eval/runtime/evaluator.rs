@@ -25,6 +25,7 @@ use crate::{
     eval::{
         runtime::{
             call_stack::CallStack,
+            flame_profile::FlameProfile,
             heap_profile::HeapProfile,
             slots::{LocalSlotId, LocalSlots},
             stmt_profile::StmtProfile,
@@ -42,11 +43,14 @@ use std::{
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[allow(clippy::enum_variant_names)]
 enum EvaluatorError {
     #[error("Can't call `write_heap_profile` unless you first call `enable_heap_profile`.")]
     HeapProfilingNotEnabled,
     #[error("Can't call `write_stmt_profile` unless you first call `enable_stmt_profile`.")]
     StmtProfilingNotEnabled,
+    #[error("Can't call `write_flame_profile` unless you first call `enable_flame_profile`.")]
+    FlameProfilingNotEnabled,
 }
 
 /// Number of bytes to allocate between GC's.
@@ -68,8 +72,12 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) loader: Option<&'a mut dyn FileLoader>,
     // The codemap that corresponds to this module.
     pub(crate) codemap: &'v CodeMap,
-    // Should we enable profiling or not
+    // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
+    // Should we enable flame profiling or not
+    pub(crate) flame_profile: FlameProfile<'v>,
+    // Is either heap or flame profiling enabled
+    pub(crate) heap_or_flame_profile: bool,
     // Is GC disabled for some reason
     pub(crate) disable_gc: bool,
     // Size of the heap when we should next perform a GC.
@@ -97,6 +105,7 @@ unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
         roots.trace(tracer);
         self.local_variables.trace(tracer);
         self.call_stack.trace(tracer);
+        self.flame_profile.trace(tracer);
     }
 }
 
@@ -125,6 +134,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             alloca: Alloca::new(),
             heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
+            flame_profile: FlameProfile::new(),
+            heap_or_flame_profile: false,
             before_stmt: Vec::new(),
         }
     }
@@ -146,30 +157,42 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Enable profiling, allowing [`Evaluator::write_heap_profile`] to be used.
     /// Has the side effect of disabling garbage-collection.
     ///
-    /// Starlark contains two types of profile information - `profile` and `stmt_profile`.
+    /// Starlark contains three types of profile information - `heap`, `stmt` and `flame`.
     /// These must be enabled _before_ execution with [`enable_heap_profile`](Evaluator::enable_heap_profile)/
-    /// [`enable_stmt_profile`](Evaluator::enable_stmt_profile), then after execution the
+    /// [`enable_stmt_profile`](Evaluator::enable_stmt_profile)/
+    /// [`enable_flame_profile`](Evaluator::enable_flame_profile), then after execution the
     /// profiles can be written to a file using [`write_heap_profile`](Evaluator::write_heap_profile)/
-    /// [`write_stmt_profile`](Evaluator::write_stmt_profile). These profiling modes both have
+    /// [`write_stmt_profile`](Evaluator::write_stmt_profile)/
+    /// [`write_flame_profile`](Evaluator::write_flame_profile). These profiling modes both have
     /// some overhead, so while they _can_ be used simultaneously, it's usually better to run the
-    /// code twice if that's possible.
+    /// code repeatedly if that's possible.
     ///
     /// * The `heap_profile` mode provides information about the time spent in each function and allocations
     ///   performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     ///   This profiling mode is the recommended one.
     /// * The `stmt_profile` mode provides information about time spent in each statement.
+    /// * The `flame_profile` mode provides input compatible with
+    ///   [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     pub fn enable_heap_profile(&mut self) {
         self.heap_profile.enable();
+        self.heap_or_flame_profile = true;
         // Disable GC because otherwise why lose the profile records, as we use the heap
         // to store a complete list of what happened in linear order.
         self.disable_gc = true;
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_stmt_profile`] to be used.
-    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
+    /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
         self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+    }
+
+    /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.
+    /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
+    pub fn enable_flame_profile(&mut self) {
+        self.flame_profile.enable();
+        self.heap_or_flame_profile = true;
     }
 
     /// Write a profile (as a `.csv` file) to a file.
@@ -183,11 +206,21 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Write a profile (as a `.csv` file) to a file.
     /// Only valid if [`enable_stmt_profile`](Evaluator::enable_stmt_profile) was called before execution began.
-    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
+    /// See [`Evaluator::enable_heap_profile`] for details about two types of Starlark profiles.
     pub fn write_stmt_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
         self.stmt_profile
             .write(filename.as_ref())
             .unwrap_or_else(|| Err(EvaluatorError::StmtProfilingNotEnabled.into()))
+    }
+
+    /// Write a profile to a file, suitable as input to
+    /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
+    /// Only valid if [`enable_flame_profile`](Evaluator::enable_flame_profile) was called before execution began.
+    /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
+    pub fn write_flame_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        self.flame_profile
+            .write(filename.as_ref())
+            .unwrap_or_else(|| Err(EvaluatorError::FlameProfilingNotEnabled.into()))
     }
 
     /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
@@ -249,11 +282,17 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             span.unwrap_or_default(),
             span.map(|_| self.codemap),
         )?;
-        self.heap_profile.record_call_enter(function, self.heap());
+        if self.heap_or_flame_profile {
+            self.heap_profile.record_call_enter(function, self.heap());
+            self.flame_profile.record_call_enter(function);
+        }
         // Must always call .pop regardless
         let res = within(self).map_err(|e| add_diagnostics(e, self));
         self.call_stack.pop();
-        self.heap_profile.record_call_exit(self.heap());
+        if self.heap_or_flame_profile {
+            self.heap_profile.record_call_exit(self.heap());
+            self.flame_profile.record_call_exit();
+        }
         res
     }
 
