@@ -37,6 +37,7 @@ use crate::{
 use gazebo::{any::AnyLifetime, cast};
 use once_cell::sync::Lazy;
 use std::{
+    intrinsics::unlikely,
     mem::{self, MaybeUninit},
     path::Path,
 };
@@ -282,14 +283,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             span.unwrap_or_default(),
             span.map(|_| self.codemap),
         )?;
-        if self.heap_or_flame_profile {
+        if unlikely(self.heap_or_flame_profile) {
             self.heap_profile.record_call_enter(function, self.heap());
             self.flame_profile.record_call_enter(function);
         }
         // Must always call .pop regardless
         let res = within(self).map_err(|e| add_diagnostics(e, self));
         self.call_stack.pop();
-        if self.heap_or_flame_profile {
+        if unlikely(self.heap_or_flame_profile) {
             self.heap_profile.record_call_exit(self.heap());
             self.flame_profile.record_call_exit();
         }

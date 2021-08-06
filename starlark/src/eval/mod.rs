@@ -26,7 +26,7 @@ use crate::{
     values::Value,
 };
 use gazebo::{cast, prelude::*};
-use std::mem;
+use std::{intrinsics::unlikely, mem};
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
@@ -114,7 +114,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack
             .push(Value::new_none(), span, Some(codemap))
             .unwrap();
-        if self.heap_or_flame_profile {
+        if unlikely(self.heap_or_flame_profile) {
             self.heap_profile
                 .record_call_enter(Value::new_none(), self.heap());
             self.flame_profile.record_call_enter(Value::new_none());
@@ -125,7 +125,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         // Clean up the world, putting everything back
         self.call_stack.pop();
-        if self.heap_or_flame_profile {
+        if unlikely(self.heap_or_flame_profile) {
             self.heap_profile.record_call_exit(self.heap());
             self.flame_profile.record_call_exit();
         }
