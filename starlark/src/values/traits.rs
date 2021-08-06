@@ -117,6 +117,12 @@ unsafe impl<'v, T: Trace<'v> + Copy> Trace<'v> for Cell<T> {
     }
 }
 
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for Box<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        Box::as_mut(self).trace(tracer)
+    }
+}
+
 unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>> Trace<'v> for (T1, T2) {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.0.trace(tracer);
