@@ -92,7 +92,7 @@ mod tests {
             r#"
 def assert_stack(want):
     stack = debug_inspect_stack()
-    assert_eq([x.split('(')[0] for x in stack[:-2]], want)
+    assert_eq([x.split(' ')[0] for x in stack[:-2]], want)
 
 assert_stack([])
 

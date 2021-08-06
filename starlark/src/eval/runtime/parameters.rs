@@ -238,33 +238,39 @@ impl<V> ParametersSpec<V> {
     // Generate a good error message for it
     pub(crate) fn collect_repr(&self, collector: &mut String) {
         collector.push_str(&self.function_name);
-        collector.push('(');
 
-        let mut names = self.names.keys();
-        let mut next_name = || {
-            // We prepend '$' on the front of variable names that are positional-only
-            // arguments to the native functions. We rip those off when
-            // displaying the signature.
-            // The `unwrap` is safe because we must have a names entry for each
-            // non-Args/KWargs kind.
-            names.next().unwrap().as_str().trim_start_match('$')
-        };
+        // We used to make the "name" of a function include all its parameters, but that is a lot of
+        // details and visually crowds out everything else. Try disabling, although we might want it
+        // in some contexts, so don't delete it.
+        if false {
+            collector.push('(');
 
-        for (i, typ) in self.kinds.iter().enumerate() {
-            if i != 0 {
-                collector.push_str(", ");
-            }
-            match typ {
-                ParameterKind::Required => collector.push_str(next_name()),
-                ParameterKind::Optional | ParameterKind::Defaulted(_) => {
-                    collector.push_str(next_name());
-                    collector.push_str(" = ...");
+            let mut names = self.names.keys();
+            let mut next_name = || {
+                // We prepend '$' on the front of variable names that are positional-only
+                // arguments to the native functions. We rip those off when
+                // displaying the signature.
+                // The `unwrap` is safe because we must have a names entry for each
+                // non-Args/KWargs kind.
+                names.next().unwrap().as_str().trim_start_match('$')
+            };
+
+            for (i, typ) in self.kinds.iter().enumerate() {
+                if i != 0 {
+                    collector.push_str(", ");
                 }
-                ParameterKind::Args => collector.push_str("*args"),
-                ParameterKind::KWargs => collector.push_str("**kwargs"),
+                match typ {
+                    ParameterKind::Required => collector.push_str(next_name()),
+                    ParameterKind::Optional | ParameterKind::Defaulted(_) => {
+                        collector.push_str(next_name());
+                        collector.push_str(" = ...");
+                    }
+                    ParameterKind::Args => collector.push_str("*args"),
+                    ParameterKind::KWargs => collector.push_str("**kwargs"),
+                }
             }
+            collector.push(')');
         }
-        collector.push(')');
     }
 }
 
