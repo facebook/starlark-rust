@@ -233,36 +233,22 @@ impl HeapProfile {
         self.enabled = true;
     }
 
-    #[inline(always)]
     pub(crate) fn record_call_enter<'v>(&self, function: Value<'v>, heap: &'v Heap) {
-        #[inline(never)]
-        #[cold]
-        fn f<'v>(function: Value<'v>, heap: &'v Heap) {
+        if self.enabled {
             heap.alloc_complex(CallEnter {
                 function,
                 time: Instant::now(),
                 memory: heap.allocated_bytes_inline(),
             });
         }
-
-        if self.enabled {
-            f(function, heap);
-        }
     }
 
-    #[inline(always)]
     pub(crate) fn record_call_exit<'v>(&self, heap: &'v Heap) {
-        #[inline(never)]
-        #[cold]
-        fn f<'v>(heap: &'v Heap) {
+        if self.enabled {
             heap.alloc_simple(CallExit {
                 time: Instant::now(),
                 memory: heap.allocated_bytes_inline(),
             });
-        }
-
-        if self.enabled {
-            f(heap);
         }
     }
 
