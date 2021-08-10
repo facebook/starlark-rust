@@ -18,7 +18,7 @@
 use crate::collections::hash::{BorrowHashed, Hashed, SmallHashResult};
 use gazebo::prelude::*;
 use indexmap::{Equivalent, IndexMap};
-use std::{hash::BuildHasher, mem};
+use std::{fmt, hash::BuildHasher, mem};
 
 // TODO: benchmark, is this the right threshold
 pub const THRESHOLD: usize = 12;
@@ -283,6 +283,19 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
     }
 }
 
+pub struct InsertCapacityOverflow<K, V> {
+    pub key: Hashed<K>,
+    pub value: V,
+}
+
+impl<K, V> fmt::Debug for InsertCapacityOverflow<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VecMapInsertCapacityOverflow")
+            // TODO(nga): use `finish_non_exhaustive` when our rust is fresh enough
+            .finish()
+    }
+}
+
 impl<K, V> VecMap<K, V> {
     pub fn try_with_capacity(n: usize) -> Option<Self> {
         if n <= THRESHOLD {
@@ -369,19 +382,24 @@ impl<K, V> VecMap<K, V> {
         return false;
     }
 
-    pub fn insert_hashed(&mut self, key: Hashed<K>, mut value: V) -> Option<V>
+    pub fn try_insert_hashed(
+        &mut self,
+        key: Hashed<K>,
+        mut value: V,
+    ) -> Result<Option<V>, InsertCapacityOverflow<K, V>>
     where
         K: Eq,
     {
         if let Some(v) = self.get_mut_hashed(key.borrow()) {
             mem::swap(v, &mut value);
-            Some(value)
+            Ok(Some(value))
+        } else if self.len() == THRESHOLD {
+            Err(InsertCapacityOverflow { key, value })
         } else {
             let i = self.values.len();
-            // Panics here if current size is equal to `THRESHOLD`
             self.hashes[i] = key.hash();
             self.values.push((key.into_key(), value));
-            None
+            Ok(None)
         }
     }
 
@@ -504,8 +522,8 @@ mod test {
         assert!(!v.try_reserve(isize::max_value() as usize));
         assert!(!v.try_reserve(usize::max_value()));
 
-        v.insert_hashed(Hashed::new(10), 100);
-        v.insert_hashed(Hashed::new(20), 200);
+        v.try_insert_hashed(Hashed::new(10), 100).unwrap();
+        v.try_insert_hashed(Hashed::new(20), 200).unwrap();
         assert!(v.try_reserve(1));
         assert!(v.try_reserve(THRESHOLD - 2));
         assert!(!v.try_reserve(THRESHOLD - 1));

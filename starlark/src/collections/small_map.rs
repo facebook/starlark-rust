@@ -23,9 +23,10 @@
 use crate::collections::{
     hash::{BorrowHashed, Hashed},
     idhasher::BuildIdHasher,
+    vec_map,
     vec_map::{
         VMIntoIter, VMIntoIterHash, VMIter, VMIterHash, VMIterMut, VMKeys, VMValues, VMValuesMut,
-        VecMap, THRESHOLD,
+        VecMap,
     },
 };
 use gazebo::{
@@ -585,16 +586,18 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => self.upgrade_empty_to_vec().insert_hashed(key, val),
+            MapHolder::Empty => self
+                .upgrade_empty_to_vec()
+                .try_insert_hashed(key, val)
+                .unwrap(),
             MapHolder::Map(ref mut m) => m.insert(key, val),
-            MapHolder::Vec(ref mut v) => {
-                let want = v.len() + 1;
-                if want < THRESHOLD {
-                    v.insert_hashed(key, val)
-                } else {
-                    self.upgrade_vec_to_map(want).insert(key, val)
+            MapHolder::Vec(ref mut v) => match v.try_insert_hashed(key, val) {
+                Ok(v) => v,
+                Err(vec_map::InsertCapacityOverflow { key, value }) => {
+                    let want = self.len() + 1;
+                    self.upgrade_vec_to_map(want).insert(key, value)
                 }
-            }
+            },
         }
     }
 
