@@ -369,6 +369,7 @@ impl<K, V> VecMap<K, V> {
             Some(value)
         } else {
             let i = self.values.len();
+            // Panics here if current size is equal to `THRESHOLD`
             self.hashes[i] = key.hash();
             self.values.push((key.into_key(), value));
             None
