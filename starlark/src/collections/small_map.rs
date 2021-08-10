@@ -540,11 +540,9 @@ impl<K, V> SmallMap<K, V> {
                 self.state = MapHolder::with_capacity(additional);
             }
             MapHolder::Vec(x) => {
-                let want = additional + x.len();
-                if want > THRESHOLD {
+                if !x.try_reserve(additional) {
+                    let want = additional + x.len();
                     self.upgrade_vec_to_map(want);
-                } else {
-                    x.reserve(additional);
                 }
             }
             MapHolder::Map(_) => {

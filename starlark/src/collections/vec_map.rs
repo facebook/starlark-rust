@@ -295,8 +295,13 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
-    pub fn reserve(&mut self, additional: usize) {
-        self.values.reserve(additional)
+    pub fn try_reserve(&mut self, additional: usize) -> bool {
+        if additional > THRESHOLD.wrapping_sub(self.len()) {
+            false
+        } else {
+            self.values.reserve(additional);
+            true
+        }
     }
 
     pub fn get_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<&V>
@@ -480,5 +485,31 @@ impl<K, V> VecMap<K, V> {
         VMIterMut {
             iter: self.values.iter_mut(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::collections::{
+        vec_map::{VecMap, THRESHOLD},
+        Hashed,
+    };
+
+    #[test]
+    fn try_reserve() {
+        let mut v: VecMap<u32, u64> = VecMap::default();
+        assert!(v.try_reserve(1));
+        assert!(v.try_reserve(THRESHOLD));
+        assert!(!v.try_reserve(THRESHOLD + 1));
+        assert!(!v.try_reserve(isize::max_value() as usize));
+        assert!(!v.try_reserve(usize::max_value()));
+
+        v.insert_hashed(Hashed::new(10), 100);
+        v.insert_hashed(Hashed::new(20), 200);
+        assert!(v.try_reserve(1));
+        assert!(v.try_reserve(THRESHOLD - 2));
+        assert!(!v.try_reserve(THRESHOLD - 1));
+        assert!(!v.try_reserve(isize::max_value() as usize));
+        assert!(!v.try_reserve(usize::max_value()));
     }
 }
