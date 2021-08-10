@@ -21,7 +21,7 @@ use indexmap::{Equivalent, IndexMap};
 use std::{fmt, hash::BuildHasher, mem};
 
 // TODO: benchmark, is this the right threshold
-pub const THRESHOLD: usize = 12;
+const THRESHOLD: usize = 12;
 
 // We define a lot of iterators on top of other iterators
 // so define a helper macro for that
