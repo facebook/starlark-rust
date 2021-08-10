@@ -310,10 +310,11 @@ impl<K, V> MapHolder<K, V> {
     fn with_capacity(n: usize) -> Self {
         if n == 0 {
             MapHolder::Empty
-        } else if n <= THRESHOLD {
-            MapHolder::Vec(VecMap::with_capacity(n))
         } else {
-            MapHolder::Map(IndexMap::with_capacity_and_hasher(n, Default::default()))
+            match VecMap::try_with_capacity(n) {
+                Some(vec) => MapHolder::Vec(vec),
+                None => MapHolder::Map(IndexMap::with_capacity_and_hasher(n, Default::default())),
+            }
         }
     }
 }

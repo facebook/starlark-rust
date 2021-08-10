@@ -284,10 +284,14 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
 }
 
 impl<K, V> VecMap<K, V> {
-    pub fn with_capacity(n: usize) -> Self {
-        Self {
-            hashes: [SmallHashResult::default(); THRESHOLD],
-            values: Vec::with_capacity(n),
+    pub fn try_with_capacity(n: usize) -> Option<Self> {
+        if n <= THRESHOLD {
+            Some(Self {
+                hashes: [SmallHashResult::default(); THRESHOLD],
+                values: Vec::with_capacity(n),
+            })
+        } else {
+            None
         }
     }
 
