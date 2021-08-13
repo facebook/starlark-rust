@@ -67,6 +67,31 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
     }
 }
 
+/// A wrapper that specifies a value should unpack into one of two types.
+///
+/// These types should, themselves, implement [`UnpackValue`]. [`EitherOf`] unpacks by
+/// checking if the first type unpacks successfully, and if it does not, it attempts to
+/// unpack the second type. Useful for arguments to [`#[starlark_module]`](macro@starlark_module)
+/// functions that can take multiple types, without having accept a raw [`Value`] and
+/// do that conversion internally.
+pub enum EitherOf<TLeft, TRight> {
+    Left(TLeft),
+    Right(TRight),
+}
+
+impl<'v, TLeft: UnpackValue<'v>, TRight: UnpackValue<'v>> UnpackValue<'v>
+    for EitherOf<TLeft, TRight>
+{
+    // Only implemented for types that implement [`UnpackValue`]. Nonsensical for other types.
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        if let Some(left) = TLeft::unpack_value(value) {
+            Some(Self::Left(left))
+        } else {
+            TRight::unpack_value(value).map(Self::Right)
+        }
+    }
+}
+
 /// Unpack a [`Value`] which is a reference to an underlying type.
 ///
 /// Usually implemented by [`starlark_simple_value!`] or [`starlark_complex_value!`].

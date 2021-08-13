@@ -1437,7 +1437,7 @@ mod value_of {
         self as starlark,
         assert::Assert,
         environment::GlobalsBuilder,
-        values::{dict::DictOf, list::ListOf, ValueOf},
+        values::{dict::DictOf, list::ListOf, EitherOf, ValueOf},
     };
     use itertools::Itertools;
 
@@ -1503,6 +1503,15 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
+        fn with_either(v: EitherOf<i32, EitherOf<String, ListOf<i32>>>) -> String {
+            match v {
+                EitherOf::Left(i) => Ok(i.to_string()),
+                EitherOf::Right(nested) => match nested {
+                    EitherOf::Left(s) => Ok(s),
+                    EitherOf::Right(l) => Ok(l.to_repr()),
+                },
+            }
+        }
     }
 
     // The standard error these raise on incorrect types
@@ -1551,6 +1560,17 @@ mod value_of {
         let expected = r#"({1: {2: 3, 4: 5}, 6: {7: 8}}, "1: 2:3, 4:5 + 6: 7:8")"#;
         let test = r#"with_dict_dict({1: {2: 3, 4: 5}, 6: {7: 8}})"#;
         a.eq(expected, test);
+    }
+
+    #[test]
+    fn test_either_of() {
+        let mut a = Assert::new();
+        a.globals_add(validate_module);
+        a.eq("'2'", "with_either(2)");
+        a.eq("'[2, 3]'", "with_either([2,3])");
+        a.eq("'s'", "with_either('s')");
+        a.fail("with_either(None)", BAD);
+        a.fail("with_either({})", BAD);
     }
 }
 
