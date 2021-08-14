@@ -29,7 +29,7 @@ pub use crate::collections::{
 pub(crate) mod alloca;
 mod hash;
 mod idhasher;
-mod small_map;
+pub mod small_map;
 mod small_set;
 pub(crate) mod stack;
 pub(crate) mod symbol_map;

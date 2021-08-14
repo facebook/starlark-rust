@@ -648,6 +648,53 @@ impl<K, V> SmallMap<K, V> {
         self.remove_hashed_entry(BorrowHashed::new(key))
     }
 
+    pub fn entry_hashed(&mut self, key: Hashed<K>) -> Entry<'_, K, V>
+    where
+        K: Eq,
+    {
+        let s = self as *mut Self;
+
+        match self.state {
+            MapHolder::Empty => Entry::Vacant(VacantEntry(VacantEntryImpl::Empty(key, self))),
+            MapHolder::Vec(ref mut v) => match v.entry_hashed(key) {
+                vec_map::Entry::Occupied(e) => {
+                    Entry::Occupied(OccupiedEntry(OccupiedEntryImpl::Vec(e)))
+                }
+                vec_map::Entry::Vacant(e) => Entry::Vacant(VacantEntry(VacantEntryImpl::Vec(e))),
+                vec_map::Entry::VacantFull(e) => {
+                    // NOTE(nga): `unsafe` here is a work around current limitations
+                    //   of borrow checker. It cannot be explained in one sentence,
+                    //   if you are interested in details, watch this talk
+                    //   https://youtu.be/_agDeiWek8w?t=1485 starting from 24:45.
+                    //   This talk describes Polonius, next version of Rust borrow checker
+                    //   which should typecheck this code fine.
+                    //
+                    //   This code is safe because when we `&mut` the raw map pointer,
+                    //   we don't hold any borrowed references to the map.
+                    Entry::Vacant(VacantEntry(VacantEntryImpl::VecFull(
+                        e.into_hashed_key(),
+                        unsafe { &mut *s },
+                    )))
+                }
+            },
+            MapHolder::Map(ref mut m) => match m.entry(key) {
+                indexmap::map::Entry::Occupied(e) => {
+                    Entry::Occupied(OccupiedEntry(OccupiedEntryImpl::Map(e)))
+                }
+                indexmap::map::Entry::Vacant(e) => {
+                    Entry::Vacant(VacantEntry(VacantEntryImpl::Map(e)))
+                }
+            },
+        }
+    }
+
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
+    where
+        K: Eq + Hash,
+    {
+        self.entry_hashed(Hashed::new(key))
+    }
+
     pub fn is_empty(&self) -> bool {
         match self.state {
             MapHolder::Empty => true,
@@ -666,6 +713,96 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn clear(&mut self) {
         self.state = MapHolder::default();
+    }
+}
+
+enum OccupiedEntryImpl<'a, K, V> {
+    Vec(vec_map::OccupiedEntry<'a, K, V>),
+    Map(indexmap::map::OccupiedEntry<'a, Hashed<K>, V>),
+}
+
+pub struct OccupiedEntry<'a, K, V>(OccupiedEntryImpl<'a, K, V>);
+
+enum VacantEntryImpl<'a, K, V> {
+    Empty(Hashed<K>, &'a mut SmallMap<K, V>),
+    Vec(vec_map::VacantEntry<'a, K, V>),
+    VecFull(Hashed<K>, &'a mut SmallMap<K, V>),
+    Map(indexmap::map::VacantEntry<'a, Hashed<K>, V>),
+}
+
+pub struct VacantEntry<'a, K, V>(VacantEntryImpl<'a, K, V>);
+
+pub enum Entry<'a, K, V> {
+    Occupied(OccupiedEntry<'a, K, V>),
+    Vacant(VacantEntry<'a, K, V>),
+}
+
+impl<'a, K, V> OccupiedEntry<'a, K, V> {
+    pub fn key(&self) -> &K {
+        match self.0 {
+            OccupiedEntryImpl::Vec(ref e) => e.key(),
+            OccupiedEntryImpl::Map(ref e) => e.key().key(),
+        }
+    }
+
+    pub fn get(&self) -> &V {
+        match self.0 {
+            OccupiedEntryImpl::Vec(ref e) => e.get(),
+            OccupiedEntryImpl::Map(ref e) => e.get(),
+        }
+    }
+
+    pub fn get_mut(&mut self) -> &mut V {
+        match self.0 {
+            OccupiedEntryImpl::Vec(ref mut e) => e.get_mut(),
+            OccupiedEntryImpl::Map(ref mut e) => e.get_mut(),
+        }
+    }
+}
+
+impl<'a, K, V> VacantEntry<'a, K, V>
+where
+    K: Eq,
+{
+    pub fn key(&self) -> &K {
+        match self.0 {
+            VacantEntryImpl::Empty(ref k, ..) => k.key(),
+            VacantEntryImpl::Vec(ref e) => e.key(),
+            VacantEntryImpl::VecFull(ref k, ..) => k.key(),
+            VacantEntryImpl::Map(ref e) => e.key().key(),
+        }
+    }
+
+    // NOTE(nga): `VacantEntry::insert` is supposed to return `&'a mut V`
+    pub fn insert(self, value: V) {
+        match self.0 {
+            VacantEntryImpl::Empty(k, map) => {
+                map.upgrade_empty_to_vec()
+                    .try_insert_hashed(k, value)
+                    .unwrap();
+            }
+            VacantEntryImpl::Vec(e) => {
+                e.insert(value);
+            }
+            VacantEntryImpl::VecFull(k, map) => {
+                map.upgrade_vec_to_map(map.len() + 1).insert(k, value);
+            }
+            VacantEntryImpl::Map(e) => {
+                e.insert(value);
+            }
+        }
+    }
+}
+
+impl<'a, K, V> Entry<'a, K, V>
+where
+    K: Eq,
+{
+    pub fn key(&self) -> &K {
+        match self {
+            Entry::Occupied(e) => e.key(),
+            Entry::Vacant(e) => e.key(),
+        }
     }
 }
 
@@ -953,5 +1090,20 @@ mod tests {
     fn test_smallmap_debug() {
         let s = format!("{:?}", smallmap![1 => "test", 2 => "more"]);
         assert_eq!(s, "{1: \"test\", 2: \"more\"}")
+    }
+
+    #[test]
+    fn entry() {
+        let mut map = SmallMap::new();
+        for i in 0..100 {
+            match map.entry(i) {
+                Entry::Vacant(e) => e.insert(i * 2),
+                Entry::Occupied(..) => panic!(),
+            }
+            match map.entry(i) {
+                Entry::Occupied(..) => {}
+                Entry::Vacant(..) => panic!(),
+            }
+        }
     }
 }

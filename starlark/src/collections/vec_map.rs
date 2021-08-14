@@ -430,6 +430,28 @@ impl<K, V> VecMap<K, V> {
         self.remove_hashed_entry(key).map(|(_, v)| v)
     }
 
+    pub fn entry_hashed(&mut self, key: Hashed<K>) -> Entry<'_, K, V>
+    where
+        K: Eq,
+    {
+        // We could use `get_mut_hashed` here, but because of borrow checker limitations
+        // we can't, so we do copy-paste.
+        for i in 0..self.values.len() {
+            if self.hashes[i] == key.hash() && key.key().equivalent(&self.values[i].0) {
+                return Entry::Occupied(OccupiedEntry {
+                    key,
+                    value: &mut self.values[i].1,
+                });
+            }
+        }
+
+        if self.len() == THRESHOLD {
+            Entry::VacantFull(VacantFullEntry { key })
+        } else {
+            Entry::Vacant(VacantEntry { key, map: self })
+        }
+    }
+
     pub fn drain_to<S>(&mut self, map: &mut IndexMap<Hashed<K>, V, S>)
     where
         K: Eq,
@@ -506,12 +528,108 @@ impl<K, V> VecMap<K, V> {
     }
 }
 
+/// Occupied entry for the given key.
+pub struct OccupiedEntry<'a, K, V> {
+    key: Hashed<K>,
+    value: &'a mut V,
+}
+
+/// Empty entry for the given key.
+pub struct VacantEntry<'a, K, V> {
+    key: Hashed<K>,
+    map: &'a mut VecMap<K, V>,
+}
+
+/// Value not found by the key, but the [`VecMap`] is at full capacity,
+/// so the vacant entry cannot be updated.
+pub struct VacantFullEntry<K> {
+    key: Hashed<K>,
+}
+
+/// [`VecMap`] entry.
+pub enum Entry<'a, K, V> {
+    Occupied(OccupiedEntry<'a, K, V>),
+    Vacant(VacantEntry<'a, K, V>),
+    VacantFull(VacantFullEntry<K>),
+}
+
+impl<'a, K, V> OccupiedEntry<'a, K, V> {
+    pub fn key(&self) -> &K {
+        self.key.key()
+    }
+
+    pub fn get_mut(&mut self) -> &mut V {
+        self.value
+    }
+
+    pub fn get(&self) -> &V {
+        self.value
+    }
+}
+
+impl<'a, K, V> VacantEntry<'a, K, V> {
+    pub fn key(&self) -> &K {
+        self.key.key()
+    }
+
+    pub fn insert(self, value: V) -> &'a mut V {
+        let i = self.map.values.len();
+        self.map.hashes[i] = self.key.hash();
+        self.map.values.push((self.key.into_key(), value));
+        &mut self.map.values.last_mut().unwrap().1
+    }
+}
+
+impl<K> VacantFullEntry<K> {
+    pub fn key(&self) -> &K {
+        self.key.key()
+    }
+
+    pub fn into_hashed_key(self) -> Hashed<K> {
+        self.key
+    }
+}
+
+impl<'a, K, V> Entry<'a, K, V> {
+    #[allow(dead_code)]
+    pub fn _key(&self) -> &K {
+        match self {
+            Entry::Occupied(e) => e.key(),
+            Entry::Vacant(e) => e.key(),
+            Entry::VacantFull(e) => e.key(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::collections::{
-        vec_map::{VecMap, THRESHOLD},
+        vec_map::{Entry, VecMap, THRESHOLD},
         Hashed,
     };
+
+    #[test]
+    fn entry() {
+        let mut m: VecMap<u32, u64> = VecMap::default();
+
+        let e = m.entry_hashed(Hashed::new(10));
+        let e = match e {
+            Entry::Vacant(e) => e,
+            _ => panic!(),
+        };
+        assert_eq!(&10, e.key());
+
+        assert_eq!(&mut 100, e.insert(100));
+
+        let e = m.entry_hashed(Hashed::new(10));
+        let mut e = match e {
+            Entry::Occupied(e) => e,
+            _ => panic!(),
+        };
+
+        assert_eq!(&100, e.get());
+        assert_eq!(&mut 100, e.get_mut());
+    }
 
     #[test]
     fn try_reserve() {
