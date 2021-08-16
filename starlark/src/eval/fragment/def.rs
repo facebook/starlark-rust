@@ -159,14 +159,7 @@ impl Compiler<'_> {
                     Some((v, TypeCompiled::new(v, eval.heap())?))
                 }
             };
-            Def::new(
-                parameters,
-                parameter_types,
-                return_type,
-                info.dupe(),
-                eval.codemap.dupe(),
-                eval,
-            )
+            Def::new(parameters, parameter_types, return_type, info.dupe(), eval)
         })
     }
 }
@@ -199,7 +192,6 @@ impl<'v> Def<'v> {
         parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: Arc<DefInfo>,
-        codemap: CodeMap,
         eval: &mut Evaluator<'v, '_>,
     ) -> Value<'v> {
         let captured = stmt
@@ -211,7 +203,7 @@ impl<'v> Def<'v> {
             parameter_types,
             return_type,
             stmt,
-            codemap,
+            codemap: eval.codemap.dupe(),
             captured,
             module: None,
         })
