@@ -301,7 +301,7 @@ impl Assert {
     /// a.module("hello.star", "hello = 'world'");
     /// a.is_true("load('hello.star', 'hello'); hello == 'world'");
     /// ```
-    pub fn module(&mut self, name: &str, program: &str) {
+    pub fn module(&mut self, name: &str, program: &str) -> FrozenModule {
         let module = self
             .with_gc(|gc| {
                 let module = Module::new();
@@ -309,7 +309,8 @@ impl Assert {
                 module.freeze()
             })
             .expect("error freezing module");
-        self.module_add(name, module);
+        self.module_add(name, module.dupe());
+        module
     }
 
     /// Set the [`Globals`] that future tests have access to.
