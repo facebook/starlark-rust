@@ -94,9 +94,8 @@ pub(crate) enum StarFunSource {
 impl StarModule {
     pub fn resolve(&mut self) {
         for x in &mut self.stmts {
-            match x {
-                StarStmt::Fun(x) => x.resolve(),
-                _ => {}
+            if let StarStmt::Fun(x) = x {
+                x.resolve()
             }
         }
     }
