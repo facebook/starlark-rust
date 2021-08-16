@@ -1195,6 +1195,32 @@ f()
 }
 
 #[test]
+fn test_frozen_lambda_nest() {
+    let mut a = Assert::new();
+    let m = a.module(
+        "a",
+        r#"
+def outer_function(x):
+    return x["test"]
+
+def function(x):
+    def inner_function():
+        return outer_function(x)
+    return inner_function()
+
+value = {"test": "hello"}
+"#,
+    );
+    let f = m.get("function").unwrap();
+    let x = m.get("value").unwrap();
+    let module = Module::new();
+    let globals = Globals::extended();
+    let mut eval = Evaluator::new(&module, &globals);
+    let res = eval.eval_function(f.value(), &[x.value()], &[]).unwrap();
+    assert_eq!(res.to_str(), "hello");
+}
+
+#[test]
 fn test_compare() {
     assert::fail("1 > False", "Operation `==` not supported");
     assert::is_true("[1, 2] == [1, 2]");

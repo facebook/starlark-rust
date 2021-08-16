@@ -64,7 +64,7 @@ pub struct Evaluator<'v, 'a> {
     // The module-level variables in scope at the moment.
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
-    pub(crate) module_variables: Option<&'static FrozenModuleData>,
+    pub(crate) module_variables: Option<(&'static FrozenModuleData, FrozenModuleValue)>,
     // Local variables for this function, and older stack frames too.
     pub(crate) local_variables: LocalSlots<'v>,
     // Globals used to resolve global variables.
@@ -322,7 +322,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         // Set up for the new function call
         let old_module_variables =
-            mem::replace(&mut self.module_variables, module.map(|x| x.get()));
+            mem::replace(&mut self.module_variables, module.map(|x| (x.get(), x)));
 
         // Run the computation
         let res = within(self);
@@ -353,7 +353,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         fn error<'v>(eval: &Evaluator<'v, '_>, slot: ModuleSlotId) -> anyhow::Error {
             let name = match &eval.module_variables {
                 None => eval.module_env.names().get_slot(slot),
-                Some(e) => e.get_slot_name(slot),
+                Some(e) => e.0.get_slot_name(slot),
             }
             .unwrap_or_else(|| "<unknown>".to_owned());
             EnvironmentError::LocalVariableReferencedBeforeAssignment(name).into()
@@ -361,7 +361,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         match &self.module_variables {
             None => self.module_env.slots().get_slot(slot),
-            Some(e) => e.get_slot(slot).map(Value::new_frozen),
+            Some(e) => e.0.get_slot(slot).map(Value::new_frozen),
         }
         .ok_or_else(|| error(self, slot))
     }

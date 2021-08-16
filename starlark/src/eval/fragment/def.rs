@@ -205,7 +205,7 @@ impl<'v> Def<'v> {
             stmt,
             codemap: eval.codemap.dupe(),
             captured,
-            module: None,
+            module: eval.module_variables.map(|x| x.1),
         })
     }
 }
@@ -243,6 +243,10 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             .return_type
             .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
+        let module = Some(
+            self.module
+                .unwrap_or_else(|| FrozenModuleValue::new(freezer)),
+        );
         Ok(FrozenDef {
             parameters,
             parameter_types,
@@ -250,7 +254,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             codemap: self.codemap,
             stmt: self.stmt,
             captured,
-            module: Some(FrozenModuleValue::new(freezer)),
+            module,
         })
     }
 }
