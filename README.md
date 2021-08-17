@@ -49,7 +49,7 @@ In this section we outline where we don't comply with the [Starlark spec](https:
 ## Making a release
 
 1. Check the [GitHub Actions](https://github.com/facebookexperimental/starlark-rust/actions) are green.
-2. Update `CHANGELOG.md` with the changes since the last release. [This link](https://github.com/facebookexperimental/starlark-rust/compare/v0.4.0...master) can help (update to compare against the last release).
+2. Update `CHANGELOG.md` with the changes since the last release. [This link](https://github.com/facebookexperimental/starlark-rust/compare/v0.4.0...main) can help (update to compare against the last release).
 3. Update the version numbers of the two `Cargo.toml` files. Bump them by 0.0.1 if there are no incompatible changes, or 0.1.0 if there are. Bump the dependency in `starlark` to point at the latest `starlark_module` version.
 4. Copy the files `CHANGELOG.md`, `LICENSE` and `README.md` into each `starlark` and `starlark_module` subdirectory.
 5. Run `cargo publish --dry-run --allow-dirty`, then without the `--dry-run`, first in `starlark_module` and then `starlark` directories.
