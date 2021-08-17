@@ -57,6 +57,11 @@ pub fn global(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn field(ref typ: Value, default: Option<Value>) -> Field<'v> {
+        // We compile the type even if we don't have a default to raise the error sooner
+        let compiled = TypeCompiled::new(typ, heap)?;
+        if let Some(d) = default {
+            d.check_type_compiled(typ, &compiled, Some("default"))?;
+        }
         Ok(Field::new(typ, default))
     }
 }
@@ -171,5 +176,14 @@ assert_eq(r1(host="test"), rt(host="test"))
 assert_ne(r1(host="test"), diff(host="test"))
 "#,
         );
+    }
+
+    #[test]
+    fn test_field_invalid() {
+        assert::fails(
+            "field(str.type, None)",
+            &["does not match the type", "`default`"],
+        );
+        assert::fails("field(True)", &["`True`", "not a valid type"]);
     }
 }
