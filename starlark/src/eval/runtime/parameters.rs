@@ -34,6 +34,7 @@ use gazebo::{
     coerce::{coerce, Coerce},
     prelude::*,
 };
+use itertools::Itertools;
 use std::{cell::Cell, cmp, convert::TryInto, iter};
 use thiserror::Error;
 
@@ -60,9 +61,9 @@ pub(crate) enum FunctionError {
     WrongNumberOfParameters(usize, usize, usize),
 }
 
-#[derive(Debug, Clone, Coerce)]
+#[derive(Debug, Clone, Coerce, PartialEq)]
 #[repr(C)]
-enum ParameterKind<V> {
+pub(crate) enum ParameterKind<V> {
     Required,
     Optional,
     Defaulted(V),
@@ -271,6 +272,44 @@ impl<V> ParametersSpec<V> {
             }
             collector.push(')');
         }
+    }
+
+    /// Get the index where a user would have supplied "*" as a parameter.
+    #[allow(dead_code)]
+    pub(crate) fn no_args_param_index(&self) -> Option<usize> {
+        if self.positional < self.kinds.len() {
+            match self.kinds.get(self.positional) {
+                Some(ParameterKind::Args) | Some(ParameterKind::KWargs) => None,
+                _ => Some(self.positional),
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Iterate over the parameters
+    ///
+    /// Returns an iterator over (parameter index, name, kind)
+    #[allow(dead_code)]
+    pub(crate) fn iter_params(&self) -> impl Iterator<Item = (usize, &str, &ParameterKind<V>)> {
+        let names: Vec<&str> = self
+            .names
+            .iter()
+            .sorted_by_key(|(_, i)| i)
+            .map(|(s, _)| s.as_str())
+            .collect();
+
+        self.kinds.iter().enumerate().map(move |(i, kind)| {
+            let name = match kind {
+                ParameterKind::Args => "*args",
+                ParameterKind::KWargs => "**kwargs",
+                _ => names
+                    .get(i)
+                    .map(|s| s.trim_start_match('$'))
+                    .expect("name in mapping"),
+            };
+            (i, name, kind)
+        })
     }
 }
 
@@ -928,5 +967,43 @@ mod test {
         let names = [(Symbol::new("test"), heap.alloc("test"))];
         p.names = &names;
         assert!(p.no_named_args().is_err());
+    }
+
+    #[test]
+    fn test_parameter_iteration() {
+        let mut p = ParametersSpec::<FrozenValue>::new("f".to_owned());
+        p.required("a");
+        p.optional("b");
+        p.no_args();
+        p.optional("c");
+        p.kwargs();
+
+        let params: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = p.iter_params().collect();
+
+        let expected: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = vec![
+            (0, "a", &ParameterKind::Required),
+            (1, "b", &ParameterKind::Optional),
+            (2, "c", &ParameterKind::Optional),
+            (3, "**kwargs", &ParameterKind::KWargs),
+        ];
+
+        assert_eq!(expected, params);
+        assert_eq!(Some(2), p.no_args_param_index());
+
+        let mut p = ParametersSpec::<FrozenValue>::new("f".to_owned());
+        p.required("a");
+        p.args();
+        p.kwargs();
+
+        let params: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = p.iter_params().collect();
+
+        let expected: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = vec![
+            (0, "a", &ParameterKind::Required),
+            (1, "*args", &ParameterKind::Args),
+            (2, "**kwargs", &ParameterKind::KWargs),
+        ];
+
+        assert_eq!(expected, params);
+        assert_eq!(None, p.no_args_param_index());
     }
 }
