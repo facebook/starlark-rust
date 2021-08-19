@@ -337,6 +337,11 @@ pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 ///
 /// Every additional field enables further features in Starlark. In most cases the default
 /// implementation returns an "unimplemented" [`Err`].
+///
+/// # Note To Implementors
+/// Any additional methods that are added to this trait also need to be added to the
+/// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
+/// any implementations other than the default implementation will not be run.
 pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
