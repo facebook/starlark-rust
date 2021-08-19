@@ -16,7 +16,10 @@
  */
 
 use gazebo::prelude::*;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// The documentation provided by a user for a specific module, object, function, etc.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,6 +54,94 @@ impl DocString {
                 }),
             }
         }
+    }
+
+    /// Join lines up, dedent them, and trim them
+    fn join_and_dedent_lines(lines: &[String]) -> String {
+        textwrap::dedent(&lines.join("\n")).trim().to_owned()
+    }
+
+    /// Parse out parameter docs from an "Args:" section of a docstring
+    ///
+    /// `args_section` should be dedented, and generally should just be the `args` key of
+    /// the `DocString::parse_params()` function call. This is done as a separate function
+    /// to reduce the number of times that sections are parsed out of docstring (e.g. if
+    /// a user wants both the `Args:` and `Returns:` sections)
+    pub fn parse_params(args_section: &str) -> HashMap<String, String> {
+        static ARG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\*{0,2}\w+):\s*(.*)").unwrap());
+        static INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
+
+        let mut ret = HashMap::new();
+        let mut current_arg = None;
+        let mut current_text = vec![];
+
+        for line in args_section.lines() {
+            if let Some(matches) = ARG_RE.captures(line) {
+                if let Some(a) = current_arg.take() {
+                    ret.insert(a, Self::join_and_dedent_lines(&current_text));
+                }
+
+                current_arg = Some(matches.get(1).unwrap().as_str().to_owned());
+
+                let doc_match = matches.get(2).unwrap();
+                current_text = vec![format!(
+                    "{}{}",
+                    " ".repeat(doc_match.start()),
+                    doc_match.as_str()
+                )];
+            } else if current_arg.is_some() && INDENTED_RE.is_match(line) {
+                current_text.push(line.to_owned());
+            }
+        }
+
+        if let Some(a) = current_arg.take() {
+            ret.insert(a, Self::join_and_dedent_lines(&current_text));
+        }
+
+        ret
+    }
+
+    /// Parse the various sections out of a doc string.
+    ///
+    /// "sections" are the various things in doc strings like "Arguments:", "Returns:", etc
+    ///
+    /// A string like:
+    ///
+    /// """
+    /// Some summary
+    ///
+    /// Details about the function go here
+    ///     Arguments:
+    ///         arg_foo: The foo for you
+    /// """
+    ///
+    /// would return a mapping of `{"arguments": "arg_foo: The foo for you"}`
+    pub fn parse_sections(&self) -> HashMap<String, String> {
+        let mut ret = HashMap::new();
+
+        if let Some(details) = &self.details {
+            static SECTION_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([\w -]+):\s*$").unwrap());
+            static INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
+
+            let mut current_section = None;
+            let mut current_section_text = vec![];
+            for line in details.lines() {
+                if let Some(matches) = SECTION_RE.captures(line) {
+                    if let Some(s) = current_section.take() {
+                        ret.insert(s, Self::join_and_dedent_lines(&current_section_text));
+                    }
+                    current_section = Some(matches.get(1).unwrap().as_str().to_ascii_lowercase());
+                    current_section_text = vec![];
+                } else if current_section.is_some() && INDENTED_RE.is_match(line) {
+                    current_section_text.push(line.to_owned());
+                }
+            }
+
+            if let Some(s) = current_section.take() {
+                ret.insert(s, Self::join_and_dedent_lines(&current_section_text));
+            }
+        }
+        ret
     }
 }
 
@@ -258,5 +349,83 @@ mod test {
                 ),
             })
         );
+    }
+
+    #[test]
+    fn parses_sections_from_docstring() {
+        let docstring = r#"This is an example docstring
+
+        We have some details up here that should not be parsed
+
+        Some empty section:
+        Example:
+            First line of the section
+
+            A newline with no space after it before the second one,
+                and a third that's indented further.
+        This is not in the arguments section
+
+        Last:
+            This is something in the last section
+        "#;
+
+        let mut expected = HashMap::new();
+        expected.insert("some empty section".to_owned(), "".to_owned());
+        expected.insert(
+            "last".to_owned(),
+            "This is something in the last section".to_owned(),
+        );
+        expected.insert(
+            "example".to_owned(),
+            concat!(
+                "First line of the section\n\n",
+                "A newline with no space after it before the second one,\n",
+                "    and a third that's indented further."
+            )
+            .to_owned(),
+        );
+
+        let sections = DocString::from_docstring(docstring)
+            .unwrap()
+            .parse_sections();
+
+        assert_eq!(sections, expected);
+    }
+
+    #[test]
+    fn parses_params_from_docstring() {
+        let docstring = r#"This is an example docstring
+
+        Args:
+            arg_foo: The argument named foo
+            arg_bar: The argument named bar. It has
+                     a longer doc string that spans
+                     over three lines
+            *args: Docs for args
+            **kwargs: Docs for kwargs
+        "#;
+
+        let mut expected = HashMap::new();
+        expected.insert("arg_foo".to_owned(), "The argument named foo".to_owned());
+        expected.insert(
+            "arg_bar".to_owned(),
+            concat!(
+                "The argument named bar. It has\n",
+                "a longer doc string that spans\n",
+                "over three lines"
+            )
+            .to_owned(),
+        );
+        expected.insert("*args".to_owned(), "Docs for args".to_owned());
+        expected.insert("**kwargs".to_owned(), "Docs for kwargs".to_owned());
+
+        let param_docs = DocString::from_docstring(docstring)
+            .unwrap()
+            .parse_sections()
+            .get("args")
+            .map(|s| DocString::parse_params(s))
+            .unwrap();
+
+        assert_eq!(param_docs, expected);
     }
 }
