@@ -173,7 +173,7 @@ impl<V> ParametersSpec<V> {
         self.add(name, ParameterKind::Optional);
     }
 
-    /// Add an optional parameter. Will be the edefault value if the caller
+    /// Add an optional parameter. Will be the default value if the caller
     /// doesn't supply it. If you want to supply a position-only argument,
     /// prepend a `$` to the name.
     pub fn defaulted(&mut self, name: &str, val: V) {
