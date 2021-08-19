@@ -275,7 +275,6 @@ impl<V> ParametersSpec<V> {
     }
 
     /// Get the index where a user would have supplied "*" as a parameter.
-    #[allow(dead_code)]
     pub(crate) fn no_args_param_index(&self) -> Option<usize> {
         if self.positional < self.kinds.len() {
             match self.kinds.get(self.positional) {
@@ -290,7 +289,6 @@ impl<V> ParametersSpec<V> {
     /// Iterate over the parameters
     ///
     /// Returns an iterator over (parameter index, name, kind)
-    #[allow(dead_code)]
     pub(crate) fn iter_params(&self) -> impl Iterator<Item = (usize, &str, &ParameterKind<V>)> {
         let names: Vec<&str> = self
             .names

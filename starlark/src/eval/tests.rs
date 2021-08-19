@@ -1457,6 +1457,203 @@ fn test_starlark_module() {
     );
 }
 
+#[test]
+fn test_def_docstring_parses() -> anyhow::Result<()> {
+    use crate::values::docs::{DocItem, DocString, Function, Param, Return, Type};
+
+    let fun = assert::pass(
+        r#"
+def f1(a, b: "string", c:"int" = 5, *, d:"string" = "some string", **kwargs) -> ["string"]:
+    """
+    Summary line goes here
+
+    Args:
+        a: The docs for a
+        b: The docs for b
+        c: The docs for c, but these
+           go onto two lines
+        **kwargs: Docs for the keyword args
+
+    Returns:
+        A string repr of the args
+    """
+    return [str((a, b, c, d, repr(kwargs)))]
+
+def f2(a, *args: ["string"]):
+    """
+    This is a function with *args, and no return type
+
+    Args:
+        *args: Only doc this arg
+    """
+    return None
+
+def f3(a: "string") -> "string":
+    return a
+
+def f4(a: "string") -> "string":
+    """ This is a docstring with no 'Args:' section """
+    return a
+
+
+    # Function with: no doc string, with a docstring and no args:, one with *args, one with no return type
+(f1, f2, f3, f4)
+"#,
+    );
+    let env = Module::new();
+    let f1 = fun
+        .value()
+        .at(Value::new_int(0), env.heap())?
+        .get_ref()
+        .documentation();
+    let f2 = fun
+        .value()
+        .at(Value::new_int(1), env.heap())?
+        .get_ref()
+        .documentation();
+    let f3 = fun
+        .value()
+        .at(Value::new_int(2), env.heap())?
+        .get_ref()
+        .documentation();
+    let f4 = fun
+        .value()
+        .at(Value::new_int(3), env.heap())?
+        .get_ref()
+        .documentation();
+
+    let expected_f1 = Some(DocItem::Function(Function {
+        docs: DocString::from_docstring(
+            r#"Summary line goes here
+
+    Args:
+        a: The docs for a
+        b: The docs for b
+        c: The docs for c, but these
+           go onto two lines
+        **kwargs: Docs for the keyword args
+
+    Returns:
+        A string repr of the args"#,
+        ),
+        params: vec![
+            Param::Arg {
+                name: "a".to_owned(),
+                docs: DocString::from_docstring("The docs for a"),
+                typ: None,
+                default_value: None,
+            },
+            Param::Arg {
+                name: "b".to_owned(),
+                docs: DocString::from_docstring("The docs for b"),
+                typ: Some(Type {
+                    raw_type: "\"string\"".to_owned(),
+                }),
+                default_value: None,
+            },
+            Param::Arg {
+                name: "c".to_owned(),
+                docs: DocString::from_docstring("The docs for c, but these\ngo onto two lines"),
+                typ: Some(Type {
+                    raw_type: "\"int\"".to_owned(),
+                }),
+                default_value: Some("5".to_owned()),
+            },
+            Param::NoArgs,
+            Param::Arg {
+                name: "d".to_owned(),
+                docs: None,
+                typ: Some(Type {
+                    raw_type: "\"string\"".to_owned(),
+                }),
+                default_value: Some("\"some string\"".to_owned()),
+            },
+            Param::Kwargs {
+                name: "**kwargs".to_owned(),
+                docs: DocString::from_docstring("Docs for the keyword args"),
+                typ: None,
+            },
+        ],
+        ret: Return {
+            docs: DocString::from_docstring("A string repr of the args"),
+            typ: Some(Type {
+                raw_type: r#"["string"]"#.to_owned(),
+            }),
+        },
+    }));
+
+    let expected_f2 = Some(DocItem::Function(Function {
+        docs: DocString::from_docstring(
+            r#"This is a function with *args, and no return type
+
+    Args:
+        *args: Only doc this arg"#,
+        ),
+        params: vec![
+            Param::Arg {
+                name: "a".to_owned(),
+                docs: None,
+                typ: None,
+                default_value: None,
+            },
+            Param::Args {
+                name: "*args".to_owned(),
+                docs: DocString::from_docstring("Only doc this arg"),
+                typ: Some(Type {
+                    raw_type: "[\"string\"]".to_owned(),
+                }),
+            },
+        ],
+        ret: Return {
+            docs: None,
+            typ: None,
+        },
+    }));
+
+    let expected_f3 = Some(DocItem::Function(Function {
+        docs: None,
+        params: vec![Param::Arg {
+            name: "a".to_owned(),
+            docs: None,
+            typ: Some(Type {
+                raw_type: "\"string\"".to_owned(),
+            }),
+            default_value: None,
+        }],
+        ret: Return {
+            docs: None,
+            typ: Some(Type {
+                raw_type: "\"string\"".to_owned(),
+            }),
+        },
+    }));
+
+    let expected_f4 = Some(DocItem::Function(Function {
+        docs: DocString::from_docstring("This is a docstring with no 'Args:' section"),
+        params: vec![Param::Arg {
+            name: "a".to_owned(),
+            docs: None,
+            typ: Some(Type {
+                raw_type: "\"string\"".to_owned(),
+            }),
+            default_value: None,
+        }],
+        ret: Return {
+            docs: None,
+            typ: Some(Type {
+                raw_type: "\"string\"".to_owned(),
+            }),
+        },
+    }));
+
+    assert_eq!(expected_f1, f1);
+    assert_eq!(expected_f2, f2);
+    assert_eq!(expected_f3, f3);
+    assert_eq!(expected_f4, f4);
+
+    Ok(())
+}
+
 mod value_of {
     use super::*;
     use crate::{

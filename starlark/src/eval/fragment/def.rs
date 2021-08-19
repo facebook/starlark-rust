@@ -18,7 +18,7 @@
 //! Implementation of `def`.
 
 use crate::{
-    codemap::{CodeMap, Span},
+    codemap::{CodeMap, Span, Spanned},
     environment::FrozenModuleValue,
     eval::{
         compiler::{
@@ -27,20 +27,24 @@ use crate::{
         },
         runtime::{
             evaluator::Evaluator,
-            parameters::ParametersSpec,
+            parameters::{ParameterKind, ParametersSpec},
             slots::{LocalSlotBase, LocalSlotId},
         },
         Parameters,
     },
-    syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
+    syntax::ast::{AstExpr, AstLiteral, AstParameter, AstStmt, Expr, Parameter, Stmt},
     values::{
-        function::FUNCTION_TYPE, typing::TypeCompiled, ComplexValue, Freezer, FrozenValue,
-        StarlarkValue, Trace, Tracer, Value, ValueLike, ValueRef,
+        docs,
+        docs::{DocItem, DocString},
+        function::FUNCTION_TYPE,
+        typing::TypeCompiled,
+        ComplexValue, Freezer, FrozenValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        ValueRef,
     },
 };
 use derivative::Derivative;
 use gazebo::prelude::*;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 enum ParameterCompiled<T> {
     Normal(String, Option<T>),
@@ -106,6 +110,23 @@ impl Compiler<'_> {
         }
     }
 
+    fn function_docstring(suite: &AstStmt) -> Option<String> {
+        if let Stmt::Statements(stmts) = &suite.node {
+            if let Some(Spanned {
+                node:
+                    Stmt::Expression(Spanned {
+                        node: Expr::Literal(AstLiteral::StringLiteral(s)),
+                        ..
+                    }),
+                ..
+            }) = stmts.first()
+            {
+                return Some(s.node.to_owned());
+            }
+        };
+        None
+    }
+
     pub fn function(
         &mut self,
         name: &str,
@@ -125,6 +146,8 @@ impl Compiler<'_> {
 
         self.scope
             .enter_def(params.iter().flat_map(ParameterCompiled::name), &suite);
+
+        let docstring = Self::function_docstring(&suite);
         let body = self.stmt(suite, false);
         let scope_names = self.scope.exit_def();
 
@@ -164,7 +187,14 @@ impl Compiler<'_> {
                     Some((v, TypeCompiled::new(v, eval.heap())?))
                 }
             };
-            Def::new(parameters, parameter_types, return_type, info.dupe(), eval)
+            Def::new(
+                parameters,
+                parameter_types,
+                return_type,
+                info.dupe(),
+                eval,
+                docstring.clone(),
+            )
         })
     }
 }
@@ -183,6 +213,7 @@ pub(crate) struct DefGen<V, RefV> {
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
     module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
+    docstring: Option<String>, // The raw docstring pulled out of the AST
 }
 
 // We can't use the `starlark_complex_value!` macro because we have two type arguments.
@@ -198,6 +229,7 @@ impl<'v> Def<'v> {
         return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: Arc<DefInfo>,
         eval: &mut Evaluator<'v, '_>,
+        docstring: Option<String>,
     ) -> Value<'v> {
         let captured = stmt
             .scope_names
@@ -211,7 +243,107 @@ impl<'v> Def<'v> {
             codemap: eval.codemap.dupe(),
             captured,
             module: eval.module_variables.map(|x| x.1),
+            docstring,
         })
+    }
+}
+
+impl<'v, T1: ValueLike<'v>, T2> DefGen<T1, T2> {
+    /// Extract a few key things out of the main function docstring
+    fn parse_docstring(
+        &self,
+    ) -> (
+        Option<DocString>,
+        HashMap<String, Option<DocString>>,
+        Option<DocString>,
+    ) {
+        let docstring = self
+            .docstring
+            .as_ref()
+            .and_then(|s| DocString::from_docstring(s));
+        let mut param_docs = HashMap::new();
+        let mut return_docs = None;
+
+        if let Some(ds) = &docstring {
+            let sections = ds.parse_sections();
+            if let Some(args) = sections.get("args") {
+                param_docs = DocString::parse_params(args)
+                    .into_iter()
+                    .map(|(name, docs)| (name, DocString::from_docstring(&docs)))
+                    .collect();
+            }
+            if let Some(docs) = sections.get("returns") {
+                return_docs = DocString::from_docstring(docs);
+            }
+        };
+        (docstring, param_docs, return_docs)
+    }
+
+    fn docs(&self) -> Option<DocItem> {
+        let (def_docstring, parameter_docs, return_docs) = self.parse_docstring();
+
+        let parameter_types: HashMap<usize, docs::Type> = self
+            .parameter_types
+            .iter()
+            .map(|(idx, _, v, _)| {
+                (
+                    *idx,
+                    docs::Type {
+                        raw_type: v.to_value().to_repr(),
+                    },
+                )
+            })
+            .collect();
+
+        let mut parameters: Vec<docs::Param> = self
+            .parameters
+            .iter_params()
+            .map(|(i, name, kind)| {
+                let typ = parameter_types.get(&i).cloned();
+                let docs = parameter_docs.get(name).and_then(|x| x.clone());
+                let name = name.to_owned();
+                match kind {
+                    ParameterKind::Required => docs::Param::Arg {
+                        name,
+                        docs,
+                        typ,
+                        default_value: None,
+                    },
+                    ParameterKind::Optional => docs::Param::Arg {
+                        name,
+                        docs,
+                        typ,
+                        default_value: Some("None".to_owned()),
+                    },
+                    ParameterKind::Defaulted(v) => docs::Param::Arg {
+                        name,
+                        docs,
+                        typ,
+                        default_value: Some(v.to_value().to_repr()),
+                    },
+                    ParameterKind::Args => docs::Param::Args { name, docs, typ },
+                    ParameterKind::KWargs => docs::Param::Kwargs { name, docs, typ },
+                }
+            })
+            .collect();
+
+        // Go back and add the "*" arg if it's present
+        if let Some(i) = self.parameters.no_args_param_index() {
+            parameters.insert(i, docs::Param::NoArgs);
+        }
+
+        let return_details = docs::Return {
+            docs: return_docs,
+            typ: self.return_type.as_ref().map(|r| docs::Type {
+                raw_type: r.0.to_value().to_repr(),
+            }),
+        };
+
+        Some(DocItem::Function(docs::Function {
+            docs: def_docstring,
+            params: parameters,
+            ret: return_details,
+        }))
     }
 }
 
@@ -260,6 +392,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             stmt: self.stmt,
             captured,
             module,
+            docstring: self.docstring,
         })
     }
 }
@@ -292,6 +425,10 @@ impl<'v> StarlarkValue<'v> for FrozenDef {
             })
         })
     }
+
+    fn documentation(&self) -> Option<DocItem> {
+        self.docs()
+    }
 }
 
 impl<'v> StarlarkValue<'v> for Def<'v> {
@@ -317,6 +454,10 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
                 eval.ann("invoke_def_raw", |eval| self.invoke_raw(slot_base, eval))
             })
         })
+    }
+
+    fn documentation(&self) -> Option<DocItem> {
+        self.docs()
     }
 }
 
