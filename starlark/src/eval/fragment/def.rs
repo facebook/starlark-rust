@@ -135,13 +135,18 @@ impl Compiler<'_> {
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
 
-            for (i, x) in params.iter().enumerate() {
+            // count here rather than enumerate because '*' doesn't get a real
+            // index in the parameter mapping, and it messes up the indexes
+            let mut i = 0;
+            for x in params.iter() {
                 if let Some(t) = x.ty() {
                     let v = t(eval)?;
                     let name = x.name().unwrap_or("unknown").to_owned();
                     parameter_types.push((i, name, v, TypeCompiled::new(v, eval.heap())?));
                 }
-
+                if !matches!(x, ParameterCompiled::NoArgs) {
+                    i += 1;
+                }
                 match x {
                     ParameterCompiled::Normal(n, _) => parameters.required(n),
                     ParameterCompiled::WithDefaultValue(n, _, v) => {

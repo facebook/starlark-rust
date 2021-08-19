@@ -287,7 +287,7 @@ assert_eq(add18(24), 42)
 fn test_eval_function() {
     let fun = assert::pass(
         r#"
-def fun(a, y, x = 1):
+def fun(a, *, y: "string", x = 1) -> "string":
     return str((a, y, x))
 fun
 "#,
