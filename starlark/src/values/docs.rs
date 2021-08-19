@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use gazebo::prelude::*;
+use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -38,7 +38,9 @@ impl DocString {
         if trimmed_docs.is_empty() {
             None
         } else {
-            match trimmed_docs.split1_opt("\n\n") {
+            static SPLIT_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n[ ]*\n").unwrap());
+            let split: Option<(&str, &str)> = SPLIT_RE.splitn(trimmed_docs, 2).collect_tuple();
+            match split {
                 Some((summary, details)) if !summary.is_empty() && !details.is_empty() => {
                     // Dedent the details separately so that people can have the summary on the
                     // same line as the opening quotes, and the details indented on subsequent
@@ -298,6 +300,15 @@ mod test {
             Some(DocString {
                 summary: "This should be the summary".to_owned(),
                 details: None,
+            })
+        );
+        assert_eq!(
+            DocString::from_docstring(
+                "Summary line here\n    \nDetails after some spaces\n\nand some more newlines"
+            ),
+            Some(DocString {
+                summary: "Summary line here".to_owned(),
+                details: Some("Details after some spaces\n\nand some more newlines".to_owned()),
             })
         );
         assert_eq!(
