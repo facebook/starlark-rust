@@ -47,6 +47,7 @@ lsp-server = "0.5"
 lsp-types = "0.89.0"
 debugserver-types = "0.5.0"
 hashbrown = { version = "0.11.2", features = ["raw"] }
+textwrap = "0.14.2"
 
 [dev-dependencies]
 criterion = "0.3"

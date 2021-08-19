@@ -51,6 +51,7 @@ use std::{
 mod comparison;
 
 // Submodules
+pub mod docs;
 mod error;
 pub(crate) mod fast_string;
 mod frozen_ref;
