@@ -20,8 +20,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        layout::arena::AValuePtr, none::NoneType, string::StarlarkStr, ComplexValue, Freezer,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        docs::DocItem, layout::arena::AValuePtr, none::NoneType, string::StarlarkStr, ComplexValue,
+        Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
@@ -422,5 +422,8 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     }
     fn set_attr(&self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
         self.1.set_attr(attribute, new_value)
+    }
+    fn documentation(&self) -> Option<DocItem> {
+        self.1.documentation()
     }
 }

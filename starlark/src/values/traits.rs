@@ -34,8 +34,8 @@ use crate::{
     environment::Globals,
     eval::{Evaluator, Parameters},
     values::{
-        function::FUNCTION_TYPE, ControlError, Freezer, FrozenValue, Heap, Tracer, Value,
-        ValueError,
+        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenValue, Heap, Tracer,
+        Value, ValueError,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -368,6 +368,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// [`GlobalsStatic`](crate::environment::GlobalsStatic) for an example of how
     /// to define this method.
     fn get_methods(&self) -> Option<&'static Globals> {
+        None
+    }
+
+    /// Return structured documentation for self, if available.
+    fn documentation(&self) -> Option<DocItem> {
         None
     }
 
