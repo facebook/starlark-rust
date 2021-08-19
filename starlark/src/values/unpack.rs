@@ -18,6 +18,7 @@
 //! Parameter conversion utilities for `starlark_module` macros.
 
 use crate::values::{list::List, tuple::Tuple, Value};
+use either::Either;
 use gazebo::cell::ARef;
 use std::ops::Deref;
 
@@ -67,20 +68,8 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
     }
 }
 
-/// A wrapper that specifies a value should unpack into one of two types.
-///
-/// These types should, themselves, implement [`UnpackValue`]. [`EitherOf`] unpacks by
-/// checking if the first type unpacks successfully, and if it does not, it attempts to
-/// unpack the second type. Useful for arguments to [`#[starlark_module]`](macro@starlark_module)
-/// functions that can take multiple types, without having accept a raw [`Value`] and
-/// do that conversion internally.
-pub enum EitherOf<TLeft, TRight> {
-    Left(TLeft),
-    Right(TRight),
-}
-
 impl<'v, TLeft: UnpackValue<'v>, TRight: UnpackValue<'v>> UnpackValue<'v>
-    for EitherOf<TLeft, TRight>
+    for Either<TLeft, TRight>
 {
     // Only implemented for types that implement [`UnpackValue`]. Nonsensical for other types.
     fn unpack_value(value: Value<'v>) -> Option<Self> {

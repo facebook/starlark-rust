@@ -1463,8 +1463,9 @@ mod value_of {
         self as starlark,
         assert::Assert,
         environment::GlobalsBuilder,
-        values::{dict::DictOf, list::ListOf, EitherOf, ValueOf},
+        values::{dict::DictOf, list::ListOf, ValueOf},
     };
+    use either::Either;
     use itertools::Itertools;
 
     // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
@@ -1529,12 +1530,12 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_either(v: EitherOf<i32, EitherOf<String, ListOf<i32>>>) -> String {
+        fn with_either(v: Either<i32, Either<String, ListOf<i32>>>) -> String {
             match v {
-                EitherOf::Left(i) => Ok(i.to_string()),
-                EitherOf::Right(nested) => match nested {
-                    EitherOf::Left(s) => Ok(s),
-                    EitherOf::Right(l) => Ok(l.to_repr()),
+                Either::Left(i) => Ok(i.to_string()),
+                Either::Right(nested) => match nested {
+                    Either::Left(s) => Ok(s),
+                    Either::Right(l) => Ok(l.to_repr()),
                 },
             }
         }
