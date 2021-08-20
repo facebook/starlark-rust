@@ -18,7 +18,7 @@
 //! Implementation of `def`.
 
 use crate::{
-    codemap::{CodeMap, Span, Spanned},
+    codemap::{CodeMap, Span},
     environment::FrozenModuleValue,
     eval::{
         compiler::{
@@ -32,7 +32,7 @@ use crate::{
         },
         Parameters,
     },
-    syntax::ast::{AstExpr, AstLiteral, AstParameter, AstStmt, Expr, Parameter, Stmt},
+    syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
     values::{
         docs,
         docs::{DocItem, DocString},
@@ -110,23 +110,6 @@ impl Compiler<'_> {
         }
     }
 
-    fn function_docstring(suite: &AstStmt) -> Option<String> {
-        if let Stmt::Statements(stmts) = &suite.node {
-            if let Some(Spanned {
-                node:
-                    Stmt::Expression(Spanned {
-                        node: Expr::Literal(AstLiteral::StringLiteral(s)),
-                        ..
-                    }),
-                ..
-            }) = stmts.first()
-            {
-                return Some(s.node.to_owned());
-            }
-        };
-        None
-    }
-
     pub fn function(
         &mut self,
         name: &str,
@@ -147,7 +130,7 @@ impl Compiler<'_> {
         self.scope
             .enter_def(params.iter().flat_map(ParameterCompiled::name), &suite);
 
-        let docstring = Self::function_docstring(&suite);
+        let docstring = DocString::extract_raw_starlark_docstring(&suite);
         let body = self.stmt(suite, false);
         let scope_names = self.scope.exit_def();
 

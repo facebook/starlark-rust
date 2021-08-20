@@ -15,6 +15,10 @@
  * limitations under the License.
  */
 
+use crate::{
+    codemap::Spanned,
+    syntax::ast::{AstLiteral, AstStmt, Expr, Stmt},
+};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -32,6 +36,25 @@ pub struct DocString {
 }
 
 impl DocString {
+    /// Extracts the docstring from a function or module body, iff the first
+    /// statement is a string literal.
+    pub fn extract_raw_starlark_docstring(body: &AstStmt) -> Option<String> {
+        if let Stmt::Statements(stmts) = &body.node {
+            if let Some(Spanned {
+                node:
+                    Stmt::Expression(Spanned {
+                        node: Expr::Literal(AstLiteral::StringLiteral(s)),
+                        ..
+                    }),
+                ..
+            }) = stmts.first()
+            {
+                return Some(s.node.to_owned());
+            }
+        };
+        None
+    }
+
     /// Parse out a docstring from a user provided string, handling dedenting, trimming, etc.
     pub fn from_docstring(user_docstring: &str) -> Option<DocString> {
         let trimmed_docs = user_docstring.trim();

@@ -28,7 +28,7 @@ use crate::{
 use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
-use crate::syntax::ast::AstLiteral;
+use crate::values::docs::DocString;
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
 pub use runtime::{
@@ -79,7 +79,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         } = ast;
         inject_return(&mut statement);
 
-        if let Some(docstring) = Self::module_docstring(&statement) {
+        if let Some(docstring) = DocString::extract_raw_starlark_docstring(&statement) {
             self.module_env.set_docstring(docstring)
         }
 
@@ -163,25 +163,5 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             kwargs: None,
         };
         function.invoke(None, params, self)
-    }
-
-    /// If the first statement in the module is a string literal, consider that the
-    /// docstring for the module. Otherwise, assume there is no docstring. Docstrings must
-    /// go before any load statements as well.
-    fn module_docstring(module_body: &AstStmt) -> Option<String> {
-        if let Stmt::Statements(stmts) = &module_body.node {
-            if let Some(Spanned {
-                node:
-                    Stmt::Expression(Spanned {
-                        node: Expr::Literal(AstLiteral::StringLiteral(s)),
-                        ..
-                    }),
-                ..
-            }) = stmts.first()
-            {
-                return Some(s.node.to_owned());
-            }
-        };
-        None
     }
 }
