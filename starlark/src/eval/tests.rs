@@ -1654,6 +1654,63 @@ def f4(a: "string") -> "string":
     Ok(())
 }
 
+#[test]
+fn test_module_docstring_parses() {
+    use crate::values::docs::{DocItem, DocString, Module};
+
+    let m1 = assert::pass_module(
+        r#"
+"""
+This is the summary of the module's docs
+
+Some extra details can go here,
+    and indentation is kept as expected
+"""
+def f1():
+    """ This is a function summary """
+    pass
+
+# This function has no docstring
+def f2():
+    pass
+"#,
+    );
+    let m2 = assert::pass_module(
+        r#"
+x = ""
+"""
+This comes after another statement, so is not a docstring
+"""
+def f1():
+    pass
+"#,
+    );
+    let m3 = assert::pass_module(
+        r#"
+# This module has no docstring
+def f1():
+    pass
+"#,
+    );
+
+    let m1_docs = m1.documentation();
+    let m2_docs = m2.documentation();
+    let m3_docs = m3.documentation();
+
+    let expected_m1 = Some(DocItem::Module(Module {
+        docs: DocString::from_docstring(
+            r"This is the summary of the module's docs
+
+Some extra details can go here,
+    and indentation is kept as expected",
+        ),
+    }));
+
+    assert_eq!(expected_m1, m1_docs);
+    assert_eq!(None, m2_docs);
+    assert_eq!(None, m3_docs);
+}
+
 mod value_of {
     use super::*;
     use crate::{

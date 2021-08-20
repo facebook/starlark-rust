@@ -399,6 +399,16 @@ impl Assert {
         })
     }
 
+    /// A program that must execute successfully without an exception. Returns the frozen module
+    /// that `program` was evaluated in.
+    pub fn pass_module(&self, program: &str) -> FrozenModule {
+        self.with_gc(|gc| {
+            let env = Module::new();
+            self.execute_unwrap("pass", "assert.bzl", program, &env, gc);
+            env.freeze().expect("error freezing module")
+        })
+    }
+
     /// A program that must evaluate to `True`.
     ///
     /// ```
@@ -600,6 +610,11 @@ pub fn all_true(expressions: &str) {
 /// See [`Assert::pass`].
 pub fn pass(program: &str) -> OwnedFrozenValue {
     Assert::new().pass(program)
+}
+
+/// See [`Assert::pass_module`].
+pub fn pass_module(program: &str) -> FrozenModule {
+    Assert::new().pass_module(program)
 }
 
 /// See [`Assert::parse`].

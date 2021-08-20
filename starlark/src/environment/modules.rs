@@ -27,13 +27,15 @@ use crate::{
         EnvironmentError,
     },
     values::{
+        docs,
+        docs::{DocItem, DocString},
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
         StarlarkValue, Value,
     },
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
-use std::{mem, sync::Arc};
+use std::{cell::RefCell, mem, sync::Arc};
 
 /// The result of freezing a [`Module`], making it and its contained values immutable.
 ///
@@ -54,6 +56,7 @@ pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 pub(crate) struct FrozenModuleData {
     pub(crate) names: FrozenNames,
     pub(crate) slots: FrozenSlots,
+    docstring: Option<String>,
 }
 
 // When a definition is frozen, it still needs to get at some module info,
@@ -84,6 +87,7 @@ pub struct Module {
     // you can inject the wrong values in, so make sure slots aren't
     // exported.
     slots: MutableSlots<'static>,
+    docstring: RefCell<Option<String>>,
 }
 
 impl FrozenModule {
@@ -112,6 +116,10 @@ impl FrozenModule {
     /// Print out some approximation of the module definitions.
     pub fn describe(&self) -> String {
         self.1.0.describe()
+    }
+
+    pub fn documentation(&self) -> Option<DocItem> {
+        self.1.documentation()
     }
 }
 
@@ -146,6 +154,14 @@ impl FrozenModuleData {
 
 impl<'v> StarlarkValue<'v> for FrozenModuleRef {
     starlark_type!("frozen_module");
+
+    fn documentation(&self) -> Option<DocItem> {
+        self.0.docstring.as_ref().map(|d| {
+            DocItem::Module(docs::Module {
+                docs: DocString::from_docstring(d),
+            })
+        })
+    }
 }
 
 impl SimpleValue for FrozenModuleRef {}
@@ -183,6 +199,7 @@ impl Module {
             frozen_heap: FrozenHeap::new(),
             names: MutableNames::new(),
             slots: MutableSlots::new(),
+            docstring: RefCell::new(None),
         }
     }
 
@@ -218,6 +235,7 @@ impl Module {
             slots,
             frozen_heap,
             heap,
+            docstring,
         } = self;
         // This is when we do the GC/freeze, using the module slots as roots
         // Note that we even freeze anonymous slots, since they are accessed by
@@ -228,6 +246,7 @@ impl Module {
         let rest = FrozenModuleRef(Arc::new(FrozenModuleData {
             names: names.freeze(),
             slots,
+            docstring: docstring.into_inner(),
         }));
         FrozenModuleValue::set(&mut freezer, &rest);
         // The values MUST be alive up until this point (as the above line uses them),
@@ -275,6 +294,10 @@ impl Module {
             None => Err(EnvironmentError::VariableNotFound(symbol.to_owned()).into()),
             Some(v) => Ok(v.owned_value(self.frozen_heap())),
         }
+    }
+
+    pub(crate) fn set_docstring(&self, docstring: String) {
+        self.docstring.replace(Some(docstring));
     }
 }
 
