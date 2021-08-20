@@ -35,7 +35,7 @@ use crate::{
 };
 use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
-use std::{cell::RefCell, mem, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
 
 /// The result of freezing a [`Module`], making it and its contained values immutable.
 ///
@@ -70,6 +70,15 @@ pub(crate) struct FrozenModuleData {
 // Deliberately don't derive Debug, since this value often occurs in cycles,
 // and Debug printing of that would be bad.
 pub(crate) struct FrozenModuleValue(FrozenValue); // Must contain a FrozenModuleRef inside it
+
+/// Container for the documentation for a module
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModuleDocs {
+    /// The documentation for the module itself
+    pub module: Option<DocItem>,
+    /// A mapping of top level symbols to their documentation, if any.
+    pub members: HashMap<String, Option<DocItem>>,
+}
 
 /// A container for user values, used during execution.
 ///
@@ -120,6 +129,23 @@ impl FrozenModule {
 
     pub fn documentation(&self) -> Option<DocItem> {
         self.1.documentation()
+    }
+
+    /// The documentation for the module, and all of its top level values
+    ///
+    /// Returns (<module documentation>, { <symbol> : <that symbol's documentation> })
+    pub fn module_documentation(&self) -> ModuleDocs {
+        let members = self
+            .names()
+            .filter(|n| Module::is_public_symbol(n))
+            .map(|n| (n, self.get(n)))
+            .filter_map(|(n, v)| v.map(|fv| (n.to_owned(), fv.value().get_ref().documentation())))
+            .collect();
+
+        ModuleDocs {
+            module: self.documentation(),
+            members,
+        }
     }
 }
 

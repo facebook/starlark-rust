@@ -19,7 +19,7 @@ use crate::{
     self as starlark,
     assert::{self, Assert},
     collections::SmallMap,
-    environment::{Globals, GlobalsBuilder, Module},
+    environment::{Globals, GlobalsBuilder, Module, ModuleDocs},
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
@@ -1709,6 +1709,104 @@ Some extra details can go here,
     assert_eq!(expected_m1, m1_docs);
     assert_eq!(None, m2_docs);
     assert_eq!(None, m3_docs);
+}
+
+#[test]
+fn test_module_docs_return() {
+    use crate::values::docs::{DocItem, DocString, Function, Module, Return};
+
+    let m1 = assert::pass_module(
+        r#"
+"""
+This is the summary of the module's docs
+
+Some extra details can go here,
+    and indentation is kept as expected
+"""
+def f1():
+    """ This is a function summary """
+    pass
+
+# This function has no docstring
+def f2():
+    pass
+
+# This is not public, so it should not be exported in docs
+def _f3():
+    pass
+"#,
+    );
+    let m2 = assert::pass_module(
+        r#"
+x = ""
+"""
+This comes after another statement, so is not a docstring
+"""
+def f1():
+    pass
+"#,
+    );
+    let m3 = assert::pass_module(
+        r#"
+# This module has no docstring
+def f1():
+    pass
+"#,
+    );
+
+    let m1_docs = m1.module_documentation();
+    let m2_docs = m2.module_documentation();
+    let m3_docs = m3.module_documentation();
+
+    let empty_function = Some(DocItem::Function(Function {
+        docs: None,
+        params: vec![],
+        ret: Return {
+            docs: None,
+            typ: None,
+        },
+    }));
+
+    let expected_m1 = ModuleDocs {
+        module: Some(DocItem::Module(Module {
+            docs: DocString::from_docstring(
+                r"This is the summary of the module's docs
+
+Some extra details can go here,
+    and indentation is kept as expected",
+            ),
+        })),
+        members: hashmap! {
+            "f1".to_owned() => Some(DocItem::Function(Function {
+                docs: DocString::from_docstring("This is a function summary"),
+                params: vec![],
+                ret: Return {
+                    docs: None,
+                    typ: None,
+                },
+            })),
+            "f2".to_owned() => empty_function.clone(),
+        },
+    };
+
+    let expected_m2 = ModuleDocs {
+        module: None,
+        members: hashmap! {
+            "x".to_owned() => None,
+            "f1".to_owned() => empty_function.clone(),
+        },
+    };
+
+    let expected_m3 = ModuleDocs {
+        module: None,
+        members: hashmap! {
+            "f1".to_owned() => empty_function,
+        },
+    };
+
+    assert_eq!(expected_m1, m1_docs);
+    assert_eq!(expected_m2, m2_docs);
+    assert_eq!(expected_m3, m3_docs);
 }
 
 mod value_of {
