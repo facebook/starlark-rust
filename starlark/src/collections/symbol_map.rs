@@ -39,7 +39,6 @@ use crate::{
 use gazebo::coerce::Coerce;
 use hashbrown::raw::RawTable;
 use std::{
-    cmp,
     fmt::{self, Debug},
     intrinsics::copy_nonoverlapping,
     mem, slice, str,
@@ -111,7 +110,7 @@ impl Symbol {
         let small_hash = SmallHashResult::new(x);
         let hash = promote_hash(small_hash);
         let len = x.len();
-        let len8 = (len / 8) + cmp::min(1, len % 8);
+        let len8 = (len + 7) / 8;
         let mut payload = vec![0; len8]; // 0 pad it at the end
         unsafe {
             copy_nonoverlapping(x.as_ptr(), payload.as_mut_ptr() as *mut u8, len);
