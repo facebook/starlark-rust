@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use crate::collections::BorrowHashed;
 /// Deal with all aspects of runtime parameter evaluation.
 /// First build a Parameters structure, then use collect to collect the
 /// parameters into slots.
@@ -459,7 +460,10 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                         match k.key().unpack_str() {
                             None => return Err(FunctionError::ArgsValueIsNotString.into()),
                             Some(s) => {
-                                let repeat = match self.names.get_hashed_str(k.hash(), s) {
+                                let repeat = match self
+                                    .names
+                                    .get_hashed_str(BorrowHashed::new_unchecked(k.hash(), s))
+                                {
                                     None => add_kwargs(&mut kwargs, k, v),
                                     Some(i) => {
                                         let this_slot = &slots[*i];

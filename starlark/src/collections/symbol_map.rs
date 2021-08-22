@@ -33,7 +33,7 @@
 //! so we can reasonably expect to hit the smaller cases most often.
 
 use crate::{
-    collections::{idhasher::mix_u32, SmallHashResult},
+    collections::{idhasher::mix_u32, BorrowHashed, SmallHashResult},
     values::{Trace, Tracer},
 };
 use gazebo::coerce::Coerce;
@@ -162,12 +162,12 @@ impl<T> SymbolMap<T> {
     }
 
     pub fn get_str(&self, key: &str) -> Option<&T> {
-        self.get_hashed_str(SmallHashResult::new(key), key)
+        self.get_hashed_str(BorrowHashed::new(key))
     }
 
-    pub fn get_hashed_str(&self, hash: SmallHashResult, key: &str) -> Option<&T> {
+    pub fn get_hashed_str(&self, key: BorrowHashed<str>) -> Option<&T> {
         self.0
-            .get(promote_hash(hash), |x| x.0.as_str() == key)
+            .get(promote_hash(key.hash()), |x| x.0.as_str() == key.key())
             .map(|x| &x.1)
     }
 
