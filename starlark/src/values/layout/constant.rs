@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-use crate::values::layout::{arena::AValuePtr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue};
+use crate::values::{
+    layout::{arena::AValuePtr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
+    string::StarlarkStr,
+};
 use gazebo::prelude::*;
 use std::intrinsics::copy_nonoverlapping;
 
@@ -23,7 +26,7 @@ use std::intrinsics::copy_nonoverlapping;
 #[repr(C)] // Must match this layout on the heap
 pub struct ConstFrozenStringN<const N: usize> {
     vtable: AValuePtr,
-    size: usize,
+    object: StarlarkStr,
     payload: [u8; N],
 }
 
@@ -38,7 +41,7 @@ impl<const N: usize> ConstFrozenStringN<N> {
         };
         Self {
             vtable: VALUE_STR_A_VALUE_PTR,
-            size: N,
+            object: unsafe { StarlarkStr::new(N) },
             payload,
         }
     }
