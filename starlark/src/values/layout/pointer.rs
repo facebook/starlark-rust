@@ -28,7 +28,7 @@
 use either::Either;
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};
 use static_assertions::assert_eq_size;
-use std::num::NonZeroUsize;
+use std::{mem, num::NonZeroUsize};
 
 // A structure that is morally a `PointerUnpack`, but gets encoded in one
 // pointer sized lump. The two types P1 and P2 are arbitrary pointers (which we
@@ -53,6 +53,13 @@ const TAG_USER: usize = 0b100;
 unsafe fn untag_pointer<'a, T>(x: usize) -> &'a T {
     cast::usize_to_ptr(x & !TAG_BITS)
 }
+
+#[allow(clippy::unused_unit)]
+const _: () = if mem::size_of::<usize>() > mem::size_of::<i32>() {
+    ()
+} else {
+    panic!("starlark-rust requires 64 bit usize")
+};
 
 fn tag_int(x: i32) -> usize {
     ((x as isize) << 3) as usize | TAG_INT
