@@ -25,7 +25,7 @@ use crate::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::Evaluator,
-        Parameters,
+        Arguments,
     },
     syntax::ast::{
         Argument, AstArgument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility,
@@ -212,9 +212,9 @@ impl Args0Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
     ) -> Result<R, EvalException<'v>> {
-        let params = Parameters {
+        let params = Arguments {
             this,
             pos: &[],
             named: &[],
@@ -232,9 +232,9 @@ impl Args1Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
     ) -> Result<R, EvalException<'v>> {
-        let params = Parameters {
+        let params = Arguments {
             this,
             pos: &[self.0(eval)?],
             named: &[],
@@ -252,9 +252,9 @@ impl Args2Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
     ) -> Result<R, EvalException<'v>> {
-        let params = Parameters {
+        let params = Arguments {
             this,
             pos: &[self.0(eval)?, self.1(eval)?],
             named: &[],
@@ -272,7 +272,7 @@ impl ArgsCompiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Parameters<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
     ) -> Result<R, EvalException<'v>> {
         eval.alloca_uninit(self.pos_named.len(), |xs, eval| {
             // because Value has no drop, we don't need to worry about failures before assume_init
@@ -291,7 +291,7 @@ impl ArgsCompiled {
                 Some(f) => Some(f(eval)?),
             };
             let (pos, named) = &xs.split_at(xs.len() - self.names.len());
-            let params = Parameters {
+            let params = Arguments {
                 this,
                 pos,
                 named,

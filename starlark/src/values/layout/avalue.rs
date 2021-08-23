@@ -18,7 +18,7 @@
 use crate::{
     codemap::Span,
     environment::Globals,
-    eval::{Evaluator, Parameters},
+    eval::{Arguments, Evaluator},
     values::{
         docs::DocItem, layout::arena::AValuePtr, none::NoneType, string::StarlarkStr, ComplexValue,
         Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
@@ -327,10 +327,10 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
         &self,
         me: Value<'v>,
         location: Option<Span>,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.1.invoke(me, location, params, eval)
+        self.1.invoke(me, location, args, eval)
     }
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.1.at(index, heap)

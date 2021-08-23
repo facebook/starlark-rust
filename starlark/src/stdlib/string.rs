@@ -20,7 +20,7 @@
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
-    eval::Parameters,
+    eval::Arguments,
     stdlib::util::convert_indices,
     values::{
         fast_string, interpolation, list::List, none::NoneOr, string, tuple::Tuple, UnpackValue,
@@ -343,12 +343,12 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "Is {0!r} {0!s}?".format("heterological") == "Is \"heterological\" heterological?"
     /// # "#);
     /// ```
-    fn format(params: Parameters<'v, '_>) -> String {
-        let iter = params.positions(heap)?;
+    fn format(args: Arguments<'v, '_>) -> String {
+        let iter = args.positions(heap)?;
         interpolation::format(
-            params.this.unwrap().unpack_str().unwrap(),
+            args.this.unwrap().unpack_str().unwrap(),
             iter,
-            params.names()?,
+            args.names()?,
         )
     }
 

@@ -34,7 +34,7 @@ pub use crate::values::{
 use crate::{
     codemap::Span,
     collections::{Hashed, SmallHashResult},
-    eval::{Evaluator, Parameters},
+    eval::{Arguments, Evaluator},
     values::function::FUNCTION_TYPE,
 };
 use gazebo::coerce::CoerceKey;
@@ -194,10 +194,10 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
     fn invoke(
         self,
         location: Option<Span>,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.to_value().invoke(location, params, eval)
+        self.to_value().invoke(location, args, eval)
     }
 
     fn get_hash(self) -> anyhow::Result<u64> {
@@ -571,10 +571,10 @@ impl<'v> Value<'v> {
     pub fn invoke(
         self,
         location: Option<Span>,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.get_ref().invoke(self, location, params, eval)
+        self.get_ref().invoke(self, location, args, eval)
     }
 
     /// Invoke a function with only positional arguments.
@@ -584,9 +584,9 @@ impl<'v> Value<'v> {
         pos: &[Value<'v>],
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let params = Parameters {
+        let params = Arguments {
             pos,
-            ..Parameters::default()
+            ..Arguments::default()
         };
         self.invoke(location, params, eval)
     }

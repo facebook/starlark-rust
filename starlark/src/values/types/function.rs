@@ -20,7 +20,7 @@
 use crate as starlark;
 use crate::{
     codemap::Span,
-    eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
+    eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
         SimpleValue, StarlarkValue, Trace, Value, ValueLike, ValueRef,
@@ -37,7 +37,7 @@ pub const FUNCTION_TYPE: &str = "function";
 
 /// A native function that can be evaluated.
 pub trait NativeFunc:
-    for<'v> Fn(&mut Evaluator<'v, '_>, Parameters<'v, '_>) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -45,7 +45,7 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(&mut Evaluator<'v, '_>, Parameters<'v, '_>) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -90,7 +90,7 @@ impl NativeFunction {
     pub fn new_direct<F>(function: F, name: String) -> Self
     where
         // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(&mut Evaluator<'v, '_>, Parameters<'v, '_>) -> anyhow::Result<Value<'v>>
+        F: for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
             + Send
             + Sync
             + 'static,
@@ -160,11 +160,11 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         &self,
         me: Value<'v>,
         location: Option<Span>,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         eval.ann("invoke_native", |eval| {
-            eval.with_call_stack(me, location, |eval| (self.function)(eval, params))
+            eval.with_call_stack(me, location, |eval| (self.function)(eval, args))
         })
     }
 
@@ -228,12 +228,12 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
         &self,
         _me: Value<'v>,
         location: Option<Span>,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         // If someone tries to invoke us with a this, first unwind the call, then continue onwards
-        let me = self.call(params.this.unwrap(), eval)?;
-        me.invoke(location, params, eval)
+        let me = self.call(args.this.unwrap(), eval)?;
+        me.invoke(location, args, eval)
     }
 }
 
@@ -279,10 +279,10 @@ where
         &self,
         _me: Value<'v>,
         location: Option<Span>,
-        mut params: Parameters<'v, '_>,
+        mut args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        params.this = Some(self.this.to_value());
-        self.method.invoke(location, params, eval)
+        args.this = Some(self.this.to_value());
+        self.method.invoke(location, args, eval)
     }
 }

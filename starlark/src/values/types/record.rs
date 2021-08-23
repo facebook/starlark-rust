@@ -45,7 +45,7 @@ use crate as starlark;
 use crate::{
     codemap::Span,
     collections::SmallMap,
-    eval::{Evaluator, Parameters, ParametersParser, ParametersSpec},
+    eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
@@ -287,11 +287,11 @@ where
         &self,
         me: Value<'v>,
         location: Option<Span>,
-        mut params: Parameters<'v, '_>,
+        mut args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        params.this = Some(me);
-        self.constructor.invoke(location, params, eval)
+        args.this = Some(me);
+        self.constructor.invoke(location, args, eval)
     }
 
     fn dir_attr(&self) -> Vec<String> {

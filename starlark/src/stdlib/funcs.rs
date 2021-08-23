@@ -22,7 +22,7 @@ use crate::{
     self as starlark,
     collections::SmallMap,
     environment::GlobalsBuilder,
-    eval::Parameters,
+    eval::Arguments,
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
@@ -235,15 +235,15 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark_type(Dict::TYPE)]
-    fn dict(params: Parameters<'v, '_>) -> Dict<'v> {
+    fn dict(args: Arguments<'v, '_>) -> Dict<'v> {
         // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
         // In particular, we don't generate the kwargs if there are no positional arguments.
-        // Therefore we make it take the raw Parameters.
+        // Therefore we make it take the raw Arguments.
         // It might have one positional argument, which could be a dict or an array of pairs.
         // It might have named/kwargs arguments, which we copy over (afterwards).
 
-        let pos = params.optional1(heap)?;
-        let kwargs = params.names()?;
+        let pos = args.optional1(heap)?;
+        let kwargs = args.names()?;
 
         match pos {
             None => Ok(kwargs),

@@ -19,17 +19,17 @@
 use crate as starlark;
 use crate::{
     environment::GlobalsBuilder,
-    eval::Parameters,
+    eval::Arguments,
     values::{structs::Struct, Value, ValueLike},
 };
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
     #[starlark_type(Struct::TYPE)]
-    fn r#struct(params: Parameters<'v, '_>) -> Struct<'v> {
-        params.no_positional_args(heap)?;
+    fn r#struct(args: Arguments<'v, '_>) -> Struct<'v> {
+        args.no_positional_args(heap)?;
         Ok(Struct {
-            fields: params.names()?.content,
+            fields: args.names()?.content,
         })
     }
 }

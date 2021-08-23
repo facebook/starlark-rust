@@ -111,7 +111,7 @@ impl StarFun {
             !x.by_ref || x.is_args() || x.is_kwargs() || (x.is_value() && x.default.is_some())
         }
 
-        if self.args.len() == 1 && self.args[0].is_parameters() {
+        if self.args.len() == 1 && self.args[0].is_arguments() {
             self.args[0].source = StarArgSource::Parameters;
             self.source = StarFunSource::Parameters;
         } else {
@@ -154,8 +154,8 @@ impl StarFun {
 }
 
 impl StarArg {
-    pub fn is_parameters(&self) -> bool {
-        is_type_name(&self.ty, "Parameters")
+    pub fn is_arguments(&self) -> bool {
+        is_type_name(&self.ty, "Arguments")
     }
 
     pub fn is_option(&self) -> bool {

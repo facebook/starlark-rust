@@ -317,24 +317,24 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         self.kinds.len()
     }
 
-    /// Move parameters from [`Parameters`] to a list of [`Value`],
+    /// Move parameters from [`Arguments`] to a list of [`Value`],
     /// using the supplied [`ParametersSpec`].
     pub fn collect(
         &self,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
-        self.collect_inline(params, coerce(slots), heap)
+        self.collect_inline(args, coerce(slots), heap)
     }
 
     pub fn collect_into<const N: usize>(
         &self,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         heap: &'v Heap,
     ) -> anyhow::Result<[Cell<Option<Value<'v>>>; N]> {
         let slots = [(); N].map(|_| Cell::new(None));
-        self.collect(params, &slots, heap)?;
+        self.collect(args, &slots, heap)?;
         Ok(slots)
     }
 
@@ -343,7 +343,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     #[inline(always)]
     pub(crate) fn collect_inline(
         &self,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         slots: &[ValueRef<'v>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -370,35 +370,35 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // We might do unchecked stuff later on, so make sure we have as many slots as we expect
         assert!(slots.len() >= len);
 
-        let mut args = Vec::new();
+        let mut star_args = Vec::new();
         let mut kwargs = None;
         let mut next_position = 0;
 
         // First deal with positional parameters
-        if params.pos.len() <= self.positional {
+        if args.pos.len() <= self.positional {
             // fast path for when we don't need to bounce down to filling in args
-            for (v, s) in params.pos.iter().zip(slots.iter()) {
+            for (v, s) in args.pos.iter().zip(slots.iter()) {
                 s.set_direct(*v);
             }
-            if params.pos.len() == self.positional
-                && params.pos.len() == self.kinds.len()
-                && params.named.is_empty()
-                && params.args.is_none()
-                && params.kwargs.is_none()
+            if args.pos.len() == self.positional
+                && args.pos.len() == self.kinds.len()
+                && args.named.is_empty()
+                && args.args.is_none()
+                && args.kwargs.is_none()
             {
                 // If the arguments equal the length and the kinds, and we don't have any other args,
                 // then no_args, *args and **kwargs must all be unset,
                 // and we don't have to crate args/kwargs objects, we can skip everything else
                 return Ok(());
             }
-            next_position = params.pos.len();
+            next_position = args.pos.len();
         } else {
-            for v in params.pos {
+            for v in args.pos {
                 if next_position < self.positional {
                     slots[next_position].set_direct(*v);
                     next_position += 1;
                 } else {
-                    args.push(*v);
+                    star_args.push(*v);
                 }
             }
         }
@@ -409,8 +409,8 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // So no duplicate checking until after all positional arguments
         let mut lowest_name = usize::MAX;
         // Avoid a lot of loop setup etc in the common case
-        if !params.names.is_empty() {
-            for ((name, name_value), v) in params.names.iter().zip(params.named) {
+        if !args.names.is_empty() {
+            for ((name, name_value), v) in args.names.iter().zip(args.named) {
                 // Safe to use new_unchecked because hash for the Value and str are the same
                 match self.names.get(name) {
                     None => {
@@ -429,7 +429,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         // Next up are the *args parameters
-        if let Some(param_args) = params.args {
+        if let Some(param_args) = args.args {
             param_args
                 .with_iterator(heap, |it| {
                     for v in it {
@@ -437,7 +437,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                             slots[next_position].set_direct(v);
                             next_position += 1;
                         } else {
-                            args.push(v);
+                            star_args.push(v);
                         }
                     }
                 })
@@ -453,7 +453,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         // Now insert the kwargs, if there are any
-        if let Some(param_kwargs) = params.kwargs {
+        if let Some(param_kwargs) = args.kwargs {
             match Dict::from_value(param_kwargs) {
                 Some(y) => {
                     for (k, v) in y.iter_hashed() {
@@ -519,10 +519,10 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // Note that we deliberately give warnings about missing parameters _before_ giving warnings
         // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
         if let Some(args_pos) = self.args {
-            slots[args_pos].set_direct(heap.alloc(Tuple::new(args)));
-        } else if !args.is_empty() {
+            slots[args_pos].set_direct(heap.alloc(Tuple::new(star_args)));
+        } else if !star_args.is_empty() {
             return Err(FunctionError::ExtraPositionalParameters {
-                count: args.len(),
+                count: star_args.len(),
                 function: self.signature(),
             }
             .into());
@@ -614,7 +614,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 }
 
 #[derive(Default, Clone, Copy, Dupe)]
-pub struct Parameters<'v, 'a> {
+pub struct Arguments<'v, 'a> {
     pub this: Option<Value<'v>>,
     pub pos: &'a [Value<'v>],
     pub named: &'a [Value<'v>],
@@ -623,7 +623,7 @@ pub struct Parameters<'v, 'a> {
     pub kwargs: Option<Value<'v>>,
 }
 
-impl<'v, 'a> Parameters<'v, 'a> {
+impl<'v, 'a> Arguments<'v, 'a> {
     /// Unwrap all named parameters into a dictionary,
     pub fn names(&self) -> anyhow::Result<Dict<'v>> {
         match self.unpack_kwargs()? {
@@ -637,7 +637,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
             Some(kwargs) => {
                 if self.names.is_empty() {
                     for k in kwargs.content.keys() {
-                        Parameters::unpack_kwargs_key(*k)?;
+                        Arguments::unpack_kwargs_key(*k)?;
                     }
                     Ok(kwargs.clone())
                 } else {
@@ -648,7 +648,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
                         result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
                     }
                     for (k, v) in kwargs.iter_hashed() {
-                        let s = Parameters::unpack_kwargs_key(*k.key())?;
+                        let s = Arguments::unpack_kwargs_key(*k.key())?;
                         let old = result.insert_hashed(k, v);
                         if old.is_some() {
                             return Err(
@@ -710,13 +710,13 @@ impl<'v, 'a> Parameters<'v, 'a> {
     pub fn no_named_args(&self) -> anyhow::Result<()> {
         #[cold]
         #[inline(never)]
-        fn bad(x: &Parameters) -> anyhow::Result<()> {
+        fn bad(x: &Arguments) -> anyhow::Result<()> {
             // We might have a empty kwargs dictionary, but probably have an error
             let mut extra = Vec::new();
             extra.extend(x.names.iter().map(|x| x.0.as_str().to_owned()));
             if let Some(kwargs) = x.unpack_kwargs()? {
                 for k in kwargs.content.keys() {
-                    extra.push(Parameters::unpack_kwargs_key(*k)?.to_owned());
+                    extra.push(Arguments::unpack_kwargs_key(*k)?.to_owned());
                 }
             }
             if extra.is_empty() {
@@ -738,14 +738,14 @@ impl<'v, 'a> Parameters<'v, 'a> {
         }
     }
 
-    /// Collect exactly `N` positional arguments from the [`Parameters`], failing if there are too many/few
+    /// Collect exactly `N` positional arguments from the [`Arguments`], failing if there are too many/few
     /// arguments. Ignores named arguments.
     #[inline(always)]
     pub fn positional<const N: usize>(&self, heap: &'v Heap) -> anyhow::Result<[Value<'v>; N]> {
         #[cold]
         #[inline(never)]
         fn rare<'v, const N: usize>(
-            x: &Parameters<'v, '_>,
+            x: &Arguments<'v, '_>,
             heap: &'v Heap,
         ) -> anyhow::Result<[Value<'v>; N]> {
             // Very sad that we allocate into a vector, but I expect calling into a small positional argument
@@ -771,7 +771,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
     }
 
     /// Collect exactly `REQUIRED` positional arguments, plus at most `OPTIONAL` positional arguments
-    /// from the [`Parameters`], failing if there are too many/few arguments. Ignores named arguments.
+    /// from the [`Arguments`], failing if there are too many/few arguments. Ignores named arguments.
     /// The `OPTIONAL` array will never have a [`Some`] after a [`None`].
     #[inline(always)]
     pub fn optional<const REQUIRED: usize, const OPTIONAL: usize>(
@@ -781,7 +781,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
         #[cold]
         #[inline(never)]
         fn rare<'v, const REQUIRED: usize, const OPTIONAL: usize>(
-            x: &Parameters<'v, '_>,
+            x: &Arguments<'v, '_>,
             heap: &'v Heap,
         ) -> anyhow::Result<([Value<'v>; REQUIRED], [Option<Value<'v>>; OPTIONAL])> {
             // Very sad that we allocate into a vector, but I expect calling into a small positional argument
@@ -821,7 +821,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
         }
     }
 
-    /// Collect 1 positional arguments from the [`Parameters`], failing if there are too many/few
+    /// Collect 1 positional arguments from the [`Arguments`], failing if there are too many/few
     /// arguments. Ignores named arguments.
     #[inline(always)]
     pub fn positional1(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -830,7 +830,7 @@ impl<'v, 'a> Parameters<'v, 'a> {
         Ok(x)
     }
 
-    /// Collect up to 1 optional arguments from the [`Parameters`], failing if there are too many
+    /// Collect up to 1 optional arguments from the [`Arguments`], failing if there are too many
     /// arguments. Ignores named arguments.
     #[inline(always)]
     pub fn optional1(&self, heap: &'v Heap) -> anyhow::Result<Option<Value<'v>>> {
@@ -845,7 +845,7 @@ fn named_err<T>(name: &str, x: Option<T>) -> anyhow::Result<T> {
     x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
 }
 
-impl Parameters<'_, '_> {
+impl Arguments<'_, '_> {
     /// Utility for checking a `this` parameter matches what you expect.
     pub fn check_this<'v, T: UnpackValue<'v>>(this: Option<Value<'v>>) -> anyhow::Result<T> {
         named_err("this", this.and_then(T::unpack_value))
@@ -878,9 +878,9 @@ mod test {
     #[test]
     fn test_parameter_unpack() {
         let heap = Heap::new();
-        fn f<'v, F: Fn(&Parameters<'v, '_>), const N: usize>(heap: &'v Heap, op: F) {
+        fn f<'v, F: Fn(&Arguments<'v, '_>), const N: usize>(heap: &'v Heap, op: F) {
             for i in 0..=N {
-                let mut p = Parameters::default();
+                let mut p = Arguments::default();
                 let pos = (0..i).map(|x| Value::new_int(x as i32)).collect::<Vec<_>>();
                 let args = (i..N).map(|x| Value::new_int(x as i32)).collect::<Vec<_>>();
                 let empty_args = args.is_empty();
@@ -949,7 +949,7 @@ mod test {
     #[test]
     fn test_parameter_no_named() {
         let heap = Heap::new();
-        let mut p = Parameters::default();
+        let mut p = Arguments::default();
         assert!(p.no_named_args().is_ok());
 
         // Test lots of forms of kwargs work properly

@@ -131,13 +131,13 @@ fn render_fun(x: StarFun) -> TokenStream {
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v>(
             eval: &mut starlark::eval::Evaluator<'v, '_>,
-            parameters: starlark::eval::Parameters<'v, '_>,
+            parameters: starlark::eval::Arguments<'v, '_>,
             #signature_arg
         ) -> anyhow::Result<starlark::values::Value<'v>> {
                 fn inner<'v>(
                 #[allow(unused_variables)]
                 eval: &mut starlark::eval::Evaluator<'v, '_>,
-                __parameters: starlark::eval::Parameters<'v, '_>,
+                __args: starlark::eval::Arguments<'v, '_>,
                 #signature_arg
             ) -> anyhow::Result<#return_type> {
                 #[allow(unused_variables)]
@@ -165,7 +165,7 @@ fn render_fun(x: StarFun) -> TokenStream {
     }
 }
 
-// Given __parameters and __signature (if render_signature was Some)
+// Given __args and __signature (if render_signature was Some)
 // create bindings for all the arguments
 fn render_binding(x: &StarFun) -> TokenStream {
     match x.source {
@@ -179,13 +179,13 @@ fn render_binding(x: &StarFun) -> TokenStream {
                 default: _,
                 source: _,
             } = &x.args[0];
-            quote! { #( #attrs )* let #name : #ty = __parameters; }
+            quote! { #( #attrs )* let #name : #ty = __args; }
         }
         StarFunSource::Argument(arg_count) => {
             let bind_args = x.args.map(render_binding_arg);
             quote! {
-                let __this = __parameters.this;
-                let __args: [_; #arg_count] = __signature.collect_into(__parameters, eval.heap())?;
+                let __this = __args.this;
+                let __args: [_; #arg_count] = __signature.collect_into(__args, eval.heap())?;
                 #( #bind_args )*
             }
         }
@@ -193,16 +193,16 @@ fn render_binding(x: &StarFun) -> TokenStream {
             let bind_args = x.args.map(render_binding_arg);
             if optional == 0 {
                 quote! {
-                    let __this = __parameters.this;
-                    __parameters.no_named_args()?;
-                    let __required: [_; #required] = __parameters.positional(eval.heap())?;
+                    let __this = __args.this;
+                    __args.no_named_args()?;
+                    let __required: [_; #required] = __args.positional(eval.heap())?;
                     #( #bind_args )*
                 }
             } else {
                 quote! {
-                    let __this = __parameters.this;
-                    __parameters.no_named_args()?;
-                    let (__required, __optional): ([_; #required], [_; #optional]) = __parameters.optional(eval.heap())?;
+                    let __this = __args.this;
+                    __args.no_named_args()?;
+                    let (__required, __optional): ([_; #required], [_; #optional]) = __args.optional(eval.heap())?;
                     #( #bind_args )*
                 }
             }
@@ -227,22 +227,22 @@ fn render_binding_arg(arg: &StarArg) -> TokenStream {
 
     // Rust doesn't have powerful enough nested if yet
     let next = if arg.is_this() {
-        quote! { starlark::eval::Parameters::check_this(#source)? }
+        quote! { starlark::eval::Arguments::check_this(#source)? }
     } else if arg.is_option() {
         assert!(
             arg.default.is_none(),
             "Can't have Option argument with a default, for `{}`",
             name_str
         );
-        quote! { starlark::eval::Parameters::check_optional(#name_str, #source)? }
+        quote! { starlark::eval::Arguments::check_optional(#name_str, #source)? }
     } else if !arg.is_value() && arg.default.is_some() {
         let default = arg
             .default
             .as_ref()
             .unwrap_or_else(|| unreachable!("Checked on the line above"));
-        quote! { starlark::eval::Parameters::check_optional(#name_str, #source)?.unwrap_or(#default) }
+        quote! { starlark::eval::Arguments::check_optional(#name_str, #source)?.unwrap_or(#default) }
     } else {
-        quote! { starlark::eval::Parameters::check_required(#name_str, #source)? }
+        quote! { starlark::eval::Arguments::check_required(#name_str, #source)? }
     };
 
     let mutability = mut_token(arg.mutable);

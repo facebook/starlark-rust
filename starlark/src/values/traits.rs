@@ -32,7 +32,7 @@ use crate::{
     codemap::Span,
     collections::SmallMap,
     environment::Globals,
-    eval::{Evaluator, Parameters},
+    eval::{Arguments, Evaluator},
     values::{
         docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenValue, Heap, Tracer,
         Value, ValueError,
@@ -456,7 +456,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         &self,
         _me: Value<'v>,
         _location: Option<Span>,
-        _params: Parameters<'v, '_>,
+        _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported(self, "call()")

@@ -32,9 +32,9 @@ use crate::values::docs::DocString;
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
 pub use runtime::{
+    arguments::{Arguments, ParametersParser, ParametersSpec},
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
-    parameters::{Parameters, ParametersParser, ParametersSpec},
 };
 
 mod compiler;
@@ -154,7 +154,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ) -> anyhow::Result<Value<'v>> {
         let names = named.map(|(s, _)| (Symbol::new(*s), self.heap().alloc(*s)));
         let named = named.map(|x| x.1);
-        let params = Parameters {
+        let params = Arguments {
             this: None,
             pos: positional,
             named: &named,

@@ -20,7 +20,7 @@ use crate::{
     codemap::Span,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
-    eval::{Evaluator, Parameters, ParametersSpec},
+    eval::{Arguments, Evaluator, ParametersSpec},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
         ComplexValue, Freezer, StarlarkValue, Trace, Value, ValueLike,
@@ -182,7 +182,7 @@ where
         &self,
         _me: Value<'v>,
         location: Option<Span>,
-        params: Parameters<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         // apply the partial arguments first, then the remaining arguments I was given
@@ -191,13 +191,13 @@ where
         let self_named = coerce_ref(&self.named);
         let self_names = coerce_ref(&self.names);
 
-        let params = Parameters {
-            this: params.this,
-            pos: &[self_pos, params.pos].concat(),
-            named: &[self_named, params.named].concat(),
-            names: &[self_names, params.names].concat(),
-            args: params.args,
-            kwargs: params.kwargs,
+        let params = Arguments {
+            this: args.this,
+            pos: &[self_pos, args.pos].concat(),
+            named: &[self_named, args.named].concat(),
+            names: &[self_names, args.names].concat(),
+            args: args.args,
+            kwargs: args.kwargs,
         };
         self.func.invoke(location, params, eval)
     }

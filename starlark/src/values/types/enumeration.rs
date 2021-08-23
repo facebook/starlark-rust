@@ -38,7 +38,7 @@ use crate as starlark;
 use crate::{
     codemap::Span,
     collections::SmallMap,
-    eval::{Evaluator, Parameters},
+    eval::{Arguments, Evaluator},
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
@@ -214,11 +214,11 @@ where
         &self,
         me: Value<'v>,
         location: Option<Span>,
-        mut params: Parameters<'v, '_>,
+        mut args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        params.this = Some(me);
-        self.constructor.invoke(location, params, eval)
+        args.this = Some(me);
+        self.constructor.invoke(location, args, eval)
     }
 
     fn length(&self) -> anyhow::Result<i32> {
