@@ -615,16 +615,26 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 
 #[derive(Default, Clone, Copy, Dupe)]
 pub struct Arguments<'v, 'a> {
+    /// This argument, used in method calls.
     pub this: Option<Value<'v>>,
+    /// Positional arguments.
     pub pos: &'a [Value<'v>],
+    /// Named arguments.
     pub named: &'a [Value<'v>],
+    /// Names of named arguments.
+    ///
+    /// `named` length must be equal to `names` length.
     pub names: &'a [(Symbol, Value<'v>)],
+    /// `*args` argument.
     pub args: Option<Value<'v>>,
+    /// `**kwargs` argument.
     pub kwargs: Option<Value<'v>>,
 }
 
 impl<'v, 'a> Arguments<'v, 'a> {
-    /// Unwrap all named parameters into a dictionary,
+    /// Unwrap all named arguments (both explicit and in `**kwargs`) into a dictionary.
+    ///
+    /// This operation fails if named argument names are not unique.
     pub fn names(&self) -> anyhow::Result<Dict<'v>> {
         match self.unpack_kwargs()? {
             None => {
@@ -662,7 +672,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
         }
     }
 
-    /// Unpack all positional parameters into an iterator,
+    /// Unpack all positional parameters into an iterator.
     pub fn positions<'b>(
         &'b self,
         heap: &'v Heap,

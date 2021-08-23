@@ -164,6 +164,10 @@ impl Expr {
 #[derive(Default)]
 struct ArgsCompiled {
     pos_named: Vec<ExprCompiled>,
+    /// Named arguments compiled.
+    ///
+    /// Note names are guaranteed to be unique here because names are validated in AST:
+    /// named arguments in [`Expr::Call`] are unique.
     names: Vec<(Symbol, FrozenValue)>,
     args: Option<ExprCompiled>,
     kwargs: Option<ExprCompiled>,
