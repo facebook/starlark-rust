@@ -318,6 +318,10 @@ impl<K, V> MapHolder<K, V> {
             }
         }
     }
+
+    fn with_capacity_largest_vec() -> Self {
+        MapHolder::Vec(VecMap::with_largest_capacity())
+    }
 }
 
 impl<K, V> Default for MapHolder<K, V> {
@@ -360,6 +364,13 @@ impl<K, V> SmallMap<K, V> {
     pub fn with_capacity(n: usize) -> Self {
         Self {
             state: MapHolder::with_capacity(n),
+        }
+    }
+
+    /// Create with largest capacity which is represented by `Vec`.
+    pub(crate) fn with_capacity_largest_vec() -> Self {
+        Self {
+            state: MapHolder::with_capacity_largest_vec(),
         }
     }
 

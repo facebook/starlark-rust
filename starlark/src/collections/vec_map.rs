@@ -308,6 +308,14 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
+    /// Create `VecMap` with largest capacity it can hold.
+    pub fn with_largest_capacity() -> Self {
+        Self {
+            hashes: [SmallHashResult::default(); THRESHOLD],
+            values: Vec::with_capacity(THRESHOLD),
+        }
+    }
+
     pub fn try_reserve(&mut self, additional: usize) -> bool {
         if additional > THRESHOLD.wrapping_sub(self.len()) {
             false

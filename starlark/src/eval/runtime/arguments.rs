@@ -356,8 +356,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         ) -> bool {
             match kwargs {
                 None => {
-                    // pick 11 as its the largest Vec we might need, but not yet a SmallMap
-                    let mut mp = SmallMap::with_capacity(11);
+                    let mut mp = SmallMap::with_capacity_largest_vec();
                     mp.insert_hashed(key, val);
                     *kwargs = Some(box Dict::new(mp));
                     false
