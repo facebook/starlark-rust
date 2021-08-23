@@ -351,6 +351,7 @@
 #![feature(const_mut_refs)]
 #![feature(const_panic)]
 #![feature(const_ptr_offset)]
+#![feature(const_refs_to_cell)]
 #![feature(core_intrinsics)]
 #![feature(hash_set_entry)]
 #![feature(iter_advance_by)]

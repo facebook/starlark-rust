@@ -36,6 +36,7 @@ use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
     slice, str,
+    sync::atomic,
 };
 
 /// The result of calling `type()` on strings.
@@ -47,6 +48,11 @@ pub const STRING_TYPE: &str = "string";
 #[repr(C)] // We want the body to come after len
 pub struct StarlarkStr {
     len: usize,
+    // Lazily-initialized cached hash code.
+    // TODO(nga): when this field added, Starlark memory consumption
+    //   increased by approximately 0.7%. So if we could change
+    //   both `hash` and `len` fields to 32-bit, we would save 0.7% memory.
+    hash: atomic::AtomicU64,
     // Followed by an unsized block, meaning this type is unsized.
     // But we can't mark it as such since we really want &StarlarkStr to
     // take up only one word.
@@ -62,7 +68,11 @@ impl Debug for StarlarkStr {
 impl StarlarkStr {
     /// Unsafe because if you do `unpack` on this it will blow up
     pub(crate) const unsafe fn new(len: usize) -> Self {
-        Self { len, body: () }
+        Self {
+            len,
+            hash: atomic::AtomicU64::new(0),
+            body: (),
+        }
     }
 
     pub fn unpack(&self) -> &str {
@@ -214,9 +224,18 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = DefaultHasher::new();
-        hash_string_value(self.unpack(), &mut s);
-        Ok(s.finish())
+        // Note relaxed load and store are practically non-locking memory operations.
+        let hash = self.hash.load(atomic::Ordering::Relaxed);
+        if hash != 0 {
+            Ok(hash)
+        } else {
+            let mut s = DefaultHasher::new();
+            hash_string_value(self.unpack(), &mut s);
+            let hash = s.finish();
+            // If hash is zero, we are unlucky, but it is highly improbable.
+            self.hash.store(hash, atomic::Ordering::Relaxed);
+            Ok(hash)
+        }
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
@@ -457,7 +476,7 @@ impl<'v> ComplexValue<'v> for StringIterator<'v> {
 mod tests {
     use crate::{
         assert,
-        values::{index::apply_slice, Heap, Value},
+        values::{index::apply_slice, Heap, Value, ValueLike},
     };
 
     const EXAMPLES: &[&str] = &[
@@ -482,6 +501,13 @@ mod tests {
                 heap.alloc(*x).get_hashed().unwrap().hash()
             );
         }
+    }
+
+    // If hash was zero, we'd need to mask the value in the hash cache.
+    #[test]
+    fn test_zero_length_string_hash_is_not_zero() {
+        let heap = Heap::new();
+        assert_ne!(0, heap.alloc("").get_hash().unwrap());
     }
 
     #[test]

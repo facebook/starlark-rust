@@ -55,9 +55,11 @@ pub(crate) static VALUE_TRUE: &AValuePtr = {
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValuePtr = {
+    #[allow(clippy::declare_interior_mutable_const)]
     const VTABLE: Wrapper<Direct, StarlarkStr> = Wrapper(Direct, unsafe { StarlarkStr::new(0) });
-    const DYN: &dyn AValue<'static> = &VTABLE;
-    AValuePtr(metadata(DYN))
+    AValuePtr(metadata(
+        &VTABLE as *const Wrapper<Direct, StarlarkStr> as *const dyn AValue<'static>,
+    ))
 };
 
 /// A trait that covers [`StarlarkValue`].
