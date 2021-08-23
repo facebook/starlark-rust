@@ -62,10 +62,13 @@ const _: () = if mem::size_of::<usize>() > mem::size_of::<i32>() {
 };
 
 fn tag_int(x: i32) -> usize {
-    ((x as isize) << 3) as usize | TAG_INT
+    ((x as u32 as usize) << 3) | TAG_INT
 }
 
 fn untag_int(x: usize) -> i32 {
+    const INT_DATA_MASK: usize = 0xffffffff << 3;
+    debug_assert!(x & !INT_DATA_MASK == TAG_INT);
+
     ((x as isize) >> 3) as i32
 }
 
