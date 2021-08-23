@@ -19,7 +19,7 @@
 
 use crate as starlark;
 use crate::{
-    collections::SmallHashResult,
+    collections::{BorrowHashed, SmallHashResult},
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
@@ -80,6 +80,28 @@ impl StarlarkStr {
             let slice = slice::from_raw_parts(&self.body as *const () as *const u8, self.len);
             str::from_utf8_unchecked(slice)
         }
+    }
+
+    fn get_hash_64(&self) -> u64 {
+        // Note relaxed load and store are practically non-locking memory operations.
+        let hash = self.hash.load(atomic::Ordering::Relaxed);
+        if hash != 0 {
+            hash
+        } else {
+            let mut s = DefaultHasher::new();
+            hash_string_value(self.unpack(), &mut s);
+            let hash = s.finish();
+            // If hash is zero, we are unlucky, but it is highly improbable.
+            self.hash.store(hash, atomic::Ordering::Relaxed);
+            hash
+        }
+    }
+
+    pub fn as_str_hashed(&self) -> BorrowHashed<str> {
+        BorrowHashed::new_unchecked(
+            SmallHashResult::new_unchecked(self.get_hash_64()),
+            self.unpack(),
+        )
     }
 
     pub fn len(&self) -> usize {
@@ -224,18 +246,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        // Note relaxed load and store are practically non-locking memory operations.
-        let hash = self.hash.load(atomic::Ordering::Relaxed);
-        if hash != 0 {
-            Ok(hash)
-        } else {
-            let mut s = DefaultHasher::new();
-            hash_string_value(self.unpack(), &mut s);
-            let hash = s.finish();
-            // If hash is zero, we are unlucky, but it is highly improbable.
-            self.hash.store(hash, atomic::Ordering::Relaxed);
-            Ok(hash)
-        }
+        Ok(self.get_hash_64())
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {

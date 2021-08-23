@@ -78,9 +78,9 @@ pub fn partial(builder: &mut GlobalsBuilder) {
             .keys()
             .map(|x| {
                 (
-                    // We throw away the hash and recompute it.
+                    // We duplicate string here.
                     // If this becomes hot, we should do better.
-                    Symbol::new(x.unpack_str().unwrap()),
+                    Symbol::new_hashed(x.unpack_starlark_str().unwrap().as_str_hashed()),
                     *x,
                 )
             })

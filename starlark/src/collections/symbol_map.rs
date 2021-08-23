@@ -107,13 +107,17 @@ impl Eq for Symbol {}
 
 impl Symbol {
     pub fn new(x: &str) -> Self {
-        let small_hash = SmallHashResult::new(x);
+        Self::new_hashed(BorrowHashed::new(x))
+    }
+
+    pub fn new_hashed(x: BorrowHashed<str>) -> Self {
+        let small_hash = x.hash();
         let hash = promote_hash(small_hash);
-        let len = x.len();
+        let len = x.key().len();
         let len8 = (len + 7) / 8;
         let mut payload = vec![0; len8]; // 0 pad it at the end
         unsafe {
-            copy_nonoverlapping(x.as_ptr(), payload.as_mut_ptr() as *mut u8, len);
+            copy_nonoverlapping(x.key().as_ptr(), payload.as_mut_ptr() as *mut u8, len);
         }
         Self {
             hash,
