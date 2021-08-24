@@ -40,7 +40,7 @@ use crate::{
 use gazebo::coerce::CoerceKey;
 pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
-pub use starlark_module::Trace;
+pub use starlark_module::{starlark_attrs, StarlarkAttrs, Trace};
 use std::{
     cmp::Ordering,
     fmt,
