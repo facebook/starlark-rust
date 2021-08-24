@@ -49,14 +49,14 @@ pub(crate) struct Arena {
 
 #[doc(hidden)] // Appears in a trait, but don't want it to
 #[repr(transparent)]
-pub struct AValuePtr(pub(crate) DynMetadata<dyn AValue<'static>>);
+pub struct AValueHeader(pub(crate) DynMetadata<dyn AValue<'static>>);
 
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
 pub(crate) struct Reservation<'v> {
-    typ: TypeId,                   // The type of T
-    pointer: *mut (AValuePtr, ()), // Secretly (AValuePtr, T)
+    typ: TypeId,                      // The type of T
+    pointer: *mut (AValueHeader, ()), // Secretly (AValuePtr, T)
     phantom: PhantomData<&'v ()>,
 }
 
@@ -64,12 +64,12 @@ impl<'v> Reservation<'v> {
     pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
         assert_eq!(self.typ, T::static_type_id());
         unsafe {
-            let p = self.pointer as *mut (AValuePtr, T);
-            ptr::write(p, (AValuePtr::new(&x), x));
+            let p = self.pointer as *mut (AValueHeader, T);
+            ptr::write(p, (AValueHeader::new(&x), x));
         }
     }
 
-    pub(crate) fn ptr(&self) -> &'v AValuePtr {
+    pub(crate) fn ptr(&self) -> &'v AValueHeader {
         unsafe { &(*self.pointer).0 }
     }
 }
@@ -87,20 +87,20 @@ impl Arena {
     fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
         bump: &'v Bump,
         extra: usize,
-    ) -> *mut (AValuePtr, T) {
+    ) -> *mut (AValueHeader, T) {
         assert!(
-            mem::align_of::<T>() <= mem::align_of::<AValuePtr>(),
+            mem::align_of::<T>() <= mem::align_of::<AValueHeader>(),
             "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
             std::any::type_name::<T>(),
             mem::align_of::<T>(),
-            mem::align_of::<AValuePtr>()
+            mem::align_of::<AValueHeader>()
         );
         // We require at least usize space available for overwrite/blackhole
-        let size = mem::size_of::<AValuePtr>()
+        let size = mem::size_of::<AValueHeader>()
             + cmp::max(mem::size_of::<T>() + extra, mem::size_of::<usize>());
-        let layout = Layout::from_size_align(size, mem::align_of::<AValuePtr>()).unwrap();
+        let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout);
-        p.as_ptr() as *mut (AValuePtr, T)
+        p.as_ptr() as *mut (AValueHeader, T)
     }
 
     // Reservation should really be an incremental type
@@ -111,21 +111,24 @@ impl Arena {
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
         let x = BlackHole(mem::size_of::<T>());
         unsafe {
-            ptr::write(p as *mut (AValuePtr, BlackHole), (AValuePtr::new(&x), x))
+            ptr::write(
+                p as *mut (AValueHeader, BlackHole),
+                (AValueHeader::new(&x), x),
+            )
         };
 
         Reservation {
             typ: T::static_type_id(),
-            pointer: p as *mut (AValuePtr, ()),
+            pointer: p as *mut (AValueHeader, ()),
             phantom: PhantomData,
         }
     }
 
     /// Allocate a type `T`.
-    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValuePtr {
+    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValueHeader {
         let p = Self::alloc_empty::<T>(&self.drop, 0);
         unsafe {
-            ptr::write(p, (AValuePtr::new(&x), x));
+            ptr::write(p, (AValueHeader::new(&x), x));
             &(*p).0
         }
     }
@@ -137,15 +140,15 @@ impl Arena {
         &'v self,
         x: T,
         extra: usize,
-    ) -> &'v AValuePtr {
+    ) -> &'v AValueHeader {
         let p = Self::alloc_empty::<T>(&self.non_drop, extra);
         unsafe {
-            ptr::write(p, (AValuePtr::new(&x), x));
+            ptr::write(p, (AValueHeader::new(&x), x));
             &(*p).0
         }
     }
 
-    fn iter_chunk<'a>(chunk: &'a [MaybeUninit<u8>], mut f: impl FnMut(&'a AValuePtr)) {
+    fn iter_chunk<'a>(chunk: &'a [MaybeUninit<u8>], mut f: impl FnMut(&'a AValueHeader)) {
         // We only allocate trait ptr then a payload immediately after
         // so find the first trait ptr, see how big it is, and keep skipping.
         let mut p = chunk.as_ptr();
@@ -156,16 +159,16 @@ impl Arena {
                 // Overwritten, so the next word will be the size of the memory
                 unsafe { *(p as *const usize).add(1) }
             } else {
-                let ptr: &AValuePtr = unsafe { &*(p as *const AValuePtr) };
+                let ptr: &AValueHeader = unsafe { &*(p as *const AValueHeader) };
                 f(ptr);
                 ptr.unpack().memory_size()
             };
             let n = cmp::max(n, mem::size_of::<usize>());
             unsafe {
-                p = p.add(mem::size_of::<AValuePtr>() + n);
+                p = p.add(mem::size_of::<AValueHeader>() + n);
                 // We know the alignment requirements will never be greater than AValuePtr
                 // since we check that in allocate_empty
-                p = p.add(p.align_offset(mem::align_of::<AValuePtr>()));
+                p = p.add(p.align_offset(mem::align_of::<AValueHeader>()));
             }
         }
     }
@@ -174,7 +177,7 @@ impl Arena {
     // were added.
     // Requires relying on internal bumpalo invariants, since
     // there is no spec to the resulting order.
-    pub fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValuePtr)) {
+    pub fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
         // It seems that we get the chunks from most newest to oldest.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
@@ -189,14 +192,14 @@ impl Arena {
     }
 
     // Iterate over the values in the heap in any order
-    pub fn for_each_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValuePtr)) {
+    pub fn for_each_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
         self.drop
             .iter_allocated_chunks()
             .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
     }
 }
 
-impl AValuePtr {
+impl AValueHeader {
     pub(crate) fn new<'a, 'b>(x: &'a dyn AValue<'b>) -> Self
     where
         'b: 'a,
@@ -206,19 +209,19 @@ impl AValuePtr {
         let metadata: DynMetadata<dyn AValue<'static>> = unsafe { mem::transmute(metadata) };
         // Check that the LSB is not set, as we reuse that for overwrite
         debug_assert!(unsafe { mem::transmute::<_, usize>(metadata) } & 1 == 0);
-        AValuePtr(metadata)
+        AValueHeader(metadata)
     }
 
     pub fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
         unsafe {
-            let res = &*(from_raw_parts((self as *const AValuePtr).add(1) as *const (), self.0));
+            let res = &*(from_raw_parts((self as *const AValueHeader).add(1) as *const (), self.0));
             mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
         }
     }
 
     /// Unpack something that might have been overwritten.
     pub fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
-        let x = unsafe { *(self as *const AValuePtr as *const usize) };
+        let x = unsafe { *(self as *const AValueHeader as *const usize) };
         if x & 1 == 1 {
             Either::Left(x & !1)
         } else {
@@ -233,9 +236,9 @@ impl AValuePtr {
         assert_eq!(self.0.layout(), Layout::new::<T>());
 
         let sz = self.unpack().memory_size();
-        let p = self as *const AValuePtr as *const (AValuePtr, T);
+        let p = self as *const AValueHeader as *const (AValueHeader, T);
         let res = ptr::read(p).1;
-        let p = self as *const AValuePtr as *mut usize;
+        let p = self as *const AValueHeader as *mut usize;
         ptr::write(p, x | 1);
         ptr::write(p.add(1), sz);
         res
@@ -248,8 +251,8 @@ impl AValuePtr {
 
     pub unsafe fn get_extra(&self) -> *mut u8 {
         let n = self.0.size_of();
-        let p = self as *const AValuePtr as *mut u8;
-        p.add(mem::size_of::<AValuePtr>() + n)
+        let p = self as *const AValueHeader as *mut u8;
+        p.add(mem::size_of::<AValueHeader>() + n)
     }
 }
 
@@ -272,7 +275,7 @@ mod test {
     use super::*;
     use crate::values::{any::StarlarkAny, layout::avalue::simple};
 
-    fn to_repr(x: &AValuePtr) -> String {
+    fn to_repr(x: &AValueHeader) -> String {
         let mut s = String::new();
         x.unpack().collect_repr(&mut s);
         s

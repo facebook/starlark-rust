@@ -31,7 +31,7 @@
 
 use crate::values::{
     layout::{
-        arena::AValuePtr,
+        arena::AValueHeader,
         avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
         constant::VALUE_EMPTY_STRING,
         pointer::Pointer,
@@ -51,7 +51,7 @@ use gazebo::{
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
-pub struct Value<'v>(pub(crate) Pointer<'v, AValuePtr>);
+pub struct Value<'v>(pub(crate) Pointer<'v, AValueHeader>);
 
 unsafe impl<'v> Coerce<Value<'v>> for Value<'v> {}
 unsafe impl<'v> CoerceKey<Value<'v>> for Value<'v> {}
@@ -65,7 +65,7 @@ unsafe impl<'v> CoerceKey<Value<'v>> for Value<'v> {}
 /// for a little bit more safety.
 #[derive(Clone, Copy, Dupe)]
 // One possible change: moving from Blackhole during GC
-pub struct FrozenValue(pub(crate) Pointer<'static, AValuePtr>);
+pub struct FrozenValue(pub(crate) Pointer<'static, AValueHeader>);
 
 // These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
 // it having variance.
@@ -73,7 +73,7 @@ unsafe impl Send for FrozenValue {}
 unsafe impl Sync for FrozenValue {}
 
 impl<'v> Value<'v> {
-    pub(crate) fn new_ptr(x: &'v AValuePtr) -> Self {
+    pub(crate) fn new_ptr(x: &'v AValueHeader) -> Self {
         Self(Pointer::new_mutable(x))
     }
 
@@ -188,7 +188,7 @@ impl<'v> Value<'v> {
 }
 
 impl FrozenValue {
-    pub(crate) fn new_ptr(x: &'static AValuePtr) -> Self {
+    pub(crate) fn new_ptr(x: &'static AValueHeader) -> Self {
         Self(Pointer::new_frozen(x))
     }
 

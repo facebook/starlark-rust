@@ -23,7 +23,7 @@ use crate::{
     collections::Hashed,
     values::{
         layout::{
-            arena::{AValuePtr, Arena, Reservation},
+            arena::{AValueHeader, Arena, Reservation},
             avalue::{complex, simple, starlark_str, AValue},
             constant::constant_string,
             value::{FrozenValue, Value},
@@ -130,7 +130,7 @@ impl FrozenHeap {
     }
 
     fn alloc_raw(&self, x: impl AValue<'static>) -> FrozenValue {
-        let v: &AValuePtr = self.arena.alloc(x);
+        let v: &AValueHeader = self.arena.alloc(x);
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
@@ -140,7 +140,7 @@ impl FrozenHeap {
         if let Some(x) = constant_string(x) {
             x
         } else {
-            let v: &AValuePtr = self
+            let v: &AValueHeader = self
                 .arena
                 .alloc_extra_non_drop(starlark_str(x.len()), x.len());
             unsafe {
@@ -248,7 +248,7 @@ impl Heap {
     fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValuePtr = arena.alloc(x);
+        let v: &AValueHeader = arena.alloc(x);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -263,7 +263,7 @@ impl Heap {
     ) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValuePtr = arena.alloc_extra_non_drop(starlark_str(len), len);
+        let v: &AValueHeader = arena.alloc_extra_non_drop(starlark_str(len), len);
         init(unsafe { v.get_extra() });
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
@@ -363,7 +363,7 @@ impl<'v> Tracer<'v> {
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> Value<'v> {
-        let v: &AValuePtr = self
+        let v: &AValueHeader = self
             .arena
             .alloc_extra_non_drop(starlark_str(x.len()), x.len());
         unsafe {

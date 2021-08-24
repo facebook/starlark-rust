@@ -16,7 +16,7 @@
  */
 
 use crate::values::{
-    layout::{arena::AValuePtr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
+    layout::{arena::AValueHeader, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
 };
 use gazebo::prelude::*;
@@ -25,7 +25,7 @@ use std::intrinsics::copy_nonoverlapping;
 /// A constant string that can be converted to a [`FrozenValue`].
 #[repr(C)] // Must match this layout on the heap
 pub struct ConstFrozenStringN<const N: usize> {
-    vtable: AValuePtr,
+    vtable: AValueHeader,
     object: StarlarkStr,
     payload: [u8; N],
 }
@@ -70,7 +70,7 @@ impl<const N: usize> ConstFrozenStringN<N> {
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
 #[derive(Copy, Clone, Dupe)]
-pub struct ConstFrozenString(&'static AValuePtr);
+pub struct ConstFrozenString(&'static AValueHeader);
 
 impl ConstFrozenString {
     /// Obtain the [`FrozenValue`] for a [`ConstFrozenString`].

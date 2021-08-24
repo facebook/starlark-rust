@@ -20,8 +20,8 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
-        docs::DocItem, layout::arena::AValuePtr, none::NoneType, string::StarlarkStr, ComplexValue,
-        Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        docs::DocItem, layout::arena::AValueHeader, none::NoneType, string::StarlarkStr,
+        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
@@ -33,31 +33,31 @@ use std::{
     ptr::metadata,
 };
 
-pub(crate) static VALUE_NONE: &AValuePtr = {
+pub(crate) static VALUE_NONE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValuePtr, Wrapper<Basic, NoneType>) = (AValuePtr(metadata(DYN)), PAYLOAD);
+    static DATA: (AValueHeader, Wrapper<Basic, NoneType>) = (AValueHeader(metadata(DYN)), PAYLOAD);
     &DATA.0
 };
 
-pub(crate) static VALUE_FALSE: &AValuePtr = {
+pub(crate) static VALUE_FALSE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, false);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValuePtr, Wrapper<Basic, bool>) = (AValuePtr(metadata(DYN)), PAYLOAD);
+    static DATA: (AValueHeader, Wrapper<Basic, bool>) = (AValueHeader(metadata(DYN)), PAYLOAD);
     &DATA.0
 };
 
-pub(crate) static VALUE_TRUE: &AValuePtr = {
+pub(crate) static VALUE_TRUE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, true);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValuePtr, Wrapper<Basic, bool>) = (AValuePtr(metadata(DYN)), PAYLOAD);
+    static DATA: (AValueHeader, Wrapper<Basic, bool>) = (AValueHeader(metadata(DYN)), PAYLOAD);
     &DATA.0
 };
 
-pub(crate) const VALUE_STR_A_VALUE_PTR: AValuePtr = {
+pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
     #[allow(clippy::declare_interior_mutable_const)]
     const VTABLE: Wrapper<Direct, StarlarkStr> = Wrapper(Direct, unsafe { StarlarkStr::new(0) });
-    AValuePtr(metadata(
+    AValueHeader(metadata(
         &VTABLE as *const Wrapper<Direct, StarlarkStr> as *const dyn AValue<'static>,
     ))
 };
@@ -71,10 +71,10 @@ pub trait AValue<'v>: StarlarkValue<'v> {
     fn memory_size(&self) -> usize;
 
     #[doc(hidden)]
-    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
+    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
 
     #[doc(hidden)]
-    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v>;
+    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
 
     fn unpack_str(&self) -> Option<&str> {
         self.unpack_starlark_str().map(|x| x.unpack())
@@ -152,10 +152,10 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
         mem::size_of::<Self>()
     }
 
-    fn heap_freeze(&self, _me: &AValuePtr, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, _me: &AValueHeader, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         unreachable!("Basic types don't appear in the heap")
     }
-    fn heap_copy(&self, _me: &AValuePtr, _tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, _me: &AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!("Basic types don't appear in the heap")
     }
 
@@ -169,7 +169,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         mem::size_of::<StarlarkStr>() + self.1.len()
     }
 
-    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
         unsafe {
@@ -178,7 +178,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         let s = self.1.unpack();
         let v = tracer.alloc_str(s);
         unsafe {
@@ -200,14 +200,14 @@ where
         mem::size_of::<Self>()
     }
 
-    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Self>();
         let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
         r.fill(x);
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         let (v, r) = tracer.reserve::<Self>();
         let x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
         r.fill(x);
@@ -224,7 +224,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         mem::size_of::<Self>()
     }
 
-    fn heap_freeze(&self, me: &AValuePtr, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
         let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
         let res = x.1.freeze(freezer)?;
@@ -232,7 +232,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValuePtr, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         let (v, r) = tracer.reserve::<Self>();
         let mut x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
         // We have to put the forwarding node in _before_ we trace in case there are cycles
@@ -276,10 +276,10 @@ impl<'v> AValue<'v> for BlackHole {
         self.0
     }
 
-    fn heap_freeze(&self, _me: &AValuePtr, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, _me: &AValueHeader, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         unreachable!()
     }
-    fn heap_copy(&self, _me: &AValuePtr, _tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, _me: &AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!()
     }
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
