@@ -66,7 +66,7 @@
 //!
 //! ```
 //! #[macro_use]
-//! extern crate starlark_module;
+//! extern crate starlark;
 //! # fn run() -> anyhow::Result<()> {
 //! use starlark::environment::{GlobalsBuilder, Module};
 //! use starlark::eval::Evaluator;
@@ -106,7 +106,7 @@
 //!
 //! ```
 //! #[macro_use]
-//! extern crate starlark_module;
+//! extern crate starlark;
 //! # fn run() -> anyhow::Result<()> {
 //! use starlark::environment::{GlobalsBuilder, Module};
 //! use starlark::eval::Evaluator;
@@ -391,6 +391,8 @@ extern crate starlark_module;
 extern crate maplit;
 #[macro_use]
 mod macros;
+
+pub use starlark_module::starlark_module;
 
 pub(crate) mod analysis;
 pub mod assert;

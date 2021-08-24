@@ -26,7 +26,7 @@
 //!
 //! ```
 //! #[macro_use]
-//! extern crate starlark_module;
+//! extern crate starlark;
 //! # fn main() {
 //! use starlark::assert::Assert;
 //! use starlark::environment::GlobalsBuilder;
