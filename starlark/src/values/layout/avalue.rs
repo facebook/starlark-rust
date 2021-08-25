@@ -36,28 +36,31 @@ use std::{
 pub(crate) static VALUE_NONE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValueHeader, Wrapper<Basic, NoneType>) = (AValueHeader(metadata(DYN)), PAYLOAD);
+    static DATA: (AValueHeader, Wrapper<Basic, NoneType>) =
+        (AValueHeader::with_metadata(metadata(DYN)), PAYLOAD);
     &DATA.0
 };
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, false);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValueHeader, Wrapper<Basic, bool>) = (AValueHeader(metadata(DYN)), PAYLOAD);
+    static DATA: (AValueHeader, Wrapper<Basic, bool>) =
+        (AValueHeader::with_metadata(metadata(DYN)), PAYLOAD);
     &DATA.0
 };
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, true);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValueHeader, Wrapper<Basic, bool>) = (AValueHeader(metadata(DYN)), PAYLOAD);
+    static DATA: (AValueHeader, Wrapper<Basic, bool>) =
+        (AValueHeader::with_metadata(metadata(DYN)), PAYLOAD);
     &DATA.0
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
     #[allow(clippy::declare_interior_mutable_const)]
     const VTABLE: Wrapper<Direct, StarlarkStr> = Wrapper(Direct, unsafe { StarlarkStr::new(0) });
-    AValueHeader(metadata(
+    AValueHeader::with_metadata(metadata(
         &VTABLE as *const Wrapper<Direct, StarlarkStr> as *const dyn AValue<'static>,
     ))
 };

@@ -347,6 +347,7 @@
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(cell_filter_map)]
+#![feature(const_fn_trait_bound)]
 #![feature(const_intrinsic_copy)]
 #![feature(const_mut_refs)]
 #![feature(const_panic)]

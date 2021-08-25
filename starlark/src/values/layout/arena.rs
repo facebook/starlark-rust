@@ -49,7 +49,7 @@ pub(crate) struct Arena {
 
 #[doc(hidden)] // Appears in a trait, but don't want it to
 #[repr(transparent)]
-pub struct AValueHeader(pub(crate) DynMetadata<dyn AValue<'static>>);
+pub struct AValueHeader(DynMetadata<dyn AValue<'static>>);
 
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
@@ -209,6 +209,10 @@ impl AValueHeader {
         let metadata: DynMetadata<dyn AValue<'static>> = unsafe { mem::transmute(metadata) };
         // Check that the LSB is not set, as we reuse that for overwrite
         debug_assert!(unsafe { mem::transmute::<_, usize>(metadata) } & 1 == 0);
+        AValueHeader(metadata)
+    }
+
+    pub(crate) const fn with_metadata(metadata: DynMetadata<dyn AValue<'static>>) -> Self {
         AValueHeader(metadata)
     }
 
