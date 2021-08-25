@@ -51,12 +51,19 @@ pub(crate) struct Arena {
 #[repr(transparent)]
 pub struct AValueHeader(DynMetadata<dyn AValue<'static>>);
 
+/// How object is represented in arena.
+#[repr(C)]
+pub(crate) struct AValueRepr<T> {
+    header: AValueHeader,
+    payload: T,
+}
+
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
 pub(crate) struct Reservation<'v> {
-    typ: TypeId,                      // The type of T
-    pointer: *mut (AValueHeader, ()), // Secretly (AValuePtr, T)
+    typ: TypeId,                  // The type of T
+    pointer: *mut AValueRepr<()>, // Secretly AValueObject<T>
     phantom: PhantomData<&'v ()>,
 }
 
@@ -64,13 +71,19 @@ impl<'v> Reservation<'v> {
     pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
         assert_eq!(self.typ, T::static_type_id());
         unsafe {
-            let p = self.pointer as *mut (AValueHeader, T);
-            ptr::write(p, (AValueHeader::new(&x), x));
+            let p = self.pointer as *mut AValueRepr<T>;
+            ptr::write(
+                p,
+                AValueRepr {
+                    header: AValueHeader::new(&x),
+                    payload: x,
+                },
+            );
         }
     }
 
     pub(crate) fn ptr(&self) -> &'v AValueHeader {
-        unsafe { &(*self.pointer).0 }
+        unsafe { &(*self.pointer).header }
     }
 }
 
@@ -87,7 +100,7 @@ impl Arena {
     fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
         bump: &'v Bump,
         extra: usize,
-    ) -> *mut (AValueHeader, T) {
+    ) -> *mut AValueRepr<T> {
         assert!(
             mem::align_of::<T>() <= mem::align_of::<AValueHeader>(),
             "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
@@ -100,7 +113,7 @@ impl Arena {
             + cmp::max(mem::size_of::<T>() + extra, mem::size_of::<usize>());
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout);
-        p.as_ptr() as *mut (AValueHeader, T)
+        p.as_ptr() as *mut AValueRepr<T>
     }
 
     // Reservation should really be an incremental type
@@ -119,7 +132,7 @@ impl Arena {
 
         Reservation {
             typ: T::static_type_id(),
-            pointer: p as *mut (AValueHeader, ()),
+            pointer: p as *mut AValueRepr<()>,
             phantom: PhantomData,
         }
     }
@@ -128,8 +141,14 @@ impl Arena {
     pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValueHeader {
         let p = Self::alloc_empty::<T>(&self.drop, 0);
         unsafe {
-            ptr::write(p, (AValueHeader::new(&x), x));
-            &(*p).0
+            ptr::write(
+                p,
+                AValueRepr {
+                    header: AValueHeader::new(&x),
+                    payload: x,
+                },
+            );
+            &(*p).header
         }
     }
 
@@ -143,8 +162,14 @@ impl Arena {
     ) -> &'v AValueHeader {
         let p = Self::alloc_empty::<T>(&self.non_drop, extra);
         unsafe {
-            ptr::write(p, (AValueHeader::new(&x), x));
-            &(*p).0
+            ptr::write(
+                p,
+                AValueRepr {
+                    header: AValueHeader::new(&x),
+                    payload: x,
+                },
+            );
+            &(*p).header
         }
     }
 
@@ -257,6 +282,22 @@ impl AValueHeader {
         let n = self.0.size_of();
         let p = self as *const AValueHeader as *mut u8;
         p.add(mem::size_of::<AValueHeader>() + n)
+    }
+}
+
+impl<T> AValueRepr<T> {
+    pub(crate) const fn with_metadata(
+        metadata: DynMetadata<dyn AValue<'static>>,
+        payload: T,
+    ) -> AValueRepr<T> {
+        AValueRepr {
+            header: AValueHeader::with_metadata(metadata),
+            payload,
+        }
+    }
+
+    pub(crate) const fn header(&self) -> &AValueHeader {
+        &self.header
     }
 }
 

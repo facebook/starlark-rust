@@ -20,7 +20,10 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
-        docs::DocItem, layout::arena::AValueHeader, none::NoneType, string::StarlarkStr,
+        docs::DocItem,
+        layout::arena::{AValueHeader, AValueRepr},
+        none::NoneType,
+        string::StarlarkStr,
         ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
     },
 };
@@ -36,25 +39,25 @@ use std::{
 pub(crate) static VALUE_NONE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValueHeader, Wrapper<Basic, NoneType>) =
-        (AValueHeader::with_metadata(metadata(DYN)), PAYLOAD);
-    &DATA.0
+    static DATA: AValueRepr<Wrapper<Basic, NoneType>> =
+        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
+    DATA.header()
 };
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, false);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValueHeader, Wrapper<Basic, bool>) =
-        (AValueHeader::with_metadata(metadata(DYN)), PAYLOAD);
-    &DATA.0
+    static DATA: AValueRepr<Wrapper<Basic, bool>> =
+        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
+    DATA.header()
 };
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, true);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: (AValueHeader, Wrapper<Basic, bool>) =
-        (AValueHeader::with_metadata(metadata(DYN)), PAYLOAD);
-    &DATA.0
+    static DATA: AValueRepr<Wrapper<Basic, bool>> =
+        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
+    DATA.header()
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
