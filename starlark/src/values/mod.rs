@@ -29,7 +29,7 @@
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
 pub use crate::values::{
-    error::*, frozen_ref::*, layout::*, owned::*, traits::*, types::*, unpack::*,
+    alloc_value::*, error::*, frozen_ref::*, layout::*, owned::*, traits::*, types::*, unpack::*,
 };
 use crate::{
     codemap::Span,
@@ -51,6 +51,7 @@ use std::{
 mod comparison;
 
 // Submodules
+mod alloc_value;
 pub mod docs;
 mod error;
 pub(crate) mod fast_string;
@@ -122,65 +123,6 @@ impl Equivalent<FrozenValue> for Value<'_> {
 impl Equivalent<Value<'_>> for FrozenValue {
     fn equivalent(&self, key: &Value) -> bool {
         self.equals(*key).unwrap()
-    }
-}
-
-/// Trait for things that can be created on a [`Heap`] producing a [`Value`].
-///
-/// Note, this trait does not represent Starlark types.
-/// For example, this trait is implemented for `char`,
-/// but there's no Starlark type for `char`, this trait
-/// is implemented for `char` to construct Starlark `str`.
-pub trait AllocValue<'v> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v>;
-}
-
-impl<'v> AllocValue<'v> for FrozenValue {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
-        self.to_value()
-    }
-}
-
-impl<'v> AllocValue<'v> for Value<'v> {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
-        self
-    }
-}
-
-impl<'v, T> AllocValue<'v> for Option<T>
-where
-    T: AllocValue<'v>,
-{
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        match self {
-            Some(v) => v.alloc_value(heap),
-            None => Value::new_none(),
-        }
-    }
-}
-
-/// Trait for things that can be allocated on a [`FrozenHeap`] producing a [`FrozenValue`].
-pub trait AllocFrozenValue {
-    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue;
-}
-
-impl AllocFrozenValue for FrozenValue {
-    fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
-        self
-    }
-}
-
-impl FrozenHeap {
-    /// Allocate a new value on a [`FrozenHeap`].
-    pub fn alloc<T: AllocFrozenValue>(&self, val: T) -> FrozenValue {
-        val.alloc_frozen_value(self)
-    }
-}
-
-impl Heap {
-    /// Allocate a new value on a [`Heap`].
-    pub fn alloc<'v, T: AllocValue<'v>>(&'v self, x: T) -> Value<'v> {
-        x.alloc_value(self)
     }
 }
 
