@@ -1,5 +1,5 @@
 [workspace]
 members = [
     "starlark",
-    "starlark_module",
+    "starlark_derive",
 ]

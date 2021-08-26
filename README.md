@@ -32,7 +32,7 @@ This project also has three non-goals:
 
 There are three components:
 
-* `starlark_module`, a proc-macro crate that defines the `#[starlark_module]` annotation that can be applied to Rust code to make it available as a Starlark module. This library is a dependency of `starlark` the library.
+* `starlark_derive`, a proc-macro crate that defines the necessary macros for Starlark. This library is a dependency of `starlark` the library, which reexports all the relevant pieces, and should not be used directly.
 * `starlark` the library, a library that defines the parser, evaluator and standard library. Projects wishing to embed Starlark in their environment (with additional types, library functions and features) will make use of this library.
 * `starlark` the binary, which provides interactive evaluation, IDE features and linter, exposed through a command line. Useful if you want to use vanilla Starlark (but if you do, consider Python3 instead) or as a test-bed for experimenting. Most projects will end up implementing some of this functionality themselves over the `starlark` library, incorporating their specific extra types etc.
 
@@ -50,9 +50,9 @@ In this section we outline where we don't comply with the [Starlark spec](https:
 
 1. Check the [GitHub Actions](https://github.com/facebookexperimental/starlark-rust/actions) are green.
 2. Update `CHANGELOG.md` with the changes since the last release. [This link](https://github.com/facebookexperimental/starlark-rust/compare/v0.4.0...main) can help (update to compare against the last release).
-3. Update the version numbers of the two `Cargo.toml` files. Bump them by 0.0.1 if there are no incompatible changes, or 0.1.0 if there are. Bump the dependency in `starlark` to point at the latest `starlark_module` version.
-4. Copy the files `CHANGELOG.md`, `LICENSE` and `README.md` into each `starlark` and `starlark_module` subdirectory.
-5. Run `cargo publish --dry-run --allow-dirty`, then without the `--dry-run`, first in `starlark_module` and then `starlark` directories.
+3. Update the version numbers of the two `Cargo.toml` files. Bump them by 0.0.1 if there are no incompatible changes, or 0.1.0 if there are. Bump the dependency in `starlark` to point at the latest `starlark_derive` version.
+4. Copy the files `CHANGELOG.md`, `LICENSE` and `README.md` into each `starlark` and `starlark_derive` subdirectory.
+5. Run `cargo publish --dry-run --allow-dirty`, then without the `--dry-run`, first in `starlark_derive` and then `starlark` directories.
 6. Create a [GitHub release](https://github.com/facebookexperimental/starlark-rust/releases/new) with `v0.X.Y`, using the `starlark` version as the name.
 
 ## License

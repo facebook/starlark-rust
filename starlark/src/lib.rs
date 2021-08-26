@@ -387,13 +387,13 @@
 #[macro_use]
 extern crate gazebo;
 #[macro_use]
-extern crate starlark_module;
+extern crate starlark_derive;
 #[macro_use]
 extern crate maplit;
 #[macro_use]
 mod macros;
 
-pub use starlark_module::starlark_module;
+pub use starlark_derive::starlark_module;
 
 pub(crate) mod analysis;
 pub mod assert;

@@ -32,7 +32,7 @@ paste = "1.0"
 either = "1.6.1"
 static_assertions = "1.1.0"
 thiserror = "1.0.9"
-starlark_module = { version = "0.4.0", path = "../starlark_module" }
+starlark_derive = { version = "0.4.0", path = "../starlark_derive" }
 # @oss-disable: gazebo = { path = "../../gazebo/gazebo", features = ["str_pattern_extensions"] }
 gazebo = { version = "0.4.1", features = ["str_pattern_extensions"] } # @oss-enable
 # @oss-disable: linter = { path = "../../linter/linter" }
