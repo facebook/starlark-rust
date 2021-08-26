@@ -125,7 +125,12 @@ impl Equivalent<Value<'_>> for FrozenValue {
     }
 }
 
-/// Trait for things that can be allocated on a [`Heap`] producing a [`Value`].
+/// Trait for things that can be created on a [`Heap`] producing a [`Value`].
+///
+/// Note, this trait does not represent Starlark types.
+/// For example, this trait is implemented for `char`,
+/// but there's no Starlark type for `char`, this trait
+/// is implemented for `char` to construct Starlark `str`.
 pub trait AllocValue<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v>;
 }
