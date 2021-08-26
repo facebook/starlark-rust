@@ -1,5 +1,25 @@
 # Starlark
 
+## 0.5.0 (August 26, 2021)
+
+There have been many changes since the last release, primarily focused on performance (up to 100x in some benchmarks). These changes caused a number of API changes, the most significant of which are listed below.
+
+* Rename the `starlark_module` crate to `starlark_derive`.
+* Rename the `walk` methods to `trace` to align to standard GC literature.
+* Add `derive` for `Trace`.
+* Add `StarlarkAttrs` derivation and scheme.
+* Initial start of documentation generation (still unstable).
+* More complete `SmallMap` API.
+* Three profiling modes, heap, flame and statement.
+* Changes to `invoke` to take an `Arguments` structure.
+* Changed to iteration APIs.
+* Many semantic improvements to non-ASCII strings.
+* Refinements to types and how they work.
+* Mark a few additional APIs as `unsafe`.
+* Use the `gazebo` `Coerce` trait extensively, in particular required for some of the `starlark_value` macros.
+* Delete `dict.copy` and `list.copy`, since they aren't in the Starlark spec.
+* `UnpackValue` no longer takes a `heap` argument.
+
 ## 0.4.0 (April 6, 2021)
 
 * Change maintainer to Facebook.
