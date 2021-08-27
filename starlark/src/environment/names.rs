@@ -17,7 +17,7 @@
 
 use std::{cell::RefCell, collections::HashMap, iter::Iterator};
 
-use crate::environment::slots::ModuleSlotId;
+use crate::{environment::slots::ModuleSlotId, syntax::ast::Visibility};
 
 /// MutableNames are how we allocate slots (index-based) to variables
 /// (name-based). The slots field is the current active mapping of names to
@@ -37,10 +37,10 @@ use crate::environment::slots::ModuleSlotId;
 /// On an unscope, we do the reverse, putting things back to how they were
 /// before (apart from the total) number of slots required.
 #[derive(Debug)]
-pub(crate) struct MutableNames(RefCell<HashMap<String, ModuleSlotId>>);
+pub(crate) struct MutableNames(RefCell<HashMap<String, (ModuleSlotId, Visibility)>>);
 
 #[derive(Debug)]
-pub(crate) struct FrozenNames(HashMap<String, ModuleSlotId>);
+pub(crate) struct FrozenNames(HashMap<String, (ModuleSlotId, Visibility)>);
 
 impl MutableNames {
     pub fn new() -> Self {
@@ -54,7 +54,7 @@ impl MutableNames {
     /// Try and go back from a slot to a name.
     /// Inefficient - only use in error paths.
     pub fn get_slot(&self, slot: ModuleSlotId) -> Option<String> {
-        for (s, i) in &*self.0.borrow() {
+        for (s, (i, _vis)) in &*self.0.borrow() {
             if *i == slot {
                 return Some(s.clone());
             }
@@ -62,21 +62,32 @@ impl MutableNames {
         None
     }
 
-    pub fn get_name(&self, name: &str) -> Option<ModuleSlotId> {
+    pub(crate) fn get_name(&self, name: &str) -> Option<(ModuleSlotId, Visibility)> {
         self.0.borrow().get(name).copied()
     }
 
-    // Add a name, or if it's already there, return the existing name
-    pub fn add_name(&self, name: &str) -> ModuleSlotId {
+    /// Add a name with explicit visibility to the module.
+    pub(crate) fn add_name_visibility(&self, name: &str, vis: Visibility) -> ModuleSlotId {
         let mut x = self.0.borrow_mut();
-        match x.get(name) {
-            Some(v) => *v,
+        match x.get_mut(name) {
+            Some((slot, stored_vis)) => {
+                // Public visibility wins.
+                if *stored_vis == Visibility::Private {
+                    *stored_vis = vis;
+                }
+                *slot
+            }
             None => {
                 let slot = ModuleSlotId::new(x.len());
-                x.insert(name.to_owned(), slot);
+                x.insert(name.to_owned(), (slot, vis));
                 slot
             }
         }
+    }
+
+    // Add an exported name, or if it's already there, return the existing name
+    pub fn add_name(&self, name: &str) -> ModuleSlotId {
+        self.add_name_visibility(name, Visibility::Public)
     }
 
     pub fn hide_name(&self, name: &str) {
@@ -84,7 +95,11 @@ impl MutableNames {
     }
 
     pub fn all_names(&self) -> HashMap<String, ModuleSlotId> {
-        self.0.borrow().clone()
+        self.0
+            .borrow()
+            .iter()
+            .map(|(name, (slot, _vis))| (name.to_owned(), *slot))
+            .collect()
     }
 
     pub fn freeze(self) -> FrozenNames {
@@ -93,11 +108,15 @@ impl MutableNames {
 }
 
 impl FrozenNames {
-    pub fn get_name(&self, name: &str) -> Option<ModuleSlotId> {
+    pub(crate) fn get_name(&self, name: &str) -> Option<(ModuleSlotId, Visibility)> {
         self.0.get(name).copied()
     }
 
-    pub fn symbols(&self) -> impl Iterator<Item = (&String, &ModuleSlotId)> {
-        self.0.iter()
+    /// Exported symbols.
+    pub fn symbols(&self) -> impl Iterator<Item = (&String, ModuleSlotId)> {
+        self.0.iter().flat_map(|(name, (slot, vis))| match vis {
+            Visibility::Private => None,
+            Visibility::Public => Some((name, *slot)),
+        })
     }
 }

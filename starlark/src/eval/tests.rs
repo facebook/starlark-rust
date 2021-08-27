@@ -1264,7 +1264,10 @@ fn test_load_reexport() {
     a.dialect_set(|d| d.enable_load_reexport = false);
     a.module("a", "x = 1");
     a.module("b", "load('a', 'x')");
-    a.fail("load('b', 'x')\nassert_eq(x, 1)", "Variable `x` not found");
+    a.fail(
+        "load('b', 'x')\nassert_eq(x, 1)",
+        "Module symbol `x` is not exported",
+    );
 }
 
 #[test]

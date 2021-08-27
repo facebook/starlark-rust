@@ -18,7 +18,7 @@
 use crate::{
     environment::{names::MutableNames, slots::ModuleSlotId},
     eval::runtime::slots::LocalSlotId,
-    syntax::ast::{AstAssign, AstStmt, Expr, Stmt, Visibility},
+    syntax::ast::{AstAssign, AstStmt, Expr, Stmt},
 };
 use std::collections::HashMap;
 
@@ -112,20 +112,12 @@ impl<'a> Scope<'a> {
     pub fn enter_module(module: &'a MutableNames, code: &AstStmt) -> Self {
         let mut locals = HashMap::new();
         Stmt::collect_defines(code, &mut locals);
-        let mut module_private = ScopeNames::default();
         for (x, vis) in locals {
-            match vis {
-                Visibility::Public => {
-                    module.add_name(x);
-                }
-                Visibility::Private => {
-                    module_private.add_name(x);
-                }
-            }
+            module.add_name_visibility(x, vis);
         }
         Self {
             module,
-            locals: vec![module_private],
+            locals: vec![ScopeNames::default()],
             unscopes: Vec::new(),
         }
     }
@@ -195,7 +187,9 @@ impl<'a> Scope<'a> {
                 return Some(Slot::Local(v));
             }
         }
-        self.module.get_name(name).map(Slot::Module)
+        self.module
+            .get_name(name)
+            .map(|(slot, _vis)| Slot::Module(slot))
     }
 
     pub fn get_name_or_panic(&mut self, name: &str) -> Slot {

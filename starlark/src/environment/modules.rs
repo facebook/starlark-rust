@@ -26,6 +26,7 @@ use crate::{
         slots::{FrozenSlots, ModuleSlotId, MutableSlots},
         EnvironmentError,
     },
+    syntax::ast::Visibility,
     values::{
         docs,
         docs::{DocItem, DocString},
@@ -100,16 +101,25 @@ pub struct Module {
 }
 
 impl FrozenModule {
-    /// Get the value of the variable `name`.
-    /// Returns [`None`] if the variable isn't defined in the module or hasn't been set.
-    pub fn get(&self, name: &str) -> Option<OwnedFrozenValue> {
-        let slot = self.1.0.names.get_name(name)?;
+    /// Get value, exported or private by name.
+    pub(crate) fn get_any_visibility(&self, name: &str) -> Option<(OwnedFrozenValue, Visibility)> {
+        let (slot, vis) = self.1.0.names.get_name(name)?;
         // This code is safe because we know the frozen module ref keeps the values alive
         self.1
             .0
             .slots
             .get_slot(slot)
-            .map(|x| unsafe { OwnedFrozenValue::new(self.0.dupe(), x) })
+            .map(|x| (unsafe { OwnedFrozenValue::new(self.0.dupe(), x) }, vis))
+    }
+
+    /// Get the value of the exported variable `name`.
+    /// Returns [`None`] if the variable isn't defined in the module or it is private.
+    pub fn get(&self, name: &str) -> Option<OwnedFrozenValue> {
+        self.get_any_visibility(name)
+            .and_then(|(value, vis)| match vis {
+                Visibility::Private => None,
+                Visibility::Public => Some(value),
+            })
     }
 
     /// Iterate through all the names defined in this module.
@@ -157,7 +167,7 @@ impl FrozenModuleData {
     pub fn describe(&self) -> String {
         self.names
             .symbols()
-            .filter_map(|(name, slot)| Some((name, self.slots.get_slot(*slot)?)))
+            .filter_map(|(name, slot)| Some((name, self.slots.get_slot(slot)?)))
             .map(|(name, val)| val.to_value().describe(name))
             .join("\n")
     }
@@ -170,7 +180,7 @@ impl FrozenModuleData {
     /// Inefficient - only use in error paths.
     pub(crate) fn get_slot_name(&self, slot: ModuleSlotId) -> Option<String> {
         for (s, i) in self.names.symbols() {
-            if *i == slot {
+            if i == slot {
                 return Some(s.clone());
             }
         }
@@ -248,10 +258,21 @@ impl Module {
         unsafe { transmute!(&'v MutableSlots<'static>, &'v MutableSlots<'v>, &self.slots) }
     }
 
-    /// Get the value of the variable `name`, or [`None`] if the variable is not defined.
+    /// Get value, exported or private by name.
+    pub(crate) fn get_any_visibility<'v>(&'v self, name: &str) -> Option<(Value<'v>, Visibility)> {
+        let (slot, vis) = self.names.get_name(name)?;
+        let value = self.slots().get_slot(slot)?;
+        Some((value, vis))
+    }
+
+    /// Get the value of the exported variable `name`.
+    /// Returns [`None`] if the variable isn't defined in the module or it is private.
     pub fn get<'v>(&'v self, name: &str) -> Option<Value<'v>> {
-        let slot = self.names.get_name(name)?;
-        self.slots().get_slot(slot)
+        self.get_any_visibility(name)
+            .and_then(|(v, vis)| match vis {
+                Visibility::Private => None,
+                Visibility::Public => Some(v),
+            })
     }
 
     /// Freeze the environment, all its value will become immutable afterwards.
@@ -301,7 +322,7 @@ impl Module {
         self.frozen_heap.add_reference(&module.0);
         for (k, slot) in module.1.0.names.symbols() {
             if Self::is_public_symbol(k) {
-                if let Some(value) = module.1.0.slots.get_slot(*slot) {
+                if let Some(value) = module.1.0.slots.get_slot(slot) {
                     self.set(k, Value::new_frozen(value))
                 }
             }
@@ -316,9 +337,12 @@ impl Module {
         if !Self::is_public_symbol(symbol) {
             return Err(EnvironmentError::CannotImportPrivateSymbol(symbol.to_owned()).into());
         }
-        match module.get(symbol) {
-            None => Err(EnvironmentError::VariableNotFound(symbol.to_owned()).into()),
-            Some(v) => Ok(v.owned_value(self.frozen_heap())),
+        match module.get_any_visibility(symbol) {
+            None => Err(EnvironmentError::ModuleHasNoSymbol(symbol.to_owned()).into()),
+            Some((v, Visibility::Public)) => Ok(v.owned_value(self.frozen_heap())),
+            Some((_, Visibility::Private)) => {
+                Err(EnvironmentError::ModuleSymbolIsNotExported(symbol.to_owned()).into())
+            }
         }
     }
 

@@ -180,7 +180,7 @@ pub enum AssignOp {
     RightShift,  // >>=
 }
 
-#[derive(Debug, Copy, Clone, Dupe)]
+#[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq)]
 pub enum Visibility {
     Private,
     Public,

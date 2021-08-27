@@ -502,7 +502,10 @@ impl Compiler<'_> {
                 let name = name.node;
                 let symbols = v.into_map(|(x, y)| {
                     (
-                        self.scope.get_name_or_panic(&x.node),
+                        match self.scope.get_name_or_panic(&x.node) {
+                            Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
+                            Slot::Module(slot) => slot,
+                        },
                         y.node,
                         x.span.merge(y.span),
                     )
@@ -522,10 +525,7 @@ impl Compiler<'_> {
                             *span,
                             eval,
                         )?;
-                        match new_name {
-                            Slot::Local(slot) => eval.set_slot_local(*slot, value),
-                            Slot::Module(slot) => eval.set_slot_module(*slot, value),
-                        }
+                        eval.set_slot_module(*new_name, value)
                     }
                 })
             }
