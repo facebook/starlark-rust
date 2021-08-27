@@ -511,7 +511,7 @@ impl Compiler<'_> {
                     )
                 });
                 stmt!("load", span, |eval| {
-                    let loadenv = match eval.loader.as_mut() {
+                    let loadenv = match eval.loader.as_ref() {
                         None => {
                             return Err(EvalException::Error(
                                 EnvironmentError::NoImportsAvailable(name.to_owned()).into(),

@@ -26,7 +26,7 @@ use std::collections::HashMap;
 /// A trait for turning a `path` given by a `load()` statement into a [`FrozenModule`].
 pub trait FileLoader {
     /// Open the file given by the load statement `path`.
-    fn load(&mut self, path: &str) -> anyhow::Result<FrozenModule>;
+    fn load(&self, path: &str) -> anyhow::Result<FrozenModule>;
 }
 
 /// [`FileLoader`] that looks up modules by name from a [`HashMap`].
@@ -39,7 +39,7 @@ pub struct ReturnFileLoader<'a> {
 }
 
 impl<'a> FileLoader for ReturnFileLoader<'a> {
-    fn load(&mut self, path: &str) -> anyhow::Result<FrozenModule> {
+    fn load(&self, path: &str) -> anyhow::Result<FrozenModule> {
         match self.modules.get(path) {
             Some(v) => Ok((*v).dupe()),
             None => Err(anyhow!(
