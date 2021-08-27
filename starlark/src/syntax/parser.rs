@@ -127,7 +127,7 @@ impl AstModule {
         // There is a suggestion that `load` statements should be at the top of a file, but we tolerate that not being true.
         fn f<'a>(ast: &'a AstStmt, vec: &mut Vec<&'a str>) {
             match &ast.node {
-                Stmt::Load(module, ..) => vec.push(&module.node),
+                Stmt::Load(load) => vec.push(&load.module.node),
                 Stmt::Statements(stmts) => {
                     for s in stmts {
                         f(s, vec);

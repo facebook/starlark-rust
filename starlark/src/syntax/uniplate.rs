@@ -68,7 +68,7 @@ impl Stmt {
                 lhs.visit_expr(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(rhs));
             }
-            Stmt::Load(_, _, _) => {}
+            Stmt::Load(..) => {}
         }
     }
 

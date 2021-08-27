@@ -203,8 +203,8 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             stmt(body, res);
             flow(res)
         }
-        Stmt::Load(_, args, _) => {
-            for x in args {
+        Stmt::Load(load) => {
+            for x in &load.node.args {
                 res.push(Bind::Set(Assigner::Load, x.0.clone()))
             }
         }

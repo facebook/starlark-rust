@@ -307,12 +307,13 @@ impl Stmt {
             Stmt::Def(name, ..) => {
                 result.insert(&name.node, Visibility::Public);
             }
-            Stmt::Load(_, names, vis) => {
-                for (name, _) in names {
+            Stmt::Load(load) => {
+                for (name, _) in &load.node.args {
+                    let vis = load.visibility;
                     // If we are in the map as Public and Private, then Public wins.
                     // Everything but Load is definitely Public.
                     // So only insert if it wasn't already there.
-                    result.entry(&name.node).or_insert(*vis);
+                    result.entry(&name.node).or_insert(vis);
                 }
             }
             _ => stmt.node.visit_stmt(|x| Stmt::collect_defines(x, result)),
@@ -498,9 +499,9 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Stmt::Load(name, v, _) => {
-                let name = name.node;
-                let symbols = v.into_map(|(x, y)| {
+            Stmt::Load(load) => {
+                let name = load.node.module.node;
+                let symbols = load.node.args.into_map(|(x, y)| {
                     (
                         match self.scope.get_name_or_panic(&x.node) {
                             Slot::Local(..) => unreachable!("symbol need to be resolved to module"),

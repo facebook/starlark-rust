@@ -34,6 +34,7 @@ pub type AstArgument = Spanned<Argument>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = Spanned<Parameter>;
 pub type AstInt = Spanned<i32>;
+pub type AstLoad = Spanned<Load>;
 pub type AstStmt = Spanned<Stmt>;
 
 // We don't care _that_ much about the size of these structures,
@@ -130,6 +131,14 @@ pub enum Assign {
     Identifier(AstString),
 }
 
+/// `load` statement.
+#[derive(Debug)]
+pub struct Load {
+    pub module: AstString,
+    pub args: Vec<(AstString, AstString)>,
+    pub visibility: Visibility,
+}
+
 #[derive(Debug)]
 pub struct ForClause {
     pub var: AstAssign,
@@ -206,7 +215,7 @@ pub enum Stmt {
         Box<AstStmt>,
     ),
     // The Visibility of a Load is implicit from the Dialect, not written by a user
-    Load(AstString, Vec<(AstString, AstString)>, Visibility),
+    Load(AstLoad),
 }
 
 impl Argument {
@@ -505,12 +514,12 @@ impl Stmt {
                 f.write_str(":\n")?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::Load(filename, v, _) => {
+            Stmt::Load(load) => {
                 write!(f, "{}load(", tab)?;
-                fmt_string_literal(f, &filename.node)?;
+                fmt_string_literal(f, &load.node.module.node)?;
                 comma_separated_fmt(
                     f,
-                    v,
+                    &load.node.args,
                     |x, f| {
                         write!(f, "{} = ", x.0.node)?;
                         fmt_string_literal(f, &(x.1.node))

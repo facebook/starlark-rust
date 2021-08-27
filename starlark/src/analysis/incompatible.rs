@@ -161,8 +161,8 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
                 lhs.visit_lvalue(|x| ident(x, false, codemap, defined, res))
             }
             Stmt::Def(name, _, _, _) => ident(name, false, codemap, defined, res),
-            Stmt::Load(_, names, _) => {
-                for (name, _) in names {
+            Stmt::Load(load) => {
+                for (name, _) in &load.args {
                     ident(name, true, codemap, defined, res)
                 }
             }
