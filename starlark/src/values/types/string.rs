@@ -56,7 +56,7 @@ pub struct StarlarkStr {
     // Followed by an unsized block, meaning this type is unsized.
     // But we can't mark it as such since we really want &StarlarkStr to
     // take up only one word.
-    body: (),
+    body: [u8; 0],
 }
 
 impl Debug for StarlarkStr {
@@ -71,13 +71,13 @@ impl StarlarkStr {
         Self {
             len,
             hash: atomic::AtomicU64::new(0),
-            body: (),
+            body: [],
         }
     }
 
     pub fn unpack(&self) -> &str {
         unsafe {
-            let slice = slice::from_raw_parts(&self.body as *const () as *const u8, self.len);
+            let slice = slice::from_raw_parts(self.body.as_ptr(), self.len);
             str::from_utf8_unchecked(slice)
         }
     }
