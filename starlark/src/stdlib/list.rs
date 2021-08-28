@@ -300,4 +300,15 @@ mod tests {
             "not found in list",
         );
     }
+
+    #[test]
+    fn recursive_list() {
+        assert::is_true(
+            r#"
+cyclic = [1, 2, 3]
+cyclic[1] = cyclic
+len(cyclic) == 3 and len(cyclic[1]) == 3
+    "#,
+        )
+    }
 }

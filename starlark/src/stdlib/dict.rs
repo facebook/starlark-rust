@@ -373,4 +373,13 @@ mod tests {
     fn test_dict_add() {
         assert::fail("{1: 2} + {3: 4}", "not supported");
     }
+
+    #[test]
+    fn test_dict_with_duplicates() {
+        // In Starlark spec this is a runtime error. In Python it's fine.
+        // We make it a runtime error, plus have a lint that checks for it statically.
+        assert::fails("{40+2: 2, 6*7: 3}", &["key repeated", "42"]);
+        // Also check we fail if the entire dictionary is static (a different code path).
+        assert::fails("{42: 2, 42: 3}", &["key repeated", "42"]);
+    }
 }
