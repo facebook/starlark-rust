@@ -58,6 +58,15 @@ pub(crate) struct AValueRepr<T> {
     payload: T,
 }
 
+/// This is object written over [`AValueRepr`] during GC.
+#[repr(C)]
+pub(crate) struct AValueForward {
+    /// Moved object pointer with lowest bit set.
+    forward_ptr: usize,
+    /// Size of `<T>`. Does not include [`AValueHeader`].
+    object_size: usize,
+}
+
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
@@ -182,7 +191,7 @@ impl Arena {
             let val = unsafe { *(p as *const usize) };
             let n = if val & 1 == 1 {
                 // Overwritten, so the next word will be the size of the memory
-                unsafe { *(p as *const usize).add(1) }
+                unsafe { (*(p as *const AValueForward)).object_size }
             } else {
                 let ptr: &AValueHeader = unsafe { &*(p as *const AValueHeader) };
                 f(ptr);
@@ -267,9 +276,11 @@ impl AValueHeader {
         let sz = self.unpack().memory_size();
         let p = self as *const AValueHeader as *const (AValueHeader, T);
         let res = ptr::read(p).1;
-        let p = self as *const AValueHeader as *mut usize;
-        ptr::write(p, x | 1);
-        ptr::write(p.add(1), sz);
+        let p = self as *const AValueHeader as *mut AValueForward;
+        *p = AValueForward {
+            forward_ptr: x | 1,
+            object_size: sz,
+        };
         res
     }
 
