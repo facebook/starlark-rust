@@ -102,7 +102,8 @@ pub struct Module {
 
 impl FrozenModule {
     /// Get value, exported or private by name.
-    pub(crate) fn get_any_visibility(&self, name: &str) -> Option<(OwnedFrozenValue, Visibility)> {
+    #[doc(hidden)] // TODO(nga): Buck2 depends on this function
+    pub fn get_any_visibility(&self, name: &str) -> Option<(OwnedFrozenValue, Visibility)> {
         let (slot, vis) = self.1.0.names.get_name(name)?;
         // This code is safe because we know the frozen module ref keeps the values alive
         self.1
@@ -147,7 +148,7 @@ impl FrozenModule {
     pub fn module_documentation(&self) -> ModuleDocs {
         let members = self
             .names()
-            .filter(|n| Module::is_public_symbol(n))
+            .filter(|n| Module::default_visibility(n) == Visibility::Public)
             .map(|n| (n, self.get(n)))
             .filter_map(|(n, v)| v.map(|fv| (n.to_owned(), fv.value().get_ref().documentation())))
             .collect();
@@ -313,15 +314,19 @@ impl Module {
         slots.set_slot(slot, value);
     }
 
-    fn is_public_symbol(symbol: &str) -> bool {
-        !symbol.starts_with('_')
+    /// Symbols starting with underscore are considered private.
+    pub(crate) fn default_visibility(symbol: &str) -> Visibility {
+        match symbol.starts_with('_') {
+            true => Visibility::Private,
+            false => Visibility::Public,
+        }
     }
 
     /// Import symbols from a module, similar to what is done during `load()`.
     pub fn import_public_symbols(&self, module: &FrozenModule) {
         self.frozen_heap.add_reference(&module.0);
         for (k, slot) in module.1.0.names.symbols() {
-            if Self::is_public_symbol(k) {
+            if Self::default_visibility(k) == Visibility::Public {
                 if let Some(value) = module.1.0.slots.get_slot(slot) {
                     self.set(k, Value::new_frozen(value))
                 }
@@ -334,7 +339,7 @@ impl Module {
         module: &FrozenModule,
         symbol: &str,
     ) -> anyhow::Result<Value<'v>> {
-        if !Self::is_public_symbol(symbol) {
+        if Self::default_visibility(symbol) != Visibility::Public {
             return Err(EnvironmentError::CannotImportPrivateSymbol(symbol.to_owned()).into());
         }
         match module.get_any_visibility(symbol) {

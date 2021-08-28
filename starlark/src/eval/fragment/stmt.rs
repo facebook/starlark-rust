@@ -24,7 +24,7 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     codemap::{Span, Spanned},
-    environment::EnvironmentError,
+    environment::{EnvironmentError, Module},
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
         fragment::known::{list_to_tuple, Conditional},
@@ -305,11 +305,15 @@ impl Stmt {
                 Stmt::collect_defines(body, result);
             }
             Stmt::Def(name, ..) => {
-                result.insert(&name.node, Visibility::Public);
+                result.insert(&name.node, Module::default_visibility(&name.node));
             }
             Stmt::Load(load) => {
+                let vis = load.visibility;
                 for (name, _) in &load.node.args {
-                    let vis = load.visibility;
+                    let mut vis = vis;
+                    if Module::default_visibility(name) == Visibility::Private {
+                        vis = Visibility::Private;
+                    }
                     // If we are in the map as Public and Private, then Public wins.
                     // Everything but Load is definitely Public.
                     // So only insert if it wasn't already there.

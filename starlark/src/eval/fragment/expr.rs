@@ -19,7 +19,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
-    environment::EnvironmentError,
+    environment::{EnvironmentError, Module},
     errors::Diagnostic,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
@@ -156,7 +156,7 @@ impl Expr {
         result: &mut HashMap<&'a str, Visibility>,
     ) {
         expr.node.visit_lvalue(|x| {
-            result.insert(&x.node, Visibility::Public);
+            result.insert(&x.node, Module::default_visibility(&x.node));
         })
     }
 }
