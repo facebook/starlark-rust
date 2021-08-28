@@ -1271,6 +1271,16 @@ fn test_load_reexport() {
 }
 
 #[test]
+fn test_load_did_you_mean() {
+    let mut a = Assert::new();
+    a.module("categories", "colour = 1");
+    a.fail(
+        "load('categories', 'color')",
+        "Module has no symbol `color`, did you mean `colour`?",
+    );
+}
+
+#[test]
 fn test_display_debug() {
     let heap = Heap::new();
     let val = heap.alloc((vec![1, 2], "test", true));

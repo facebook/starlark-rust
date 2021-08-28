@@ -26,6 +26,7 @@ use crate::{
         slots::{FrozenSlots, ModuleSlotId, MutableSlots},
         EnvironmentError,
     },
+    errors::did_you_mean::did_you_mean,
     syntax::ast::Visibility,
     values::{
         docs,
@@ -343,7 +344,16 @@ impl Module {
             return Err(EnvironmentError::CannotImportPrivateSymbol(symbol.to_owned()).into());
         }
         match module.get_any_visibility(symbol) {
-            None => Err(EnvironmentError::ModuleHasNoSymbol(symbol.to_owned()).into()),
+            None => Err({
+                match did_you_mean(symbol, module.names()) {
+                    Some(better) => EnvironmentError::ModuleHasNoSymbolDidYouMean(
+                        symbol.to_owned(),
+                        better.to_owned(),
+                    )
+                    .into(),
+                    None => EnvironmentError::ModuleHasNoSymbol(symbol.to_owned()).into(),
+                }
+            }),
             Some((v, Visibility::Public)) => Ok(v.owned_value(self.frozen_heap())),
             Some((_, Visibility::Private)) => {
                 Err(EnvironmentError::ModuleSymbolIsNotExported(symbol.to_owned()).into())

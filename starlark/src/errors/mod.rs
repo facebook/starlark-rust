@@ -28,6 +28,8 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
+pub(crate) mod did_you_mean;
+
 /// An error plus its origination location and call stack.
 ///
 /// The underlying [`message`](Diagnostic::message) is an [`anyhow::Error`].

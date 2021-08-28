@@ -44,6 +44,8 @@ pub(crate) enum EnvironmentError {
     CannotImportPrivateSymbol(String),
     #[error("Module has no symbol `{0}`")]
     ModuleHasNoSymbol(String),
+    #[error("Module has no symbol `{0}`, did you mean `{1}`?")]
+    ModuleHasNoSymbolDidYouMean(String, String),
     #[error("Module symbol `{0}` is not exported")]
     ModuleSymbolIsNotExported(String),
     #[error("No imports are available, you tried `{0}` (no call to `Evaluator.set_loader`)")]
