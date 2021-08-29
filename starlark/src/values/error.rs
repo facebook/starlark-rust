@@ -47,6 +47,10 @@ pub enum ValueError {
     CannotMutateImmutableValue,
     #[error("This operation mutate an iterable for an iterator while iterating.")]
     MutationDuringIteration,
+    #[error("Object of type `{0}` has no attribute `{1}`")]
+    NoAttr(String, String),
+    #[error("Object of type `{0}` has no attribute `{1}`, did you mean `{2}`?")]
+    NoAttrDidYouMean(String, String, String),
 }
 
 #[derive(Debug, Error)]

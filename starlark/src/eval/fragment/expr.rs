@@ -20,7 +20,7 @@ use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
     environment::{EnvironmentError, Module},
-    errors::Diagnostic,
+    errors::{did_you_mean::did_you_mean, Diagnostic},
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
         fragment::known::{list_to_tuple, Conditional},
@@ -308,6 +308,20 @@ impl ArgsCompiled {
     }
 }
 
+#[cold]
+#[inline(never)]
+fn get_attr_no_attr_error<'v>(x: Value<'v>, attribute: &Symbol) -> anyhow::Error {
+    match did_you_mean(attribute.as_str(), x.dir_attr().iter().map(|s| s.as_str())) {
+        None => ValueError::NoAttr(x.get_type().to_owned(), attribute.as_str().to_owned()).into(),
+        Some(better) => ValueError::NoAttrDidYouMean(
+            x.get_type().to_owned(),
+            attribute.as_str().to_owned(),
+            better.to_owned(),
+        )
+        .into(),
+    }
+}
+
 fn get_attr_hashed<'v>(
     x: Value<'v>,
     attribute: &Symbol,
@@ -320,11 +334,7 @@ fn get_attr_hashed<'v>(
         }
     }
     match aref.get_attr(attribute.as_str(), heap) {
-        None => ValueError::unsupported_owned(
-            aref.get_type(),
-            &format!(".{}", attribute.as_str()),
-            None,
-        ),
+        None => Err(get_attr_no_attr_error(x, attribute)),
         Some(x) => Ok((AttrType::Field, x)),
     }
 }

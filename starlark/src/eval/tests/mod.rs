@@ -412,6 +412,22 @@ fn test_load_did_you_mean() {
 }
 
 #[test]
+fn test_getattr_did_you_mean_builtin() {
+    assert::fail(
+        "[].appen",
+        "Object of type `list` has no attribute `appen`, did you mean `append`?",
+    );
+}
+
+#[test]
+fn test_getattr_did_you_mean_custom() {
+    assert::fail(
+        "struct(grey=1).gray",
+        "Object of type `struct` has no attribute `gray`, did you mean `grey`?",
+    );
+}
+
+#[test]
 fn test_unassigned() {
     assert::fails("y = x; x = 1", &["referenced before assignment", "`x`"]);
     assert::fails(
