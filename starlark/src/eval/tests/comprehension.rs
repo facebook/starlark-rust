@@ -45,6 +45,21 @@ fn test_spec() {
 }
 
 #[test]
+fn test_scopes() {
+    // In the (unnatural) examples below, the scope of the variables x, y, and z
+    // is the entire comprehension block, except the operand of the first loop ([], [1] or w),
+    // which is resolved in the enclosing environment. The second loop may thus refer
+    // to variables defined by the third (z), even though such references would fail
+    // if actually executed.
+    check_comp(&["[1//0 for x in [] for y in z for z in ()] == []"]);
+    assert::fail(
+        "[1//0 for x in [1] for y in z for z in ()]",
+        "Local variable `z` referenced before assignment",
+    );
+    assert::fail("[() for x in w for w in [1]]", "Variable `w` not found");
+}
+
+#[test]
 fn test_dict() {
     // Dict comprehensions
     check_comp(&["{x: 1 for x in [0,1,2]} == {0: 1, 1: 1, 2: 1}"]);
