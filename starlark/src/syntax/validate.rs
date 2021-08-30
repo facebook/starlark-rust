@@ -22,8 +22,8 @@ use crate::{
     errors::Diagnostic,
     syntax::{
         ast::{
-            Argument, Assign, AssignOp, AstArgument, AstAssign, AstExpr, AstParameter, AstStmt,
-            AstString, Expr, Parameter, Stmt,
+            Argument, Assign, AssignIdent, AssignOp, AstArgument, AstAssign, AstAssignIdent,
+            AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
         },
         Dialect,
     },
@@ -144,18 +144,18 @@ impl Expr {
 
 fn test_param_name<'a, T>(
     argset: &mut HashSet<&'a str>,
-    n: &'a Spanned<String>,
+    n: &'a AstAssignIdent,
     arg: &Spanned<T>,
     codemap: &CodeMap,
 ) -> anyhow::Result<()> {
-    if argset.contains(n.node.as_str()) {
+    if argset.contains(n.node.0.as_str()) {
         return Err(Diagnostic::new(
             ArgumentUseOrderError::DuplicateParameterName,
             arg.span,
             codemap.dupe(),
         ));
     }
-    argset.insert(&n.node);
+    argset.insert(&n.node.0);
     Ok(())
 }
 
@@ -229,6 +229,7 @@ impl Stmt {
                 }
             }
         }
+        let name = name.into_map(AssignIdent);
         Ok(Stmt::Def(name, parameters, return_type, box stmts))
     }
 
@@ -241,7 +242,7 @@ impl Stmt {
                 }
                 Expr::Dot(a, b) => Assign::Dot(a, b),
                 Expr::ArrayIndirection(box (a, b)) => Assign::ArrayIndirection(box (a, b)),
-                Expr::Identifier(x) => Assign::Identifier(x),
+                Expr::Identifier(x) => Assign::Identifier(x.into_map(AssignIdent)),
                 _ => {
                     return Err(Diagnostic::new(
                         ValidateError::InvalidLhs,

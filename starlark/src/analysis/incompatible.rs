@@ -19,7 +19,7 @@ use crate::{
     analysis::types::{LintT, LintWarning},
     codemap::{CodeMap, FileSpan, Span},
     syntax::{
-        ast::{Assign, AstExpr, AstStmt, AstString, BinOp, Expr, Stmt},
+        ast::{Assign, AstAssignIdent, AstExpr, AstStmt, BinOp, Expr, Stmt},
         AstModule,
     },
 };
@@ -120,20 +120,20 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
     let mut exported = HashSet::new(); // name's already exported by is_load
 
     fn ident<'a>(
-        x: &'a AstString,
+        x: &'a AstAssignIdent,
         is_load: bool,
         codemap: &CodeMap,
         defined: &mut HashMap<&'a str, (Span, bool)>,
         res: &mut Vec<LintT<Incompatibility>>,
     ) {
-        if let Some((old, _)) = defined.get(x.node.as_str()) {
+        if let Some((old, _)) = defined.get(x.0.as_str()) {
             res.push(LintT::new(
                 codemap,
                 x.span,
-                Incompatibility::DuplicateTopLevelAssign(x.node.clone(), codemap.file_span(*old)),
+                Incompatibility::DuplicateTopLevelAssign(x.0.clone(), codemap.file_span(*old)),
             ));
         } else {
-            defined.insert(&x.node, (x.span, is_load));
+            defined.insert(&x.0, (x.span, is_load));
         }
     }
 
@@ -147,13 +147,13 @@ fn duplicate_top_level_assignment(module: &AstModule, res: &mut Vec<LintT<Incomp
         match &**x {
             Stmt::Assign(lhs, rhs) => match (&**lhs, &***rhs) {
                 (Assign::Identifier(x), Expr::Identifier(y))
-                    if x.node == y.node
-                        && defined.get(x.node.as_str()).map_or(false, |x| x.1)
-                        && !exported.contains(x.node.as_str()) =>
+                    if x.node.0 == y.node
+                        && defined.get(x.node.0.as_str()).map_or(false, |x| x.1)
+                        && !exported.contains(x.node.0.as_str()) =>
                 {
                     // Normally this would be an error, but if we load()'d it, this is how we'd reexport through Starlark.
                     // But only allow one export
-                    exported.insert(x.node.as_str());
+                    exported.insert(x.node.0.as_str());
                 }
                 _ => lhs.visit_lvalue(|x| ident(x, false, codemap, defined, res)),
             },

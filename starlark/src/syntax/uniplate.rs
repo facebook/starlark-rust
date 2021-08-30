@@ -19,7 +19,7 @@
 #![allow(clippy::many_single_char_names)]
 
 use crate::syntax::ast::{
-    Assign, AstExpr, AstStmt, AstString, Clause, Expr, ForClause, Parameter, Stmt,
+    Assign, AstAssignIdent, AstExpr, AstStmt, Clause, Expr, ForClause, Parameter, Stmt,
 };
 
 enum Visit<'a> {
@@ -108,7 +108,7 @@ impl Stmt {
 
 impl Parameter {
     // Split a parameter into name, type, default value
-    pub fn split(&self) -> (Option<&AstString>, Option<&AstExpr>, Option<&AstExpr>) {
+    pub fn split(&self) -> (Option<&AstAssignIdent>, Option<&AstExpr>, Option<&AstExpr>) {
         match self {
             Parameter::Normal(a, b) | Parameter::Args(a, b) | Parameter::KwArgs(a, b) => {
                 (Some(a), b.as_ref().map(|x| &**x), None)
@@ -202,8 +202,8 @@ impl Assign {
     /// Assuming this expression was on the left-hand-side of an assignment,
     /// visit all the names that are bound by this assignment.
     /// Note that assignments like `x[i] = n` don't bind any names.
-    pub fn visit_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstString)) {
-        fn recurse<'a>(x: &'a Assign, f: &mut impl FnMut(&'a AstString)) {
+    pub fn visit_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstAssignIdent)) {
+        fn recurse<'a>(x: &'a Assign, f: &mut impl FnMut(&'a AstAssignIdent)) {
             match x {
                 Assign::Identifier(x) => f(x),
                 Assign::Tuple(xs) => xs.iter().for_each(|x| recurse(x, f)),

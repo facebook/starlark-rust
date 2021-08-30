@@ -30,6 +30,7 @@ use std::{
 // especially for the location of the AST item
 pub type AstExpr = Spanned<Expr>;
 pub type AstAssign = Spanned<Assign>;
+pub type AstAssignIdent = Spanned<AssignIdent>;
 pub type AstArgument = Spanned<Argument>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = Spanned<Parameter>;
@@ -80,11 +81,11 @@ pub enum Argument {
 
 #[derive(Debug)]
 pub enum Parameter {
-    Normal(AstString, Option<Box<AstExpr>>),
-    WithDefaultValue(AstString, Option<Box<AstExpr>>, Box<AstExpr>),
+    Normal(AstAssignIdent, Option<Box<AstExpr>>),
+    WithDefaultValue(AstAssignIdent, Option<Box<AstExpr>>, Box<AstExpr>),
     NoArgs,
-    Args(AstString, Option<Box<AstExpr>>),
-    KwArgs(AstString, Option<Box<AstExpr>>),
+    Args(AstAssignIdent, Option<Box<AstExpr>>),
+    KwArgs(AstAssignIdent, Option<Box<AstExpr>>),
 }
 
 #[derive(Debug, Clone)]
@@ -128,14 +129,18 @@ pub enum Assign {
     Tuple(Vec<AstAssign>),
     ArrayIndirection(Box<(AstExpr, AstExpr)>),
     Dot(Box<AstExpr>, AstString),
-    Identifier(AstString),
+    Identifier(AstAssignIdent),
 }
+
+/// Identifier in assign position.
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct AssignIdent(pub String);
 
 /// `load` statement.
 #[derive(Debug)]
 pub struct Load {
     pub module: AstString,
-    pub args: Vec<(AstString, AstString)>,
+    pub args: Vec<(AstAssignIdent, AstString)>,
     pub visibility: Visibility,
 }
 
@@ -209,7 +214,7 @@ pub enum Stmt {
     IfElse(AstExpr, Box<(AstStmt, AstStmt)>),
     For(AstAssign, Box<(AstExpr, AstStmt)>),
     Def(
-        AstString,
+        AstAssignIdent,
         Vec<AstParameter>,
         Option<Box<AstExpr>>,
         Box<AstStmt>,
@@ -424,6 +429,12 @@ impl Display for Assign {
             Assign::ArrayIndirection(box (e, i)) => write!(f, "{}[{}]", e.node, i.node),
             Assign::Identifier(s) => s.node.fmt(f),
         }
+    }
+}
+
+impl Display for AssignIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 

@@ -114,26 +114,26 @@ fn duplicate_assign(
     res: &mut Vec<LintT<NameWarning>>,
 ) {
     // If I see two set's, without any intervening flow or get, the first one was pointless
-    let mut warnings = HashMap::new();
-    let mut captured = HashSet::new(); // those captured by child scopes
+    let mut warnings: HashMap<&str, _> = HashMap::new();
+    let mut captured: HashSet<&str> = HashSet::new(); // those captured by child scopes
     for x in &scope.inner {
         match x {
             Bind::Set(reason, x) => {
-                let ignored = !top && x.starts_with('_');
-                if !ignored && !captured.contains(&x.node) {
-                    if let Some((span, typ)) = warnings.insert(&x.node, (x.span, *reason)) {
-                        res.push(NameWarning::unused(typ, codemap, span, x.node.clone()))
+                let ignored = !top && x.0.starts_with('_');
+                if !ignored && !captured.contains(x.0.as_str()) {
+                    if let Some((span, typ)) = warnings.insert(&x.node.0, (x.span, *reason)) {
+                        res.push(NameWarning::unused(typ, codemap, span, x.0.clone()))
                     }
                 }
             }
             Bind::Get(x) => {
-                warnings.remove(&x.node);
+                warnings.remove(x.node.as_str());
             }
             Bind::Scope(scope) => {
                 duplicate_assign(codemap, scope, false, res);
                 for x in scope.free.keys() {
-                    warnings.remove(x);
-                    captured.insert(x);
+                    warnings.remove(x.as_str());
+                    captured.insert(x.as_str());
                 }
             }
             Bind::Flow => warnings.clear(),
@@ -176,10 +176,12 @@ fn unused_variable(codemap: &CodeMap, scope: &Scope, top: bool, res: &mut Vec<Li
 
 fn unassigned_variable(codemap: &CodeMap, scope: &Scope, res: &mut Vec<LintT<NameWarning>>) {
     // We only look for variables that are assigned in this scope, but haven't yet been assigned
-    let mut assigned = HashSet::new();
+    let mut assigned: HashSet<&str> = HashSet::new();
     for x in &scope.inner {
         match x {
-            Bind::Get(x) if scope.bound.get(&x.node).is_some() && !assigned.contains(&x.node) => {
+            Bind::Get(x)
+                if scope.bound.get(&x.node).is_some() && !assigned.contains(x.as_str()) =>
+            {
                 res.push(LintT::new(
                     codemap,
                     x.span,
@@ -187,7 +189,7 @@ fn unassigned_variable(codemap: &CodeMap, scope: &Scope, res: &mut Vec<LintT<Nam
                 ))
             }
             Bind::Set(_, x) => {
-                assigned.insert(&x.node);
+                assigned.insert(x.0.as_str());
             }
             Bind::Scope(scope) => unassigned_variable(codemap, scope, res),
             _ => {}
@@ -204,24 +206,23 @@ fn inappropriate_underscore(
 ) {
     match &**x {
         Stmt::Def(name, _, _, x) => {
-            if !top && name.starts_with('_') {
+            if !top && name.0.starts_with('_') {
                 res.push(LintT::new(
                     codemap,
                     name.span,
-                    NameWarning::UnderscoreFunction(name.node.clone()),
+                    NameWarning::UnderscoreFunction(name.0.clone()),
                 ))
             }
             inappropriate_underscore(codemap, x, false, res)
         }
         Stmt::Assign(lhs, rhs) | Stmt::AssignModify(lhs, _, rhs) if !top => {
             match (&**lhs, &***rhs) {
-                (Assign::Identifier(name), Expr::Lambda(..)) if name.starts_with('_') => {
-                    res.push(LintT::new(
+                (Assign::Identifier(name), Expr::Lambda(..)) if name.0.starts_with('_') => res
+                    .push(LintT::new(
                         codemap,
                         name.span,
-                        NameWarning::UnderscoreFunction(name.node.clone()),
-                    ))
-                }
+                        NameWarning::UnderscoreFunction(name.node.0.clone()),
+                    )),
                 _ => {}
             }
         }

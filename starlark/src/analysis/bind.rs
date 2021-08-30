@@ -19,7 +19,8 @@ use crate::{
     codemap::Span,
     syntax::{
         ast::{
-            AstAssign, AstExpr, AstParameter, AstStmt, AstString, Clause, Expr, ForClause, Stmt,
+            AssignIdent, AstAssign, AstAssignIdent, AstExpr, AstParameter, AstStmt, AstString,
+            Clause, Expr, ForClause, Stmt,
         },
         AstModule,
     },
@@ -36,8 +37,8 @@ pub enum Assigner {
 
 #[derive(Debug)]
 pub enum Bind {
-    Set(Assigner, AstString), // Variable assigned to directly
-    Get(AstString),           // Variable that is referenced
+    Set(Assigner, AstAssignIdent), // Variable assigned to directly
+    Get(AstString),                // Variable that is referenced
     Flow,         // Flow control occurs here (if, for etc) - can arrive or leave at this point
     Scope(Scope), // Entering a new scope (lambda/def/comprehension)
 }
@@ -51,12 +52,12 @@ pub struct Scope {
 
 impl Scope {
     fn new(inner: Vec<Bind>) -> Self {
-        let mut bound = HashMap::new();
-        let mut free = HashMap::new();
+        let mut bound: HashMap<String, _> = HashMap::new();
+        let mut free: HashMap<String, _> = HashMap::new();
         for x in &inner {
             match x {
                 Bind::Set(assigner, x) => {
-                    bound.entry(x.node.clone()).or_insert((*assigner, x.span));
+                    bound.entry(x.0.clone()).or_insert((*assigner, x.span));
                 }
                 Bind::Get(x) => {
                     free.entry(x.node.clone()).or_insert(x.span);
@@ -192,7 +193,7 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             // 2. Evaluate b.
             // 3. Assign to all variables in a.
             lhs.visit_expr(|x| expr(x, res));
-            lhs.visit_lvalue(|x| res.push(Bind::Get(x.clone())));
+            lhs.visit_lvalue(|x| res.push(Bind::Get(x.clone().into_map(|AssignIdent(s)| s))));
             expr(rhs, res);
             expr_lvalue(lhs, res);
         }

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::codemap::CodeMap;
+use crate::codemap::Spanned;
 use crate::syntax::lexer;
 use crate::syntax::dialect::Dialect;
 use crate::syntax::ast::*;
@@ -48,6 +49,11 @@ string: AstString = <l:@L> <e:"STRING"> <r:@R>
 identifier: AstString = <l:@L> <e:"IDENTIFIER"> <r:@R>
     => e.ast(l, r);
 
+AssignIdent: AstAssignIdent = <id:identifier> => Spanned {
+    span: id.span,
+    node: AssignIdent(id.node),
+};
+
 COMMA<E>: Vec<E> =
     <v0:(<E> ",")*> <e1:E?>
         => v0.into_iter().chain(e1).collect();
@@ -68,20 +74,20 @@ ReturnType: Option<Box<AstExpr>> = {
 
 Parameter: AstParameter = ASTP<Parameter_>;
 Parameter_: Parameter = {
-    <n:identifier> "=" <e:Test> => Parameter::WithDefaultValue(n, None, box e),
-    <identifier>            => Parameter::Normal(<>, None),
-    "*" <identifier>        => Parameter::Args(<>, None),
-    <l:@L> "*" <r:@R>       =>? Ok(dialect.check_keyword_only_arguments(codemap, l, r, Parameter::NoArgs)?),
-    "**" <identifier>       => Parameter::KwArgs(<>, None),
+    <n:AssignIdent> "=" <e:Test> => Parameter::WithDefaultValue(n, None, box e),
+    <AssignIdent>                => Parameter::Normal(<>, None),
+    "*" <AssignIdent>            => Parameter::Args(<>, None),
+    <l:@L> "*" <r:@R>                 =>? Ok(dialect.check_keyword_only_arguments(codemap, l, r, Parameter::NoArgs)?),
+    "**" <AssignIdent>           => Parameter::KwArgs(<>, None),
 };
 
 ParameterTyped: AstParameter = ASTP<ParameterTyped_>;
 ParameterTyped_: Parameter = {
-    <n:identifier> <t:Type> "=" <e:Test> => Parameter::WithDefaultValue(n, t, box e),
-    <identifier> <Type>            => Parameter::Normal(<>),
-    "*" <identifier> <Type>        => Parameter::Args(<>),
-    <l:@L> "*" <r:@R>              =>? Ok(dialect.check_keyword_only_arguments(codemap, l, r, Parameter::NoArgs)?),
-    "**" <identifier> <Type>       => Parameter::KwArgs(<>),
+    <n:AssignIdent> <t:Type> "=" <e:Test> => Parameter::WithDefaultValue(n, t, box e),
+    <AssignIdent> <Type>                  => Parameter::Normal(<>),
+    "*" <AssignIdent> <Type>              => Parameter::Args(<>),
+    <l:@L> "*" <r:@R>                          =>? Ok(dialect.check_keyword_only_arguments(codemap, l, r, Parameter::NoArgs)?),
+    "**" <AssignIdent> <Type>             => Parameter::KwArgs(<>),
 };
 
 Type: Option<Box<AstExpr>> = {
@@ -181,8 +187,13 @@ LoadStmtInner_: Load = "load" "(" <module:string> <args:("," <LoadStmtSyms>)+> "
 
 LoadStmtBindingName: AstString = <identifier> "=";
 
-LoadStmtSyms: (AstString, AstString) = <id:LoadStmtBindingName?> <n:string>
-    => (id.unwrap_or(n.clone()), n);
+LoadStmtSyms: (AstAssignIdent, AstString) = <id:LoadStmtBindingName?> <n:string> => {
+    let id = id.unwrap_or(n.clone());
+    (
+        Spanned { span: id.span, node: AssignIdent(id.node) },
+        n,
+    )
+};
 
 // Expression
 L<E>: AstExpr = <l:@L> <v:(<E> ",")*> <e:E> <f:","?> <r:@R>

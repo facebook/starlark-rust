@@ -90,21 +90,21 @@ impl Compiler<'_> {
     fn parameter(&mut self, x: AstParameter) -> ParameterCompiled<ExprCompiled> {
         match x.node {
             Parameter::Normal(x, t) => ParameterCompiled::Normal(
-                x.node,
+                x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
             Parameter::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
-                x.node,
+                x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
                 self.expr(*v).as_compiled(),
             ),
             Parameter::NoArgs => ParameterCompiled::NoArgs,
             Parameter::Args(x, t) => ParameterCompiled::Args(
-                x.node,
+                x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
             Parameter::KwArgs(x, t) => ParameterCompiled::KwArgs(
-                x.node,
+                x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
         }

@@ -94,14 +94,14 @@ impl Compiler<'_> {
                 let v = v.into_map(|x| self.assign(x));
                 box move |value, eval| eval_assign_list(&v, span, value, eval)
             }
-            Assign::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node) {
+            Assign::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node.0) {
                 Slot::Local(slot) => box move |value, eval| {
                     eval.set_slot_local(slot, value);
                     Ok(())
                 },
                 Slot::Module(slot) => box move |value, eval| {
                     // Make sure that `ComplexValue`s get their name as soon as possible
-                    value.export_as(&ident.node, eval);
+                    value.export_as(&ident.node.0, eval);
                     eval.set_slot_module(slot, value);
                     Ok(())
                 },
@@ -151,11 +151,11 @@ impl Compiler<'_> {
             }
             Assign::Identifier(ident) => {
                 let name = ident.node;
-                match self.scope.get_name_or_panic(&name) {
+                match self.scope.get_name_or_panic(&name.0) {
                     Slot::Local(slot) => {
                         let rhs = rhs.as_compiled();
                         stmt!("assign_local", span_stmt, |eval| {
-                            let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
+                            let v = throw(eval.get_slot_local(slot, &name.0), span_lhs, eval)?;
                             let rhs = rhs(eval)?;
                             let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                             eval.set_slot_local(slot, v);
@@ -336,7 +336,7 @@ impl Compiler<'_> {
         match stmt.node {
             Stmt::Def(name, params, return_type, suite) => {
                 let rhs = self
-                    .function(&name.node, params, return_type, *suite)
+                    .function(&name.0, params, return_type, *suite)
                     .as_compiled();
                 let lhs = self.assign(Spanned {
                     span: name.span,
@@ -474,7 +474,7 @@ impl Compiler<'_> {
                 let name = load.node.module.node;
                 let symbols = load.node.args.into_map(|(x, y)| {
                     (
-                        match self.scope.get_name_or_panic(&x.node) {
+                        match self.scope.get_name_or_panic(&x.node.0) {
                             Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
                             Slot::Module(slot) => slot,
                         },

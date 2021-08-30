@@ -231,19 +231,19 @@ impl Stmt {
                 Stmt::collect_defines(body, result);
             }
             Stmt::Def(name, ..) => {
-                result.insert(&name.node, Module::default_visibility(&name.node));
+                result.insert(&name.node.0, Module::default_visibility(&name.0));
             }
             Stmt::Load(load) => {
                 let vis = load.visibility;
                 for (name, _) in &load.node.args {
                     let mut vis = vis;
-                    if Module::default_visibility(name) == Visibility::Private {
+                    if Module::default_visibility(&name.0) == Visibility::Private {
                         vis = Visibility::Private;
                     }
                     // If we are in the map as Public and Private, then Public wins.
                     // Everything but Load is definitely Public.
                     // So only insert if it wasn't already there.
-                    result.entry(&name.node).or_insert(vis);
+                    result.entry(&name.node.0).or_insert(vis);
                 }
             }
             _ => stmt.node.visit_stmt(|x| Stmt::collect_defines(x, result)),
@@ -256,7 +256,7 @@ impl Assign {
     // for variable etc)
     fn collect_defines_lvalue<'a>(expr: &'a AstAssign, result: &mut HashMap<&'a str, Visibility>) {
         expr.node.visit_lvalue(|x| {
-            result.insert(&x.node, Module::default_visibility(&x.node));
+            result.insert(x.0.as_str(), Module::default_visibility(x.0.as_str()));
         })
     }
 }

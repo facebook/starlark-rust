@@ -27,22 +27,22 @@ impl AstModule {
     pub fn exported_symbols(&self) -> Vec<(FileSpan, &str)> {
         // Map since we only want to store the first of each export
         // IndexMap since we want the order to match the order they were defined in
-        let mut result = IndexMap::new();
+        let mut result: IndexMap<&str, _> = IndexMap::new();
         self.statement.visit_stmt(|x| match &**x {
             Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
                 dest.visit_lvalue(|name| {
-                    result.entry(&name.node).or_insert(name.span);
+                    result.entry(&name.0).or_insert(name.span);
                 });
             }
             Stmt::Def(name, ..) => {
-                result.entry(name).or_insert(name.span);
+                result.entry(&name.0).or_insert(name.span);
             }
             _ => {}
         });
         result
             .into_iter()
             .filter(|(name, _)| !name.starts_with('_'))
-            .map(|(name, span)| (self.file_span(span), name.as_str()))
+            .map(|(name, span)| (self.file_span(span), name))
             .collect()
     }
 }
