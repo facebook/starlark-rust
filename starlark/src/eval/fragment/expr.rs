@@ -352,7 +352,7 @@ impl Compiler<'_> {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
-            Expr::Identifier(ident) => {
+            Expr::Identifier(ident, ()) => {
                 let name = ident.node;
                 let span = ident.span;
                 match self.scope.get_name(&name) {

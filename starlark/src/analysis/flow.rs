@@ -70,7 +70,7 @@ fn returns(x: &AstStmt) -> Vec<(Span, Option<&AstExpr>)> {
 fn is_fail(x: &AstExpr) -> bool {
     match &**x {
         Expr::Call(x, _) => match &***x {
-            Expr::Identifier(name) => name.node == "fail",
+            Expr::Identifier(name, _) => name.node == "fail",
             _ => false,
         },
         _ => false,
@@ -94,7 +94,7 @@ fn require_return_expression(ret_type: &Option<Box<AstExpr>>) -> Option<Span> {
     match ret_type {
         None => None,
         Some(x) => match &***x {
-            Expr::Identifier(x) if x.node == "None" => None,
+            Expr::Identifier(x, _) if x.node == "None" => None,
             _ => Some(x.span),
         },
     }

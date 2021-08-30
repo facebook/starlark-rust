@@ -51,7 +51,7 @@ identifier: AstString = <l:@L> <e:"IDENTIFIER"> <r:@R>
 
 AssignIdent: AstAssignIdent = <id:identifier> => Spanned {
     span: id.span,
-    node: AssignIdent(id.node),
+    node: AssignIdentP(id.node, ()),
 };
 
 COMMA<E>: Vec<E> =
@@ -190,7 +190,7 @@ LoadStmtBindingName: AstString = <identifier> "=";
 LoadStmtSyms: (AstAssignIdent, AstString) = <id:LoadStmtBindingName?> <n:string> => {
     let id = id.unwrap_or(n.clone());
     (
-        Spanned { span: id.span, node: AssignIdent(id.node) },
+        Spanned { span: id.span, node: AssignIdentP(id.node, ()) },
         n,
     )
 };
@@ -240,7 +240,7 @@ Argument_: Argument = {
 
 Operand: AstExpr = {
     <l:@L> <i:identifier> <r:@R>
-        => Expr::Identifier(i).ast(l, r),
+        => Expr::Identifier(i, ()).ast(l, r),
     <l:@L> <i:integer> <r:@R>
         => Expr::Literal(AstLiteral::IntLiteral(i)).ast(l, r),
     <l:@L> <s:string> <r:@R>

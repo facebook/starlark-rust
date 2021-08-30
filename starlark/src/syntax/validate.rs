@@ -22,7 +22,7 @@ use crate::{
     errors::Diagnostic,
     syntax::{
         ast::{
-            Argument, Assign, AssignIdent, AssignOp, AstArgument, AstAssign, AstAssignIdent,
+            Argument, Assign, AssignIdentP, AssignOp, AstArgument, AstAssign, AstAssignIdent,
             AstExpr, AstParameter, AstStmt, AstString, Expr, Parameter, Stmt,
         },
         Dialect,
@@ -229,7 +229,7 @@ impl Stmt {
                 }
             }
         }
-        let name = name.into_map(AssignIdent);
+        let name = name.into_map(|s| AssignIdentP(s, ()));
         Ok(Stmt::Def(name, parameters, return_type, box stmts))
     }
 
@@ -242,7 +242,7 @@ impl Stmt {
                 }
                 Expr::Dot(a, b) => Assign::Dot(a, b),
                 Expr::ArrayIndirection(box (a, b)) => Assign::ArrayIndirection(box (a, b)),
-                Expr::Identifier(x) => Assign::Identifier(x.into_map(AssignIdent)),
+                Expr::Identifier(x, ()) => Assign::Identifier(x.into_map(|s| AssignIdentP(s, ()))),
                 _ => {
                     return Err(Diagnostic::new(
                         ValidateError::InvalidLhs,

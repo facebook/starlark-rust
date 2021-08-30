@@ -56,7 +56,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
                 AstLiteral::IntLiteral(x) => Some((Key::Int(x.node), x.span)),
                 AstLiteral::StringLiteral(x) => Some((Key::String(&x.node), x.span)),
             },
-            Expr::Identifier(x) => Some((Key::Identifier(&x.node), x.span)),
+            Expr::Identifier(x, ()) => Some((Key::Identifier(&x.node), x.span)),
             _ => None,
         }
     }

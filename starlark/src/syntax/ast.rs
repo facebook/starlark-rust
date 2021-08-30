@@ -23,20 +23,53 @@ use gazebo::prelude::*;
 use static_assertions::assert_eq_size;
 use std::{
     fmt,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
 };
+
+/// Payload types attached to AST nodes.
+pub trait AstPayload: Debug {
+    type IdentPayload: Debug;
+    type IdentAssignPayload: Debug;
+}
+
+/// Default implementation of payload, which attaches `()` to nodes.
+/// This payload is returned with AST by parser.
+#[derive(Debug, Copy, Clone, Dupe)]
+pub struct AstNoPayload;
+impl AstPayload for AstNoPayload {
+    type IdentPayload = ();
+    type IdentAssignPayload = ();
+}
+
+pub type Expr = ExprP<AstNoPayload>;
+pub type Assign = AssignP<AstNoPayload>;
+pub type AssignIdent = AssignIdentP<AstNoPayload>;
+pub type Clause = ClauseP<AstNoPayload>;
+pub type ForClause = ForClauseP<AstNoPayload>;
+pub type Argument = ArgumentP<AstNoPayload>;
+pub type Parameter = ParameterP<AstNoPayload>;
+pub type Load = LoadP<AstNoPayload>;
+pub type Stmt = StmtP<AstNoPayload>;
 
 // Boxed types used for storing information from the parsing will be used
 // especially for the location of the AST item
-pub type AstExpr = Spanned<Expr>;
-pub type AstAssign = Spanned<Assign>;
-pub type AstAssignIdent = Spanned<AssignIdent>;
-pub type AstArgument = Spanned<Argument>;
+pub type AstExprP<P> = Spanned<ExprP<P>>;
+pub type AstAssignP<P> = Spanned<AssignP<P>>;
+pub type AstAssignIdentP<P> = Spanned<AssignIdentP<P>>;
+pub type AstArgumentP<P> = Spanned<ArgumentP<P>>;
+pub type AstParameterP<P> = Spanned<ParameterP<P>>;
+pub type AstLoadP<P> = Spanned<LoadP<P>>;
+pub type AstStmtP<P> = Spanned<StmtP<P>>;
+
+pub type AstExpr = AstExprP<AstNoPayload>;
+pub type AstAssign = AstAssignP<AstNoPayload>;
+pub type AstAssignIdent = AstAssignIdentP<AstNoPayload>;
+pub type AstArgument = AstArgumentP<AstNoPayload>;
 pub type AstString = Spanned<String>;
-pub type AstParameter = Spanned<Parameter>;
+pub type AstParameter = AstParameterP<AstNoPayload>;
 pub type AstInt = Spanned<i32>;
-pub type AstLoad = Spanned<Load>;
-pub type AstStmt = Spanned<Stmt>;
+pub type AstLoad = AstLoadP<AstNoPayload>;
+pub type AstStmt = AstStmtP<AstNoPayload>;
 
 // We don't care _that_ much about the size of these structures,
 // but we equally don't want to regress without noticing.
@@ -72,20 +105,24 @@ pub(crate) trait ToAst: Sized {
 impl<T> ToAst for T {}
 
 #[derive(Debug)]
-pub enum Argument {
-    Positional(AstExpr),
-    Named(AstString, AstExpr),
-    Args(AstExpr),
-    KwArgs(AstExpr),
+pub enum ArgumentP<P: AstPayload> {
+    Positional(AstExprP<P>),
+    Named(AstString, AstExprP<P>),
+    Args(AstExprP<P>),
+    KwArgs(AstExprP<P>),
 }
 
 #[derive(Debug)]
-pub enum Parameter {
-    Normal(AstAssignIdent, Option<Box<AstExpr>>),
-    WithDefaultValue(AstAssignIdent, Option<Box<AstExpr>>, Box<AstExpr>),
+pub enum ParameterP<P: AstPayload> {
+    Normal(AstAssignIdentP<P>, Option<Box<AstExprP<P>>>),
+    WithDefaultValue(
+        AstAssignIdentP<P>,
+        Option<Box<AstExprP<P>>>,
+        Box<AstExprP<P>>,
+    ),
     NoArgs,
-    Args(AstAssignIdent, Option<Box<AstExpr>>),
-    KwArgs(AstAssignIdent, Option<Box<AstExpr>>),
+    Args(AstAssignIdentP<P>, Option<Box<AstExprP<P>>>),
+    KwArgs(AstAssignIdentP<P>, Option<Box<AstExprP<P>>>),
 }
 
 #[derive(Debug, Clone)]
@@ -95,65 +132,69 @@ pub enum AstLiteral {
 }
 
 #[derive(Debug)]
-pub enum Expr {
-    Tuple(Vec<AstExpr>),
-    Dot(Box<AstExpr>, AstString),
-    Call(Box<AstExpr>, Vec<AstArgument>),
-    ArrayIndirection(Box<(AstExpr, AstExpr)>),
+pub enum ExprP<P: AstPayload> {
+    Tuple(Vec<AstExprP<P>>),
+    Dot(Box<AstExprP<P>>, AstString),
+    Call(Box<AstExprP<P>>, Vec<AstArgumentP<P>>),
+    ArrayIndirection(Box<(AstExprP<P>, AstExprP<P>)>),
     Slice(
-        Box<AstExpr>,
-        Option<Box<AstExpr>>,
-        Option<Box<AstExpr>>,
-        Option<Box<AstExpr>>,
+        Box<AstExprP<P>>,
+        Option<Box<AstExprP<P>>>,
+        Option<Box<AstExprP<P>>>,
+        Option<Box<AstExprP<P>>>,
     ),
-    Identifier(AstString),
-    Lambda(Vec<AstParameter>, Box<AstExpr>),
+    Identifier(AstString, P::IdentPayload),
+    Lambda(Vec<AstParameterP<P>>, Box<AstExprP<P>>),
     Literal(AstLiteral),
-    Not(Box<AstExpr>),
-    Minus(Box<AstExpr>),
-    Plus(Box<AstExpr>),
-    BitNot(Box<AstExpr>),
-    Op(Box<AstExpr>, BinOp, Box<AstExpr>),
-    If(Box<(AstExpr, AstExpr, AstExpr)>), // Order: condition, v1, v2 <=> v1 if condition else v2
-    List(Vec<AstExpr>),
-    Dict(Vec<(AstExpr, AstExpr)>),
-    ListComprehension(Box<AstExpr>, Box<ForClause>, Vec<Clause>),
-    DictComprehension(Box<(AstExpr, AstExpr)>, Box<ForClause>, Vec<Clause>),
+    Not(Box<AstExprP<P>>),
+    Minus(Box<AstExprP<P>>),
+    Plus(Box<AstExprP<P>>),
+    BitNot(Box<AstExprP<P>>),
+    Op(Box<AstExprP<P>>, BinOp, Box<AstExprP<P>>),
+    If(Box<(AstExprP<P>, AstExprP<P>, AstExprP<P>)>), // Order: condition, v1, v2 <=> v1 if condition else v2
+    List(Vec<AstExprP<P>>),
+    Dict(Vec<(AstExprP<P>, AstExprP<P>)>),
+    ListComprehension(Box<AstExprP<P>>, Box<ForClauseP<P>>, Vec<ClauseP<P>>),
+    DictComprehension(
+        Box<(AstExprP<P>, AstExprP<P>)>,
+        Box<ForClauseP<P>>,
+        Vec<ClauseP<P>>,
+    ),
 }
 
 /// In some places e.g. AssignModify, the Tuple case is not allowed.
 #[derive(Debug)]
-pub enum Assign {
+pub enum AssignP<P: AstPayload> {
     // We use Tuple for both Tuple and List,
     // as these have the same semantics in Starlark.
-    Tuple(Vec<AstAssign>),
-    ArrayIndirection(Box<(AstExpr, AstExpr)>),
-    Dot(Box<AstExpr>, AstString),
-    Identifier(AstAssignIdent),
+    Tuple(Vec<AstAssignP<P>>),
+    ArrayIndirection(Box<(AstExprP<P>, AstExprP<P>)>),
+    Dot(Box<AstExprP<P>>, AstString),
+    Identifier(AstAssignIdentP<P>),
 }
 
 /// Identifier in assign position.
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct AssignIdent(pub String);
+pub struct AssignIdentP<P: AstPayload>(pub String, pub P::IdentAssignPayload);
 
 /// `load` statement.
 #[derive(Debug)]
-pub struct Load {
+pub struct LoadP<P: AstPayload> {
     pub module: AstString,
-    pub args: Vec<(AstAssignIdent, AstString)>,
+    pub args: Vec<(AstAssignIdentP<P>, AstString)>,
     pub visibility: Visibility,
 }
 
 #[derive(Debug)]
-pub struct ForClause {
-    pub var: AstAssign,
-    pub over: AstExpr,
+pub struct ForClauseP<P: AstPayload> {
+    pub var: AstAssignP<P>,
+    pub over: AstExprP<P>,
 }
 
 #[derive(Debug)]
-pub enum Clause {
-    For(ForClause),
-    If(AstExpr),
+pub enum ClauseP<P: AstPayload> {
+    For(ForClauseP<P>),
+    If(AstExprP<P>),
 }
 
 #[derive(Debug, Clone, Copy, Dupe, Eq, PartialEq)]
@@ -201,26 +242,26 @@ pub enum Visibility {
 }
 
 #[derive(Debug)]
-pub enum Stmt {
+pub enum StmtP<P: AstPayload> {
     Break,
     Continue,
     Pass,
-    Return(Option<AstExpr>),
-    Expression(AstExpr),
-    Assign(AstAssign, Box<AstExpr>),
-    AssignModify(AstAssign, AssignOp, Box<AstExpr>),
-    Statements(Vec<AstStmt>),
-    If(AstExpr, Box<AstStmt>),
-    IfElse(AstExpr, Box<(AstStmt, AstStmt)>),
-    For(AstAssign, Box<(AstExpr, AstStmt)>),
+    Return(Option<AstExprP<P>>),
+    Expression(AstExprP<P>),
+    Assign(AstAssignP<P>, Box<AstExprP<P>>),
+    AssignModify(AstAssignP<P>, AssignOp, Box<AstExprP<P>>),
+    Statements(Vec<AstStmtP<P>>),
+    If(AstExprP<P>, Box<AstStmtP<P>>),
+    IfElse(AstExprP<P>, Box<(AstStmtP<P>, AstStmtP<P>)>),
+    For(AstAssignP<P>, Box<(AstExprP<P>, AstStmtP<P>)>),
     Def(
-        AstAssignIdent,
-        Vec<AstParameter>,
-        Option<Box<AstExpr>>,
-        Box<AstStmt>,
+        AstAssignIdentP<P>,
+        Vec<AstParameterP<P>>,
+        Option<Box<AstExprP<P>>>,
+        Box<AstStmtP<P>>,
     ),
     // The Visibility of a Load is implicit from the Dialect, not written by a user
-    Load(AstLoad),
+    Load(AstLoadP<P>),
 }
 
 impl Argument {
@@ -329,7 +370,7 @@ fn fmt_string_literal(f: &mut Formatter<'_>, s: &str) -> fmt::Result {
 impl Display for AstLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            AstLiteral::IntLiteral(i) => i.node.fmt(f),
+            AstLiteral::IntLiteral(i) => write!(f, "{}", &i.node),
             AstLiteral::StringLiteral(s) => fmt_string_literal(f, &s.node),
         }
     }
@@ -340,15 +381,15 @@ impl Display for Expr {
         match self {
             Expr::Tuple(e) => {
                 f.write_str("(")?;
-                comma_separated_fmt(f, e, |x, f| x.node.fmt(f), true)?;
+                comma_separated_fmt(f, e, |x, f| write!(f, "{}", x.node), true)?;
                 f.write_str(")")
             }
             Expr::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
             Expr::Lambda(params, e) => {
                 f.write_str("(lambda ")?;
-                comma_separated_fmt(f, params, |x, f| x.node.fmt(f), false)?;
+                comma_separated_fmt(f, params, |x, f| write!(f, "{}", x.node), false)?;
                 f.write_str(": ")?;
-                e.node.fmt(f)?;
+                write!(f, "{}", e.node)?;
                 f.write_str(")")
             }
             Expr::Call(e, args) => {
@@ -357,7 +398,7 @@ impl Display for Expr {
                     if i != 0 {
                         f.write_str(", ")?;
                     }
-                    x.fmt(f)?;
+                    write!(f, "{}", x.node)?;
                 }
                 f.write_str(")")
             }
@@ -370,14 +411,14 @@ impl Display for Expr {
                     f.write_str(":")?
                 }
                 if let Some(x) = i2 {
-                    x.node.fmt(f)?
+                    write!(f, "{}", x.node)?
                 }
                 if let Some(x) = i3 {
                     write!(f, ":{}", x.node)?
                 }
                 Ok(())
             }
-            Expr::Identifier(s) => s.node.fmt(f),
+            Expr::Identifier(s, _) => write!(f, "{}", s.node),
             Expr::Not(e) => write!(f, "(not {})", e.node),
             Expr::Minus(e) => write!(f, "-{}", e.node),
             Expr::Plus(e) => write!(f, "+{}", e.node),
@@ -388,7 +429,7 @@ impl Display for Expr {
             }
             Expr::List(v) => {
                 f.write_str("[")?;
-                comma_separated_fmt(f, v, |x, f| x.node.fmt(f), false)?;
+                comma_separated_fmt(f, v, |x, f| write!(f, "{}", x.node), false)?;
                 f.write_str("]")
             }
             Expr::Dict(v) => {
@@ -398,21 +439,21 @@ impl Display for Expr {
             }
             Expr::ListComprehension(e, for_, c) => {
                 write!(f, "[{}", e.node)?;
-                for_.fmt(f)?;
+                write!(f, "{}", for_)?;
                 for x in c {
-                    x.fmt(f)?;
+                    write!(f, "{}", x)?;
                 }
                 f.write_str("]")
             }
             Expr::DictComprehension(box (k, v), for_, c) => {
                 write!(f, "{{{}: {}", k.node, v.node)?;
-                for_.fmt(f)?;
+                write!(f, "{}", for_)?;
                 for x in c {
-                    x.fmt(f)?;
+                    write!(f, "{}", x)?;
                 }
                 f.write_str("}}")
             }
-            Expr::Literal(x) => x.fmt(f),
+            Expr::Literal(x) => write!(f, "{}", x),
         }
     }
 }
@@ -422,26 +463,26 @@ impl Display for Assign {
         match self {
             Assign::Tuple(e) => {
                 f.write_str("(")?;
-                comma_separated_fmt(f, e, |x, f| x.node.fmt(f), true)?;
+                comma_separated_fmt(f, e, |x, f| write!(f, "{}", x.node), true)?;
                 f.write_str(")")
             }
             Assign::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
             Assign::ArrayIndirection(box (e, i)) => write!(f, "{}[{}]", e.node, i.node),
-            Assign::Identifier(s) => s.node.fmt(f),
+            Assign::Identifier(s) => write!(f, "{}", s.node),
         }
     }
 }
 
 impl Display for AssignIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        write!(f, "{}", self.0)
     }
 }
 
 impl Display for Argument {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Argument::Positional(s) => s.node.fmt(f),
+            Argument::Positional(s) => write!(f, "{}", s.node),
             Argument::Named(s, e) => write!(f, "{} = {}", s.node, e.node),
             Argument::Args(s) => write!(f, "*{}", s.node),
             Argument::KwArgs(s) => write!(f, "**{}", s.node),
@@ -478,7 +519,7 @@ impl Display for ForClause {
 impl Display for Clause {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Clause::For(x) => x.fmt(f),
+            Clause::For(x) => write!(f, "{}", x),
             Clause::If(x) => write!(f, " if {}", x.node),
         }
     }
@@ -517,7 +558,7 @@ impl Stmt {
             }
             Stmt::Def(name, params, return_type, suite) => {
                 write!(f, "{}def {}(", tab, name.node)?;
-                comma_separated_fmt(f, params, |x, f| x.node.fmt(f), false)?;
+                comma_separated_fmt(f, params, |x, f| write!(f, "{}", x.node), false)?;
                 f.write_str(")")?;
                 if let Some(rt) = return_type {
                     write!(f, " -> {}", rt.node)?;

@@ -144,7 +144,7 @@ impl Expr {
                 c.iter().for_each(|x| f(x));
                 d.iter().for_each(|x| f(x));
             }
-            Expr::Identifier(_) => {}
+            Expr::Identifier(..) => {}
             Expr::Lambda(args, body) => {
                 args.iter().for_each(|x| x.visit_expr(|x| f(x)));
                 f(body);
@@ -193,7 +193,7 @@ impl Assign {
                     f(a);
                     f(b);
                 }
-                Assign::Identifier(_) => {}
+                Assign::Identifier(..) => {}
             }
         }
         recurse(self, &mut f)

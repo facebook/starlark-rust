@@ -19,7 +19,7 @@ use crate::{
     codemap::Span,
     syntax::{
         ast::{
-            AssignIdent, AstAssign, AstAssignIdent, AstExpr, AstParameter, AstStmt, AstString,
+            AssignIdentP, AstAssign, AstAssignIdent, AstExpr, AstParameter, AstStmt, AstString,
             Clause, Expr, ForClause, Stmt,
         },
         AstModule,
@@ -106,7 +106,7 @@ fn comprehension(
 
 fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
     match &**x {
-        Expr::Identifier(x) => res.push(Bind::Get(x.clone())),
+        Expr::Identifier(x, _) => res.push(Bind::Get(x.clone())),
         Expr::Lambda(args, body) => {
             let mut inner = Vec::new();
             parameters(args, res, &mut inner);
@@ -193,7 +193,7 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             // 2. Evaluate b.
             // 3. Assign to all variables in a.
             lhs.visit_expr(|x| expr(x, res));
-            lhs.visit_lvalue(|x| res.push(Bind::Get(x.clone().into_map(|AssignIdent(s)| s))));
+            lhs.visit_lvalue(|x| res.push(Bind::Get(x.clone().into_map(|AssignIdentP(s, ())| s))));
             expr(rhs, res);
             expr_lvalue(lhs, res);
         }
