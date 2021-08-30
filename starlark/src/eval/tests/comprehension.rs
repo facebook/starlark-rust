@@ -93,6 +93,16 @@ fn test_if_only() {
 }
 
 #[test]
+fn test_same_var_twice_in_assignment() {
+    check_comp(&["[x for (x, x) in [(1, 2), (3, 4)]] == [2, 4]"]);
+}
+
+#[test]
+fn test_same_var_in_two_fors() {
+    check_comp(&["[x for x in [[1, 2], [3]] for x in x] == [1, 2, 3]"]);
+}
+
+#[test]
 fn test_comprehension_blocks() {
     assert::fail(
         r#"

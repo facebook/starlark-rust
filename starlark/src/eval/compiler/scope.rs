@@ -20,7 +20,7 @@ use crate::{
     eval::runtime::slots::LocalSlotId,
     syntax::ast::{AstAssign, AstStmt, Expr, Stmt},
 };
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 
 pub(crate) struct Scope<'a> {
     module: &'a MutableNames,
@@ -30,8 +30,20 @@ pub(crate) struct Scope<'a> {
     unscopes: Vec<Unscope>,
 }
 
+struct UnscopeBinding {
+    slot: LocalSlotId,
+    /// Variable mappings in local scope are overwritten by comprehension variables.
+    ///
+    /// When we enter comprehension, we replace local scope variable slots with comprehension
+    /// scope slots. This field stores the original slot in the local scope,
+    /// or `None` if there was no mapping for the variable.
+    ///
+    /// When we pop the comprehension scope, we restore the mapping from this value.
+    undo: Option<LocalSlotId>,
+}
+
 #[derive(Default)]
-struct Unscope(Vec<(String, Option<LocalSlotId>)>);
+struct Unscope(HashMap<String, UnscopeBinding>);
 
 #[derive(Default, Debug)]
 pub(crate) struct ScopeNames {
@@ -71,29 +83,34 @@ impl ScopeNames {
     }
 
     fn add_scoped(&mut self, name: &str, unscope: &mut Unscope) -> LocalSlotId {
-        let slot = self.next_slot();
-        let undo = match self.mp.get_mut(name) {
-            Some(v) => {
-                let old = *v;
-                *v = slot;
-                Some(old)
+        match unscope.0.entry(name.to_owned()) {
+            hash_map::Entry::Occupied(e) => e.get().slot,
+            hash_map::Entry::Vacant(e) => {
+                let slot = self.next_slot();
+                let undo = match self.mp.get_mut(name) {
+                    Some(v) => {
+                        let old = *v;
+                        *v = slot;
+                        Some(old)
+                    }
+                    None => {
+                        self.mp.insert(name.to_owned(), slot);
+                        None
+                    }
+                };
+                e.insert(UnscopeBinding { slot, undo });
+                slot
             }
-            None => {
-                self.mp.insert(name.to_owned(), slot);
-                None
-            }
-        };
-        unscope.0.push((name.to_owned(), undo));
-        slot
+        }
     }
 
     fn unscope(&mut self, unscope: Unscope) {
-        for (name, v) in unscope.0.iter().rev() {
-            match v {
+        for (name, UnscopeBinding { undo, .. }) in unscope.0 {
+            match undo {
                 None => {
-                    self.mp.remove(name);
+                    self.mp.remove(&name);
                 }
-                Some(v) => *self.mp.get_mut(name).unwrap() = *v,
+                Some(v) => *self.mp.get_mut(&name).unwrap() = v,
             }
         }
     }
