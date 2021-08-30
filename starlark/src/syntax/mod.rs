@@ -31,6 +31,7 @@ pub(crate) mod ast;
 pub(crate) mod cursors;
 mod dialect;
 pub(crate) mod lexer;
+pub(crate) mod payload_map;
 pub(crate) mod validate;
 
 #[allow(clippy::all)]
