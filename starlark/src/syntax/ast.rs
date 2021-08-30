@@ -264,27 +264,27 @@ pub enum StmtP<P: AstPayload> {
     Load(AstLoadP<P>),
 }
 
-impl Argument {
-    pub fn expr(&self) -> &AstExpr {
+impl<P: AstPayload> ArgumentP<P> {
+    pub fn expr(&self) -> &AstExprP<P> {
         match self {
-            Argument::Positional(x) => x,
-            Argument::Named(_, x) => x,
-            Argument::Args(x) => x,
-            Argument::KwArgs(x) => x,
+            ArgumentP::Positional(x) => x,
+            ArgumentP::Named(_, x) => x,
+            ArgumentP::Args(x) => x,
+            ArgumentP::KwArgs(x) => x,
         }
     }
 
-    pub fn into_expr(self) -> AstExpr {
+    pub fn into_expr(self) -> AstExprP<P> {
         match self {
-            Argument::Positional(x) => x,
-            Argument::Named(_, x) => x,
-            Argument::Args(x) => x,
-            Argument::KwArgs(x) => x,
+            ArgumentP::Positional(x) => x,
+            ArgumentP::Named(_, x) => x,
+            ArgumentP::Args(x) => x,
+            ArgumentP::KwArgs(x) => x,
         }
     }
 
     pub fn is_positional(&self) -> bool {
-        matches!(self, Argument::Positional(_))
+        matches!(self, ArgumentP::Positional(_))
     }
 }
 
