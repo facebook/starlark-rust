@@ -16,9 +16,9 @@
  */
 
 use crate::{
-    environment::{names::MutableNames, slots::ModuleSlotId},
+    environment::{names::MutableNames, slots::ModuleSlotId, Module},
     eval::runtime::slots::LocalSlotId,
-    syntax::ast::{AstAssign, AstStmt, Expr, Stmt},
+    syntax::ast::{Assign, AstAssign, AstStmt, Stmt, Visibility},
 };
 use std::collections::{hash_map, HashMap};
 
@@ -177,7 +177,7 @@ impl<'a> Scope<'a> {
 
     pub fn add_compr(&mut self, var: &AstAssign) {
         let mut locals = HashMap::new();
-        Expr::collect_defines_lvalue(var, &mut locals);
+        Assign::collect_defines_lvalue(var, &mut locals);
         for k in locals.into_iter() {
             self.locals
                 .last_mut()
@@ -215,6 +215,48 @@ impl<'a> Scope<'a> {
                 "Scope::get_name, internal error, entry missing from scope table `{}`",
                 name
             )
+        })
+    }
+}
+
+impl Stmt {
+    // Collect all the variables that are defined in this scope
+    fn collect_defines<'a>(stmt: &'a AstStmt, result: &mut HashMap<&'a str, Visibility>) {
+        match &stmt.node {
+            Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
+                Assign::collect_defines_lvalue(dest, result);
+            }
+            Stmt::For(dest, box (_, body)) => {
+                Assign::collect_defines_lvalue(dest, result);
+                Stmt::collect_defines(body, result);
+            }
+            Stmt::Def(name, ..) => {
+                result.insert(&name.node, Module::default_visibility(&name.node));
+            }
+            Stmt::Load(load) => {
+                let vis = load.visibility;
+                for (name, _) in &load.node.args {
+                    let mut vis = vis;
+                    if Module::default_visibility(name) == Visibility::Private {
+                        vis = Visibility::Private;
+                    }
+                    // If we are in the map as Public and Private, then Public wins.
+                    // Everything but Load is definitely Public.
+                    // So only insert if it wasn't already there.
+                    result.entry(&name.node).or_insert(vis);
+                }
+            }
+            _ => stmt.node.visit_stmt(|x| Stmt::collect_defines(x, result)),
+        }
+    }
+}
+
+impl Assign {
+    // Collect variables defined in an expression on the LHS of an assignment (or
+    // for variable etc)
+    fn collect_defines_lvalue<'a>(expr: &'a AstAssign, result: &mut HashMap<&'a str, Visibility>) {
+        expr.node.visit_lvalue(|x| {
+            result.insert(&x.node, Module::default_visibility(&x.node));
         })
     }
 }

@@ -19,7 +19,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
-    environment::{EnvironmentError, Module},
+    environment::EnvironmentError,
     errors::{did_you_mean::did_you_mean, Diagnostic},
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
@@ -27,9 +27,7 @@ use crate::{
         runtime::evaluator::Evaluator,
         Arguments,
     },
-    syntax::ast::{
-        Argument, AstArgument, AstAssign, AstExpr, AstLiteral, BinOp, Expr, Stmt, Visibility,
-    },
+    syntax::ast::{Argument, AstArgument, AstExpr, AstLiteral, BinOp, Expr, Stmt},
     values::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
@@ -39,7 +37,7 @@ use crate::{
     },
 };
 use gazebo::{coerce::coerce_ref, prelude::*};
-use std::{cmp::Ordering, collections::HashMap, mem::MaybeUninit};
+use std::{cmp::Ordering, mem::MaybeUninit};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -147,17 +145,6 @@ impl Expr {
         }
         results.reverse();
         Some(results.concat())
-    }
-
-    // Collect variables defined in an expression on the LHS of an assignment (or
-    // for variable etc)
-    pub(crate) fn collect_defines_lvalue<'a>(
-        expr: &'a AstAssign,
-        result: &mut HashMap<&'a str, Visibility>,
-    ) {
-        expr.node.visit_lvalue(|x| {
-            result.insert(&x.node, Module::default_visibility(&x.node));
-        })
     }
 }
 

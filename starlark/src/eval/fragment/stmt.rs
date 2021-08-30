@@ -24,18 +24,18 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     codemap::{Span, Spanned},
-    environment::{EnvironmentError, Module},
+    environment::EnvironmentError,
     eval::{
         compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
-    syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt, Visibility},
+    syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt},
     values::{list::List, Heap, Trace, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::{collections::HashMap, mem};
+use std::mem;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -291,39 +291,6 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
 }
 
 impl Stmt {
-    // Collect all the variables that are defined in this scope
-    pub(crate) fn collect_defines<'a>(
-        stmt: &'a AstStmt,
-        result: &mut HashMap<&'a str, Visibility>,
-    ) {
-        match &stmt.node {
-            Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
-                Expr::collect_defines_lvalue(dest, result);
-            }
-            Stmt::For(dest, box (_, body)) => {
-                Expr::collect_defines_lvalue(dest, result);
-                Stmt::collect_defines(body, result);
-            }
-            Stmt::Def(name, ..) => {
-                result.insert(&name.node, Module::default_visibility(&name.node));
-            }
-            Stmt::Load(load) => {
-                let vis = load.visibility;
-                for (name, _) in &load.node.args {
-                    let mut vis = vis;
-                    if Module::default_visibility(name) == Visibility::Private {
-                        vis = Visibility::Private;
-                    }
-                    // If we are in the map as Public and Private, then Public wins.
-                    // Everything but Load is definitely Public.
-                    // So only insert if it wasn't already there.
-                    result.entry(&name.node).or_insert(vis);
-                }
-            }
-            _ => stmt.node.visit_stmt(|x| Stmt::collect_defines(x, result)),
-        }
-    }
-
     // Return statements to execute, skipping those that have no effect
     // and flattening any nested Statements
     fn flatten_statements(xs: Vec<AstStmt>) -> Vec<AstStmt> {
