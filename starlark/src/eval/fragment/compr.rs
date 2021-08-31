@@ -21,20 +21,23 @@ use crate::{
     codemap::Span,
     collections::SmallMap,
     eval::{
-        compiler::{throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
+        compiler::{
+            scope::{CstExpr, CstPayload},
+            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+        },
         fragment::{known::list_to_tuple, stmt::AssignCompiled},
         runtime::evaluator::Evaluator,
     },
-    syntax::ast::{AstExpr, Clause, ForClause},
+    syntax::ast::{ClauseP, ForClauseP},
     values::{dict::Dict, list::List, Value},
 };
 
 impl Compiler<'_> {
     pub fn list_comprehension(
         &mut self,
-        x: AstExpr,
-        for_: ForClause,
-        clauses: Vec<Clause>,
+        x: CstExpr,
+        for_: ForClauseP<CstPayload>,
+        clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
         self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
@@ -45,10 +48,10 @@ impl Compiler<'_> {
 
     pub fn dict_comprehension(
         &mut self,
-        k: AstExpr,
-        v: AstExpr,
-        for_: ForClause,
-        clauses: Vec<Clause>,
+        k: CstExpr,
+        v: CstExpr,
+        for_: ForClauseP<CstPayload>,
+        clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
         self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
@@ -61,17 +64,17 @@ impl Compiler<'_> {
 
 /// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
 fn compile_ifs(
-    clauses: &mut Vec<Clause>,
+    clauses: &mut Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
-) -> (Option<ForClause>, Vec<ExprCompiled>) {
+) -> (Option<ForClauseP<CstPayload>>, Vec<ExprCompiled>) {
     let mut ifs = Vec::new();
     while let Some(x) = clauses.pop() {
         match x {
-            Clause::For(f) => {
+            ClauseP::For(f) => {
                 ifs.reverse();
                 return (Some(f), ifs);
             }
-            Clause::If(x) => {
+            ClauseP::If(x) => {
                 ifs.push(compiler.expr(x).as_compiled());
             }
         }
@@ -81,8 +84,8 @@ fn compile_ifs(
 }
 
 fn compile_clauses(
-    for_: ForClause,
-    mut clauses: Vec<Clause>,
+    for_: ForClauseP<CstPayload>,
+    mut clauses: Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
 ) -> Vec<ClauseCompiled> {
     // The first for.over is scoped before we enter the list comp
@@ -92,7 +95,7 @@ fn compile_clauses(
     // Now everything else must be compiled with all the for variables in scope
     compiler.scope.add_compr(&for_.var);
     for x in &clauses {
-        if let Clause::For(x) = x {
+        if let ClauseP::For(x) = x {
             compiler.scope.add_compr(&x.var);
         }
     }

@@ -22,8 +22,8 @@ use crate::{
     environment::FrozenModuleValue,
     eval::{
         compiler::{
-            scope::ScopeNames, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
-            StmtCompiled,
+            scope::{CstExpr, CstParameter, CstStmt, ScopeNames},
+            Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtCompiled,
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -32,7 +32,7 @@ use crate::{
         },
         Arguments,
     },
-    syntax::ast::{AstExpr, AstParameter, AstStmt, Parameter},
+    syntax::ast::ParameterP,
     values::{
         docs,
         docs::{DocItem, DocString},
@@ -87,23 +87,23 @@ struct DefInfo {
 }
 
 impl Compiler<'_> {
-    fn parameter(&mut self, x: AstParameter) -> ParameterCompiled<ExprCompiled> {
+    fn parameter(&mut self, x: CstParameter) -> ParameterCompiled<ExprCompiled> {
         match x.node {
-            Parameter::Normal(x, t) => ParameterCompiled::Normal(
+            ParameterP::Normal(x, t) => ParameterCompiled::Normal(
                 x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
-            Parameter::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
+            ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
                 x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
                 self.expr(*v).as_compiled(),
             ),
-            Parameter::NoArgs => ParameterCompiled::NoArgs,
-            Parameter::Args(x, t) => ParameterCompiled::Args(
+            ParameterP::NoArgs => ParameterCompiled::NoArgs,
+            ParameterP::Args(x, t) => ParameterCompiled::Args(
                 x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
-            Parameter::KwArgs(x, t) => ParameterCompiled::KwArgs(
+            ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
                 x.node.0,
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
@@ -113,9 +113,9 @@ impl Compiler<'_> {
     pub fn function(
         &mut self,
         name: &str,
-        params: Vec<AstParameter>,
-        return_type: Option<Box<AstExpr>>,
-        suite: AstStmt,
+        params: Vec<CstParameter>,
+        return_type: Option<Box<CstExpr>>,
+        suite: CstStmt,
     ) -> ExprCompiledValue {
         let file = self.codemap.file_span(suite.span);
         let function_name = format!("{}.{}", file.file.filename(), name);

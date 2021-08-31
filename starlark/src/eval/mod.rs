@@ -28,7 +28,7 @@ use crate::{
 use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
-use crate::values::docs::DocString;
+use crate::{eval::compiler::scope::CompilerAstMap, values::docs::DocString};
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
 pub use runtime::{
@@ -78,6 +78,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             mut statement,
         } = ast;
         inject_return(&mut statement);
+
+        let statement = statement.into_map_payload(&mut CompilerAstMap);
 
         if let Some(docstring) = DocString::extract_raw_starlark_docstring(&statement) {
             self.module_env.set_docstring(docstring)

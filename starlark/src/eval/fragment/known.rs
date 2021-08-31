@@ -20,10 +20,10 @@
 use crate::{
     codemap::Spanned,
     eval::{
-        compiler::{Compiler, ExprCompiled, ExprCompiledValue},
+        compiler::{scope::CstExpr, Compiler, ExprCompiled, ExprCompiledValue},
         EvalException, Evaluator,
     },
-    syntax::ast::{AstExpr, Expr},
+    syntax::ast::ExprP,
     values::{dict::Dict, list::List, Value},
 };
 
@@ -32,13 +32,13 @@ use crate::{
 /// switch to tuple where it makes no difference. A tuple of constants
 /// will go on the FrozenHeap, while a list of constants will be continually
 /// reallocated.
-pub(crate) fn list_to_tuple(x: AstExpr) -> AstExpr {
+pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
     match x {
         Spanned {
-            node: Expr::List(x),
+            node: ExprP::List(x),
             span,
         } => Spanned {
-            node: Expr::Tuple(x),
+            node: ExprP::Tuple(x),
             span,
         },
         _ => x,
@@ -55,10 +55,10 @@ pub(crate) enum Conditional {
 }
 
 impl Compiler<'_> {
-    pub fn conditional(&mut self, expr: AstExpr) -> Conditional {
+    pub fn conditional(&mut self, expr: CstExpr) -> Conditional {
         let (expect, val) = match expr {
             Spanned {
-                node: Expr::Not(box expr),
+                node: ExprP::Not(box expr),
                 ..
             } => (false, self.expr(expr)),
             _ => (true, self.expr(expr)),
@@ -83,14 +83,14 @@ impl Compiler<'_> {
 
     /// Compile the operation `type(expr)`, trying to produce a constant
     /// where possible.
-    pub fn fn_type(&mut self, expr: AstExpr) -> ExprCompiledValue {
+    pub fn fn_type(&mut self, expr: CstExpr) -> ExprCompiledValue {
         // Note that `type([fail("bad")])` must still raise an exception.
         // In practice people only really use the empty versions as constants.
         match &expr.node {
-            Expr::Dict(xs) if xs.is_empty() => {
+            ExprP::Dict(xs) if xs.is_empty() => {
                 return ExprCompiledValue::Value(self.heap.alloc_str(Dict::TYPE));
             }
-            Expr::List(xs) if xs.is_empty() => {
+            ExprP::List(xs) if xs.is_empty() => {
                 return ExprCompiledValue::Value(self.heap.alloc_str(List::TYPE));
             }
             // No need to handle Tuple as it will become frozen if it has no inner-calls

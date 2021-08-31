@@ -22,12 +22,15 @@ use crate::{
     environment::EnvironmentError,
     errors::{did_you_mean::did_you_mean, Diagnostic},
     eval::{
-        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue},
+        compiler::{
+            scope::{CstArgument, CstExpr, Slot},
+            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+        },
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::Evaluator,
         Arguments,
     },
-    syntax::ast::{Argument, AstArgument, AstExpr, AstLiteral, BinOp, Expr, Stmt},
+    syntax::ast::{ArgumentP, AstExprP, AstLiteral, AstPayload, BinOp, ExprP, StmtP},
     values::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
@@ -108,10 +111,10 @@ impl AstLiteral {
     }
 }
 
-impl Expr {
+impl<P: AstPayload> ExprP<P> {
     fn unpack_string_literal(&self) -> Option<&str> {
         match self {
-            Expr::Literal(AstLiteral::StringLiteral(i)) => Some(&i.node),
+            ExprP::Literal(AstLiteral::StringLiteral(i)) => Some(&i.node),
             _ => None,
         }
     }
@@ -119,8 +122,8 @@ impl Expr {
     // Does an entire sequence of additions reduce to a string literal
     fn reduces_to_string<'a>(
         mut op: BinOp,
-        mut left: &'a AstExpr,
-        mut right: &'a AstExpr,
+        mut left: &'a AstExprP<P>,
+        mut right: &'a AstExprP<P>,
     ) -> Option<String> {
         let mut results = Vec::new();
         loop {
@@ -131,7 +134,7 @@ impl Expr {
             let x = right.unpack_string_literal()?;
             results.push(x.to_owned());
             match &left.node {
-                Expr::Op(left2, op2, right2) => {
+                ExprP::Op(left2, op2, right2) => {
                     op = *op2;
                     left = left2;
                     right = right2;
@@ -327,32 +330,32 @@ fn get_attr_hashed<'v>(
 }
 
 impl Compiler<'_> {
-    pub fn expr_opt(&mut self, expr: Option<Box<AstExpr>>) -> Option<ExprCompiledValue> {
+    pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<ExprCompiledValue> {
         expr.map(|v| self.expr(*v))
     }
 
-    fn args(&mut self, args: Vec<AstArgument>) -> ArgsCompiled {
+    fn args(&mut self, args: Vec<CstArgument>) -> ArgsCompiled {
         let mut res = ArgsCompiled::default();
         for x in args {
             match x.node {
-                Argument::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
-                Argument::Named(name, value) => {
+                ArgumentP::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
+                ArgumentP::Named(name, value) => {
                     let fv = self.heap.alloc(name.node.as_str());
                     res.names.push((Symbol::new(&name.node), fv));
                     res.pos_named.push(self.expr(value).as_compiled());
                 }
-                Argument::Args(x) => res.args = Some(self.expr(x).as_compiled()),
-                Argument::KwArgs(x) => res.kwargs = Some(self.expr(x).as_compiled()),
+                ArgumentP::Args(x) => res.args = Some(self.expr(x).as_compiled()),
+                ArgumentP::KwArgs(x) => res.kwargs = Some(self.expr(x).as_compiled()),
             }
         }
         res
     }
 
-    pub fn expr(&mut self, expr: AstExpr) -> ExprCompiledValue {
+    pub fn expr(&mut self, expr: CstExpr) -> ExprCompiledValue {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
-            Expr::Identifier(ident, ()) => {
+            ExprP::Identifier(ident, ()) => {
                 let name = ident.node;
                 let span = ident.span;
                 match self.scope.get_name(&name) {
@@ -397,14 +400,14 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::Lambda(params, box inner) => {
+            ExprP::Lambda(params, box inner) => {
                 let suite = Spanned {
                     span: expr.span,
-                    node: Stmt::Return(Some(inner)),
+                    node: StmtP::Return(Some(inner)),
                 };
                 self.function("lambda", params, None, suite)
             }
-            Expr::Tuple(exprs) => {
+            ExprP::Tuple(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
@@ -417,7 +420,7 @@ impl Compiler<'_> {
                         .alloc(Tuple::new(xs.try_map(|x| x(eval))?)))
                 }
             }
-            Expr::List(exprs) => {
+            ExprP::List(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.is_empty() {
                     expr!("list_empty", |eval| eval.heap().alloc(List::default()))
@@ -434,7 +437,7 @@ impl Compiler<'_> {
                         .alloc(List::new(xs.try_map(|x| x(eval))?)))
                 }
             }
-            Expr::Dict(exprs) => {
+            ExprP::Dict(exprs) => {
                 let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
                 if xs.is_empty() {
                     return expr!("dict_empty", |eval| eval.heap().alloc(Dict::default()));
@@ -505,7 +508,7 @@ impl Compiler<'_> {
                     eval.heap().alloc(Dict::new(r))
                 })
             }
-            Expr::If(box (cond, then_expr, else_expr)) => {
+            ExprP::If(box (cond, then_expr, else_expr)) => {
                 let then_expr = self.expr(then_expr);
                 let else_expr = self.expr(else_expr);
                 let (cond, t, f) = match self.conditional(cond) {
@@ -524,7 +527,7 @@ impl Compiler<'_> {
                     }
                 })
             }
-            Expr::Dot(left, right) => {
+            ExprP::Dot(left, right) => {
                 let left = self.expr(*left);
                 let s = Symbol::new(&right.node);
                 expr!("dot", left, |eval| {
@@ -539,9 +542,9 @@ impl Compiler<'_> {
                     }
                 })
             }
-            Expr::Call(left, mut args) => {
+            ExprP::Call(left, mut args) => {
                 match left.node {
-                    Expr::Dot(box e, s) => {
+                    ExprP::Dot(box e, s) => {
                         let e = self.expr(e);
                         let s = Symbol::new(&s.node);
                         let args = self.args(args);
@@ -583,21 +586,21 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::ArrayIndirection(box (array, index)) => {
+            ExprP::ArrayIndirection(box (array, index)) => {
                 let array = self.expr(array);
                 let index = self.expr(index);
                 expr!("index", array, index, |eval| {
                     throw(array.at(index, eval.heap()), span, eval)?
                 })
             }
-            Expr::Slice(collection, start, stop, stride) => {
+            ExprP::Slice(collection, start, stop, stride) => {
                 let collection = self.expr(*collection);
                 let start = start.map(|x| self.expr(*x));
                 let stop = stop.map(|x| self.expr(*x));
                 let stride = stride.map(|x| self.expr(*x));
                 eval_slice(span, collection, start, stop, stride)
             }
-            Expr::Not(expr) => {
+            ExprP::Not(expr) => {
                 let expr = self.expr(*expr);
                 match expr.as_value() {
                     Some(x) => {
@@ -606,7 +609,7 @@ impl Compiler<'_> {
                     _ => expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool())),
                 }
             }
-            Expr::Minus(expr) => {
+            ExprP::Minus(expr) => {
                 let expr = self.expr(*expr);
                 match expr
                     .as_value()
@@ -621,7 +624,7 @@ impl Compiler<'_> {
                     )?),
                 }
             }
-            Expr::Plus(expr) => {
+            ExprP::Plus(expr) => {
                 let expr = self.expr(*expr);
                 match expr.as_value() {
                     Some(x) if x.unpack_int().is_some() => value!(x),
@@ -632,12 +635,12 @@ impl Compiler<'_> {
                     )?),
                 }
             }
-            Expr::BitNot(expr) => {
+            ExprP::BitNot(expr) => {
                 let expr = self.expr(*expr);
                 expr!("bit_not", expr, |_eval| Value::new_int(!expr.to_int()?))
             }
-            Expr::Op(left, op, right) => {
-                if let Some(x) = Expr::reduces_to_string(op, &left, &right) {
+            ExprP::Op(left, op, right) => {
+                if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
                     let val = self.heap.alloc(x);
                     value!(val)
                 } else {
@@ -737,13 +740,13 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Expr::ListComprehension(x, box for_, clauses) => {
+            ExprP::ListComprehension(x, box for_, clauses) => {
                 self.list_comprehension(*x, for_, clauses)
             }
-            Expr::DictComprehension(box (k, v), box for_, clauses) => {
+            ExprP::DictComprehension(box (k, v), box for_, clauses) => {
                 self.dict_comprehension(k, v, for_, clauses)
             }
-            Expr::Literal(x) => {
+            ExprP::Literal(x) => {
                 let val = x.compile(self.heap);
                 value!(val)
             }

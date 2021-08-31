@@ -17,7 +17,7 @@
 
 use crate::{
     codemap::Spanned,
-    syntax::ast::{AstLiteral, AstStmt, Expr, Stmt},
+    syntax::ast::{AstLiteral, AstPayload, AstStmtP, ExprP, StmtP},
 };
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -38,12 +38,12 @@ pub struct DocString {
 impl DocString {
     /// Extracts the docstring from a function or module body, iff the first
     /// statement is a string literal.
-    pub fn extract_raw_starlark_docstring(body: &AstStmt) -> Option<String> {
-        if let Stmt::Statements(stmts) = &body.node {
+    pub fn extract_raw_starlark_docstring<P: AstPayload>(body: &AstStmtP<P>) -> Option<String> {
+        if let StmtP::Statements(stmts) = &body.node {
             if let Some(Spanned {
                 node:
-                    Stmt::Expression(Spanned {
-                        node: Expr::Literal(AstLiteral::StringLiteral(s)),
+                    StmtP::Expression(Spanned {
+                        node: ExprP::Literal(AstLiteral::StringLiteral(s)),
                         ..
                     }),
                 ..

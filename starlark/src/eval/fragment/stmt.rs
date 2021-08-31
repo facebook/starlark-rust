@@ -26,11 +26,14 @@ use crate::{
     codemap::{Span, Spanned},
     environment::EnvironmentError,
     eval::{
-        compiler::{scope::Slot, throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled},
+        compiler::{
+            scope::{CstAssign, CstStmt, Slot},
+            throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled,
+        },
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
-    syntax::ast::{Assign, AssignOp, AstAssign, AstStmt, Expr, Stmt},
+    syntax::ast::{AssignOp, AssignP, AstPayload, AstStmtP, ExprP, StmtP},
     values::{list::List, Heap, Trace, Value, ValueError},
 };
 use anyhow::anyhow;
@@ -77,24 +80,24 @@ fn eval_assign_list<'v>(
 }
 
 impl Compiler<'_> {
-    pub fn assign(&mut self, expr: AstAssign) -> AssignCompiled {
+    pub fn assign(&mut self, expr: CstAssign) -> AssignCompiled {
         let span = expr.span;
         match expr.node {
-            Assign::Dot(e, s) => {
+            AssignP::Dot(e, s) => {
                 let e = self.expr(*e).as_compiled();
                 let s = s.node;
                 box move |value, eval| throw(e(eval)?.set_attr(&s, value), span, eval)
             }
-            Assign::ArrayIndirection(box (e, idx)) => {
+            AssignP::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e).as_compiled();
                 let idx = self.expr(idx).as_compiled();
                 box move |value, eval| throw(e(eval)?.set_at(idx(eval)?, value), span, eval)
             }
-            Assign::Tuple(v) => {
+            AssignP::Tuple(v) => {
                 let v = v.into_map(|x| self.assign(x));
                 box move |value, eval| eval_assign_list(&v, span, value, eval)
             }
-            Assign::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node.0) {
+            AssignP::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node.0) {
                 Slot::Local(slot) => box move |value, eval| {
                     eval.set_slot_local(slot, value);
                     Ok(())
@@ -112,13 +115,13 @@ impl Compiler<'_> {
     fn assign_modify(
         &mut self,
         span_stmt: Span,
-        lhs: AstAssign,
+        lhs: CstAssign,
         rhs: ExprCompiledValue,
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
     ) -> StmtCompiled {
         let span_lhs = lhs.span;
         match lhs.node {
-            Assign::Dot(e, s) => {
+            AssignP::Dot(e, s) => {
                 let e = self.expr(*e).as_compiled();
                 let s = s.node;
                 let rhs = rhs.as_compiled();
@@ -133,7 +136,7 @@ impl Compiler<'_> {
                     )?;
                 })
             }
-            Assign::ArrayIndirection(box (e, idx)) => {
+            AssignP::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e).as_compiled();
                 let idx = self.expr(idx).as_compiled();
                 let rhs = rhs.as_compiled();
@@ -149,7 +152,7 @@ impl Compiler<'_> {
                     )?;
                 })
             }
-            Assign::Identifier(ident) => {
+            AssignP::Identifier(ident) => {
                 let name = ident.node;
                 match self.scope.get_name_or_panic(&name.0) {
                     Slot::Local(slot) => {
@@ -172,7 +175,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Assign::Tuple(_) => {
+            AssignP::Tuple(_) => {
                 unreachable!("Assign modify validates that the LHS is never a tuple")
             }
         }
@@ -290,13 +293,13 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     }
 }
 
-impl Stmt {
+impl<P: AstPayload> StmtP<P> {
     // Return statements to execute, skipping those that have no effect
     // and flattening any nested Statements
-    fn flatten_statements(xs: Vec<AstStmt>) -> Vec<AstStmt> {
-        fn has_effect(x: &Expr) -> bool {
+    fn flatten_statements(xs: Vec<AstStmtP<P>>) -> Vec<AstStmtP<P>> {
+        fn has_effect<P: AstPayload>(x: &ExprP<P>) -> bool {
             match x {
-                Expr::Literal(_) => false,
+                ExprP::Literal(_) => false,
                 _ => true,
             }
         }
@@ -304,9 +307,9 @@ impl Stmt {
         let mut res = Vec::with_capacity(xs.len());
         for x in xs.into_iter() {
             match x.node {
-                Stmt::Statements(x) => res.extend(Stmt::flatten_statements(x)),
-                Stmt::Pass => {}
-                Stmt::Expression(x) if !has_effect(&x) => {}
+                StmtP::Statements(x) => res.extend(StmtP::flatten_statements(x)),
+                StmtP::Pass => {}
+                StmtP::Expression(x) if !has_effect(&x) => {}
                 _ => res.push(x),
             }
         }
@@ -315,8 +318,8 @@ impl Stmt {
 }
 
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: AstStmt, allow_gc: bool) -> StmtCompiled {
-        let is_statements = matches!(&stmt.node, Stmt::Statements(_));
+    pub(crate) fn stmt(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
+        let is_statements = matches!(&stmt.node, StmtP::Statements(_));
         let res = self.stmt_direct(stmt, allow_gc);
         // No point inserting a GC point around statements, since they will contain inner statements we can do
         if allow_gc && !is_statements {
@@ -331,22 +334,22 @@ impl Compiler<'_> {
         }
     }
 
-    fn stmt_direct(&mut self, stmt: AstStmt, allow_gc: bool) -> StmtCompiled {
+    fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
         let span = stmt.span;
         match stmt.node {
-            Stmt::Def(name, params, return_type, suite) => {
+            StmtP::Def(name, params, return_type, suite) => {
                 let rhs = self
                     .function(&name.0, params, return_type, *suite)
                     .as_compiled();
                 let lhs = self.assign(Spanned {
                     span: name.span,
-                    node: Assign::Identifier(name),
+                    node: AssignP::Identifier(name),
                 });
                 stmt!("define_def", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
                 })
             }
-            Stmt::For(var, box (over, body)) => {
+            StmtP::For(var, box (over, body)) => {
                 let over = list_to_tuple(over);
                 let over_span = over.span;
                 let var = self.assign(var);
@@ -372,16 +375,16 @@ impl Compiler<'_> {
                     )??;
                 })
             }
-            Stmt::Return(Some(e)) => {
+            StmtP::Return(Some(e)) => {
                 let e = self.expr(e).as_compiled();
                 stmt!("return_value", span, |eval| {
                     return Err(EvalException::Return(e(eval)?));
                 })
             }
-            Stmt::Return(None) => stmt!("return", span, |eval| {
+            StmtP::Return(None) => stmt!("return", span, |eval| {
                 return Err(EvalException::Return(Value::new_none()));
             }),
-            Stmt::If(cond, box then_block) => {
+            StmtP::If(cond, box then_block) => {
                 let then_block = self.stmt(then_block, allow_gc);
                 match self.conditional(cond) {
                     Conditional::True => then_block,
@@ -398,7 +401,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Stmt::IfElse(cond, box (then_block, else_block)) => {
+            StmtP::IfElse(cond, box (then_block, else_block)) => {
                 let then_block = self.stmt(then_block, allow_gc);
                 let else_block = self.stmt(else_block, allow_gc);
                 let (cond, t, f) = match self.conditional(cond) {
@@ -413,10 +416,10 @@ impl Compiler<'_> {
                     f(eval)?
                 })
             }
-            Stmt::Statements(stmts) => {
+            StmtP::Statements(stmts) => {
                 // No need to do before_stmt on these statements as they are
                 // not meaningful statements
-                let stmts = Stmt::flatten_statements(stmts);
+                let stmts = StmtP::flatten_statements(stmts);
                 let mut stmts = stmts.into_map(|x| self.stmt(x, allow_gc));
                 match stmts.len() {
                     0 => box move |_| Ok(()),
@@ -429,20 +432,20 @@ impl Compiler<'_> {
                     },
                 }
             }
-            Stmt::Expression(e) => {
+            StmtP::Expression(e) => {
                 let e = self.expr(e).as_compiled();
                 stmt!("expression", span, |eval| {
                     e(eval)?;
                 })
             }
-            Stmt::Assign(lhs, rhs) => {
+            StmtP::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs).as_compiled();
                 let lhs = self.assign(lhs);
                 stmt!("assign", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
                 })
             }
-            Stmt::AssignModify(lhs, op, rhs) => {
+            StmtP::AssignModify(lhs, op, rhs) => {
                 let rhs = self.expr(*rhs);
                 match op {
                     AssignOp::Add => self
@@ -470,7 +473,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            Stmt::Load(load) => {
+            StmtP::Load(load) => {
                 let name = load.node.module.node;
                 let symbols = load.node.args.into_map(|(x, y)| {
                     (
@@ -501,9 +504,9 @@ impl Compiler<'_> {
                     }
                 })
             }
-            Stmt::Pass => stmt!("pass", span, |eval| {}),
-            Stmt::Break => stmt!("break", span, |eval| return Err(EvalException::Break)),
-            Stmt::Continue => stmt!("continue", span, |eval| return Err(EvalException::Continue)),
+            StmtP::Pass => stmt!("pass", span, |eval| {}),
+            StmtP::Break => stmt!("break", span, |eval| return Err(EvalException::Break)),
+            StmtP::Continue => stmt!("continue", span, |eval| return Err(EvalException::Continue)),
         }
     }
 }

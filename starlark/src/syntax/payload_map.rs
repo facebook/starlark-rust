@@ -17,9 +17,6 @@
 
 //! Map AST payload.
 
-// TODO: remove in the following diff when these funtions are used
-#![allow(dead_code)]
-
 use crate::{
     codemap::Spanned,
     syntax::ast::{
@@ -270,7 +267,5 @@ ast_payload_map_stub!(AssignP);
 ast_payload_map_stub!(AssignIdentP);
 ast_payload_map_stub!(ParameterP);
 ast_payload_map_stub!(ArgumentP);
-ast_payload_map_stub!(ClauseP);
-ast_payload_map_stub!(ForClauseP);
 ast_payload_map_stub!(LoadP);
 ast_payload_map_stub!(StmtP);

@@ -18,7 +18,13 @@
 use crate::{
     environment::{names::MutableNames, slots::ModuleSlotId, Module},
     eval::runtime::slots::LocalSlotId,
-    syntax::ast::{Assign, AstAssign, AstStmt, Stmt, Visibility},
+    syntax::{
+        ast::{
+            Assign, AstArgumentP, AstAssignP, AstExprP, AstNoPayload, AstParameterP, AstPayload,
+            AstStmtP, Stmt, StmtP, Visibility,
+        },
+        payload_map::AstPayloadFunction,
+    },
 };
 use std::collections::{hash_map, HashMap};
 
@@ -126,7 +132,7 @@ pub(crate) enum Slot {
 }
 
 impl<'a> Scope<'a> {
-    pub fn enter_module(module: &'a MutableNames, code: &AstStmt) -> Self {
+    pub fn enter_module(module: &'a MutableNames, code: &CstStmt) -> Self {
         let mut locals = HashMap::new();
         Stmt::collect_defines(code, &mut locals);
         for (x, vis) in locals {
@@ -148,7 +154,7 @@ impl<'a> Scope<'a> {
         (self.module.slot_count(), scope.used)
     }
 
-    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &AstStmt) {
+    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &CstStmt) {
         let mut names = ScopeNames::default();
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
@@ -175,7 +181,7 @@ impl<'a> Scope<'a> {
         self.unscopes.push(Unscope::default());
     }
 
-    pub fn add_compr(&mut self, var: &AstAssign) {
+    pub fn add_compr(&mut self, var: &CstAssign) {
         let mut locals = HashMap::new();
         Assign::collect_defines_lvalue(var, &mut locals);
         for k in locals.into_iter() {
@@ -221,19 +227,19 @@ impl<'a> Scope<'a> {
 
 impl Stmt {
     // Collect all the variables that are defined in this scope
-    fn collect_defines<'a>(stmt: &'a AstStmt, result: &mut HashMap<&'a str, Visibility>) {
+    fn collect_defines<'a>(stmt: &'a CstStmt, result: &mut HashMap<&'a str, Visibility>) {
         match &stmt.node {
-            Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
+            StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
                 Assign::collect_defines_lvalue(dest, result);
             }
-            Stmt::For(dest, box (_, body)) => {
+            StmtP::For(dest, box (_, body)) => {
                 Assign::collect_defines_lvalue(dest, result);
-                Stmt::collect_defines(body, result);
+                StmtP::collect_defines(body, result);
             }
-            Stmt::Def(name, ..) => {
+            StmtP::Def(name, ..) => {
                 result.insert(&name.node.0, Module::default_visibility(&name.0));
             }
-            Stmt::Load(load) => {
+            StmtP::Load(load) => {
                 let vis = load.visibility;
                 for (name, _) in &load.node.args {
                     let mut vis = vis;
@@ -254,9 +260,32 @@ impl Stmt {
 impl Assign {
     // Collect variables defined in an expression on the LHS of an assignment (or
     // for variable etc)
-    fn collect_defines_lvalue<'a>(expr: &'a AstAssign, result: &mut HashMap<&'a str, Visibility>) {
+    fn collect_defines_lvalue<'a>(expr: &'a CstAssign, result: &mut HashMap<&'a str, Visibility>) {
         expr.node.visit_lvalue(|x| {
             result.insert(x.0.as_str(), Module::default_visibility(x.0.as_str()));
         })
     }
 }
+
+// We use CST as acronym for compiler-specific AST.
+
+/// Compiler-specific AST payload.
+#[derive(Debug)]
+pub(crate) struct CstPayload;
+impl AstPayload for CstPayload {
+    type IdentPayload = ();
+    type IdentAssignPayload = ();
+}
+
+pub(crate) struct CompilerAstMap;
+impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap {
+    fn map_ident(&mut self, (): ()) {}
+
+    fn map_ident_assign(&mut self, (): ()) {}
+}
+
+pub(crate) type CstExpr = AstExprP<CstPayload>;
+pub(crate) type CstAssign = AstAssignP<CstPayload>;
+pub(crate) type CstArgument = AstArgumentP<CstPayload>;
+pub(crate) type CstParameter = AstParameterP<CstPayload>;
+pub(crate) type CstStmt = AstStmtP<CstPayload>;
