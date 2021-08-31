@@ -115,7 +115,7 @@ impl Compiler<'_> {
         name: &str,
         params: Vec<CstParameter>,
         return_type: Option<Box<CstExpr>>,
-        suite: CstStmt,
+        mut suite: CstStmt,
     ) -> ExprCompiledValue {
         let file = self.codemap.file_span(suite.span);
         let function_name = format!("{}.{}", file.file.filename(), name);
@@ -128,7 +128,7 @@ impl Compiler<'_> {
             .map(ExprCompiledValue::as_compiled);
 
         self.scope
-            .enter_def(params.iter().flat_map(ParameterCompiled::name), &suite);
+            .enter_def(params.iter().flat_map(ParameterCompiled::name), &mut suite);
 
         let docstring = DocString::extract_raw_starlark_docstring(&suite);
         let body = self.stmt(suite, false);

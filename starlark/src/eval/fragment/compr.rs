@@ -84,7 +84,7 @@ fn compile_ifs(
 }
 
 fn compile_clauses(
-    for_: ForClauseP<CstPayload>,
+    mut for_: ForClauseP<CstPayload>,
     mut clauses: Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
 ) -> Vec<ClauseCompiled> {
@@ -93,10 +93,10 @@ fn compile_clauses(
     let over = compiler.expr(list_to_tuple(for_.over));
 
     // Now everything else must be compiled with all the for variables in scope
-    compiler.scope.add_compr(&for_.var);
-    for x in &clauses {
+    compiler.scope.add_compr(&mut for_.var);
+    for x in &mut clauses {
         if let ClauseP::For(x) = x {
-            compiler.scope.add_compr(&x.var);
+            compiler.scope.add_compr(&mut x.var);
         }
     }
 

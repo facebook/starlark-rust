@@ -132,7 +132,7 @@ pub(crate) enum Slot {
 }
 
 impl<'a> Scope<'a> {
-    pub fn enter_module(module: &'a MutableNames, code: &CstStmt) -> Self {
+    pub fn enter_module(module: &'a MutableNames, code: &mut CstStmt) -> Self {
         let mut locals = HashMap::new();
         Stmt::collect_defines(code, &mut locals);
         for (x, vis) in locals {
@@ -154,7 +154,7 @@ impl<'a> Scope<'a> {
         (self.module.slot_count(), scope.used)
     }
 
-    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &CstStmt) {
+    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &mut CstStmt) {
         let mut names = ScopeNames::default();
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
@@ -181,7 +181,7 @@ impl<'a> Scope<'a> {
         self.unscopes.push(Unscope::default());
     }
 
-    pub fn add_compr(&mut self, var: &CstAssign) {
+    pub fn add_compr(&mut self, var: &mut CstAssign) {
         let mut locals = HashMap::new();
         Assign::collect_defines_lvalue(var, &mut locals);
         for k in locals.into_iter() {
@@ -227,8 +227,8 @@ impl<'a> Scope<'a> {
 
 impl Stmt {
     // Collect all the variables that are defined in this scope
-    fn collect_defines<'a>(stmt: &'a CstStmt, result: &mut HashMap<&'a str, Visibility>) {
-        match &stmt.node {
+    fn collect_defines<'a>(stmt: &'a mut CstStmt, result: &mut HashMap<&'a str, Visibility>) {
+        match &mut stmt.node {
             StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
                 Assign::collect_defines_lvalue(dest, result);
             }
@@ -252,7 +252,7 @@ impl Stmt {
                     result.entry(&name.node.0).or_insert(vis);
                 }
             }
-            _ => stmt.node.visit_stmt(|x| Stmt::collect_defines(x, result)),
+            stmt => stmt.visit_stmt_mut(|x| Stmt::collect_defines(x, result)),
         }
     }
 }
@@ -260,7 +260,10 @@ impl Stmt {
 impl Assign {
     // Collect variables defined in an expression on the LHS of an assignment (or
     // for variable etc)
-    fn collect_defines_lvalue<'a>(expr: &'a CstAssign, result: &mut HashMap<&'a str, Visibility>) {
+    fn collect_defines_lvalue<'a>(
+        expr: &'a mut CstAssign,
+        result: &mut HashMap<&'a str, Visibility>,
+    ) {
         expr.node.visit_lvalue(|x| {
             result.insert(x.0.as_str(), Module::default_visibility(x.0.as_str()));
         })

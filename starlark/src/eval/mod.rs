@@ -79,13 +79,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         } = ast;
         inject_return(&mut statement);
 
-        let statement = statement.into_map_payload(&mut CompilerAstMap);
+        let mut statement = statement.into_map_payload(&mut CompilerAstMap);
 
         if let Some(docstring) = DocString::extract_raw_starlark_docstring(&statement) {
             self.module_env.set_docstring(docstring)
         }
 
-        let scope = Scope::enter_module(self.module_env.names(), &statement);
+        let scope = Scope::enter_module(self.module_env.names(), &mut statement);
 
         let span = statement.span;
 

@@ -26,7 +26,7 @@ use std::{
     cmp,
     fmt::{self, Display},
     hash::Hash,
-    ops::{Add, Deref},
+    ops::{Add, Deref, DerefMut},
     sync::Arc,
 };
 
@@ -128,6 +128,12 @@ impl<T> Deref for Spanned<T> {
 
     fn deref(&self) -> &T {
         &self.node
+    }
+}
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.node
     }
 }
 

@@ -28,6 +28,11 @@ enum Visit<'a, P: AstPayload> {
     Expr(&'a AstExprP<P>),
 }
 
+enum VisitMut<'a, P: AstPayload> {
+    Stmt(&'a mut AstStmtP<P>),
+    Expr(&'a mut AstExprP<P>),
+}
+
 impl<P: AstPayload> StmtP<P> {
     fn visit_children<'a>(&'a self, mut f: impl FnMut(Visit<'a, P>)) {
         match self {
@@ -73,10 +78,61 @@ impl<P: AstPayload> StmtP<P> {
         }
     }
 
+    fn visit_children_mut<'a>(&'a mut self, mut f: impl FnMut(VisitMut<'a, P>)) {
+        match self {
+            StmtP::Statements(xs) => xs.iter_mut().for_each(|x| f(VisitMut::Stmt(x))),
+            StmtP::If(condition, box then_block) => {
+                f(VisitMut::Expr(condition));
+                f(VisitMut::Stmt(then_block));
+            }
+            StmtP::IfElse(condition, box (then_block, else_block)) => {
+                f(VisitMut::Expr(condition));
+                f(VisitMut::Stmt(then_block));
+                f(VisitMut::Stmt(else_block));
+            }
+            StmtP::Def(_, params, ret_type, body) => {
+                params
+                    .iter_mut()
+                    .for_each(|x| x.visit_expr_mut(|x| f(VisitMut::Expr(x))));
+                ret_type.iter_mut().for_each(|x| f(VisitMut::Expr(x)));
+                f(VisitMut::Stmt(body));
+            }
+            StmtP::For(lhs, box (over, body)) => {
+                lhs.visit_expr_mut(|x| f(VisitMut::Expr(x)));
+                f(VisitMut::Expr(over));
+                f(VisitMut::Stmt(body));
+            }
+            // Nothing else contains nested statements
+            StmtP::Break => {}
+            StmtP::Continue => {}
+            StmtP::Pass => {}
+            StmtP::Return(ret) => {
+                ret.iter_mut().for_each(|x| f(VisitMut::Expr(x)));
+            }
+            StmtP::Expression(e) => f(VisitMut::Expr(e)),
+            StmtP::Assign(lhs, rhs) => {
+                lhs.visit_expr_mut(|x| f(VisitMut::Expr(x)));
+                f(VisitMut::Expr(rhs));
+            }
+            StmtP::AssignModify(lhs, _, rhs) => {
+                lhs.visit_expr_mut(|x| f(VisitMut::Expr(x)));
+                f(VisitMut::Expr(rhs));
+            }
+            StmtP::Load(..) => {}
+        }
+    }
+
     pub fn visit_stmt<'a>(&'a self, mut f: impl FnMut(&'a AstStmtP<P>)) {
         self.visit_children(|x| match x {
             Visit::Stmt(x) => f(x),
             Visit::Expr(_) => {} // Nothing to do
+        })
+    }
+
+    pub fn visit_stmt_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstStmtP<P>)) {
+        self.visit_children_mut(|x| match x {
+            VisitMut::Stmt(x) => f(x),
+            VisitMut::Expr(_) => {} // Nothing to do
         })
     }
 
@@ -127,10 +183,39 @@ impl<P: AstPayload> ParameterP<P> {
         }
     }
 
+    // Split a parameter into name, type, default value
+    pub fn split_mut(
+        &mut self,
+    ) -> (
+        Option<&mut AstAssignIdentP<P>>,
+        Option<&mut AstExprP<P>>,
+        Option<&mut AstExprP<P>>,
+    ) {
+        match self {
+            ParameterP::Normal(a, b) | ParameterP::Args(a, b) | ParameterP::KwArgs(a, b) => {
+                (Some(a), b.as_mut().map(|x| &mut **x), None)
+            }
+            ParameterP::WithDefaultValue(a, b, c) => {
+                (Some(a), b.as_mut().map(|x| &mut **x), Some(&mut **c))
+            }
+            ParameterP::NoArgs => (None, None, None),
+        }
+    }
+
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         let (_, typ, def) = self.split();
         typ.iter().for_each(|x| f(x));
         def.iter().for_each(|x| f(x));
+    }
+
+    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+        let (_, typ, def) = self.split_mut();
+        if let Some(typ) = typ {
+            f(typ);
+        }
+        if let Some(def) = def {
+            f(def);
+        }
     }
 }
 
@@ -197,6 +282,24 @@ impl<P: AstPayload> AssignP<P> {
         fn recurse<'a, P: AstPayload>(x: &'a AssignP<P>, f: &mut impl FnMut(&'a AstExprP<P>)) {
             match x {
                 AssignP::Tuple(xs) => xs.iter().for_each(|x| recurse(&*x, f)),
+                AssignP::Dot(a, _) => f(a),
+                AssignP::ArrayIndirection(box (a, b)) => {
+                    f(a);
+                    f(b);
+                }
+                AssignP::Identifier(..) => {}
+            }
+        }
+        recurse(self, &mut f)
+    }
+
+    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+        fn recurse<'a, P: AstPayload>(
+            x: &'a mut AssignP<P>,
+            f: &mut impl FnMut(&'a mut AstExprP<P>),
+        ) {
+            match x {
+                AssignP::Tuple(ref mut xs) => xs.iter_mut().for_each(|x| recurse(&mut *x, f)),
                 AssignP::Dot(a, _) => f(a),
                 AssignP::ArrayIndirection(box (a, b)) => {
                     f(a);
