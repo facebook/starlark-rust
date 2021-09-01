@@ -22,7 +22,7 @@ use crate::{
     environment::FrozenModuleValue,
     eval::{
         compiler::{
-            scope::{CstExpr, CstParameter, CstStmt, ScopeNames},
+            scope::{CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames},
             Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtCompiled,
         },
         runtime::{
@@ -44,7 +44,7 @@ use crate::{
 };
 use derivative::Derivative;
 use gazebo::prelude::*;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, mem, sync::Arc};
 
 enum ParameterCompiled<T> {
     Normal(String, Option<T>),
@@ -113,6 +113,7 @@ impl Compiler<'_> {
     pub fn function(
         &mut self,
         name: &str,
+        scope_id: ScopeId,
         params: Vec<CstParameter>,
         return_type: Option<Box<CstExpr>>,
         mut suite: CstStmt,
@@ -127,12 +128,17 @@ impl Compiler<'_> {
             .expr_opt(return_type)
             .map(ExprCompiledValue::as_compiled);
 
-        self.scope
-            .enter_def(params.iter().flat_map(ParameterCompiled::name), &mut suite);
+        self.scope.enter_def(
+            scope_id,
+            params.iter().flat_map(ParameterCompiled::name),
+            &mut suite,
+        );
 
         let docstring = DocString::extract_raw_starlark_docstring(&suite);
         let body = self.stmt(suite, false);
         let scope_names = self.scope.exit_def();
+
+        let scope_names = mem::take(scope_names);
 
         let info = Arc::new(DefInfo { scope_names, body });
 

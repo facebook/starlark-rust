@@ -400,12 +400,12 @@ impl Compiler<'_> {
                     }
                 }
             }
-            ExprP::Lambda(params, box inner, ()) => {
+            ExprP::Lambda(params, box inner, scope_id) => {
                 let suite = Spanned {
                     span: expr.span,
                     node: StmtP::Return(Some(inner)),
                 };
-                self.function("lambda", params, None, suite)
+                self.function("lambda", scope_id, params, None, suite)
             }
             ExprP::Tuple(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));

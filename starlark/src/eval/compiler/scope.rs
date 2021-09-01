@@ -36,9 +36,9 @@ use std::{
 pub(crate) struct Scope<'a> {
     pub(crate) scope_data: ScopeData,
     module: &'a MutableNames,
-    // The first locals is the anon-slots for load() and comprehensions at the module-level
-    // The rest are anon-slots for functions (which include their comprehensions)
-    locals: Vec<ScopeNames>,
+    // The first scope is a module-level scope (including comprehensions in module scope).
+    // The rest are scopes for functions (which include their comprehensions).
+    locals: Vec<ScopeId>,
     unscopes: Vec<Unscope>,
 }
 
@@ -139,11 +139,29 @@ pub(crate) enum Slot {
 }
 
 impl<'a> Scope<'a> {
+    fn top_scope_id(&self) -> ScopeId {
+        *self.locals.last().unwrap()
+    }
+
+    fn scope_at_level(&self, level: usize) -> &ScopeNames {
+        let scope_id = self.locals[level];
+        self.scope_data.get_scope(scope_id)
+    }
+
+    fn scope_at_level_mut(&mut self, level: usize) -> &mut ScopeNames {
+        let scope_id = self.locals[level];
+        self.scope_data.mut_scope(scope_id)
+    }
+
     pub fn enter_module(
         module: &'a MutableNames,
+        scope_id: ScopeId,
         mut scope_data: ScopeData,
         code: &mut CstStmt,
     ) -> Self {
+        // Not really important, sanity check
+        assert_eq!(scope_id, ScopeId(0));
+
         let mut locals = IndexMap::new();
         Stmt::collect_defines(code, &mut scope_data, &mut locals);
         for (x, binding_id) in locals {
@@ -155,7 +173,7 @@ impl<'a> Scope<'a> {
         Self {
             scope_data,
             module,
-            locals: vec![ScopeNames::default()],
+            locals: vec![scope_id],
             unscopes: Vec::new(),
         }
     }
@@ -164,14 +182,19 @@ impl<'a> Scope<'a> {
     pub fn exit_module(mut self) -> (usize, usize) {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
-        let scope = self.locals.pop().unwrap();
+        let scope_id = self.locals.pop().unwrap();
+        let scope = self.scope_data.get_scope(scope_id);
         assert!(scope.parent.is_empty());
         (self.module.slot_count(), scope.used)
     }
 
-    pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &mut CstStmt) {
+    pub fn enter_def<'s>(
+        &mut self,
+        scope_id: ScopeId,
+        params: impl Iterator<Item = &'s str>,
+        code: &mut CstStmt,
+    ) {
         let mut locals = IndexMap::new();
-        let mut names = ScopeNames::default();
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
             // beginning
@@ -180,19 +203,20 @@ impl<'a> Scope<'a> {
         }
         Stmt::collect_defines(code, &mut self.scope_data, &mut locals);
         for (name, binding_id) in locals.into_iter() {
+            let slot = self.scope_data.mut_scope(scope_id).add_name(name);
             let binding = self.scope_data.mut_binding(binding_id);
-            let slot = names.add_name(name);
             let old_slot = mem::replace(&mut binding.slot, Some(Slot::Local(slot)));
             assert!(old_slot.is_none());
         }
-        self.locals.push(names);
+        self.locals.push(scope_id);
     }
 
     // Which slots to grab from the current scope to the parent scope, size of your
     // self scope Future state: Should return the slots to use from the parent
     // scope
-    pub fn exit_def(&mut self) -> ScopeNames {
-        self.locals.pop().unwrap()
+    pub fn exit_def(&mut self) -> &mut ScopeNames {
+        let scope_id = self.locals.pop().unwrap();
+        self.scope_data.mut_scope(scope_id)
     }
 
     pub fn enter_compr(&mut self) {
@@ -200,23 +224,22 @@ impl<'a> Scope<'a> {
     }
 
     pub fn add_compr(&mut self, var: &mut CstAssign) {
+        let scope_id = self.top_scope_id();
         let mut locals = IndexMap::new();
         Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
         for (name, binding_id) in locals.into_iter() {
-            let binding = self.scope_data.mut_binding(binding_id);
             let slot = self
-                .locals
-                .last_mut()
-                .unwrap()
+                .scope_data
+                .mut_scope(scope_id)
                 .add_scoped(name, self.unscopes.last_mut().unwrap());
+            let binding = self.scope_data.mut_binding(binding_id);
             assert!(mem::replace(&mut binding.slot, Some(Slot::Local(slot))).is_none());
         }
     }
 
     pub fn exit_compr(&mut self) {
-        self.locals
-            .last_mut()
-            .unwrap()
+        self.scope_data
+            .mut_scope(self.top_scope_id())
             .unscope(self.unscopes.pop().unwrap());
     }
 
@@ -224,9 +247,9 @@ impl<'a> Scope<'a> {
         // look upwards to find the first place the variable occurs
         // then copy that variable downwards
         for i in (0..self.locals.len()).rev() {
-            if let Some(mut v) = self.locals[i].get_name(name) {
+            if let Some(mut v) = self.scope_at_level(i).get_name(name) {
                 for j in (i + 1)..self.locals.len() {
-                    v = self.locals[j].copy_parent(v, name);
+                    v = self.scope_at_level_mut(j).copy_parent(v, name);
                 }
                 return Some(Slot::Local(v));
             }
@@ -343,6 +366,7 @@ impl Assign {
 #[derive(Default)]
 pub(crate) struct ScopeData {
     bindings: Vec<Binding>,
+    scopes: Vec<ScopeNames>,
 }
 
 /// Binding defines a place for a variable.
@@ -368,6 +392,10 @@ impl Binding {
 #[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) struct BindingId(usize);
 
+/// Id of a scope within current module.
+#[derive(Copy, Clone, Dupe, Debug, Eq, PartialEq)]
+pub(crate) struct ScopeId(usize);
+
 impl ScopeData {
     pub(crate) fn new() -> ScopeData {
         ScopeData::default()
@@ -386,6 +414,20 @@ impl ScopeData {
         self.bindings.push(Binding::new(vis));
         (binding_id, self.bindings.last_mut().unwrap())
     }
+
+    pub(crate) fn get_scope(&self, ScopeId(id): ScopeId) -> &ScopeNames {
+        &self.scopes[id]
+    }
+
+    fn mut_scope(&mut self, ScopeId(id): ScopeId) -> &mut ScopeNames {
+        &mut self.scopes[id]
+    }
+
+    pub(crate) fn new_scope(&mut self) -> (ScopeId, &mut ScopeNames) {
+        let scope_id = ScopeId(self.scopes.len());
+        self.scopes.push(ScopeNames::default());
+        (scope_id, self.scopes.last_mut().unwrap())
+    }
 }
 
 // We use CST as acronym for compiler-specific AST.
@@ -403,18 +445,20 @@ impl AstPayload for CstPayload {
     ///
     /// When compilation starts, all payloads are `Some`.
     type IdentAssignPayload = Option<BindingId>;
-    type DefPayload = ();
+    type DefPayload = ScopeId;
 }
 
-pub(crate) struct CompilerAstMap;
-impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap {
+pub(crate) struct CompilerAstMap<'a>(pub(crate) &'a mut ScopeData);
+impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap<'_> {
     fn map_ident(&mut self, (): ()) {}
 
     fn map_ident_assign(&mut self, (): ()) -> Option<BindingId> {
         None
     }
 
-    fn map_def(&mut self, (): ()) {}
+    fn map_def(&mut self, (): ()) -> ScopeId {
+        self.0.new_scope().0
+    }
 }
 
 pub(crate) type CstExpr = AstExprP<CstPayload>;
