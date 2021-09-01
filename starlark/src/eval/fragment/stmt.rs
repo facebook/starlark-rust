@@ -97,18 +97,29 @@ impl Compiler<'_> {
                 let v = v.into_map(|x| self.assign(x));
                 box move |value, eval| eval_assign_list(&v, span, value, eval)
             }
-            AssignP::Identifier(ident) => match self.scope.get_name_or_panic(&ident.node.0) {
-                Slot::Local(slot) => box move |value, eval| {
-                    eval.set_slot_local(slot, value);
-                    Ok(())
-                },
-                Slot::Module(slot) => box move |value, eval| {
-                    // Make sure that `ComplexValue`s get their name as soon as possible
-                    value.export_as(&ident.node.0, eval);
-                    eval.set_slot_module(slot, value);
-                    Ok(())
-                },
-            },
+            AssignP::Identifier(ident) => {
+                let name = ident.node.0;
+                let binding_id = ident
+                    .node
+                    .1
+                    .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
+                let binding = self.scope.scope_data.get_binding(binding_id);
+                let slot = binding
+                    .slot
+                    .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
+                match slot {
+                    Slot::Local(slot) => box move |value, eval| {
+                        eval.set_slot_local(slot, value);
+                        Ok(())
+                    },
+                    Slot::Module(slot) => box move |value, eval| {
+                        // Make sure that `ComplexValue`s get their name as soon as possible
+                        value.export_as(&name, eval);
+                        eval.set_slot_module(slot, value);
+                        Ok(())
+                    },
+                }
+            }
         }
     }
 
@@ -157,8 +168,9 @@ impl Compiler<'_> {
                 match self.scope.get_name_or_panic(&name.0) {
                     Slot::Local(slot) => {
                         let rhs = rhs.as_compiled();
+                        let name = name.0;
                         stmt!("assign_local", span_stmt, |eval| {
-                            let v = throw(eval.get_slot_local(slot, &name.0), span_lhs, eval)?;
+                            let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
                             let rhs = rhs(eval)?;
                             let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                             eval.set_slot_local(slot, v);

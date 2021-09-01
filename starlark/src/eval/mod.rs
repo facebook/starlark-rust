@@ -28,7 +28,10 @@ use crate::{
 use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
-use crate::{eval::compiler::scope::CompilerAstMap, values::docs::DocString};
+use crate::{
+    eval::compiler::scope::{CompilerAstMap, ScopeData},
+    values::docs::DocString,
+};
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
 pub use runtime::{
@@ -85,7 +88,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.module_env.set_docstring(docstring)
         }
 
-        let scope = Scope::enter_module(self.module_env.names(), &mut statement);
+        let scope_data = ScopeData::new();
+
+        let scope = Scope::enter_module(self.module_env.names(), scope_data, &mut statement);
 
         let span = statement.span;
 

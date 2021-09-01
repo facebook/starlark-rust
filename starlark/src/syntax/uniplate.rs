@@ -327,6 +327,20 @@ impl<P: AstPayload> AssignP<P> {
         }
         recurse(self, &mut f)
     }
+
+    pub fn visit_lvalue_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstAssignIdentP<P>)) {
+        fn recurse<'a, P: AstPayload>(
+            x: &'a mut AssignP<P>,
+            f: &mut impl FnMut(&'a mut AstAssignIdentP<P>),
+        ) {
+            match x {
+                AssignP::Identifier(x) => f(x),
+                AssignP::Tuple(xs) => xs.iter_mut().for_each(|x| recurse(x, f)),
+                _ => {}
+            }
+        }
+        recurse(self, &mut f)
+    }
 }
 
 impl<P: AstPayload> ForClauseP<P> {

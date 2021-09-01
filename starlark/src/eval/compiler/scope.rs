@@ -20,16 +20,21 @@ use crate::{
     eval::runtime::slots::LocalSlotId,
     syntax::{
         ast::{
-            Assign, AstArgumentP, AstAssignP, AstExprP, AstNoPayload, AstParameterP, AstPayload,
-            AstStmtP, Stmt, StmtP, Visibility,
+            Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstNoPayload,
+            AstParameterP, AstPayload, AstStmtP, Stmt, StmtP, Visibility,
         },
         payload_map::AstPayloadFunction,
     },
 };
+use gazebo::dupe::Dupe;
 use indexmap::map::IndexMap;
-use std::collections::{hash_map, HashMap};
+use std::{
+    collections::{hash_map, HashMap},
+    mem,
+};
 
 pub(crate) struct Scope<'a> {
+    pub(crate) scope_data: ScopeData,
     module: &'a MutableNames,
     // The first locals is the anon-slots for load() and comprehensions at the module-level
     // The rest are anon-slots for functions (which include their comprehensions)
@@ -127,19 +132,28 @@ impl ScopeNames {
     }
 }
 
+#[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) enum Slot {
     Module(ModuleSlotId), // Top-level module scope
     Local(LocalSlotId),   // Local scope, always mutable
 }
 
 impl<'a> Scope<'a> {
-    pub fn enter_module(module: &'a MutableNames, code: &mut CstStmt) -> Self {
+    pub fn enter_module(
+        module: &'a MutableNames,
+        mut scope_data: ScopeData,
+        code: &mut CstStmt,
+    ) -> Self {
         let mut locals = IndexMap::new();
-        Stmt::collect_defines(code, &mut locals);
-        for (x, vis) in locals {
-            module.add_name_visibility(x, vis);
+        Stmt::collect_defines(code, &mut scope_data, &mut locals);
+        for (x, binding_id) in locals {
+            let binding = scope_data.mut_binding(binding_id);
+            let slot = module.add_name_visibility(x, binding.vis);
+            let old_slot = mem::replace(&mut binding.slot, Some(Slot::Module(slot)));
+            assert!(old_slot.is_none());
         }
         Self {
+            scope_data,
             module,
             locals: vec![ScopeNames::default()],
             unscopes: Vec::new(),
@@ -156,16 +170,20 @@ impl<'a> Scope<'a> {
     }
 
     pub fn enter_def<'s>(&mut self, params: impl Iterator<Item = &'s str>, code: &mut CstStmt) {
+        let mut locals = IndexMap::new();
         let mut names = ScopeNames::default();
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
             // beginning
-            names.add_name(p);
+            let old_local = locals.insert(p, self.scope_data.new_binding(Visibility::Public).0);
+            assert!(old_local.is_none());
         }
-        let mut locals = IndexMap::new();
-        Stmt::collect_defines(code, &mut locals);
-        for x in locals.into_iter() {
-            names.add_name(x.0);
+        Stmt::collect_defines(code, &mut self.scope_data, &mut locals);
+        for (name, binding_id) in locals.into_iter() {
+            let binding = self.scope_data.mut_binding(binding_id);
+            let slot = names.add_name(name);
+            let old_slot = mem::replace(&mut binding.slot, Some(Slot::Local(slot)));
+            assert!(old_slot.is_none());
         }
         self.locals.push(names);
     }
@@ -183,12 +201,15 @@ impl<'a> Scope<'a> {
 
     pub fn add_compr(&mut self, var: &mut CstAssign) {
         let mut locals = IndexMap::new();
-        Assign::collect_defines_lvalue(var, &mut locals);
-        for k in locals.into_iter() {
-            self.locals
+        Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
+        for (name, binding_id) in locals.into_iter() {
+            let binding = self.scope_data.mut_binding(binding_id);
+            let slot = self
+                .locals
                 .last_mut()
                 .unwrap()
-                .add_scoped(k.0, self.unscopes.last_mut().unwrap());
+                .add_scoped(name, self.unscopes.last_mut().unwrap());
+            assert!(mem::replace(&mut binding.slot, Some(Slot::Local(slot))).is_none());
         }
     }
 
@@ -227,33 +248,80 @@ impl<'a> Scope<'a> {
 
 impl Stmt {
     // Collect all the variables that are defined in this scope
-    fn collect_defines<'a>(stmt: &'a mut CstStmt, result: &mut IndexMap<&'a str, Visibility>) {
+    fn collect_defines<'a>(
+        stmt: &'a mut CstStmt,
+        scope_data: &mut ScopeData,
+        result: &mut IndexMap<&'a str, BindingId>,
+    ) {
         match &mut stmt.node {
             StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
-                Assign::collect_defines_lvalue(dest, result);
+                Assign::collect_defines_lvalue(dest, scope_data, result);
             }
             StmtP::For(dest, box (_, body)) => {
-                Assign::collect_defines_lvalue(dest, result);
-                StmtP::collect_defines(body, result);
+                Assign::collect_defines_lvalue(dest, scope_data, result);
+                StmtP::collect_defines(body, scope_data, result);
             }
             StmtP::Def(name, ..) => {
-                result.insert(&name.node.0, Module::default_visibility(&name.0));
+                AssignIdent::collect_assign_ident(name, Visibility::Public, scope_data, result)
             }
             StmtP::Load(load) => {
                 let vis = load.visibility;
-                for (name, _) in &load.node.args {
+                for (name, _) in &mut load.node.args {
                     let mut vis = vis;
                     if Module::default_visibility(&name.0) == Visibility::Private {
                         vis = Visibility::Private;
                     }
+                    AssignIdent::collect_assign_ident(name, vis, scope_data, result);
+                }
+            }
+            stmt => stmt.visit_stmt_mut(|x| Stmt::collect_defines(x, scope_data, result)),
+        }
+    }
+}
+
+impl AssignIdent {
+    fn collect_assign_ident<'a>(
+        assign: &'a mut CstAssignIdent,
+        vis: Visibility,
+        scope_data: &mut ScopeData,
+        result: &mut IndexMap<&'a str, BindingId>,
+    ) {
+        // Helper function to untangle lifetimes: we read and modify `assign` fields.
+        fn assign_ident_impl<'b>(
+            name: &'b str,
+            binding: &'b mut Option<BindingId>,
+            mut vis: Visibility,
+            scope_data: &mut ScopeData,
+            result: &mut IndexMap<&'b str, BindingId>,
+        ) {
+            assert!(
+                binding.is_none(),
+                "binding can be assigned only once: `{}`",
+                name
+            );
+            if vis == Visibility::Public {
+                vis = Module::default_visibility(name);
+            }
+            match result.entry(name) {
+                indexmap::map::Entry::Occupied(e) => {
+                    let prev_binding_id = *e.get();
+                    let prev_binding = scope_data.mut_binding(prev_binding_id);
                     // If we are in the map as Public and Private, then Public wins.
                     // Everything but Load is definitely Public.
                     // So only insert if it wasn't already there.
-                    result.entry(&name.node.0).or_insert(vis);
+                    if vis == Visibility::Public {
+                        prev_binding.vis = Visibility::Public;
+                    }
+                    *binding = Some(prev_binding_id);
                 }
-            }
-            stmt => stmt.visit_stmt_mut(|x| Stmt::collect_defines(x, result)),
+                indexmap::map::Entry::Vacant(e) => {
+                    let (new_binding_id, _) = scope_data.new_binding(vis);
+                    e.insert(new_binding_id);
+                    *binding = Some(new_binding_id);
+                }
+            };
         }
+        assign_ident_impl(&assign.node.0, &mut assign.node.1, vis, scope_data, result);
     }
 }
 
@@ -262,11 +330,61 @@ impl Assign {
     // for variable etc)
     fn collect_defines_lvalue<'a>(
         expr: &'a mut CstAssign,
-        result: &mut IndexMap<&'a str, Visibility>,
+        scope_data: &mut ScopeData,
+        result: &mut IndexMap<&'a str, BindingId>,
     ) {
-        expr.node.visit_lvalue(|x| {
-            result.insert(x.0.as_str(), Module::default_visibility(x.0.as_str()));
-        })
+        expr.node.visit_lvalue_mut(|x| {
+            AssignIdent::collect_assign_ident(x, Visibility::Public, scope_data, result)
+        });
+    }
+}
+
+/// Storage of objects referenced by AST.
+#[derive(Default)]
+pub(crate) struct ScopeData {
+    bindings: Vec<Binding>,
+}
+
+/// Binding defines a place for a variable.
+///
+/// For example, in code `x = 1; x = 2`, there's one binding for name `x`.
+///
+/// In code `x = 1; def f(): x = 2`, there are two bindings for name `x`.
+#[derive(Debug)]
+pub(crate) struct Binding {
+    pub(crate) vis: Visibility,
+    /// `slot` is `None` when it is not initialized yet.
+    /// When analysis is completed, `slot` is always `Some`.
+    pub(crate) slot: Option<Slot>,
+}
+
+impl Binding {
+    fn new(vis: Visibility) -> Binding {
+        Binding { vis, slot: None }
+    }
+}
+
+/// If of a binding within current module.
+#[derive(Copy, Clone, Dupe, Debug)]
+pub(crate) struct BindingId(usize);
+
+impl ScopeData {
+    pub(crate) fn new() -> ScopeData {
+        ScopeData::default()
+    }
+
+    pub(crate) fn get_binding(&self, BindingId(id): BindingId) -> &Binding {
+        &self.bindings[id]
+    }
+
+    fn mut_binding(&mut self, BindingId(id): BindingId) -> &mut Binding {
+        &mut self.bindings[id]
+    }
+
+    fn new_binding(&mut self, vis: Visibility) -> (BindingId, &mut Binding) {
+        let binding_id = BindingId(self.bindings.len());
+        self.bindings.push(Binding::new(vis));
+        (binding_id, self.bindings.last_mut().unwrap())
     }
 }
 
@@ -277,7 +395,14 @@ impl Assign {
 pub(crate) struct CstPayload;
 impl AstPayload for CstPayload {
     type IdentPayload = ();
-    type IdentAssignPayload = ();
+    /// Binding for an identifier in assignment position.
+    ///
+    /// This is `None` when CST is created.
+    /// All payload objects are filled with binding ids for all assign idents
+    /// during analysis.
+    ///
+    /// When compilation starts, all payloads are `Some`.
+    type IdentAssignPayload = Option<BindingId>;
     type DefPayload = ();
 }
 
@@ -285,13 +410,16 @@ pub(crate) struct CompilerAstMap;
 impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap {
     fn map_ident(&mut self, (): ()) {}
 
-    fn map_ident_assign(&mut self, (): ()) {}
+    fn map_ident_assign(&mut self, (): ()) -> Option<BindingId> {
+        None
+    }
 
     fn map_def(&mut self, (): ()) {}
 }
 
 pub(crate) type CstExpr = AstExprP<CstPayload>;
 pub(crate) type CstAssign = AstAssignP<CstPayload>;
+pub(crate) type CstAssignIdent = AstAssignIdentP<CstPayload>;
 pub(crate) type CstArgument = AstArgumentP<CstPayload>;
 pub(crate) type CstParameter = AstParameterP<CstPayload>;
 pub(crate) type CstStmt = AstStmtP<CstPayload>;
