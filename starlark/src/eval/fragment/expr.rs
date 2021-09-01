@@ -400,7 +400,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            ExprP::Lambda(params, box inner) => {
+            ExprP::Lambda(params, box inner, ()) => {
                 let suite = Spanned {
                     span: expr.span,
                     node: StmtP::Return(Some(inner)),

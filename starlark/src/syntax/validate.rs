@@ -230,7 +230,7 @@ impl Stmt {
             }
         }
         let name = name.into_map(|s| AssignIdentP(s, ()));
-        Ok(Stmt::Def(name, parameters, return_type, box stmts))
+        Ok(Stmt::Def(name, parameters, return_type, box stmts, ()))
     }
 
     pub fn check_assign(codemap: &CodeMap, x: AstExpr) -> anyhow::Result<AstAssign> {
@@ -297,7 +297,7 @@ impl Stmt {
             let err = |x| Err(Diagnostic::new(x, stmt.span, codemap.dupe()));
 
             match &stmt.node {
-                Stmt::Def(_, _, _, body) => f(codemap, dialect, body, false, false, true),
+                Stmt::Def(_, _, _, body, _payload) => f(codemap, dialect, body, false, false, true),
                 Stmt::For(_, box (_, body)) => {
                     if top_level && !dialect.enable_top_level_stmt {
                         err(ValidateError::NoTopLevelFor)

@@ -30,6 +30,7 @@ use std::{
 pub trait AstPayload: Debug {
     type IdentPayload: Debug;
     type IdentAssignPayload: Debug;
+    type DefPayload: Debug;
 }
 
 /// Default implementation of payload, which attaches `()` to nodes.
@@ -39,6 +40,7 @@ pub struct AstNoPayload;
 impl AstPayload for AstNoPayload {
     type IdentPayload = ();
     type IdentAssignPayload = ();
+    type DefPayload = ();
 }
 
 pub type Expr = ExprP<AstNoPayload>;
@@ -144,7 +146,7 @@ pub enum ExprP<P: AstPayload> {
         Option<Box<AstExprP<P>>>,
     ),
     Identifier(AstString, P::IdentPayload),
-    Lambda(Vec<AstParameterP<P>>, Box<AstExprP<P>>),
+    Lambda(Vec<AstParameterP<P>>, Box<AstExprP<P>>, P::DefPayload),
     Literal(AstLiteral),
     Not(Box<AstExprP<P>>),
     Minus(Box<AstExprP<P>>),
@@ -259,6 +261,7 @@ pub enum StmtP<P: AstPayload> {
         Vec<AstParameterP<P>>,
         Option<Box<AstExprP<P>>>,
         Box<AstStmtP<P>>,
+        P::DefPayload,
     ),
     // The Visibility of a Load is implicit from the Dialect, not written by a user
     Load(AstLoadP<P>),
@@ -385,7 +388,7 @@ impl Display for Expr {
                 f.write_str(")")
             }
             Expr::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
-            Expr::Lambda(params, e) => {
+            Expr::Lambda(params, e, _payload) => {
                 f.write_str("(lambda ")?;
                 comma_separated_fmt(f, params, |x, f| write!(f, "{}", x.node), false)?;
                 f.write_str(": ")?;
@@ -556,7 +559,7 @@ impl Stmt {
                 writeln!(f, "{}for {} in {}:", tab, bind.node, coll.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::Def(name, params, return_type, suite) => {
+            Stmt::Def(name, params, return_type, suite, _payload) => {
                 write!(f, "{}def {}(", tab, name.node)?;
                 comma_separated_fmt(f, params, |x, f| write!(f, "{}", x.node), false)?;
                 f.write_str(")")?;

@@ -205,7 +205,7 @@ fn inappropriate_underscore(
     res: &mut Vec<LintT<NameWarning>>,
 ) {
     match &**x {
-        Stmt::Def(name, _, _, x) => {
+        Stmt::Def(name, _, _, x, _payload) => {
             if !top && name.0.starts_with('_') {
                 res.push(LintT::new(
                     codemap,

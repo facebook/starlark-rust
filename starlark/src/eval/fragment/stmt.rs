@@ -337,7 +337,7 @@ impl Compiler<'_> {
     fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
         let span = stmt.span;
         match stmt.node {
-            StmtP::Def(name, params, return_type, suite) => {
+            StmtP::Def(name, params, return_type, suite, ()) => {
                 let rhs = self
                     .function(&name.0, params, return_type, *suite)
                     .as_compiled();

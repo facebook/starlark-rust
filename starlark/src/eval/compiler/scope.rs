@@ -278,6 +278,7 @@ pub(crate) struct CstPayload;
 impl AstPayload for CstPayload {
     type IdentPayload = ();
     type IdentAssignPayload = ();
+    type DefPayload = ();
 }
 
 pub(crate) struct CompilerAstMap;
@@ -285,6 +286,8 @@ impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap {
     fn map_ident(&mut self, (): ()) {}
 
     fn map_ident_assign(&mut self, (): ()) {}
+
+    fn map_def(&mut self, (): ()) {}
 }
 
 pub(crate) type CstExpr = AstExprP<CstPayload>;

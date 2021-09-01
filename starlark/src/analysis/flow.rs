@@ -102,7 +102,7 @@ fn require_return_expression(ret_type: &Option<Box<AstExpr>>) -> Option<Span> {
 
 fn check_stmt(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     match &**x {
-        Stmt::Def(name, _params, ret_type, body) => {
+        Stmt::Def(name, _params, ret_type, body, _payload) => {
             let rets = returns(body);
 
             // Do I require my return statements to have an expression
@@ -211,7 +211,7 @@ fn redundant(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
     fn f(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>>) {
         match &**x {
             Stmt::For(_, box (_, body)) => check(true, codemap, body, res),
-            Stmt::Def(_, _, _, body) => check(false, codemap, body, res),
+            Stmt::Def(_, _, _, body, _payload) => check(false, codemap, body, res),
             _ => {}
         }
         // We always want to look inside everything for other types of violation

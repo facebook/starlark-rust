@@ -46,7 +46,7 @@ impl<P: AstPayload> StmtP<P> {
                 f(Visit::Stmt(then_block));
                 f(Visit::Stmt(else_block));
             }
-            StmtP::Def(_, params, ret_type, body) => {
+            StmtP::Def(_, params, ret_type, body, _) => {
                 params
                     .iter()
                     .for_each(|x| x.visit_expr(|x| f(Visit::Expr(x))));
@@ -90,7 +90,7 @@ impl<P: AstPayload> StmtP<P> {
                 f(VisitMut::Stmt(then_block));
                 f(VisitMut::Stmt(else_block));
             }
-            StmtP::Def(_, params, ret_type, body) => {
+            StmtP::Def(_, params, ret_type, body, _) => {
                 params
                     .iter_mut()
                     .for_each(|x| x.visit_expr_mut(|x| f(VisitMut::Expr(x))));
@@ -239,7 +239,7 @@ impl<P: AstPayload> ExprP<P> {
                 d.iter().for_each(|x| f(x));
             }
             ExprP::Identifier(..) => {}
-            ExprP::Lambda(args, body) => {
+            ExprP::Lambda(args, body, _) => {
                 args.iter().for_each(|x| x.visit_expr(|x| f(x)));
                 f(body);
             }

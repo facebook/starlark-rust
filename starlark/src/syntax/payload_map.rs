@@ -29,6 +29,7 @@ use gazebo::prelude::VecExt;
 pub(crate) trait AstPayloadFunction<A: AstPayload, B: AstPayload> {
     fn map_ident(&mut self, a: A::IdentPayload) -> B::IdentPayload;
     fn map_ident_assign(&mut self, a: A::IdentAssignPayload) -> B::IdentAssignPayload;
+    fn map_def(&mut self, a: A::DefPayload) -> B::DefPayload;
 }
 
 impl<A: AstPayload> LoadP<A> {
@@ -84,11 +85,12 @@ impl<A: AstPayload> StmtP<A> {
                 assign.into_map_payload(f),
                 box (coll.into_map_payload(f), body.into_map_payload(f)),
             ),
-            StmtP::Def(name, params, ret, body) => StmtP::Def(
+            StmtP::Def(name, params, ret, body, p) => StmtP::Def(
                 name.into_map_payload(f),
                 params.into_map(|p| p.into_map_payload(f)),
                 ret.map(|ret| box ret.into_map_payload(f)),
                 box body.into_map_payload(f),
+                f.map_def(p),
             ),
             StmtP::Load(load) => StmtP::Load(load.into_map_payload(f)),
         }
@@ -117,9 +119,10 @@ impl<A: AstPayload> ExprP<A> {
                 c.map(|e| box e.into_map_payload(f)),
             ),
             ExprP::Identifier(id, p) => ExprP::Identifier(id, f.map_ident(p)),
-            ExprP::Lambda(ps, body) => ExprP::Lambda(
+            ExprP::Lambda(ps, body, p) => ExprP::Lambda(
                 ps.into_map(|p| p.into_map_payload(f)),
                 box body.into_map_payload(f),
+                f.map_def(p),
             ),
             ExprP::Literal(l) => ExprP::Literal(l),
             ExprP::Not(e) => ExprP::Not(box e.into_map_payload(f)),
