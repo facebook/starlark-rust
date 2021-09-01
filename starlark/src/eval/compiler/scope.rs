@@ -407,15 +407,6 @@ impl<'a> Scope<'a> {
             .get_name(name)
             .map(|(slot, _vis)| Slot::Module(slot))
     }
-
-    pub fn get_name_or_panic(&mut self, name: &str) -> Slot {
-        self.get_name(name).unwrap_or_else(|| {
-            panic!(
-                "Scope::get_name, internal error, entry missing from scope table `{}`",
-                name
-            )
-        })
-    }
 }
 
 impl Stmt {

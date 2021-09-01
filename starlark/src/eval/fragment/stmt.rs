@@ -164,8 +164,9 @@ impl Compiler<'_> {
                 })
             }
             AssignP::Identifier(ident) => {
+                let slot = self.scope.scope_data.get_assign_ident_slot(&ident);
                 let name = ident.node;
-                match self.scope.get_name_or_panic(&name.0) {
+                match slot {
                     Slot::Local(slot) => {
                         let rhs = rhs.as_compiled();
                         let name = name.0;
