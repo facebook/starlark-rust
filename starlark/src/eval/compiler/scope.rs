@@ -84,14 +84,10 @@ impl ScopeNames {
     }
 
     fn add_name(&mut self, name: &str) -> LocalSlotId {
-        match self.mp.get(name) {
-            Some(v) => *v,
-            None => {
-                let slot = self.next_slot();
-                self.mp.insert(name.to_owned(), slot);
-                slot
-            }
-        }
+        let slot = self.next_slot();
+        let old_slot = self.mp.insert(name.to_owned(), slot);
+        assert!(old_slot.is_none());
+        slot
     }
 
     fn add_scoped(&mut self, name: &str, unscope: &mut Unscope) -> LocalSlotId {
