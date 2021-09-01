@@ -488,8 +488,9 @@ impl Compiler<'_> {
             StmtP::Load(load) => {
                 let name = load.node.module.node;
                 let symbols = load.node.args.into_map(|(x, y)| {
+                    let slot = self.scope.scope_data.get_assign_ident_slot(&x);
                     (
-                        match self.scope.get_name_or_panic(&x.node.0) {
+                        match slot {
                             Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
                             Slot::Module(slot) => slot,
                         },

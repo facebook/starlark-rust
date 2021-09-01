@@ -461,6 +461,13 @@ impl ScopeData {
         self.scopes.push(ScopeNames::default());
         (scope_id, self.scopes.last_mut().unwrap())
     }
+
+    /// Get resolved slot for assigning identifier.
+    pub(crate) fn get_assign_ident_slot(&self, ident: &CstAssignIdent) -> Slot {
+        let binding_id = ident.1.expect("binding not assigned for ident");
+        let slot = self.get_binding(binding_id).slot;
+        slot.expect("binding slot is not initialized")
+    }
 }
 
 // We use CST as acronym for compiler-specific AST.
