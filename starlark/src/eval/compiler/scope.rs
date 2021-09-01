@@ -21,9 +21,10 @@ use crate::{
     syntax::{
         ast::{
             Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstNoPayload,
-            AstParameterP, AstPayload, AstStmtP, Stmt, StmtP, Visibility,
+            AstParameterP, AstPayload, AstStmtP, ExprP, ParameterP, Stmt, StmtP, Visibility,
         },
         payload_map::AstPayloadFunction,
+        uniplate::VisitMut,
     },
 };
 use gazebo::dupe::Dupe;
@@ -166,6 +167,9 @@ impl<'a> Scope<'a> {
             let old_slot = mem::replace(&mut binding.slot, Some(Slot::Module(slot)));
             assert!(old_slot.is_none());
         }
+
+        // Here we traverse the AST second time to collect scopes of defs
+        Self::collect_defines_recursively(&mut scope_data, code);
         Self {
             scope_data,
             module,
@@ -184,26 +188,59 @@ impl<'a> Scope<'a> {
         (self.module.slot_count(), scope.used)
     }
 
-    pub fn enter_def<'s>(
-        &mut self,
+    fn collect_defines_in_def(
+        scope_data: &mut ScopeData,
         scope_id: ScopeId,
-        params: impl Iterator<Item = &'s str>,
-        code: &mut CstStmt,
+        params: &mut [CstParameter],
+        body: Option<&mut CstStmt>,
     ) {
-        let mut locals = IndexMap::new();
+        let params = params.iter_mut().flat_map(|p| match &mut p.node {
+            ParameterP::Normal(n, ..) => Some(n),
+            ParameterP::WithDefaultValue(n, ..) => Some(n),
+            ParameterP::NoArgs => None,
+            ParameterP::Args(n, ..) => Some(n),
+            ParameterP::KwArgs(n, ..) => Some(n),
+        });
+        let mut locals: IndexMap<&str, _> = IndexMap::new();
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
             // beginning
-            let old_local = locals.insert(p, self.scope_data.new_binding(Visibility::Public).0);
+            let old_local = locals.insert(&p.0, scope_data.new_binding(Visibility::Public).0);
             assert!(old_local.is_none());
         }
-        Stmt::collect_defines(code, &mut self.scope_data, &mut locals);
+        if let Some(code) = body {
+            Stmt::collect_defines(code, scope_data, &mut locals);
+        }
         for (name, binding_id) in locals.into_iter() {
-            let slot = self.scope_data.mut_scope(scope_id).add_name(name);
-            let binding = self.scope_data.mut_binding(binding_id);
+            let slot = scope_data.mut_scope(scope_id).add_name(name);
+            let binding = scope_data.mut_binding(binding_id);
             let old_slot = mem::replace(&mut binding.slot, Some(Slot::Local(slot)));
             assert!(old_slot.is_none());
         }
+    }
+
+    fn collect_defines_recursively(scope_data: &mut ScopeData, code: &mut CstStmt) {
+        if let StmtP::Def(_name, params, _ret, suite, scope_id) = &mut code.node {
+            // Here we traverse the AST twice: once for this def scope,
+            // second time below for nested defs.
+            Self::collect_defines_in_def(scope_data, *scope_id, params, Some(suite));
+        }
+
+        code.visit_children_mut(&mut |visit| match visit {
+            VisitMut::Expr(e) => Self::collect_defines_recursively_in_expr(scope_data, e),
+            VisitMut::Stmt(s) => Self::collect_defines_recursively(scope_data, s),
+        });
+    }
+
+    fn collect_defines_recursively_in_expr(scope_data: &mut ScopeData, code: &mut CstExpr) {
+        if let ExprP::Lambda(params, _expr, scope_id) = &mut code.node {
+            Self::collect_defines_in_def(scope_data, *scope_id, params, None);
+        }
+
+        code.visit_expr_mut(|e| Self::collect_defines_recursively_in_expr(scope_data, e));
+    }
+
+    pub fn enter_def(&mut self, scope_id: ScopeId) {
         self.locals.push(scope_id);
     }
 

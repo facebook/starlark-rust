@@ -277,6 +277,15 @@ impl<P: AstPayload> ArgumentP<P> {
         }
     }
 
+    pub fn expr_mut(&mut self) -> &mut AstExprP<P> {
+        match self {
+            ArgumentP::Positional(x) => x,
+            ArgumentP::Named(_, x) => x,
+            ArgumentP::Args(x) => x,
+            ArgumentP::KwArgs(x) => x,
+        }
+    }
+
     pub fn into_expr(self) -> AstExprP<P> {
         match self {
             ArgumentP::Positional(x) => x,

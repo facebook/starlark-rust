@@ -28,7 +28,7 @@ enum Visit<'a, P: AstPayload> {
     Expr(&'a AstExprP<P>),
 }
 
-enum VisitMut<'a, P: AstPayload> {
+pub(crate) enum VisitMut<'a, P: AstPayload> {
     Stmt(&'a mut AstStmtP<P>),
     Expr(&'a mut AstExprP<P>),
 }
@@ -78,7 +78,7 @@ impl<P: AstPayload> StmtP<P> {
         }
     }
 
-    fn visit_children_mut<'a>(&'a mut self, mut f: impl FnMut(VisitMut<'a, P>)) {
+    pub(crate) fn visit_children_mut<'a>(&'a mut self, mut f: impl FnMut(VisitMut<'a, P>)) {
         match self {
             StmtP::Statements(xs) => xs.iter_mut().for_each(|x| f(VisitMut::Stmt(x))),
             StmtP::If(condition, box then_block) => {
@@ -146,6 +146,16 @@ impl<P: AstPayload> StmtP<P> {
             }
         }
         self.visit_children(|x| pick(x, &mut f))
+    }
+
+    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+        fn pick<'a, P: AstPayload>(x: VisitMut<'a, P>, f: &mut impl FnMut(&'a mut AstExprP<P>)) {
+            match x {
+                VisitMut::Stmt(x) => x.visit_children_mut(|x| pick(x, f)),
+                VisitMut::Expr(x) => f(x),
+            }
+        }
+        self.visit_children_mut(|x| pick(x, &mut f))
     }
 
     pub fn visit_stmt_result<E>(
@@ -275,6 +285,62 @@ impl<P: AstPayload> ExprP<P> {
             }
         }
     }
+
+    pub(crate) fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+        match self {
+            ExprP::Tuple(xs) => xs.iter_mut().for_each(|x| f(x)),
+            ExprP::Dot(x, _) => f(x),
+            ExprP::Call(a, b) => {
+                f(a);
+                b.iter_mut().for_each(|x| f(x.expr_mut()));
+            }
+            ExprP::ArrayIndirection(box (a, b)) => {
+                f(a);
+                f(b);
+            }
+            ExprP::Slice(a, b, c, d) => {
+                f(a);
+                b.iter_mut().for_each(|x| f(x));
+                c.iter_mut().for_each(|x| f(x));
+                d.iter_mut().for_each(|x| f(x));
+            }
+            ExprP::Identifier(..) => {}
+            ExprP::Lambda(args, body, _) => {
+                args.iter_mut().for_each(|x| x.visit_expr_mut(|x| f(x)));
+                f(body);
+            }
+            ExprP::Literal(_) => {}
+            ExprP::Not(x) => f(x),
+            ExprP::Minus(x) => f(x),
+            ExprP::Plus(x) => f(x),
+            ExprP::BitNot(x) => f(x),
+            ExprP::Op(x, _, y) => {
+                f(x);
+                f(y);
+            }
+            ExprP::If(box (a, b, c)) => {
+                f(a);
+                f(b);
+                f(c);
+            }
+            ExprP::List(x) => x.iter_mut().for_each(|x| f(x)),
+            ExprP::Dict(x) => x.iter_mut().for_each(|(x, y)| {
+                f(x);
+                f(y);
+            }),
+            ExprP::ListComprehension(x, for_, y) => {
+                for_.visit_expr_mut(|x| f(x));
+                y.iter_mut().for_each(|x| x.visit_expr_mut(|x| f(x)));
+                f(x);
+            }
+            ExprP::DictComprehension(x, for_, y) => {
+                for_.visit_expr_mut(|x| f(x));
+                y.iter_mut().for_each(|x| x.visit_expr_mut(|x| f(x)));
+                f(&mut x.0);
+                f(&mut x.1);
+            }
+        }
+    }
 }
 
 impl<P: AstPayload> AssignP<P> {
@@ -348,12 +414,24 @@ impl<P: AstPayload> ForClauseP<P> {
         self.var.visit_expr(&mut f);
         f(&self.over);
     }
+
+    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+        self.var.visit_expr_mut(&mut f);
+        f(&mut self.over);
+    }
 }
 
 impl<P: AstPayload> ClauseP<P> {
     pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         match self {
             ClauseP::For(x) => x.visit_expr(f),
+            ClauseP::If(x) => f(x),
+        }
+    }
+
+    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+        match self {
+            ClauseP::For(x) => x.visit_expr_mut(f),
             ClauseP::If(x) => f(x),
         }
     }
