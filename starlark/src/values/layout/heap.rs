@@ -374,7 +374,7 @@ impl<'v> Tracer<'v> {
 
     fn adjust(&self, value: Value<'v>) -> Value<'v> {
         // Case 1, doesn't point at the old arena
-        if !value.0.is_mutable() {
+        if !value.0.is_unfrozen() {
             return value;
         }
         let old_val = value.0.unpack_ptr().unwrap();

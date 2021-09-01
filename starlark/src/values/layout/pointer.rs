@@ -47,7 +47,9 @@ assert_eq_size!(Option<Pointer<'static, String>>, usize);
 const TAG_BITS: usize = 0b111;
 
 const TAG_INT: usize = 0b10;
-const TAG_MUTABLE: usize = 0b01;
+// Pointer to an object, which is not frozen.
+// Note, an object can be changed from unfrozen to frozen, not vice versa.
+const TAG_UNFROZEN: usize = 0b01;
 const TAG_USER: usize = 0b100;
 
 unsafe fn untag_pointer<'a, T>(x: usize) -> &'a T {
@@ -89,24 +91,24 @@ impl<'p, P> Pointer<'p, P> {
         Self::new(tag_int(x))
     }
 
-    pub fn new_mutable_usize(x: usize) -> Self {
-        Self::new(x | TAG_MUTABLE)
+    pub fn new_unfrozen_usize(x: usize) -> Self {
+        Self::new(x | TAG_UNFROZEN)
     }
 
     pub fn new_frozen_usize(x: usize) -> Self {
         Self::new(x)
     }
 
-    pub fn new_mutable(x: &'p P) -> Self {
-        Self::new_mutable_usize(cast::ptr_to_usize(x))
+    pub fn new_unfrozen(x: &'p P) -> Self {
+        Self::new_unfrozen_usize(cast::ptr_to_usize(x))
     }
 
     pub fn new_frozen(x: &'p P) -> Self {
         Self::new_frozen_usize(cast::ptr_to_usize(x))
     }
 
-    pub fn is_mutable(self) -> bool {
-        self.pointer.get() & TAG_MUTABLE == TAG_MUTABLE
+    pub fn is_unfrozen(self) -> bool {
+        self.pointer.get() & TAG_UNFROZEN == TAG_UNFROZEN
     }
 
     pub fn unpack(self) -> Either<&'p P, i32> {

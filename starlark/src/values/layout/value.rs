@@ -74,11 +74,11 @@ unsafe impl Sync for FrozenValue {}
 
 impl<'v> Value<'v> {
     pub(crate) fn new_ptr(x: &'v AValueHeader) -> Self {
-        Self(Pointer::new_mutable(x))
+        Self(Pointer::new_unfrozen(x))
     }
 
     pub(crate) fn new_ptr_usize(x: usize) -> Self {
-        Self(Pointer::new_mutable_usize(x))
+        Self(Pointer::new_unfrozen_usize(x))
     }
 
     /// Create a new `None` value.
@@ -111,7 +111,7 @@ impl<'v> Value<'v> {
 
     /// Obtain the underlying [`FrozenValue`] from inside the [`Value`], if it is one.
     pub fn unpack_frozen(self) -> Option<FrozenValue> {
-        if self.0.is_mutable() {
+        if self.0.is_unfrozen() {
             None
         } else {
             Some(FrozenValue(unsafe { self.0.cast_lifetime() }))
