@@ -58,7 +58,7 @@ assert_eq(add18(24), 42)
 }
 
 #[test]
-fn test_nested_def() {
+fn test_nested_def_1() {
     assert::is_true(
         "
 def foo(x):
@@ -67,6 +67,10 @@ def foo(x):
     return bar(x)
 foo(8) == 16",
     );
+}
+
+#[test]
+fn test_nested_def_2() {
     assert::is_true(
         "
 def squarer():
@@ -78,6 +82,10 @@ def squarer():
 sq = squarer()
 [sq(), sq(), sq(), sq()] == [1,4,9,16]",
     );
+}
+
+#[test]
+fn test_nested_def_3() {
     assert::is_true(
         "
 def f(x):

@@ -23,7 +23,7 @@ use crate::{
     errors::{did_you_mean::did_you_mean, Diagnostic},
     eval::{
         compiler::{
-            scope::{CstArgument, CstExpr, Slot},
+            scope::{CstArgument, CstExpr, ResolvedIdent, Slot},
             throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
         },
         fragment::known::{list_to_tuple, Conditional},
@@ -355,11 +355,13 @@ impl Compiler<'_> {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
-            ExprP::Identifier(ident, ()) => {
+            ExprP::Identifier(ident, resolved_ident) => {
+                let resolved_ident = resolved_ident
+                    .unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
                 let name = ident.node;
                 let span = ident.span;
-                match self.scope.get_name(&name) {
-                    Some(Slot::Local(slot)) => {
+                match resolved_ident {
+                    ResolvedIdent::Slot(Slot::Local(slot)) => {
                         // We can't look up the local variabless in advance, because they are different each time
                         // we go through a new function call.
                         expr!("local", |eval| throw(
@@ -368,7 +370,7 @@ impl Compiler<'_> {
                             eval
                         )?)
                     }
-                    Some(Slot::Module(slot)) => {
+                    ResolvedIdent::Slot(Slot::Module(slot)) => {
                         // We can't look up the module variables in advance because the first time around they are
                         // mutables, but after freezing they point at a different set of frozen slots.
                         expr!("module", |eval| throw(
@@ -377,7 +379,7 @@ impl Compiler<'_> {
                             eval
                         )?)
                     }
-                    None => {
+                    ResolvedIdent::GlobalOrUnknown => {
                         // Must be a global, since we know all variables
                         match self.globals.get_frozen(&name) {
                             Some(v) => value!(v),

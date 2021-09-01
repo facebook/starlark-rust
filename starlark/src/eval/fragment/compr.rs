@@ -39,10 +39,8 @@ impl Compiler<'_> {
         for_: ForClauseP<CstPayload>,
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
-        self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
         let x = self.expr(x).as_compiled();
-        self.scope.exit_compr();
         eval_list(x, clauses)
     }
 
@@ -53,11 +51,9 @@ impl Compiler<'_> {
         for_: ForClauseP<CstPayload>,
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
-        self.scope.enter_compr();
         let clauses = compile_clauses(for_, clauses, self);
         let k = self.expr(k).as_compiled();
         let v = self.expr(v).as_compiled();
-        self.scope.exit_compr();
         eval_dict(k, v, clauses)
     }
 }
@@ -84,21 +80,13 @@ fn compile_ifs(
 }
 
 fn compile_clauses(
-    mut for_: ForClauseP<CstPayload>,
+    for_: ForClauseP<CstPayload>,
     mut clauses: Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
 ) -> Vec<ClauseCompiled> {
     // The first for.over is scoped before we enter the list comp
     let over_span = for_.over.span;
     let over = compiler.expr(list_to_tuple(for_.over));
-
-    // Now everything else must be compiled with all the for variables in scope
-    compiler.scope.add_compr(&mut for_.var);
-    for x in &mut clauses {
-        if let ClauseP::For(x) = x {
-            compiler.scope.add_compr(&mut x.var);
-        }
-    }
 
     // Now we want to group them into a `for`, followed by any number of `if`.
     // The evaluator wants to use pop to consume them, so reverse the order.

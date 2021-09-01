@@ -21,7 +21,8 @@ use crate::{
     syntax::{
         ast::{
             Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstNoPayload,
-            AstParameterP, AstPayload, AstStmtP, ExprP, ParameterP, Stmt, StmtP, Visibility,
+            AstParameterP, AstPayload, AstStmtP, AstString, ClauseP, ExprP, ForClauseP, ParameterP,
+            Stmt, StmtP, Visibility,
         },
         payload_map::AstPayloadFunction,
         uniplate::VisitMut,
@@ -170,12 +171,14 @@ impl<'a> Scope<'a> {
 
         // Here we traverse the AST second time to collect scopes of defs
         Self::collect_defines_recursively(&mut scope_data, code);
-        Self {
+        let mut scope = Self {
             scope_data,
             module,
             locals: vec![scope_id],
             unscopes: Vec::new(),
-        }
+        };
+        scope.resolve_idents(code);
+        scope
     }
 
     // Number of module slots I need, number of local anon slots I need
@@ -240,6 +243,119 @@ impl<'a> Scope<'a> {
         code.visit_expr_mut(|e| Self::collect_defines_recursively_in_expr(scope_data, e));
     }
 
+    fn resolve_idents(&mut self, code: &mut CstStmt) {
+        match &mut code.node {
+            StmtP::Def(_name, params, ret, body, scope_id) => self.resolve_idents_in_def(
+                *scope_id,
+                params,
+                ret.as_mut().map(|r| &mut **r),
+                Some(body),
+                None,
+            ),
+            _ => code.visit_children_mut(|visit| match visit {
+                VisitMut::Stmt(stmt) => self.resolve_idents(stmt),
+                VisitMut::Expr(expr) => self.resolve_idents_in_expr(expr),
+            }),
+        }
+    }
+
+    fn resolve_idents_in_assign(&mut self, assign: &mut CstAssign) {
+        assign.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr));
+    }
+
+    fn resolve_idents_in_def(
+        &mut self,
+        scope_id: ScopeId,
+        params: &mut [CstParameter],
+        ret: Option<&mut CstExpr>,
+        body_stmt: Option<&mut CstStmt>,
+        body_expr: Option<&mut CstExpr>,
+    ) {
+        for param in params {
+            param.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr));
+        }
+        if let Some(ret) = ret {
+            self.resolve_idents_in_expr(ret);
+        }
+
+        self.enter_def(scope_id);
+        if let Some(body_stmt) = body_stmt {
+            self.resolve_idents(body_stmt);
+        }
+        if let Some(body_expr) = body_expr {
+            self.resolve_idents_in_expr(body_expr);
+        }
+        self.exit_def();
+    }
+
+    fn resolve_idents_in_expr(&mut self, expr: &mut CstExpr) {
+        match &mut expr.node {
+            ExprP::Identifier(ident, slot) => self.resolve_ident(ident, slot),
+            ExprP::Lambda(params, body, scope_id) => {
+                self.resolve_idents_in_def(*scope_id, params, None, None, Some(body))
+            }
+            ExprP::ListComprehension(expr, first_for, clauses) => {
+                self.resolve_idents_in_compr(&mut [expr], first_for, clauses)
+            }
+            ExprP::DictComprehension(box (k, v), first_for, clauses) => {
+                self.resolve_idents_in_compr(&mut [k, v], first_for, clauses)
+            }
+            _ => expr.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr)),
+        }
+    }
+
+    fn resolve_ident(&mut self, ident: &AstString, resolved_ident: &mut Option<ResolvedIdent>) {
+        assert!(resolved_ident.is_none());
+        *resolved_ident = Some(match self.get_name(ident) {
+            None => ResolvedIdent::GlobalOrUnknown,
+            Some(slot) => ResolvedIdent::Slot(slot),
+        });
+    }
+
+    fn resolve_idents_in_compr(
+        &mut self,
+        exprs: &mut [&mut CstExpr],
+        first_for: &mut ForClauseP<CstPayload>,
+        clauses: &mut [ClauseP<CstPayload>],
+    ) {
+        // First for is resolved in outer scope
+        self.resolve_idents_in_for_clause(first_for);
+
+        self.enter_compr();
+
+        // Add identifiers to compr scope
+
+        self.add_compr(&mut first_for.var);
+        for clause in clauses.iter_mut() {
+            match clause {
+                ClauseP::For(for_clause) => self.add_compr(&mut for_clause.var),
+                ClauseP::If(..) => {}
+            }
+        }
+
+        // Now resolve idents in compr scope
+
+        for clause in clauses.iter_mut() {
+            match clause {
+                ClauseP::For(for_clause) => self.resolve_idents_in_for_clause(for_clause),
+                ClauseP::If(cond) => self.resolve_idents_in_expr(cond),
+            }
+        }
+
+        // Finally, resolve the item expression
+
+        for expr in exprs {
+            self.resolve_idents_in_expr(expr);
+        }
+
+        self.exit_compr();
+    }
+
+    fn resolve_idents_in_for_clause(&mut self, for_clause: &mut ForClauseP<CstPayload>) {
+        self.resolve_idents_in_expr(&mut for_clause.over);
+        self.resolve_idents_in_assign(&mut for_clause.var);
+    }
+
     pub fn enter_def(&mut self, scope_id: ScopeId) {
         self.locals.push(scope_id);
     }
@@ -252,11 +368,11 @@ impl<'a> Scope<'a> {
         self.scope_data.mut_scope(scope_id)
     }
 
-    pub fn enter_compr(&mut self) {
+    fn enter_compr(&mut self) {
         self.unscopes.push(Unscope::default());
     }
 
-    pub fn add_compr(&mut self, var: &mut CstAssign) {
+    fn add_compr(&mut self, var: &mut CstAssign) {
         let scope_id = self.top_scope_id();
         let mut locals = IndexMap::new();
         Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
@@ -270,13 +386,13 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn exit_compr(&mut self) {
+    fn exit_compr(&mut self) {
         self.scope_data
             .mut_scope(self.top_scope_id())
             .unscope(self.unscopes.pop().unwrap());
     }
 
-    pub fn get_name(&mut self, name: &str) -> Option<Slot> {
+    fn get_name(&mut self, name: &str) -> Option<Slot> {
         // look upwards to find the first place the variable occurs
         // then copy that variable downwards
         for i in (0..self.locals.len()).rev() {
@@ -470,13 +586,27 @@ impl ScopeData {
     }
 }
 
+#[derive(Debug)]
+pub(crate) enum ResolvedIdent {
+    Slot(Slot),
+    // TODO: produce error in analysis if name is unknown
+    GlobalOrUnknown,
+}
+
 // We use CST as acronym for compiler-specific AST.
 
 /// Compiler-specific AST payload.
 #[derive(Debug)]
 pub(crate) struct CstPayload;
 impl AstPayload for CstPayload {
-    type IdentPayload = ();
+    /// Information about how identifier binding is resolved.
+    ///
+    /// This is `None` when CST is created.
+    /// All payload objects are filled with binding ids for all assign idents
+    /// during analysis.
+    ///
+    /// When compilation starts, all payloads are `Some`.
+    type IdentPayload = Option<ResolvedIdent>;
     /// Binding for an identifier in assignment position.
     ///
     /// This is `None` when CST is created.
@@ -490,7 +620,9 @@ impl AstPayload for CstPayload {
 
 pub(crate) struct CompilerAstMap<'a>(pub(crate) &'a mut ScopeData);
 impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap<'_> {
-    fn map_ident(&mut self, (): ()) {}
+    fn map_ident(&mut self, (): ()) -> Option<ResolvedIdent> {
+        None
+    }
 
     fn map_ident_assign(&mut self, (): ()) -> Option<BindingId> {
         None
