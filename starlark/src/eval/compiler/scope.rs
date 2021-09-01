@@ -26,6 +26,7 @@ use crate::{
         payload_map::AstPayloadFunction,
     },
 };
+use indexmap::map::IndexMap;
 use std::collections::{hash_map, HashMap};
 
 pub(crate) struct Scope<'a> {
@@ -133,7 +134,7 @@ pub(crate) enum Slot {
 
 impl<'a> Scope<'a> {
     pub fn enter_module(module: &'a MutableNames, code: &mut CstStmt) -> Self {
-        let mut locals = HashMap::new();
+        let mut locals = IndexMap::new();
         Stmt::collect_defines(code, &mut locals);
         for (x, vis) in locals {
             module.add_name_visibility(x, vis);
@@ -161,9 +162,8 @@ impl<'a> Scope<'a> {
             // beginning
             names.add_name(p);
         }
-        let mut locals = HashMap::new();
+        let mut locals = IndexMap::new();
         Stmt::collect_defines(code, &mut locals);
-        // Note: this process introduces non-determinism, as the defines are collected in different orders each time
         for x in locals.into_iter() {
             names.add_name(x.0);
         }
@@ -182,7 +182,7 @@ impl<'a> Scope<'a> {
     }
 
     pub fn add_compr(&mut self, var: &mut CstAssign) {
-        let mut locals = HashMap::new();
+        let mut locals = IndexMap::new();
         Assign::collect_defines_lvalue(var, &mut locals);
         for k in locals.into_iter() {
             self.locals
@@ -227,7 +227,7 @@ impl<'a> Scope<'a> {
 
 impl Stmt {
     // Collect all the variables that are defined in this scope
-    fn collect_defines<'a>(stmt: &'a mut CstStmt, result: &mut HashMap<&'a str, Visibility>) {
+    fn collect_defines<'a>(stmt: &'a mut CstStmt, result: &mut IndexMap<&'a str, Visibility>) {
         match &mut stmt.node {
             StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
                 Assign::collect_defines_lvalue(dest, result);
@@ -262,7 +262,7 @@ impl Assign {
     // for variable etc)
     fn collect_defines_lvalue<'a>(
         expr: &'a mut CstAssign,
-        result: &mut HashMap<&'a str, Visibility>,
+        result: &mut IndexMap<&'a str, Visibility>,
     ) {
         expr.node.visit_lvalue(|x| {
             result.insert(x.0.as_str(), Module::default_visibility(x.0.as_str()));
