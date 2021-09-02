@@ -34,6 +34,14 @@
                     ".sky",
                     ".bzl"
                 ],
+                "filenames": [
+                    "BUILD",
+                    "WORKSPACE",
+                    "BUCK",
+                    "BUILD_DEFS",
+                    "DEFS",
+                    "TARGETS"
+                ],
                 "configuration": "./syntaxes/starlark.configuration.json"
             }
         ],
