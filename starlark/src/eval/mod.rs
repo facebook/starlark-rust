@@ -29,7 +29,7 @@ use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
 use crate::{
-    eval::compiler::scope::{CompilerAstMap, ScopeData, ScopeId},
+    eval::compiler::scope::{CompilerAstMap, ScopeData},
     values::docs::DocString,
 };
 pub(crate) use compiler::scope::ScopeNames;
@@ -112,18 +112,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let (module_slots, local_slots, scope_data) = scope.exit_module();
 
-        let mut compiler = Compiler {
-            scope_data,
-            locals: Vec::new(),
-            heap: self.module_env.frozen_heap(),
-            codemap: codemap.dupe(),
-            constants: Constants::new(),
-        };
-        compiler.enter_scope(ScopeId::module());
-        let stmt = compiler.stmt(statement, true);
-        compiler.exit_scope();
-        assert!(compiler.locals.is_empty());
-
         self.module_env.slots().ensure_slots(module_slots);
         let new_locals = self.local_variables.reserve(local_slots);
         let old_locals = self.local_variables.utilise(new_locals);
@@ -145,7 +133,15 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
 
         // Evaluation
-        let res = stmt(self);
+        let mut compiler = Compiler {
+            scope_data,
+            locals: Vec::new(),
+            heap: self.module_env.frozen_heap(),
+            codemap: codemap.dupe(),
+            constants: Constants::new(),
+        };
+
+        let res = compiler.eval_module(statement, self);
 
         // Clean up the world, putting everything back
         self.call_stack.pop();

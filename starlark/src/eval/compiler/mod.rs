@@ -123,7 +123,7 @@ pub(crate) struct Compiler<'a> {
     pub(crate) constants: Constants,
 }
 
-impl<'a> Compiler<'a> {
+impl Compiler<'_> {
     pub(crate) fn enter_scope(&mut self, scope_id: ScopeId) {
         self.locals.push(scope_id);
     }
