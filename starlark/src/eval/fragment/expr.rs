@@ -360,7 +360,7 @@ impl Compiler<'_> {
                 let name = ident.node;
                 let span = ident.span;
                 match resolved_ident {
-                    ResolvedIdent::Slot(Slot::Local(slot)) => {
+                    ResolvedIdent::Slot((Slot::Local(slot), _binding_id)) => {
                         // We can't look up the local variabless in advance, because they are different each time
                         // we go through a new function call.
                         expr!("local", |eval| throw(
@@ -369,7 +369,7 @@ impl Compiler<'_> {
                             eval
                         )?)
                     }
-                    ResolvedIdent::Slot(Slot::Module(slot)) => {
+                    ResolvedIdent::Slot((Slot::Module(slot), _binding_id)) => {
                         // We can't look up the module variables in advance because the first time around they are
                         // mutables, but after freezing they point at a different set of frozen slots.
                         expr!("module", |eval| throw(

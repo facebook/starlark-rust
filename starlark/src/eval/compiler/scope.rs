@@ -439,7 +439,7 @@ impl<'a> Scope<'a> {
             .unscope(self.unscopes.pop().unwrap());
     }
 
-    fn get_name(&mut self, name: &str) -> Option<Slot> {
+    fn get_name(&mut self, name: &str) -> Option<(Slot, BindingId)> {
         // look upwards to find the first place the variable occurs
         // then copy that variable downwards
         for i in (0..self.locals.len()).rev() {
@@ -447,12 +447,15 @@ impl<'a> Scope<'a> {
                 for j in (i + 1)..self.locals.len() {
                     v = self.scope_at_level_mut(j).copy_parent(v, binding_id, name);
                 }
-                return Some(Slot::Local(v));
+                return Some((Slot::Local(v), binding_id));
             }
         }
-        self.module_bindings
-            .get(name)
-            .map(|binding_id| self.scope_data.get_binding(*binding_id).slot.unwrap())
+        self.module_bindings.get(name).map(|&binding_id| {
+            (
+                self.scope_data.get_binding(binding_id).slot.unwrap(),
+                binding_id,
+            )
+        })
     }
 }
 
@@ -632,7 +635,7 @@ impl ScopeData {
 
 #[derive(Debug)]
 pub(crate) enum ResolvedIdent {
-    Slot(Slot),
+    Slot((Slot, BindingId)),
     Global(FrozenValue),
 }
 
