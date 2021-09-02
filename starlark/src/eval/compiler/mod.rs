@@ -115,8 +115,6 @@ impl From<EvalException<'_>> for anyhow::Error {
 pub(crate) struct Compiler<'a> {
     pub(crate) scope: Scope<'a>,
     pub(crate) heap: &'a FrozenHeap,
-    pub(crate) globals: &'a Globals,
-    pub(crate) errors: Vec<anyhow::Error>,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
 }

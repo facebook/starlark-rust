@@ -16,7 +16,9 @@
  */
 
 use crate::{
-    environment::{names::MutableNames, slots::ModuleSlotId, Module},
+    codemap::CodeMap,
+    environment::{names::MutableNames, slots::ModuleSlotId, EnvironmentError, Globals, Module},
+    errors::Diagnostic,
     eval::runtime::slots::LocalSlotId,
     syntax::{
         ast::{
@@ -27,6 +29,7 @@ use crate::{
         payload_map::AstPayloadFunction,
         uniplate::VisitMut,
     },
+    values::FrozenValue,
 };
 use gazebo::dupe::Dupe;
 use indexmap::map::IndexMap;
@@ -42,6 +45,9 @@ pub(crate) struct Scope<'a> {
     // The rest are scopes for functions (which include their comprehensions).
     locals: Vec<ScopeId>,
     unscopes: Vec<Unscope>,
+    codemap: CodeMap,
+    globals: &'a Globals,
+    pub(crate) errors: Vec<anyhow::Error>,
 }
 
 struct UnscopeBinding {
@@ -156,6 +162,8 @@ impl<'a> Scope<'a> {
         scope_id: ScopeId,
         mut scope_data: ScopeData,
         code: &mut CstStmt,
+        globals: &'a Globals,
+        codemap: CodeMap,
     ) -> Self {
         // Not really important, sanity check
         assert_eq!(scope_id, ScopeId(0));
@@ -176,6 +184,9 @@ impl<'a> Scope<'a> {
             module,
             locals: vec![scope_id],
             unscopes: Vec::new(),
+            codemap,
+            globals,
+            errors: Vec::new(),
         };
         scope.resolve_idents(code);
         scope
@@ -307,7 +318,24 @@ impl<'a> Scope<'a> {
     fn resolve_ident(&mut self, ident: &AstString, resolved_ident: &mut Option<ResolvedIdent>) {
         assert!(resolved_ident.is_none());
         *resolved_ident = Some(match self.get_name(ident) {
-            None => ResolvedIdent::GlobalOrUnknown,
+            None => {
+                // Must be a global, since we know all variables
+                match self.globals.get_frozen(ident) {
+                    None => {
+                        let codemap = self.codemap.dupe();
+                        let mk_err = move || {
+                            Diagnostic::new(
+                                EnvironmentError::VariableNotFound(ident.node.clone()),
+                                ident.span,
+                                codemap.dupe(),
+                            )
+                        };
+                        self.errors.push(mk_err());
+                        return;
+                    }
+                    Some(v) => ResolvedIdent::Global(v),
+                }
+            }
             Some(slot) => ResolvedIdent::Slot(slot),
         });
     }
@@ -580,8 +608,7 @@ impl ScopeData {
 #[derive(Debug)]
 pub(crate) enum ResolvedIdent {
     Slot(Slot),
-    // TODO: produce error in analysis if name is unknown
-    GlobalOrUnknown,
+    Global(FrozenValue),
 }
 
 // We use CST as acronym for compiler-specific AST.

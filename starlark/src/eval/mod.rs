@@ -92,31 +92,31 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.module_env.set_docstring(docstring)
         }
 
-        let scope = Scope::enter_module(
+        let mut scope = Scope::enter_module(
             self.module_env.names(),
             root_scope_id,
             scope_data,
             &mut statement,
+            self.globals,
+            codemap.dupe(),
         );
+
+        // We want to grab the first error only, with ownership, so drop all but the first
+        scope.errors.truncate(1);
+        if let Some(e) = scope.errors.pop() {
+            // Static errors, reported even if the branch is not hit
+            return Err(e);
+        }
 
         let span = statement.span;
 
         let mut compiler = Compiler {
             scope,
             heap: self.module_env.frozen_heap(),
-            globals: self.globals,
-            errors: Vec::new(),
             codemap: codemap.dupe(),
             constants: Constants::new(),
         };
         let stmt = compiler.stmt(statement, true);
-
-        // We want to grab the first error only, with ownership, so drop all but the first
-        compiler.errors.truncate(1);
-        if let Some(e) = compiler.errors.pop() {
-            // Static errors, reported even if the branch is not hit
-            return Err(e);
-        }
 
         let (module_slots, local_slots) = compiler.scope.exit_module();
         self.module_env.slots().ensure_slots(module_slots);

@@ -19,8 +19,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
-    environment::EnvironmentError,
-    errors::{did_you_mean::did_you_mean, Diagnostic},
+    errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
             scope::{CstArgument, CstExpr, ResolvedIdent, Slot},
@@ -379,27 +378,7 @@ impl Compiler<'_> {
                             eval
                         )?)
                     }
-                    ResolvedIdent::GlobalOrUnknown => {
-                        // Must be a global, since we know all variables
-                        match self.globals.get_frozen(&name) {
-                            Some(v) => value!(v),
-                            None => {
-                                let name = name.to_owned();
-                                let codemap = self.codemap.dupe();
-                                let mk_err = move || {
-                                    Diagnostic::new(
-                                        EnvironmentError::VariableNotFound(name.clone()),
-                                        span,
-                                        codemap.dupe(),
-                                    )
-                                };
-                                self.errors.push(mk_err());
-                                ExprCompiledValue::Compiled(box move |_eval| {
-                                    Err(EvalException::Error(mk_err()))
-                                })
-                            }
-                        }
-                    }
+                    ResolvedIdent::Global(v) => value!(v),
                 }
             }
             ExprP::Lambda(params, box inner, scope_id) => {
