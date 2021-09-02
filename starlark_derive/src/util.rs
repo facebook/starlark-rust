@@ -27,7 +27,7 @@ pub(crate) fn is_type_name(x: &Type, name: &str) -> bool {
         ..
     }) = x
     {
-        if let Some(seg1) = segments.first() {
+        if let Some(seg1) = segments.last() {
             return seg1.ident == name;
         }
     }

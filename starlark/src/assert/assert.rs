@@ -79,7 +79,8 @@ enum GcStrategy {
 
 /// Definitions to support assert.star as used by the Go test suite
 #[starlark_module]
-fn assert_star(builder: &mut GlobalsBuilder) {
+// Deliberately qualify the GlobalsBuild type to test that we can
+fn assert_star(builder: &mut crate::environment::GlobalsBuilder) {
     fn eq(a: Value, b: Value) -> NoneType {
         assert_equals(a, b)
     }
