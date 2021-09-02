@@ -103,7 +103,7 @@ impl Compiler<'_> {
                     .node
                     .1
                     .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
-                let binding = self.scope.scope_data.get_binding(binding_id);
+                let binding = self.scope_data.get_binding(binding_id);
                 let slot = binding
                     .slot
                     .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
@@ -164,7 +164,7 @@ impl Compiler<'_> {
                 })
             }
             AssignP::Identifier(ident) => {
-                let slot = self.scope.scope_data.get_assign_ident_slot(&ident);
+                let slot = self.scope_data.get_assign_ident_slot(&ident);
                 let name = ident.node;
                 match slot {
                     Slot::Local(slot) => {
@@ -489,7 +489,7 @@ impl Compiler<'_> {
             StmtP::Load(load) => {
                 let name = load.node.module.node;
                 let symbols = load.node.args.into_map(|(x, y)| {
-                    let slot = self.scope.scope_data.get_assign_ident_slot(&x);
+                    let slot = self.scope_data.get_assign_ident_slot(&x);
                     (
                         match slot {
                             Slot::Local(..) => unreachable!("symbol need to be resolved to module"),

@@ -128,11 +128,11 @@ impl Compiler<'_> {
             .expr_opt(return_type)
             .map(ExprCompiledValue::as_compiled);
 
-        self.scope.enter_def(scope_id);
+        self.enter_scope(scope_id);
 
         let docstring = DocString::extract_raw_starlark_docstring(&suite);
         let body = self.stmt(suite, false);
-        let scope_names = self.scope.exit_def();
+        let scope_names = self.exit_scope();
 
         let scope_names = mem::take(scope_names);
 

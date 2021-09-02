@@ -21,7 +21,10 @@ use crate::{
     codemap::{CodeMap, Span},
     environment::Globals,
     errors::Diagnostic,
-    eval::{compiler::scope::Scope, Evaluator},
+    eval::{
+        compiler::scope::{ScopeData, ScopeId},
+        Evaluator, ScopeNames,
+    },
     values::{FrozenHeap, FrozenValue, Value},
 };
 use anyhow::anyhow;
@@ -113,10 +116,22 @@ impl From<EvalException<'_>> for anyhow::Error {
 }
 
 pub(crate) struct Compiler<'a> {
-    pub(crate) scope: Scope<'a>,
+    pub(crate) scope_data: ScopeData,
+    pub(crate) locals: Vec<ScopeId>,
     pub(crate) heap: &'a FrozenHeap,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
+}
+
+impl<'a> Compiler<'a> {
+    pub(crate) fn enter_scope(&mut self, scope_id: ScopeId) {
+        self.locals.push(scope_id);
+    }
+
+    pub(crate) fn exit_scope(&mut self) -> &mut ScopeNames {
+        let scope_id = self.locals.pop().unwrap();
+        self.scope_data.mut_scope(scope_id)
+    }
 }
 
 #[derive(Clone, Copy, Dupe)]

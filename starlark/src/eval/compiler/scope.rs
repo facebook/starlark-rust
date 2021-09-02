@@ -193,13 +193,13 @@ impl<'a> Scope<'a> {
     }
 
     // Number of module slots I need, number of local anon slots I need
-    pub fn exit_module(mut self) -> (usize, usize) {
+    pub fn exit_module(mut self) -> (usize, usize, ScopeData) {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
         let scope_id = self.locals.pop().unwrap();
         let scope = self.scope_data.get_scope(scope_id);
         assert!(scope.parent.is_empty());
-        (self.module.slot_count(), scope.used)
+        (self.module.slot_count(), scope.used, self.scope_data)
     }
 
     fn collect_defines_in_def(
@@ -564,6 +564,12 @@ pub(crate) struct BindingId(usize);
 #[derive(Copy, Clone, Dupe, Debug, Eq, PartialEq)]
 pub(crate) struct ScopeId(usize);
 
+impl ScopeId {
+    pub(crate) fn module() -> ScopeId {
+        ScopeId(0)
+    }
+}
+
 impl ScopeData {
     pub(crate) fn new() -> ScopeData {
         ScopeData::default()
@@ -587,7 +593,7 @@ impl ScopeData {
         &self.scopes[id]
     }
 
-    fn mut_scope(&mut self, ScopeId(id): ScopeId) -> &mut ScopeNames {
+    pub(crate) fn mut_scope(&mut self, ScopeId(id): ScopeId) -> &mut ScopeNames {
         &mut self.scopes[id]
     }
 

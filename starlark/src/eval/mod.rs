@@ -29,7 +29,7 @@ use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
 use crate::{
-    eval::compiler::scope::{CompilerAstMap, ScopeData},
+    eval::compiler::scope::{CompilerAstMap, ScopeData, ScopeId},
     values::docs::DocString,
 };
 pub(crate) use compiler::scope::ScopeNames;
@@ -110,15 +110,20 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let span = statement.span;
 
+        let (module_slots, local_slots, scope_data) = scope.exit_module();
+
         let mut compiler = Compiler {
-            scope,
+            scope_data,
+            locals: Vec::new(),
             heap: self.module_env.frozen_heap(),
             codemap: codemap.dupe(),
             constants: Constants::new(),
         };
+        compiler.enter_scope(ScopeId::module());
         let stmt = compiler.stmt(statement, true);
+        compiler.exit_scope();
+        assert!(compiler.locals.is_empty());
 
-        let (module_slots, local_slots) = compiler.scope.exit_module();
         self.module_env.slots().ensure_slots(module_slots);
         let new_locals = self.local_variables.reserve(local_slots);
         let old_locals = self.local_variables.utilise(new_locals);
