@@ -175,11 +175,12 @@ impl<'a> Scope<'a> {
 
         let existing_module_names = module.all_names();
         for name in existing_module_names.keys() {
-            let (binding_id, _binding) = scope_data.new_binding(Visibility::Public);
+            let (binding_id, _binding) =
+                scope_data.new_binding(Visibility::Public, AssignCount::AtMostOnce);
             locals.insert(name.as_str(), binding_id);
         }
 
-        Stmt::collect_defines(code, &mut scope_data, &mut locals);
+        Stmt::collect_defines(code, InLoop::No, &mut scope_data, &mut locals);
 
         let mut module_bindings = HashMap::new();
         for (x, binding_id) in locals {
@@ -234,11 +235,16 @@ impl<'a> Scope<'a> {
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
             // beginning
-            let old_local = locals.insert(&p.0, scope_data.new_binding(Visibility::Public).0);
+            let old_local = locals.insert(
+                &p.0,
+                scope_data
+                    .new_binding(Visibility::Public, AssignCount::AtMostOnce)
+                    .0,
+            );
             assert!(old_local.is_none());
         }
         if let Some(code) = body {
-            Stmt::collect_defines(code, scope_data, &mut locals);
+            Stmt::collect_defines(code, InLoop::No, scope_data, &mut locals);
         }
         for (name, binding_id) in locals.into_iter() {
             let slot = scope_data.mut_scope(scope_id).add_name(name, binding_id);
@@ -420,7 +426,7 @@ impl<'a> Scope<'a> {
         let scope_id = self.top_scope_id();
         let mut locals = IndexMap::new();
         for var in var {
-            Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
+            Assign::collect_defines_lvalue(var, InLoop::Yes, &mut self.scope_data, &mut locals);
         }
         for (name, binding_id) in locals.into_iter() {
             let slot = self.scope_data.mut_scope(scope_id).add_scoped(
@@ -459,24 +465,38 @@ impl<'a> Scope<'a> {
     }
 }
 
+/// While performing analysis.
+#[derive(Copy, Clone, Dupe)]
+enum InLoop {
+    /// Current statement has an enclosing loop in the current scope.
+    Yes,
+    /// Current statement has no enclosing loop in the current scope.
+    No,
+}
+
 impl Stmt {
     // Collect all the variables that are defined in this scope
     fn collect_defines<'a>(
         stmt: &'a mut CstStmt,
+        in_loop: InLoop,
         scope_data: &mut ScopeData,
         result: &mut IndexMap<&'a str, BindingId>,
     ) {
         match &mut stmt.node {
             StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
-                Assign::collect_defines_lvalue(dest, scope_data, result);
+                Assign::collect_defines_lvalue(dest, in_loop, scope_data, result);
             }
             StmtP::For(dest, box (_, body)) => {
-                Assign::collect_defines_lvalue(dest, scope_data, result);
-                StmtP::collect_defines(body, scope_data, result);
+                Assign::collect_defines_lvalue(dest, InLoop::Yes, scope_data, result);
+                StmtP::collect_defines(body, InLoop::Yes, scope_data, result);
             }
-            StmtP::Def(name, ..) => {
-                AssignIdent::collect_assign_ident(name, Visibility::Public, scope_data, result)
-            }
+            StmtP::Def(name, ..) => AssignIdent::collect_assign_ident(
+                name,
+                in_loop,
+                Visibility::Public,
+                scope_data,
+                result,
+            ),
             StmtP::Load(load) => {
                 let vis = load.visibility;
                 for (name, _) in &mut load.node.args {
@@ -484,10 +504,10 @@ impl Stmt {
                     if Module::default_visibility(&name.0) == Visibility::Private {
                         vis = Visibility::Private;
                     }
-                    AssignIdent::collect_assign_ident(name, vis, scope_data, result);
+                    AssignIdent::collect_assign_ident(name, in_loop, vis, scope_data, result);
                 }
             }
-            stmt => stmt.visit_stmt_mut(|x| Stmt::collect_defines(x, scope_data, result)),
+            stmt => stmt.visit_stmt_mut(|x| Stmt::collect_defines(x, in_loop, scope_data, result)),
         }
     }
 }
@@ -495,6 +515,7 @@ impl Stmt {
 impl AssignIdent {
     fn collect_assign_ident<'a>(
         assign: &'a mut CstAssignIdent,
+        in_loop: InLoop,
         vis: Visibility,
         scope_data: &mut ScopeData,
         result: &mut IndexMap<&'a str, BindingId>,
@@ -503,6 +524,7 @@ impl AssignIdent {
         fn assign_ident_impl<'b>(
             name: &'b str,
             binding: &'b mut Option<BindingId>,
+            in_loop: InLoop,
             mut vis: Visibility,
             scope_data: &mut ScopeData,
             result: &mut IndexMap<&'b str, BindingId>,
@@ -525,16 +547,28 @@ impl AssignIdent {
                     if vis == Visibility::Public {
                         prev_binding.vis = Visibility::Public;
                     }
+                    prev_binding.assign_count = AssignCount::Any;
                     *binding = Some(prev_binding_id);
                 }
                 indexmap::map::Entry::Vacant(e) => {
-                    let (new_binding_id, _) = scope_data.new_binding(vis);
+                    let assign_count = match in_loop {
+                        InLoop::Yes => AssignCount::Any,
+                        InLoop::No => AssignCount::AtMostOnce,
+                    };
+                    let (new_binding_id, _) = scope_data.new_binding(vis, assign_count);
                     e.insert(new_binding_id);
                     *binding = Some(new_binding_id);
                 }
             };
         }
-        assign_ident_impl(&assign.node.0, &mut assign.node.1, vis, scope_data, result);
+        assign_ident_impl(
+            &assign.node.0,
+            &mut assign.node.1,
+            in_loop,
+            vis,
+            scope_data,
+            result,
+        );
     }
 }
 
@@ -543,11 +577,12 @@ impl Assign {
     // for variable etc)
     fn collect_defines_lvalue<'a>(
         expr: &'a mut CstAssign,
+        in_loop: InLoop,
         scope_data: &mut ScopeData,
         result: &mut IndexMap<&'a str, BindingId>,
     ) {
         expr.node.visit_lvalue_mut(|x| {
-            AssignIdent::collect_assign_ident(x, Visibility::Public, scope_data, result)
+            AssignIdent::collect_assign_ident(x, in_loop, Visibility::Public, scope_data, result)
         });
     }
 }
@@ -557,6 +592,14 @@ impl Assign {
 pub(crate) struct ScopeData {
     bindings: Vec<Binding>,
     scopes: Vec<ScopeNames>,
+}
+
+#[derive(Debug)]
+enum AssignCount {
+    /// Variable is assigned at most once during the execution of the scope.
+    AtMostOnce,
+    /// Variable may be assigned more than once during execution of the scope.
+    Any,
 }
 
 /// Binding defines a place for a variable.
@@ -570,11 +613,16 @@ pub(crate) struct Binding {
     /// `slot` is `None` when it is not initialized yet.
     /// When analysis is completed, `slot` is always `Some`.
     pub(crate) slot: Option<Slot>,
+    assign_count: AssignCount,
 }
 
 impl Binding {
-    fn new(vis: Visibility) -> Binding {
-        Binding { vis, slot: None }
+    fn new(vis: Visibility, assign_count: AssignCount) -> Binding {
+        Binding {
+            vis,
+            slot: None,
+            assign_count,
+        }
     }
 }
 
@@ -605,9 +653,13 @@ impl ScopeData {
         &mut self.bindings[id]
     }
 
-    fn new_binding(&mut self, vis: Visibility) -> (BindingId, &mut Binding) {
+    fn new_binding(
+        &mut self,
+        vis: Visibility,
+        assigned_count: AssignCount,
+    ) -> (BindingId, &mut Binding) {
         let binding_id = BindingId(self.bindings.len());
-        self.bindings.push(Binding::new(vis));
+        self.bindings.push(Binding::new(vis, assigned_count));
         (binding_id, self.bindings.last_mut().unwrap())
     }
 
@@ -691,8 +743,8 @@ mod test {
     use crate::{
         environment::{names::MutableNames, Globals},
         eval::compiler::scope::{
-            CompilerAstMap, CstAssignIdent, CstExpr, CstStmt, ResolvedIdent, Scope, ScopeData,
-            ScopeId, Slot,
+            AssignCount, CompilerAstMap, CstAssign, CstAssignIdent, CstExpr, CstStmt,
+            ResolvedIdent, Scope, ScopeData, ScopeId, Slot,
         },
         syntax::{
             ast::{ExprP, StmtP},
@@ -729,7 +781,11 @@ mod test {
                 Slot::Module(slot) => format!("m={}", slot.0),
                 Slot::Local(slot) => format!("l={}", slot.0),
             };
-            write!(r, "{}:{}", i, slot).unwrap();
+            let assign_count = match binding.assign_count {
+                AssignCount::AtMostOnce => "",
+                AssignCount::Any => "+",
+            };
+            write!(r, "{}:{}{}", i, slot, assign_count).unwrap();
         }
 
         write!(r, " |").unwrap();
@@ -755,17 +811,26 @@ mod test {
                 write!(&mut self.r, " {}:{}", ident.0, ident.1.unwrap().0).unwrap();
             }
 
-            fn visit_stmt(&mut self, stmt: &CstStmt) {
-                match &stmt.node {
-                    StmtP::Assign(lhs, _rhs) => lhs.visit_lvalue(|ident| self.visit_lvalue(ident)),
-                    StmtP::Def(name, ..) => self.visit_lvalue(name),
-                    _ => {}
-                }
-
+            fn visit_stmt_children(&mut self, stmt: &CstStmt) {
                 stmt.visit_children(|visit| match visit {
                     Visit::Stmt(stmt) => self.visit_stmt(stmt),
                     Visit::Expr(expr) => self.visit_expr(expr),
                 });
+            }
+
+            fn visit_assign(&mut self, assign: &CstAssign) {
+                assign.visit_lvalue(|ident| self.visit_lvalue(ident));
+            }
+
+            fn visit_stmt(&mut self, stmt: &CstStmt) {
+                match &stmt.node {
+                    StmtP::Assign(lhs, _rhs) => self.visit_assign(lhs),
+                    StmtP::Def(name, ..) => self.visit_lvalue(name),
+                    StmtP::For(assign, ..) => self.visit_assign(assign),
+                    _ => {}
+                }
+
+                self.visit_stmt_children(stmt);
             }
         }
 
@@ -785,7 +850,12 @@ mod test {
 
     #[test]
     fn module_reassignment() {
-        t("x = 1; x = 2", "0:m=0 | x:0 x:0");
+        t("x = 1; x = 2", "0:m=0+ | x:0 x:0");
+    }
+
+    #[test]
+    fn reassignment_in_loop() {
+        t("for x in []: y = x", "0:m=0+ 1:m=1+ | x:0 y:1 x:0");
     }
 
     #[test]
