@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-use std::{cell::RefCell, collections::HashMap, iter::Iterator};
-
 use crate::{environment::slots::ModuleSlotId, syntax::ast::Visibility};
+use indexmap::map::IndexMap;
+use std::{cell::RefCell, iter::Iterator};
 
 /// MutableNames are how we allocate slots (index-based) to variables
 /// (name-based). The slots field is the current active mapping of names to
@@ -37,14 +37,14 @@ use crate::{environment::slots::ModuleSlotId, syntax::ast::Visibility};
 /// On an unscope, we do the reverse, putting things back to how they were
 /// before (apart from the total) number of slots required.
 #[derive(Debug)]
-pub(crate) struct MutableNames(RefCell<HashMap<String, (ModuleSlotId, Visibility)>>);
+pub(crate) struct MutableNames(RefCell<IndexMap<String, (ModuleSlotId, Visibility)>>);
 
 #[derive(Debug)]
-pub(crate) struct FrozenNames(HashMap<String, (ModuleSlotId, Visibility)>);
+pub(crate) struct FrozenNames(IndexMap<String, (ModuleSlotId, Visibility)>);
 
 impl MutableNames {
     pub fn new() -> Self {
-        Self(RefCell::new(HashMap::new()))
+        Self(RefCell::new(IndexMap::new()))
     }
 
     pub fn slot_count(&self) -> usize {
@@ -94,7 +94,7 @@ impl MutableNames {
         self.0.borrow_mut().remove(name);
     }
 
-    pub fn all_names(&self) -> HashMap<String, ModuleSlotId> {
+    pub fn all_names(&self) -> IndexMap<String, ModuleSlotId> {
         self.0
             .borrow()
             .iter()
