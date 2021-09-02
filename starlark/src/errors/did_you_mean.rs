@@ -86,4 +86,10 @@ mod test {
 
         assert_eq!(None, did_you_mean("bc", vec!["de"]));
     }
+
+    #[test]
+    fn earlier_variants_are_more_important() {
+        assert_eq!(Some("aaaay"), did_you_mean("aaaax", vec!["aaaay", "aaaaz"]));
+        assert_eq!(Some("aaaaz"), did_you_mean("aaaax", vec!["aaaaz", "aaaay"]));
+    }
 }
