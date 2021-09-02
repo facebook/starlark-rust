@@ -38,6 +38,7 @@ use std::{collections::HashMap, iter, mem};
 pub(crate) struct Scope<'a> {
     pub(crate) scope_data: ScopeData,
     module: &'a MutableNames,
+    module_bindings: HashMap<String, BindingId>,
     // The first scope is a module-level scope (including comprehensions in module scope).
     // The rest are scopes for functions (which include their comprehensions).
     locals: Vec<ScopeId>,
@@ -171,12 +172,23 @@ impl<'a> Scope<'a> {
         assert_eq!(scope_id, ScopeId(0));
 
         let mut locals = IndexMap::new();
+
+        let existing_module_names = module.all_names();
+        for name in existing_module_names.keys() {
+            let (binding_id, _binding) = scope_data.new_binding(Visibility::Public);
+            locals.insert(name.as_str(), binding_id);
+        }
+
         Stmt::collect_defines(code, &mut scope_data, &mut locals);
+
+        let mut module_bindings = HashMap::new();
         for (x, binding_id) in locals {
             let binding = scope_data.mut_binding(binding_id);
             let slot = module.add_name_visibility(x, binding.vis);
             let old_slot = mem::replace(&mut binding.slot, Some(Slot::Module(slot)));
             assert!(old_slot.is_none());
+            let old_binding = module_bindings.insert(x.to_owned(), binding_id);
+            assert!(old_binding.is_none());
         }
 
         // Here we traverse the AST second time to collect scopes of defs
@@ -184,6 +196,7 @@ impl<'a> Scope<'a> {
         let mut scope = Self {
             scope_data,
             module,
+            module_bindings,
             locals: vec![scope_id],
             unscopes: Vec::new(),
             codemap,
@@ -437,9 +450,9 @@ impl<'a> Scope<'a> {
                 return Some(Slot::Local(v));
             }
         }
-        self.module
-            .get_name(name)
-            .map(|(slot, _vis)| Slot::Module(slot))
+        self.module_bindings
+            .get(name)
+            .map(|binding_id| self.scope_data.get_binding(*binding_id).slot.unwrap())
     }
 }
 
