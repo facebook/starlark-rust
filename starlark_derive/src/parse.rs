@@ -70,29 +70,47 @@ fn is_attribute_type(x: &Attribute) -> Option<NestedMeta> {
     }
 }
 
+struct ProcessedAttributes {
+    is_attribute: bool,
+    type_attribute: Option<NestedMeta>,
+    /// Rest attributes
+    attrs: Vec<Attribute>,
+}
+
 /// (#[attribute], #[starlark_type(x)], rest)
-fn process_attributes(xs: Vec<Attribute>) -> (bool, Option<NestedMeta>, Vec<Attribute>) {
-    let mut rest = Vec::with_capacity(xs.len());
-    let mut attribute = false;
-    let mut typ = None;
+fn process_attributes(xs: Vec<Attribute>) -> ProcessedAttributes {
+    let mut attrs = Vec::with_capacity(xs.len());
+    let mut is_attribute = false;
+    let mut type_attribute = None;
     for x in xs {
         if is_attribute_attribute(&x) {
-            attribute = true;
+            is_attribute = true;
         } else if let Some(t) = is_attribute_type(&x) {
-            typ = Some(t);
+            type_attribute = Some(t);
         } else {
-            rest.push(x);
+            attrs.push(x);
         }
     }
-    if attribute {
-        assert!(typ.is_none(), "Can't be an attribute with a .type");
+    if is_attribute {
+        assert!(
+            type_attribute.is_none(),
+            "Can't be an attribute with a .type"
+        );
     }
-    (attribute, typ, rest)
+    ProcessedAttributes {
+        is_attribute,
+        type_attribute,
+        attrs,
+    }
 }
 
 // Add a function to the `GlobalsModule` named `globals_builder`.
 fn parse_fun(func: ItemFn) -> StarStmt {
-    let (is_attribute, type_attribute, attrs) = process_attributes(func.attrs);
+    let ProcessedAttributes {
+        is_attribute,
+        type_attribute,
+        attrs,
+    } = process_attributes(func.attrs);
 
     let return_type = match func.sig.output {
         ReturnType::Default => panic!(
