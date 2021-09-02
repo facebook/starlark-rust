@@ -55,7 +55,7 @@ struct UnscopeBinding {
     /// or `None` if there was no mapping for the variable.
     ///
     /// When we pop the comprehension scope, we restore the mapping from this value.
-    undo: Option<LocalSlotId>,
+    undo: Option<(LocalSlotId, BindingId)>,
 }
 
 #[derive(Default)]
@@ -67,17 +67,22 @@ pub(crate) struct ScopeNames {
     /// The next required slot would be at index `used`.
     pub used: usize,
     /// The names that are in this scope
-    pub mp: HashMap<String, LocalSlotId>,
+    pub mp: HashMap<String, (LocalSlotId, BindingId)>,
     /// Slots to copy from the parent. (index in parent, index in child).
     /// Module-level identifiers are not copied over, to avoid excess copying.
     pub parent: Vec<(LocalSlotId, LocalSlotId)>,
 }
 
 impl ScopeNames {
-    fn copy_parent(&mut self, parent: LocalSlotId, name: &str) -> LocalSlotId {
+    fn copy_parent(
+        &mut self,
+        parent_slot: LocalSlotId,
+        binding_id: BindingId,
+        name: &str,
+    ) -> LocalSlotId {
         assert!(self.get_name(name).is_none()); // Or we'll be overwriting our variable
-        let res = self.add_name(name);
-        self.parent.push((parent, res));
+        let res = self.add_name(name, binding_id);
+        self.parent.push((parent_slot, res));
         res
     }
 
@@ -87,23 +92,28 @@ impl ScopeNames {
         res
     }
 
-    fn add_name(&mut self, name: &str) -> LocalSlotId {
+    fn add_name(&mut self, name: &str, binding_id: BindingId) -> LocalSlotId {
         let slot = self.next_slot();
-        let old_slot = self.mp.insert(name.to_owned(), slot);
-        assert!(old_slot.is_none());
+        let old = self.mp.insert(name.to_owned(), (slot, binding_id));
+        assert!(old.is_none());
         slot
     }
 
-    fn add_scoped(&mut self, name: &str, unscope: &mut Unscope) -> LocalSlotId {
+    fn add_scoped(
+        &mut self,
+        name: &str,
+        binding_id: BindingId,
+        unscope: &mut Unscope,
+    ) -> LocalSlotId {
         let slot = self.next_slot();
         let undo = match self.mp.get_mut(name) {
             Some(v) => {
                 let old = *v;
-                *v = slot;
+                *v = (slot, binding_id);
                 Some(old)
             }
             None => {
-                self.mp.insert(name.to_owned(), slot);
+                self.mp.insert(name.to_owned(), (slot, binding_id));
                 None
             }
         };
@@ -123,7 +133,7 @@ impl ScopeNames {
         }
     }
 
-    fn get_name(&self, name: &str) -> Option<LocalSlotId> {
+    fn get_name(&self, name: &str) -> Option<(LocalSlotId, BindingId)> {
         self.mp.get(name).copied()
     }
 }
@@ -218,7 +228,7 @@ impl<'a> Scope<'a> {
             Stmt::collect_defines(code, scope_data, &mut locals);
         }
         for (name, binding_id) in locals.into_iter() {
-            let slot = scope_data.mut_scope(scope_id).add_name(name);
+            let slot = scope_data.mut_scope(scope_id).add_name(name, binding_id);
             let binding = scope_data.mut_binding(binding_id);
             let old_slot = mem::replace(&mut binding.slot, Some(Slot::Local(slot)));
             assert!(old_slot.is_none());
@@ -400,10 +410,11 @@ impl<'a> Scope<'a> {
             Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
         }
         for (name, binding_id) in locals.into_iter() {
-            let slot = self
-                .scope_data
-                .mut_scope(scope_id)
-                .add_scoped(name, self.unscopes.last_mut().unwrap());
+            let slot = self.scope_data.mut_scope(scope_id).add_scoped(
+                name,
+                binding_id,
+                self.unscopes.last_mut().unwrap(),
+            );
             let binding = self.scope_data.mut_binding(binding_id);
             assert!(mem::replace(&mut binding.slot, Some(Slot::Local(slot))).is_none());
         }
@@ -419,9 +430,9 @@ impl<'a> Scope<'a> {
         // look upwards to find the first place the variable occurs
         // then copy that variable downwards
         for i in (0..self.locals.len()).rev() {
-            if let Some(mut v) = self.scope_at_level(i).get_name(name) {
+            if let Some((mut v, binding_id)) = self.scope_at_level(i).get_name(name) {
                 for j in (i + 1)..self.locals.len() {
-                    v = self.scope_at_level_mut(j).copy_parent(v, name);
+                    v = self.scope_at_level_mut(j).copy_parent(v, binding_id, name);
                 }
                 return Some(Slot::Local(v));
             }

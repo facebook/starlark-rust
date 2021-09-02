@@ -43,7 +43,7 @@ fn inspect_local_variables<'v>(eval: &Evaluator<'v, '_>) -> Option<SmallMap<Stri
     let xs = eval.call_stack.to_function_values();
     let names = xs.into_iter().rev().find_map(to_scope_names)?;
     let mut res = SmallMap::new();
-    for (name, slot) in &names.mp {
+    for (name, (slot, _binding_id)) in &names.mp {
         if let Some(v) = eval.local_variables.get_slot(*slot) {
             res.insert(name.clone(), v);
         }

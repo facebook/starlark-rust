@@ -63,7 +63,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             .rev()
             .find_map(to_scope_names);
         if let Some(names) = &locals {
-            for (name, slot) in &names.mp {
+            for (name, (slot, _binding_id)) in &names.mp {
                 if let Some(value) = self.local_variables.get_slot(*slot) {
                     self.module_env.set(name, value)
                 }
@@ -77,7 +77,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // Now put the Module back how it was before we started, as best we can
         // and move things into locals if that makes sense
         if let Some(names) = &locals {
-            for (name, slot) in &names.mp {
+            for (name, (slot, _binding_id)) in &names.mp {
                 if let Some(value) = self.module_env.get(name) {
                     self.local_variables.set_slot(*slot, value)
                 }
