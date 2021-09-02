@@ -685,3 +685,116 @@ pub(crate) type CstAssignIdent = AstAssignIdentP<CstPayload>;
 pub(crate) type CstArgument = AstArgumentP<CstPayload>;
 pub(crate) type CstParameter = AstParameterP<CstPayload>;
 pub(crate) type CstStmt = AstStmtP<CstPayload>;
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        environment::{names::MutableNames, Globals},
+        eval::compiler::scope::{
+            CompilerAstMap, CstAssignIdent, CstExpr, CstStmt, ResolvedIdent, Scope, ScopeData,
+            ScopeId, Slot,
+        },
+        syntax::{
+            ast::{ExprP, StmtP},
+            uniplate::Visit,
+            AstModule, Dialect,
+        },
+    };
+    use std::fmt::Write;
+
+    fn t(program: &str, expected: &str) {
+        let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::Extended).unwrap();
+        let mut scope_data = ScopeData::new();
+        let mut cst = ast
+            .statement
+            .into_map_payload(&mut CompilerAstMap(&mut scope_data));
+        let module = MutableNames::new();
+        let globals = Globals::new();
+        let _root_scope_id = scope_data.new_scope().0;
+        let scope = Scope::enter_module(
+            &module,
+            ScopeId::module(),
+            scope_data,
+            &mut cst,
+            &globals,
+            ast.codemap,
+        );
+        let (.., scope_data) = scope.exit_module();
+        let mut r = String::new();
+        for (i, binding) in scope_data.bindings.iter().enumerate() {
+            if i != 0 {
+                r.push(' ');
+            }
+            let slot = match binding.slot.unwrap() {
+                Slot::Module(slot) => format!("m={}", slot.0),
+                Slot::Local(slot) => format!("l={}", slot.0),
+            };
+            write!(r, "{}:{}", i, slot).unwrap();
+        }
+
+        write!(r, " |").unwrap();
+
+        struct Visitor<'a> {
+            r: &'a mut String,
+        }
+
+        impl Visitor<'_> {
+            fn visit_expr(&mut self, expr: &CstExpr) {
+                if let ExprP::Identifier(ident, resolved) = &expr.node {
+                    let resolved = match resolved.as_ref().unwrap() {
+                        ResolvedIdent::Slot((_slot, binding_id)) => format!("{}", binding_id.0),
+                        ResolvedIdent::Global(_) => "G".to_owned(),
+                    };
+                    write!(&mut self.r, " {}:{}", ident.node, resolved).unwrap();
+                }
+
+                expr.visit_expr(|expr| self.visit_expr(expr));
+            }
+
+            fn visit_lvalue(&mut self, ident: &CstAssignIdent) {
+                write!(&mut self.r, " {}:{}", ident.0, ident.1.unwrap().0).unwrap();
+            }
+
+            fn visit_stmt(&mut self, stmt: &CstStmt) {
+                match &stmt.node {
+                    StmtP::Assign(lhs, _rhs) => lhs.visit_lvalue(|ident| self.visit_lvalue(ident)),
+                    StmtP::Def(name, ..) => self.visit_lvalue(name),
+                    _ => {}
+                }
+
+                stmt.visit_children(|visit| match visit {
+                    Visit::Stmt(stmt) => self.visit_stmt(stmt),
+                    Visit::Expr(expr) => self.visit_expr(expr),
+                });
+            }
+        }
+
+        Visitor { r: &mut r }.visit_stmt(&cst);
+
+        assert_eq!(expected, &r);
+    }
+
+    // Expected test output (second parameter to `t` function) is:
+    // * list of bindings in format like `1:l=2` means binding id = 1, local slot 2
+    // * list of variables with references to binding ids
+
+    #[test]
+    fn basic() {
+        t("x = 1; y = 2", "0:m=0 1:m=1 | x:0 y:1");
+    }
+
+    #[test]
+    fn module_reassignment() {
+        t("x = 1; x = 2", "0:m=0 | x:0 x:0");
+    }
+
+    #[test]
+    fn def_capture() {
+        t("x = 1\ndef f(): x", "0:m=0 1:m=1 | x:0 f:1 x:0");
+    }
+
+    #[test]
+    fn def_shadow() {
+        t("x = 1\ndef f(): x = 2", "0:m=0 1:m=1 2:l=0 | x:0 f:1 x:2");
+    }
+}

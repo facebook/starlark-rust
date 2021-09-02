@@ -20,7 +20,7 @@ use gazebo::prelude::*;
 use std::mem;
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
-pub(crate) struct LocalSlotId(usize);
+pub(crate) struct LocalSlotId(pub(crate) usize);
 
 impl LocalSlotId {
     pub fn new(index: usize) -> Self {

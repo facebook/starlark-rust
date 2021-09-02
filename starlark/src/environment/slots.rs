@@ -20,7 +20,7 @@ use gazebo::prelude::*;
 use std::cell::{RefCell, RefMut};
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
-pub(crate) struct ModuleSlotId(usize);
+pub(crate) struct ModuleSlotId(pub(crate) usize);
 
 impl ModuleSlotId {
     pub fn new(index: usize) -> Self {

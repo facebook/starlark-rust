@@ -23,7 +23,7 @@ use crate::syntax::ast::{
     ParameterP, StmtP,
 };
 
-enum Visit<'a, P: AstPayload> {
+pub(crate) enum Visit<'a, P: AstPayload> {
     Stmt(&'a AstStmtP<P>),
     Expr(&'a AstExprP<P>),
 }
@@ -34,7 +34,7 @@ pub(crate) enum VisitMut<'a, P: AstPayload> {
 }
 
 impl<P: AstPayload> StmtP<P> {
-    fn visit_children<'a>(&'a self, mut f: impl FnMut(Visit<'a, P>)) {
+    pub(crate) fn visit_children<'a>(&'a self, mut f: impl FnMut(Visit<'a, P>)) {
         match self {
             StmtP::Statements(xs) => xs.iter().for_each(|x| f(Visit::Stmt(x))),
             StmtP::If(condition, box then_block) => {
