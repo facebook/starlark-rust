@@ -17,24 +17,46 @@
 
 //! Compile and evaluate module top-level statements.
 
-use crate::eval::{
-    compiler::{
-        scope::{CstStmt, ScopeId},
-        Compiler, EvalException,
+use crate::{
+    eval::{
+        compiler::{
+            scope::{CstStmt, ScopeId},
+            Compiler, EvalException,
+        },
+        Evaluator,
     },
-    Evaluator,
+    syntax::ast::StmtP,
 };
 
 impl Compiler<'_> {
+    fn eval_top_level_stmt<'v>(
+        &mut self,
+        stmt: CstStmt,
+        evaluator: &mut Evaluator<'v, '_>,
+    ) -> Result<(), EvalException<'v>> {
+        match stmt.node {
+            StmtP::Statements(stmts) => {
+                for stmt in stmts {
+                    self.eval_top_level_stmt(stmt, evaluator)?;
+                }
+                Ok(())
+            }
+            _ => {
+                let stmt = self.stmt(stmt, true);
+                stmt(evaluator)
+            }
+        }
+    }
+
     pub(crate) fn eval_module<'v>(
         &mut self,
         stmt: CstStmt,
         evaluator: &mut Evaluator<'v, '_>,
     ) -> Result<(), EvalException<'v>> {
         self.enter_scope(ScopeId::module());
-        let stmt = self.stmt(stmt, true);
+        self.eval_top_level_stmt(stmt, evaluator)?;
         self.exit_scope();
         assert!(self.locals.is_empty());
-        stmt(evaluator)
+        Ok(())
     }
 }
