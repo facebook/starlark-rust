@@ -33,10 +33,7 @@ use crate::{
 };
 use gazebo::dupe::Dupe;
 use indexmap::map::IndexMap;
-use std::{
-    collections::{hash_map, HashMap},
-    mem,
-};
+use std::{collections::HashMap, iter, mem};
 
 pub(crate) struct Scope<'a> {
     pub(crate) scope_data: ScopeData,
@@ -51,7 +48,6 @@ pub(crate) struct Scope<'a> {
 }
 
 struct UnscopeBinding {
-    slot: LocalSlotId,
     /// Variable mappings in local scope are overwritten by comprehension variables.
     ///
     /// When we enter comprehension, we replace local scope variable slots with comprehension
@@ -99,29 +95,25 @@ impl ScopeNames {
     }
 
     fn add_scoped(&mut self, name: &str, unscope: &mut Unscope) -> LocalSlotId {
-        match unscope.0.entry(name.to_owned()) {
-            hash_map::Entry::Occupied(e) => e.get().slot,
-            hash_map::Entry::Vacant(e) => {
-                let slot = self.next_slot();
-                let undo = match self.mp.get_mut(name) {
-                    Some(v) => {
-                        let old = *v;
-                        *v = slot;
-                        Some(old)
-                    }
-                    None => {
-                        self.mp.insert(name.to_owned(), slot);
-                        None
-                    }
-                };
-                e.insert(UnscopeBinding { slot, undo });
-                slot
+        let slot = self.next_slot();
+        let undo = match self.mp.get_mut(name) {
+            Some(v) => {
+                let old = *v;
+                *v = slot;
+                Some(old)
             }
-        }
+            None => {
+                self.mp.insert(name.to_owned(), slot);
+                None
+            }
+        };
+        let name = name.to_owned();
+        assert!(unscope.0.insert(name, UnscopeBinding { undo }).is_none());
+        slot
     }
 
     fn unscope(&mut self, unscope: Unscope) {
-        for (name, UnscopeBinding { undo, .. }) in unscope.0 {
+        for (name, UnscopeBinding { undo }) in unscope.0 {
             match undo {
                 None => {
                     self.mp.remove(&name);
@@ -353,13 +345,14 @@ impl<'a> Scope<'a> {
 
         // Add identifiers to compr scope
 
-        self.add_compr(&mut first_for.var);
-        for clause in clauses.iter_mut() {
-            match clause {
-                ClauseP::For(for_clause) => self.add_compr(&mut for_clause.var),
-                ClauseP::If(..) => {}
-            }
-        }
+        self.add_compr(
+            iter::once(&mut first_for.var).chain(clauses.iter_mut().flat_map(
+                |clause| match clause {
+                    ClauseP::For(for_clause) => Some(&mut for_clause.var),
+                    ClauseP::If(..) => None,
+                },
+            )),
+        );
 
         // Now resolve idents in compr scope
 
@@ -400,10 +393,12 @@ impl<'a> Scope<'a> {
         self.unscopes.push(Unscope::default());
     }
 
-    fn add_compr(&mut self, var: &mut CstAssign) {
+    fn add_compr<'x>(&mut self, var: impl IntoIterator<Item = &'x mut CstAssign>) {
         let scope_id = self.top_scope_id();
         let mut locals = IndexMap::new();
-        Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
+        for var in var {
+            Assign::collect_defines_lvalue(var, &mut self.scope_data, &mut locals);
+        }
         for (name, binding_id) in locals.into_iter() {
             let slot = self
                 .scope_data
