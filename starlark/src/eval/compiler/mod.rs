@@ -19,13 +19,13 @@ pub(crate) mod scope;
 
 use crate::{
     codemap::{CodeMap, Span},
-    environment::Globals,
+    environment::{Globals, Module},
     errors::Diagnostic,
     eval::{
         compiler::scope::{ScopeData, ScopeId},
         Evaluator, ScopeNames,
     },
-    values::{FrozenHeap, FrozenValue, Value},
+    values::{FrozenValue, Value},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -118,7 +118,7 @@ impl From<EvalException<'_>> for anyhow::Error {
 pub(crate) struct Compiler<'a> {
     pub(crate) scope_data: ScopeData,
     pub(crate) locals: Vec<ScopeId>,
-    pub(crate) heap: &'a FrozenHeap,
+    pub(crate) module_env: &'a Module,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
 }

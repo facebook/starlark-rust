@@ -136,7 +136,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let mut compiler = Compiler {
             scope_data,
             locals: Vec::new(),
-            heap: self.module_env.frozen_heap(),
+            module_env: self.module_env,
             codemap: codemap.dupe(),
             constants: Constants::new(),
         };

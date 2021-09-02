@@ -594,8 +594,8 @@ pub(crate) struct ScopeData {
     scopes: Vec<ScopeNames>,
 }
 
-#[derive(Debug)]
-enum AssignCount {
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum AssignCount {
     /// Variable is assigned at most once during the execution of the scope.
     AtMostOnce,
     /// Variable may be assigned more than once during execution of the scope.
@@ -613,7 +613,7 @@ pub(crate) struct Binding {
     /// `slot` is `None` when it is not initialized yet.
     /// When analysis is completed, `slot` is always `Some`.
     pub(crate) slot: Option<Slot>,
-    assign_count: AssignCount,
+    pub(crate) assign_count: AssignCount,
 }
 
 impl Binding {
@@ -754,17 +754,16 @@ mod test {
     };
     use std::fmt::Write;
 
-    fn t(program: &str, expected: &str) {
+    fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
         let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::Extended).unwrap();
         let mut scope_data = ScopeData::new();
         let mut cst = ast
             .statement
             .into_map_payload(&mut CompilerAstMap(&mut scope_data));
-        let module = MutableNames::new();
         let globals = Globals::new();
         let _root_scope_id = scope_data.new_scope().0;
         let scope = Scope::enter_module(
-            &module,
+            module,
             ScopeId::module(),
             scope_data,
             &mut cst,
@@ -839,6 +838,11 @@ mod test {
         assert_eq!(expected, &r);
     }
 
+    fn t(program: &str, expected: &str) {
+        let module = MutableNames::new();
+        test_with_module(program, expected, &module);
+    }
+
     // Expected test output (second parameter to `t` function) is:
     // * list of bindings in format like `1:l=2` means binding id = 1, local slot 2
     // * list of variables with references to binding ids
@@ -866,5 +870,13 @@ mod test {
     #[test]
     fn def_shadow() {
         t("x = 1\ndef f(): x = 2", "0:m=0 1:m=1 2:l=0 | x:0 f:1 x:2");
+    }
+
+    #[test]
+    fn existing_module_with_names() {
+        let module = MutableNames::new();
+        module.add_name("x");
+        module.add_name("y");
+        test_with_module("x = y", "0:m=0+ 1:m=1 | x:0 y:1", &module);
     }
 }

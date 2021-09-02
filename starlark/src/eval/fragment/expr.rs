@@ -22,7 +22,7 @@ use crate::{
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
-            scope::{CstArgument, CstExpr, ResolvedIdent, Slot},
+            scope::{AssignCount, CstArgument, CstExpr, ResolvedIdent, Slot},
             throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
         },
         fragment::known::{list_to_tuple, Conditional},
@@ -339,7 +339,7 @@ impl Compiler<'_> {
             match x.node {
                 ArgumentP::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
                 ArgumentP::Named(name, value) => {
-                    let fv = self.heap.alloc(name.node.as_str());
+                    let fv = self.module_env.frozen_heap().alloc(name.node.as_str());
                     res.names.push((Symbol::new(&name.node), fv));
                     res.pos_named.push(self.expr(value).as_compiled());
                 }
@@ -369,7 +369,20 @@ impl Compiler<'_> {
                             eval
                         )?)
                     }
-                    ResolvedIdent::Slot((Slot::Module(slot), _binding_id)) => {
+                    ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
+                        let binding = self.scope_data.get_binding(binding_id);
+
+                        // We can only inline variables if they were assigned once
+                        // otherwise we might inline the wrong value.
+                        if binding.assign_count == AssignCount::AtMostOnce {
+                            if let Some(v) = self.module_env.slots().get_slot(slot) {
+                                // We could inline non-frozen values, but these values
+                                // can be garbage-collected, so it is somewhat harder to implement.
+                                if let Some(v) = v.unpack_frozen() {
+                                    return value!(v);
+                                }
+                            }
+                        }
                         // We can't look up the module variables in advance because the first time around they are
                         // mutables, but after freezing they point at a different set of frozen slots.
                         expr!("module", |eval| throw(
@@ -392,7 +405,7 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self.heap.alloc(FrozenTuple { content });
+                    let result = self.module_env.frozen_heap().alloc(FrozenTuple { content });
                     value!(result)
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());
@@ -622,7 +635,7 @@ impl Compiler<'_> {
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
-                    let val = self.heap.alloc(x);
+                    let val = self.module_env.frozen_heap().alloc(x);
                     value!(val)
                 } else {
                     let right = if op == BinOp::In || op == BinOp::NotIn {
@@ -728,7 +741,7 @@ impl Compiler<'_> {
                 self.dict_comprehension(k, v, for_, clauses)
             }
             ExprP::Literal(x) => {
-                let val = x.compile(self.heap);
+                let val = x.compile(self.module_env.frozen_heap());
                 value!(val)
             }
         }

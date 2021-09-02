@@ -88,10 +88,14 @@ impl Compiler<'_> {
         // In practice people only really use the empty versions as constants.
         match &expr.node {
             ExprP::Dict(xs) if xs.is_empty() => {
-                return ExprCompiledValue::Value(self.heap.alloc_str(Dict::TYPE));
+                return ExprCompiledValue::Value(
+                    self.module_env.frozen_heap().alloc_str(Dict::TYPE),
+                );
             }
             ExprP::List(xs) if xs.is_empty() => {
-                return ExprCompiledValue::Value(self.heap.alloc_str(List::TYPE));
+                return ExprCompiledValue::Value(
+                    self.module_env.frozen_heap().alloc_str(List::TYPE),
+                );
             }
             // No need to handle Tuple as it will become frozen if it has no inner-calls
             _ => {}
