@@ -99,6 +99,7 @@ macro_rules! stmt {
     }};
 }
 
+pub(crate) mod call;
 pub(crate) mod compr;
 pub(crate) mod def;
 pub(crate) mod expr;
