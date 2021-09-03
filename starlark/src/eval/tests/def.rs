@@ -97,7 +97,7 @@ f(1)(2)(3) == 6",
 }
 
 #[test]
-fn test_lambda_capture() {
+fn test_lambda_capture_from_module() {
     assert::is_true(
         "
 f = lambda y: x + y
@@ -105,12 +105,30 @@ x = 100
 f(42) == 142
 ",
     );
+}
+
+#[test]
+fn test_lambda_capture_from_def() {
     assert::is_true(
         "
 def inside():
     f = lambda y: x + y
     x = 100
     return f(42) == 142
+inside()
+",
+    );
+}
+
+#[test]
+fn test_lambda_capture_reassigned_from_def() {
+    assert::is_true(
+        "
+def inside():
+    x = 100
+    f = lambda y: x + y
+    x = 200
+    return f(42) == 242
 inside()
 ",
     );
