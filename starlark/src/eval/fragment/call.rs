@@ -46,33 +46,44 @@ struct ArgsCompiled {
     kwargs: Option<ExprCompiled>,
 }
 
-// Helper that creates some specialised argument calls
-macro_rules! args {
-    ($args:ident, $e:expr) => {
-        if $args.names.is_empty()
-            && $args.args.is_none()
-            && $args.kwargs.is_none()
-            && $args.pos_named.len() <= 2
+/// Specialized version of [`ArgsCompiled`] for faster evaluation.
+///
+/// This is meant to be used with [`args!`] macro.
+enum ArgsCompiledSpec {
+    Args0(Args0Compiled),
+    Args1(Args1Compiled),
+    Args2(Args2Compiled),
+    Args(ArgsCompiled),
+}
+
+impl ArgsCompiled {
+    fn spec(mut self) -> ArgsCompiledSpec {
+        if self.names.is_empty()
+            && self.args.is_none()
+            && self.kwargs.is_none()
+            && self.pos_named.len() <= 2
         {
-            let mut args = $args;
-            match args.pos_named.pop() {
-                None => {
-                    let $args = Args0Compiled;
-                    $e
-                }
-                Some(a1) => match args.pos_named.pop() {
-                    None => {
-                        let $args = Args1Compiled(a1);
-                        $e
-                    }
-                    Some(a2) => {
-                        let $args = Args2Compiled(a2, a1);
-                        $e
-                    }
+            match self.pos_named.pop() {
+                None => ArgsCompiledSpec::Args0(Args0Compiled),
+                Some(a1) => match self.pos_named.pop() {
+                    None => ArgsCompiledSpec::Args1(Args1Compiled(a1)),
+                    Some(a2) => ArgsCompiledSpec::Args2(Args2Compiled(a2, a1)),
                 },
             }
         } else {
-            $e
+            ArgsCompiledSpec::Args(self)
+        }
+    }
+}
+
+// Helper that creates some specialised argument calls
+macro_rules! args {
+    ($args:ident, $e:expr) => {
+        match $args.spec() {
+            ArgsCompiledSpec::Args0($args) => $e,
+            ArgsCompiledSpec::Args1($args) => $e,
+            ArgsCompiledSpec::Args2($args) => $e,
+            ArgsCompiledSpec::Args($args) => $e,
         }
     };
 }
