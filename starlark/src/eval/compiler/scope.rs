@@ -18,7 +18,7 @@
 use crate::{
     codemap::CodeMap,
     environment::{names::MutableNames, slots::ModuleSlotId, EnvironmentError, Globals, Module},
-    errors::Diagnostic,
+    errors::{did_you_mean::did_you_mean, Diagnostic},
     eval::runtime::slots::LocalSlotId,
     syntax::{
         ast::{
@@ -336,6 +336,34 @@ impl<'a> Scope<'a> {
         }
     }
 
+    fn current_scope_all_visible_names_for_did_you_mean(&self) -> Vec<String> {
+        // It is OK to return non-unique identifiers
+        let mut r = Vec::new();
+        for &scope_id in self.locals.iter().rev() {
+            let scope = self.scope_data.get_scope(scope_id);
+            r.extend(scope.mp.keys().cloned());
+        }
+        r.extend(self.module_bindings.keys().cloned());
+        r.extend(self.globals.names());
+        r
+    }
+
+    fn variable_not_found_err(&self, ident: &AstString) -> anyhow::Error {
+        let variants = self.current_scope_all_visible_names_for_did_you_mean();
+        let better = did_you_mean(ident, variants.iter().map(|s| s.as_str()));
+        Diagnostic::new(
+            match better {
+                Some(better) => EnvironmentError::VariableNotFoundDidYouMean(
+                    ident.node.clone(),
+                    better.to_owned(),
+                ),
+                None => EnvironmentError::VariableNotFound(ident.node.clone()),
+            },
+            ident.span,
+            self.codemap.dupe(),
+        )
+    }
+
     fn resolve_ident(&mut self, ident: &AstString, resolved_ident: &mut Option<ResolvedIdent>) {
         assert!(resolved_ident.is_none());
         *resolved_ident = Some(match self.get_name(ident) {
@@ -343,15 +371,7 @@ impl<'a> Scope<'a> {
                 // Must be a global, since we know all variables
                 match self.globals.get_frozen(ident) {
                     None => {
-                        let codemap = self.codemap.dupe();
-                        let mk_err = move || {
-                            Diagnostic::new(
-                                EnvironmentError::VariableNotFound(ident.node.clone()),
-                                ident.span,
-                                codemap.dupe(),
-                            )
-                        };
-                        self.errors.push(mk_err());
+                        self.errors.push(self.variable_not_found_err(ident));
                         return;
                     }
                     Some(v) => ResolvedIdent::Global(v),

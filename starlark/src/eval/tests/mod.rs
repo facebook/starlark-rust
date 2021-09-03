@@ -428,6 +428,43 @@ fn test_getattr_did_you_mean_custom() {
 }
 
 #[test]
+fn test_globals_did_you_mean() {
+    assert::fail("true", "Variable `true` not found, did you mean `True`?");
+}
+
+#[test]
+fn test_module_level_did_you_mean() {
+    assert::fail(
+        "_x = 1; print(x)",
+        "Variable `x` not found, did you mean `_x`?",
+    );
+}
+
+#[test]
+fn test_module_level_from_def_did_you_mean() {
+    assert::fail(
+        "def _func(): return func",
+        "Variable `func` not found, did you mean `_func`?",
+    );
+}
+
+#[test]
+fn test_local_from_def_did_you_mean() {
+    assert::fail(
+        "def f(discreet): return discrete",
+        "Variable `discrete` not found, did you mean `discreet`?",
+    );
+}
+
+#[test]
+fn test_compr_did_you_mean() {
+    assert::fail(
+        "[val for value in []]",
+        "Variable `val` not found, did you mean `value`?",
+    );
+}
+
+#[test]
 fn test_unassigned() {
     assert::fails("y = x; x = 1", &["referenced before assignment", "`x`"]);
     assert::fails(
