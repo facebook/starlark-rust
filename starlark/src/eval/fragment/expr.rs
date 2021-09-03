@@ -53,6 +53,13 @@ fn eval_compare(
     r: ExprCompiledValue,
     cmp: fn(Ordering) -> bool,
 ) -> ExprCompiledValue {
+    if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
+        // If comparison fails, let it fail in runtime.
+        if let Ok(r) = l.compare(r.to_value()) {
+            return value!(FrozenValue::new_bool(cmp(r)));
+        }
+    }
+
     expr!("compare", l, r, |eval| {
         Value::new_bool(cmp(throw(l.compare(r), span, eval)?))
     })
@@ -64,6 +71,13 @@ fn eval_equals(
     r: ExprCompiledValue,
     cmp: fn(bool) -> bool,
 ) -> ExprCompiledValue {
+    if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
+        // If comparison fails, let it fail in runtime.
+        if let Ok(r) = l.equals(r.to_value()) {
+            return value!(FrozenValue::new_bool(cmp(r)));
+        }
+    }
+
     expr!("equals", l, r, |eval| {
         Value::new_bool(cmp(throw(l.equals(r), span, eval)?))
     })
