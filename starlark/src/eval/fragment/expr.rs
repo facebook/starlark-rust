@@ -480,16 +480,28 @@ impl Compiler<'_> {
                     let r = self.expr(right);
                     match op {
                         BinOp::Or => {
-                            let r = r.as_compiled();
-                            expr!("or", l, |eval| {
-                                if l.to_bool() { l } else { r(eval)? }
-                            })
+                            if let Some(l) = l.as_value() {
+                                if l.to_value().to_bool() { value!(l) } else { r }
+                            } else {
+                                let r = r.as_compiled();
+                                expr!("or", l, |eval| {
+                                    if l.to_bool() { l } else { r(eval)? }
+                                })
+                            }
                         }
                         BinOp::And => {
-                            let r = r.as_compiled();
-                            expr!("and", l, |eval| {
-                                if !l.to_bool() { l } else { r(eval)? }
-                            })
+                            if let Some(l) = l.as_value() {
+                                if !l.to_value().to_bool() {
+                                    value!(l)
+                                } else {
+                                    r
+                                }
+                            } else {
+                                let r = r.as_compiled();
+                                expr!("and", l, |eval| {
+                                    if !l.to_bool() { l } else { r(eval)? }
+                                })
+                            }
                         }
                         BinOp::Equal => eval_equals(span, l, r, |x| x),
                         BinOp::NotEqual => eval_equals(span, l, r, |x| !x),
