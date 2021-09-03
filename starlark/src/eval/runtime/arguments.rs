@@ -347,6 +347,31 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         slots: &[ValueRef<'v>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
+        // If the arguments equal the length and the kinds, and we don't have any other args,
+        // then no_args, *args and **kwargs must all be unset,
+        // and we don't have to crate args/kwargs objects, we can skip everything else
+        if args.pos.len() == self.positional
+            && args.pos.len() == self.kinds.len()
+            && args.named.is_empty()
+            && args.args.is_none()
+            && args.kwargs.is_none()
+        {
+            for (v, s) in args.pos.iter().zip(slots.iter()) {
+                s.set_direct(*v);
+            }
+
+            return Ok(());
+        }
+
+        self.collect_slow(args, slots, heap)
+    }
+
+    fn collect_slow(
+        &self,
+        args: Arguments<'v, '_>,
+        slots: &[ValueRef<'v>],
+        heap: &'v Heap,
+    ) -> anyhow::Result<()> {
         // Return true if the value is a duplicate
         #[inline(always)]
         fn add_kwargs<'v>(
@@ -378,17 +403,6 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             // fast path for when we don't need to bounce down to filling in args
             for (v, s) in args.pos.iter().zip(slots.iter()) {
                 s.set_direct(*v);
-            }
-            if args.pos.len() == self.positional
-                && args.pos.len() == self.kinds.len()
-                && args.named.is_empty()
-                && args.args.is_none()
-                && args.kwargs.is_none()
-            {
-                // If the arguments equal the length and the kinds, and we don't have any other args,
-                // then no_args, *args and **kwargs must all be unset,
-                // and we don't have to crate args/kwargs objects, we can skip everything else
-                return Ok(());
             }
             next_position = args.pos.len();
         } else {
