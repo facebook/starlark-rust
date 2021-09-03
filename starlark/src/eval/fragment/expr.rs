@@ -350,6 +350,20 @@ impl Compiler<'_> {
         res
     }
 
+    fn compile_time_getattr(
+        &mut self,
+        left: FrozenValue,
+        attr: &Symbol,
+    ) -> Option<(AttrType, FrozenValue)> {
+        // We assume `getattr` has no side effects.
+        let (attr_type, field) =
+            get_attr_hashed(left.to_value(), attr, self.module_env.heap()).ok()?;
+        // We take only frozen values, so if getattr returns fresh object on each call,
+        // we are discarding the result.
+        let field = field.unpack_frozen()?;
+        Some((attr_type, field))
+    }
+
     pub fn expr(&mut self, expr: CstExpr) -> ExprCompiledValue {
         // println!("compile {}", expr.node);
         let span = expr.span;
@@ -524,6 +538,18 @@ impl Compiler<'_> {
             ExprP::Dot(left, right) => {
                 let left = self.expr(*left);
                 let s = Symbol::new(&right.node);
+
+                if let Some(left) = left.as_value() {
+                    if let Some((attr_type, v)) = self.compile_time_getattr(left, &s) {
+                        if attr_type == AttrType::Field {
+                            return ExprCompiledValue::Value(v);
+                        } else {
+                            // TODO: maybe call attribute at compile time
+                            // TODO: maybe create bound method at compile time
+                        }
+                    }
+                }
+
                 expr!("dot", left, |eval| {
                     let (attr_type, v) = throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
                     if attr_type == AttrType::Field {
@@ -542,6 +568,29 @@ impl Compiler<'_> {
                         let e = self.expr(e);
                         let s = Symbol::new(&s.node);
                         let args = self.args(args);
+                        if let Some(e) = e.as_value() {
+                            if let Some((_, fun)) = self.compile_time_getattr(e, &s) {
+                                return args!(
+                                    args,
+                                    expr!("call_method_getattr_cached", |eval| {
+                                        // This code is identical to non-const-propagated branch
+                                        // below. But these branches are hard to merge
+                                        // because of `args! macro`.
+                                        args.with_params(
+                                            Some(e.to_value()),
+                                            eval,
+                                            |params, eval| {
+                                                throw(
+                                                    fun.invoke(Some(span), params, eval),
+                                                    span,
+                                                    eval,
+                                                )
+                                            },
+                                        )?
+                                    })
+                                );
+                            }
+                        }
                         args!(
                             args,
                             expr!("call_method", e, |eval| {

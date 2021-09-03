@@ -536,6 +536,8 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// The three methods [`get_attr`](StarlarkValue::get_attr),
     /// [`has_attr`](StarlarkValue::has_attr) and [`dir_attr`](StarlarkValue::dir_attr)
     /// must be consistent - if you implement one, you should probably implement all three.
+    ///
+    /// This operations must have no side effects, because it can be called speculatively.
     fn get_attr(&self, _attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         None
     }
