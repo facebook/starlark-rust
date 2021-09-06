@@ -70,16 +70,13 @@ pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
 
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
-pub trait AValue<'v>: StarlarkValue<'v> {
-    #[doc(hidden)]
+pub(crate) trait AValue<'v>: StarlarkValue<'v> {
     // How much memory I take up on the heap.
     // Included to allow unsized types to live on the heap.
     fn memory_size(&self) -> usize;
 
-    #[doc(hidden)]
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
 
-    #[doc(hidden)]
     fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
 
     fn unpack_str(&self) -> Option<&str> {

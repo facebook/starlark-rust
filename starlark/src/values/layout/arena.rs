@@ -250,7 +250,7 @@ impl AValueHeader {
         AValueHeader(metadata)
     }
 
-    pub fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
+    pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
         unsafe {
             let res = &*(from_raw_parts((self as *const AValueHeader).add(1) as *const (), self.0));
             mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
@@ -258,7 +258,7 @@ impl AValueHeader {
     }
 
     /// Unpack something that might have been overwritten.
-    pub fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
+    pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
         let x = unsafe { *(self as *const AValueHeader as *const usize) };
         if x & 1 == 1 {
             Either::Left(x & !1)

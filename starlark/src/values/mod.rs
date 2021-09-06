@@ -136,7 +136,8 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
-    fn get_ref(self) -> &'v dyn AValue<'v>;
+    /// Get referenced [`StarlarkValue`] a value as [`AnyLifetime`].
+    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v>;
 
     fn invoke(
         self,
@@ -147,9 +148,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
         self.to_value().invoke(location, args, eval)
     }
 
-    fn get_hash(self) -> anyhow::Result<u64> {
-        self.get_ref().get_hash()
-    }
+    fn get_hash(self) -> anyhow::Result<u64>;
 
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         Ok(Hashed::new_unchecked(
@@ -158,33 +157,17 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
         ))
     }
 
-    fn collect_repr(self, collector: &mut String) {
-        self.get_ref().collect_repr(collector);
-    }
+    fn collect_repr(self, collector: &mut String);
 
-    fn to_json(self) -> anyhow::Result<String> {
-        self.get_ref().to_json()
-    }
+    fn to_json(self) -> anyhow::Result<String>;
 
-    fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
-        if self.to_value().ptr_eq(other) {
-            Ok(true)
-        } else {
-            let _guard = stack_guard::stack_guard()?;
-            self.get_ref().equals(other)
-        }
-    }
+    fn equals(self, other: Value<'v>) -> anyhow::Result<bool>;
 
-    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
-        let _guard = stack_guard::stack_guard()?;
-        self.get_ref().compare(other)
-    }
+    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering>;
 
     /// Get a reference to underlying data or [`None`]
     /// if contained object has different type than requested.
-    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
-        self.get_ref().downcast_ref::<T>()
-    }
+    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T>;
 }
 
 impl<'v, V: ValueLike<'v>> Hashed<V> {
@@ -217,22 +200,76 @@ impl Default for FrozenValue {
 }
 
 impl<'v> ValueLike<'v> for Value<'v> {
-    fn get_ref(self) -> &'v dyn AValue<'v> {
-        Value::get_ref(self)
-    }
-
     fn to_value(self) -> Value<'v> {
         self
+    }
+
+    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
+        self.get_ref().downcast_ref::<T>()
+    }
+
+    fn collect_repr(self, collector: &mut String) {
+        self.get_ref().collect_repr(collector);
+    }
+
+    fn get_hash(self) -> anyhow::Result<u64> {
+        self.get_ref().get_hash()
+    }
+
+    fn to_json(self) -> anyhow::Result<String> {
+        self.get_ref().to_json()
+    }
+
+    fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
+        if self.ptr_eq(other) {
+            Ok(true)
+        } else {
+            let _guard = stack_guard::stack_guard()?;
+            self.get_ref().equals(other)
+        }
+    }
+
+    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
+        let _guard = stack_guard::stack_guard()?;
+        self.get_ref().compare(other)
+    }
+
+    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
+        self.get_ref().as_dyn_any()
     }
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
-    fn get_ref(self) -> &'v dyn AValue<'v> {
-        self.get_ref()
-    }
-
     fn to_value(self) -> Value<'v> {
         Value::new_frozen(self)
+    }
+
+    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
+        self.to_value().downcast_ref()
+    }
+
+    fn collect_repr(self, collector: &mut String) {
+        self.to_value().collect_repr(collector)
+    }
+
+    fn get_hash(self) -> anyhow::Result<u64> {
+        self.to_value().get_hash()
+    }
+
+    fn to_json(self) -> anyhow::Result<String> {
+        self.to_value().to_json()
+    }
+
+    fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
+        self.to_value().equals(other)
+    }
+
+    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
+        self.to_value().compare(other)
+    }
+
+    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
+        self.get_ref().as_dyn_any()
     }
 }
 

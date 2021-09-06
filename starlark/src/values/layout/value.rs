@@ -159,7 +159,7 @@ impl<'v> Value<'v> {
     }
 
     /// Get a pointer to a [`AValue`].
-    pub fn get_ref(self) -> &'v dyn AValue<'v> {
+    pub(crate) fn get_ref(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(PointerI32::new(x)),
@@ -253,7 +253,7 @@ impl FrozenValue {
     }
 
     /// Get a pointer to the [`AValue`] object this value represents.
-    pub fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
+    pub(crate) fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(PointerI32::new(x)),
