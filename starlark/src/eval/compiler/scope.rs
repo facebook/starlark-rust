@@ -169,7 +169,7 @@ impl<'a> Scope<'a> {
         codemap: CodeMap,
     ) -> Self {
         // Not really important, sanity check
-        assert_eq!(scope_id, ScopeId(0));
+        assert_eq!(scope_id, ScopeId::module());
 
         let mut locals = IndexMap::new();
 
@@ -213,6 +213,7 @@ impl<'a> Scope<'a> {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
         let scope_id = self.locals.pop().unwrap();
+        assert!(scope_id == ScopeId::module());
         let scope = self.scope_data.get_scope(scope_id);
         assert!(scope.parent.is_empty());
         (self.module.slot_count(), scope.used, self.scope_data)
@@ -427,6 +428,7 @@ impl<'a> Scope<'a> {
     }
 
     pub fn enter_def(&mut self, scope_id: ScopeId) {
+        assert!(scope_id != ScopeId::module());
         self.locals.push(scope_id);
     }
 
@@ -470,18 +472,26 @@ impl<'a> Scope<'a> {
         // then copy that variable downwards
         for i in (0..self.locals.len()).rev() {
             if let Some((mut v, binding_id)) = self.scope_at_level(i).get_name(name) {
+                if i + 1 != self.locals.len() {
+                    self.scope_data.mut_binding(binding_id).captured = true;
+                }
                 for j in (i + 1)..self.locals.len() {
                     v = self.scope_at_level_mut(j).copy_parent(v, binding_id, name);
                 }
                 return Some((Slot::Local(v), binding_id));
             }
         }
-        self.module_bindings.get(name).map(|&binding_id| {
-            (
-                self.scope_data.get_binding(binding_id).slot.unwrap(),
-                binding_id,
-            )
-        })
+        let binding_id = self.module_bindings.get(name).copied();
+        match binding_id {
+            Some(binding_id) => {
+                let binding = self.scope_data.mut_binding(binding_id);
+                if self.locals.len() > 1 {
+                    binding.captured = true;
+                }
+                Some((binding.slot.unwrap(), binding_id))
+            }
+            None => None,
+        }
     }
 }
 
@@ -634,6 +644,10 @@ pub(crate) struct Binding {
     /// When analysis is completed, `slot` is always `Some`.
     pub(crate) slot: Option<Slot>,
     pub(crate) assign_count: AssignCount,
+    // Whether a variable defined in a scope gets captured in nested def or lambda scope.
+    // (Comprehension scopes do not count, because they are considered
+    // local by the runtime and do not allocate a frame).
+    pub(crate) captured: bool,
 }
 
 impl Binding {
@@ -642,6 +656,7 @@ impl Binding {
             vis,
             slot: None,
             assign_count,
+            captured: false,
         }
     }
 }
@@ -764,7 +779,7 @@ mod test {
         environment::{names::MutableNames, Globals},
         eval::compiler::scope::{
             AssignCount, CompilerAstMap, CstAssign, CstAssignIdent, CstExpr, CstStmt,
-            ResolvedIdent, Scope, ScopeData, ScopeId, Slot,
+            ResolvedIdent, Scope, ScopeData, Slot,
         },
         syntax::{
             ast::{ExprP, StmtP},
@@ -777,19 +792,20 @@ mod test {
     fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
         let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::Extended).unwrap();
         let mut scope_data = ScopeData::new();
+        let root_scope_id = scope_data.new_scope().0;
         let mut cst = ast
             .statement
             .into_map_payload(&mut CompilerAstMap(&mut scope_data));
         let globals = Globals::new();
-        let _root_scope_id = scope_data.new_scope().0;
         let scope = Scope::enter_module(
             module,
-            ScopeId::module(),
+            root_scope_id,
             scope_data,
             &mut cst,
             &globals,
             ast.codemap,
         );
+        assert!(scope.errors.is_empty());
         let (.., scope_data) = scope.exit_module();
         let mut r = String::new();
         for (i, binding) in scope_data.bindings.iter().enumerate() {
@@ -804,7 +820,11 @@ mod test {
                 AssignCount::AtMostOnce => "",
                 AssignCount::Any => "+",
             };
-            write!(r, "{}:{}{}", i, slot, assign_count).unwrap();
+            let captured = match binding.captured {
+                true => "&",
+                false => "",
+            };
+            write!(r, "{}:{}{}{}", i, slot, assign_count, captured).unwrap();
         }
 
         write!(r, " |").unwrap();
@@ -884,12 +904,23 @@ mod test {
 
     #[test]
     fn def_capture() {
-        t("x = 1\ndef f(): x", "0:m=0 1:m=1 | x:0 f:1 x:0");
+        t("x = 1\ndef f(): x", "0:m=0& 1:m=1 | x:0 f:1 x:0");
     }
 
     #[test]
     fn def_shadow() {
         t("x = 1\ndef f(): x = 2", "0:m=0 1:m=1 2:l=0 | x:0 f:1 x:2");
+    }
+
+    #[test]
+    fn nested_def_capture() {
+        t(
+            "\
+def f():
+    x = 1
+    def g(): return x",
+            "0:m=0 1:l=0& 2:l=1 | f:0 x:1 g:2 x:1",
+        )
     }
 
     #[test]
