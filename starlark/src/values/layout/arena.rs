@@ -134,8 +134,11 @@ impl Arena {
         let x = BlackHole(mem::size_of::<T>());
         unsafe {
             ptr::write(
-                p as *mut (AValueHeader, BlackHole),
-                (AValueHeader::new(&x), x),
+                p as *mut AValueRepr<BlackHole>,
+                AValueRepr {
+                    header: AValueHeader::new(&x),
+                    payload: x,
+                },
             )
         };
 
@@ -252,7 +255,8 @@ impl AValueHeader {
 
     pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
         unsafe {
-            let res = &*(from_raw_parts((self as *const AValueHeader).add(1) as *const (), self.0));
+            let self_repr = self as *const AValueHeader as *const AValueRepr<()>;
+            let res = &*(from_raw_parts(&(*self_repr).payload, self.0));
             mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
         }
     }
@@ -274,8 +278,8 @@ impl AValueHeader {
         assert_eq!(self.0.layout(), Layout::new::<T>());
 
         let sz = self.unpack().memory_size();
-        let p = self as *const AValueHeader as *const (AValueHeader, T);
-        let res = ptr::read(p).1;
+        let p = self as *const AValueHeader as *const AValueRepr<T>;
+        let res = ptr::read(p).payload;
         let p = self as *const AValueHeader as *mut AValueForward;
         *p = AValueForward {
             forward_ptr: x | 1,
