@@ -151,6 +151,10 @@ impl<'v> Dict<'v> {
     /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
 
+    pub fn get_type_value_static() -> FrozenValue {
+        DictGen::<FrozenDict>::get_type_value_static()
+    }
+
     /// Create a new [`Dict`].
     pub fn new(content: SmallMap<Value<'v>, Value<'v>>) -> Self {
         Self { content }

@@ -356,6 +356,16 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// Usually implemented by the [`starlark_type!`] macro.
     fn get_type_value(&self) -> FrozenValue;
 
+    /// Like [`get_type_value`](Self::get_type_value), but does not require `self`.
+    ///
+    /// This function must return the same statically-allocated instance as
+    /// [`get_type_value`](Self::get_type_value).
+    ///
+    /// Usually implemented by the [`starlark_type!`] macro.
+    fn get_type_value_static() -> FrozenValue
+    where
+        Self: Sized;
+
     /// Is this value a match for a named type. Usually returns `true` for
     /// values matching `get_type`, but might also work for subtypes it implements.
     fn matches_type(&self, ty: &str) -> bool {

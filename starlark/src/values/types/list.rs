@@ -182,6 +182,10 @@ impl<'v> List<'v> {
     /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 
+    pub fn get_type_value_static() -> FrozenValue {
+        ListGen::<FrozenList>::get_type_value_static()
+    }
+
     pub fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }

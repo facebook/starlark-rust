@@ -304,6 +304,9 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     fn get_type_value(&self) -> FrozenValue {
         self.1.get_type_value()
     }
+    fn get_type_value_static() -> FrozenValue {
+        T::get_type_value_static()
+    }
     fn matches_type(&self, ty: &str) -> bool {
         self.1.matches_type(ty)
     }
