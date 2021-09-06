@@ -73,11 +73,28 @@ pub struct FrozenHeap {
     refs: RefCell<HashSet<FrozenHeapRef>>, // Memory I depend on
 }
 
+/// `FrozenHeap` when it is no longer modified and can be share between threads.
+/// Although, `arena` is not safe to share between threads, but at least `refs` is.
+#[derive(Default)]
+struct FrozenFrozenHeap {
+    arena: Arena,
+    refs: HashSet<FrozenHeapRef>,
+}
+
 impl Debug for FrozenHeap {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut x = f.debug_struct("FrozenHeap");
         x.field("bytes", &self.arena.allocated_bytes());
         x.field("refs", &self.refs.try_borrow().map(|x| x.len()));
+        x.finish()
+    }
+}
+
+impl Debug for FrozenFrozenHeap {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut x = f.debug_struct("FrozenHeap");
+        x.field("bytes", &self.arena.allocated_bytes());
+        x.field("refs", &self.refs.len());
         x.finish()
     }
 }
@@ -92,11 +109,11 @@ unsafe impl Send for FrozenHeapRef {}
 #[derive(Clone, Dupe, Debug)]
 // The Eq/Hash are by pointer rather than value, since we produce unique values
 // given an underlying FrozenHeap.
-pub struct FrozenHeapRef(Arc<FrozenHeap>);
+pub struct FrozenHeapRef(Arc<FrozenFrozenHeap>);
 
 impl Hash for FrozenHeapRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let x: &FrozenHeap = Deref::deref(&self.0);
+        let x: &FrozenFrozenHeap = Deref::deref(&self.0);
         ptr::hash(x, state);
     }
 }
@@ -119,7 +136,11 @@ impl FrozenHeap {
     /// [`FrozenHeapRef`] which can be [`clone`](Clone::clone)d, shared between threads,
     /// and ensures the underlying values allocated on the [`FrozenHeap`] remain valid.
     pub fn into_ref(self) -> FrozenHeapRef {
-        FrozenHeapRef(Arc::new(self))
+        let FrozenHeap { arena, refs } = self;
+        FrozenHeapRef(Arc::new(FrozenFrozenHeap {
+            arena,
+            refs: refs.into_inner(),
+        }))
     }
 
     /// Keep the argument [`FrozenHeapRef`] alive as long as this [`FrozenHeap`]
