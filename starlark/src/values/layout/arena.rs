@@ -47,9 +47,8 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
-#[doc(hidden)] // Appears in a trait, but don't want it to
 #[repr(transparent)]
-pub struct AValueHeader(DynMetadata<dyn AValue<'static>>);
+pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
 
 /// How object is represented in arena.
 #[repr(C)]
