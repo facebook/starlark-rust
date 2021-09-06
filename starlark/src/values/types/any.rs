@@ -59,7 +59,7 @@
 
 use crate::{
     starlark_simple_value,
-    values::{StarlarkValue, Value},
+    values::{StarlarkValue, Value, ValueLike},
 };
 use std::{
     any::Any,

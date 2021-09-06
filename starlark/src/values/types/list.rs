@@ -159,9 +159,8 @@ impl FrozenList {
     /// Obtain the [`FrozenList`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
-    pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenList>> {
-        x.downcast_ref::<ListGen<FrozenList>>()
-            .map(|x| ARef::map(x, |x| &x.0))
+    pub fn from_frozen_value(x: &FrozenValue) -> Option<&FrozenList> {
+        x.downcast_ref::<ListGen<FrozenList>>().map(|x| &x.0)
     }
 }
 

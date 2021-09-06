@@ -290,7 +290,7 @@
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
-//! use starlark::values::{Heap, SimpleValue, StarlarkValue, Value, ValueError};
+//! use starlark::values::{Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike};
 //! use starlark::{starlark_type, starlark_simple_value};
 //!
 //! // Define complex numbers

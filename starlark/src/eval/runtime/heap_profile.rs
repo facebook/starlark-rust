@@ -18,6 +18,7 @@
 use crate as starlark;
 use crate::values::{
     tuple::FrozenTuple, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
+    ValueLike,
 };
 use anyhow::Context;
 use gazebo::{any::AnyLifetime, prelude::*};

@@ -18,7 +18,7 @@
 use crate::{
     collections::SmallMap,
     eval::{Def, Evaluator, FrozenDef, ScopeNames},
-    values::Value,
+    values::{Value, ValueLike},
 };
 
 pub(crate) fn to_scope_names<'v>(x: Value<'v>) -> Option<&'v ScopeNames> {

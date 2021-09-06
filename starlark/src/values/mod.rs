@@ -180,8 +180,10 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
         self.get_ref().compare(other)
     }
 
-    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        ARef::filter_map(ARef::new_ptr(self.get_ref()), |e| e.downcast_ref::<T>()).ok()
+    /// Get a reference to underlying data or [`None`]
+    /// if contained object has different type than requested.
+    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
+        self.get_ref().downcast_ref::<T>()
     }
 }
 
@@ -331,17 +333,6 @@ impl<'v> Value<'v> {
     /// Get the [`Hashed`] version of this [`Value`].
     pub fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         ValueLike::get_hashed(self)
-    }
-
-    /// Get a reference to underlying data or [`None`]
-    /// if contained object has different type than requested.
-    ///
-    /// This function panics if the [`Value`] is borrowed mutably.
-    ///
-    /// In many cases you may wish to call [`FromValue`] instead, as that can
-    /// get a non-frozen value from an underlying frozen value.
-    pub fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
-        self.get_ref().downcast_ref::<T>()
     }
 
     /// Are two values equal. If the values are of different types it will

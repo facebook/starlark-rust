@@ -119,9 +119,8 @@ impl FrozenDict {
     /// Obtain the [`FrozenDict`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
-    pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenDict>> {
-        x.downcast_ref::<DictGen<FrozenDict>>()
-            .map(|x| ARef::map(x, |x| &x.0))
+    pub fn from_frozen_value(x: &FrozenValue) -> Option<&FrozenDict> {
+        x.downcast_ref::<DictGen<FrozenDict>>().map(|x| &x.0)
     }
 }
 

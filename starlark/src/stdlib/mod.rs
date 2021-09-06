@@ -110,7 +110,7 @@ mod tests {
         self as starlark,
         assert::Assert,
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
-        values::{none::NoneType, StarlarkValue, UnpackValue, Value},
+        values::{none::NoneType, StarlarkValue, UnpackValue, Value, ValueLike},
     };
     use gazebo::prelude::*;
 

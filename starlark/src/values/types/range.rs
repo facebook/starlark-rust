@@ -19,7 +19,7 @@
 
 use crate::values::{
     index::{convert_index, convert_slice_indices},
-    Heap, StarlarkValue, Value, ValueError,
+    Heap, StarlarkValue, Value, ValueError, ValueLike,
 };
 use gazebo::prelude::*;
 use std::{marker::PhantomData, num::NonZeroI32};

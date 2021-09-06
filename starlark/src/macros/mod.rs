@@ -143,7 +143,7 @@ macro_rules! starlark_simple_value {
 
             impl $x {
                 pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<&'v Self> {
-                    x.downcast_ref::< $x >()
+                    $crate::values::ValueLike::downcast_ref::< $x >(x)
                 }
             }
 
