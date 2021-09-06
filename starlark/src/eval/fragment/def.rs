@@ -136,7 +136,10 @@ impl Compiler<'_> {
 
         let scope_names = mem::take(scope_names);
 
-        let info = Arc::new(DefInfo { scope_names, body });
+        let info = Arc::new(DefInfo {
+            scope_names,
+            body: body.as_compiled(),
+        });
 
         expr!("def", |eval| {
             let mut parameters =

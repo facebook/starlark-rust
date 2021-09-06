@@ -42,7 +42,7 @@ impl Compiler<'_> {
                 Ok(())
             }
             _ => {
-                let stmt = self.stmt(stmt, true);
+                let stmt = self.stmt(stmt, true).as_compiled();
                 stmt(evaluator)
             }
         }

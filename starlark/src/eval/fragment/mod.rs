@@ -84,8 +84,8 @@ macro_rules! stmt {
             fn [<ann_stmt_ $name>](
                 f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
                     + Send + Sync + 'static,
-            ) -> StmtCompiled {
-                box move |eval| f(eval)
+            ) -> StmtsCompiled {
+                StmtsCompiled::one(box move |eval| f(eval))
             }
             [<ann_stmt_ $name>](move |$eval|
                 $eval.ann($name, |$eval| {

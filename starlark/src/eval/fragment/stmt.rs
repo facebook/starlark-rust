@@ -28,12 +28,12 @@ use crate::{
     eval::{
         compiler::{
             scope::{CstAssign, CstExpr, CstStmt, Slot},
-            throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled,
+            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtsCompiled,
         },
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
-    syntax::ast::{AssignOp, AssignP, AstPayload, AstStmtP, ExprP, StmtP},
+    syntax::ast::{AssignOp, AssignP, StmtP},
     values::{list::List, Heap, Trace, Value, ValueError},
 };
 use anyhow::anyhow;
@@ -129,7 +129,7 @@ impl Compiler<'_> {
         lhs: CstAssign,
         rhs: ExprCompiledValue,
         op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
-    ) -> StmtCompiled {
+    ) -> StmtsCompiled {
         let span_lhs = lhs.span;
         match lhs.node {
             AssignP::Dot(e, s) => {
@@ -306,44 +306,44 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     }
 }
 
-impl<P: AstPayload> StmtP<P> {
-    // Return statements to execute, skipping those that have no effect
-    // and flattening any nested Statements
-    fn flatten_statements(xs: Vec<AstStmtP<P>>) -> Vec<AstStmtP<P>> {
-        fn has_effect<P: AstPayload>(x: &ExprP<P>) -> bool {
-            match x {
-                ExprP::Literal(_) => false,
-                _ => true,
-            }
-        }
-
-        let mut res = Vec::with_capacity(xs.len());
-        for x in xs.into_iter() {
-            match x.node {
-                StmtP::Statements(x) => res.extend(StmtP::flatten_statements(x)),
-                StmtP::Pass => {}
-                StmtP::Expression(x) if !has_effect(&x) => {}
-                _ => res.push(x),
-            }
-        }
-        res
-    }
-}
-
 impl Compiler<'_> {
-    pub(crate) fn stmt(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
+    pub(crate) fn stmt(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {
         let is_statements = matches!(&stmt.node, StmtP::Statements(_));
         let res = self.stmt_direct(stmt, allow_gc);
         // No point inserting a GC point around statements, since they will contain inner statements we can do
         if allow_gc && !is_statements {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
-            box move |eval| {
+            let res = res.as_compiled();
+            StmtsCompiled::one(box move |eval| {
                 possible_gc(eval);
                 res(eval)
-            }
+            })
         } else {
             res
+        }
+    }
+
+    fn stmt_if_compiled(
+        &mut self,
+        span: Span,
+        cond: ExprCompiled,
+        cond_is_positive: bool,
+        then_block: StmtsCompiled,
+    ) -> StmtsCompiled {
+        if then_block.is_empty() {
+            self.stmt_expr_compiled(span, ExprCompiledValue::Compiled(cond))
+        } else {
+            let then_block = then_block.as_compiled();
+            if cond_is_positive {
+                stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
+                    then_block(eval)?
+                })
+            } else {
+                stmt!("if_then", span, |eval| if !cond(eval)?.to_bool() {
+                    then_block(eval)?
+                })
+            }
         }
     }
 
@@ -353,21 +353,13 @@ impl Compiler<'_> {
         cond: CstExpr,
         then_block: CstStmt,
         allow_gc: bool,
-    ) -> StmtCompiled {
+    ) -> StmtsCompiled {
         let then_block = self.stmt(then_block, allow_gc);
         match self.conditional(cond) {
             Conditional::True => then_block,
-            Conditional::False => stmt!("if_false", span, |eval| {}),
-            Conditional::Normal(cond) => {
-                stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
-                    then_block(eval)?
-                })
-            }
-            Conditional::Negate(cond) => {
-                stmt!("if_then", span, |eval| if !cond(eval)?.to_bool() {
-                    then_block(eval)?
-                })
-            }
+            Conditional::False => StmtsCompiled::empty(),
+            Conditional::Normal(cond) => self.stmt_if_compiled(span, cond, true, then_block),
+            Conditional::Negate(cond) => self.stmt_if_compiled(span, cond, false, then_block),
         }
     }
 
@@ -378,7 +370,7 @@ impl Compiler<'_> {
         then_block: CstStmt,
         else_block: CstStmt,
         allow_gc: bool,
-    ) -> StmtCompiled {
+    ) -> StmtsCompiled {
         let then_block = self.stmt(then_block, allow_gc);
         let else_block = self.stmt(else_block, allow_gc);
         let (cond, t, f) = match self.conditional(cond) {
@@ -387,24 +379,37 @@ impl Compiler<'_> {
             Conditional::Normal(cond) => (cond, then_block, else_block),
             Conditional::Negate(cond) => (cond, else_block, then_block),
         };
-        stmt!("if_then_else", span, |eval| if cond(eval)?.to_bool() {
-            t(eval)?
+        if f.is_empty() {
+            self.stmt_if_compiled(span, cond, true, t)
+        } else if t.is_empty() {
+            self.stmt_if_compiled(span, cond, false, f)
         } else {
-            f(eval)?
-        })
+            let t = t.as_compiled();
+            let f = f.as_compiled();
+            stmt!("if_then_else", span, |eval| if cond(eval)?.to_bool() {
+                t(eval)?
+            } else {
+                f(eval)?
+            })
+        }
     }
 
-    fn stmt_expr(&mut self, expr: CstExpr) -> StmtCompiled {
-        let span = expr.span;
-        match self.expr(expr) {
-            ExprCompiledValue::Value(_) => box |_eval| Ok(()),
+    fn stmt_expr_compiled(&mut self, span: Span, expr: ExprCompiledValue) -> StmtsCompiled {
+        match expr {
+            ExprCompiledValue::Value(_) => StmtsCompiled::empty(),
             ExprCompiledValue::Compiled(e) => stmt!("expr", span, |eval| {
                 e(eval)?;
             }),
         }
     }
 
-    fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
+    fn stmt_expr(&mut self, expr: CstExpr) -> StmtsCompiled {
+        let span = expr.span;
+        let expr = self.expr(expr);
+        self.stmt_expr_compiled(span, expr)
+    }
+
+    fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {
         let span = stmt.span;
         match stmt.node {
             StmtP::Def(name, params, return_type, suite, scope_id) => {
@@ -424,7 +429,7 @@ impl Compiler<'_> {
                 let over_span = over.span;
                 let var = self.assign(var);
                 let over = self.expr(over).as_compiled();
-                let st = self.stmt(body, false);
+                let st = self.stmt(body, false).as_compiled();
                 stmt!("for", span, |eval| {
                     let heap = eval.heap();
                     let iterable = over(eval)?;
@@ -459,20 +464,11 @@ impl Compiler<'_> {
                 self.stmt_if_else(span, cond, then_block, else_block, allow_gc)
             }
             StmtP::Statements(stmts) => {
-                // No need to do before_stmt on these statements as they are
-                // not meaningful statements
-                let stmts = StmtP::flatten_statements(stmts);
-                let mut stmts = stmts.into_map(|x| self.stmt(x, allow_gc));
-                match stmts.len() {
-                    0 => box move |_| Ok(()),
-                    1 => stmts.pop().unwrap(),
-                    _ => box move |eval| {
-                        for stmt in &stmts {
-                            stmt(eval)?;
-                        }
-                        Ok(())
-                    },
+                let mut r = StmtsCompiled::empty();
+                for stmt in stmts {
+                    r.extend(self.stmt(stmt, allow_gc));
                 }
+                r
             }
             StmtP::Expression(e) => self.stmt_expr(e),
             StmtP::Assign(lhs, rhs) => {
@@ -542,7 +538,7 @@ impl Compiler<'_> {
                     }
                 })
             }
-            StmtP::Pass => stmt!("pass", span, |eval| {}),
+            StmtP::Pass => StmtsCompiled::empty(),
             StmtP::Break => stmt!("break", span, |eval| return Err(EvalException::Break)),
             StmtP::Continue => stmt!("continue", span, |eval| return Err(EvalException::Continue)),
         }
