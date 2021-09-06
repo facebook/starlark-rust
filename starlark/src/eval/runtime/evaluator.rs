@@ -151,7 +151,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Set the [`FileLoader`] used to resolve `load()` statements.
     /// A list of all load statements can be obtained through
     /// [`AstModule::loads`](crate::syntax::AstModule::loads).
-    pub fn set_loader(&mut self, loader: &'a mut dyn FileLoader) {
+    pub fn set_loader(&mut self, loader: &'a dyn FileLoader) {
         self.loader = Some(loader);
     }
 

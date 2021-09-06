@@ -207,7 +207,7 @@ impl Assert {
         for (k, v) in &self.modules {
             modules.insert(k.as_str(), v);
         }
-        let mut loader = ReturnFileLoader { modules: &modules };
+        let loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
         let mut eval = Evaluator::new(module, &self.globals);
 
@@ -220,7 +220,7 @@ impl Assert {
             GcStrategy::Auto => {}
             GcStrategy::Always => eval.before_stmt(&gc_always),
         }
-        eval.set_loader(&mut loader);
+        eval.set_loader(&loader);
         eval.eval_module(ast)
     }
 
