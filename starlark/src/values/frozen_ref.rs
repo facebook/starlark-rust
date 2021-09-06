@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::values::{string::StarlarkStr, FrozenValue, SimpleValue};
+use crate::values::{string::StarlarkStr, FrozenValue, SimpleValue, ValueLike};
 use gazebo::prelude::*;
 use std::{
     borrow::Borrow,
@@ -46,9 +46,7 @@ impl<T: 'static + ?Sized> FrozenRef<T> {
 
 impl FrozenValue {
     pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
-        self.get_ref::<'static>()
-            .downcast_ref::<T>()
-            .map(|value| FrozenRef { value })
+        self.downcast_ref::<T>().map(|value| FrozenRef { value })
     }
 
     pub fn downcast_frozen_str(self) -> Option<FrozenRef<str>> {

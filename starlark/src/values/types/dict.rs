@@ -88,8 +88,7 @@ impl<'v> Dict<'v> {
             x.downcast_ref::<DictGen<FrozenDict>>()
                 .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
         } else {
-            let ptr = x.get_ref();
-            let ptr = ptr.downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
+            let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
             Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
@@ -98,7 +97,7 @@ impl<'v> Dict<'v> {
         if x.unpack_frozen().is_some() {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
-        let ptr = x.get_ref().downcast_ref::<DictGen<RefCell<Dict<'v>>>>();
+        let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>();
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {

@@ -32,7 +32,7 @@ use crate::{
         docs,
         docs::{DocItem, DocString},
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
-        StarlarkValue, Value,
+        StarlarkValue, Value, ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -214,12 +214,7 @@ impl FrozenModuleValue {
     }
 
     pub fn get<'v>(self) -> &'v FrozenModuleData {
-        &self
-            .0
-            .get_ref()
-            .downcast_ref::<FrozenModuleRef>()
-            .unwrap()
-            .0
+        &self.0.downcast_ref::<FrozenModuleRef>().unwrap().0
     }
 }
 

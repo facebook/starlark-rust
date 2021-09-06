@@ -91,7 +91,7 @@ impl<'v> List<'v> {
             x.downcast_ref::<ListGen<FrozenList>>()
                 .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
         } else {
-            let ptr = x.get_ref().downcast_ref::<ListGen<RefCell<List>>>()?;
+            let ptr = x.downcast_ref::<ListGen<RefCell<List>>>()?;
             Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
@@ -100,7 +100,7 @@ impl<'v> List<'v> {
         if x.unpack_frozen().is_some() {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
-        let ptr = x.get_ref().downcast_ref::<ListGen<RefCell<List<'v>>>>();
+        let ptr = x.downcast_ref::<ListGen<RefCell<List<'v>>>>();
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {
