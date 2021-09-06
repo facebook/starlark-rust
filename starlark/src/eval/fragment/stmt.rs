@@ -27,7 +27,7 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{
-            scope::{CstAssign, CstStmt, Slot},
+            scope::{CstAssign, CstExpr, CstStmt, Slot},
             throw, Compiler, EvalException, ExprCompiledValue, StmtCompiled,
         },
         fragment::known::{list_to_tuple, Conditional},
@@ -347,6 +347,53 @@ impl Compiler<'_> {
         }
     }
 
+    fn stmt_if(
+        &mut self,
+        span: Span,
+        cond: CstExpr,
+        then_block: CstStmt,
+        allow_gc: bool,
+    ) -> StmtCompiled {
+        let then_block = self.stmt(then_block, allow_gc);
+        match self.conditional(cond) {
+            Conditional::True => then_block,
+            Conditional::False => stmt!("if_false", span, |eval| {}),
+            Conditional::Normal(cond) => {
+                stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
+                    then_block(eval)?
+                })
+            }
+            Conditional::Negate(cond) => {
+                stmt!("if_then", span, |eval| if !cond(eval)?.to_bool() {
+                    then_block(eval)?
+                })
+            }
+        }
+    }
+
+    fn stmt_if_else(
+        &mut self,
+        span: Span,
+        cond: CstExpr,
+        then_block: CstStmt,
+        else_block: CstStmt,
+        allow_gc: bool,
+    ) -> StmtCompiled {
+        let then_block = self.stmt(then_block, allow_gc);
+        let else_block = self.stmt(else_block, allow_gc);
+        let (cond, t, f) = match self.conditional(cond) {
+            Conditional::True => return then_block,
+            Conditional::False => return else_block,
+            Conditional::Normal(cond) => (cond, then_block, else_block),
+            Conditional::Negate(cond) => (cond, else_block, then_block),
+        };
+        stmt!("if_then_else", span, |eval| if cond(eval)?.to_bool() {
+            t(eval)?
+        } else {
+            f(eval)?
+        })
+    }
+
     fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
         let span = stmt.span;
         match stmt.node {
@@ -397,37 +444,9 @@ impl Compiler<'_> {
             StmtP::Return(None) => stmt!("return", span, |eval| {
                 return Err(EvalException::Return(Value::new_none()));
             }),
-            StmtP::If(cond, box then_block) => {
-                let then_block = self.stmt(then_block, allow_gc);
-                match self.conditional(cond) {
-                    Conditional::True => then_block,
-                    Conditional::False => stmt!("if_false", span, |eval| {}),
-                    Conditional::Normal(cond) => {
-                        stmt!("if_then", span, |eval| if cond(eval)?.to_bool() {
-                            then_block(eval)?
-                        })
-                    }
-                    Conditional::Negate(cond) => {
-                        stmt!("if_then", span, |eval| if !cond(eval)?.to_bool() {
-                            then_block(eval)?
-                        })
-                    }
-                }
-            }
+            StmtP::If(cond, box then_block) => self.stmt_if(span, cond, then_block, allow_gc),
             StmtP::IfElse(cond, box (then_block, else_block)) => {
-                let then_block = self.stmt(then_block, allow_gc);
-                let else_block = self.stmt(else_block, allow_gc);
-                let (cond, t, f) = match self.conditional(cond) {
-                    Conditional::True => return then_block,
-                    Conditional::False => return else_block,
-                    Conditional::Normal(cond) => (cond, then_block, else_block),
-                    Conditional::Negate(cond) => (cond, else_block, then_block),
-                };
-                stmt!("if_then_else", span, |eval| if cond(eval)?.to_bool() {
-                    t(eval)?
-                } else {
-                    f(eval)?
-                })
+                self.stmt_if_else(span, cond, then_block, else_block, allow_gc)
             }
             StmtP::Statements(stmts) => {
                 // No need to do before_stmt on these statements as they are
