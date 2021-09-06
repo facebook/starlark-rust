@@ -394,6 +394,16 @@ impl Compiler<'_> {
         })
     }
 
+    fn stmt_expr(&mut self, expr: CstExpr) -> StmtCompiled {
+        let span = expr.span;
+        match self.expr(expr) {
+            ExprCompiledValue::Value(_) => box |_eval| Ok(()),
+            ExprCompiledValue::Compiled(e) => stmt!("expr", span, |eval| {
+                e(eval)?;
+            }),
+        }
+    }
+
     fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtCompiled {
         let span = stmt.span;
         match stmt.node {
@@ -464,12 +474,7 @@ impl Compiler<'_> {
                     },
                 }
             }
-            StmtP::Expression(e) => {
-                let e = self.expr(e).as_compiled();
-                stmt!("expression", span, |eval| {
-                    e(eval)?;
-                })
-            }
+            StmtP::Expression(e) => self.stmt_expr(e),
             StmtP::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs).as_compiled();
                 let lhs = self.assign(lhs);
