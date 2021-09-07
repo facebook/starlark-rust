@@ -167,7 +167,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
 
     /// Get a reference to underlying data or [`None`]
     /// if contained object has different type than requested.
-    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T>;
+    fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T>;
 }
 
 impl<'v, V: ValueLike<'v>> Hashed<V> {
@@ -204,7 +204,7 @@ impl<'v> ValueLike<'v> for Value<'v> {
         self
     }
 
-    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
+    fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T> {
         self.get_ref().downcast_ref::<T>()
     }
 
@@ -244,7 +244,7 @@ impl<'v> ValueLike<'v> for FrozenValue {
         Value::new_frozen(self)
     }
 
-    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
+    fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T> {
         self.to_value().downcast_ref()
     }
 
