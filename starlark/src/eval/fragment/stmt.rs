@@ -221,6 +221,7 @@ impl Compiler<'_> {
 fn before_stmt(span: Span, eval: &mut Evaluator) {
     // In all the high-performance use cases we don't have any `before_stmt` things set,
     // so ensure the check gets inlined but the operation doesn't.
+    #[cold]
     #[inline(never)]
     fn have_stmt(span: Span, eval: &mut Evaluator) {
         // The user could inject more before_stmt values during iteration (although that sounds like a bad plan!)

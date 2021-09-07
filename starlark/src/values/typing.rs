@@ -207,6 +207,7 @@ impl<'v> Value<'v> {
         Ok(TypeCompiled::new(ty, heap)?.0(self))
     }
 
+    #[cold]
     #[inline(never)]
     fn check_type_error(value: Value, ty: Value, arg_name: Option<&str>) -> anyhow::Result<()> {
         Err(TypingError::TypeAnnotationMismatch(

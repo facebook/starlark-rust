@@ -148,6 +148,7 @@ impl<'v> From<anyhow::Error> for EvalException<'v> {
 }
 
 // Make sure the error-path doesn't get inlined into the normal-path execution
+#[cold]
 #[inline(never)]
 fn throw_error<'v, T>(
     e: anyhow::Error,

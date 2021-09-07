@@ -273,6 +273,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         span: Option<Span>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
+        #[cold]
         #[inline(never)]
         fn add_diagnostics(e: anyhow::Error, me: &Evaluator) -> anyhow::Error {
             Diagnostic::modify(e, |d: &mut Diagnostic| {
@@ -352,6 +353,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     pub(crate) fn get_slot_module(&self, slot: ModuleSlotId) -> anyhow::Result<Value<'v>> {
         // Make sure the error-path doesn't get inlined into the normal-path execution
+        #[cold]
         #[inline(never)]
         fn error<'v>(eval: &Evaluator<'v, '_>, slot: ModuleSlotId) -> anyhow::Error {
             let name = match &eval.module_variables {
@@ -370,6 +372,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     // Make sure the error-path doesn't get inlined into the normal-path execution
+    #[cold]
     #[inline(never)]
     fn local_var_referenced_before_assignment(name: &str) -> anyhow::Error {
         EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
