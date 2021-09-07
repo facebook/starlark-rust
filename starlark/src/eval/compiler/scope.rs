@@ -236,12 +236,11 @@ impl<'a> Scope<'a> {
         for p in params {
             // Subtle invariant: the slots for the params must be ordered and at the
             // beginning
-            let old_local = locals.insert(
-                &p.0,
-                scope_data
-                    .new_binding(Visibility::Public, AssignCount::AtMostOnce)
-                    .0,
-            );
+            let binding_id = scope_data
+                .new_binding(Visibility::Public, AssignCount::AtMostOnce)
+                .0;
+            p.1 = Some(binding_id);
+            let old_local = locals.insert(&p.0, binding_id);
             assert!(old_local.is_none());
         }
         if let Some(code) = body {
@@ -846,6 +845,12 @@ mod test {
                 expr.visit_expr(|expr| self.visit_expr(expr));
             }
 
+            fn visit_exprs<'a>(&mut self, exprs: impl IntoIterator<Item = &'a CstExpr>) {
+                for expr in exprs {
+                    self.visit_expr(expr);
+                }
+            }
+
             fn visit_lvalue(&mut self, ident: &CstAssignIdent) {
                 write!(&mut self.r, " {}:{}", ident.0, ident.1.unwrap().0).unwrap();
             }
@@ -864,7 +869,17 @@ mod test {
             fn visit_stmt(&mut self, stmt: &CstStmt) {
                 match &stmt.node {
                     StmtP::Assign(lhs, _rhs) => self.visit_assign(lhs),
-                    StmtP::Def(name, ..) => self.visit_lvalue(name),
+                    StmtP::Def(name, params, ..) => {
+                        self.visit_lvalue(name);
+                        for param in params {
+                            let (name, def, typ) = param.split();
+                            if let Some(name) = name {
+                                self.visit_lvalue(name);
+                            }
+                            self.visit_exprs(def);
+                            self.visit_exprs(typ);
+                        }
+                    }
                     StmtP::For(assign, ..) => self.visit_assign(assign),
                     _ => {}
                 }
@@ -910,6 +925,11 @@ mod test {
     #[test]
     fn def_shadow() {
         t("x = 1\ndef f(): x = 2", "0:m=0 1:m=1 2:l=0 | x:0 f:1 x:2");
+    }
+
+    #[test]
+    fn def_param_bindings() {
+        t("def f(x): return x", "0:m=0 1:l=0 | f:0 x:1 x:1");
     }
 
     #[test]
