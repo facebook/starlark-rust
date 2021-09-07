@@ -26,10 +26,10 @@ use crate::{
             throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
         },
         fragment::expr::get_attr_hashed,
-        Arguments, Evaluator,
+        Arguments, Evaluator, FrozenDef,
     },
     syntax::ast::{ArgumentP, ExprP},
-    values::{FrozenValue, Value, ValueLike},
+    values::{function::NativeFunction, AttrType, FrozenValue, StarlarkValue, Value, ValueLike},
 };
 use gazebo::coerce::coerce_ref;
 use std::mem::MaybeUninit;
@@ -210,6 +210,53 @@ impl Compiler<'_> {
         res
     }
 
+    fn expr_call_fun_frozen_no_special(
+        &mut self,
+        span: Span,
+        this: Option<FrozenValue>,
+        fun: FrozenValue,
+        args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        let args = self.args(args);
+        if let Some(fun_ref) = fun.downcast_frozen_ref::<FrozenDef>() {
+            assert!(this.is_none());
+            args!(
+                args,
+                expr!("call_frozen_def", |eval| {
+                    args.with_params(None, eval, |params, eval| {
+                        throw(
+                            fun_ref.invoke(fun.to_value(), Some(span), params, eval),
+                            span,
+                            eval,
+                        )
+                    })?
+                })
+            )
+        } else if let Some(fun_ref) = fun.downcast_frozen_ref::<NativeFunction>() {
+            args!(
+                args,
+                expr!("call_native_fun", |eval| {
+                    args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
+                        throw(
+                            fun_ref.invoke(fun.to_value(), Some(span), params, eval),
+                            span,
+                            eval,
+                        )
+                    })?
+                })
+            )
+        } else {
+            args!(
+                args,
+                expr!("call_known_fn", |eval| {
+                    args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
+                        throw(fun.invoke(Some(span), params, eval), span, eval)
+                    })?
+                })
+            )
+        }
+    }
+
     fn expr_call_fun_frozen(
         &mut self,
         span: Span,
@@ -227,15 +274,7 @@ impl Compiler<'_> {
             // so let's just ignore that corner case for additional perf.
             expr!("len", x, |_eval| Value::new_int(x.length()?))
         } else {
-            let args = self.args(args);
-            args!(
-                args,
-                expr!("call_known_fn", |eval| {
-                    args.with_params(None, eval, |params, eval| {
-                        throw(left.invoke(Some(span), params, eval), span, eval)
-                    })?
-                })
-            )
+            self.expr_call_fun_frozen_no_special(span, None, left, args)
         }
     }
 
@@ -270,22 +309,16 @@ impl Compiler<'_> {
             ExprP::Dot(box e, s) => {
                 let e = self.expr(e);
                 let s = Symbol::new(&s.node);
-                let args = self.args(args);
                 if let Some(e) = e.as_value() {
-                    if let Some((_, fun)) = self.compile_time_getattr(e, &s) {
-                        return args!(
-                            args,
-                            expr!("call_method_getattr_cached", |eval| {
-                                // This code is identical to non-const-propagated branch
-                                // below. But these branches are hard to merge
-                                // because of `args! macro`.
-                                args.with_params(Some(e.to_value()), eval, |params, eval| {
-                                    throw(fun.invoke(Some(span), params, eval), span, eval)
-                                })?
-                            })
-                        );
+                    if let Some((at, fun)) = self.compile_time_getattr(e, &s) {
+                        let this = match at {
+                            AttrType::Field => None,
+                            AttrType::Method => Some(e),
+                        };
+                        return self.expr_call_fun_frozen_no_special(span, this, fun, args);
                     }
                 }
+                let args = self.args(args);
                 args!(
                     args,
                     expr!("call_method", e, |eval| {
