@@ -28,7 +28,7 @@ use crate::{
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::Evaluator,
     },
-    syntax::ast::{AstExprP, AstLiteral, AstPayload, BinOp, ExprP, StmtP},
+    syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
@@ -213,50 +213,56 @@ impl Compiler<'_> {
         Some((attr_type, field))
     }
 
+    fn expr_ident(
+        &mut self,
+        ident: AstString,
+        resolved_ident: Option<ResolvedIdent>,
+    ) -> ExprCompiledValue {
+        let resolved_ident =
+            resolved_ident.unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
+        let name = ident.node;
+        let span = ident.span;
+        match resolved_ident {
+            ResolvedIdent::Slot((Slot::Local(slot), _binding_id)) => {
+                // We can't look up the local variabless in advance, because they are different each time
+                // we go through a new function call.
+                expr!("local", |eval| throw(
+                    eval.get_slot_local(slot, &name),
+                    span,
+                    eval
+                )?)
+            }
+            ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
+                let binding = self.scope_data.get_binding(binding_id);
+
+                // We can only inline variables if they were assigned once
+                // otherwise we might inline the wrong value.
+                if binding.assign_count == AssignCount::AtMostOnce {
+                    if let Some(v) = self.module_env.slots().get_slot(slot) {
+                        // We could inline non-frozen values, but these values
+                        // can be garbage-collected, so it is somewhat harder to implement.
+                        if let Some(v) = v.unpack_frozen() {
+                            return value!(v);
+                        }
+                    }
+                }
+                // We can't look up the module variables in advance because the first time around they are
+                // mutables, but after freezing they point at a different set of frozen slots.
+                expr!("module", |eval| throw(
+                    eval.get_slot_module(slot),
+                    span,
+                    eval
+                )?)
+            }
+            ResolvedIdent::Global(v) => value!(v),
+        }
+    }
+
     pub fn expr(&mut self, expr: CstExpr) -> ExprCompiledValue {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
-            ExprP::Identifier(ident, resolved_ident) => {
-                let resolved_ident = resolved_ident
-                    .unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
-                let name = ident.node;
-                let span = ident.span;
-                match resolved_ident {
-                    ResolvedIdent::Slot((Slot::Local(slot), _binding_id)) => {
-                        // We can't look up the local variabless in advance, because they are different each time
-                        // we go through a new function call.
-                        expr!("local", |eval| throw(
-                            eval.get_slot_local(slot, &name),
-                            span,
-                            eval
-                        )?)
-                    }
-                    ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
-                        let binding = self.scope_data.get_binding(binding_id);
-
-                        // We can only inline variables if they were assigned once
-                        // otherwise we might inline the wrong value.
-                        if binding.assign_count == AssignCount::AtMostOnce {
-                            if let Some(v) = self.module_env.slots().get_slot(slot) {
-                                // We could inline non-frozen values, but these values
-                                // can be garbage-collected, so it is somewhat harder to implement.
-                                if let Some(v) = v.unpack_frozen() {
-                                    return value!(v);
-                                }
-                            }
-                        }
-                        // We can't look up the module variables in advance because the first time around they are
-                        // mutables, but after freezing they point at a different set of frozen slots.
-                        expr!("module", |eval| throw(
-                            eval.get_slot_module(slot),
-                            span,
-                            eval
-                        )?)
-                    }
-                    ResolvedIdent::Global(v) => value!(v),
-                }
-            }
+            ExprP::Identifier(ident, resolved_ident) => self.expr_ident(ident, resolved_ident),
             ExprP::Lambda(params, box inner, scope_id) => {
                 let suite = Spanned {
                     span: expr.span,
