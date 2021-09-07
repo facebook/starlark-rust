@@ -210,11 +210,61 @@ impl Compiler<'_> {
         res
     }
 
+    fn expr_call_fun_frozen(
+        &mut self,
+        span: Span,
+        left: FrozenValue,
+        mut args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        let one_positional = args.len() == 1 && args[0].is_positional();
+        if left == self.constants.fn_type && one_positional {
+            self.fn_type(args.pop().unwrap().node.into_expr())
+        } else if left == self.constants.fn_len && one_positional {
+            let x = self.expr(args.pop().unwrap().node.into_expr());
+            // Technically the length command _could_ call other functions,
+            // and we'd not get entries on the call stack, which would be bad.
+            // But `len()` is super common, and no one expects it to call other functions,
+            // so let's just ignore that corner case for additional perf.
+            expr!("len", x, |_eval| Value::new_int(x.length()?))
+        } else {
+            let args = self.args(args);
+            args!(
+                args,
+                expr!("call_known_fn", |eval| {
+                    args.with_params(None, eval, |params, eval| {
+                        throw(left.invoke(Some(span), params, eval), span, eval)
+                    })?
+                })
+            )
+        }
+    }
+
+    fn expr_call_fun_compiled(
+        &mut self,
+        span: Span,
+        left: ExprCompiledValue,
+        args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        if let Some(left) = left.as_value() {
+            self.expr_call_fun_frozen(span, left, args)
+        } else {
+            let args = self.args(args);
+            args!(
+                args,
+                expr!("call", left, |eval| {
+                    args.with_params(None, eval, |params, eval| {
+                        throw(left.invoke(Some(span), params, eval), span, eval)
+                    })?
+                })
+            )
+        }
+    }
+
     pub(crate) fn expr_call(
         &mut self,
         span: Span,
         left: CstExpr,
-        mut args: Vec<CstArgument>,
+        args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         match left.node {
             ExprP::Dot(box e, s) => {
@@ -249,28 +299,8 @@ impl Compiler<'_> {
                 )
             }
             _ => {
-                let left = self.expr(left);
-                let one_positional = args.len() == 1 && args[0].is_positional();
-                if left.as_value() == Some(self.constants.fn_type) && one_positional {
-                    self.fn_type(args.pop().unwrap().node.into_expr())
-                } else if left.as_value() == Some(self.constants.fn_len) && one_positional {
-                    let x = self.expr(args.pop().unwrap().node.into_expr());
-                    // Technically the length command _could_ call other functions,
-                    // and we'd not get entries on the call stack, which would be bad.
-                    // But `len()` is super common, and no one expects it to call other functions,
-                    // so let's just ignore that corner case for additional perf.
-                    expr!("len", x, |_eval| Value::new_int(x.length()?))
-                } else {
-                    let args = self.args(args);
-                    args!(
-                        args,
-                        expr!("call", left, |eval| {
-                            args.with_params(None, eval, |params, eval| {
-                                throw(left.invoke(Some(span), params, eval), span, eval)
-                            })?
-                        })
-                    )
-                }
+                let expr = self.expr(left);
+                self.expr_call_fun_compiled(span, expr, args)
             }
         }
     }
