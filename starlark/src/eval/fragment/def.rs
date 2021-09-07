@@ -22,7 +22,9 @@ use crate::{
     environment::FrozenModuleValue,
     eval::{
         compiler::{
-            scope::{CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames},
+            scope::{
+                Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
+            },
             Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtCompiled,
         },
         runtime::{
@@ -39,23 +41,27 @@ use crate::{
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
         ComplexValue, Freezer, FrozenValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
-        ValueRef,
     },
 };
 use derivative::Derivative;
 use gazebo::prelude::*;
 use std::{collections::HashMap, mem, sync::Arc};
 
+struct ParameterName {
+    name: String,
+    captured: Captured,
+}
+
 enum ParameterCompiled<T> {
-    Normal(String, Option<T>),
-    WithDefaultValue(String, Option<T>, T),
+    Normal(ParameterName, Option<T>),
+    WithDefaultValue(ParameterName, Option<T>, T),
     NoArgs,
-    Args(String, Option<T>),
-    KwArgs(String, Option<T>),
+    Args(ParameterName, Option<T>),
+    KwArgs(ParameterName, Option<T>),
 }
 
 impl<T> ParameterCompiled<T> {
-    fn name(&self) -> Option<&str> {
+    fn param_name(&self) -> Option<&ParameterName> {
         match self {
             Self::Normal(x, _) => Some(x),
             Self::WithDefaultValue(x, _, _) => Some(x),
@@ -63,6 +69,14 @@ impl<T> ParameterCompiled<T> {
             Self::Args(x, _) => Some(x),
             Self::KwArgs(x, _) => Some(x),
         }
+    }
+
+    fn name(&self) -> Option<&str> {
+        self.param_name().map(|n| n.name.as_str())
+    }
+
+    fn captured(&self) -> Captured {
+        self.param_name().map_or(Captured::No, |n| n.captured)
     }
 
     fn ty(&self) -> Option<&T> {
@@ -87,24 +101,33 @@ struct DefInfo {
 }
 
 impl Compiler<'_> {
+    fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
+        let binding_id = ident.1.expect("no binding for parameter");
+        let binding = self.scope_data.get_binding(binding_id);
+        ParameterName {
+            name: ident.node.0,
+            captured: binding.captured,
+        }
+    }
+
     fn parameter(&mut self, x: CstParameter) -> ParameterCompiled<ExprCompiled> {
         match x.node {
             ParameterP::Normal(x, t) => ParameterCompiled::Normal(
-                x.node.0,
+                self.parameter_name(x),
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
             ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
-                x.node.0,
+                self.parameter_name(x),
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
                 self.expr(*v).as_compiled(),
             ),
             ParameterP::NoArgs => ParameterCompiled::NoArgs,
             ParameterP::Args(x, t) => ParameterCompiled::Args(
-                x.node.0,
+                self.parameter_name(x),
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
             ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
-                x.node.0,
+                self.parameter_name(x),
                 self.expr_opt(t).map(ExprCompiledValue::as_compiled),
             ),
         }
@@ -145,6 +168,7 @@ impl Compiler<'_> {
             let mut parameters =
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
+            let mut parameter_captures = Vec::new();
 
             // count here rather than enumerate because '*' doesn't get a real
             // index in the parameter mapping, and it messes up the indexes
@@ -155,17 +179,20 @@ impl Compiler<'_> {
                     let name = x.name().unwrap_or("unknown").to_owned();
                     parameter_types.push((i, name, v, TypeCompiled::new(v, eval.heap())?));
                 }
-                if !matches!(x, ParameterCompiled::NoArgs) {
-                    i += 1;
-                }
                 match x {
-                    ParameterCompiled::Normal(n, _) => parameters.required(n),
+                    ParameterCompiled::Normal(n, _) => parameters.required(&n.name),
                     ParameterCompiled::WithDefaultValue(n, _, v) => {
-                        parameters.defaulted(n, v(eval)?);
+                        parameters.defaulted(&n.name, v(eval)?)
                     }
                     ParameterCompiled::NoArgs => parameters.no_args(),
                     ParameterCompiled::Args(_, _) => parameters.args(),
                     ParameterCompiled::KwArgs(_, _) => parameters.kwargs(),
+                };
+                if let Captured::Yes = x.captured() {
+                    parameter_captures.push(i);
+                }
+                if !matches!(x, ParameterCompiled::NoArgs) {
+                    i += 1;
                 }
             }
             let return_type = match &return_type {
@@ -177,6 +204,7 @@ impl Compiler<'_> {
             };
             Def::new(
                 parameters,
+                parameter_captures,
                 parameter_types,
                 return_type,
                 info.dupe(),
@@ -191,28 +219,32 @@ impl Compiler<'_> {
 /// [`StarlarkValue`].
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub(crate) struct DefGen<V, RefV> {
+pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
+    parameter_captures: Vec<usize>, // Indices of parameters, which are captured in nested defs
     parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
     codemap: CodeMap,                       // Codemap that was active during this module
     stmt: Arc<DefInfo>,                     // The source code and metadata for this function
-    captured: Vec<RefV>, // Any variables captured from the outer scope (nested def/lambda), see stmt.parent
+    /// Any variables captured from the outer scope (nested def/lambda).
+    /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
+    /// [`ValueCaptured`] or [`FrozenValueCaptured`].
+    captured: Vec<V>,
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
     module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
     docstring: Option<String>, // The raw docstring pulled out of the AST
 }
 
-// We can't use the `starlark_complex_value!` macro because we have two type arguments.
-pub(crate) type Def<'v> = DefGen<Value<'v>, ValueRef<'v>>;
-pub(crate) type FrozenDef = DefGen<FrozenValue, Option<FrozenValue>>;
+pub(crate) type Def<'v> = DefGen<Value<'v>>;
+pub(crate) type FrozenDef = DefGen<FrozenValue>;
 
 starlark_complex_values!(Def);
 
 impl<'v> Def<'v> {
     fn new(
         parameters: ParametersSpec<Value<'v>>,
+        parameter_captures: Vec<usize>,
         parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: Arc<DefInfo>,
@@ -222,9 +254,10 @@ impl<'v> Def<'v> {
         let captured = stmt
             .scope_names
             .parent
-            .map(|(x, _)| eval.clone_slot_reference(*x, eval.heap()));
+            .map(|(x, _)| eval.clone_slot_capture(*x));
         eval.heap().alloc(Self {
             parameters,
+            parameter_captures,
             parameter_types,
             return_type,
             stmt,
@@ -236,7 +269,7 @@ impl<'v> Def<'v> {
     }
 }
 
-impl<'v, T1: ValueLike<'v>, T2> DefGen<T1, T2> {
+impl<'v, T1: ValueLike<'v>> DefGen<T1> {
     /// Extract a few key things out of the main function docstring
     fn parse_docstring(
         &self,
@@ -335,7 +368,7 @@ impl<'v, T1: ValueLike<'v>, T2> DefGen<T1, T2> {
     }
 }
 
-impl<T1, T2> DefGen<T1, T2> {
+impl<T1> DefGen<T1> {
     pub(crate) fn scope_names(&self) -> &ScopeNames {
         &self.stmt.scope_names
     }
@@ -374,6 +407,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
         );
         Ok(FrozenDef {
             parameters,
+            parameter_captures: self.parameter_captures,
             parameter_types,
             return_type,
             codemap: self.codemap,
@@ -449,23 +483,7 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
     }
 }
 
-pub(crate) trait AsValueRef<'v> {
-    fn to_value_ref(&self) -> ValueRef<'v>;
-}
-
-impl<'v> AsValueRef<'v> for Option<FrozenValue> {
-    fn to_value_ref(&self) -> ValueRef<'v> {
-        ValueRef::new_frozen(*self)
-    }
-}
-
-impl<'v> AsValueRef<'v> for ValueRef<'v> {
-    fn to_value_ref(&self) -> ValueRef<'v> {
-        self.dupe_reference()
-    }
-}
-
-impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
+impl<'v, V: ValueLike<'v>> DefGen<V> {
     pub fn invoke_raw(
         &self,
         locals: LocalSlotBase,
@@ -485,6 +503,13 @@ impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
             }
         }
 
+        // Parameters are collected into local slots without captures
+        // (to avoid even more branches in parameter capture),
+        // and this loop wraps captured parameters.
+        for &captured in &self.parameter_captures {
+            eval.wrap_local_slot_captured(LocalSlotId::new(captured));
+        }
+
         // Copy over the parent slots
         for ((_, me), captured) in self
             .stmt
@@ -493,8 +518,7 @@ impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
             .iter()
             .zip(self.captured.iter())
         {
-            eval.local_variables
-                .set_slot_ref(*me, captured.to_value_ref());
+            eval.local_variables.set_slot(*me, captured.to_value());
         }
 
         let res =

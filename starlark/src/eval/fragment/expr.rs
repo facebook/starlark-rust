@@ -22,7 +22,7 @@ use crate::{
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
-            scope::{AssignCount, CstExpr, ResolvedIdent, Slot},
+            scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
             throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
         },
         fragment::known::{list_to_tuple, Conditional},
@@ -223,14 +223,23 @@ impl Compiler<'_> {
         let name = ident.node;
         let span = ident.span;
         match resolved_ident {
-            ResolvedIdent::Slot((Slot::Local(slot), _binding_id)) => {
+            ResolvedIdent::Slot((Slot::Local(slot), binding_id)) => {
+                let binding = self.scope_data.get_binding(binding_id);
+
                 // We can't look up the local variabless in advance, because they are different each time
                 // we go through a new function call.
-                expr!("local", |eval| throw(
-                    eval.get_slot_local(slot, &name),
-                    span,
-                    eval
-                )?)
+                match binding.captured {
+                    Captured::Yes => expr!("local_captured", |eval| throw(
+                        eval.get_slot_local_captured(slot, &name),
+                        span,
+                        eval
+                    )?),
+                    Captured::No => expr!("local", |eval| throw(
+                        eval.get_slot_local(slot, &name),
+                        span,
+                        eval
+                    )?),
+                }
             }
             ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
                 let binding = self.scope_data.get_binding(binding_id);

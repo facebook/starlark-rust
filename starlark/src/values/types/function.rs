@@ -23,15 +23,12 @@ use crate::{
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Trace, Value, ValueLike, ValueRef,
+        SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use derivative::Derivative;
-use gazebo::{
-    any::AnyLifetime,
-    coerce::{coerce, Coerce},
-};
-use std::mem::MaybeUninit;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
+use std::{cell::Cell, mem::MaybeUninit};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -119,13 +116,13 @@ impl NativeFunction {
                 eval.alloca_uninit(parameters.len(), |slots, eval| {
                     // Fill in all the slots, because ValueRef lacks a Clone or similar
                     for slot in slots.iter_mut() {
-                        slot.write(ValueRef::new_unassigned());
+                        slot.write(Cell::new(None));
                     }
                     let slots = unsafe { MaybeUninit::slice_assume_init_ref(slots) };
 
                     let this = params.this;
                     parameters.collect_inline(params, slots, eval.heap())?;
-                    let parser = ParametersParser::new(coerce(slots));
+                    let parser = ParametersParser::new(slots);
                     function(eval, this, parser)
                 })
             },

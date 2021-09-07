@@ -50,7 +50,6 @@ const TAG_INT: usize = 0b10;
 // Pointer to an object, which is not frozen.
 // Note, an object can be changed from unfrozen to frozen, not vice versa.
 const TAG_UNFROZEN: usize = 0b01;
-const TAG_USER: usize = 0b100;
 
 unsafe fn untag_pointer<'a, T>(x: usize) -> &'a T {
     cast::usize_to_ptr(x & !TAG_BITS)
@@ -81,10 +80,6 @@ impl<'p, P> Pointer<'p, P> {
         debug_assert!(pointer != 0);
         let pointer = unsafe { NonZeroUsize::new_unchecked(pointer) };
         Self { pointer, phantom }
-    }
-
-    pub fn set_user_tag(self) -> Self {
-        Self::new(self.pointer.get() | TAG_USER)
     }
 
     pub fn new_int(x: i32) -> Self {
@@ -118,10 +113,6 @@ impl<'p, P> Pointer<'p, P> {
         } else {
             Either::Right(untag_int(p))
         }
-    }
-
-    pub fn get_user_tag(self) -> bool {
-        self.pointer.get() & TAG_USER == TAG_USER
     }
 
     pub fn unpack_int(self) -> Option<i32> {

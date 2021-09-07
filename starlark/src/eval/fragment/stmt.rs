@@ -27,7 +27,7 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{
-            scope::{CstAssign, CstExpr, CstStmt, Slot},
+            scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
             throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtsCompiled,
         },
         fragment::known::{list_to_tuple, Conditional},
@@ -107,12 +107,16 @@ impl Compiler<'_> {
                 let slot = binding
                     .slot
                     .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
-                match slot {
-                    Slot::Local(slot) => box move |value, eval| {
+                match (slot, binding.captured) {
+                    (Slot::Local(slot), Captured::Yes) => box move |value, eval| {
+                        eval.set_slot_local_captured(slot, value);
+                        Ok(())
+                    },
+                    (Slot::Local(slot), Captured::No) => box move |value, eval| {
                         eval.set_slot_local(slot, value);
                         Ok(())
                     },
-                    Slot::Module(slot) => box move |value, eval| {
+                    (Slot::Module(slot), _) => box move |value, eval| {
                         // Make sure that `ComplexValue`s get their name as soon as possible
                         value.export_as(&name, eval);
                         eval.set_slot_module(slot, value);
@@ -164,18 +168,35 @@ impl Compiler<'_> {
                 })
             }
             AssignP::Identifier(ident) => {
-                let slot = self.scope_data.get_assign_ident_slot(&ident);
+                let (slot, captured) = self.scope_data.get_assign_ident_slot(&ident);
                 let name = ident.node;
                 match slot {
                     Slot::Local(slot) => {
                         let rhs = rhs.as_compiled();
                         let name = name.0;
-                        stmt!("assign_local", span_stmt, |eval| {
-                            let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
-                            let rhs = rhs(eval)?;
-                            let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                            eval.set_slot_local(slot, v);
-                        })
+                        match captured {
+                            Captured::Yes => {
+                                stmt!("assign_local_captured", span_stmt, |eval| {
+                                    let v = throw(
+                                        eval.get_slot_local_captured(slot, &name),
+                                        span_lhs,
+                                        eval,
+                                    )?;
+                                    let rhs = rhs(eval)?;
+                                    let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                                    eval.set_slot_local_captured(slot, v);
+                                })
+                            }
+                            Captured::No => {
+                                stmt!("assign_local", span_stmt, |eval| {
+                                    let v =
+                                        throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
+                                    let rhs = rhs(eval)?;
+                                    let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                                    eval.set_slot_local(slot, v);
+                                })
+                            }
+                        }
                     }
                     Slot::Module(slot) => {
                         let rhs = rhs.as_compiled();
@@ -509,7 +530,7 @@ impl Compiler<'_> {
             StmtP::Load(load) => {
                 let name = load.node.module.node;
                 let symbols = load.node.args.into_map(|(x, y)| {
-                    let slot = self.scope_data.get_assign_ident_slot(&x);
+                    let (slot, _captured) = self.scope_data.get_assign_ident_slot(&x);
                     (
                         match slot {
                             Slot::Local(..) => unreachable!("symbol need to be resolved to module"),

@@ -401,16 +401,11 @@ impl<'v> Tracer<'v> {
         let old_val = value.0.unpack_ptr().unwrap();
 
         // Case 2: We have already been replaced with a forwarding, or need to freeze
-        let mut res = match old_val.unpack_overwrite() {
+        let res = match old_val.unpack_overwrite() {
             Either::Left(x) => Value::new_ptr_usize(x),
             Either::Right(v) => v.heap_copy(old_val, self),
         };
 
-        if value.0.get_user_tag() {
-            // SUPER IMPORTANT:
-            // There are invariants around user tags (whether something is a Ref), so make sure they get copied over.
-            res = Value(res.0.set_user_tag());
-        }
         res
     }
 }

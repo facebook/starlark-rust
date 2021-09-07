@@ -32,11 +32,14 @@ use crate::{
         },
         FileLoader,
     },
-    values::{FrozenHeap, Heap, Trace, Tracer, Value, ValueRef},
+    values::{
+        value_captured_get, FrozenHeap, Heap, Trace, Tracer, Value, ValueCaptured, ValueLike,
+    },
 };
 use gazebo::{any::AnyLifetime, cast};
 use once_cell::sync::Lazy;
 use std::{
+    cell::Cell,
     intrinsics::unlikely,
     mem::{self, MaybeUninit},
     path::Path,
@@ -366,24 +369,50 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         .ok_or_else(|| error(self, slot))
     }
 
+    // Make sure the error-path doesn't get inlined into the normal-path execution
+    #[inline(never)]
+    fn local_var_referenced_before_assignment(name: &str) -> anyhow::Error {
+        EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
+    }
+
     pub(crate) fn get_slot_local(
         &self,
         slot: LocalSlotId,
         name: &str,
     ) -> anyhow::Result<Value<'v>> {
-        // Make sure the error-path doesn't get inlined into the normal-path execution
-        #[inline(never)]
-        fn error(name: &str) -> anyhow::Error {
-            EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
-        }
-
         self.local_variables
             .get_slot(slot)
-            .ok_or_else(|| error(name))
+            .ok_or_else(|| Self::local_var_referenced_before_assignment(name))
     }
 
-    pub(crate) fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
-        self.local_variables.clone_slot_reference(slot, heap)
+    pub(crate) fn get_slot_local_captured(
+        &self,
+        slot: LocalSlotId,
+        name: &str,
+    ) -> anyhow::Result<Value<'v>> {
+        let value_captured = self.get_slot_local(slot, name)?;
+        let value_captured = value_captured_get(value_captured);
+        value_captured.ok_or_else(|| Self::local_var_referenced_before_assignment(name))
+    }
+
+    pub(crate) fn clone_slot_capture(&self, slot: LocalSlotId) -> Value<'v> {
+        match self.local_variables.get_slot(slot) {
+            Some(value_captured) => {
+                debug_assert!(
+                    value_captured.downcast_ref::<ValueCaptured>().is_some(),
+                    "slot {:?} is expected to be ValueCaptured, it is {:?} ({})",
+                    slot,
+                    value_captured,
+                    value_captured.get_type()
+                );
+                value_captured
+            }
+            None => {
+                let value_captured = self.heap().alloc_complex(ValueCaptured(Cell::new(None)));
+                self.local_variables.set_slot(slot, value_captured);
+                value_captured
+            }
+        }
     }
 
     /// Set a variable in the top-level module currently being processed.
@@ -410,6 +439,33 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     pub(crate) fn set_slot_local(&mut self, slot: LocalSlotId, value: Value<'v>) {
         self.local_variables.set_slot(slot, value)
+    }
+
+    pub(crate) fn set_slot_local_captured(&mut self, slot: LocalSlotId, value: Value<'v>) {
+        match self.local_variables.get_slot(slot) {
+            Some(value_captured) => {
+                let value_captured = value_captured
+                    .downcast_ref::<ValueCaptured>()
+                    .expect("not a ValueCaptured");
+                value_captured.set(value);
+            }
+            None => {
+                let value_captured = self
+                    .heap()
+                    .alloc_complex(ValueCaptured(Cell::new(Some(value))));
+                self.local_variables.set_slot(slot, value_captured);
+            }
+        };
+    }
+
+    /// Take a value from the local slot and store it back wrapped in [`ValueCaptured`].
+    pub(crate) fn wrap_local_slot_captured(&mut self, slot: LocalSlotId) {
+        let value = self.local_variables.get_slot(slot).expect("slot unset");
+        debug_assert!(value.downcast_ref::<ValueCaptured>().is_none());
+        let value_captured = self
+            .heap()
+            .alloc_complex(ValueCaptured(Cell::new(Some(value))));
+        self.local_variables.set_slot(slot, value_captured);
     }
 
     /// Cause a GC to be triggered next time it's possible.

@@ -472,7 +472,7 @@ impl<'a> Scope<'a> {
         for i in (0..self.locals.len()).rev() {
             if let Some((mut v, binding_id)) = self.scope_at_level(i).get_name(name) {
                 if i + 1 != self.locals.len() {
-                    self.scope_data.mut_binding(binding_id).captured = true;
+                    self.scope_data.mut_binding(binding_id).captured = Captured::Yes;
                 }
                 for j in (i + 1)..self.locals.len() {
                     v = self.scope_at_level_mut(j).copy_parent(v, binding_id, name);
@@ -485,7 +485,7 @@ impl<'a> Scope<'a> {
             Some(binding_id) => {
                 let binding = self.scope_data.mut_binding(binding_id);
                 if self.locals.len() > 1 {
-                    binding.captured = true;
+                    binding.captured = Captured::Yes;
                 }
                 Some((binding.slot.unwrap(), binding_id))
             }
@@ -631,6 +631,13 @@ pub(crate) enum AssignCount {
     Any,
 }
 
+/// Was a binding captured by nested def or lambda scopes?
+#[derive(Debug, Copy, Clone, Dupe)]
+pub(crate) enum Captured {
+    Yes,
+    No,
+}
+
 /// Binding defines a place for a variable.
 ///
 /// For example, in code `x = 1; x = 2`, there's one binding for name `x`.
@@ -646,7 +653,7 @@ pub(crate) struct Binding {
     // Whether a variable defined in a scope gets captured in nested def or lambda scope.
     // (Comprehension scopes do not count, because they are considered
     // local by the runtime and do not allocate a frame).
-    pub(crate) captured: bool,
+    pub(crate) captured: Captured,
 }
 
 impl Binding {
@@ -655,7 +662,7 @@ impl Binding {
             vis,
             slot: None,
             assign_count,
-            captured: false,
+            captured: Captured::No,
         }
     }
 }
@@ -712,10 +719,14 @@ impl ScopeData {
     }
 
     /// Get resolved slot for assigning identifier.
-    pub(crate) fn get_assign_ident_slot(&self, ident: &CstAssignIdent) -> Slot {
+    pub(crate) fn get_assign_ident_slot(&self, ident: &CstAssignIdent) -> (Slot, Captured) {
         let binding_id = ident.1.expect("binding not assigned for ident");
-        let slot = self.get_binding(binding_id).slot;
-        slot.expect("binding slot is not initialized")
+        let binding = self.get_binding(binding_id);
+        let slot = binding.slot;
+        (
+            slot.expect("binding slot is not initialized"),
+            binding.captured,
+        )
     }
 }
 
@@ -777,7 +788,7 @@ mod test {
     use crate::{
         environment::{names::MutableNames, Globals},
         eval::compiler::scope::{
-            AssignCount, CompilerAstMap, CstAssign, CstAssignIdent, CstExpr, CstStmt,
+            AssignCount, Captured, CompilerAstMap, CstAssign, CstAssignIdent, CstExpr, CstStmt,
             ResolvedIdent, Scope, ScopeData, Slot,
         },
         syntax::{
@@ -820,8 +831,8 @@ mod test {
                 AssignCount::Any => "+",
             };
             let captured = match binding.captured {
-                true => "&",
-                false => "",
+                Captured::Yes => "&",
+                Captured::No => "",
             };
             write!(r, "{}:{}{}{}", i, slot, assign_count, captured).unwrap();
         }

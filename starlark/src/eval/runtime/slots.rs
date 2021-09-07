@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-use crate::values::{Heap, Trace, Tracer, Value, ValueRef};
+use crate::values::{Trace, Tracer, Value};
 use gazebo::prelude::*;
-use std::mem;
+use std::{cell::Cell, mem};
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
 pub(crate) struct LocalSlotId(pub(crate) usize);
@@ -45,7 +45,7 @@ pub(crate) struct LocalSlotBase(usize);
 /// 5. `release` these slots by moving the register index back.
 pub(crate) struct LocalSlots<'v> {
     // All the slots are stored continguously
-    slots: Vec<ValueRef<'v>>,
+    slots: Vec<Cell<Option<Value<'v>>>>,
     // The current index at which LocalSlotId is relative to
     base: LocalSlotBase,
 }
@@ -68,7 +68,7 @@ impl<'v> LocalSlots<'v> {
         let res = LocalSlotBase(self.slots.len());
         self.slots.reserve(len);
         for _ in 0..len {
-            self.slots.push(ValueRef::new_unassigned());
+            self.slots.push(Cell::new(None));
         }
         res
     }
@@ -89,7 +89,7 @@ impl<'v> LocalSlots<'v> {
         self.base = new_base;
     }
 
-    pub fn get_slots_at(&self, base: LocalSlotBase) -> &[ValueRef<'v>] {
+    pub fn get_slots_at(&self, base: LocalSlotBase) -> &[Cell<Option<Value<'v>>>] {
         &self.slots[base.0..]
     }
 
@@ -99,16 +99,6 @@ impl<'v> LocalSlots<'v> {
     }
 
     pub fn set_slot(&self, slot: LocalSlotId, value: Value<'v>) {
-        self.slots[self.base.0 + slot.0].set(value);
-    }
-
-    /// Make a copy of this slot that can be used with `set_slot_ref` to
-    /// bind two instances together.
-    pub fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
-        self.slots[self.base.0 + slot.0].clone_reference(heap)
-    }
-
-    pub fn set_slot_ref(&mut self, slot: LocalSlotId, value_ref: ValueRef<'v>) {
-        self.slots[self.base.0 + slot.0] = value_ref;
+        self.slots[self.base.0 + slot.0].set(Some(value));
     }
 }
