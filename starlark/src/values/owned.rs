@@ -103,6 +103,17 @@ impl OwnedFrozenValue {
         }
     }
 
+    /// Same as [`map`](OwnedFrozenValue::map) above but with [`Result`]
+    pub fn try_map<E>(
+        &self,
+        f: impl FnOnce(FrozenValue) -> Result<FrozenValue, E>,
+    ) -> Result<Self, E> {
+        Ok(Self {
+            owner: self.owner.dupe(),
+            value: f(self.value)?,
+        })
+    }
+
     /// Obtain direct access to the [`FrozenValue`] that lives inside. If you drop all
     /// references to the [`FrozenHeap`] keeping it alive, any code using the [`FrozenValue`]
     /// is likely to segfault. If possible use [`value`](OwnedFrozenValue::value) or
