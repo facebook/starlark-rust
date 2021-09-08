@@ -273,7 +273,11 @@ impl Compiler<'_> {
             // and we'd not get entries on the call stack, which would be bad.
             // But `len()` is super common, and no one expects it to call other functions,
             // so let's just ignore that corner case for additional perf.
-            expr!("len", x, |_eval| Value::new_int(x.length()?))
+            expr!("len", x, |eval| Value::new_int(expr_throw(
+                x.length(),
+                span,
+                eval
+            )?))
         } else {
             self.expr_call_fun_frozen_no_special(span, None, left, args)
         }

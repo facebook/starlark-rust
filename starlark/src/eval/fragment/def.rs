@@ -18,10 +18,11 @@
 //! Implementation of `def`.
 
 use crate::{
-    codemap::{CodeMap, Span},
+    codemap::{CodeMap, Span, Spanned},
     environment::FrozenModuleValue,
     eval::{
         compiler::{
+            expr_throw,
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
@@ -110,26 +111,29 @@ impl Compiler<'_> {
         }
     }
 
-    fn parameter(&mut self, x: CstParameter) -> ParameterCompiled<ExprCompiled> {
-        match x.node {
-            ParameterP::Normal(x, t) => ParameterCompiled::Normal(
-                self.parameter_name(x),
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-            ),
-            ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
-                self.parameter_name(x),
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-                self.expr(*v).as_compiled(),
-            ),
-            ParameterP::NoArgs => ParameterCompiled::NoArgs,
-            ParameterP::Args(x, t) => ParameterCompiled::Args(
-                self.parameter_name(x),
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-            ),
-            ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
-                self.parameter_name(x),
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-            ),
+    fn parameter(&mut self, x: CstParameter) -> Spanned<ParameterCompiled<ExprCompiled>> {
+        Spanned {
+            span: x.span,
+            node: match x.node {
+                ParameterP::Normal(x, t) => ParameterCompiled::Normal(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                ),
+                ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                    self.expr(*v).as_compiled(),
+                ),
+                ParameterP::NoArgs => ParameterCompiled::NoArgs,
+                ParameterP::Args(x, t) => ParameterCompiled::Args(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                ),
+                ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                ),
+            },
         }
     }
 
@@ -147,9 +151,10 @@ impl Compiler<'_> {
         // The parameters run in the scope of the parent, so compile them with the outer
         // scope
         let params = params.into_map(|x| self.parameter(x));
-        let return_type = self
-            .expr_opt(return_type)
-            .map(ExprCompiledValue::as_compiled);
+        let return_type = return_type.map(|return_type| Spanned {
+            span: return_type.span,
+            node: self.expr(*return_type).as_compiled(),
+        });
 
         self.enter_scope(scope_id);
 
@@ -177,9 +182,14 @@ impl Compiler<'_> {
                 if let Some(t) = x.ty() {
                     let v = t(eval)?;
                     let name = x.name().unwrap_or("unknown").to_owned();
-                    parameter_types.push((i, name, v, TypeCompiled::new(v, eval.heap())?));
+                    parameter_types.push((
+                        i,
+                        name,
+                        v,
+                        expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval)?,
+                    ));
                 }
-                match x {
+                match &x.node {
                     ParameterCompiled::Normal(n, _) => parameters.required(&n.name),
                     ParameterCompiled::WithDefaultValue(n, _, v) => {
                         parameters.defaulted(&n.name, v(eval)?)
@@ -191,15 +201,18 @@ impl Compiler<'_> {
                 if let Captured::Yes = x.captured() {
                     parameter_captures.push(i);
                 }
-                if !matches!(x, ParameterCompiled::NoArgs) {
+                if !matches!(x.node, ParameterCompiled::NoArgs) {
                     i += 1;
                 }
             }
             let return_type = match &return_type {
                 None => None,
                 Some(v) => {
-                    let v = v(eval)?;
-                    Some((v, TypeCompiled::new(v, eval.heap())?))
+                    let value = (v.node)(eval)?;
+                    Some((
+                        value,
+                        expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)?,
+                    ))
                 }
             };
             Def::new(

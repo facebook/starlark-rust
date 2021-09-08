@@ -151,12 +151,6 @@ impl<'v> From<anyhow::Error> for EvalException<'v> {
     }
 }
 
-impl<'v> From<anyhow::Error> for ExprEvalException {
-    fn from(x: anyhow::Error) -> Self {
-        Self(x)
-    }
-}
-
 impl<'v> From<ExprEvalException> for EvalException<'v> {
     fn from(ExprEvalException(e): ExprEvalException) -> Self {
         Self::Error(e)

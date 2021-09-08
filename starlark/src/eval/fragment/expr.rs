@@ -268,6 +268,13 @@ impl Compiler<'_> {
         }
     }
 
+    pub(crate) fn expr_spanned(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
+        Spanned {
+            span: expr.span,
+            node: self.expr(expr),
+        }
+    }
+
     pub fn expr(&mut self, expr: CstExpr) -> ExprCompiledValue {
         // println!("compile {}", expr.node);
         let span = expr.span;
@@ -311,7 +318,7 @@ impl Compiler<'_> {
                 }
             }
             ExprP::Dict(exprs) => {
-                let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                let xs = exprs.into_map(|(k, v)| (self.expr_spanned(k), self.expr(v)));
                 if xs.is_empty() {
                     return expr!("dict_empty", |eval| eval.heap().alloc(Dict::default()));
                 }
@@ -365,14 +372,27 @@ impl Compiler<'_> {
                     }
                 }
 
-                let xs = xs.into_map(|(k, v)| (k.as_compiled(), v.as_compiled()));
+                let xs = xs.into_map(|(k, v)| {
+                    (
+                        Spanned {
+                            span: k.span,
+                            node: k.node.as_compiled(),
+                        },
+                        v.as_compiled(),
+                    )
+                });
                 expr!("dict", |eval| {
                     let mut r = SmallMap::with_capacity(xs.len());
                     for (k, v) in &xs {
-                        let k = k(eval)?;
-                        if r.insert_hashed(k.get_hashed()?, v(eval)?).is_some() {
+                        let k_value = k(eval)?;
+                        if r.insert_hashed(
+                            expr_throw(k_value.get_hashed(), k.span, eval)?,
+                            v(eval)?,
+                        )
+                        .is_some()
+                        {
                             expr_throw(
-                                Err(EvalError::DuplicateDictionaryKey(k.to_string()).into()),
+                                Err(EvalError::DuplicateDictionaryKey(k_value.to_string()).into()),
                                 span,
                                 eval,
                             )?;
@@ -480,7 +500,11 @@ impl Compiler<'_> {
             }
             ExprP::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                expr!("bit_not", expr, |_eval| Value::new_int(!expr.to_int()?))
+                expr!("bit_not", expr, |eval| Value::new_int(!expr_throw(
+                    expr.to_int(),
+                    span,
+                    eval
+                )?))
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {

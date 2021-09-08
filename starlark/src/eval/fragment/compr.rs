@@ -54,9 +54,9 @@ impl Compiler<'_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
         let clauses = compile_clauses(for_, clauses, self);
-        let k = self.expr(k).as_compiled();
-        let v = self.expr(v).as_compiled();
-        eval_dict(k, v, clauses)
+        let k = self.expr_spanned(k);
+        let v = self.expr(v);
+        eval_dict(k.node.as_compiled(), k.span, v.as_compiled(), clauses)
     }
 }
 
@@ -150,11 +150,16 @@ fn eval_list(x: ExprCompiled, mut clauses: Vec<ClauseCompiled>) -> ExprCompiledV
     }
 }
 
-fn eval_dict(k: ExprCompiled, v: ExprCompiled, clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
+fn eval_dict(
+    k: ExprCompiled,
+    k_span: Span,
+    v: ExprCompiled,
+    clauses: Vec<ClauseCompiled>,
+) -> ExprCompiledValue {
     let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, eval| {
         let k = k(eval)?;
         let v = v(eval)?;
-        me.insert_hashed(k.get_hashed()?, v);
+        me.insert_hashed(expr_throw(k.get_hashed(), k_span, eval)?, v);
         Ok(())
     });
 
