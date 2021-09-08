@@ -139,6 +139,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             module_env: self.module_env,
             codemap: codemap.dupe(),
             constants: Constants::new(),
+            has_before_stmt: !self.before_stmt.is_empty(),
         };
 
         let res = compiler.eval_module(statement, self);

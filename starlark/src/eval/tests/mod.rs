@@ -31,6 +31,7 @@ use gazebo::any::AnyLifetime;
 use std::cell::RefCell;
 
 mod basic;
+mod before_stmt;
 mod call;
 mod comprehension;
 mod def;

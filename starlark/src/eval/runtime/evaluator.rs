@@ -241,6 +241,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Called before every statement is run with the [`Span`] and a reference to the containing [`Evaluator`].
     /// A list of all possible statements can be obtained in advance by
     /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
+    ///
+    /// This function may have no effect is called mid evaluation.
     pub fn before_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
         self.before_stmt.push(f)
     }

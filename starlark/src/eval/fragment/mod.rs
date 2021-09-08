@@ -79,7 +79,7 @@ macro_rules! value {
 }
 
 macro_rules! stmt {
-    ($name:expr, $span:ident, |$eval:ident| $body:expr) => {{
+    ($self:ident, $name:expr, $span:ident, |$eval:ident| $body:expr) => {{
         paste::paste! {
             fn [<ann_stmt_ $name>](
                 f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
@@ -87,14 +87,13 @@ macro_rules! stmt {
             ) -> StmtsCompiled {
                 StmtsCompiled::one(box move |eval| f(eval))
             }
-            [<ann_stmt_ $name>](move |$eval|
+            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>](move |$eval|
                 $eval.ann($name, |$eval| {
-                    before_stmt($span, $eval);
                     $body;
                     #[allow(unreachable_code)]
                     Ok(())
                 })
-            )
+            ))
         }
     }};
 }

@@ -98,6 +98,14 @@ impl StmtsCompiled {
         StmtsCompiled(SmallVec1::One(stmt))
     }
 
+    pub(crate) fn len(&self) -> usize {
+        match &self.0 {
+            SmallVec1::Empty => 0,
+            SmallVec1::One(_) => 1,
+            SmallVec1::Many(stmts) => stmts.len(),
+        }
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         match &self.0 {
             SmallVec1::Empty => true,
@@ -223,6 +231,7 @@ pub(crate) struct Compiler<'a> {
     pub(crate) module_env: &'a Module,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
+    pub(crate) has_before_stmt: bool,
 }
 
 impl Compiler<'_> {
