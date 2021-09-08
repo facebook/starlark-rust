@@ -22,8 +22,9 @@ use crate::{
     collections::symbol_map::Symbol,
     eval::{
         compiler::{
+            expr_throw,
             scope::{CstArgument, CstExpr},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+            Compiler, ExprCompiled, ExprCompiledValue, ExprEvalException,
         },
         fragment::expr::get_attr_hashed,
         Arguments, Evaluator, FrozenDef,
@@ -100,8 +101,8 @@ impl Args0Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         let params = Arguments {
             this,
             pos: &[],
@@ -120,8 +121,8 @@ impl Args1Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         let params = Arguments {
             this,
             pos: &[self.0(eval)?],
@@ -140,8 +141,8 @@ impl Args2Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         let params = Arguments {
             this,
             pos: &[self.0(eval)?, self.1(eval)?],
@@ -160,8 +161,8 @@ impl ArgsCompiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         eval.alloca_uninit(self.pos_named.len(), |xs, eval| {
             // because Value has no drop, we don't need to worry about failures before assume_init
             for (x, arg) in xs.iter_mut().zip(&self.pos_named) {
@@ -224,7 +225,7 @@ impl Compiler<'_> {
                 args,
                 expr!("call_frozen_def", |eval| {
                     args.with_params(None, eval, |params, eval| {
-                        throw(
+                        expr_throw(
                             fun_ref.invoke(fun.to_value(), Some(span), params, eval),
                             span,
                             eval,
@@ -237,7 +238,7 @@ impl Compiler<'_> {
                 args,
                 expr!("call_native_fun", |eval| {
                     args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
-                        throw(
+                        expr_throw(
                             fun_ref.invoke(fun.to_value(), Some(span), params, eval),
                             span,
                             eval,
@@ -250,7 +251,7 @@ impl Compiler<'_> {
                 args,
                 expr!("call_known_fn", |eval| {
                     args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
-                        throw(fun.invoke(Some(span), params, eval), span, eval)
+                        expr_throw(fun.invoke(Some(span), params, eval), span, eval)
                     })?
                 })
             )
@@ -292,7 +293,7 @@ impl Compiler<'_> {
                 args,
                 expr!("call", left, |eval| {
                     args.with_params(None, eval, |params, eval| {
-                        throw(left.invoke(Some(span), params, eval), span, eval)
+                        expr_throw(left.invoke(Some(span), params, eval), span, eval)
                     })?
                 })
             )
@@ -324,9 +325,9 @@ impl Compiler<'_> {
                     expr!("call_method", e, |eval| {
                         // We don't need to worry about whether it's an attribute, method or field
                         // since those that don't want the `this` just ignore it
-                        let fun = throw(get_attr_hashed(e, &s, eval.heap()), span, eval)?.1;
+                        let fun = expr_throw(get_attr_hashed(e, &s, eval.heap()), span, eval)?.1;
                         args.with_params(Some(e), eval, |params, eval| {
-                            throw(fun.invoke(Some(span), params, eval), span, eval)
+                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
                         })?
                     })
                 )

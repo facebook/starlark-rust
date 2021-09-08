@@ -21,7 +21,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
-    eval::compiler::{scope::Scope, Compiler, Constants, EvalException},
+    eval::compiler::{scope::Scope, Compiler, Constants, EvalException, ExprEvalException},
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::Value,
 };

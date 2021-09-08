@@ -22,8 +22,9 @@ use crate::{
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
+            expr_throw,
             scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+            Compiler, ExprCompiled, ExprCompiledValue,
         },
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::Evaluator,
@@ -61,7 +62,7 @@ fn eval_compare(
     }
 
     expr!("compare", l, r, |eval| {
-        Value::new_bool(cmp(throw(l.compare(r), span, eval)?))
+        Value::new_bool(cmp(expr_throw(l.compare(r), span, eval)?))
     })
 }
 
@@ -79,7 +80,7 @@ fn eval_equals(
     }
 
     expr!("equals", l, r, |eval| {
-        Value::new_bool(cmp(throw(l.equals(r), span, eval)?))
+        Value::new_bool(cmp(expr_throw(l.equals(r), span, eval)?))
     })
 }
 
@@ -106,7 +107,7 @@ fn eval_slice(
             Some(ref e) => Some(e(eval)?),
             None => None,
         };
-        throw(
+        expr_throw(
             collection.slice(start, stop, stride, eval.heap()),
             span,
             eval,
@@ -229,12 +230,12 @@ impl Compiler<'_> {
                 // We can't look up the local variabless in advance, because they are different each time
                 // we go through a new function call.
                 match binding.captured {
-                    Captured::Yes => expr!("local_captured", |eval| throw(
+                    Captured::Yes => expr!("local_captured", |eval| expr_throw(
                         eval.get_slot_local_captured(slot, &name),
                         span,
                         eval
                     )?),
-                    Captured::No => expr!("local", |eval| throw(
+                    Captured::No => expr!("local", |eval| expr_throw(
                         eval.get_slot_local(slot, &name),
                         span,
                         eval
@@ -257,7 +258,7 @@ impl Compiler<'_> {
                 }
                 // We can't look up the module variables in advance because the first time around they are
                 // mutables, but after freezing they point at a different set of frozen slots.
-                expr!("module", |eval| throw(
+                expr!("module", |eval| expr_throw(
                     eval.get_slot_module(slot),
                     span,
                     eval
@@ -351,7 +352,7 @@ impl Compiler<'_> {
                             let mut r = SmallMap::with_capacity(xs.len());
                             for (k, v) in &xs {
                                 if r.insert_hashed(k.to_hashed_value(), v(eval)?).is_some() {
-                                    throw(
+                                    expr_throw(
                                         Err(EvalError::DuplicateDictionaryKey(k.key().to_string())
                                             .into()),
                                         span,
@@ -370,7 +371,7 @@ impl Compiler<'_> {
                     for (k, v) in &xs {
                         let k = k(eval)?;
                         if r.insert_hashed(k.get_hashed()?, v(eval)?).is_some() {
-                            throw(
+                            expr_throw(
                                 Err(EvalError::DuplicateDictionaryKey(k.to_string()).into()),
                                 span,
                                 eval,
@@ -415,11 +416,12 @@ impl Compiler<'_> {
                 }
 
                 expr!("dot", left, |eval| {
-                    let (attr_type, v) = throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
+                    let (attr_type, v) =
+                        expr_throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
                     if attr_type == AttrType::Field {
                         v
                     } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                        throw(v_attr.call(left, eval), span, eval)?
+                        expr_throw(v_attr.call(left, eval), span, eval)?
                     } else {
                         // Insert self so the method see the object it is acting on
                         eval.heap().alloc(BoundMethod::new(left, v))
@@ -431,7 +433,7 @@ impl Compiler<'_> {
                 let array = self.expr(array);
                 let index = self.expr(index);
                 expr!("index", array, index, |eval| {
-                    throw(array.at(index, eval.heap()), span, eval)?
+                    expr_throw(array.at(index, eval.heap()), span, eval)?
                 })
             }
             ExprP::Slice(collection, start, stop, stride) => {
@@ -458,7 +460,7 @@ impl Compiler<'_> {
                     .and_then(i32::checked_neg)
                 {
                     Some(i) => value!(FrozenValue::new_int(i)),
-                    _ => expr!("minus", expr, |eval| throw(
+                    _ => expr!("minus", expr, |eval| expr_throw(
                         expr.minus(eval.heap()),
                         span,
                         eval
@@ -469,7 +471,7 @@ impl Compiler<'_> {
                 let expr = self.expr(*expr);
                 match expr.as_value() {
                     Some(x) if x.unpack_int().is_some() => value!(x),
-                    _ => expr!("plus", expr, |eval| throw(
+                    _ => expr!("plus", expr, |eval| expr_throw(
                         expr.plus(eval.heap()),
                         span,
                         eval
@@ -525,13 +527,13 @@ impl Compiler<'_> {
                         BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
                         BinOp::GreaterOrEqual => eval_compare(span, l, r, |x| x != Ordering::Less),
                         BinOp::In => expr!("in", r, l, |eval| {
-                            throw(r.is_in(l).map(Value::new_bool), span, eval)?
+                            expr_throw(r.is_in(l).map(Value::new_bool), span, eval)?
                         }),
                         BinOp::NotIn => expr!("not_in", r, l, |eval| {
-                            throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
+                            expr_throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
                         }),
                         BinOp::Subtract => {
-                            expr!("subtract", l, r, |eval| throw(
+                            expr!("subtract", l, r, |eval| expr_throw(
                                 l.sub(r, eval.heap()),
                                 span,
                                 eval
@@ -552,39 +554,47 @@ impl Compiler<'_> {
                             }
 
                             // Written using Value::add so that Rust Analyzer doesn't think it is an error.
-                            throw(Value::add(l, r, eval.heap()), span, eval)?
+                            expr_throw(Value::add(l, r, eval.heap()), span, eval)?
                         }),
                         BinOp::Multiply => {
-                            expr!("multiply", l, r, |eval| throw(
+                            expr!("multiply", l, r, |eval| expr_throw(
                                 l.mul(r, eval.heap()),
                                 span,
                                 eval
                             )?)
                         }
                         BinOp::Percent => expr!("percent", l, r, |eval| {
-                            throw(l.percent(r, eval.heap()), span, eval)?
+                            expr_throw(l.percent(r, eval.heap()), span, eval)?
                         }),
                         BinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
-                            throw(l.floor_div(r, eval.heap()), span, eval)?
+                            expr_throw(l.floor_div(r, eval.heap()), span, eval)?
                         }),
                         BinOp::BitAnd => {
-                            expr!("bit_and", l, r, |eval| throw(l.bit_and(r), span, eval)?)
+                            expr!("bit_and", l, r, |eval| expr_throw(
+                                l.bit_and(r),
+                                span,
+                                eval
+                            )?)
                         }
                         BinOp::BitOr => {
-                            expr!("bit_or", l, r, |eval| throw(l.bit_or(r), span, eval)?)
+                            expr!("bit_or", l, r, |eval| expr_throw(l.bit_or(r), span, eval)?)
                         }
                         BinOp::BitXor => {
-                            expr!("bit_xor", l, r, |eval| throw(l.bit_xor(r), span, eval)?)
+                            expr!("bit_xor", l, r, |eval| expr_throw(
+                                l.bit_xor(r),
+                                span,
+                                eval
+                            )?)
                         }
                         BinOp::LeftShift => {
-                            expr!("left_shift", l, r, |eval| throw(
+                            expr!("left_shift", l, r, |eval| expr_throw(
                                 l.left_shift(r),
                                 span,
                                 eval
                             )?)
                         }
                         BinOp::RightShift => {
-                            expr!("right_shift", l, r, |eval| throw(
+                            expr!("right_shift", l, r, |eval| expr_throw(
                                 l.right_shift(r),
                                 span,
                                 eval

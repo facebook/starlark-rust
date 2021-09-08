@@ -22,11 +22,13 @@ use crate::{
     collections::SmallMap,
     eval::{
         compiler::{
+            expr_throw,
             scope::{CstExpr, CstPayload},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+            Compiler, ExprCompiled, ExprCompiledValue,
         },
         fragment::{known::list_to_tuple, stmt::AssignCompiled},
         runtime::evaluator::Evaluator,
+        ExprEvalException,
     },
     syntax::ast::{ClauseP, ForClauseP},
     values::{dict::Dict, list::List, Value},
@@ -121,8 +123,8 @@ fn eval_list(x: ExprCompiled, mut clauses: Vec<ClauseCompiled>) -> ExprCompiledV
         let c = clauses.pop().unwrap();
         expr!("list_comp_map", |eval| {
             let iterable = (c.over)(eval)?;
-            throw(
-                iterable.with_iterator(eval.heap(), |it| -> Result<_, EvalException> {
+            expr_throw(
+                iterable.with_iterator(eval.heap(), |it| -> Result<_, ExprEvalException> {
                     let mut res = Vec::with_capacity(it.size_hint().0);
                     for i in it {
                         (c.var)(i, eval)?;
@@ -179,7 +181,7 @@ fn eval_one_dimensional_comprehension_dict(
         dyn for<'v> Fn(
                 &mut SmallMap<Value<'v>, Value<'v>>,
                 &mut Evaluator<'v, '_>,
-            ) -> Result<(), EvalException<'v>>
+            ) -> Result<(), ExprEvalException>
             + Send
             + Sync,
     >,
@@ -187,7 +189,7 @@ fn eval_one_dimensional_comprehension_dict(
     dyn for<'v> Fn(
             &mut SmallMap<Value<'v>, Value<'v>>,
             &mut Evaluator<'v, '_>,
-        ) -> Result<(), EvalException<'v>>
+        ) -> Result<(), ExprEvalException>
         + Send
         + Sync,
 > {
@@ -196,7 +198,7 @@ fn eval_one_dimensional_comprehension_dict(
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
-            'f: for i in throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+            'f: for i in expr_throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
                     if !ifc(eval)?.to_bool() {
@@ -215,12 +217,12 @@ fn eval_one_dimensional_comprehension_dict(
 fn eval_one_dimensional_comprehension_list(
     mut clauses: Vec<ClauseCompiled>,
     add: Box<
-        dyn for<'v> Fn(&mut Vec<Value<'v>>, &mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
+        dyn for<'v> Fn(&mut Vec<Value<'v>>, &mut Evaluator<'v, '_>) -> Result<(), ExprEvalException>
             + Send
             + Sync,
     >,
 ) -> Box<
-    dyn for<'v> Fn(&mut Vec<Value<'v>>, &mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
+    dyn for<'v> Fn(&mut Vec<Value<'v>>, &mut Evaluator<'v, '_>) -> Result<(), ExprEvalException>
         + Send
         + Sync,
 > {
@@ -229,7 +231,7 @@ fn eval_one_dimensional_comprehension_list(
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
             let iterable = (c.over)(eval)?;
-            'f: for i in throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
+            'f: for i in expr_throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
                 (c.var)(i, eval)?;
                 for ifc in &c.ifs {
                     if !ifc(eval)?.to_bool() {

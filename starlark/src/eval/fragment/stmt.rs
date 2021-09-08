@@ -27,8 +27,10 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{
+            expr_throw,
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtsCompiled,
+            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue, ExprEvalException,
+            StmtsCompiled,
         },
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
@@ -49,7 +51,7 @@ enum AssignError {
 }
 
 pub(crate) type AssignCompiled = Box<
-    dyn for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
+    dyn for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> Result<(), ExprEvalException>
         + Send
         + Sync,
 >;
@@ -59,11 +61,11 @@ fn eval_assign_list<'v>(
     span: Span,
     value: Value<'v>,
     eval: &mut Evaluator<'v, '_>,
-) -> Result<(), EvalException<'v>> {
+) -> Result<(), ExprEvalException> {
     let l = lvalues.len() as i32;
-    let nvl = throw(value.length(), span, eval)?;
+    let nvl = expr_throw(value.length(), span, eval)?;
     if nvl != l {
-        throw(
+        expr_throw(
             Err(AssignError::IncorrectNumberOfValueToUnpack(l, nvl).into()),
             span,
             eval,
@@ -71,7 +73,7 @@ fn eval_assign_list<'v>(
     } else {
         let mut it1 = lvalues.iter();
         // TODO: the span here should probably include the rvalue
-        let mut it2 = throw(value.iterate(eval.heap()), span, eval)?;
+        let mut it2 = expr_throw(value.iterate(eval.heap()), span, eval)?;
         for _ in 0..l {
             it1.next().unwrap()(it2.next().unwrap(), eval)?;
         }
@@ -86,12 +88,12 @@ impl Compiler<'_> {
             AssignP::Dot(e, s) => {
                 let e = self.expr(*e).as_compiled();
                 let s = s.node;
-                box move |value, eval| throw(e(eval)?.set_attr(&s, value), span, eval)
+                box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
             }
             AssignP::ArrayIndirection(box (e, idx)) => {
                 let e = self.expr(e).as_compiled();
                 let idx = self.expr(idx).as_compiled();
-                box move |value, eval| throw(e(eval)?.set_at(idx(eval)?, value), span, eval)
+                box move |value, eval| expr_throw(e(eval)?.set_at(idx(eval)?, value), span, eval)
             }
             AssignP::Tuple(v) => {
                 let v = v.into_map(|x| self.assign(x));
@@ -458,7 +460,8 @@ impl Compiler<'_> {
                     throw(
                         iterable.with_iterator(heap, |it| {
                             for v in it {
-                                match var(v, eval).and_then(|_| st(eval)) {
+                                var(v, eval)?;
+                                match st(eval) {
                                     Err(EvalException::Break) => break,
                                     Err(EvalException::Continue) => {}
                                     Err(e) => return Err(e),

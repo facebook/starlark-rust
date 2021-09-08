@@ -33,7 +33,7 @@ use once_cell::sync::Lazy;
 use std::{fmt::Debug, mem};
 
 pub(crate) type ExprCompiled = Box<
-    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
+    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
 >;
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
@@ -141,9 +141,25 @@ pub(crate) enum EvalException<'v> {
     Error(anyhow::Error),
 }
 
+/// Error of evaluation of an expression.
+#[derive(Debug)]
+pub(crate) struct ExprEvalException(anyhow::Error);
+
 impl<'v> From<anyhow::Error> for EvalException<'v> {
     fn from(x: anyhow::Error) -> Self {
         Self::Error(x)
+    }
+}
+
+impl<'v> From<anyhow::Error> for ExprEvalException {
+    fn from(x: anyhow::Error) -> Self {
+        Self(x)
+    }
+}
+
+impl<'v> From<ExprEvalException> for EvalException<'v> {
+    fn from(ExprEvalException(e): ExprEvalException) -> Self {
+        Self::Error(e)
     }
 }
 
@@ -162,6 +178,20 @@ fn throw_error<'v, T>(
     Err(EvalException::Error(e))
 }
 
+#[cold]
+#[inline(never)]
+fn expr_throw_error<'v, T>(
+    e: anyhow::Error,
+    span: Span,
+    eval: &Evaluator<'v, '_>,
+) -> Result<T, ExprEvalException> {
+    let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
+        d.set_span(span, eval.codemap.dupe());
+        d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
+    });
+    Err(ExprEvalException(e))
+}
+
 /// Convert syntax error to spanned evaluation exception
 pub(crate) fn throw<'v, T>(
     r: anyhow::Result<T>,
@@ -171,6 +201,18 @@ pub(crate) fn throw<'v, T>(
     match r {
         Ok(v) => Ok(v),
         Err(e) => throw_error(e, span, eval),
+    }
+}
+
+/// Convert syntax error to spanned evaluation exception
+pub(crate) fn expr_throw<'v, T>(
+    r: anyhow::Result<T>,
+    span: Span,
+    eval: &Evaluator<'v, '_>,
+) -> Result<T, ExprEvalException> {
+    match r {
+        Ok(v) => Ok(v),
+        Err(e) => expr_throw_error(e, span, eval),
     }
 }
 

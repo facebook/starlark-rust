@@ -22,7 +22,7 @@ macro_rules! expr {
     ($name:expr, |$eval:ident| $body:expr) => {{
         paste::paste! {
             fn [<ann_expr_ $name>](
-                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>>
+                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, crate::eval::ExprEvalException>
                     + Send + Sync + 'static,
             ) -> ExprCompiled {
                 #[allow(clippy::needless_question_mark)]
@@ -38,7 +38,7 @@ macro_rules! expr {
         let $v1 = $v1.as_compiled();
         paste::paste! {
             fn [<ann_expr_ $name>](
-                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>>
+                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, crate::eval::ExprEvalException>
                     + Send + Sync + 'static,
             ) -> ExprCompiled {
                 box move |eval| f(eval)
@@ -56,7 +56,7 @@ macro_rules! expr {
         let $v2 = $v2.as_compiled();
         paste::paste! {
             fn [<ann_expr_ $name>](
-                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>>
+                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, crate::eval::ExprEvalException>
                     + Send + Sync + 'static,
             ) -> ExprCompiled {
                 box move |eval| f(eval)

@@ -21,7 +21,7 @@ use crate::{
     codemap::Spanned,
     eval::{
         compiler::{scope::CstExpr, Compiler, ExprCompiled, ExprCompiledValue},
-        EvalException, Evaluator,
+        Evaluator,
     },
     syntax::ast::ExprP,
     values::{dict::Dict, list::List, Value},
