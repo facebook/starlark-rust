@@ -66,10 +66,7 @@ impl<'v> LocalSlots<'v> {
 
     pub fn reserve(&mut self, len: usize) -> LocalSlotBase {
         let res = LocalSlotBase(self.slots.len());
-        self.slots.reserve(len);
-        for _ in 0..len {
-            self.slots.push(Cell::new(None));
-        }
+        self.slots.resize(self.slots.len() + len, Cell::new(None));
         res
     }
 
