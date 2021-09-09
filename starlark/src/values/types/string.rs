@@ -223,8 +223,8 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
                 } else {
                     // safe because we know the following values are all lower-ascii bytes
                     let byte_buffer = unsafe { buffer.as_mut_vec() };
-                    if x == 34 || x == 39 || x == 92 {
-                        byte_buffer.push(92); // character for \
+                    if x == b'"' || x == b'\'' || x == b'\\' {
+                        byte_buffer.push(b'\\');
                     }
                     byte_buffer.push(x);
                 }
