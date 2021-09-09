@@ -150,8 +150,10 @@ impl FrozenModule {
         let members = self
             .names()
             .filter(|n| Module::default_visibility(n) == Visibility::Public)
-            .map(|n| (n, self.get(n)))
-            .filter_map(|(n, v)| v.map(|fv| (n.to_owned(), fv.value().get_ref().documentation())))
+            .filter_map(|n| {
+                self.get(n)
+                    .map(|fv| (n.to_owned(), fv.value().get_ref().documentation()))
+            })
             .collect();
 
         ModuleDocs {
