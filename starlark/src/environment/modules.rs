@@ -318,13 +318,22 @@ impl Module {
         }
     }
 
+    /// Set the value of a variable in the environment. Set its visibliity to
+    /// "private" to ensure that it is not re-exported
+    fn set_private<'v>(&'v self, name: &str, value: Value<'v>) {
+        let slot = self.names.add_name_visibility(name, Visibility::Private);
+        let slots = self.slots();
+        slots.ensure_slot(slot);
+        slots.set_slot(slot, value);
+    }
+
     /// Import symbols from a module, similar to what is done during `load()`.
     pub fn import_public_symbols(&self, module: &FrozenModule) {
         self.frozen_heap.add_reference(&module.0);
         for (k, slot) in module.1.0.names.symbols() {
             if Self::default_visibility(k) == Visibility::Public {
                 if let Some(value) = module.1.0.slots.get_slot(slot) {
-                    self.set(k, Value::new_frozen(value))
+                    self.set_private(k, Value::new_frozen(value))
                 }
             }
         }

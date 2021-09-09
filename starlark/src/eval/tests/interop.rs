@@ -136,6 +136,19 @@ fn test_load_symbols() {
 }
 
 #[test]
+fn test_load_public_symbols_does_not_reexport() -> anyhow::Result<()> {
+    let mut a = Assert::new();
+
+    let module_b = a.module("b", "x = 5");
+    let module_a = Module::new();
+    module_a.import_public_symbols(&module_b);
+    a.module_add("a", module_a.freeze()?);
+    // Trying to load a symbol transitively should fail.
+    a.fail("load('a', 'x')", "Module symbol `x` is not exported");
+    Ok(())
+}
+
+#[test]
 // Test that we can express something that loads symbols into the exported module,
 // but not using the very dubious `set_module_variable_at_some_point`.
 fn test_load_symbols_extra() -> anyhow::Result<()> {
