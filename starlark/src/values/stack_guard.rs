@@ -18,7 +18,7 @@
 //! Guard to check we don't recurse too deeply with nested operations like Equals.
 
 use crate::values::ControlError;
-use std::cell::Cell;
+use std::{cell::Cell, intrinsics::unlikely};
 
 // Maximum recursion level for comparison
 // TODO(dmarting): those are rather short, maybe make it configurable?
@@ -69,7 +69,7 @@ fn inc() -> StackGuard {
 
 /// Check stack depth does not exceed configured max stack depth.
 fn check() -> anyhow::Result<()> {
-    if STACK_DEPTH.with(Cell::get) >= MAX_RECURSION {
+    if unlikely(STACK_DEPTH.with(Cell::get) >= MAX_RECURSION) {
         return Err(ControlError::TooManyRecursionLevel.into());
     }
     Ok(())

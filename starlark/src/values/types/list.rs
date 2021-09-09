@@ -41,6 +41,7 @@ use std::{
     cmp,
     cmp::Ordering,
     fmt::Debug,
+    intrinsics::unlikely,
     marker::PhantomData,
     ops::Deref,
 };
@@ -97,7 +98,7 @@ impl<'v> List<'v> {
     }
 
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
-        if x.unpack_frozen().is_some() {
+        if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
         let ptr = x.downcast_ref::<ListGen<RefCell<List<'v>>>>();

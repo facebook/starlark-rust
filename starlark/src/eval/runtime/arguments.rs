@@ -32,7 +32,7 @@ use crate::{
 use either::Either;
 use gazebo::{cell::ARef, coerce::Coerce, prelude::*};
 use itertools::Itertools;
-use std::{cell::Cell, cmp, convert::TryInto, iter};
+use std::{cell::Cell, cmp, convert::TryInto, intrinsics::unlikely, iter};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -454,7 +454,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         // Check if the named arguments clashed with the positional arguments
-        if next_position > lowest_name {
+        if unlikely(next_position > lowest_name) {
             return Err(FunctionError::RepeatedParameter {
                 name: self.param_name_at(lowest_name),
             }
@@ -481,7 +481,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                                         repeat
                                     }
                                 };
-                                if repeat {
+                                if unlikely(repeat) {
                                     return Err(FunctionError::RepeatedParameter {
                                         name: s.to_owned(),
                                     }
@@ -529,7 +529,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
         if let Some(args_pos) = self.args {
             slots[args_pos].set(Some(heap.alloc(Tuple::new(star_args))));
-        } else if !star_args.is_empty() {
+        } else if unlikely(!star_args.is_empty()) {
             return Err(FunctionError::ExtraPositionalParameters {
                 count: star_args.len(),
                 function: self.signature(),
@@ -669,7 +669,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
                     for (k, v) in kwargs.iter_hashed() {
                         let s = Arguments::unpack_kwargs_key(*k.key())?;
                         let old = result.insert_hashed(k, v);
-                        if old.is_some() {
+                        if unlikely(old.is_some()) {
                             return Err(
                                 FunctionError::RepeatedParameter { name: s.to_owned() }.into()
                             );

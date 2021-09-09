@@ -38,6 +38,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     hash::{Hash, Hasher},
+    intrinsics::unlikely,
     marker::PhantomData,
     ops::Deref,
 };
@@ -94,7 +95,7 @@ impl<'v> Dict<'v> {
     }
 
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
-        if x.unpack_frozen().is_some() {
+        if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
         let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>();

@@ -62,6 +62,7 @@ pub(crate) enum ControlError {
 }
 
 impl ValueError {
+    #[cold]
     pub(crate) fn unsupported_owned<T>(
         left: &str,
         op: &str,
@@ -83,6 +84,7 @@ impl ValueError {
     }
 
     /// Helper to create an [`OperationNotSupported`](ValueError::OperationNotSupported) error.
+    #[cold]
     pub fn unsupported<'v, T, V: StarlarkValue<'v> + ?Sized>(
         left: &V,
         op: &str,
@@ -91,6 +93,7 @@ impl ValueError {
     }
 
     /// Helper to create an [`OperationNotSupported`](ValueError::OperationNotSupportedBinary) error.
+    #[cold]
     pub fn unsupported_with<'v, T, V: StarlarkValue<'v> + ?Sized>(
         left: &V,
         op: &str,
