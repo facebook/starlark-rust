@@ -54,6 +54,16 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
         match &**x {
             Expr::Literal(x) => match &*x {
                 AstLiteral::IntLiteral(x) => Some((Key::Int(x.node), x.span)),
+                AstLiteral::FloatLiteral(x) => {
+                    let value = x.node;
+                    let int_candidate = value.floor();
+                    if value == int_candidate && int_candidate <= i32::MAX as f64 && int_candidate >= i32::MIN as f64 {
+                        Some((Key::Int(int_candidate as i32), x.span))
+                    } else {
+                        // FIXME: implement float as dict keys
+                        None
+                    }
+                },
                 AstLiteral::StringLiteral(x) => Some((Key::String(&x.node), x.span)),
             },
             Expr::Identifier(x, ()) => Some((Key::Identifier(&x.node), x.span)),

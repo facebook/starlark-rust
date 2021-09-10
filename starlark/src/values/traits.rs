@@ -654,6 +654,20 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         ValueError::unsupported_with(self, "*", other)
     }
 
+    /// Divide the current value by `other`. Always results in a float value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # starlark::assert::all_true(r#"
+    /// 4 / 2.0 == 2.0
+    /// 7 / 2 == 3.5
+    /// # "#);
+    /// ```
+    fn div(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        ValueError::unsupported_with(self, "/", other)
+    }
+
     /// Apply the percent operator between the current value and `other`. Usually used on
     /// strings, as per
     /// [the Starlark spec](https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#string-interpolation).

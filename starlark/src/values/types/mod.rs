@@ -19,6 +19,7 @@ pub mod any;
 pub mod bool;
 pub mod dict;
 pub mod enumeration;
+pub mod float;
 pub mod function;
 pub mod int;
 pub mod list;

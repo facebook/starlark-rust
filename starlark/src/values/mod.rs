@@ -495,6 +495,10 @@ impl<'v> Value<'v> {
         self.get_ref().percent(other, heap)
     }
 
+    pub fn div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().div(other, heap)
+    }
+
     pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().floor_div(other, heap)
     }

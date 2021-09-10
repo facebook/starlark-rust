@@ -131,6 +131,16 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
             None => other.mul(Value::new_int(self.get()), heap),
         }
     }
+    fn div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if let Some(other) = other.unpack_and_coerce_float() {
+            if other == 0.0 {
+                return Err(ValueError::DivisionByZero.into());
+            }
+            Ok(heap.alloc_simple(self.get() as f64 / other))
+        } else {
+            ValueError::unsupported_with(self, "/", other)
+        }
+    }
     fn percent(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         i64_arith_bin_op(self.get(), other, "%", |a, b| {
             if b == 0 {

@@ -42,6 +42,10 @@ integer: AstInt = <l:@L> <e:"INTEGER"> <r:@R>
     => e.ast(l, r);
 
 #[inline]
+float: AstFloat = <l:@L> <e:"FLOAT"> <r:@R>
+    => e.ast(l, r);
+
+#[inline]
 string: AstString = <l:@L> <e:"STRING"> <r:@R>
     => e.ast(l, r);
 
@@ -243,6 +247,8 @@ Operand: AstExpr = {
         => Expr::Identifier(i, ()).ast(l, r),
     <l:@L> <i:integer> <r:@R>
         => Expr::Literal(AstLiteral::IntLiteral(i)).ast(l, r),
+    <l:@L> <f:float> <r:@R>
+        => Expr::Literal(AstLiteral::FloatLiteral(f)).ast(l, r),
     <l:@L> <s:string> <r:@R>
         => Expr::Literal(AstLiteral::StringLiteral(s)).ast(l, r),
     <l:@L> "[" <e:COMMA<Test>> "]" <r:@R>
@@ -374,6 +380,8 @@ ProductExpr: AstExpr = {
             .ast(l, r),
     <l:@L> <e1:ProductExpr> "%" <e2:FactorExpr> <r:@R>
         => Expr::Op(box e1, BinOp::Percent, box e2).ast(l, r),
+    <l:@L> <e1:ProductExpr> "/" <e2:FactorExpr> <r:@R>
+        => Expr::Op(box e1, BinOp::Divide, box e2).ast(l, r),
     <l:@L> <e1:ProductExpr> "//" <e2:FactorExpr> <r:@R>
         => Expr::Op(box e1, BinOp::FloorDivide, box e2).ast(l, r),
     FactorExpr
@@ -420,6 +428,7 @@ extern {
       "+=" => lexer::Token::PlusEqual,
       "-=" => lexer::Token::MinusEqual,
       "*=" => lexer::Token::StarEqual,
+      "/=" => lexer::Token::SlashEqual,
       "//=" => lexer::Token::SlashSlashEqual,
       "%=" => lexer::Token::PercentEqual,
       "==" => lexer::Token::EqualEqual,
@@ -435,6 +444,7 @@ extern {
       "+" => lexer::Token::Plus,
       "*" => lexer::Token::Star,
       "%" => lexer::Token::Percent,
+      "/" => lexer::Token::Slash,
       "//" => lexer::Token::SlashSlash,
       "." => lexer::Token::Dot,
       "&" => lexer::Token::Ampersand,
@@ -459,6 +469,7 @@ extern {
 
       "IDENTIFIER" => lexer::Token::Identifier(<String>),
       "INTEGER" => lexer::Token::IntegerLiteral(<i32>),
+      "FLOAT" => lexer::Token::FloatLiteral(<f64>),
       "STRING" => lexer::Token::StringLiteral(<String>)
     }
 }

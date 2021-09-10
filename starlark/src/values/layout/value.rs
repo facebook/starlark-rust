@@ -137,6 +137,18 @@ impl<'v> Value<'v> {
     }
 
     /// Obtain the underlying `int` if it is an integer.
+    // TODO: find better name
+    pub fn unpack_and_coerce_float(self) -> Option<f64> {
+        if let Some(f) = self.downcast_ref::<f64>() {
+            Some(*f)
+        } else if let Some(i) = self.unpack_int() {
+            Some(i as f64)
+        } else {
+            None
+        }
+    }
+
+    /// Obtain the underlying `int` if it is an integer.
     pub fn unpack_int(self) -> Option<i32> {
         self.0.unpack_int()
     }

@@ -118,6 +118,7 @@ impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
             AstLiteral::IntLiteral(i) => FrozenValue::new_int(i.node),
+            AstLiteral::FloatLiteral(f) => heap.alloc(f.node),
             AstLiteral::StringLiteral(x) => heap.alloc(x.node.as_str()),
         }
     }
@@ -548,6 +549,9 @@ impl Compiler<'_> {
                         }
                         BinOp::Percent => expr!("percent", l, r, |eval| {
                             throw(l.percent(r, eval.heap()), span, eval)?
+                        }),
+                        BinOp::Divide => expr!("divide", l, r, |eval| {
+                            throw(l.div(r, eval.heap()), span, eval)?
                         }),
                         BinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
                             throw(l.floor_div(r, eval.heap()), span, eval)?
