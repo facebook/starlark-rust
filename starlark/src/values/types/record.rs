@@ -294,6 +294,13 @@ where
         self.constructor.invoke(location, args, eval)
     }
 
+    fn extra_memory(&self) -> usize {
+        // We don't capture the memory beneath the TypeCompiled, since we don't know how big
+        // those closures are.
+        let typ = self.typ.as_aref();
+        typ.as_ref().map_or(0, |s| s.capacity()) + self.fields.extra_memory()
+    }
+
     fn dir_attr(&self) -> Vec<String> {
         vec!["type".to_owned()]
     }

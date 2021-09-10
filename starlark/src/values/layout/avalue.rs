@@ -331,6 +331,9 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         self.1.compare(other)
     }
+    fn extra_memory(&self) -> usize {
+        self.1.extra_memory()
+    }
     fn invoke(
         &self,
         me: Value<'v>,

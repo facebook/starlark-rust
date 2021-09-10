@@ -320,6 +320,10 @@ where
         }
     }
 
+    fn extra_memory(&self) -> usize {
+        self.0.content().extra_memory()
+    }
+
     fn length(&self) -> anyhow::Result<i32> {
         Ok(self.0.content().len() as i32)
     }

@@ -569,6 +569,21 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    /// Give a best guess as to how much heap memory is being used.
+    /// Used internally, but not exported as this isn't a usual API.
+    pub(crate) fn extra_memory(&self) -> usize {
+        match &self.state {
+            MapHolder::Empty => 0,
+            MapHolder::Vec(x) => x.capacity() * mem::size_of::<(K, V)>(),
+            MapHolder::Map(x) => {
+                // For each entry, IndexMap stores the (K,V), a usize in the hash table, and about 1 byte overhead.
+                // Not canonical details, just based on the current implementation.
+                let factor = mem::size_of::<(K, V)>() + mem::size_of::<usize>() + 1;
+                factor * x.capacity()
+            }
+        }
+    }
+
     fn upgrade_empty_to_vec(&mut self) -> &mut VecMap<K, V> {
         self.state = MapHolder::Vec(VecMap::default());
         if let MapHolder::Vec(ref mut v) = self.state {

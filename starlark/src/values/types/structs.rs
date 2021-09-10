@@ -124,6 +124,10 @@ where
         RES.methods(crate::stdlib::structs::struct_methods)
     }
 
+    fn extra_memory(&self) -> usize {
+        self.fields.extra_memory()
+    }
+
     fn to_json(&self) -> anyhow::Result<String> {
         let mut s = "{".to_owned();
         s += &self

@@ -29,7 +29,7 @@ use gazebo::{
     coerce::{coerce, Coerce},
     prelude::*,
 };
-use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
+use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher, mem};
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[derive(Clone, Default_, Debug, Trace, Coerce)]
@@ -119,6 +119,10 @@ where
         }
         res.push(']');
         Ok(res)
+    }
+
+    fn extra_memory(&self) -> usize {
+        self.content.capacity() * mem::size_of::<Value>()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

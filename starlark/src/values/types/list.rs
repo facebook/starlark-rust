@@ -43,6 +43,7 @@ use std::{
     fmt::Debug,
     intrinsics::unlikely,
     marker::PhantomData,
+    mem,
     ops::Deref,
 };
 
@@ -221,13 +222,13 @@ impl FrozenList {
 }
 
 trait ListLike<'v>: Debug {
-    fn content(&self) -> ARef<[Value<'v>]>;
+    fn content(&self) -> ARef<Vec<Value<'v>>>;
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
 }
 
 impl<'v> ListLike<'v> for RefCell<List<'v>> {
-    fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ref(Ref::map(self.borrow(), |x| x.content.as_slice()))
+    fn content(&self) -> ARef<Vec<Value<'v>>> {
+        ARef::new_ref(Ref::map(self.borrow(), |x| &x.content))
     }
 
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
@@ -242,8 +243,8 @@ impl<'v> ListLike<'v> for RefCell<List<'v>> {
 }
 
 impl<'v> ListLike<'v> for FrozenList {
-    fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ptr(coerce_ref(&self.content).as_slice())
+    fn content(&self) -> ARef<Vec<Value<'v>>> {
+        ARef::new_ptr(coerce_ref(&self.content))
     }
 
     fn set_at(&self, _i: usize, _v: Value<'v>) -> anyhow::Result<()> {
@@ -311,6 +312,10 @@ where
     fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let i = convert_index(index, self.0.content().len() as i32)? as usize;
         Ok(self.0.content()[i])
+    }
+
+    fn extra_memory(&self) -> usize {
+        self.0.content().capacity() * mem::size_of::<Value>()
     }
 
     fn length(&self) -> anyhow::Result<i32> {

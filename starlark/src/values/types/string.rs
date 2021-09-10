@@ -293,6 +293,10 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         }
     }
 
+    fn extra_memory(&self) -> usize {
+        self.len
+    }
+
     fn length(&self) -> anyhow::Result<i32> {
         Ok(fast_string::len(self.unpack()) as i32)
     }

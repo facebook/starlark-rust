@@ -221,6 +221,11 @@ where
         self.constructor.invoke(location, args, eval)
     }
 
+    fn extra_memory(&self) -> usize {
+        let typ = self.typ.as_aref();
+        typ.as_ref().map_or(0, |s| s.capacity()) + self.elements.extra_memory()
+    }
+
     fn length(&self) -> anyhow::Result<i32> {
         Ok(self.elements.len() as i32)
     }
