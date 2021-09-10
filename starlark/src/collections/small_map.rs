@@ -557,11 +557,7 @@ impl<K, V> SmallMap<K, V> {
                     self.upgrade_vec_to_map(want);
                 }
             }
-            MapHolder::Map(_) => {
-                // The reserve on IndexMap is useless - just reserves a single
-                // slot so no benefit to reserving in advance
-                // Nothing to do
-            }
+            MapHolder::Map(mp) => mp.reserve(additional),
         }
     }
 
