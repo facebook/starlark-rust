@@ -48,13 +48,15 @@ pub(crate) type ExprCompiled = Box<
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
     Compiled(ExprCompiled),
+    /// `type(x)`
+    Type(ExprCompiled),
 }
 
 impl ExprCompiledValue {
     pub fn as_value(&self) -> Option<FrozenValue> {
         match self {
             Self::Value(x) => Some(*x),
-            Self::Compiled(_) => None,
+            _ => None,
         }
     }
 
@@ -62,6 +64,10 @@ impl ExprCompiledValue {
         match self {
             Self::Value(x) => box move |_| Ok(x.to_value()),
             Self::Compiled(x) => x,
+            Self::Type(x) => expr!("type", |eval| {
+                x(eval)?.get_ref().get_type_value().to_value()
+            })
+            .as_compiled(),
         }
     }
 }

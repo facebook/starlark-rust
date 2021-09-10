@@ -22,10 +22,9 @@ use crate::{
     eval::{
         compiler::{scope::CstExpr, Compiler},
         fragment::expr::{ExprCompiled, ExprCompiledValue},
-        Evaluator,
     },
     syntax::ast::ExprP,
-    values::{dict::Dict, list::List, Value},
+    values::{dict::Dict, list::List},
 };
 
 /// Convert a list into a tuple. In many cases (iteration, `in`) these types
@@ -72,11 +71,11 @@ impl Compiler<'_> {
                     Conditional::False
                 }
             }
-            ExprCompiledValue::Compiled(v) => {
+            v => {
                 if expect {
-                    Conditional::Normal(v)
+                    Conditional::Normal(v.as_compiled())
                 } else {
-                    Conditional::Negate(v)
+                    Conditional::Negate(v.as_compiled())
                 }
             }
         }
@@ -99,11 +98,7 @@ impl Compiler<'_> {
         }
         match self.expr(expr) {
             ExprCompiledValue::Value(x) => ExprCompiledValue::Value(x.to_value().get_type_value()),
-            ExprCompiledValue::Compiled(x) => {
-                expr!("type", |eval| {
-                    x(eval)?.get_ref().get_type_value().to_value()
-                })
-            }
+            x => ExprCompiledValue::Type(x.as_compiled()),
         }
     }
 }

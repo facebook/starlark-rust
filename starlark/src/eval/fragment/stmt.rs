@@ -435,9 +435,12 @@ impl Compiler<'_> {
     fn stmt_expr_compiled(&mut self, span: Span, expr: ExprCompiledValue) -> StmtsCompiled {
         match expr {
             ExprCompiledValue::Value(_) => StmtsCompiled::empty(),
-            ExprCompiledValue::Compiled(e) => stmt!(self, "expr", span, |eval| {
-                e(eval)?;
-            }),
+            e => {
+                let e = e.as_compiled();
+                stmt!(self, "expr", span, |eval| {
+                    e(eval)?;
+                })
+            }
         }
     }
 
