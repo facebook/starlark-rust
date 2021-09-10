@@ -34,6 +34,7 @@ use crate::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
         list::List,
+        string::StarlarkStr,
         tuple::{FrozenTuple, Tuple},
         AttrType, FrozenHeap, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
@@ -96,6 +97,29 @@ fn eval_compare(
     })
 }
 
+/// Try fold expression `cmp(l == r)` into `cmp(type(x) == "y")`.
+/// Return original `l` and `r` arguments if fold was unsuccessful.
+fn try_eval_type_is(
+    l: ExprCompiledValue,
+    r: ExprCompiledValue,
+    cmp: fn(bool) -> bool,
+) -> Result<ExprCompiledValue, (ExprCompiledValue, ExprCompiledValue)> {
+    match (l, r) {
+        (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
+            if let Some(r) = r.downcast_frozen_ref::<StarlarkStr>() {
+                let l = ExprCompiledValue::Compiled(l);
+                let t = r.map(|r| r.unpack());
+                Ok(expr!("type_is", l, |_eval| {
+                    Value::new_bool(cmp(l.get_type() == t.as_ref()))
+                }))
+            } else {
+                Err((ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)))
+            }
+        }
+        (l, r) => Err((l, r)),
+    }
+}
+
 fn eval_equals(
     span: Span,
     l: ExprCompiledValue,
@@ -108,6 +132,16 @@ fn eval_equals(
             return value!(FrozenValue::new_bool(cmp(r)));
         }
     }
+
+    let (l, r) = match try_eval_type_is(l, r, cmp) {
+        Ok(e) => return e,
+        Err((l, r)) => (l, r),
+    };
+
+    let (r, l) = match try_eval_type_is(r, l, cmp) {
+        Ok(e) => return e,
+        Err((r, l)) => (r, l),
+    };
 
     expr!("equals", l, r, |eval| {
         Value::new_bool(cmp(expr_throw(l.equals(r), span, eval)?))
