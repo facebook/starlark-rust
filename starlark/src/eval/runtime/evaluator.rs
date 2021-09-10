@@ -479,6 +479,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.next_gc_level = 0;
     }
 
+    /// Perform a garbage collection.
+    /// After this operation all [`Value`]s not reachable from the evaluator will be invalid,
+    /// and using them will lead to a segfault.
+    /// Do not call during Starlark evaluation.
+    pub unsafe fn garbage_collect(&mut self) {
+        self.heap().garbage_collect(|tracer| self.trace(tracer))
+    }
+
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
     /// or you call it yourself.
     #[inline(always)]

@@ -36,7 +36,7 @@ use crate::{
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{AssignOp, AssignP, StmtP},
-    values::{list::List, Heap, Trace, Value, ValueError},
+    values::{list::List, Heap, Value, ValueError},
 };
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -277,7 +277,7 @@ fn possible_gc(eval: &mut Evaluator) {
             // references to all values, so walking covers everything and the unsafe
             // is satisfied.
             unsafe {
-                eval.heap().garbage_collect(|tracer| eval.trace(tracer))
+                eval.garbage_collect()
             }
             eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
         })
