@@ -32,30 +32,6 @@ use gazebo::prelude::*;
 use once_cell::sync::Lazy;
 use std::{fmt::Debug, mem};
 
-pub(crate) type ExprCompiled = Box<
-    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
->;
-pub(crate) enum ExprCompiledValue {
-    Value(FrozenValue),
-    Compiled(ExprCompiled),
-}
-
-impl ExprCompiledValue {
-    pub fn as_value(&self) -> Option<FrozenValue> {
-        match self {
-            Self::Value(x) => Some(*x),
-            Self::Compiled(_) => None,
-        }
-    }
-
-    pub fn as_compiled(self) -> ExprCompiled {
-        match self {
-            Self::Value(x) => box move |_| Ok(x.to_value()),
-            Self::Compiled(x) => x,
-        }
-    }
-}
-
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
 

@@ -26,8 +26,9 @@ use crate::{
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
-            Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtCompiled,
+            Compiler, EvalException, StmtCompiled,
         },
+        fragment::expr::{ExprCompiled, ExprCompiledValue},
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
             evaluator::Evaluator,

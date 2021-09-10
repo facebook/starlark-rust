@@ -20,7 +20,8 @@
 use crate::{
     codemap::Spanned,
     eval::{
-        compiler::{scope::CstExpr, Compiler, ExprCompiled, ExprCompiledValue},
+        compiler::{scope::CstExpr, Compiler},
+        fragment::expr::{ExprCompiled, ExprCompiledValue},
         Evaluator,
     },
     syntax::ast::ExprP,

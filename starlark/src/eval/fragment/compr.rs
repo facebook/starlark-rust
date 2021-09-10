@@ -24,9 +24,13 @@ use crate::{
         compiler::{
             expr_throw,
             scope::{CstExpr, CstPayload},
-            Compiler, ExprCompiled, ExprCompiledValue,
+            Compiler,
         },
-        fragment::{known::list_to_tuple, stmt::AssignCompiled},
+        fragment::{
+            expr::{ExprCompiled, ExprCompiledValue},
+            known::list_to_tuple,
+            stmt::AssignCompiled,
+        },
         runtime::evaluator::Evaluator,
         ExprEvalException,
     },

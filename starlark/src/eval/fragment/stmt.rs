@@ -29,10 +29,12 @@ use crate::{
         compiler::{
             expr_throw,
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue, ExprEvalException,
-            StmtsCompiled,
+            throw, Compiler, EvalException, ExprEvalException, StmtsCompiled,
         },
-        fragment::known::{list_to_tuple, Conditional},
+        fragment::{
+            expr::{ExprCompiled, ExprCompiledValue},
+            known::{list_to_tuple, Conditional},
+        },
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
     },
     syntax::ast::{AssignOp, AssignP, StmtP},

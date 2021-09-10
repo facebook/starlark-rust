@@ -24,7 +24,7 @@ use crate::{
         compiler::{
             expr_throw,
             scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
-            Compiler, ExprCompiled, ExprCompiledValue,
+            Compiler, ExprEvalException,
         },
         fragment::known::{list_to_tuple, Conditional},
         runtime::evaluator::Evaluator,
@@ -41,6 +41,30 @@ use crate::{
 use gazebo::{coerce::coerce_ref, prelude::*};
 use std::cmp::Ordering;
 use thiserror::Error;
+
+pub(crate) type ExprCompiled = Box<
+    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
+>;
+pub(crate) enum ExprCompiledValue {
+    Value(FrozenValue),
+    Compiled(ExprCompiled),
+}
+
+impl ExprCompiledValue {
+    pub fn as_value(&self) -> Option<FrozenValue> {
+        match self {
+            Self::Value(x) => Some(*x),
+            Self::Compiled(_) => None,
+        }
+    }
+
+    pub fn as_compiled(self) -> ExprCompiled {
+        match self {
+            Self::Value(x) => box move |_| Ok(x.to_value()),
+            Self::Compiled(x) => x,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Error)]
 pub(crate) enum EvalError {

@@ -24,9 +24,9 @@ use crate::{
         compiler::{
             expr_throw,
             scope::{CstArgument, CstExpr},
-            Compiler, ExprCompiled, ExprCompiledValue, ExprEvalException,
+            Compiler, ExprEvalException,
         },
-        fragment::expr::get_attr_hashed,
+        fragment::expr::{get_attr_hashed, ExprCompiled, ExprCompiledValue},
         Arguments, Evaluator, FrozenDef,
     },
     syntax::ast::{ArgumentP, ExprP},
