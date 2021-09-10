@@ -561,6 +561,14 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    pub fn capacity(&self) -> usize {
+        match &self.state {
+            MapHolder::Empty => 0,
+            MapHolder::Vec(x) => x.capacity(),
+            MapHolder::Map(x) => x.capacity(),
+        }
+    }
+
     fn upgrade_empty_to_vec(&mut self) -> &mut VecMap<K, V> {
         self.state = MapHolder::Vec(VecMap::default());
         if let MapHolder::Vec(ref mut v) = self.state {
