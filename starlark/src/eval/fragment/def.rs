@@ -26,7 +26,7 @@ use crate::{
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
-            Compiler, EvalException, StmtCompiled,
+            throw_eval_exception, Compiler, EvalException, StmtCompiled,
         },
         fragment::expr::{ExprCompiled, ExprCompiledValue},
         runtime::{
@@ -510,7 +510,7 @@ impl<'v, V: ValueLike<'v>> DefGen<V> {
 
         let ret = match res {
             Err(EvalException::Return(ret)) => ret,
-            Err(e) => return Err(e.into()),
+            Err(e) => return throw_eval_exception(e),
             Ok(_) => Value::new_none(),
         };
 

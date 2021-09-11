@@ -29,7 +29,10 @@ use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
 use crate::{
-    eval::compiler::scope::{CompilerAstMap, ScopeData},
+    eval::compiler::{
+        scope::{CompilerAstMap, ScopeData},
+        throw_eval_exception,
+    },
     values::docs::DocString,
 };
 pub(crate) use compiler::scope::ScopeNames;
@@ -157,7 +160,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         match res {
             Ok(_) => Ok(Value::new_none()),
             Err(EvalException::Return(x)) => Ok(x),
-            Err(e) => Err(e.into()),
+            Err(e) => throw_eval_exception(e),
         }
     }
 

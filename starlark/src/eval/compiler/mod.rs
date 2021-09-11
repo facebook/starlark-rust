@@ -188,17 +188,17 @@ pub(crate) fn expr_throw<'v, T>(
     }
 }
 
-impl From<EvalException<'_>> for anyhow::Error {
-    fn from(x: EvalException) -> Self {
-        match x {
-            EvalException::Error(e) => e,
-            EvalException::Break => anyhow!("Break statement used outside of a loop"),
-            EvalException::Continue => anyhow!("Continue statement used outside of a loop"),
-            EvalException::Return(..) => {
-                anyhow!("Return statement used outside of a function call")
-            }
+#[cold]
+#[inline(never)]
+pub(crate) fn throw_eval_exception<T>(x: EvalException<'_>) -> anyhow::Result<T> {
+    Err(match x {
+        EvalException::Error(e) => e,
+        EvalException::Break => anyhow!("Break statement used outside of a loop"),
+        EvalException::Continue => anyhow!("Continue statement used outside of a loop"),
+        EvalException::Return(..) => {
+            anyhow!("Return statement used outside of a function call")
         }
-    }
+    })
 }
 
 pub(crate) struct Compiler<'a> {
