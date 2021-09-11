@@ -189,7 +189,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
-        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, eval.codemap));
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.
@@ -304,7 +304,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn set_codemap(&mut self, codemap: &'v CodeMap) -> &'v CodeMap {
-        self.stmt_profile.set_codemap(codemap);
         mem::replace(&mut self.codemap, codemap)
     }
 

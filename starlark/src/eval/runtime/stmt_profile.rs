@@ -82,14 +82,17 @@ impl StmtProfileData {
         }
     }
 
-    fn before_stmt(&mut self, span: Span) {
+    fn before_stmt(&mut self, span: Span, codemap: &CodeMap) {
         let now = Instant::now();
         self.add_last(now);
+        if self.last_span.0 != FileId::new(codemap) {
+            self.add_codemap(codemap);
+        }
         self.last_span = (self.next_file, span);
         self.last_start = now;
     }
 
-    fn set_codemap(&mut self, codemap: &CodeMap) {
+    fn add_codemap(&mut self, codemap: &CodeMap) {
         let id = FileId::new(codemap);
         self.next_file = id;
         match self.files.entry(id) {
@@ -179,15 +182,9 @@ impl StmtProfile {
         self.0 = Some(box StmtProfileData::new())
     }
 
-    pub fn before_stmt(&mut self, span: Span) {
+    pub fn before_stmt(&mut self, span: Span, codemap: &CodeMap) {
         if let Some(box data) = &mut self.0 {
-            data.before_stmt(span)
-        }
-    }
-
-    pub fn set_codemap(&mut self, codemap: &CodeMap) {
-        if let Some(box data) = &mut self.0 {
-            data.set_codemap(codemap)
+            data.before_stmt(span, codemap)
         }
     }
 
