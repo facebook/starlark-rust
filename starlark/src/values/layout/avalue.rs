@@ -41,7 +41,7 @@ pub(crate) static VALUE_NONE: &AValueHeader = {
     const DYN: &dyn AValue<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, NoneType>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    DATA.header()
+    &DATA.header
 };
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
@@ -49,7 +49,7 @@ pub(crate) static VALUE_FALSE: &AValueHeader = {
     const DYN: &dyn AValue<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, bool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    DATA.header()
+    &DATA.header
 };
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
@@ -57,7 +57,7 @@ pub(crate) static VALUE_TRUE: &AValueHeader = {
     const DYN: &dyn AValue<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, bool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    DATA.header()
+    &DATA.header
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {

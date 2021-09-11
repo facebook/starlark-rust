@@ -53,8 +53,8 @@ pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
 /// How object is represented in arena.
 #[repr(C)]
 pub(crate) struct AValueRepr<T> {
-    header: AValueHeader,
-    payload: T,
+    pub(crate) header: AValueHeader,
+    pub(crate) payload: T,
 }
 
 /// This is object written over [`AValueRepr`] during GC.
@@ -308,10 +308,6 @@ impl<T> AValueRepr<T> {
             header: AValueHeader::with_metadata(metadata),
             payload,
         }
-    }
-
-    pub(crate) const fn header(&self) -> &AValueHeader {
-        &self.header
     }
 }
 

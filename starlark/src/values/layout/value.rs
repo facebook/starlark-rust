@@ -31,13 +31,14 @@
 
 use crate::values::{
     layout::{
-        arena::AValueHeader,
+        arena::{AValueHeader, AValueRepr},
         avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
         constant::VALUE_EMPTY_STRING,
         pointer::Pointer,
         pointer_i32::PointerI32,
     },
     string::StarlarkStr,
+    StarlarkValue,
 };
 use either::Either;
 use gazebo::{
@@ -190,6 +191,10 @@ impl<'v> Value<'v> {
 impl FrozenValue {
     pub(crate) fn new_ptr(x: &'static AValueHeader) -> Self {
         Self(Pointer::new_frozen(x))
+    }
+
+    pub(crate) fn new_repr<'a, T: StarlarkValue<'a>>(x: &'static AValueRepr<T>) -> Self {
+        Self::new_ptr(&x.header)
     }
 
     pub(crate) fn new_ptr_usize(x: usize) -> Self {

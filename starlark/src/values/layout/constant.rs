@@ -16,7 +16,7 @@
  */
 
 use crate::values::{
-    layout::{arena::AValueHeader, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
+    layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
 };
 use gazebo::prelude::*;
@@ -25,8 +25,7 @@ use std::intrinsics::copy_nonoverlapping;
 /// A constant string that can be converted to a [`FrozenValue`].
 #[repr(C)] // Must match this layout on the heap
 pub struct ConstFrozenStringN<const N: usize> {
-    vtable: AValueHeader,
-    object: StarlarkStr,
+    repr: AValueRepr<StarlarkStr>,
     payload: [u8; N],
 }
 
@@ -40,8 +39,10 @@ impl<const N: usize> ConstFrozenStringN<N> {
             copy_nonoverlapping(s.as_ptr(), payload.as_mut_ptr(), N)
         };
         Self {
-            vtable: VALUE_STR_A_VALUE_PTR,
-            object: unsafe { StarlarkStr::new(N) },
+            repr: AValueRepr {
+                header: VALUE_STR_A_VALUE_PTR,
+                payload: unsafe { StarlarkStr::new(N) },
+            },
             payload,
         }
     }
@@ -53,7 +54,7 @@ impl<const N: usize> ConstFrozenStringN<N> {
 
     /// Erase the type parameter, giving a slightly nicer user experience.
     pub const fn erase(&'static self) -> ConstFrozenString {
-        ConstFrozenString(&self.vtable)
+        ConstFrozenString(&self.repr)
     }
 }
 
@@ -70,12 +71,12 @@ impl<const N: usize> ConstFrozenStringN<N> {
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
 #[derive(Copy, Clone, Dupe)]
-pub struct ConstFrozenString(&'static AValueHeader);
+pub struct ConstFrozenString(&'static AValueRepr<StarlarkStr>);
 
 impl ConstFrozenString {
     /// Obtain the [`FrozenValue`] for a [`ConstFrozenString`].
     pub fn unpack(self) -> FrozenValue {
-        FrozenValue::new_ptr(self.0)
+        FrozenValue::new_repr(self.0)
     }
 }
 
