@@ -46,7 +46,7 @@ use crate::{
     },
 };
 use derivative::Derivative;
-use gazebo::prelude::*;
+use gazebo::{any::AnyLifetime, prelude::*};
 use std::{collections::HashMap, mem, sync::Arc};
 
 struct ParameterName {
@@ -433,41 +433,10 @@ impl<'v> ComplexValue<'v> for Def<'v> {
     }
 }
 
-// We define two different StarlarkValue instances because
-// the invoker uses different types for both of them.
-impl<'v> StarlarkValue<'v> for FrozenDef {
-    starlark_type!(FUNCTION_TYPE);
-
-    fn collect_repr(&self, collector: &mut String) {
-        collector.push_str(&self.parameters.signature());
-    }
-
-    fn invoke(
-        &self,
-        me: Value<'v>,
-        location: Option<Span>,
-        args: Arguments<'v, '_>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
-        eval.ann("invoke_frozen_def", |eval| {
-            let local_slots = self.stmt.scope_names.used;
-            let slot_base = eval.local_variables.reserve(local_slots);
-            let slots = eval.local_variables.get_slots_at(slot_base);
-            self.parameters.collect_inline(args, slots, eval.heap())?;
-            eval.with_call_stack(me, location, |eval| {
-                eval.ann("invoke_frozen_def_raw", |eval| {
-                    self.invoke_raw(slot_base, eval)
-                })
-            })
-        })
-    }
-
-    fn documentation(&self) -> Option<DocItem> {
-        self.docs()
-    }
-}
-
-impl<'v> StarlarkValue<'v> for Def<'v> {
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DefGen<V>
+where
+    Self: AnyLifetime<'v>,
+{
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
