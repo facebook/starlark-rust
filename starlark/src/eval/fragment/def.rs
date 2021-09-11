@@ -498,7 +498,7 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
 }
 
 impl<'v, V: ValueLike<'v>> DefGen<V> {
-    pub fn invoke_raw(
+    fn invoke_raw(
         &self,
         locals: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
