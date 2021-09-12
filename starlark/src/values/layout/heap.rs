@@ -311,6 +311,11 @@ impl Heap {
     }
 
     pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {
+        // If either strings is empty, we should not be calling this function
+        // but reuse non-empty string object instead.
+        debug_assert!(!x.is_empty());
+        debug_assert!(!y.is_empty());
+
         self.alloc_str_init(x.len() + y.len(), |dest| unsafe {
             copy_nonoverlapping(x.as_ptr(), dest, x.len());
             copy_nonoverlapping(y.as_ptr(), dest.add(x.len()), y.len())
