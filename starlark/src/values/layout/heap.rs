@@ -23,7 +23,7 @@ use crate::{
     collections::Hashed,
     values::{
         layout::{
-            arena::{AValueHeader, Arena, Reservation},
+            arena::{AValueHeader, Arena, HeapSummary, Reservation},
             avalue::{complex, simple, starlark_str, AValue},
             constant::constant_string,
             value::{FrozenValue, Value},
@@ -126,6 +126,14 @@ impl PartialEq<FrozenHeapRef> for FrozenHeapRef {
 
 impl Eq for FrozenHeapRef {}
 
+impl FrozenHeapRef {
+    /// Obtain a summary of how much memory is currently allocated by this heap.
+    /// Doesn't include the heaps it keeps alive by reference.
+    pub fn allocated_summary(&self) -> HeapSummary {
+        self.0.arena.allocated_summary()
+    }
+}
+
 impl FrozenHeap {
     /// Create a new [`FrozenHeap`].
     pub fn new() -> Self {
@@ -182,6 +190,11 @@ impl FrozenHeap {
     /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
         self.alloc_raw(simple(val))
+    }
+
+    /// Obtain a summary of how much memory is currently allocated by this heap.
+    pub fn allocated_summary(&self) -> HeapSummary {
+        self.arena.allocated_summary()
     }
 }
 
@@ -365,6 +378,11 @@ impl Heap {
         };
         f(&tracer);
         *arena = tracer.arena;
+    }
+
+    /// Obtain a summary of how much memory is currently allocated by this heap.
+    pub fn allocated_summary(&self) -> HeapSummary {
+        self.arena.borrow().allocated_summary()
     }
 }
 

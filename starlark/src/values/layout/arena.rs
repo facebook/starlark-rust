@@ -29,10 +29,12 @@
 use crate::values::layout::avalue::{AValue, BlackHole};
 use bumpalo::Bump;
 use either::Either;
+use gazebo::prelude::*;
 use std::{
     alloc::Layout,
     any::TypeId,
     cmp,
+    collections::HashMap,
     intrinsics::copy_nonoverlapping,
     marker::PhantomData,
     mem::{self, MaybeUninit},
@@ -47,8 +49,12 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
+#[derive(Hash, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
+
+// Implements Copy so this is fine
+impl Dupe for AValueHeader {}
 
 /// How object is represented in arena.
 #[repr(C)]
@@ -93,6 +99,17 @@ impl<'v> Reservation<'v> {
     pub(crate) fn ptr(&self) -> &'v AValueHeader {
         unsafe { &(*self.pointer).header }
     }
+}
+
+#[derive(Debug)]
+/// Information about the data stored on a heap. Accessible through
+/// the function `allocated_summary` available on [`Heap`](crate::values::Heap)
+/// and [`FrozenHeap`](crate::values::FrozenHeap)
+pub struct HeapSummary {
+    /// For each type, give the (number of entries, size of all entries).
+    /// The size may be approximate as it includes information from
+    /// the approximate [`memory_size`](StarlarkValue::memory_size) function.
+    pub summary: HashMap<String, (usize, usize)>,
 }
 
 impl Arena {
@@ -232,6 +249,54 @@ impl Arena {
         self.drop
             .iter_allocated_chunks()
             .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
+    }
+
+    // For each Rust-level type (the String) report how many entries there are in the heap, and how much size they consume
+    pub fn allocated_summary(&self) -> HeapSummary {
+        #[cold] // Try and avoid problematic UB :-(
+        #[inline(never)]
+        fn for_each<'a>(bump: &'a Bump, mut f: impl FnMut(&'a AValueHeader)) {
+            // We have a problem that `iter_allocated_chunks` requires a &mut, and for things like
+            // FrozenModule we don't have a mutable Bump. The only reason that the function requires &mut
+            // is to make sure new values don't get allocated while you have references to old values,
+            // but that's not a problem for us, since we immediately use the values and don't keep them around.
+            //
+            // We have requested an alternative function in terms of *const, which would be safe,
+            // but until that arrives, we cast the & pointer to &mut, accepting a small amount of UB.
+            // See https://github.com/fitzgen/bumpalo/issues/121.
+            //
+            // This might not be safe if the function `f` allocated on the heap,
+            // but since this is a local function with a controlled closure, we know that it doesn't.
+            #[allow(clippy::cast_ref_to_mut)]
+            let bump = unsafe { &mut *(bump as *const Bump as *mut Bump) };
+            bump.iter_allocated_chunks()
+                .for_each(|chunk| Arena::iter_chunk(chunk, &mut f))
+        }
+
+        // Record how many times each header occurs
+        // We deliberately hash by the AValueHeader for higher performance, less type lookup
+        let mut entries: HashMap<AValueHeader, (&'static str, (usize, usize))> = HashMap::new();
+        let mut f = |x: &AValueHeader| {
+            let v = x.unpack();
+            let e = entries
+                .entry(x.dupe())
+                .or_insert_with(|| (v.get_type(), (0, 0)));
+            e.1.0 += 1;
+            e.1.1 += v.memory_size() + v.extra_memory();
+        };
+        for_each(&self.drop, &mut f);
+        for_each(&self.non_drop, &mut f);
+
+        // For a given type, the AValueHeader isn't always unique
+        // (if they get compiled in different translation units),
+        // so not just a simple map.
+        let mut summary = HashMap::new();
+        for (_, (name, (count, memory))) in entries {
+            let v = summary.entry(name.to_owned()).or_insert((0, 0));
+            v.0 += count;
+            v.1 += memory;
+        }
+        HeapSummary { summary }
     }
 }
 
@@ -397,5 +462,15 @@ mod test {
         assert_eq!(res.len(), 3);
         assert_eq!(to_repr(res[0]), "\"test\"");
         assert_eq!(to_repr(res[2]), "\"hello\"");
+    }
+
+    #[test]
+    fn test_allocated_summary() {
+        let arena = Arena::default();
+        arena.alloc(mk_str("test"));
+        arena.alloc(mk_str("test"));
+        let res = arena.allocated_summary().summary;
+        assert_eq!(res.len(), 1);
+        assert_eq!(res.values().next().unwrap().0, 2);
     }
 }
