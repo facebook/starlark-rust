@@ -294,7 +294,10 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn extra_memory(&self) -> usize {
-        self.len
+        // We don't include the extra_memory for the size because it is
+        // allocated inline in the Starlark heap (which knows about it),
+        // not on the malloc heap.
+        0
     }
 
     fn length(&self) -> anyhow::Result<i32> {
