@@ -98,7 +98,7 @@ impl Compiler<'_> {
         }
         match self.expr(expr) {
             ExprCompiledValue::Value(x) => ExprCompiledValue::Value(x.to_value().get_type_value()),
-            x => ExprCompiledValue::Type(x.as_compiled()),
+            x => ExprCompiledValue::Type(box x),
         }
     }
 }

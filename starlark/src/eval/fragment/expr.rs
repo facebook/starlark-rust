@@ -50,7 +50,7 @@ pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
     Compiled(ExprCompiled),
     /// `type(x)`
-    Type(ExprCompiled),
+    Type(Box<ExprCompiledValue>),
 }
 
 impl ExprCompiledValue {
@@ -65,8 +65,8 @@ impl ExprCompiledValue {
         match self {
             Self::Value(x) => box move |_| Ok(x.to_value()),
             Self::Compiled(x) => x,
-            Self::Type(x) => expr!("type", |eval| {
-                x(eval)?.get_ref().get_type_value().to_value()
+            Self::Type(x) => expr!("type", x, |_eval| {
+                x.get_ref().get_type_value().to_value()
             })
             .as_compiled(),
         }
@@ -107,7 +107,6 @@ fn try_eval_type_is(
     match (l, r) {
         (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
             if let Some(r) = r.downcast_frozen_ref::<StarlarkStr>() {
-                let l = ExprCompiledValue::Compiled(l);
                 let t = r.map(|r| r.unpack());
                 Ok(expr!("type_is", l, |_eval| {
                     Value::new_bool(cmp(l.get_type() == t.as_ref()))
