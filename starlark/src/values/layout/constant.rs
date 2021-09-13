@@ -53,8 +53,8 @@ impl<const N: usize> ConstFrozenStringN<N> {
     }
 
     /// Erase the type parameter, giving a slightly nicer user experience.
-    pub const fn erase(&'static self) -> ConstFrozenString {
-        ConstFrozenString(&self.repr)
+    pub const fn erase(&'static self) -> FrozenStringValue {
+        FrozenStringValue(&self.repr)
     }
 }
 
@@ -64,23 +64,23 @@ impl<const N: usize> ConstFrozenStringN<N> {
 ///
 /// ```
 /// use starlark::const_frozen_string;
-/// use starlark::values::{ConstFrozenString, FrozenValue};
+/// use starlark::values::{FrozenStringValue, FrozenValue};
 ///
-/// static RES: ConstFrozenString = const_frozen_string!("magic");
+/// static RES: FrozenStringValue = const_frozen_string!("magic");
 /// let fv: FrozenValue = RES.unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
 #[derive(Copy, Clone, Dupe)]
-pub struct ConstFrozenString(&'static AValueRepr<StarlarkStr>);
+pub struct FrozenStringValue(&'static AValueRepr<StarlarkStr>);
 
-impl ConstFrozenString {
-    /// Obtain the [`FrozenValue`] for a [`ConstFrozenString`].
+impl FrozenStringValue {
+    /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
     pub fn unpack(self) -> FrozenValue {
         FrozenValue::new_repr(self.0)
     }
 }
 
-/// Create a [`ConstFrozenString`].
+/// Create a [`FrozenStringValue`].
 #[macro_export]
 macro_rules! const_frozen_string {
     ($s:expr) => {{
