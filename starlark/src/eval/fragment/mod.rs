@@ -85,7 +85,7 @@ macro_rules! stmt {
                 f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
                     + Send + Sync + 'static,
             ) -> StmtsCompiled {
-                StmtsCompiled::one(box move |eval| f(eval))
+                StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| f(eval)))
             }
             $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>](move |$eval|
                 $eval.ann($name, |$eval| {

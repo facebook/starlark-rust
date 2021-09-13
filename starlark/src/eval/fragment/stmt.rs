@@ -48,6 +48,18 @@ use thiserror::Error;
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
 
+pub(crate) enum StmtCompiledValue {
+    Compiled(StmtCompiled),
+}
+
+impl StmtCompiledValue {
+    pub(crate) fn as_compiled(self) -> StmtCompiled {
+        match self {
+            StmtCompiledValue::Compiled(c) => c,
+        }
+    }
+}
+
 enum SmallVec1<T> {
     Empty,
     One(T),
@@ -76,14 +88,14 @@ impl<T> SmallVec1<T> {
     }
 }
 
-pub(crate) struct StmtsCompiled(SmallVec1<StmtCompiled>);
+pub(crate) struct StmtsCompiled(SmallVec1<StmtCompiledValue>);
 
 impl StmtsCompiled {
     pub(crate) fn empty() -> StmtsCompiled {
         StmtsCompiled(SmallVec1::Empty)
     }
 
-    pub(crate) fn one(stmt: StmtCompiled) -> StmtsCompiled {
+    pub(crate) fn one(stmt: StmtCompiledValue) -> StmtsCompiled {
         StmtsCompiled(SmallVec1::One(stmt))
     }
 
@@ -113,9 +125,10 @@ impl StmtsCompiled {
     pub(crate) fn as_compiled(self) -> StmtCompiled {
         match self.0 {
             SmallVec1::Empty => box |_eval| Ok(()),
-            SmallVec1::One(stmt) => stmt,
+            SmallVec1::One(stmt) => stmt.as_compiled(),
             SmallVec1::Many(vec) => {
                 debug_assert!(vec.len() > 1);
+                let vec = vec.into_map(|s| s.as_compiled());
                 box move |eval| {
                     for stmt in &vec {
                         stmt(eval)?;
@@ -413,10 +426,10 @@ impl Compiler<'_> {
         assert!(stmt.len() == 1);
         if self.has_before_stmt {
             let stmt = stmt.as_compiled();
-            StmtsCompiled::one(box move |eval| {
+            StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
                 before_stmt(span, eval);
                 stmt(eval)
-            })
+            }))
         } else {
             stmt
         }
@@ -430,10 +443,10 @@ impl Compiler<'_> {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
             let res = res.as_compiled();
-            StmtsCompiled::one(box move |eval| {
+            StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
                 possible_gc(eval);
                 res(eval)
-            })
+            }))
         } else {
             res
         }
