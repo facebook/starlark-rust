@@ -47,26 +47,16 @@ use std::{
 
 /// Helper trait used in [`StarlarkValue`] - has a single global implementation.
 pub trait AsStarlarkValue<'v> {
-    fn as_starlark_value(&self) -> &dyn StarlarkValue<'v>;
     fn as_dyn_any(&self) -> &dyn AnyLifetime<'v>;
     fn as_debug(&self) -> &dyn Debug;
-
-    fn type_name(&self) -> &'static str;
 }
 
 impl<'v, T: StarlarkValue<'v>> AsStarlarkValue<'v> for T {
-    fn as_starlark_value(&self) -> &dyn StarlarkValue<'v> {
-        self
-    }
     fn as_dyn_any(&self) -> &dyn AnyLifetime<'v> {
         self
     }
     fn as_debug(&self) -> &dyn Debug {
         self
-    }
-
-    fn type_name(&self) -> &'static str {
-        std::any::type_name::<T>()
     }
 }
 
