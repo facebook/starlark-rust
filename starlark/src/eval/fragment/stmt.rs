@@ -50,12 +50,26 @@ pub(crate) type StmtCompiled =
 
 pub(crate) enum StmtCompiledValue {
     Compiled(StmtCompiled),
+    Return(Span, Option<ExprCompiledValue>),
 }
 
 impl StmtCompiledValue {
-    pub(crate) fn as_compiled(self) -> StmtCompiled {
+    pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
         match self {
             StmtCompiledValue::Compiled(c) => c,
+            StmtCompiledValue::Return(span, None) => {
+                stmt!(compiler, "return_none", span, |_eval| {
+                    return Err(EvalException::Return(Value::new_none()));
+                })
+                .as_compiled(compiler)
+            }
+            StmtCompiledValue::Return(span, Some(e)) => {
+                let e = e.as_compiled();
+                stmt!(compiler, "return", span, |eval| {
+                    return Err(EvalException::Return(e(eval)?));
+                })
+                .as_compiled(compiler)
+            }
         }
     }
 }
@@ -122,13 +136,13 @@ impl StmtsCompiled {
         self.0.extend(right.0);
     }
 
-    pub(crate) fn as_compiled(self) -> StmtCompiled {
+    pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
         match self.0 {
             SmallVec1::Empty => box |_eval| Ok(()),
-            SmallVec1::One(stmt) => stmt.as_compiled(),
+            SmallVec1::One(stmt) => stmt.as_compiled(compiler),
             SmallVec1::Many(vec) => {
                 debug_assert!(vec.len() > 1);
-                let vec = vec.into_map(|s| s.as_compiled());
+                let vec = vec.into_map(|s| s.as_compiled(compiler));
                 box move |eval| {
                     for stmt in &vec {
                         stmt(eval)?;
@@ -425,7 +439,7 @@ impl Compiler<'_> {
     fn maybe_wrap_before_stmt(&mut self, span: Span, stmt: StmtsCompiled) -> StmtsCompiled {
         assert!(stmt.len() == 1);
         if self.has_before_stmt {
-            let stmt = stmt.as_compiled();
+            let stmt = stmt.as_compiled(self);
             StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
                 before_stmt(span, eval);
                 stmt(eval)
@@ -442,7 +456,7 @@ impl Compiler<'_> {
         if allow_gc && !is_statements {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
-            let res = res.as_compiled();
+            let res = res.as_compiled(self);
             StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
                 possible_gc(eval);
                 res(eval)
@@ -462,7 +476,7 @@ impl Compiler<'_> {
         if then_block.is_empty() {
             self.stmt_expr_compiled(span, ExprCompiledValue::Compiled(cond))
         } else {
-            let then_block = then_block.as_compiled();
+            let then_block = then_block.as_compiled(self);
             if cond_is_positive {
                 stmt!(self, "if_then", span, |eval| if cond(eval)?.to_bool() {
                     then_block(eval)?
@@ -512,8 +526,8 @@ impl Compiler<'_> {
         } else if t.is_empty() {
             self.stmt_if_compiled(span, cond, false, f)
         } else {
-            let t = t.as_compiled();
-            let f = f.as_compiled();
+            let t = t.as_compiled(self);
+            let f = f.as_compiled(self);
             stmt!(
                 self,
                 "if_then_else",
@@ -565,7 +579,7 @@ impl Compiler<'_> {
                 let over_span = over.span;
                 let var = self.assign(var);
                 let over = self.expr(over).as_compiled();
-                let st = self.stmt(body, false).as_compiled();
+                let st = self.stmt(body, false).as_compiled(self);
                 stmt!(self, "for", span, |eval| {
                     let heap = eval.heap();
                     let iterable = over(eval)?;
@@ -587,15 +601,9 @@ impl Compiler<'_> {
                     )??;
                 })
             }
-            StmtP::Return(Some(e)) => {
-                let e = self.expr(e).as_compiled();
-                stmt!(self, "return_value", span, |eval| {
-                    return Err(EvalException::Return(e(eval)?));
-                })
+            StmtP::Return(e) => {
+                StmtsCompiled::one(StmtCompiledValue::Return(span, e.map(|e| self.expr(e))))
             }
-            StmtP::Return(None) => stmt!(self, "return", span, |_eval| {
-                return Err(EvalException::Return(Value::new_none()));
-            }),
             StmtP::If(cond, box then_block) => self.stmt_if(span, cond, then_block, allow_gc),
             StmtP::IfElse(cond, box (then_block, else_block)) => {
                 self.stmt_if_else(span, cond, then_block, else_block, allow_gc)

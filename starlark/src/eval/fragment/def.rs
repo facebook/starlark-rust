@@ -170,7 +170,7 @@ impl Compiler<'_> {
 
         let info = Arc::new(DefInfo {
             scope_names,
-            body: body.as_compiled(),
+            body: body.as_compiled(self),
         });
 
         expr!("def", |eval| {
