@@ -282,7 +282,7 @@ impl Arena {
                 .entry(x.dupe())
                 .or_insert_with(|| (v.get_type(), (0, 0)));
             e.1.0 += 1;
-            e.1.1 += v.memory_size() + v.extra_memory();
+            e.1.1 += mem::size_of::<AValueHeader>() + v.memory_size() + v.extra_memory();
         };
         for_each(&self.drop, &mut f);
         for_each(&self.non_drop, &mut f);
@@ -476,6 +476,8 @@ mod test {
         arena.alloc(mk_str("test"));
         let res = arena.allocated_summary().summary;
         assert_eq!(res.len(), 1);
-        assert_eq!(res.values().next().unwrap().0, 2);
+        let entry = res.values().next().unwrap();
+        assert_eq!(entry.0, 2);
+        assert_eq!(entry.1, arena.allocated_bytes())
     }
 }
