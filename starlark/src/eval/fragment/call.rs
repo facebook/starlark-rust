@@ -30,7 +30,10 @@ use crate::{
         Arguments, Evaluator, FrozenDef,
     },
     syntax::ast::{ArgumentP, ExprP},
-    values::{function::NativeFunction, AttrType, FrozenValue, StarlarkValue, Value, ValueLike},
+    values::{
+        function::NativeFunction, AttrType, FrozenStringValue, FrozenValue, StarlarkValue, Value,
+        ValueLike,
+    },
 };
 use gazebo::coerce::coerce_ref;
 use std::mem::MaybeUninit;
@@ -42,7 +45,7 @@ struct ArgsCompiled {
     ///
     /// Note names are guaranteed to be unique here because names are validated in AST:
     /// named arguments in [`Expr::Call`] are unique.
-    names: Vec<(Symbol, FrozenValue)>,
+    names: Vec<(Symbol, FrozenStringValue)>,
     args: Option<ExprCompiled>,
     kwargs: Option<ExprCompiled>,
 }
@@ -200,7 +203,10 @@ impl Compiler<'_> {
             match x.node {
                 ArgumentP::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
                 ArgumentP::Named(name, value) => {
-                    let fv = self.module_env.frozen_heap().alloc(name.node.as_str());
+                    let fv = self
+                        .module_env
+                        .frozen_heap()
+                        .alloc_string_value(name.node.as_str());
                     res.names.push((Symbol::new(&name.node), fv));
                     res.pos_named.push(self.expr(value).as_compiled());
                 }

@@ -27,7 +27,6 @@ mod pointer_i32;
 mod value;
 mod value_captured;
 
-#[allow(unused_imports)] // TODO: remove in the following diff
 pub(crate) use constant::StringValueLike;
 pub use constant::{ConstFrozenStringN, FrozenStringValue, StringValue};
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};

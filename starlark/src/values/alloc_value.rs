@@ -70,7 +70,6 @@ impl FrozenHeap {
         val.alloc_frozen_value(self)
     }
 
-    #[allow(dead_code)] // TODO: remove in the following diff
     pub(crate) fn alloc_string_value(&self, s: &str) -> FrozenStringValue {
         unsafe { FrozenStringValue::new_unchecked(self.alloc_str(s)) }
     }
@@ -82,7 +81,6 @@ impl Heap {
         x.alloc_value(self)
     }
 
-    #[allow(dead_code)] // TODO: remove in the following diff
     pub(crate) fn alloc_string_value<'v>(&'v self, s: &str) -> StringValue<'v> {
         unsafe { StringValue::new_unchecked(self.alloc_str(s)) }
     }

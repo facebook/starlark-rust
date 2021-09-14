@@ -115,7 +115,6 @@ impl FrozenStringValue {
     }
 }
 
-#[allow(dead_code)] // TODO: remove in the following diff
 impl<'v> StringValue<'v> {
     /// Construct without a check that the value contains a string.
     ///

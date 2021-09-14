@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::collections::BorrowHashed;
+use crate::{collections::BorrowHashed, values::StringValue};
 /// Deal with all aspects of runtime parameter evaluation.
 /// First build a Parameters structure, then use collect to collect the
 /// parameters into slots.
@@ -425,7 +425,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                     None => {
                         add_kwargs(
                             &mut kwargs,
-                            Hashed::new_unchecked(name.small_hash(), *name_value),
+                            Hashed::new_unchecked(name.small_hash(), name_value.to_value()),
                             *v,
                         );
                     }
@@ -633,7 +633,7 @@ pub struct Arguments<'v, 'a> {
     /// Names of named arguments.
     ///
     /// `named` length must be equal to `names` length.
-    pub names: &'a [(Symbol, Value<'v>)],
+    pub names: &'a [(Symbol, StringValue<'v>)],
     /// `*args` argument.
     pub args: Option<Value<'v>>,
     /// `**kwargs` argument.
@@ -649,7 +649,8 @@ impl<'v, 'a> Arguments<'v, 'a> {
             None => {
                 let mut result = SmallMap::with_capacity(self.names.len());
                 for (k, v) in self.names.iter().zip(self.named) {
-                    result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
+                    result
+                        .insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1.to_value()), *v);
                 }
                 Ok(Dict::new(result))
             }
@@ -664,7 +665,10 @@ impl<'v, 'a> Arguments<'v, 'a> {
                     let mut result =
                         SmallMap::with_capacity(self.names.len() + kwargs.content.len());
                     for (k, v) in self.names.iter().zip(self.named) {
-                        result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
+                        result.insert_hashed(
+                            Hashed::new_unchecked(k.0.small_hash(), k.1.to_value()),
+                            *v,
+                        );
                     }
                     for (k, v) in kwargs.iter_hashed() {
                         let s = Arguments::unpack_kwargs_key(*k.key())?;
@@ -985,7 +989,7 @@ mod test {
         p.kwargs = None;
         let named = [Value::new_none()];
         p.named = &named;
-        let names = [(Symbol::new("test"), heap.alloc("test"))];
+        let names = [(Symbol::new("test"), heap.alloc_string_value("test"))];
         p.names = &names;
         assert!(p.no_named_args().is_err());
     }

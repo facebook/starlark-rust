@@ -23,7 +23,8 @@ use crate::{
     eval::{Arguments, Evaluator, ParametersSpec},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
-        ComplexValue, Freezer, StarlarkValue, Trace, Value, ValueLike,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, StarlarkValue, StringValue,
+        StringValueLike, Trace, Value, ValueLike,
     },
 };
 use gazebo::{
@@ -77,11 +78,12 @@ pub fn partial(builder: &mut GlobalsBuilder) {
             .content
             .keys()
             .map(|x| {
+                let x = StringValue::new(*x).unwrap();
                 (
                     // We duplicate string here.
                     // If this becomes hot, we should do better.
-                    Symbol::new_hashed(x.unpack_starlark_str().unwrap().as_str_hashed()),
-                    *x,
+                    Symbol::new_hashed(x.unpack_starlark_str().as_str_hashed()),
+                    x,
                 )
             })
             .collect();
@@ -147,15 +149,17 @@ pub fn abs(builder: &mut GlobalsBuilder) {
 
 #[derive(Debug, Coerce, Trace)]
 #[repr(C)]
-struct PartialGen<V> {
+struct PartialGen<V, S> {
     func: V,
     pos: Vec<V>,
     named: Vec<V>,
-    names: Vec<(Symbol, V)>,
+    names: Vec<(Symbol, S)>,
     signature: ParametersSpec<V>,
 }
 
-starlark_complex_value!(Partial);
+type Partial<'v> = PartialGen<Value<'v>, StringValue<'v>>;
+type FrozenPartial = PartialGen<FrozenValue, FrozenStringValue>;
+starlark_complex_values!(Partial);
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
     type Frozen = FrozenPartial;
@@ -172,7 +176,7 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for PartialGen<V>
+impl<'v, V: ValueLike<'v>, S: StringValueLike<'v>> StarlarkValue<'v> for PartialGen<V, S>
 where
     Self: AnyLifetime<'v>,
 {
