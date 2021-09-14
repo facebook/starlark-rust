@@ -133,6 +133,13 @@ impl FrozenHeapRef {
         self.0.arena.allocated_bytes()
     }
 
+    /// Number of bytes allocated by the heap but not filled.
+    /// Note that these bytes will _never_ be filled as no further allocations can
+    /// be made on this heap (it has been sealed).
+    pub fn available_bytes(&self) -> usize {
+        self.0.arena.available_bytes()
+    }
+
     /// Obtain a summary of how much memory is currently allocated by this heap.
     /// Doesn't include the heaps it keeps alive by reference.
     pub fn allocated_summary(&self) -> HeapSummary {
@@ -202,6 +209,11 @@ impl FrozenHeap {
     /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
     pub fn allocated_bytes(&self) -> usize {
         self.arena.allocated_bytes()
+    }
+
+    /// Number of bytes allocated by the heap but not yet filled.
+    pub fn available_bytes(&self) -> usize {
+        self.arena.available_bytes()
     }
 
     /// Obtain a summary of how much memory is currently allocated by this heap.
@@ -287,6 +299,11 @@ impl Heap {
     /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
     pub fn allocated_bytes(&self) -> usize {
         self.arena.borrow().allocated_bytes()
+    }
+
+    /// Number of bytes allocated by the heap but not yet filled.
+    pub fn available_bytes(&self) -> usize {
+        self.arena.borrow().available_bytes()
     }
 
     /// Only those allocated on the inline heap (mostly strings)

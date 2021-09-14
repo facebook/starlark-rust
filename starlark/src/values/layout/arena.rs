@@ -117,6 +117,10 @@ impl Arena {
         self.drop.allocated_bytes() + self.non_drop.allocated_bytes()
     }
 
+    pub fn available_bytes(&self) -> usize {
+        self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
+    }
+
     /// Bytes allocated which can't be iterated over
     pub fn allocated_bytes_inline(&self) -> usize {
         self.non_drop.allocated_bytes()
@@ -478,6 +482,6 @@ mod test {
         assert_eq!(res.len(), 1);
         let entry = res.values().next().unwrap();
         assert_eq!(entry.0, 2);
-        assert_eq!(entry.1, arena.allocated_bytes())
+        assert_eq!(entry.1, arena.allocated_bytes());
     }
 }
