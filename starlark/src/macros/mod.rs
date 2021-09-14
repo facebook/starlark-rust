@@ -24,14 +24,14 @@ macro_rules! starlark_type {
         fn get_type(&self) -> &'static str {
             $typ
         }
-        fn get_type_value(&self) -> $crate::values::FrozenValue {
+        fn get_type_value(&self) -> $crate::values::FrozenStringValue {
             Self::get_type_value_static()
         }
-        fn get_type_value_static() -> $crate::values::FrozenValue {
+        fn get_type_value_static() -> $crate::values::FrozenStringValue {
             const N: usize = $typ.len();
             static RES: $crate::values::ConstFrozenStringN<N> =
                 $crate::values::ConstFrozenStringN::new($typ);
-            RES.unpack()
+            RES.erase()
         }
     };
 }

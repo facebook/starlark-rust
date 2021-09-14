@@ -25,8 +25,9 @@ use crate::{
         error::ValueError,
         index::{apply_slice, convert_index},
         iter::ARefIterator,
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap, FrozenValue,
-        Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
+        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
+        FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value,
+        ValueLike,
     },
 };
 use gazebo::{
@@ -183,7 +184,7 @@ impl<'v> List<'v> {
     /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 
-    pub fn get_type_value_static() -> FrozenValue {
+    pub fn get_type_value_static() -> FrozenStringValue {
         ListGen::<FrozenList>::get_type_value_static()
     }
 

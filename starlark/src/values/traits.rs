@@ -34,8 +34,8 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
-        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenValue, Heap, Tracer,
-        Value, ValueError,
+        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenStringValue, Heap,
+        Tracer, Value, ValueError,
     },
 };
 use gazebo::any::AnyLifetime;
@@ -339,12 +339,12 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// Usually implemented by the [`starlark_type!`] macro.
     fn get_type(&self) -> &'static str;
 
-    /// Like get_type, but returns a reusable [`FrozenValue`] pointer to it.
-    /// This function deliberately doesn't take a heap, as it would not be performant
-    /// to allocate a new value each time.
+    /// Like [`get_type`](Self::get_type), but returns a reusable [`FrozenStringValue`]
+    /// pointer to it. This function deliberately doesn't take a heap,
+    /// as it would not be performant to allocate a new value each time.
     ///
     /// Usually implemented by the [`starlark_type!`] macro.
-    fn get_type_value(&self) -> FrozenValue;
+    fn get_type_value(&self) -> FrozenStringValue;
 
     /// Like [`get_type_value`](Self::get_type_value), but does not require `self`.
     ///
@@ -352,7 +352,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     /// [`get_type_value`](Self::get_type_value).
     ///
     /// Usually implemented by the [`starlark_type!`] macro.
-    fn get_type_value_static() -> FrozenValue
+    fn get_type_value_static() -> FrozenStringValue
     where
         Self: Sized;
 

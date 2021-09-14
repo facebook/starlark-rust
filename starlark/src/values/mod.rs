@@ -566,7 +566,7 @@ impl<'v> Value<'v> {
         self.invoke(location, params, eval)
     }
 
-    pub fn get_type_value(self) -> FrozenValue {
+    pub fn get_type_value(self) -> FrozenStringValue {
         self.get_ref().get_type_value()
     }
 }

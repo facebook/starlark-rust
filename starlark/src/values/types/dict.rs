@@ -24,8 +24,8 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
         string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
-        FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
-        ValueLike,
+        FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
+        UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{
@@ -150,7 +150,7 @@ impl<'v> Dict<'v> {
     /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
 
-    pub fn get_type_value_static() -> FrozenValue {
+    pub fn get_type_value_static() -> FrozenStringValue {
         DictGen::<FrozenDict>::get_type_value_static()
     }
 

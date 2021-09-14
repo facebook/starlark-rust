@@ -66,7 +66,7 @@ impl ExprCompiledValue {
             Self::Value(x) => box move |_| Ok(x.to_value()),
             Self::Compiled(x) => x,
             Self::Type(x) => expr!("type", x, |_eval| {
-                x.get_ref().get_type_value().to_value()
+                x.get_ref().get_type_value().unpack().to_value()
             })
             .as_compiled(),
         }

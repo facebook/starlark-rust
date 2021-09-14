@@ -24,7 +24,8 @@ use crate::{
         layout::arena::{AValueHeader, AValueRepr},
         none::NoneType,
         string::StarlarkStr,
-        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
+        Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
@@ -298,10 +299,10 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     fn get_type(&self) -> &'static str {
         self.1.get_type()
     }
-    fn get_type_value(&self) -> FrozenValue {
+    fn get_type_value(&self) -> FrozenStringValue {
         self.1.get_type_value()
     }
-    fn get_type_value_static() -> FrozenValue {
+    fn get_type_value_static() -> FrozenStringValue {
         T::get_type_value_static()
     }
     fn matches_type(&self, ty: &str) -> bool {
