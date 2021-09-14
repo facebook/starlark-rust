@@ -173,10 +173,9 @@ impl<'a> Scope<'a> {
 
         let mut locals = IndexMap::new();
 
-        let existing_module_names = module.all_names();
-        for name in existing_module_names.keys() {
-            let (binding_id, _binding) =
-                scope_data.new_binding(Visibility::Public, AssignCount::AtMostOnce);
+        let existing_module_names_and_visibilites = module.all_names_and_visibilities();
+        for (name, vis) in existing_module_names_and_visibilites.iter() {
+            let (binding_id, _binding) = scope_data.new_binding(*vis, AssignCount::AtMostOnce);
             locals.insert(name.as_str(), binding_id);
         }
 

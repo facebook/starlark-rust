@@ -322,7 +322,7 @@ impl Module {
 
     /// Set the value of a variable in the environment. Set its visibliity to
     /// "private" to ensure that it is not re-exported
-    fn set_private<'v>(&'v self, name: &str, value: Value<'v>) {
+    pub(crate) fn set_private<'v>(&'v self, name: &str, value: Value<'v>) {
         let slot = self.names.add_name_visibility(name, Visibility::Private);
         let slots = self.slots();
         slots.ensure_slot(slot);

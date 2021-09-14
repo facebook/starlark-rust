@@ -102,6 +102,14 @@ impl MutableNames {
             .collect()
     }
 
+    pub(crate) fn all_names_and_visibilities(&self) -> IndexMap<String, Visibility> {
+        self.0
+            .borrow()
+            .iter()
+            .map(|(name, (_slot, vis))| (name.to_owned(), *vis))
+            .collect()
+    }
+
     pub fn freeze(self) -> FrozenNames {
         FrozenNames(self.0.into_inner())
     }
