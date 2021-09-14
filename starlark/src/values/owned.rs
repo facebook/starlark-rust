@@ -114,6 +114,11 @@ impl OwnedFrozenValue {
         })
     }
 
+    /// Obtain a reference to the FrozenHeap that owns this value.
+    pub fn owner(&self) -> &FrozenHeapRef {
+        &self.owner
+    }
+
     /// Obtain direct access to the [`FrozenValue`] that lives inside. If you drop all
     /// references to the [`FrozenHeap`] keeping it alive, any code using the [`FrozenValue`]
     /// is likely to segfault. If possible use [`value`](OwnedFrozenValue::value) or
