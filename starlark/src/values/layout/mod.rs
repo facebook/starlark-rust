@@ -28,7 +28,7 @@ mod value;
 mod value_captured;
 
 pub(crate) use constant::StringValueLike;
-pub use constant::{ConstFrozenStringN, FrozenStringValue, StringValue};
+pub use constant::{FrozenStringValue, StarlarkStrN, StringValue};
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
 pub use value::{FrozenValue, Value};

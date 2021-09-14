@@ -114,8 +114,8 @@ fn render_fun(x: StarFun) -> TokenStream {
     let set_type = type_attribute.map(|x| {
         quote! {
             const TYPE_N: usize = #x.len();
-            static TYPE: starlark::values::ConstFrozenStringN<TYPE_N> =
-                starlark::values::ConstFrozenStringN::new(#x);
+            static TYPE: starlark::values::StarlarkStrN<TYPE_N> =
+                starlark::values::StarlarkStrN::new(#x);
             func.set_type(TYPE.unpack());
         }
     });

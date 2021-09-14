@@ -29,8 +29,7 @@ macro_rules! starlark_type {
         }
         fn get_type_value_static() -> $crate::values::FrozenStringValue {
             const N: usize = $typ.len();
-            static RES: $crate::values::ConstFrozenStringN<N> =
-                $crate::values::ConstFrozenStringN::new($typ);
+            static RES: $crate::values::StarlarkStrN<N> = $crate::values::StarlarkStrN::new($typ);
             RES.erase()
         }
     };
