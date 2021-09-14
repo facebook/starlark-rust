@@ -127,6 +127,12 @@ impl PartialEq<FrozenHeapRef> for FrozenHeapRef {
 impl Eq for FrozenHeapRef {}
 
 impl FrozenHeapRef {
+    /// Number of bytes allocated on this heap, not including any memory
+    /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
+    pub fn allocated_bytes(&self) -> usize {
+        self.0.arena.allocated_bytes()
+    }
+
     /// Obtain a summary of how much memory is currently allocated by this heap.
     /// Doesn't include the heaps it keeps alive by reference.
     pub fn allocated_summary(&self) -> HeapSummary {
@@ -190,6 +196,12 @@ impl FrozenHeap {
     /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
         self.alloc_raw(simple(val))
+    }
+
+    /// Number of bytes allocated on this heap, not including any memory
+    /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
+    pub fn allocated_bytes(&self) -> usize {
+        self.arena.allocated_bytes()
     }
 
     /// Obtain a summary of how much memory is currently allocated by this heap.
@@ -271,10 +283,13 @@ impl Heap {
         Self::default()
     }
 
-    pub(crate) fn allocated_bytes(&self) -> usize {
+    /// Number of bytes allocated on this heap, not including any memory
+    /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
+    pub fn allocated_bytes(&self) -> usize {
         self.arena.borrow().allocated_bytes()
     }
 
+    /// Only those allocated on the inline heap (mostly strings)
     pub(crate) fn allocated_bytes_inline(&self) -> usize {
         self.arena.borrow().allocated_bytes_inline()
     }
