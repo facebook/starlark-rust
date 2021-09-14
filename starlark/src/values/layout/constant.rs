@@ -28,6 +28,7 @@ use std::{
     fmt,
     fmt::{Debug, Formatter},
     intrinsics::copy_nonoverlapping,
+    ptr,
 };
 
 /// A constant string that can be converted to a [`FrozenValue`].
@@ -100,6 +101,14 @@ unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> Coerce<StringValue<'v>> for StringValue<'v> {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for StringValue<'v> {}
 
+impl PartialEq for FrozenStringValue {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self, other) || self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for FrozenStringValue {}
+
 impl FrozenStringValue {
     /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
     pub fn unpack(self) -> FrozenValue {
@@ -112,6 +121,20 @@ impl FrozenStringValue {
     pub(crate) unsafe fn new_unchecked(value: FrozenValue) -> FrozenStringValue {
         debug_assert!(value.unpack_str().is_some());
         FrozenStringValue(&*(value.0.ptr_value() as *const AValueRepr<StarlarkStr>))
+    }
+
+    /// Construct from a value. Returns [`None`] if a value does not contain a string.
+    pub(crate) fn new(value: FrozenValue) -> Option<FrozenStringValue> {
+        if value.unpack_str().is_some() {
+            Some(unsafe { Self::new_unchecked(value) })
+        } else {
+            None
+        }
+    }
+
+    /// Get a string.
+    pub(crate) fn as_str(self) -> &'static str {
+        self.0.payload.unpack()
     }
 }
 

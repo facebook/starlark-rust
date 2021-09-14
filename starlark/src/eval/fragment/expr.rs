@@ -34,9 +34,8 @@ use crate::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
         list::List,
-        string::StarlarkStr,
         tuple::{FrozenTuple, Tuple},
-        AttrType, FrozenHeap, FrozenValue, Heap, Value, ValueError, ValueLike,
+        AttrType, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
 use gazebo::{coerce::coerce_ref, prelude::*};
@@ -122,11 +121,10 @@ fn try_eval_type_is(
 ) -> Result<ExprCompiledValue, (ExprCompiledValue, ExprCompiledValue)> {
     match (l, r) {
         (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
-            if let Some(r) = r.downcast_frozen_ref::<StarlarkStr>() {
-                let t = r.map(|r| r.unpack());
+            if let Some(t) = FrozenStringValue::new(r) {
                 let cmp = maybe_not.as_fn();
                 Ok(expr!("type_is", l, |_eval| {
-                    Value::new_bool(cmp(l.get_type() == t.as_ref()))
+                    Value::new_bool(cmp(l.get_type_value() == t))
                 }))
             } else {
                 Err((ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)))
