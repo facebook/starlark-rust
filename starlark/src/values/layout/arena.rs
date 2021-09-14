@@ -319,8 +319,8 @@ impl AValueHeader {
 
     pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
         unsafe {
-            let self_repr = self as *const AValueHeader as *const AValueRepr<()>;
-            let res = &*(from_raw_parts(&(*self_repr).payload, self.0));
+            let self_repr = self.as_repr::<()>();
+            let res = &*(from_raw_parts(&self_repr.payload, self.0));
             mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
         }
     }
@@ -361,6 +361,11 @@ impl AValueHeader {
         let n = self.0.size_of();
         let p = self as *const AValueHeader as *mut u8;
         p.add(mem::size_of::<AValueHeader>() + n)
+    }
+
+    /// Cast header pointer to repr pointer.
+    pub(crate) unsafe fn as_repr<T>(&self) -> &AValueRepr<T> {
+        &*(self as *const AValueHeader as *const AValueRepr<T>)
     }
 }
 

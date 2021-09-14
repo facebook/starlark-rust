@@ -18,9 +18,17 @@
 use crate::values::{
     layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
+    Freezer, Trace, Tracer, Value,
 };
-use gazebo::prelude::*;
-use std::intrinsics::copy_nonoverlapping;
+use gazebo::{
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
+use std::{
+    fmt,
+    fmt::{Debug, Formatter},
+    intrinsics::copy_nonoverlapping,
+};
 
 /// A constant string that can be converted to a [`FrozenValue`].
 #[repr(C)] // Must match this layout on the heap
@@ -71,12 +79,87 @@ impl<const N: usize> ConstFrozenStringN<N> {
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
 #[derive(Copy, Clone, Dupe)]
+#[repr(C)]
 pub struct FrozenStringValue(&'static AValueRepr<StarlarkStr>);
+
+impl Debug for FrozenStringValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("FrozenStringValue")
+            .field(&self.unpack())
+            .finish()
+    }
+}
+
+/// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
+#[derive(Copy, Clone, Dupe, Debug)]
+#[repr(C)]
+pub struct StringValue<'v>(Value<'v>);
+
+unsafe impl<'v> Coerce<StringValue<'v>> for FrozenStringValue {}
+unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
+unsafe impl<'v> Coerce<StringValue<'v>> for StringValue<'v> {}
+unsafe impl<'v> CoerceKey<StringValue<'v>> for StringValue<'v> {}
 
 impl FrozenStringValue {
     /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
     pub fn unpack(self) -> FrozenValue {
         FrozenValue::new_repr(self.0)
+    }
+
+    /// Construct without a check that the value contains a string.
+    ///
+    /// If passed value does not contain a string, it may lead to memory corruption.
+    pub(crate) unsafe fn new_unchecked(value: FrozenValue) -> FrozenStringValue {
+        debug_assert!(value.unpack_str().is_some());
+        FrozenStringValue(&*(value.0.ptr_value() as *const AValueRepr<StarlarkStr>))
+    }
+}
+
+#[allow(dead_code)] // TODO: remove in the following diff
+impl<'v> StringValue<'v> {
+    /// Construct without a check that the value contains a string.
+    ///
+    /// If passed value does not contain a string, it may lead to memory corruption.
+    pub(crate) unsafe fn new_unchecked(value: Value<'v>) -> StringValue<'v> {
+        debug_assert!(value.unpack_str().is_some());
+        StringValue(value)
+    }
+
+    /// Construct from a value. Returns [`None`] if a value does not contain a string.
+    pub(crate) fn new(value: Value<'v>) -> Option<StringValue<'v>> {
+        if value.unpack_str().is_some() {
+            Some(StringValue(value))
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn unpack_starlark_str(self) -> &'v StarlarkStr {
+        debug_assert!(self.0.unpack_str().is_some());
+        unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
+    }
+
+    pub(crate) fn to_value(self) -> Value<'v> {
+        self.0
+    }
+
+    /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
+    pub(crate) fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
+        Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.0)?) })
+    }
+}
+
+/// Common type for [`StringValue`] and [`FrozenStringValue`].
+pub(crate) trait StringValueLike<'v>: Debug + Coerce<StringValue<'v>> {}
+
+impl<'v> StringValueLike<'v> for StringValue<'v> {}
+
+impl<'v> StringValueLike<'v> for FrozenStringValue {}
+
+unsafe impl<'v> Trace<'v> for StringValue<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.trace(tracer);
+        debug_assert!(self.0.unpack_str().is_some());
     }
 }
 
