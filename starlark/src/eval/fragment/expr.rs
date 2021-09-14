@@ -43,6 +43,22 @@ use gazebo::{coerce::coerce_ref, prelude::*};
 use std::cmp::Ordering;
 use thiserror::Error;
 
+/// `bool` operation.
+#[derive(Copy, Clone, Dupe)]
+enum MaybeNot {
+    Id,
+    Not,
+}
+
+impl MaybeNot {
+    fn as_fn(self) -> fn(bool) -> bool {
+        match self {
+            MaybeNot::Id => |x| x,
+            MaybeNot::Not => |x| !x,
+        }
+    }
+}
+
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
 >;
@@ -102,12 +118,13 @@ fn eval_compare(
 fn try_eval_type_is(
     l: ExprCompiledValue,
     r: ExprCompiledValue,
-    cmp: fn(bool) -> bool,
+    maybe_not: MaybeNot,
 ) -> Result<ExprCompiledValue, (ExprCompiledValue, ExprCompiledValue)> {
     match (l, r) {
         (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
             if let Some(r) = r.downcast_frozen_ref::<StarlarkStr>() {
                 let t = r.map(|r| r.unpack());
+                let cmp = maybe_not.as_fn();
                 Ok(expr!("type_is", l, |_eval| {
                     Value::new_bool(cmp(l.get_type() == t.as_ref()))
                 }))
@@ -123,8 +140,9 @@ fn eval_equals(
     span: Span,
     l: ExprCompiledValue,
     r: ExprCompiledValue,
-    cmp: fn(bool) -> bool,
+    maybe_not: MaybeNot,
 ) -> ExprCompiledValue {
+    let cmp = maybe_not.as_fn();
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
         // If comparison fails, let it fail in runtime.
         if let Ok(r) = l.equals(r.to_value()) {
@@ -132,12 +150,12 @@ fn eval_equals(
         }
     }
 
-    let (l, r) = match try_eval_type_is(l, r, cmp) {
+    let (l, r) = match try_eval_type_is(l, r, maybe_not) {
         Ok(e) => return e,
         Err((l, r)) => (l, r),
     };
 
-    let (r, l) = match try_eval_type_is(r, l, cmp) {
+    let (r, l) = match try_eval_type_is(r, l, maybe_not) {
         Ok(e) => return e,
         Err((r, l)) => (r, l),
     };
@@ -607,8 +625,8 @@ impl Compiler<'_> {
                                 })
                             }
                         }
-                        BinOp::Equal => eval_equals(span, l, r, |x| x),
-                        BinOp::NotEqual => eval_equals(span, l, r, |x| !x),
+                        BinOp::Equal => eval_equals(span, l, r, MaybeNot::Id),
+                        BinOp::NotEqual => eval_equals(span, l, r, MaybeNot::Not),
                         BinOp::Less => eval_compare(span, l, r, |x| x == Ordering::Less),
                         BinOp::Greater => eval_compare(span, l, r, |x| x == Ordering::Greater),
                         BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
