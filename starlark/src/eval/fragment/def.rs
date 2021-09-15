@@ -29,8 +29,8 @@ use crate::{
             throw_eval_exception, Compiler, EvalException,
         },
         fragment::{
-            expr::{ExprCompiled, ExprCompiledValue},
-            stmt::StmtCompiled,
+            expr::{ExprCompiled, ExprCompiledValue, MaybeNot},
+            stmt::{StmtCompiled, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -45,7 +45,8 @@ use crate::{
         docs::{DocItem, DocString},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        ComplexValue, Freezer, FrozenValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, StarlarkValue, Trace, Tracer, Value,
+        ValueLike,
     },
 };
 use derivative::Derivative;
@@ -76,6 +77,14 @@ impl<T> ParameterCompiled<T> {
         }
     }
 
+    fn accepts_positional(&self) -> bool {
+        match self {
+            ParameterCompiled::Normal(_, _) => true,
+            ParameterCompiled::WithDefaultValue(_, _, _) => true,
+            _ => false,
+        }
+    }
+
     fn name(&self) -> Option<&str> {
         self.param_name().map(|n| n.name.as_str())
     }
@@ -97,12 +106,14 @@ impl<T> ParameterCompiled<T> {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-struct DefInfo {
+pub(crate) struct DefInfo {
     scope_names: ScopeNames,
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
     #[derivative(Debug = "ignore")]
     body: StmtCompiled,
+    /// Function body is `type(x) == "y"`
+    pub(crate) returns_type_is: Option<FrozenStringValue>,
 }
 
 impl Compiler<'_> {
@@ -141,6 +152,22 @@ impl Compiler<'_> {
         }
     }
 
+    /// If a statement is `return type(x) == "y"` where `x` is a first slot.
+    fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
+        match stmt.first() {
+            Some(StmtCompiledValue::Return(
+                _,
+                Some(ExprCompiledValue::TypeIs(
+                    // Slot 0 is a slot for the first function argument.
+                    box ExprCompiledValue::Local(LocalSlotId(0), ..),
+                    t,
+                    MaybeNot::Id,
+                )),
+            )) => Some(*t),
+            _ => None,
+        }
+    }
+
     pub fn function(
         &mut self,
         name: &str,
@@ -168,9 +195,16 @@ impl Compiler<'_> {
 
         let scope_names = mem::take(scope_names);
 
+        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
+            Self::is_return_type_is(&body)
+        } else {
+            None
+        };
+
         let info = Arc::new(DefInfo {
             scope_names,
             body: body.as_compiled(self),
+            returns_type_is,
         });
 
         expr!("def", |eval| {
@@ -242,7 +276,7 @@ pub(crate) struct DefGen<V> {
     parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
     codemap: CodeMap,                       // Codemap that was active during this module
-    stmt: Arc<DefInfo>,                     // The source code and metadata for this function
+    pub(crate) stmt: Arc<DefInfo>,          // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
     /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
     /// [`ValueCaptured`] or [`FrozenValueCaptured`].

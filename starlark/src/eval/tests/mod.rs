@@ -39,6 +39,7 @@ mod docstring;
 mod go;
 mod interop;
 mod runtime;
+mod type_is;
 
 #[test]
 fn alias_test() {

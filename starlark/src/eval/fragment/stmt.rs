@@ -152,6 +152,14 @@ impl StmtsCompiled {
             }
         }
     }
+
+    pub(crate) fn first(&self) -> Option<&StmtCompiledValue> {
+        match &self.0 {
+            SmallVec1::Empty => None,
+            SmallVec1::One(s) => Some(s),
+            SmallVec1::Many(ss) => ss.first(),
+        }
+    }
 }
 
 #[derive(Debug, Error)]

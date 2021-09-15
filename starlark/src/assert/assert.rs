@@ -137,6 +137,22 @@ fn test_methods(builder: &mut GlobalsBuilder) {
         assert_different(a, b)
     }
 
+    fn assert_true(a: Value) -> NoneType {
+        if !a.to_bool() {
+            Err(anyhow!("assertion failed"))
+        } else {
+            Ok(NoneType)
+        }
+    }
+
+    fn assert_false(a: Value) -> NoneType {
+        if a.to_bool() {
+            Err(anyhow!("assertion failed"))
+        } else {
+            Ok(NoneType)
+        }
+    }
+
     // This is only safe to call at the top-level of a Starlark module
     fn garbage_collect() -> NoneType {
         eval.trigger_gc();
