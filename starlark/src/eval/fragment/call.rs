@@ -26,7 +26,7 @@ use crate::{
             scope::{CstArgument, CstExpr},
             Compiler, ExprEvalException,
         },
-        fragment::expr::{get_attr_hashed, ExprCompiled, ExprCompiledValue},
+        fragment::expr::{get_attr_hashed, ExprCompiled, ExprCompiledValue, MaybeNot},
         Arguments, Evaluator, FrozenDef,
     },
     syntax::ast::{ArgumentP, ExprP},
@@ -285,6 +285,21 @@ impl Compiler<'_> {
                 eval
             )?))
         } else {
+            if one_positional {
+                // Try to inline a function like `lambda x: type(x) == "y"`.
+                if let Some(left) = left.downcast_ref::<FrozenDef>() {
+                    if let Some(t) = &left.stmt.returns_type_is {
+                        assert!(args.len() == 1);
+                        let arg = args.pop().unwrap();
+                        return match arg.node {
+                            ArgumentP::Positional(e) => {
+                                ExprCompiledValue::TypeIs(box self.expr(e), *t, MaybeNot::Id)
+                            }
+                            _ => unreachable!(),
+                        };
+                    }
+                }
+            }
             self.expr_call_fun_frozen_no_special(span, None, left, args)
         }
     }
