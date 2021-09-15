@@ -44,7 +44,7 @@ use thiserror::Error;
 
 /// `bool` operation.
 #[derive(Copy, Clone, Dupe)]
-enum MaybeNot {
+pub(crate) enum MaybeNot {
     Id,
     Not,
 }
@@ -66,6 +66,8 @@ pub(crate) enum ExprCompiledValue {
     Compiled(ExprCompiled),
     /// `type(x)`
     Type(Box<ExprCompiledValue>),
+    /// `maybe_not(type(x) == "y")`
+    TypeIs(Box<ExprCompiledValue>, FrozenStringValue, MaybeNot),
 }
 
 impl ExprCompiledValue {
@@ -84,6 +86,13 @@ impl ExprCompiledValue {
                 x.get_ref().get_type_value().unpack().to_value()
             })
             .as_compiled(),
+            ExprCompiledValue::TypeIs(e, t, maybe_not) => {
+                let cmp = maybe_not.as_fn();
+                expr!("type_is", e, |_eval| {
+                    Value::new_bool(cmp(e.get_type_value() == t))
+                })
+                .as_compiled()
+            }
         }
     }
 }
@@ -121,11 +130,8 @@ fn try_eval_type_is(
 ) -> Result<ExprCompiledValue, (ExprCompiledValue, ExprCompiledValue)> {
     match (l, r) {
         (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
-            if let Some(t) = FrozenStringValue::new(r) {
-                let cmp = maybe_not.as_fn();
-                Ok(expr!("type_is", l, |_eval| {
-                    Value::new_bool(cmp(l.get_type_value() == t))
-                }))
+            if let Some(r) = FrozenStringValue::new(r) {
+                Ok(ExprCompiledValue::TypeIs(l, r, maybe_not))
             } else {
                 Err((ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)))
             }
