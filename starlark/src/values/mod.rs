@@ -235,7 +235,7 @@ impl<'v> ValueLike<'v> for Value<'v> {
     }
 
     fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
-        self.get_ref().as_dyn_any()
+        self.get_ref().value_as_dyn_any()
     }
 }
 
@@ -269,7 +269,7 @@ impl<'v> ValueLike<'v> for FrozenValue {
     }
 
     fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
-        self.get_ref().as_dyn_any()
+        self.get_ref().value_as_dyn_any()
     }
 }
 

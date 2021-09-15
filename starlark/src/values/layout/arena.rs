@@ -83,7 +83,7 @@ pub(crate) struct Reservation<'v> {
 
 impl<'v> Reservation<'v> {
     pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
-        assert_eq!(self.typ, T::static_type_id());
+        assert_eq!(self.typ, T::static_type_id_of_value());
         unsafe {
             let p = self.pointer as *mut AValueRepr<T>;
             ptr::write(
@@ -163,7 +163,7 @@ impl Arena {
         };
 
         Reservation {
-            typ: T::static_type_id(),
+            typ: T::static_type_id_of_value(),
             pointer: p as *mut AValueRepr<()>,
             phantom: PhantomData,
         }

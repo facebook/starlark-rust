@@ -16,16 +16,13 @@
  */
 
 /// Define the [`get_type`](crate::values::StarlarkValue::get_type) and
-/// [`get_type_value`](crate::values::StarlarkValue::get_type_value) fields of
+/// [`get_type_value`](crate::values::StarlarkValue::get_type_value_static) fields of
 /// [`StarlarkValue`](crate::values::StarlarkValue).
 #[macro_export]
 macro_rules! starlark_type {
     ($typ:expr) => {
         fn get_type(&self) -> &'static str {
             $typ
-        }
-        fn get_type_value(&self) -> $crate::values::FrozenStringValue {
-            Self::get_type_value_static()
         }
         fn get_type_value_static() -> $crate::values::FrozenStringValue {
             const N: usize = $typ.len();
