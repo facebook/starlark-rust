@@ -27,7 +27,7 @@ use crate::{
             Compiler, ExprEvalException,
         },
         fragment::known::{list_to_tuple, Conditional},
-        runtime::evaluator::Evaluator,
+        runtime::{evaluator::Evaluator, slots::LocalSlotId},
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
@@ -64,6 +64,8 @@ pub(crate) type ExprCompiled = Box<
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
     Compiled(ExprCompiled),
+    /// Read local non-captured variable.
+    Local(LocalSlotId, Spanned<String>),
     /// `type(x)`
     Type(Box<ExprCompiledValue>),
     /// `maybe_not(type(x) == "y")`
@@ -82,6 +84,12 @@ impl ExprCompiledValue {
         match self {
             Self::Value(x) => box move |_| Ok(x.to_value()),
             Self::Compiled(x) => x,
+            Self::Local(slot, name) => expr!("local", |eval| expr_throw(
+                eval.get_slot_local(slot, &name.node),
+                name.span,
+                eval
+            )?)
+            .as_compiled(),
             Self::Type(x) => expr!("type", x, |_eval| {
                 x.get_ref().get_type_value().unpack().to_value()
             })
@@ -320,11 +328,7 @@ impl Compiler<'_> {
                         span,
                         eval
                     )?),
-                    Captured::No => expr!("local", |eval| expr_throw(
-                        eval.get_slot_local(slot, &name),
-                        span,
-                        eval
-                    )?),
+                    Captured::No => ExprCompiledValue::Local(slot, Spanned { node: name, span }),
                 }
             }
             ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
