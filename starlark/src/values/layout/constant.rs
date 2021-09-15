@@ -100,6 +100,8 @@ unsafe impl<'v> Coerce<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> Coerce<StringValue<'v>> for StringValue<'v> {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for StringValue<'v> {}
+unsafe impl<'v> Coerce<Value<'v>> for StringValue<'v> {}
+unsafe impl<'v> CoerceKey<Value<'v>> for StringValue<'v> {}
 
 impl PartialEq for FrozenStringValue {
     fn eq(&self, other: &Self) -> bool {
@@ -138,6 +140,14 @@ impl FrozenStringValue {
     }
 }
 
+impl<'v> PartialEq for StringValue<'v> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.ptr_eq(other.0) || self.as_str() == other.as_str()
+    }
+}
+
+impl<'v> Eq for StringValue<'v> {}
+
 impl<'v> StringValue<'v> {
     /// Construct without a check that the value contains a string.
     ///
@@ -159,6 +169,10 @@ impl<'v> StringValue<'v> {
     pub(crate) fn unpack_starlark_str(self) -> &'v StarlarkStr {
         debug_assert!(self.0.unpack_str().is_some());
         unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
+    }
+
+    pub(crate) fn as_str(self) -> &'v str {
+        self.unpack_starlark_str().unpack()
     }
 
     pub(crate) fn to_value(self) -> Value<'v> {

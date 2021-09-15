@@ -30,7 +30,11 @@ use crate::{
     },
 };
 use either::Either;
-use gazebo::{cell::ARef, coerce::Coerce, prelude::*};
+use gazebo::{
+    cell::ARef,
+    coerce::{coerce, Coerce},
+    prelude::*,
+};
 use itertools::Itertools;
 use std::{cell::Cell, cmp, convert::TryInto, intrinsics::unlikely, iter};
 use thiserror::Error;
@@ -371,18 +375,18 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // Return true if the value is a duplicate
         #[inline(always)]
         fn add_kwargs<'v>(
-            kwargs: &mut Option<Box<Dict<'v>>>,
-            key: Hashed<Value<'v>>,
+            kwargs: &mut Option<Box<SmallMap<StringValue<'v>, Value<'v>>>>,
+            key: Hashed<StringValue<'v>>,
             val: Value<'v>,
         ) -> bool {
             match kwargs {
                 None => {
                     let mut mp = SmallMap::with_capacity_largest_vec();
                     mp.insert_hashed(key, val);
-                    *kwargs = Some(box Dict::new(mp));
+                    *kwargs = Some(box mp);
                     false
                 }
-                Some(mp) => mp.content.insert_hashed(key, val).is_some(),
+                Some(mp) => mp.insert_hashed(key, val).is_some(),
             }
         }
 
@@ -425,7 +429,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                     None => {
                         add_kwargs(
                             &mut kwargs,
-                            Hashed::new_unchecked(name.small_hash(), name_value.to_value()),
+                            Hashed::new_unchecked(name.small_hash(), *name_value),
                             *v,
                         );
                     }
@@ -466,14 +470,17 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             match Dict::from_value(param_kwargs) {
                 Some(y) => {
                     for (k, v) in y.iter_hashed() {
-                        match k.key().unpack_str() {
+                        match StringValue::new(*k.key()) {
                             None => return Err(FunctionError::ArgsValueIsNotString.into()),
                             Some(s) => {
-                                let repeat = match self
-                                    .names
-                                    .get_hashed_str(BorrowHashed::new_unchecked(k.hash(), s))
-                                {
-                                    None => add_kwargs(&mut kwargs, k, v),
+                                let repeat = match self.names.get_hashed_str(
+                                    BorrowHashed::new_unchecked(k.hash(), s.as_str()),
+                                ) {
+                                    None => add_kwargs(
+                                        &mut kwargs,
+                                        Hashed::new_unchecked(k.hash(), s),
+                                        v,
+                                    ),
                                     Some(i) => {
                                         let this_slot = &slots[*i];
                                         let repeat = this_slot.get().is_some();
@@ -483,7 +490,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                                 };
                                 if unlikely(repeat) {
                                     return Err(FunctionError::RepeatedParameter {
-                                        name: s.to_owned(),
+                                        name: s.as_str().to_owned(),
                                     }
                                     .into());
                                 }
@@ -538,11 +545,14 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         if let Some(kwargs_pos) = self.kwargs {
-            let kwargs = kwargs.take().unwrap_or_default();
-            slots[kwargs_pos].set(Some(heap.alloc(*kwargs)));
+            let kwargs = match kwargs.take() {
+                Some(kwargs) => Dict::new(coerce(*kwargs)),
+                None => Dict::default(),
+            };
+            slots[kwargs_pos].set(Some(heap.alloc(kwargs)));
         } else if let Some(kwargs) = kwargs {
             return Err(FunctionError::ExtraNamedParameters {
-                names: kwargs.content.keys().map(|x| x.to_str()).collect(),
+                names: kwargs.keys().map(|x| x.as_str().to_owned()).collect(),
                 function: self.signature(),
             }
             .into());
