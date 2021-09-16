@@ -26,6 +26,7 @@ use crate::{
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
+        float::{FLOAT_TYPE, unpack_and_coerce_to_float},
         function::{BoundMethod, NativeAttribute},
         int::INT_TYPE,
         list::List,
@@ -318,6 +319,56 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             .map(|(k, v)| heap.alloc((k as i32 + start, v)))
             .collect();
         Ok(List::new(v))
+    }
+
+    /// [float](
+    /// https://github.com/google/skylark/blob/a5f7082aabed29c0e429c722292c66ec8ecf9591/doc/spec.md#float
+    /// ): interprets its argument as a floating-point number.
+    ///
+    /// If x is a `float`, the result is x.
+    /// if x is an `int`, the result is the nearest floating point value to x.
+    /// If x is a string, the string is interpreted as a floating-point literal.
+    /// With no arguments, `float()` returns `0.0`.
+    ///
+    /// ```
+    /// # starlark::assert::all_true(r#"
+    /// float() == 0.0
+    /// float(1) == 1.0
+    /// float('1') == 1.0
+    /// float('1.0') == 1.0
+    /// float('.25') == 0.25
+    /// float('1e2') == 100.0
+    /// # "#);
+    /// # starlark::assert::fail(r#"
+    /// float("hello")   # error: not a valid number
+    /// # "#, "not a valid number");
+    /// # starlark::assert::fail(r#"
+    /// float([])   # error: argument must be a string or a number
+    /// # "#, "argument must be a string or a number");
+    /// ```
+    #[starlark_type(FLOAT_TYPE)]
+    fn float(ref a: Option<Value>) -> f64 {
+        if a.is_none() {
+            return Ok(0.0);
+        }
+        let a = a.unwrap();
+        if let Some(f) = unpack_and_coerce_to_float(a) {
+            Ok(f)
+        } else if let Some(s) = a.unpack_str() {
+            match s.parse::<f64>() {
+                Ok(f) => Ok(f),
+                Err(x) => Err(anyhow!(
+                    "{} is not a valid number: {}",
+                    a.to_repr(),
+                    x
+                )),
+            }
+        } else {
+            Err(anyhow!(
+                "float() argument must be a string or a number, not '{}'",
+                a.get_type()
+            ))
+        }
     }
 
     /// [getattr](

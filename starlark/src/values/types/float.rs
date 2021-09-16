@@ -19,10 +19,16 @@
 
 use std::cmp::Ordering;
 
-use crate::values::{AllocFrozenValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError};
+use crate::values::{AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError};
 
-/// The result of calling `type()` on integers.
+/// The result of calling `type()` on floats.
 pub const FLOAT_TYPE: &str = "float";
+
+impl<'v> AllocValue<'v> for f64 {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
+    }
+}
 
 impl AllocFrozenValue for f64 {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
