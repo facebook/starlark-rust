@@ -226,7 +226,14 @@ impl FrozenHeap {
 // A freezer is a pair of the FrozenHeap and a "magic" value,
 // which we happen to use for the slots (see `FrozenSlotsRef`)
 // but could be used for anything.
-pub struct Freezer(FrozenHeap, FrozenValue, Option<Reservation<'static>>);
+pub struct Freezer {
+    /// Freezing into this heap.
+    heap: FrozenHeap,
+    /// Future module, `BlackHole` initially, then `FrozenModuleRef`.
+    magic: FrozenValue,
+    /// Reservation for that module.
+    reservation: Option<Reservation<'static>>,
+}
 
 impl Freezer {
     pub(crate) fn new<T: SimpleValue>(heap: FrozenHeap) -> Self {
@@ -246,29 +253,36 @@ impl Freezer {
         // Morally the type is tied to the heap, but we want to have them both next to each other
         let reservation = unsafe { transmute!(Reservation, Reservation<'static>, reservation) };
         let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(reservation.ptr()) });
-        Self(heap, fv, Some(reservation))
+        Freezer {
+            heap,
+            magic: fv,
+            reservation: Some(reservation),
+        }
     }
 
     pub(crate) fn set_magic(&mut self, val: impl SimpleValue) {
-        let reservation = self.2.take().expect("Can only call set_magic once");
+        let reservation = self
+            .reservation
+            .take()
+            .expect("Can only call set_magic once");
         reservation.fill(simple(val))
     }
 
     pub(crate) fn get_magic(&self) -> FrozenValue {
-        self.1
+        self.magic
     }
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {
-        self.0.into_ref()
+        self.heap.into_ref()
     }
 
     /// Allocate a new value while freezing. Usually not a great idea.
     pub fn alloc<'v, T: AllocFrozenValue>(&'v self, val: T) -> FrozenValue {
-        val.alloc_frozen_value(&self.0)
+        val.alloc_frozen_value(&self.heap)
     }
 
     pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> (FrozenValue, Reservation<'v>) {
-        let r = self.0.arena.reserve::<T>();
+        let r = self.heap.arena.reserve::<T>();
         let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (fv, r)
     }
