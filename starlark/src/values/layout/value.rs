@@ -124,6 +124,11 @@ impl<'v> Value<'v> {
         self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
     }
 
+    /// Is this value a float.
+    pub fn is_float(self) -> bool {
+        self.downcast_ref::<f64>().is_some()
+    }
+
     /// Obtain the underlying `bool` if it is a boolean.
     pub fn unpack_bool(self) -> Option<bool> {
         let p = self.0.ptr_value();
@@ -131,18 +136,6 @@ impl<'v> Value<'v> {
             Some(true)
         } else if p == cast::ptr_to_usize(VALUE_FALSE) {
             Some(false)
-        } else {
-            None
-        }
-    }
-
-    /// Obtain the underlying `int` if it is an integer.
-    // TODO: find better name
-    pub fn unpack_and_coerce_float(self) -> Option<f64> {
-        if let Some(f) = self.downcast_ref::<f64>() {
-            Some(*f)
-        } else if let Some(i) = self.unpack_int() {
-            Some(i as f64)
         } else {
             None
         }

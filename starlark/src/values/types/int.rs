@@ -24,7 +24,7 @@
 //! integer values will be stored on the heap.
 
 use crate::values::{
-    error::ValueError, layout::PointerI32, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
+    error::ValueError, layout::PointerI32, types::float, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
     Heap, StarlarkValue, UnpackValue, Value,
 };
 use std::cmp::Ordering;
@@ -101,8 +101,10 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
             .map(Value::new_int)
             .ok_or_else(|| ValueError::IntegerOverflow.into())
     }
-    fn add(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if other.is_float() {
+            (self.get() as f64).add(other, heap)
+        } else if let Some(other) = other.unpack_int() {
             self.get()
                 .checked_add(other)
                 .map(Value::new_int)
@@ -111,8 +113,10 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
             ValueError::unsupported_with(self, "+", other)
         }
     }
-    fn sub(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
+    fn sub(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if other.is_float() {
+            (self.get() as f64).sub(other, heap)
+        } else if let Some(other) = other.unpack_int() {
             self.get()
                 .checked_sub(other)
                 .map(Value::new_int)
@@ -122,26 +126,29 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match other.unpack_int() {
-            Some(other) => self
+        if other.is_float() {
+            (self.get() as f64).mul(other, heap)
+        } else if let Some(other) = other.unpack_int() {
+            self
                 .get()
                 .checked_mul(other)
                 .ok_or_else(|| ValueError::IntegerOverflow.into())
-                .map(Value::new_int),
-            None => other.mul(Value::new_int(self.get()), heap),
+                .map(Value::new_int)
+        } else {
+            other.mul(Value::new_int(self.get()), heap)
         }
     }
-    fn div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            if other == 0.0 {
-                return Err(ValueError::DivisionByZero.into());
-            }
-            Ok(heap.alloc_simple(self.get() as f64 / other))
+    fn div(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if float::unpack_and_coerce_to_float(other).is_some() {
+            (self.get() as f64).div(other, heap)
         } else {
             ValueError::unsupported_with(self, "/", other)
         }
     }
-    fn percent(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if other.is_float() {
+            return (self.get() as f64).percent(other, heap)
+        }
         i64_arith_bin_op(self.get(), other, "%", |a, b| {
             if b == 0 {
                 return Err(ValueError::DivisionByZero.into());
@@ -158,7 +165,10 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
             }
         })
     }
-    fn floor_div(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn floor_div(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        if other.is_float() {
+            return (self.get() as f64).floor_div(other, heap)
+        }
         i64_arith_bin_op(self.get(), other, "//", |a, b| {
             if b == 0 {
                 return Err(ValueError::DivisionByZero.into());
@@ -173,7 +183,9 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
-        if let Some(other) = other.unpack_int() {
+        if other.is_float() {
+            (self.get() as f64).compare(other)
+        } else if let Some(other) = other.unpack_int() {
             Ok(self.get().cmp(&other))
         } else {
             ValueError::unsupported_with(self, "==", other)
@@ -244,9 +256,14 @@ mod tests {
 +1 == 1
 -1 == 0 - 1
 1 + 2 == 3
+1 + 2.0 == 3.0
 1 - 2 == -1
+1 - 2.0 == -1.0
 2 * 3 == 6
+2 * 3.0 == 6.0
+4 / 2 == 2.0
 5 % 3 == 2
+4 // 2 == 2
 "#,
         );
     }

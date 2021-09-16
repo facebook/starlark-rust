@@ -33,12 +33,45 @@ impl AllocFrozenValue for f64 {
 impl SimpleValue for f64 {}
 
 
+fn f64_arith_bin_op<'v, F>(
+    left: f64,
+    right: Value,
+    heap: &'v Heap,
+    op: &'static str,
+    f: F,
+) -> anyhow::Result<Value<'v>>
+where
+    F: FnOnce(f64, f64) -> anyhow::Result<f64>,
+{
+    if let Some(other) = right.downcast_ref::<f64>() {
+        Ok(heap.alloc_simple(f(left, *other)?))
+    } else if let Some(other) = right.unpack_int() {
+        Ok(heap.alloc_simple(f(left, other as f64)?))
+    } else {
+        ValueError::unsupported_with(&left, op, right)
+    }
+}
+
+
+pub fn unpack_and_coerce_to_float(value: Value) -> Option<f64> {
+    if let Some(f) = value.downcast_ref::<f64>() {
+        Some(*f)
+    } else if let Some(i) = value.unpack_int() {
+        Some(i as f64)
+    } else {
+        None
+    }
+}
+
+
 impl<'v> StarlarkValue<'v> for f64 {
     starlark_type!(FLOAT_TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            Ok(*self == other)
+        if let Some(other) = other.downcast_ref::<f64>() {
+            Ok(self == other)
+        } else if let Some(other) = other.unpack_int() {
+            Ok(*self == other as f64)
         } else {
             Ok(false)
         }
@@ -78,64 +111,55 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn add(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            Ok(heap.alloc_simple(*self + other))
-        } else {
-            ValueError::unsupported_with(self, "+", other)
-        }
+        f64_arith_bin_op(*self, other, heap, "+", |l, r| {
+            Ok(l + r)
+        })
     }
 
     fn sub(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            Ok(heap.alloc_simple(*self - other))
-        } else {
-            ValueError::unsupported_with(self, "-", other)
-        }
+        f64_arith_bin_op(*self, other, heap, "-", |l, r| {
+            Ok(l - r)
+        })
     }
 
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            Ok(heap.alloc_simple(*self * other))
-        } else {
-            ValueError::unsupported_with(self, "*", other)
-        }
+        f64_arith_bin_op(*self, other, heap, "*", |l, r| {
+            Ok(l * r)
+        })
     }
 
     fn div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            if other == 0.0 {
-                return Err(ValueError::DivisionByZero.into());
+        f64_arith_bin_op(*self, other, heap, "/", |l, r| {
+            if r == 0.0 {
+                Err(ValueError::DivisionByZero.into())
+            } else {
+                Ok(l / r)
             }
-            Ok(heap.alloc_simple(*self / other))
-        } else {
-            ValueError::unsupported_with(self, "%", other)
-        }
+        })
     }
 
     fn percent(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            if other == 0.0 {
-                return Err(ValueError::DivisionByZero.into());
+        f64_arith_bin_op(*self, other, heap, "%", |l, r| {
+            if r == 0.0 {
+                Err(ValueError::DivisionByZero.into())
+            } else {
+                Ok(l % r)
             }
-            Ok(heap.alloc_simple(*self % other))
-        } else {
-            ValueError::unsupported_with(self, "%", other)
-        }
+        })
     }
 
     fn floor_div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_and_coerce_float() {
-            if other == 0.0 {
-                return Err(ValueError::DivisionByZero.into());
+        f64_arith_bin_op(*self, other, heap, "//", |l, r| {
+            if r == 0.0 {
+                Err(ValueError::DivisionByZero.into())
+            } else {
+                Ok((l / r).floor())
             }
-            Ok(heap.alloc_simple((*self / other).trunc()))
-        } else {
-            ValueError::unsupported_with(self, "%", other)
-        }
+        })
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
-        if let Some(other_float) = other.unpack_and_coerce_float() {
+        if let Some(other_float) = unpack_and_coerce_to_float(other) {
             // According to the spec (https://github.com/bazelbuild/starlark/blob/689f54426951638ef5b7c41a14d8fc48e65c5f77/spec.md#floating-point-numbers)
             // All NaN values compare equal to each other, but greater than any non-NaN float value.
             match (self.is_nan(), other_float.is_nan()) {
@@ -168,7 +192,9 @@ mod tests {
 1.0 + 2.0 == 3.0
 1.0 - 2.0 == -1.0
 2.0 * 3.0 == 6.0
+5.0 / 2.0 == 2.5
 5.0 % 3.0 == 2.0
+5.0 // 2.0 == 2.0
 "#,
         );
     }
