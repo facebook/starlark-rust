@@ -82,11 +82,8 @@ where
 
     fn collect_repr(&self, s: &mut String) {
         s.push('(');
-        let mut first = true;
-        for v in &self.content {
-            if first {
-                first = false;
-            } else {
+        for (i, v) in self.content.iter().enumerate() {
+            if i != 0 {
                 s.push_str(", ");
             }
             v.collect_repr(s);
