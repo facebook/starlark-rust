@@ -15,10 +15,6 @@
  * limitations under the License.
  */
 
-// Possible optimisations:
-// Preallocate int, none, bool etc slots in Value, so they are shared
-// Encoding none, bool etc in the pointer of frozen value
-
 use crate::{
     collections::Hashed,
     values::{
