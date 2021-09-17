@@ -111,6 +111,17 @@ impl AstModule {
     /// Parse a Starlark module to produce an [`AstModule`], or an error if there are syntax errors.
     /// The `filename` is for error messages only, and does not have to be a valid file.
     /// The [`Dialect`] selects which Starlark constructs are valid.
+    ///
+    /// Errors will be reported using the [`Diagnostic`] type. For example:
+    ///
+    /// ```
+    /// use starlark::syntax::{AstModule, Dialect};
+    /// use starlark::errors::Diagnostic;
+    ///
+    /// let err: anyhow::Error = AstModule::parse("filename", "\n(unmatched".to_owned(), &Dialect::Standard).unwrap_err();
+    /// let err: Diagnostic = err.downcast::<Diagnostic>().unwrap();
+    /// assert_eq!(format!("{}", err.span.unwrap()), "filename:2:11");
+    /// ```
     pub fn parse(filename: &str, content: String, dialect: &Dialect) -> anyhow::Result<Self> {
         let codemap = CodeMap::new(filename.to_owned(), content);
         let lexer = Lexer::new(codemap.source(), dialect, codemap.dupe());
