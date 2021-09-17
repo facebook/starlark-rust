@@ -35,7 +35,8 @@ use crate::{
 use either::Either;
 use gazebo::{cast, prelude::*};
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
+    cmp,
     collections::HashSet,
     fmt,
     fmt::{Debug, Formatter},
@@ -51,6 +52,8 @@ use std::{
 /// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.
 #[derive(Default)]
 pub struct Heap {
+    /// Peak memory seen when a garbage collection takes place (may be lower than currently allocated)
+    peak_allocated: Cell<usize>,
     arena: RefCell<Arena>,
 }
 
@@ -315,6 +318,12 @@ impl Heap {
         self.arena.borrow().allocated_bytes()
     }
 
+    /// Peak memory allocated to this heap, even if the value is now lower
+    /// as a result of a subsequent garbage collection.
+    pub fn peak_allocated_bytes(&self) -> usize {
+        cmp::max(self.allocated_bytes(), self.peak_allocated.get())
+    }
+
     /// Number of bytes allocated by the heap but not yet filled.
     pub fn available_bytes(&self) -> usize {
         self.arena.borrow().available_bytes()
@@ -411,6 +420,8 @@ impl Heap {
     /// invalid_. Furthermore, any references to values, e.g `&'v str` will
     /// also become invalid.
     pub(crate) unsafe fn garbage_collect<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
+        // Record the highest peak, so it never decreases
+        self.peak_allocated.set(self.peak_allocated_bytes());
         self.garbage_collect_internal(f)
     }
 
