@@ -172,9 +172,7 @@ impl<'v> EnumType<'v> {
                     .either(|x| &x.elements, |x| coerce_ref(&x.elements));
                 match elements.get_hashed(val.get_hashed()?.borrow()) {
                     Some(v) => Ok(*v),
-                    None => {
-                        Err(EnumError::InvalidElement(val.to_string(), this.to_string()).into())
-                    }
+                    None => Err(EnumError::InvalidElement(val.to_str(), this.to_repr()).into()),
                 }
             },
             "enum(value)".to_owned(),
