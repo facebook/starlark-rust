@@ -132,7 +132,7 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// allowing implementations of [`ComplexValue`] to be agnostic of their contained type.
 /// For details about each function, see the documentation for [`Value`],
 /// which provides the same functions (and more).
-pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
+pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> {
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
