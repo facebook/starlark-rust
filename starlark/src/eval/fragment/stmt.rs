@@ -200,6 +200,9 @@ fn eval_assign_list<'v>(
     }
 }
 
+pub(crate) type AssignModifyOp =
+    for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>;
+
 impl Compiler<'_> {
     pub fn assign(&mut self, expr: CstAssign) -> AssignCompiled {
         let span = expr.span;
@@ -253,7 +256,7 @@ impl Compiler<'_> {
         span_stmt: Span,
         lhs: CstAssign,
         rhs: ExprCompiledValue,
-        op: for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>,
+        op: AssignModifyOp,
     ) -> StmtsCompiled {
         let span_lhs = lhs.span;
         match lhs.node {
