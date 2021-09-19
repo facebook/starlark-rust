@@ -470,9 +470,21 @@ impl<'v> ComplexValue<'v> for Def<'v> {
     }
 }
 
+pub(crate) trait DefLike<'v> {
+    const FROZEN: bool;
+}
+
+impl<'v> DefLike<'v> for DefGen<Value<'v>> {
+    const FROZEN: bool = false;
+}
+
+impl<'v> DefLike<'v> for DefGen<FrozenValue> {
+    const FROZEN: bool = true;
+}
+
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DefGen<V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + DefLike<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
 
@@ -503,7 +515,10 @@ where
     }
 }
 
-impl<'v, V: ValueLike<'v>> DefGen<V> {
+impl<'v, V: ValueLike<'v>> DefGen<V>
+where
+    Self: DefLike<'v>,
+{
     fn invoke_raw(
         &self,
         locals: LocalSlotBase,
@@ -541,6 +556,9 @@ impl<'v, V: ValueLike<'v>> DefGen<V> {
             eval.local_variables.set_slot(*me, captured.to_value());
         }
 
+        if Self::FROZEN {
+            debug_assert!(self.module.is_some());
+        }
         let res =
             eval.with_function_context(self.module, &self.codemap, |eval| (self.stmt.body)(eval));
         eval.local_variables.release(old_locals);
