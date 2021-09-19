@@ -26,6 +26,7 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{any::StarlarkAny, none::NoneType, StarlarkValue, Value},
 };
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, cell::AsARef};
 use std::{
     cell::RefCell,
@@ -187,7 +188,8 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
 
 #[test]
 fn test_repr_str() {
-    #[derive(AnyLifetime, Debug)]
+    #[derive(AnyLifetime, Debug, Display)]
+    #[display(fmt = "{:?}", self)]
     struct Foo(Option<usize>);
 
     #[starlark_module]

@@ -32,16 +32,27 @@
 //! use starlark::environment::GlobalsBuilder;
 //! use starlark::values::Value;
 //! use starlark::values::any::StarlarkAny;
+//! use std::fmt;
+//! use std::fmt::Display;
 //! use std::time::Instant;
+//!
+//! #[derive(Debug)]
+//! struct MyInstant(Instant);
+//!
+//! impl Display for MyInstant {
+//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         write!(f, "{:?}", self)
+//!     }
+//! }
 //!
 //! #[starlark_module]
 //! fn globals(builder: &mut GlobalsBuilder) {
 //!     fn start() -> StarlarkAny {
-//!         Ok(StarlarkAny::new(Instant::now()))
+//!         Ok(StarlarkAny::new(MyInstant(Instant::now())))
 //!     }
 //!
 //!     fn elapsed(x: Value) -> String {
-//!         Ok(StarlarkAny::get::<Instant>(x).unwrap().elapsed().as_secs_f64().to_string())
+//!         Ok(StarlarkAny::get::<MyInstant>(x).unwrap().0.elapsed().as_secs_f64().to_string())
 //!     }
 //! }
 //!
@@ -63,13 +74,13 @@ use crate::{
 };
 use std::{
     any::Any,
-    fmt::{self, Debug},
+    fmt::{self, Debug, Display},
 };
 
-trait AnyDebugSendSync: Any + Debug + Send + Sync {
+trait AnyDebugDisplaySendSync: Any + Debug + Display + Send + Sync {
     fn as_any(&self) -> &dyn Any;
 }
-impl<T: Any + Debug + Send + Sync> AnyDebugSendSync for T {
+impl<T: Any + Debug + Display + Send + Sync> AnyDebugDisplaySendSync for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -78,7 +89,7 @@ impl<T: Any + Debug + Send + Sync> AnyDebugSendSync for T {
 /// A type that can be passed around as a Starlark [`Value`], but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with
 /// [`new`](StarlarkAny::new) and decomposed with [`get`](StarlarkAny::get).
-pub struct StarlarkAny(Box<dyn AnyDebugSendSync>);
+pub struct StarlarkAny(Box<dyn AnyDebugDisplaySendSync>);
 
 impl StarlarkAny {
     /// The result of calling `type()` on [`StarlarkAny`].
@@ -89,20 +100,26 @@ starlark_simple_value!(StarlarkAny);
 
 impl Debug for StarlarkAny {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        Debug::fmt(&self.0, f)
+    }
+}
+
+impl Display for StarlarkAny {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
 
 impl StarlarkAny {
     /// Create a new [`StarlarkAny`] value. Such a value can be allocated on a heap with
     /// `heap.alloc(StarlarkAny::new(x))`.
-    pub fn new<T: Any + Debug + Send + Sync>(x: T) -> Self {
+    pub fn new<T: Any + Debug + Display + Send + Sync>(x: T) -> Self {
         Self(box x)
     }
 
     /// Extract from a [`Value`] that contains a [`StarlarkAny`] underneath. Returns [`None`] if
     /// the value does not match the expected type.
-    pub fn get<'v, T: Any + Debug + Send + Sync>(x: Value<'v>) -> Option<&'v T> {
+    pub fn get<'v, T: Any + Debug + Display + Send + Sync>(x: Value<'v>) -> Option<&'v T> {
         let x: &'v Self = x.downcast_ref()?;
         let x: &'v dyn Any = x.0.as_ref().as_any();
         x.downcast_ref::<T>()

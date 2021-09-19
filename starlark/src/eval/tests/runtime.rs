@@ -24,6 +24,7 @@ use crate::{
     environment::GlobalsBuilder,
     values::{any::StarlarkAny, Heap},
 };
+use derive_more::Display;
 use once_cell::sync::Lazy;
 use std::{
     mem,
@@ -47,7 +48,7 @@ fn test_deallocation() {
     // Check that we really do deallocate values we create
     static COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
-    #[derive(Default, Debug)]
+    #[derive(Default, Debug, Display)]
     struct Dealloc;
 
     impl Drop for Dealloc {
