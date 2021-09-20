@@ -50,6 +50,7 @@ use gazebo::{
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
 ///
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
+/// The [`Display`](std::fmt::Display) trait is equivalent to the `repr()` function in Starlark.
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
 pub struct Value<'v>(pub(crate) Pointer<'v, AValueHeader>);

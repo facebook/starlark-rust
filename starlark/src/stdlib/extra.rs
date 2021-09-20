@@ -128,7 +128,7 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
 pub fn print(builder: &mut GlobalsBuilder) {
     fn print(args: Vec<Value>) -> NoneType {
         // In practice most users should want to put the print somewhere else, but this does for now
-        eprintln!("{}", args.iter().join(" "));
+        eprintln!("{}", args.iter().map(|x| x.to_str()).join(" "));
         Ok(NoneType)
     }
 }

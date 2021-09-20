@@ -244,7 +244,7 @@ fn test_display_debug() {
     );
 
     let val = heap.alloc("test");
-    assert_eq!(format!("{}", val), "test");
+    assert_eq!(format!("{}", val), "\"test\"");
     assert_eq!(val.to_repr(), "\"test\"");
     assert_eq!(val.to_str(), "test");
     assert_eq!(format!("{:?}", val), "Value(\"test\")");

@@ -72,7 +72,9 @@ unsafe impl<'v> CoerceKey<Value<'v>> for FrozenValue {}
 
 impl Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_str())
+        // We want to reuse Display for `repr`, so that means that
+        // strings must display "with quotes", so we get everything consistent.
+        write!(f, "{}", self.to_repr())
     }
 }
 
