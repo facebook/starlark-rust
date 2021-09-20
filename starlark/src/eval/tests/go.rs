@@ -49,12 +49,7 @@ fn test_go() {
         ],
     );
     // Skip benchmark.star, for benchmarking not testing
-    assert.conformance(&ignore_bad_lines(
-        test_case!("bool.star"),
-        &[
-            "0.0", // Floats, unsupported
-        ],
-    ));
+    assert.conformance(test_case!("bool.star"));
     assert.conformance(&ignore_bad_lines(
         test_case!("builtin.star"),
         &[
@@ -101,7 +96,35 @@ fn test_go() {
             "Verify position of an \"unhashable key\"", // FIXME: we should do better
         ],
     );
-    // Skip float.star, since we don't support floats
+    assert.conformance(&ignore_bad_lines(
+        test_case!("float.star"),
+        &[
+            // int's outside our range
+            "1229999999999999973",
+            "9223372036854775808",
+            "1000000000000000000",
+            "1230000000000000049",
+            "9223372036854775807",
+            "p53",
+            "maxint64",
+            "int too large to convert to float",
+
+            // FIXME
+            "duplicate key: 123",   // float dict keys lint - works for integer floats but not caught here
+            "assert.eq(str(0.), ",  // str for floats
+            "assert.eq(str(.0), ",
+            "assert.eq(str(1 // neginf), ",
+            "assert.eq(100.0 % -7.0, -5)",  // modulo arithm
+            "assert.eq(-100.0 % 7.0, 5)",
+            "assert.eq(-100.0 % 7, 5)",
+            "assert.eq(100.0 % -8.0, -4.0)",
+            "assert.eq(-100.0 % 8.0, 4.0)",
+            "assert.eq(98.0 % -8.0, -6.0)",
+            "assert.eq(-98.0 % 8.0, 6.0)",
+            "assert.eq(-98.0 % -8.0, -2.0)",
+            "want int",     // float used for indexing strings/ranges/lists (should fail)
+        ],
+    ));
     assert.conformance(&ignore_bad_lines(
         test_case!("function.star"),
         &[
@@ -117,7 +140,6 @@ fn test_go() {
         &ignore_bad_lines(
             test_case!("misc.star"),
             &[
-                "2.0",                          // We don't support float
                 "'<built-in function freeze>'", // Different display of functions
             ],
         ),

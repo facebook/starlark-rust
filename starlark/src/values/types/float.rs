@@ -84,7 +84,11 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn collect_repr(&self, s: &mut String) {
-        s.push_str(&self.to_string());
+        if self.is_nan() {
+            s.push_str("nan")
+        } else {
+            s.push_str(&self.to_string())
+        }
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
@@ -94,7 +98,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     fn to_int(&self) -> anyhow::Result<i32> {
         let candidate = self.trunc();
         if i32::MIN as f64 <= candidate && candidate <= i32::MAX as f64 {
-            Ok(self.trunc() as i32)
+            Ok(candidate as i32)
         } else {
             Err(ValueError::IntegerOverflow.into())
         }
@@ -105,7 +109,22 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        Ok(self.to_bits())
+        Ok(
+            if self.is_nan() {
+                // all possible NaNs should hash to the same value
+                0
+            } else if *self == f64::INFINITY {
+                u64::MAX
+            } else if *self == f64::NEG_INFINITY {
+                u64::MIN
+            } else {
+                // match hash of int when possible
+                match self.to_int() {
+                    Ok(i) => i as u64,
+                    Err(_) => self.to_bits(),
+                }
+            }
+        )
     }
 
     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -201,6 +220,23 @@ mod tests {
 5.0 / 2.0 == 2.5
 5.0 % 3.0 == 2.0
 5.0 // 2.0 == 2.0
+"#,
+        );
+    }
+
+    #[test]
+    fn test_comparisons() {
+        assert::all_true(
+            r#"
++0.0 == -0.0
+0.0 == 0
+0 == 0.0
+0 < 1.0
+0.0 < 1
+1 > 0.0
+1.0 > 0
+0.0 < float("nan")
+float("+inf") < float("nan")
 "#,
         );
     }

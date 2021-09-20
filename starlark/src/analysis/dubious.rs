@@ -56,7 +56,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
                 AstLiteral::IntLiteral(x) => Some((Key::Int(x.node), x.span)),
                 AstLiteral::FloatLiteral(x) => {
                     let value = x.node;
-                    let int_candidate = value.floor();
+                    let int_candidate = value.trunc();
                     if value == int_candidate && int_candidate <= i32::MAX as f64 && int_candidate >= i32::MIN as f64 {
                         Some((Key::Int(int_candidate as i32), x.span))
                     } else {
@@ -127,6 +127,7 @@ mod test {
             r#"
 {'no1': 1, 'no1': 2}
 {42: 1, 78: 9, 'no2': 100, 42: 6, 'no2': 8}
+{123.0: "f", 123: "i"}
 
 # Variables can't change as a result of expression evaluation,
 # so it's always an error if you see the same expression
@@ -140,7 +141,7 @@ mod test {
         duplicate_dictionary_key(&m, &mut res);
         assert_eq!(
             res.map(|x| x.problem.about()),
-            &["\"no1\"", "42", "\"no2\"", "no3", "no3", "no4"]
+            &["\"no1\"", "42", "\"no2\"", "123", "no3", "no3", "no4"]
         );
     }
 }
