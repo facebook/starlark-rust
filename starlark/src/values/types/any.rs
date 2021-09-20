@@ -75,7 +75,7 @@ use std::fmt::{self, Debug, Display};
 /// A type that can be passed around as a Starlark [`Value`], but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with
 /// [`new`](StarlarkAny::new) and decomposed with [`get`](StarlarkAny::get).
-pub struct StarlarkAny<T: Debug + Display + Send + Sync + 'static>(T);
+pub struct StarlarkAny<T: Debug + Display + Send + Sync + 'static>(pub T);
 
 unsafe impl<'a, T: Debug + Display + Send + Sync + 'static> AnyLifetime<'a> for StarlarkAny<T> {
     any_lifetime_body!(StarlarkAny<T>);

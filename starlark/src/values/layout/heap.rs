@@ -18,6 +18,7 @@
 use crate::{
     collections::Hashed,
     values::{
+        any::StarlarkAny,
         layout::{
             arena::{AValueHeader, Arena, HeapSummary, Reservation},
             avalue::{complex, simple, starlark_str, AValue},
@@ -25,7 +26,7 @@ use crate::{
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
-        AllocFrozenValue, ComplexValue, SimpleValue,
+        AllocFrozenValue, ComplexValue, FrozenRef, SimpleValue,
     },
 };
 use either::Either;
@@ -35,7 +36,7 @@ use std::{
     cmp,
     collections::HashSet,
     fmt,
-    fmt::{Debug, Formatter},
+    fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     intrinsics::copy_nonoverlapping,
     marker::PhantomData,
@@ -202,6 +203,19 @@ impl FrozenHeap {
     /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
         self.alloc_raw(simple(val))
+    }
+
+    /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
+    fn alloc_simple_frozen_ref<T: SimpleValue>(&self, value: T) -> FrozenRef<T> {
+        let value = self.alloc_simple(value);
+        // Here we could avoid dynamic cast, but this code is not executed frequently.
+        value.downcast_frozen_ref().unwrap()
+    }
+
+    /// Allocate any value in the frozen heap.
+    pub(crate) fn alloc_any<T: Debug + Display + Send + Sync>(&self, value: T) -> FrozenRef<T> {
+        let value = self.alloc_simple_frozen_ref(StarlarkAny::new(value));
+        value.map(|r| &r.0)
     }
 
     /// Number of bytes allocated on this heap, not including any memory

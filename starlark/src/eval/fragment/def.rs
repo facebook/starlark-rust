@@ -45,13 +45,14 @@ use crate::{
         docs::{DocItem, DocString},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        ComplexValue, Freezer, FrozenStringValue, FrozenValue, StarlarkValue, Trace, Tracer, Value,
-        ValueLike,
+        ComplexValue, Freezer, FrozenRef, FrozenStringValue, FrozenValue, StarlarkValue, Trace,
+        Tracer, Value, ValueLike,
     },
 };
 use derivative::Derivative;
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
-use std::{collections::HashMap, mem, sync::Arc};
+use std::{collections::HashMap, mem};
 
 struct ParameterName {
     name: String,
@@ -104,8 +105,9 @@ impl<T> ParameterCompiled<T> {
     }
 }
 
-#[derive(Derivative)]
+#[derive(Derivative, Display)]
 #[derivative(Debug)]
+#[display(fmt = "DefInfo")]
 pub(crate) struct DefInfo {
     /// The raw docstring pulled out of the AST.
     pub(crate) docstring: Option<String>,
@@ -203,7 +205,7 @@ impl Compiler<'_> {
             None
         };
 
-        let info = Arc::new(DefInfo {
+        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
             docstring,
             scope_names,
             body: body.as_compiled(self),
@@ -261,7 +263,7 @@ impl Compiler<'_> {
                 parameter_captures,
                 parameter_types,
                 return_type,
-                info.dupe(),
+                info,
                 eval,
             )
         })
@@ -278,7 +280,7 @@ pub(crate) struct DefGen<V> {
     parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
     codemap: CodeMap,                       // Codemap that was active during this module
-    pub(crate) stmt: Arc<DefInfo>,          // The source code and metadata for this function
+    pub(crate) stmt: FrozenRef<DefInfo>,    // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
     /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
     /// [`ValueCaptured`] or [`FrozenValueCaptured`].
@@ -299,7 +301,7 @@ impl<'v> Def<'v> {
         parameter_captures: Vec<usize>,
         parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
-        stmt: Arc<DefInfo>,
+        stmt: FrozenRef<DefInfo>,
         eval: &mut Evaluator<'v, '_>,
     ) -> Value<'v> {
         let captured = stmt
