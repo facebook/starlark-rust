@@ -21,7 +21,7 @@ use crate::{
     codemap::Spanned,
     eval::{
         compiler::{scope::CstExpr, Compiler},
-        fragment::expr::{ExprCompiled, ExprCompiledValue},
+        fragment::expr::ExprCompiledValue,
     },
     syntax::ast::ExprP,
     values::{dict::Dict, list::List},
@@ -50,8 +50,8 @@ pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
 pub(crate) enum Conditional {
     True,
     False,
-    Normal(ExprCompiled),
-    Negate(ExprCompiled),
+    Normal(ExprCompiledValue),
+    Negate(ExprCompiledValue),
 }
 
 impl Compiler<'_> {
@@ -73,9 +73,9 @@ impl Compiler<'_> {
             }
             v => {
                 if expect {
-                    Conditional::Normal(v.as_compiled())
+                    Conditional::Normal(v)
                 } else {
-                    Conditional::Negate(v.as_compiled())
+                    Conditional::Negate(v)
                 }
             }
         }

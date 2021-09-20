@@ -32,7 +32,7 @@ use crate::{
             throw, Compiler, EvalException, ExprEvalException,
         },
         fragment::{
-            expr::{ExprCompiled, ExprCompiledValue},
+            expr::ExprCompiledValue,
             known::{list_to_tuple, Conditional},
         },
         runtime::evaluator::{Evaluator, GC_THRESHOLD},
@@ -480,14 +480,15 @@ impl Compiler<'_> {
     fn stmt_if_compiled(
         &mut self,
         span: Span,
-        cond: ExprCompiled,
+        cond: ExprCompiledValue,
         cond_is_positive: bool,
         then_block: StmtsCompiled,
     ) -> StmtsCompiled {
         if then_block.is_empty() {
-            self.stmt_expr_compiled(span, ExprCompiledValue::Compiled(cond))
+            self.stmt_expr_compiled(span, cond)
         } else {
             let then_block = then_block.as_compiled(self);
+            let cond = cond.as_compiled();
             if cond_is_positive {
                 stmt!(self, "if_then", span, |eval| if cond(eval)?.to_bool() {
                     then_block(eval)?
@@ -537,6 +538,7 @@ impl Compiler<'_> {
         } else if t.is_empty() {
             self.stmt_if_compiled(span, cond, false, f)
         } else {
+            let cond = cond.as_compiled();
             let t = t.as_compiled(self);
             let f = f.as_compiled(self);
             stmt!(

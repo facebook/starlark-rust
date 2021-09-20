@@ -501,12 +501,8 @@ impl Compiler<'_> {
                 };
                 let t = t.as_compiled();
                 let f = f.as_compiled();
-                expr!("if_expr", |eval| {
-                    if cond(eval)?.to_bool() {
-                        t(eval)?
-                    } else {
-                        f(eval)?
-                    }
+                expr!("if_expr", cond, |eval| {
+                    if cond.to_bool() { t(eval)? } else { f(eval)? }
                 })
             }
             ExprP::Dot(left, right) => {
