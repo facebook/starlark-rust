@@ -107,6 +107,8 @@ impl<T> ParameterCompiled<T> {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct DefInfo {
+    /// The raw docstring pulled out of the AST.
+    pub(crate) docstring: Option<String>,
     scope_names: ScopeNames,
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
@@ -202,6 +204,7 @@ impl Compiler<'_> {
         };
 
         let info = Arc::new(DefInfo {
+            docstring,
             scope_names,
             body: body.as_compiled(self),
             returns_type_is,
@@ -260,7 +263,6 @@ impl Compiler<'_> {
                 return_type,
                 info.dupe(),
                 eval,
-                docstring.clone(),
             )
         })
     }
@@ -284,7 +286,6 @@ pub(crate) struct DefGen<V> {
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
     module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
-    docstring: Option<String>, // The raw docstring pulled out of the AST
 }
 
 pub(crate) type Def<'v> = DefGen<Value<'v>>;
@@ -300,7 +301,6 @@ impl<'v> Def<'v> {
         return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: Arc<DefInfo>,
         eval: &mut Evaluator<'v, '_>,
-        docstring: Option<String>,
     ) -> Value<'v> {
         let captured = stmt
             .scope_names
@@ -315,7 +315,6 @@ impl<'v> Def<'v> {
             codemap: eval.codemap.dupe(),
             captured,
             module: eval.module_variables.map(|x| x.1),
-            docstring,
         })
     }
 }
@@ -330,6 +329,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
         Option<DocString>,
     ) {
         let docstring = self
+            .stmt
             .docstring
             .as_ref()
             .and_then(|s| DocString::from_docstring(s));
@@ -465,7 +465,6 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             stmt: self.stmt,
             captured,
             module,
-            docstring: self.docstring,
         })
     }
 }
