@@ -192,6 +192,8 @@ impl Arena {
         x: T,
         extra: usize,
     ) -> &'v AValueHeader {
+        assert!(!mem::needs_drop::<T>());
+
         let p = Self::alloc_empty::<T>(&self.non_drop, extra);
         unsafe {
             ptr::write(
