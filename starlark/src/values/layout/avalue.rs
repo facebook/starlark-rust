@@ -171,7 +171,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
         unsafe {
-            me.overwrite::<Self>(fv.0.ptr_value() & !1)
+            me.overwrite::<Self>(fv.0.ptr_value())
         };
         Ok(fv)
     }
@@ -200,7 +200,7 @@ where
 
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Self>();
-        let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
+        let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
         r.fill(x);
         Ok(fv)
     }
@@ -224,7 +224,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
 
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
-        let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
+        let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
         let res = x.1.freeze(freezer)?;
         r.fill(simple(res));
         Ok(fv)
