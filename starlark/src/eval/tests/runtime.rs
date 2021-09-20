@@ -59,7 +59,7 @@ fn test_deallocation() {
 
     #[starlark_module]
     fn globals(builder: &mut GlobalsBuilder) {
-        fn mk() -> StarlarkAny {
+        fn mk() -> StarlarkAny<Dealloc> {
             Ok(StarlarkAny::new(Dealloc))
         }
     }

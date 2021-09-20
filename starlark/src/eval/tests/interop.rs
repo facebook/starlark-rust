@@ -194,7 +194,7 @@ fn test_repr_str() {
 
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn mk_foo() -> StarlarkAny {
+        fn mk_foo() -> StarlarkAny<Foo> {
             Ok(StarlarkAny::new(Foo(Some(42))))
         }
     }
