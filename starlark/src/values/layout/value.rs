@@ -38,7 +38,6 @@ use crate::values::{
         pointer_i32::PointerI32,
     },
     string::StarlarkStr,
-    StarlarkValue,
 };
 use either::Either;
 use gazebo::{
@@ -77,6 +76,10 @@ unsafe impl Sync for FrozenValue {}
 impl<'v> Value<'v> {
     pub(crate) fn new_ptr(x: &'v AValueHeader) -> Self {
         Self(Pointer::new_unfrozen(x))
+    }
+
+    pub(crate) fn new_repr<'a, T: 'a>(x: &'static AValueRepr<T>) -> Self {
+        Self::new_ptr(&x.header)
     }
 
     pub(crate) fn new_ptr_usize(x: usize) -> Self {
@@ -194,7 +197,7 @@ impl FrozenValue {
         Self(Pointer::new_frozen(x))
     }
 
-    pub(crate) fn new_repr<'a, T: StarlarkValue<'a>>(x: &'static AValueRepr<T>) -> Self {
+    pub(crate) fn new_repr<'a, T: 'a>(x: &'static AValueRepr<T>) -> Self {
         Self::new_ptr(&x.header)
     }
 

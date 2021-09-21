@@ -20,7 +20,7 @@ use crate::{
     values::{
         any::StarlarkAny,
         layout::{
-            arena::{AValueHeader, Arena, HeapSummary, Reservation},
+            arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation},
             avalue::{complex, simple, starlark_str, AValue},
             constant::constant_string,
             value::{FrozenValue, Value},
@@ -182,13 +182,13 @@ impl FrozenHeap {
         if let Some(x) = constant_string(x) {
             x
         } else {
-            let v: &AValueHeader = self
+            let v: *mut AValueRepr<_> = self
                 .arena
                 .alloc_extra_non_drop(starlark_str(x.len()), x.len());
             unsafe {
-                v.write_extra(x.as_bytes())
+                (*v).header.write_extra(x.as_bytes())
             };
-            FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
+            FrozenValue::new_repr(unsafe { cast::ptr_lifetime(&*v) })
         }
     }
 
@@ -362,13 +362,13 @@ impl Heap {
     ) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValueHeader = arena.alloc_extra_non_drop(starlark_str(len), len);
-        init(unsafe { v.get_extra() });
+        let v: *mut AValueRepr<_> = arena.alloc_extra_non_drop(starlark_str(len), len);
+        init(unsafe { (*v).header.get_extra() });
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
+        Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
     }
 
     /// Allocate a string on the heap.
@@ -474,13 +474,13 @@ impl<'v> Tracer<'v> {
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> Value<'v> {
-        let v: &AValueHeader = self
+        let v: *mut AValueRepr<_> = self
             .arena
             .alloc_extra_non_drop(starlark_str(x.len()), x.len());
         unsafe {
-            v.write_extra(x.as_bytes())
+            (*v).header.write_extra(x.as_bytes())
         };
-        Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
+        Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
     }
 
     fn adjust(&self, value: Value<'v>) -> Value<'v> {

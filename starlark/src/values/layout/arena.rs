@@ -191,7 +191,7 @@ impl Arena {
         &'v self,
         x: T,
         extra: usize,
-    ) -> &'v AValueHeader {
+    ) -> *mut AValueRepr<T> {
         assert!(!mem::needs_drop::<T>());
 
         let p = Self::alloc_empty::<T>(&self.non_drop, extra);
@@ -203,7 +203,7 @@ impl Arena {
                     payload: x,
                 },
             );
-            &(*p).header
+            p
         }
     }
 
