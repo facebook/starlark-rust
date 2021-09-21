@@ -112,6 +112,7 @@ mod tests {
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
         values::{none::NoneType, StarlarkValue, UnpackValue, Value, ValueLike},
     };
+    use derive_more::Display;
     use gazebo::prelude::*;
 
     #[test]
@@ -129,7 +130,8 @@ mod tests {
 
     #[test]
     fn test_value_attributes() {
-        #[derive(Copy, Clone, Debug, Dupe, PartialEq)]
+        #[derive(Copy, Clone, Debug, Dupe, PartialEq, Display)]
+        #[display(fmt = "{}", _0)]
         struct Bool2(bool);
         starlark_simple_value!(Bool2);
 

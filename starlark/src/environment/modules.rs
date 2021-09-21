@@ -35,6 +35,7 @@ use crate::{
         StarlarkValue, Value, ValueLike,
     },
 };
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
 use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
@@ -51,7 +52,8 @@ use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
 // Two Arc's should still be plenty cheap enough to qualify for `Dupe`.
 pub struct FrozenModule(FrozenHeapRef, FrozenModuleRef);
 
-#[derive(Debug, Clone, Dupe, AnyLifetime)]
+#[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
+#[display(fmt = "{:?}", self)] // Type should not be user visible
 pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
 #[derive(Debug)]

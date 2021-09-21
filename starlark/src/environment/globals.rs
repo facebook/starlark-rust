@@ -289,6 +289,7 @@ impl GlobalsStatic {
 mod test {
     use super::*;
     use crate::{assert::Assert, starlark_type, values::StarlarkValue};
+    use derive_more::Display;
 
     #[test]
     fn test_send_sync()
@@ -299,7 +300,8 @@ mod test {
 
     #[test]
     fn test_set_attribute() {
-        #[derive(Debug)]
+        #[derive(Debug, Display)]
+        #[display(fmt = "Magic")]
         struct Magic;
         starlark_simple_value!(Magic);
         impl<'v> StarlarkValue<'v> for Magic {

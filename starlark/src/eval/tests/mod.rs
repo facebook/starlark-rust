@@ -27,6 +27,7 @@ use crate::{
         tuple::FrozenTuple, ComplexValue, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value,
     },
 };
+use derive_more::Display;
 use gazebo::any::AnyLifetime;
 use std::cell::RefCell;
 
@@ -571,7 +572,8 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug, Trace, AnyLifetime)]
+    #[derive(Debug, Trace, AnyLifetime, Display)]
+    #[display(fmt = "{:?}", self)]
     struct Wrapper<'v>(RefCell<SmallMap<String, Value<'v>>>);
 
     impl<'v> StarlarkValue<'v> for Wrapper<'v>

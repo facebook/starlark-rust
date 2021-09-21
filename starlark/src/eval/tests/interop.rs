@@ -374,7 +374,8 @@ mod value_of {
 
 #[test]
 fn test_derive_attrs() {
-    #[derive(Debug, StarlarkAttrs)]
+    #[derive(Debug, StarlarkAttrs, Display)]
+    #[display(fmt = "{:?}", self)]
     struct Example {
         hello: String,
         #[starlark(skip)]
@@ -388,7 +389,8 @@ fn test_derive_attrs() {
         starlark_attrs!();
     }
 
-    #[derive(Debug, Clone, StarlarkAttrs)]
+    #[derive(Debug, Clone, StarlarkAttrs, Display)]
+    #[display(fmt = "{}", foo)]
     struct Nested {
         foo: String,
     }

@@ -21,6 +21,7 @@ use crate::values::{
     ValueLike,
 };
 use anyhow::Context;
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -35,7 +36,8 @@ pub(crate) struct HeapProfile {
     enabled: bool,
 }
 
-#[derive(AnyLifetime, Trace, Debug)]
+#[derive(AnyLifetime, Trace, Debug, Display)]
+#[display(fmt = "CallEnter")]
 struct CallEnter<'v> {
     function: Value<'v>,
     time: Instant,
@@ -53,7 +55,8 @@ impl<'v> StarlarkValue<'v> for CallEnter<'v> {
     starlark_type!("call_enter");
 }
 
-#[derive(AnyLifetime, Debug)]
+#[derive(AnyLifetime, Debug, Display)]
+#[display(fmt = "CallExit")]
 struct CallExit {
     time: Instant,
     memory: usize,

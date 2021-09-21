@@ -191,7 +191,8 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
 
 /// Used by the `#[attribute]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
-#[derive(Derivative)]
+#[derive(Derivative, Display)]
+#[display(fmt = "Attribute")]
 #[derivative(Debug)]
 pub struct NativeAttribute {
     #[derivative(Debug = "ignore")]

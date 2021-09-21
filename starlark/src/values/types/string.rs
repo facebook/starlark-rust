@@ -27,6 +27,7 @@ use crate::{
         Value, ValueError, ValueLike,
     },
 };
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
 use std::{
     cmp,
@@ -438,7 +439,8 @@ impl<'v, 'a> AllocFrozenValue for &'a str {
 }
 
 /// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug, Trace, Coerce)]
+#[derive(Debug, Trace, Coerce, Display)]
+#[display(fmt = "iterator")]
 #[repr(C)]
 struct StringIteratorGen<V> {
     string: V,
