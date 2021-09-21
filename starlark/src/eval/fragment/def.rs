@@ -52,7 +52,11 @@ use crate::{
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
-use std::{collections::HashMap, mem};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display, Write},
+    mem,
+};
 
 struct ParameterName {
     name: String,
@@ -290,6 +294,12 @@ pub(crate) struct DefGen<V> {
     module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
 }
 
+impl<V> Display for DefGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.parameters.signature())
+    }
+}
+
 pub(crate) type Def<'v> = DefGen<Value<'v>>;
 pub(crate) type FrozenDef = DefGen<FrozenValue>;
 
@@ -490,7 +500,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str(&self.parameters.signature());
+        write!(collector, "{}", self).unwrap()
     }
 
     fn invoke(

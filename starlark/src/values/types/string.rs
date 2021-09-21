@@ -33,7 +33,7 @@ use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
     fmt,
-    fmt::Debug,
+    fmt::{Debug, Display},
     hash::{Hash, Hasher},
     slice, str,
     sync::atomic,
@@ -61,7 +61,7 @@ pub struct StarlarkStr {
 
 impl Debug for StarlarkStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.unpack().fmt(f)
+        Debug::fmt(self.unpack(), f)
     }
 }
 
@@ -181,6 +181,65 @@ pub(crate) fn json_escape(x: &str) -> String {
 
 impl SimpleValue for StarlarkStr {}
 
+impl Display for StarlarkStr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // We could either accumulate straight into the buffer (can't preallocate, virtual call on each character)
+        // or accumulate into a String buffer first. Not sure which is faster, but string buffer lets us
+        // share code with collect_repr more easily.
+        let mut buffer = String::new();
+        string_repr(self.unpack(), &mut buffer);
+        f.write_str(&buffer)
+    }
+}
+
+fn string_repr(str: &str, buffer: &mut String) {
+    // this method is surprisingly hot
+    // so we first try and do a fast pass that only works for ASCII-only
+
+    // Simple but definitely correct version
+    fn loop_unicode(val: &str, buffer: &mut String) {
+        for x in val.chars() {
+            for c in x.escape_debug() {
+                buffer.push(c);
+            }
+        }
+    }
+
+    // Process the ASCII prefix, bailing out to loop_unicode if we fail
+    fn loop_ascii(val: &str, buffer: &mut String) {
+        for (done, x) in val.as_bytes().iter().enumerate() {
+            let x = *x;
+            if x >= 128 {
+                // bail out into a unicode-aware version
+                loop_unicode(&val[done..], buffer);
+                return;
+            }
+            // We enumerated all the bytes from 0..127.
+            // The ones '"\ prepend an escape.
+            // The ones below 31 print with a unicode escape.
+            // Make sure we perfectly match escape_debug so if we take the
+            // bailout its not a visible difference.
+            if x <= 31 {
+                for c in char::from(x).escape_debug() {
+                    buffer.push(c)
+                }
+            } else {
+                // safe because we know the following values are all lower-ascii bytes
+                let byte_buffer = unsafe { buffer.as_mut_vec() };
+                if x == b'"' || x == b'\'' || x == b'\\' {
+                    byte_buffer.push(b'\\');
+                }
+                byte_buffer.push(x);
+            }
+        }
+    }
+
+    buffer.reserve(2 + str.len());
+    buffer.push('"');
+    loop_ascii(str, buffer);
+    buffer.push('"');
+}
+
 impl<'v> StarlarkValue<'v> for StarlarkStr {
     starlark_type!(STRING_TYPE);
 
@@ -190,51 +249,8 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn collect_repr(&self, buffer: &mut String) {
-        // this method is surprisingly hot
-        // so we first try and do a fast pass that only works for ASCII-only
-
-        // Simple but definitely correct version
-        fn loop_unicode(val: &str, buffer: &mut String) {
-            for x in val.chars() {
-                for c in x.escape_debug() {
-                    buffer.push(c);
-                }
-            }
-        }
-
-        // Process the ASCII prefix, bailing out to loop_unicode if we fail
-        fn loop_ascii(val: &str, buffer: &mut String) {
-            for (done, x) in val.as_bytes().iter().enumerate() {
-                let x = *x;
-                if x >= 128 {
-                    // bail out into a unicode-aware version
-                    loop_unicode(&val[done..], buffer);
-                    return;
-                }
-                // We enumerated all the bytes from 0..127.
-                // The ones '"\ prepend an escape.
-                // The ones below 31 print with a unicode escape.
-                // Make sure we perfectly match escape_debug so if we take the
-                // bailout its not a visible difference.
-                if x <= 31 {
-                    for c in char::from(x).escape_debug() {
-                        buffer.push(c)
-                    }
-                } else {
-                    // safe because we know the following values are all lower-ascii bytes
-                    let byte_buffer = unsafe { buffer.as_mut_vec() };
-                    if x == b'"' || x == b'\'' || x == b'\\' {
-                        byte_buffer.push(b'\\');
-                    }
-                    byte_buffer.push(x);
-                }
-            }
-        }
-
-        buffer.reserve(2 + self.len());
-        buffer.push('"');
-        loop_ascii(self.unpack(), buffer);
-        buffer.push('"');
+        // String repr() is quite hot, so optimise it
+        string_repr(self.unpack(), buffer)
     }
 
     fn to_json(&self) -> anyhow::Result<String> {

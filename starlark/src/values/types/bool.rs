@@ -25,7 +25,10 @@ use crate::values::{
     ValueError,
 };
 use gazebo::any::AnyLifetime;
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display},
+};
 
 /// The result of calling `type()` on booleans.
 pub const BOOL_TYPE: &str = "bool";
@@ -33,6 +36,16 @@ pub const BOOL_TYPE: &str = "bool";
 // We have to alias bool so we can have a Display that uses True/False.
 #[derive(AnyLifetime, Debug)]
 pub(crate) struct StarlarkBool(pub(crate) bool);
+
+impl Display for StarlarkBool {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 {
+            write!(f, "True")
+        } else {
+            write!(f, "False")
+        }
+    }
+}
 
 impl<'v> AllocValue<'v> for bool {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
@@ -57,12 +70,14 @@ impl StarlarkValue<'_> for StarlarkBool {
     starlark_type!(BOOL_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
+        // repr() for bool is quite hot, so optimise it
         if self.0 {
             s.push_str("True")
         } else {
             s.push_str("False")
         }
     }
+
     fn to_json(&self) -> anyhow::Result<String> {
         if self.0 {
             Ok("true".to_owned())

@@ -109,6 +109,12 @@ pub struct EnumValueGen<V> {
     index: i32, // The index in the enumeration
 }
 
+impl<V: Display> Display for EnumValueGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
 starlark_complex_values!(EnumType);
 starlark_complex_value!(pub EnumValue);
 
@@ -334,7 +340,7 @@ where
     }
 
     fn collect_repr(&self, collector: &mut String) {
-        self.value.collect_repr(collector)
+        write!(collector, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

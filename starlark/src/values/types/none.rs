@@ -20,10 +20,13 @@
 use crate::values::{
     AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
 };
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
+use std::fmt::Write;
 
 /// Define the None type, use [`NoneType`] in Rust.
-#[derive(Debug, Clone, Dupe, AnyLifetime)]
+#[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
+#[display(fmt = "None")]
 pub struct NoneType;
 
 impl NoneType {
@@ -40,7 +43,7 @@ impl<'v> StarlarkValue<'v> for NoneType {
     }
 
     fn collect_repr(&self, s: &mut String) {
-        s.push_str("None");
+        write!(s, "{}", self).unwrap()
     }
 
     fn to_json(&self) -> anyhow::Result<String> {

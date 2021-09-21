@@ -27,8 +27,9 @@ use crate::{
     },
 };
 use derivative::Derivative;
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce};
-use std::{cell::Cell, mem::MaybeUninit};
+use std::{cell::Cell, fmt::Write, mem::MaybeUninit};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -66,8 +67,9 @@ impl<T> NativeAttr for T where
 /// Starlark representation of native (Rust) functions.
 ///
 /// Almost always created with [`#[starlark_module]`](macro@starlark_module).
-#[derive(Derivative, AnyLifetime)]
+#[derive(Derivative, AnyLifetime, Display)]
 #[derivative(Debug)]
+#[display(fmt = "{}", name)]
 pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
     function: Box<dyn NativeFunc>,
@@ -150,7 +152,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        s.push_str(&self.name)
+        write!(s, "{}", self).unwrap()
     }
 
     fn invoke(
@@ -239,8 +241,9 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 }
 
 /// A wrapper for a method with a self object already bound.
-#[derive(Clone, Debug, Trace, Coerce)]
+#[derive(Clone, Debug, Trace, Coerce, Display)]
 #[repr(C)]
+#[display(fmt = "{}", method)]
 pub struct BoundMethodGen<V> {
     pub(crate) method: V,
     pub(crate) this: V,
@@ -273,7 +276,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        self.method.collect_repr(s);
+        write!(s, "{}", self).unwrap()
     }
 
     fn invoke(

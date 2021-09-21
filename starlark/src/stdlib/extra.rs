@@ -34,7 +34,10 @@ use gazebo::{
     prelude::*,
 };
 use itertools::Itertools;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    fmt::{self, Display, Write},
+};
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
@@ -157,6 +160,27 @@ struct PartialGen<V, S> {
     signature: ParametersSpec<V>,
 }
 
+impl<V: Display, S> Display for PartialGen<V, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "partial({}, *[", self.func)?;
+        for (i, v) in self.pos.iter().enumerate() {
+            if i != 0 {
+                write!(f, ",")?;
+            }
+            v.fmt(f)?;
+        }
+        write!(f, "], **{{")?;
+        for (i, (k, v)) in self.names.iter().zip(self.named.iter()).enumerate() {
+            if i != 0 {
+                write!(f, ",")?;
+            }
+            write!(f, "{}:", k.0.as_str())?;
+            v.fmt(f)?;
+        }
+        write!(f, "}})")
+    }
+}
+
 type Partial<'v> = PartialGen<Value<'v>, StringValue<'v>>;
 type FrozenPartial = PartialGen<FrozenValue, FrozenStringValue>;
 starlark_complex_values!(Partial);
@@ -207,25 +231,7 @@ where
     }
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str("partial(");
-        self.func.collect_repr(collector);
-        collector.push_str(", *[");
-        for (i, v) in self.pos.iter().enumerate() {
-            if i != 0 {
-                collector.push(',');
-            }
-            v.collect_repr(collector);
-        }
-        collector.push_str("], **{");
-        for (i, (k, v)) in self.names.iter().zip(self.named.iter()).enumerate() {
-            if i != 0 {
-                collector.push(',');
-            }
-            collector.push_str(k.0.as_str());
-            collector.push(':');
-            v.collect_repr(collector);
-        }
-        collector.push_str("})");
+        write!(collector, "{}", self).unwrap()
     }
 }
 
