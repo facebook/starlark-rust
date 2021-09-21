@@ -20,7 +20,7 @@ use crate::{
     codemap::Span,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
-    eval::{Arguments, Evaluator, ParametersSpec},
+    eval::{Arguments, Evaluator},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
         ComplexValue, Freezer, FrozenStringValue, FrozenValue, StarlarkValue, StringValue,
@@ -72,11 +72,6 @@ pub fn map(builder: &mut GlobalsBuilder) {
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
     fn partial(ref func: Value, args: ARef<Tuple>, kwargs: ARef<Dict>) -> Partial<'v> {
-        // TODO: use func name (+ something?)
-        let name = "partial_closure".to_owned();
-        let mut signature = ParametersSpec::with_capacity(name, 2);
-        signature.args();
-        signature.kwargs();
         let names = kwargs
             .content
             .keys()
@@ -95,7 +90,6 @@ pub fn partial(builder: &mut GlobalsBuilder) {
             pos: args.content.clone(),
             named: kwargs.content.values().copied().collect(),
             names,
-            signature,
         })
     }
 }
@@ -157,7 +151,6 @@ struct PartialGen<V, S> {
     pos: Vec<V>,
     named: Vec<V>,
     names: Vec<(Symbol, S)>,
-    signature: ParametersSpec<V>,
 }
 
 impl<V: Display, S> Display for PartialGen<V, S> {
@@ -195,7 +188,6 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
             names: self
                 .names
                 .into_try_map(|(s, x)| Ok::<_, anyhow::Error>((s, x.freeze(freezer)?)))?,
-            signature: self.signature.freeze(freezer)?,
         })
     }
 }
