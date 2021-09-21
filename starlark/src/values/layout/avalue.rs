@@ -20,6 +20,7 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
+        bool::StarlarkBool,
         docs::DocItem,
         layout::arena::{AValueHeader, AValueRepr},
         none::NoneType,
@@ -40,17 +41,17 @@ pub(crate) static VALUE_NONE: &AValueHeader = {
 };
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, false);
+    const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(false));
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, bool>> =
+    static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, true);
+    const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(true));
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, bool>> =
+    static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };

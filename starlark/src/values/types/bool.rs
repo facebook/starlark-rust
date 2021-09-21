@@ -24,10 +24,15 @@ use crate::values::{
     AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
     ValueError,
 };
+use gazebo::any::AnyLifetime;
 use std::cmp::Ordering;
 
 /// The result of calling `type()` on booleans.
 pub const BOOL_TYPE: &str = "bool";
+
+// We have to alias bool so we can have a Display that uses True/False.
+#[derive(AnyLifetime, Debug)]
+pub(crate) struct StarlarkBool(pub(crate) bool);
 
 impl<'v> AllocValue<'v> for bool {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
@@ -48,28 +53,28 @@ impl UnpackValue<'_> for bool {
 }
 
 /// Define the bool type
-impl StarlarkValue<'_> for bool {
+impl StarlarkValue<'_> for StarlarkBool {
     starlark_type!(BOOL_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        if *self {
+        if self.0 {
             s.push_str("True")
         } else {
             s.push_str("False")
         }
     }
     fn to_json(&self) -> anyhow::Result<String> {
-        if *self {
+        if self.0 {
             Ok("true".to_owned())
         } else {
             Ok("false".to_owned())
         }
     }
     fn to_int(&self) -> anyhow::Result<i32> {
-        Ok(if *self { 1 } else { 0 })
+        Ok(if self.0 { 1 } else { 0 })
     }
     fn to_bool(&self) -> bool {
-        *self
+        self.0
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
         Ok(self.to_int().unwrap() as u64)
@@ -77,7 +82,7 @@ impl StarlarkValue<'_> for bool {
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if let Some(other) = other.unpack_bool() {
-            Ok(*self == other)
+            Ok(self.0 == other)
         } else {
             Ok(false)
         }
@@ -85,7 +90,7 @@ impl StarlarkValue<'_> for bool {
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other) = other.unpack_bool() {
-            Ok(self.cmp(&other))
+            Ok(self.0.cmp(&other))
         } else {
             ValueError::unsupported_with(self, "<>", other)
         }
