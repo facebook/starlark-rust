@@ -113,6 +113,8 @@ impl<T> ParameterCompiled<T> {
 #[derivative(Debug)]
 #[display(fmt = "DefInfo")]
 pub(crate) struct DefInfo {
+    /// Codemap of the file where the function is declared.
+    codemap: CodeMap,
     /// The raw docstring pulled out of the AST.
     pub(crate) docstring: Option<String>,
     scope_names: ScopeNames,
@@ -210,6 +212,7 @@ impl Compiler<'_> {
         };
 
         let info = self.module_env.frozen_heap().alloc_any(DefInfo {
+            codemap: self.codemap.dupe(),
             docstring,
             scope_names,
             body: body.as_compiled(self),
@@ -283,7 +286,6 @@ pub(crate) struct DefGen<V> {
     parameter_captures: Vec<usize>, // Indices of parameters, which are captured in nested defs
     parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
-    codemap: CodeMap,                       // Codemap that was active during this module
     pub(crate) stmt: FrozenRef<DefInfo>,    // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
     /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
@@ -324,7 +326,6 @@ impl<'v> Def<'v> {
             parameter_types,
             return_type,
             stmt,
-            codemap: eval.codemap.dupe(),
             captured,
             module: eval.module_variables.map(|x| x.1),
         })
@@ -473,7 +474,6 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             parameter_captures: self.parameter_captures,
             parameter_types,
             return_type,
-            codemap: self.codemap,
             stmt: self.stmt,
             captured,
             module,
@@ -570,8 +570,9 @@ where
         if Self::FROZEN {
             debug_assert!(self.module.is_some());
         }
-        let res =
-            eval.with_function_context(self.module, &self.codemap, |eval| (self.stmt.body)(eval));
+        let res = eval.with_function_context(self.module, &self.stmt.codemap, |eval| {
+            (self.stmt.body)(eval)
+        });
         eval.local_variables.release(old_locals);
 
         let ret = match res {
