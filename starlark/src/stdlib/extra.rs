@@ -71,7 +71,8 @@ pub fn map(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
-    fn partial(ref func: Value, args: ARef<Tuple>, kwargs: ARef<Dict>) -> Partial<'v> {
+    fn partial(ref func: Value, args: Value<'v>, kwargs: ARef<Dict>) -> Partial<'v> {
+        debug_assert!(Tuple::from_value(args).is_some());
         let names = kwargs
             .content
             .keys()
@@ -87,7 +88,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
             .collect();
         Ok(Partial {
             func,
-            pos: args.content.clone(),
+            pos: args,
             named: kwargs.content.values().copied().collect(),
             names,
         })
@@ -148,15 +149,22 @@ pub fn abs(builder: &mut GlobalsBuilder) {
 #[repr(C)]
 struct PartialGen<V, S> {
     func: V,
-    pos: Vec<V>,
+    // Always references a tuple.
+    pos: V,
     named: Vec<V>,
     names: Vec<(Symbol, S)>,
 }
 
-impl<V: Display, S> Display for PartialGen<V, S> {
+impl<'v, V: ValueLike<'v>, S> PartialGen<V, S> {
+    fn pos_content(&self) -> &'v [Value<'v>] {
+        &Tuple::from_value(self.pos.to_value()).unwrap().content
+    }
+}
+
+impl<'v, V: ValueLike<'v>, S> Display for PartialGen<V, S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "partial({}, *[", self.func)?;
-        for (i, v) in self.pos.iter().enumerate() {
+        for (i, v) in self.pos_content().iter().enumerate() {
             if i != 0 {
                 write!(f, ",")?;
             }
@@ -168,7 +176,7 @@ impl<V: Display, S> Display for PartialGen<V, S> {
                 write!(f, ",")?;
             }
             write!(f, "{}:", k.0.as_str())?;
-            v.fmt(f)?;
+            v.to_value().fmt(f)?;
         }
         write!(f, "}})")
     }
@@ -183,7 +191,7 @@ impl<'v> ComplexValue<'v> for Partial<'v> {
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenPartial {
             func: self.func.freeze(freezer)?,
-            pos: self.pos.try_map(|x| x.freeze(freezer))?,
+            pos: freezer.freeze(self.pos)?,
             named: self.named.try_map(|x| x.freeze(freezer))?,
             names: self
                 .names
@@ -207,7 +215,7 @@ where
     ) -> anyhow::Result<Value<'v>> {
         // apply the partial arguments first, then the remaining arguments I was given
 
-        let self_pos = coerce_ref(&self.pos);
+        let self_pos = self.pos_content();
         let self_named = coerce_ref(&self.named);
         let self_names = coerce_ref(&self.names);
 
