@@ -41,7 +41,7 @@ use std::{
     cell::{Ref, RefCell},
     cmp,
     cmp::Ordering,
-    fmt::Debug,
+    fmt::{self, Debug, Display},
     intrinsics::unlikely,
     marker::PhantomData,
     mem,
@@ -204,11 +204,17 @@ impl<'v> List<'v> {
     {
         self.content.iter().copied()
     }
+}
 
-    pub fn to_repr(&self) -> String {
-        let mut s = String::new();
-        collect_repr(&self.content, &mut s);
-        s
+impl<'v> Display for List<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(&self.content, f)
+    }
+}
+
+impl Display for FrozenList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(coerce_ref(&self.content), f)
     }
 }
 
@@ -253,15 +259,21 @@ impl<'v> ListLike<'v> for FrozenList {
     }
 }
 
-fn collect_repr(xs: &[Value], s: &mut String) {
-    s.push('[');
+impl<'v, T: ListLike<'v>> Display for ListGen<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(&*self.0.content(), f)
+    }
+}
+
+fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "[")?;
     for (i, v) in xs.iter().enumerate() {
         if i != 0 {
-            s.push_str(", ");
+            write!(f, ", ")?;
         }
-        v.collect_repr(s);
+        Display::fmt(v, f)?;
     }
-    s.push(']');
+    write!(f, "]")
 }
 
 impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>
@@ -276,7 +288,15 @@ where
     }
 
     fn collect_repr(&self, s: &mut String) {
-        collect_repr(&*self.0.content(), s)
+        // Fast path as repr() for lists is quite hot
+        s.push('[');
+        for (i, v) in self.0.content().iter().enumerate() {
+            if i != 0 {
+                s.push_str(", ");
+            }
+            v.collect_repr(s);
+        }
+        s.push(']');
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
