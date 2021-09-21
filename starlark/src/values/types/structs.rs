@@ -52,6 +52,7 @@ use gazebo::{
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
+    fmt::{self, Display, Write},
     hash::{Hash, Hasher},
 };
 
@@ -74,6 +75,20 @@ pub struct StructGen<V> {
     /// The fields in a struct.
     /// All keys _must_ be strings.
     pub fields: SmallMap<V, V>,
+}
+
+impl<'v, V: ValueLike<'v>> Display for StructGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "struct(")?;
+        for (i, (name, value)) in self.fields.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}=", name.to_value().unpack_str().unwrap())?;
+            Display::fmt(value, f)?;
+        }
+        write!(f, ")")
+    }
 }
 
 /// A builder to create a `Struct` easily.
@@ -147,16 +162,7 @@ where
     }
 
     fn collect_repr(&self, r: &mut String) {
-        r.push_str("struct(");
-        for (i, (name, value)) in self.fields.iter().enumerate() {
-            if i != 0 {
-                r.push_str(", ");
-            }
-            r.push_str(name.to_value().unpack_str().unwrap());
-            r.push('=');
-            value.collect_repr(r);
-        }
-        r.push(')');
+        write!(r, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

@@ -36,7 +36,8 @@ use gazebo::{
 use indexmap::Equivalent;
 use std::{
     cell::{Ref, RefCell, RefMut},
-    fmt::Debug,
+    fmt,
+    fmt::{Debug, Display},
     hash::{Hash, Hasher},
     intrinsics::unlikely,
     marker::PhantomData,
@@ -45,6 +46,21 @@ use std::{
 
 #[derive(Clone, Default, Trace, Debug)]
 struct DictGen<T>(T);
+
+impl<'v, T: DictLike<'v>> Display for DictGen<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        for (i, (name, value)) in self.0.content().iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            Display::fmt(name, f)?;
+            write!(f, ": ")?;
+            Display::fmt(value, f)?;
+        }
+        write!(f, "}}")
+    }
+}
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
 #[derive(Clone, Default, Trace, Debug)]
@@ -273,6 +289,7 @@ where
     }
 
     fn collect_repr(&self, r: &mut String) {
+        // Fast path as repr() for dicts is quite hot
         r.push('{');
         for (i, (name, value)) in self.0.content().iter().enumerate() {
             if i != 0 {

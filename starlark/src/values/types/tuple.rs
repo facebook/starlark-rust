@@ -29,7 +29,14 @@ use gazebo::{
     coerce::{coerce, Coerce},
     prelude::*,
 };
-use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher, mem};
+use std::{
+    cmp::Ordering,
+    collections::hash_map::DefaultHasher,
+    fmt,
+    fmt::{Display, Write},
+    hash::Hasher,
+    mem,
+};
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[derive(Clone, Default_, Debug, Trace, Coerce)]
@@ -37,6 +44,23 @@ use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher, mem
 pub struct TupleGen<V> {
     /// The data stored by the tuple.
     pub content: Vec<V>,
+}
+
+impl<V: Display> Display for TupleGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        for (i, v) in self.content.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            v.fmt(f)?;
+        }
+
+        if self.content.len() == 1 {
+            write!(f, ",")?;
+        }
+        write!(f, ")")
+    }
 }
 
 starlark_complex_value!(pub Tuple);
@@ -81,19 +105,9 @@ where
     starlark_type!(Tuple::TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        s.push('(');
-        for (i, v) in self.content.iter().enumerate() {
-            if i != 0 {
-                s.push_str(", ");
-            }
-            v.collect_repr(s);
-        }
-
-        if self.content.len() == 1 {
-            s.push(',');
-        }
-        s.push(')');
+        write!(s, "{}", self).unwrap()
     }
+
     fn to_bool(&self) -> bool {
         !self.content.is_empty()
     }

@@ -52,7 +52,10 @@ use gazebo::{
     cell::AsARef,
     coerce::{coerce_ref, Coerce},
 };
-use std::{cell::RefCell, fmt::Debug};
+use std::{
+    cell::RefCell,
+    fmt::{self, Debug, Display, Write},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -76,6 +79,19 @@ pub struct EnumTypeGen<V, Typ> {
     elements: SmallMap<V, V>,
     // Function to construct an enumeration, cached, so we don't recreate it on each invoke.
     constructor: V,
+}
+
+impl<V: Display, Typ> Display for EnumTypeGen<V, Typ> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "enum(")?;
+        for (i, (v, _)) in self.elements.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            v.fmt(f)?;
+        }
+        write!(f, ")")
+    }
 }
 
 pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
@@ -198,14 +214,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str("enum(");
-        for (i, (v, _)) in self.elements.iter().enumerate() {
-            if i != 0 {
-                collector.push_str(", ");
-            }
-            v.collect_repr(collector);
-        }
-        collector.push(')');
+        write!(collector, "{}", self).unwrap()
     }
 
     fn invoke(
