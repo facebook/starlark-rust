@@ -74,7 +74,7 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) globals: &'a Globals,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
-    // The codemap that corresponds to this module.
+    // The codemap that corresponds to currently executed function.
     pub(crate) codemap: &'v CodeMap,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
