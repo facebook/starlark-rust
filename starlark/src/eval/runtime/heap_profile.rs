@@ -124,112 +124,6 @@ impl FunctionIds {
     }
 }
 
-/// Information relating to a function.
-#[derive(Default, Debug, Clone)]
-struct FuncInfo {
-    /// Number of times this function was called
-    calls: usize,
-    /// Who called this function (and how many times each)
-    callers: HashMap<FunctionId, usize>,
-    /// Time spent directly in this function
-    time: Duration,
-    /// Inline memory used directly in this function
-    memory: usize,
-    /// Time spent directly in this function and recursive functions.
-    time_rec: Duration,
-    /// Allocations made by this function
-    allocs: HashMap<&'static str, usize>,
-}
-
-impl FuncInfo {
-    fn merge<'a>(xs: impl Iterator<Item = &'a Self>) -> Self {
-        let mut result = Self::default();
-        for x in xs {
-            result.calls += x.calls;
-            result.time += x.time;
-            result.memory += x.memory;
-            for (k, v) in x.allocs.iter() {
-                *result.allocs.entry(k).or_insert(0) += v;
-            }
-        }
-        // Recursive time doesn't accumulate nicely, the time is the right value
-        result.time_rec = result.time;
-        result
-    }
-}
-
-/// We morally have two pieces of information:
-/// 1. Information about each function.
-/// 2. The call stack.
-///
-/// However, we are always updating the top of the call stack,
-/// so pull out top_stack/top_info as a cache.
-struct Info {
-    ids: FunctionIds,
-
-    /// Information about all functions
-    info: Vec<FuncInfo>,
-    /// When the top of the stack last changed
-    last_changed: (Instant, usize),
-    /// Each entry is (Function, time_rec when I started, time I started)
-    /// The time_rec is recorded so that recursion doesn't screw up time_rec
-    call_stack: Vec<(FunctionId, Duration, Instant)>,
-}
-
-impl Info {
-    fn ensure(&mut self, x: FunctionId) {
-        if self.info.len() <= x.0 {
-            self.info.resize(x.0 + 1, FuncInfo::default());
-        }
-    }
-
-    fn top_id(&self) -> FunctionId {
-        self.call_stack.last().unwrap().0
-    }
-
-    fn top_info(&mut self) -> &mut FuncInfo {
-        let top = self.top_id();
-        &mut self.info[top.0]
-    }
-
-    /// Called before you change the top of the stack
-    fn change(&mut self, time: Instant, memory: usize) {
-        let (old_time, old_memory) = self.last_changed;
-        let ti = self.top_info();
-        ti.time += time.checked_duration_since(old_time).unwrap_or_default();
-        ti.memory += memory - old_memory;
-        self.last_changed = (time, memory);
-    }
-
-    /// Process each ValueMem in their chronological order
-    fn process<'v>(&mut self, x: Value<'v>) {
-        if let Some(CallEnter {
-            function,
-            time,
-            memory,
-        }) = x.downcast_ref()
-        {
-            let id = self.ids.get_value(*function);
-            self.ensure(id);
-            self.change(*time, *memory);
-
-            let top = self.top_id();
-            let mut me = &mut self.info[id.0];
-            me.calls += 1;
-            *me.callers.entry(top).or_insert(0) += 1;
-            self.call_stack.push((id, me.time_rec, *time));
-        } else if let Some(CallExit { time, memory }) = x.downcast_ref() {
-            self.change(*time, *memory);
-            let (name, time_rec, start) = self.call_stack.pop().unwrap();
-            self.info[name.0].time_rec =
-                time_rec + time.checked_duration_since(start).unwrap_or_default();
-        } else {
-            let typ = x.get_ref().get_type();
-            *self.top_info().allocs.entry(typ).or_insert(0) += 1;
-        }
-    }
-}
-
 impl HeapProfile {
     pub(crate) fn new() -> Self {
         Self { enabled: false }
@@ -288,6 +182,8 @@ impl HeapProfile {
     }
 
     fn write_summarized_heap_profile_to(mut file: impl Write, heap: &Heap) -> io::Result<()> {
+        use summary::{FuncInfo, Info};
+
         let mut ids = FunctionIds::default();
         let root = ids.get_string("(root)".to_owned());
         let start = Instant::now();
@@ -353,6 +249,116 @@ impl HeapProfile {
             writeln!(file)?;
         }
         Ok(())
+    }
+}
+
+mod summary {
+    use super::*;
+
+    /// Information relating to a function.
+    #[derive(Default, Debug, Clone)]
+    pub(super) struct FuncInfo {
+        /// Number of times this function was called
+        pub calls: usize,
+        /// Who called this function (and how many times each)
+        pub callers: HashMap<FunctionId, usize>,
+        /// Time spent directly in this function
+        pub time: Duration,
+        /// Inline memory used directly in this function
+        pub memory: usize,
+        /// Time spent directly in this function and recursive functions.
+        pub time_rec: Duration,
+        /// Allocations made by this function
+        pub allocs: HashMap<&'static str, usize>,
+    }
+
+    impl FuncInfo {
+        pub fn merge<'a>(xs: impl Iterator<Item = &'a Self>) -> Self {
+            let mut result = Self::default();
+            for x in xs {
+                result.calls += x.calls;
+                result.time += x.time;
+                result.memory += x.memory;
+                for (k, v) in x.allocs.iter() {
+                    *result.allocs.entry(k).or_insert(0) += v;
+                }
+            }
+            // Recursive time doesn't accumulate nicely, the time is the right value
+            result.time_rec = result.time;
+            result
+        }
+    }
+
+    /// We morally have two pieces of information:
+    /// 1. Information about each function.
+    /// 2. The call stack.
+    ///
+    /// However, we are always updating the top of the call stack,
+    /// so pull out top_stack/top_info as a cache.
+    pub(super) struct Info {
+        pub ids: FunctionIds,
+
+        /// Information about all functions
+        pub info: Vec<FuncInfo>,
+        /// When the top of the stack last changed
+        pub last_changed: (Instant, usize),
+        /// Each entry is (Function, time_rec when I started, time I started)
+        /// The time_rec is recorded so that recursion doesn't screw up time_rec
+        pub call_stack: Vec<(FunctionId, Duration, Instant)>,
+    }
+
+    impl Info {
+        pub fn ensure(&mut self, x: FunctionId) {
+            if self.info.len() <= x.0 {
+                self.info.resize(x.0 + 1, FuncInfo::default());
+            }
+        }
+
+        pub fn top_id(&self) -> FunctionId {
+            self.call_stack.last().unwrap().0
+        }
+
+        pub fn top_info(&mut self) -> &mut FuncInfo {
+            let top = self.top_id();
+            &mut self.info[top.0]
+        }
+
+        /// Called before you change the top of the stack
+        fn change(&mut self, time: Instant, memory: usize) {
+            let (old_time, old_memory) = self.last_changed;
+            let ti = self.top_info();
+            ti.time += time.checked_duration_since(old_time).unwrap_or_default();
+            ti.memory += memory - old_memory;
+            self.last_changed = (time, memory);
+        }
+
+        /// Process each ValueMem in their chronological order
+        pub fn process<'v>(&mut self, x: Value<'v>) {
+            if let Some(CallEnter {
+                function,
+                time,
+                memory,
+            }) = x.downcast_ref()
+            {
+                let id = self.ids.get_value(*function);
+                self.ensure(id);
+                self.change(*time, *memory);
+
+                let top = self.top_id();
+                let mut me = &mut self.info[id.0];
+                me.calls += 1;
+                *me.callers.entry(top).or_insert(0) += 1;
+                self.call_stack.push((id, me.time_rec, *time));
+            } else if let Some(CallExit { time, memory }) = x.downcast_ref() {
+                self.change(*time, *memory);
+                let (name, time_rec, start) = self.call_stack.pop().unwrap();
+                self.info[name.0].time_rec =
+                    time_rec + time.checked_duration_since(start).unwrap_or_default();
+            } else {
+                let typ = x.get_ref().get_type();
+                *self.top_info().allocs.entry(typ).or_insert(0) += 1;
+            }
+        }
     }
 }
 
