@@ -243,17 +243,13 @@ where
 
 impl<'v, T1: AllocValue<'v>> AllocValue<'v> for (T1,) {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(Tuple {
-            content: vec![self.0.alloc_value(heap)],
-        })
+        heap.alloc_tuple(&[self.0.alloc_value(heap)])
     }
 }
 
 impl<'v, T1: AllocValue<'v>, T2: AllocValue<'v>> AllocValue<'v> for (T1, T2) {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(Tuple {
-            content: vec![self.0.alloc_value(heap), self.1.alloc_value(heap)],
-        })
+        heap.alloc_tuple(&[self.0.alloc_value(heap), self.1.alloc_value(heap)])
     }
 }
 
@@ -261,13 +257,11 @@ impl<'v, T1: AllocValue<'v>, T2: AllocValue<'v>, T3: AllocValue<'v>> AllocValue<
     for (T1, T2, T3)
 {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(Tuple {
-            content: vec![
-                self.0.alloc_value(heap),
-                self.1.alloc_value(heap),
-                self.2.alloc_value(heap),
-            ],
-        })
+        heap.alloc_tuple(&[
+            self.0.alloc_value(heap),
+            self.1.alloc_value(heap),
+            self.2.alloc_value(heap),
+        ])
     }
 }
 

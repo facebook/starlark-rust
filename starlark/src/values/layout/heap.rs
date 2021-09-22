@@ -26,6 +26,7 @@ use crate::{
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
+        tuple::{FrozenTuple, Tuple},
         AllocFrozenValue, ComplexValue, FrozenRef, SimpleValue,
     },
 };
@@ -197,6 +198,10 @@ impl FrozenHeap {
     pub fn alloc_str_hashed(&self, x: &str) -> Hashed<FrozenValue> {
         let h = hash_string_result(x);
         Hashed::new_unchecked(h, self.alloc_str(x))
+    }
+
+    pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
+        self.alloc_simple(FrozenTuple::new(elems.to_vec()))
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -398,6 +403,10 @@ impl Heap {
             copy_nonoverlapping(x.as_ptr(), dest, x.len());
             copy_nonoverlapping(y.as_ptr(), dest.add(x.len()), y.len())
         })
+    }
+
+    pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
+        self.alloc_complex(Tuple::new(elems.to_vec()))
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
