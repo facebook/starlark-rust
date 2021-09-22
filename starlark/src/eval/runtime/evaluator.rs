@@ -26,7 +26,7 @@ use crate::{
         runtime::{
             call_stack::CallStack,
             flame_profile::FlameProfile,
-            heap_profile::HeapProfile,
+            heap_profile::{HeapProfile, HeapProfileFormat},
             slots::{LocalSlotId, LocalSlots},
             stmt_profile::StmtProfile,
         },
@@ -175,7 +175,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ///   performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     ///   This profiling mode is the recommended one.
     /// * The `stmt_profile` mode provides information about time spent in each statement.
-    /// * The `flame_profile` mode provides input compatible with
+    /// * The `flame_profile` and the `heap_profile` mode provide input compatible with
     ///   [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     pub fn enable_heap_profile(&mut self) {
         self.heap_profile.enable();
@@ -199,12 +199,26 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.heap_or_flame_profile = true;
     }
 
-    /// Write a profile (as a `.csv` file) to a file.
+    /// Write a profile (as a summarized `.csv` file) to a file.
     /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
     /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
     pub fn write_heap_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
         self.heap_profile
-            .write(filename.as_ref(), self.heap())
+            .write(filename.as_ref(), self.heap(), HeapProfileFormat::Summary)
+            .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
+    }
+
+    /// Write a heap profile as a flamegraph, suitable as input to
+    /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
+    /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
+    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
+    pub fn write_heap_flame_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        self.heap_profile
+            .write(
+                filename.as_ref(),
+                self.heap(),
+                HeapProfileFormat::FlameGraph,
+            )
             .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
     }
 

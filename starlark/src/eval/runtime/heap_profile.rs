@@ -27,12 +27,17 @@ use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
     fs::File,
-    io,
     io::Write,
     path::Path,
     rc::Rc,
     time::{Duration, Instant},
 };
+
+#[derive(Copy, Clone, Dupe, Debug)]
+pub(crate) enum HeapProfileFormat {
+    Summary,
+    FlameGraph,
+}
 
 pub(crate) struct HeapProfile {
     enabled: bool,
@@ -153,19 +158,33 @@ impl HeapProfile {
     }
 
     // We could expose profile on the Heap, but it's an implementation detail that it works here.
-    pub(crate) fn write(&self, filename: &Path, heap: &Heap) -> Option<anyhow::Result<()>> {
+    pub(crate) fn write(
+        &self,
+        filename: &Path,
+        heap: &Heap,
+        format: HeapProfileFormat,
+    ) -> Option<anyhow::Result<()>> {
         if !self.enabled {
             None
         } else {
-            Some(Self::write_enabled(filename, heap))
+            Some(Self::write_enabled(filename, heap, format))
         }
     }
 
-    pub(crate) fn write_enabled(filename: &Path, heap: &Heap) -> anyhow::Result<()> {
+    pub(crate) fn write_enabled(
+        filename: &Path,
+        heap: &Heap,
+        format: HeapProfileFormat,
+    ) -> anyhow::Result<()> {
         let file = File::create(filename).with_context(|| {
             format!("When creating profile output file `{}`", filename.display())
         })?;
-        Self::write_summarized_heap_profile_to(file, heap).with_context(|| {
+
+        match format {
+            HeapProfileFormat::Summary => Self::write_summarized_heap_profile_to(file, heap),
+            HeapProfileFormat::FlameGraph => Self::write_flame_heap_profile_to(file, heap),
+        }
+        .with_context(|| {
             format!(
                 "When writing to profile output file `{}`",
                 filename.display()
@@ -173,7 +192,6 @@ impl HeapProfile {
         })
     }
 
-    #[allow(unused)]
     fn write_flame_heap_profile_to(mut file: impl Write, heap: &Heap) -> anyhow::Result<()> {
         let mut collector = flame::StackCollector::new();
         heap.for_each_ordered(|x| collector.process(x));
@@ -181,7 +199,7 @@ impl HeapProfile {
         Ok(())
     }
 
-    fn write_summarized_heap_profile_to(mut file: impl Write, heap: &Heap) -> io::Result<()> {
+    fn write_summarized_heap_profile_to(mut file: impl Write, heap: &Heap) -> anyhow::Result<()> {
         use summary::{FuncInfo, Info};
 
         let mut ids = FunctionIds::default();
