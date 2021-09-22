@@ -94,6 +94,13 @@ impl<'v> dyn AValue<'v> {
             None
         }
     }
+
+    /// Returns the amount of memory a given AValue uses summed with how much it's holding onto.
+    /// This is for profiling, this value is not guaranteed to be exact, and might be expensive to
+    /// compute.
+    pub(crate) fn total_memory(&self) -> usize {
+        mem::size_of::<AValueHeader>() + self.memory_size() + self.extra_memory()
+    }
 }
 
 pub(crate) fn starlark_str(len: usize) -> impl AValue<'static> + Send + Sync {

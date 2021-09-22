@@ -288,7 +288,7 @@ impl Arena {
                 .entry(x.dupe())
                 .or_insert_with(|| (v.get_type(), (0, 0)));
             e.1.0 += 1;
-            e.1.1 += mem::size_of::<AValueHeader>() + v.memory_size() + v.extra_memory();
+            e.1.1 += v.total_memory()
         };
         for_each(&self.drop, &mut f);
         for_each(&self.non_drop, &mut f);
