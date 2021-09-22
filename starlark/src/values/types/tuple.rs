@@ -43,7 +43,7 @@ use std::{
 #[repr(transparent)]
 pub struct TupleGen<V> {
     /// The data stored by the tuple.
-    pub content: Vec<V>,
+    content: Vec<V>,
 }
 
 impl<V: Display> Display for TupleGen<V> {
@@ -74,6 +74,11 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
     /// Get the length of the tuple.
     pub fn len(&self) -> usize {
         self.content.len()
+    }
+
+    /// Tuple elements.
+    pub fn content(&self) -> &[V] {
+        &self.content
     }
 
     /// Iterate over the elements of the tuple.

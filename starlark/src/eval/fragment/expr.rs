@@ -380,7 +380,10 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self.module_env.frozen_heap().alloc(FrozenTuple { content });
+                    let result = self
+                        .module_env
+                        .frozen_heap()
+                        .alloc(FrozenTuple::new(content));
                     value!(result)
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());

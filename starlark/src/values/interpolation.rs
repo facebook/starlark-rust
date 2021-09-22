@@ -47,7 +47,7 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
     let tuple = Tuple::from_value(value);
     let one = &[value];
     let values = match &tuple {
-        Some(xs) => xs.content.as_slice(),
+        Some(xs) => xs.content(),
         None => one,
     };
     let mut values = values.iter().copied();

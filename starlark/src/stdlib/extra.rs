@@ -157,7 +157,7 @@ struct PartialGen<V, S> {
 
 impl<'v, V: ValueLike<'v>, S> PartialGen<V, S> {
     fn pos_content(&self) -> &'v [Value<'v>] {
-        &Tuple::from_value(self.pos.to_value()).unwrap().content
+        Tuple::from_value(self.pos.to_value()).unwrap().content()
     }
 }
 

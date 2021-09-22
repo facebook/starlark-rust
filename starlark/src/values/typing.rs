@@ -101,7 +101,7 @@ impl TypeCompiled {
             } else if ty.is_none() {
                 Ok(box |v| v.is_none())
             } else if let Some(t) = Tuple::from_value(ty) {
-                let ts = t.content.try_map(|t| f(*t, heap))?;
+                let ts = t.content().try_map(|t| f(*t, heap))?;
                 Ok(box move |v| match Tuple::from_value(v) {
                     Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| t(v)),
                     _ => false,
