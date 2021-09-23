@@ -23,9 +23,7 @@ use crate::{
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{
-        tuple::FrozenTuple, ComplexValue, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value,
-    },
+    values::{ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value},
 };
 use derive_more::Display;
 use gazebo::any::AnyLifetime;
@@ -592,10 +590,19 @@ fn test_label_assign() {
         }
     }
 
+    #[derive(Debug, AnyLifetime)]
+    struct FrozenWrapper;
+
+    impl<'v> StarlarkValue<'v> for FrozenWrapper {
+        starlark_type!("wrapper");
+    }
+
+    impl SimpleValue for FrozenWrapper {}
+
     impl<'v> ComplexValue<'v> for Wrapper<'v> {
-        type Frozen = FrozenTuple;
+        type Frozen = FrozenWrapper;
         fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-            Ok(FrozenTuple::default())
+            Ok(FrozenWrapper)
         }
     }
 
