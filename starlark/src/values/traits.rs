@@ -283,6 +283,18 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
 /// All users defining [`SimpleValue`] should use this macro.
 pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 
+/// Non-instantiatable type implementing [`SimpleValue`].
+///
+/// Useful when implementing [`ComplexValue`], which is not meant to be frozen
+/// (e.g. when evaluating code which is never frozen or in tests).
+#[derive(Debug, AnyLifetime)]
+pub enum NoSimpleValue {}
+impl<'v> StarlarkValue<'v> for NoSimpleValue {
+    starlark_type!("no_simple_value");
+}
+
+impl SimpleValue for NoSimpleValue {}
+
 /// How to put a Rust values into [`Value`]s.
 ///
 /// Every Rust value stored in a [`Value`] must implement this trait, along with
