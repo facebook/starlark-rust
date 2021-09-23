@@ -17,8 +17,7 @@
 
 use crate as starlark;
 use crate::values::{
-    tuple::FrozenTuple, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
-    ValueLike,
+    ComplexValue, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
 };
 use anyhow::Context;
 use derive_more::Display;
@@ -52,7 +51,7 @@ struct CallEnter<'v> {
 }
 
 impl<'v> ComplexValue<'v> for CallEnter<'v> {
-    type Frozen = FrozenTuple;
+    type Frozen = NoSimpleValue;
     fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         unreachable!("Should never end up freezing a CallEnter")
     }
