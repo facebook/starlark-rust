@@ -35,8 +35,20 @@ use crate::{
         ValueLike,
     },
 };
-use gazebo::coerce::coerce_ref;
+use gazebo::{coerce::coerce_ref, prelude::*};
 use std::mem::MaybeUninit;
+
+#[derive(Default)]
+struct ArgsCompiledValue {
+    pos_named: Vec<ExprCompiledValue>,
+    /// Named arguments compiled.
+    ///
+    /// Note names are guaranteed to be unique here because names are validated in AST:
+    /// named arguments in [`Expr::Call`] are unique.
+    names: Vec<(Symbol, FrozenStringValue)>,
+    args: Option<ExprCompiledValue>,
+    kwargs: Option<ExprCompiledValue>,
+}
 
 #[derive(Default)]
 struct ArgsCompiled {
@@ -60,7 +72,7 @@ enum ArgsCompiledSpec {
     Args(ArgsCompiled),
 }
 
-impl ArgsCompiled {
+impl ArgsCompiledValue {
     fn spec(mut self) -> ArgsCompiledSpec {
         if self.names.is_empty()
             && self.args.is_none()
@@ -70,12 +82,19 @@ impl ArgsCompiled {
             match self.pos_named.pop() {
                 None => ArgsCompiledSpec::Args0(Args0Compiled),
                 Some(a1) => match self.pos_named.pop() {
-                    None => ArgsCompiledSpec::Args1(Args1Compiled(a1)),
-                    Some(a2) => ArgsCompiledSpec::Args2(Args2Compiled(a2, a1)),
+                    None => ArgsCompiledSpec::Args1(Args1Compiled(a1.as_compiled())),
+                    Some(a2) => {
+                        ArgsCompiledSpec::Args2(Args2Compiled(a2.as_compiled(), a1.as_compiled()))
+                    }
                 },
             }
         } else {
-            ArgsCompiledSpec::Args(self)
+            ArgsCompiledSpec::Args(ArgsCompiled {
+                pos_named: self.pos_named.into_map(|a| a.as_compiled()),
+                names: self.names,
+                args: self.args.map(|a| a.as_compiled()),
+                kwargs: self.kwargs.map(|a| a.as_compiled()),
+            })
         }
     }
 }
@@ -197,21 +216,21 @@ impl ArgsCompiled {
 }
 
 impl Compiler<'_> {
-    fn args(&mut self, args: Vec<CstArgument>) -> ArgsCompiled {
-        let mut res = ArgsCompiled::default();
+    fn args(&mut self, args: Vec<CstArgument>) -> ArgsCompiledValue {
+        let mut res = ArgsCompiledValue::default();
         for x in args {
             match x.node {
-                ArgumentP::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
+                ArgumentP::Positional(x) => res.pos_named.push(self.expr(x)),
                 ArgumentP::Named(name, value) => {
                     let fv = self
                         .module_env
                         .frozen_heap()
                         .alloc_string_value(name.node.as_str());
                     res.names.push((Symbol::new(&name.node), fv));
-                    res.pos_named.push(self.expr(value).as_compiled());
+                    res.pos_named.push(self.expr(value));
                 }
-                ArgumentP::Args(x) => res.args = Some(self.expr(x).as_compiled()),
-                ArgumentP::KwArgs(x) => res.kwargs = Some(self.expr(x).as_compiled()),
+                ArgumentP::Args(x) => res.args = Some(self.expr(x)),
+                ArgumentP::KwArgs(x) => res.kwargs = Some(self.expr(x)),
             }
         }
         res
