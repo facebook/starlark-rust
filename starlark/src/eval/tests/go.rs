@@ -113,14 +113,6 @@ fn test_go() {
             "assert.eq(str(0.), ",  // str for floats
             "assert.eq(str(.0), ",
             "assert.eq(str(1 // neginf), ",
-            "assert.eq(100.0 % -7.0, -5)",  // modulo arithm
-            "assert.eq(-100.0 % 7.0, 5)",
-            "assert.eq(-100.0 % 7, 5)",
-            "assert.eq(100.0 % -8.0, -4.0)",
-            "assert.eq(-100.0 % 8.0, 4.0)",
-            "assert.eq(98.0 % -8.0, -6.0)",
-            "assert.eq(-98.0 % 8.0, 6.0)",
-            "assert.eq(-98.0 % -8.0, -2.0)",
             "want int",     // float used for indexing strings/ranges/lists (should fail)
         ],
     ));

@@ -147,11 +147,16 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn percent(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "%", |l, r| {
-            if r == 0.0 {
+        f64_arith_bin_op(*self, other, heap, "%", |a, b| {
+            if b == 0.0 {
                 Err(ValueError::DivisionByZero.into())
             } else {
-                Ok(l % r)
+                let r = a % b;
+                if r == 0.0 {
+                    Ok(0.0)
+                } else {
+                    Ok(if b.signum() != r.signum() { r + b } else { r })
+                }
             }
         })
     }
