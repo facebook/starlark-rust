@@ -61,8 +61,8 @@ impl<'v> StarlarkValue<'v> for f64 {
     starlark_type!(FLOAT_TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        if let Some(equal) = other.unpack_num().map(|n| *self == n.as_float()) {
-            Ok(equal)
+        if other.unpack_num().is_some() {
+            Ok(self.compare(other)? == Ordering::Equal)
         } else {
             Ok(false)
         }
@@ -71,6 +71,8 @@ impl<'v> StarlarkValue<'v> for f64 {
     fn collect_repr(&self, s: &mut String) {
         if self.is_nan() {
             s.push_str("nan")
+        } else if self.is_infinite() {
+            s.push_str(if self.is_sign_positive() { "+inf" } else { "-inf" })
         } else {
             s.push_str(&self.to_string())
         }
@@ -81,7 +83,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn to_int(&self) -> anyhow::Result<i32> {
-        match Num::from(*self).as_int() {
+        match Num::from(self.trunc()).as_int() {
             Some(i) => Ok(i),
             None => Err(ValueError::IntegerOverflow.into()),
         }

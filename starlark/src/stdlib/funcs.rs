@@ -338,6 +338,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// float('1.0') == 1.0
     /// float('.25') == 0.25
     /// float('1e2') == 100.0
+    /// float(False) == 0.0
+    /// float(True) == 1.0
     /// # "#);
     /// # starlark::assert::fail(r#"
     /// float("hello")   # error: not a valid number
@@ -356,13 +358,22 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Ok(f)
         } else if let Some(s) = a.unpack_str() {
             match s.parse::<f64>() {
-                Ok(f) => Ok(f),
+                Ok(f) => {
+                    if f.is_infinite() && !s.to_lowercase().contains("inf") {
+                        // if a resulting float is infinite but the parsed string is not explicitly infinity then we should fail with an error
+                        Err(anyhow!("float() floating-point number too large: {}", s))
+                    } else {
+                        Ok(f)
+                    }
+                }
                 Err(x) => Err(anyhow!(
                     "{} is not a valid number: {}",
                     a.to_repr(),
                     x
                 )),
             }
+        } else if let Some(b) = a.unpack_bool() {
+            Ok(if b { 1.0 } else { 0.0 })
         } else {
             Err(anyhow!(
                 "float() argument must be a string or a number, not '{}'",
