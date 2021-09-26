@@ -19,7 +19,7 @@
 
 use std::cmp::Ordering;
 
-use crate::values::{AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError};
+use crate::values::{AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError, num::Num};
 
 /// The result of calling `type()` on floats.
 pub const FLOAT_TYPE: &str = "float";
@@ -49,23 +49,10 @@ fn f64_arith_bin_op<'v, F>(
 where
     F: FnOnce(f64, f64) -> anyhow::Result<f64>,
 {
-    if let Some(other) = right.get_ref().downcast_ref::<f64>() {
-        Ok(heap.alloc_simple(f(left, *other)?))
-    } else if let Some(other) = right.unpack_int() {
-        Ok(heap.alloc_simple(f(left, other as f64)?))
+    if let Some(right) = right.unpack_num().map(|n| n.as_float()) {
+        Ok(heap.alloc_simple(f(left, right)?))
     } else {
         ValueError::unsupported_with(&left, op, right)
-    }
-}
-
-
-pub fn unpack_and_coerce_to_float(value: Value) -> Option<f64> {
-    if let Some(f) = value.get_ref().downcast_ref::<f64>() {
-        Some(*f)
-    } else if let Some(i) = value.unpack_int() {
-        Some(i as f64)
-    } else {
-        None
     }
 }
 
@@ -74,10 +61,8 @@ impl<'v> StarlarkValue<'v> for f64 {
     starlark_type!(FLOAT_TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        if let Some(other) = other.get_ref().downcast_ref::<f64>() {
-            Ok(self == other)
-        } else if let Some(other) = other.unpack_int() {
-            Ok(*self == other as f64)
+        if let Some(equal) = other.unpack_num().map(|n| *self == n.as_float()) {
+            Ok(equal)
         } else {
             Ok(false)
         }
@@ -96,11 +81,9 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn to_int(&self) -> anyhow::Result<i32> {
-        let candidate = self.trunc();
-        if i32::MIN as f64 <= candidate && candidate <= i32::MAX as f64 {
-            Ok(candidate as i32)
-        } else {
-            Err(ValueError::IntegerOverflow.into())
+        match Num::from(*self).as_int() {
+            Some(i) => Ok(i),
+            None => Err(ValueError::IntegerOverflow.into()),
         }
     }
 
@@ -184,7 +167,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
-        if let Some(other_float) = unpack_and_coerce_to_float(other) {
+        if let Some(other_float) = other.unpack_num().map(|n| n.as_float()) {
             // According to the spec (https://github.com/bazelbuild/starlark/blob/689f54426951638ef5b7c41a14d8fc48e65c5f77/spec.md#floating-point-numbers)
             // All NaN values compare equal to each other, but greater than any non-NaN float value.
             match (self.is_nan(), other_float.is_nan()) {

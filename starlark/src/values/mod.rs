@@ -60,6 +60,7 @@ mod index;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
 mod layout;
+pub(crate) mod num;
 mod owned;
 mod stack_guard;
 mod traits;

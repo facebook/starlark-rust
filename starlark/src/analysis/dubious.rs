@@ -22,6 +22,7 @@ use crate::{
         ast::{AstExpr, AstLiteral, Expr},
         AstModule,
     },
+    values::num::Num,
 };
 use gazebo::variants::VariantName;
 use std::collections::HashMap;
@@ -55,10 +56,9 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
             Expr::Literal(x) => match &*x {
                 AstLiteral::IntLiteral(x) => Some((Key::Int(x.node), x.span)),
                 AstLiteral::FloatLiteral(x) => {
-                    let value = x.node;
-                    let int_candidate = value.trunc();
-                    if value == int_candidate && int_candidate <= i32::MAX as f64 && int_candidate >= i32::MIN as f64 {
-                        Some((Key::Int(int_candidate as i32), x.span))
+                    let n = Num::from(x.node);
+                    if let Some(i) = n.as_int() {
+                        Some((Key::Int(i), x.span))
                     } else {
                         // FIXME: implement float as dict keys
                         None

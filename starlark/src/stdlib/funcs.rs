@@ -26,7 +26,7 @@ use crate::{
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
-        float::{FLOAT_TYPE, unpack_and_coerce_to_float},
+        float::FLOAT_TYPE,
         function::{BoundMethod, NativeAttribute},
         int::INT_TYPE,
         list::List,
@@ -352,7 +352,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             return Ok(0.0);
         }
         let a = a.unwrap();
-        if let Some(f) = unpack_and_coerce_to_float(a) {
+        if let Some(f) = a.unpack_num().map(|n| n.as_float()) {
             Ok(f)
         } else if let Some(s) = a.unpack_str() {
             match s.parse::<f64>() {

@@ -37,6 +37,7 @@ use crate::values::{
         pointer::Pointer,
         pointer_i32::PointerI32,
     },
+    num::Num,
     string::StarlarkStr,
 };
 use either::Either;
@@ -129,9 +130,9 @@ impl<'v> Value<'v> {
         self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
     }
 
-    /// Is this value a float.
-    pub fn is_float(self) -> bool {
-        self.get_ref().downcast_ref::<f64>().is_some()
+    /// Otain the underlying numerical value, if it is one.
+    pub fn unpack_num(self) -> Option<Num> {
+        Num::try_from_value(self)
     }
 
     /// Obtain the underlying `bool` if it is a boolean.
