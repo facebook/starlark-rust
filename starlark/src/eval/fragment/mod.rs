@@ -29,7 +29,7 @@ macro_rules! expr {
                 box move |eval| f(eval)
             }
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
-                $eval.ann($name, |$eval| Ok($body))
+                Ok($body)
             });
         }
         ExprCompiledValue::Compiled(res)
@@ -46,7 +46,7 @@ macro_rules! expr {
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
                 let $v1 = $v1($eval)?;
                 #[allow(clippy::needless_question_mark)]
-                $eval.ann($name, |$eval| Ok($body))
+                Ok($body)
             });
         }
         ExprCompiledValue::Compiled(res)
@@ -65,7 +65,7 @@ macro_rules! expr {
                 let $v1 = $v1($eval)?;
                 let $v2 = $v2($eval)?;
                 #[allow(clippy::needless_question_mark)]
-                $eval.ann($name, |$eval| Ok($body))
+                Ok($body)
             });
         }
         ExprCompiledValue::Compiled(res)
@@ -87,13 +87,11 @@ macro_rules! stmt {
             ) -> StmtsCompiled {
                 StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| f(eval)))
             }
-            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>](move |$eval|
-                $eval.ann($name, |$eval| {
-                    $body;
-                    #[allow(unreachable_code)]
-                    Ok(())
-                })
-            ))
+            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>](move |$eval| {
+                $body;
+                #[allow(unreachable_code)]
+                Ok(())
+            }))
         }
     }};
 }

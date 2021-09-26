@@ -97,7 +97,6 @@ fn render_attr(x: StarAttr) -> TokenStream {
 
 fn render_fun(x: StarFun) -> TokenStream {
     let name_str = ident_string(&x.name);
-    let native_name_str = format!("native_{}", name_str);
     let signature = render_signature(&x);
     let binding = render_binding(&x);
 
@@ -142,10 +141,8 @@ fn render_fun(x: StarFun) -> TokenStream {
             ) -> anyhow::Result<#return_type> {
                 #[allow(unused_variables)]
                 let heap = eval.heap();
-                eval.ann(#native_name_str, |eval| {
-                    #binding
-                    #body
-                })
+                #binding
+                #body
             }
             match inner(eval, parameters, #signature_val) {
                 Ok(v) => Ok(eval.heap().alloc(v)),

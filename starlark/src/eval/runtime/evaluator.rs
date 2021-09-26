@@ -274,12 +274,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         true
     }
 
-    /// An annotation that a function occurs within a name. Useful for profiling. Usually compiled away.
-    #[inline(always)]
-    pub fn ann<R>(&mut self, _name: &'static str, within: impl FnOnce(&mut Self) -> R) -> R {
-        within(self)
-    }
-
     /// Called to add an entry to the call stack, by the function being invoked.
     /// Called for all types of function, including those written in Rust.
     #[inline(always)]

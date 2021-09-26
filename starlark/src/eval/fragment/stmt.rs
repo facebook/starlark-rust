@@ -394,15 +394,13 @@ fn possible_gc(eval: &mut Evaluator) {
         && eval.heap().allocated_bytes() >= eval.next_gc_level
         && eval.extra_v.is_none()
     {
-        eval.ann("garbage_collection", |eval| {
-            // When we are at a module scope (as checked above) the eval contains
-            // references to all values, so walking covers everything and the unsafe
-            // is satisfied.
-            unsafe {
-                eval.garbage_collect()
-            }
-            eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
-        })
+        // When we are at a module scope (as checked above) the eval contains
+        // references to all values, so walking covers everything and the unsafe
+        // is satisfied.
+        unsafe {
+            eval.garbage_collect()
+        }
+        eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
     }
 }
 

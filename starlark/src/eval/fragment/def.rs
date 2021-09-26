@@ -510,15 +510,11 @@ where
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        eval.ann("invoke_def", |eval| {
-            let local_slots = self.stmt.scope_names.used;
-            let slot_base = eval.local_variables.reserve(local_slots);
-            let slots = eval.local_variables.get_slots_at(slot_base);
-            self.parameters.collect_inline(args, slots, eval.heap())?;
-            eval.with_call_stack(me, location, |eval| {
-                eval.ann("invoke_def_raw", |eval| self.invoke_raw(slot_base, eval))
-            })
-        })
+        let local_slots = self.stmt.scope_names.used;
+        let slot_base = eval.local_variables.reserve(local_slots);
+        let slots = eval.local_variables.get_slots_at(slot_base);
+        self.parameters.collect_inline(args, slots, eval.heap())?;
+        eval.with_call_stack(me, location, |eval| self.invoke_raw(slot_base, eval))
     }
 
     fn documentation(&self) -> Option<DocItem> {
