@@ -154,11 +154,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
                 return Ok((i + start) as i32);
             }
         }
-        Err(anyhow!(
-            "Element '{}' not found in '{}'",
-            needle,
-            this.to_repr()
-        ))
+        Err(anyhow!("Element '{}' not found in '{}'", needle, this))
     }
 
     /// [list.insert](
@@ -272,11 +268,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
             match this.content.iter().position(|v| *v == needle) {
                 Some(i) => i,
                 None => {
-                    return Err(anyhow!(
-                        "Element '{}' not found in list '{}'",
-                        needle,
-                        this.to_repr()
-                    ));
+                    return Err(anyhow!("Element '{}' not found in list '{}'", needle, this));
                 }
             }
         };

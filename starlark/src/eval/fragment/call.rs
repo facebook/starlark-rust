@@ -22,17 +22,33 @@ use crate::{
     collections::symbol_map::Symbol,
     eval::{
         compiler::{
+            expr_throw,
             scope::{CstArgument, CstExpr},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+            Compiler, ExprEvalException,
         },
-        fragment::expr::get_attr_hashed,
-        Arguments, Evaluator,
+        fragment::expr::{get_attr_hashed, ExprCompiled, ExprCompiledValue, MaybeNot},
+        Arguments, Evaluator, FrozenDef,
     },
     syntax::ast::{ArgumentP, ExprP},
-    values::{FrozenValue, Value, ValueLike},
+    values::{
+        function::NativeFunction, AttrType, FrozenStringValue, FrozenValue, StarlarkValue, Value,
+        ValueLike,
+    },
 };
-use gazebo::coerce::coerce_ref;
+use gazebo::{coerce::coerce_ref, prelude::*};
 use std::mem::MaybeUninit;
+
+#[derive(Default)]
+struct ArgsCompiledValue {
+    pos_named: Vec<ExprCompiledValue>,
+    /// Named arguments compiled.
+    ///
+    /// Note names are guaranteed to be unique here because names are validated in AST:
+    /// named arguments in [`Expr::Call`] are unique.
+    names: Vec<(Symbol, FrozenStringValue)>,
+    args: Option<ExprCompiledValue>,
+    kwargs: Option<ExprCompiledValue>,
+}
 
 #[derive(Default)]
 struct ArgsCompiled {
@@ -41,7 +57,7 @@ struct ArgsCompiled {
     ///
     /// Note names are guaranteed to be unique here because names are validated in AST:
     /// named arguments in [`Expr::Call`] are unique.
-    names: Vec<(Symbol, FrozenValue)>,
+    names: Vec<(Symbol, FrozenStringValue)>,
     args: Option<ExprCompiled>,
     kwargs: Option<ExprCompiled>,
 }
@@ -56,7 +72,7 @@ enum ArgsCompiledSpec {
     Args(ArgsCompiled),
 }
 
-impl ArgsCompiled {
+impl ArgsCompiledValue {
     fn spec(mut self) -> ArgsCompiledSpec {
         if self.names.is_empty()
             && self.args.is_none()
@@ -66,12 +82,19 @@ impl ArgsCompiled {
             match self.pos_named.pop() {
                 None => ArgsCompiledSpec::Args0(Args0Compiled),
                 Some(a1) => match self.pos_named.pop() {
-                    None => ArgsCompiledSpec::Args1(Args1Compiled(a1)),
-                    Some(a2) => ArgsCompiledSpec::Args2(Args2Compiled(a2, a1)),
+                    None => ArgsCompiledSpec::Args1(Args1Compiled(a1.as_compiled())),
+                    Some(a2) => {
+                        ArgsCompiledSpec::Args2(Args2Compiled(a2.as_compiled(), a1.as_compiled()))
+                    }
                 },
             }
         } else {
-            ArgsCompiledSpec::Args(self)
+            ArgsCompiledSpec::Args(ArgsCompiled {
+                pos_named: self.pos_named.into_map(|a| a.as_compiled()),
+                names: self.names,
+                args: self.args.map(|a| a.as_compiled()),
+                kwargs: self.kwargs.map(|a| a.as_compiled()),
+            })
         }
     }
 }
@@ -100,8 +123,8 @@ impl Args0Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         let params = Arguments {
             this,
             pos: &[],
@@ -120,8 +143,8 @@ impl Args1Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         let params = Arguments {
             this,
             pos: &[self.0(eval)?],
@@ -140,8 +163,8 @@ impl Args2Compiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         let params = Arguments {
             this,
             pos: &[self.0(eval)?, self.1(eval)?],
@@ -160,8 +183,8 @@ impl ArgsCompiled {
         &self,
         this: Option<Value<'v>>,
         eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, EvalException<'v>>,
-    ) -> Result<R, EvalException<'v>> {
+        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
+    ) -> Result<R, ExprEvalException> {
         eval.alloca_uninit(self.pos_named.len(), |xs, eval| {
             // because Value has no drop, we don't need to worry about failures before assume_init
             for (x, arg) in xs.iter_mut().zip(&self.pos_named) {
@@ -193,84 +216,169 @@ impl ArgsCompiled {
 }
 
 impl Compiler<'_> {
-    fn args(&mut self, args: Vec<CstArgument>) -> ArgsCompiled {
-        let mut res = ArgsCompiled::default();
+    fn args(&mut self, args: Vec<CstArgument>) -> ArgsCompiledValue {
+        let mut res = ArgsCompiledValue::default();
         for x in args {
             match x.node {
-                ArgumentP::Positional(x) => res.pos_named.push(self.expr(x).as_compiled()),
+                ArgumentP::Positional(x) => res.pos_named.push(self.expr(x)),
                 ArgumentP::Named(name, value) => {
-                    let fv = self.module_env.frozen_heap().alloc(name.node.as_str());
+                    let fv = self
+                        .module_env
+                        .frozen_heap()
+                        .alloc_string_value(name.node.as_str());
                     res.names.push((Symbol::new(&name.node), fv));
-                    res.pos_named.push(self.expr(value).as_compiled());
+                    res.pos_named.push(self.expr(value));
                 }
-                ArgumentP::Args(x) => res.args = Some(self.expr(x).as_compiled()),
-                ArgumentP::KwArgs(x) => res.kwargs = Some(self.expr(x).as_compiled()),
+                ArgumentP::Args(x) => res.args = Some(self.expr(x)),
+                ArgumentP::KwArgs(x) => res.kwargs = Some(self.expr(x)),
             }
         }
         res
+    }
+
+    fn expr_call_fun_frozen_no_special(
+        &mut self,
+        span: Span,
+        this: Option<FrozenValue>,
+        fun: FrozenValue,
+        args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        let args = self.args(args);
+        if let Some(fun_ref) = fun.downcast_frozen_ref::<FrozenDef>() {
+            assert!(this.is_none());
+            args!(
+                args,
+                expr!("call_frozen_def", |eval| {
+                    args.with_params(None, eval, |params, eval| {
+                        expr_throw(
+                            fun_ref.invoke(fun.to_value(), Some(span), params, eval),
+                            span,
+                            eval,
+                        )
+                    })?
+                })
+            )
+        } else if let Some(fun_ref) = fun.downcast_frozen_ref::<NativeFunction>() {
+            args!(
+                args,
+                expr!("call_native_fun", |eval| {
+                    args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
+                        expr_throw(
+                            fun_ref.invoke(fun.to_value(), Some(span), params, eval),
+                            span,
+                            eval,
+                        )
+                    })?
+                })
+            )
+        } else {
+            args!(
+                args,
+                expr!("call_known_fn", |eval| {
+                    args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
+                        expr_throw(fun.invoke(Some(span), params, eval), span, eval)
+                    })?
+                })
+            )
+        }
+    }
+
+    fn expr_call_fun_frozen(
+        &mut self,
+        span: Span,
+        left: FrozenValue,
+        mut args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        let one_positional = args.len() == 1 && args[0].is_positional();
+        if left == self.constants.fn_type && one_positional {
+            self.fn_type(args.pop().unwrap().node.into_expr())
+        } else if left == self.constants.fn_len && one_positional {
+            let x = self.expr(args.pop().unwrap().node.into_expr());
+            // Technically the length command _could_ call other functions,
+            // and we'd not get entries on the call stack, which would be bad.
+            // But `len()` is super common, and no one expects it to call other functions,
+            // so let's just ignore that corner case for additional perf.
+            expr!("len", x, |eval| Value::new_int(expr_throw(
+                x.length(),
+                span,
+                eval
+            )?))
+        } else {
+            if one_positional {
+                // Try to inline a function like `lambda x: type(x) == "y"`.
+                if let Some(left) = left.downcast_ref::<FrozenDef>() {
+                    if let Some(t) = &left.stmt.returns_type_is {
+                        assert!(args.len() == 1);
+                        let arg = args.pop().unwrap();
+                        return match arg.node {
+                            ArgumentP::Positional(e) => {
+                                ExprCompiledValue::TypeIs(box self.expr(e), *t, MaybeNot::Id)
+                            }
+                            _ => unreachable!(),
+                        };
+                    }
+                }
+            }
+            self.expr_call_fun_frozen_no_special(span, None, left, args)
+        }
+    }
+
+    fn expr_call_fun_compiled(
+        &mut self,
+        span: Span,
+        left: ExprCompiledValue,
+        args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        if let Some(left) = left.as_value() {
+            self.expr_call_fun_frozen(span, left, args)
+        } else {
+            let args = self.args(args);
+            args!(
+                args,
+                expr!("call", left, |eval| {
+                    args.with_params(None, eval, |params, eval| {
+                        expr_throw(left.invoke(Some(span), params, eval), span, eval)
+                    })?
+                })
+            )
+        }
     }
 
     pub(crate) fn expr_call(
         &mut self,
         span: Span,
         left: CstExpr,
-        mut args: Vec<CstArgument>,
+        args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         match left.node {
             ExprP::Dot(box e, s) => {
                 let e = self.expr(e);
                 let s = Symbol::new(&s.node);
-                let args = self.args(args);
                 if let Some(e) = e.as_value() {
-                    if let Some((_, fun)) = self.compile_time_getattr(e, &s) {
-                        return args!(
-                            args,
-                            expr!("call_method_getattr_cached", |eval| {
-                                // This code is identical to non-const-propagated branch
-                                // below. But these branches are hard to merge
-                                // because of `args! macro`.
-                                args.with_params(Some(e.to_value()), eval, |params, eval| {
-                                    throw(fun.invoke(Some(span), params, eval), span, eval)
-                                })?
-                            })
-                        );
+                    if let Some((at, fun)) = self.compile_time_getattr(e, &s) {
+                        let this = match at {
+                            AttrType::Field => None,
+                            AttrType::Method => Some(e),
+                        };
+                        return self.expr_call_fun_frozen_no_special(span, this, fun, args);
                     }
                 }
+                let args = self.args(args);
                 args!(
                     args,
                     expr!("call_method", e, |eval| {
                         // We don't need to worry about whether it's an attribute, method or field
                         // since those that don't want the `this` just ignore it
-                        let fun = throw(get_attr_hashed(e, &s, eval.heap()), span, eval)?.1;
+                        let fun = expr_throw(get_attr_hashed(e, &s, eval.heap()), span, eval)?.1;
                         args.with_params(Some(e), eval, |params, eval| {
-                            throw(fun.invoke(Some(span), params, eval), span, eval)
+                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
                         })?
                     })
                 )
             }
             _ => {
-                let left = self.expr(left);
-                let one_positional = args.len() == 1 && args[0].is_positional();
-                if left.as_value() == Some(self.constants.fn_type) && one_positional {
-                    self.fn_type(args.pop().unwrap().node.into_expr())
-                } else if left.as_value() == Some(self.constants.fn_len) && one_positional {
-                    let x = self.expr(args.pop().unwrap().node.into_expr());
-                    // Technically the length command _could_ call other functions,
-                    // and we'd not get entries on the call stack, which would be bad.
-                    // But `len()` is super common, and no one expects it to call other functions,
-                    // so let's just ignore that corner case for additional perf.
-                    expr!("len", x, |_eval| Value::new_int(x.length()?))
-                } else {
-                    let args = self.args(args);
-                    args!(
-                        args,
-                        expr!("call", left, |eval| {
-                            args.with_params(None, eval, |params, eval| {
-                                throw(left.invoke(Some(span), params, eval), span, eval)
-                            })?
-                        })
-                    )
-                }
+                let expr = self.expr(left);
+                self.expr_call_fun_compiled(span, expr, args)
             }
         }
     }

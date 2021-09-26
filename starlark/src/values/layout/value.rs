@@ -31,7 +31,7 @@
 
 use crate::values::{
     layout::{
-        arena::AValueHeader,
+        arena::{AValueHeader, AValueRepr},
         avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
         constant::VALUE_EMPTY_STRING,
         pointer::Pointer,
@@ -49,6 +49,7 @@ use gazebo::{
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
 ///
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
+/// The [`Display`](std::fmt::Display) trait is equivalent to the `repr()` function in Starlark.
 #[derive(Clone_, Copy_, Dupe_)]
 // One possible change: moving to Forward during GC.
 pub struct Value<'v>(pub(crate) Pointer<'v, AValueHeader>);
@@ -75,6 +76,10 @@ unsafe impl Sync for FrozenValue {}
 impl<'v> Value<'v> {
     pub(crate) fn new_ptr(x: &'v AValueHeader) -> Self {
         Self(Pointer::new_unfrozen(x))
+    }
+
+    pub(crate) fn new_repr<'a, T: 'a>(x: &'static AValueRepr<T>) -> Self {
+        Self::new_ptr(&x.header)
     }
 
     pub(crate) fn new_ptr_usize(x: usize) -> Self {
@@ -164,7 +169,7 @@ impl<'v> Value<'v> {
     }
 
     /// Get a pointer to a [`AValue`].
-    pub fn get_ref(self) -> &'v dyn AValue<'v> {
+    pub(crate) fn get_ref(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(PointerI32::new(x)),
@@ -195,6 +200,10 @@ impl<'v> Value<'v> {
 impl FrozenValue {
     pub(crate) fn new_ptr(x: &'static AValueHeader) -> Self {
         Self(Pointer::new_frozen(x))
+    }
+
+    pub(crate) fn new_repr<'a, T: 'a>(x: &'static AValueRepr<T>) -> Self {
+        Self::new_ptr(&x.header)
     }
 
     pub(crate) fn new_ptr_usize(x: usize) -> Self {
@@ -258,7 +267,7 @@ impl FrozenValue {
     }
 
     /// Get a pointer to the [`AValue`] object this value represents.
-    pub fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
+    pub(crate) fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(PointerI32::new(x)),

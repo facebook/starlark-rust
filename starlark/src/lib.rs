@@ -290,7 +290,7 @@
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
-//! use starlark::values::{Heap, SimpleValue, StarlarkValue, Value, ValueError};
+//! use starlark::values::{Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike};
 //! use starlark::{starlark_type, starlark_simple_value};
 //!
 //! // Define complex numbers
@@ -342,7 +342,6 @@
 //! ```
 
 // Features we use
-#![feature(array_map)]
 #![feature(backtrace)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]
@@ -360,6 +359,7 @@
 #![feature(maybe_uninit_slice)]
 #![feature(ptr_metadata)]
 #![feature(try_blocks)]
+#![feature(iter_intersperse)]
 //
 // Plugins
 #![cfg_attr(feature = "custom_linter", feature(plugin))]

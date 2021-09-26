@@ -27,7 +27,10 @@ use crate::values::{
     error::ValueError, layout::PointerI32, types::float, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
     Heap, StarlarkValue, UnpackValue, Value,
 };
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display, Write},
+};
 
 /// The result of calling `type()` on integers.
 pub const INT_TYPE: &str = "int";
@@ -64,6 +67,12 @@ where
     }
 }
 
+impl Display for PointerI32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.get())
+    }
+}
+
 /// Define the int type
 impl<'v> StarlarkValue<'v> for PointerI32 {
     starlark_type!(INT_TYPE);
@@ -79,7 +88,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
 
     fn collect_repr(&self, s: &mut String) {
-        s.push_str(&self.get().to_string());
+        write!(s, "{}", self).unwrap()
     }
 
     fn to_json(&self) -> anyhow::Result<String> {

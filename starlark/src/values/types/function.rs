@@ -23,15 +23,13 @@ use crate::{
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
         AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Trace, Value, ValueLike, ValueRef,
+        SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 use derivative::Derivative;
-use gazebo::{
-    any::AnyLifetime,
-    coerce::{coerce, Coerce},
-};
-use std::mem::MaybeUninit;
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
+use std::{cell::Cell, fmt::Write, mem::MaybeUninit};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -69,8 +67,9 @@ impl<T> NativeAttr for T where
 /// Starlark representation of native (Rust) functions.
 ///
 /// Almost always created with [`#[starlark_module]`](macro@starlark_module).
-#[derive(Derivative, AnyLifetime)]
+#[derive(Derivative, AnyLifetime, Display)]
 #[derivative(Debug)]
+#[display(fmt = "{}", name)]
 pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
     function: Box<dyn NativeFunc>,
@@ -119,13 +118,13 @@ impl NativeFunction {
                 eval.alloca_uninit(parameters.len(), |slots, eval| {
                     // Fill in all the slots, because ValueRef lacks a Clone or similar
                     for slot in slots.iter_mut() {
-                        slot.write(ValueRef::new_unassigned());
+                        slot.write(Cell::new(None));
                     }
                     let slots = unsafe { MaybeUninit::slice_assume_init_ref(slots) };
 
                     let this = params.this;
                     parameters.collect_inline(params, slots, eval.heap())?;
-                    let parser = ParametersParser::new(coerce(slots));
+                    let parser = ParametersParser::new(slots);
                     function(eval, this, parser)
                 })
             },
@@ -153,7 +152,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        s.push_str(&self.name)
+        write!(s, "{}", self).unwrap()
     }
 
     fn invoke(
@@ -166,6 +165,10 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         eval.ann("invoke_native", |eval| {
             eval.with_call_stack(me, location, |eval| (self.function)(eval, args))
         })
+    }
+
+    fn extra_memory(&self) -> usize {
+        self.name.capacity()
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
@@ -188,7 +191,8 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
 
 /// Used by the `#[attribute]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
-#[derive(Derivative)]
+#[derive(Derivative, Display)]
+#[display(fmt = "Attribute")]
 #[derivative(Debug)]
 pub struct NativeAttribute {
     #[derivative(Debug = "ignore")]
@@ -238,8 +242,9 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 }
 
 /// A wrapper for a method with a self object already bound.
-#[derive(Clone, Debug, Trace, Coerce)]
+#[derive(Clone, Debug, Trace, Coerce, Display)]
 #[repr(C)]
+#[display(fmt = "{}", method)]
 pub struct BoundMethodGen<V> {
     pub(crate) method: V,
     pub(crate) this: V,
@@ -272,7 +277,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        self.method.collect_repr(s);
+        write!(s, "{}", self).unwrap()
     }
 
     fn invoke(

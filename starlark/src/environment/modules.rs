@@ -32,9 +32,10 @@ use crate::{
         docs,
         docs::{DocItem, DocString},
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
-        StarlarkValue, Value,
+        StarlarkValue, Value, ValueLike,
     },
 };
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
 use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
@@ -51,7 +52,8 @@ use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
 // Two Arc's should still be plenty cheap enough to qualify for `Dupe`.
 pub struct FrozenModule(FrozenHeapRef, FrozenModuleRef);
 
-#[derive(Debug, Clone, Dupe, AnyLifetime)]
+#[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
+#[display(fmt = "{:?}", self)] // Type should not be user visible
 pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
 #[derive(Debug)]
@@ -150,8 +152,10 @@ impl FrozenModule {
         let members = self
             .names()
             .filter(|n| Module::default_visibility(n) == Visibility::Public)
-            .map(|n| (n, self.get(n)))
-            .filter_map(|(n, v)| v.map(|fv| (n.to_owned(), fv.value().get_ref().documentation())))
+            .filter_map(|n| {
+                self.get(n)
+                    .map(|fv| (n.to_owned(), fv.value().get_ref().documentation()))
+            })
             .collect();
 
         ModuleDocs {
@@ -214,12 +218,7 @@ impl FrozenModuleValue {
     }
 
     pub fn get<'v>(self) -> &'v FrozenModuleData {
-        &self
-            .0
-            .get_ref()
-            .downcast_ref::<FrozenModuleRef>()
-            .unwrap()
-            .0
+        &self.0.downcast_ref::<FrozenModuleRef>().unwrap().0
     }
 }
 
@@ -323,13 +322,22 @@ impl Module {
         }
     }
 
+    /// Set the value of a variable in the environment. Set its visibliity to
+    /// "private" to ensure that it is not re-exported
+    pub(crate) fn set_private<'v>(&'v self, name: &str, value: Value<'v>) {
+        let slot = self.names.add_name_visibility(name, Visibility::Private);
+        let slots = self.slots();
+        slots.ensure_slot(slot);
+        slots.set_slot(slot, value);
+    }
+
     /// Import symbols from a module, similar to what is done during `load()`.
     pub fn import_public_symbols(&self, module: &FrozenModule) {
         self.frozen_heap.add_reference(&module.0);
         for (k, slot) in module.1.0.names.symbols() {
             if Self::default_visibility(k) == Visibility::Public {
                 if let Some(value) = module.1.0.slots.get_slot(slot) {
-                    self.set(k, Value::new_frozen(value))
+                    self.set_private(k, Value::new_frozen(value))
                 }
             }
         }

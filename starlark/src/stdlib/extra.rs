@@ -20,10 +20,11 @@ use crate::{
     codemap::Span,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
-    eval::{Arguments, Evaluator, ParametersSpec},
+    eval::{Arguments, Evaluator},
     values::{
         dict::Dict, function::FUNCTION_TYPE, list::List, none::NoneType, tuple::Tuple,
-        ComplexValue, Freezer, StarlarkValue, Trace, Value, ValueLike,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, StarlarkValue, StringValue,
+        StringValueLike, Trace, Value, ValueLike,
     },
 };
 use gazebo::{
@@ -33,7 +34,10 @@ use gazebo::{
     prelude::*,
 };
 use itertools::Itertools;
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    fmt::{self, Display, Write},
+};
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
@@ -67,30 +71,26 @@ pub fn map(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
-    fn partial(ref func: Value, args: ARef<Tuple>, kwargs: ARef<Dict>) -> Partial<'v> {
-        // TODO: use func name (+ something?)
-        let name = "partial_closure".to_owned();
-        let mut signature = ParametersSpec::with_capacity(name, 2);
-        signature.args();
-        signature.kwargs();
+    fn partial(ref func: Value, args: Value<'v>, kwargs: ARef<Dict>) -> Partial<'v> {
+        debug_assert!(Tuple::from_value(args).is_some());
         let names = kwargs
             .content
             .keys()
             .map(|x| {
+                let x = StringValue::new(*x).unwrap();
                 (
                     // We duplicate string here.
                     // If this becomes hot, we should do better.
-                    Symbol::new_hashed(x.unpack_starlark_str().unwrap().as_str_hashed()),
-                    *x,
+                    Symbol::new_hashed(x.unpack_starlark_str().as_str_hashed()),
+                    x,
                 )
             })
             .collect();
         Ok(Partial {
             func,
-            pos: args.content.clone(),
+            pos: args,
             named: kwargs.content.values().copied().collect(),
             names,
-            signature,
         })
     }
 }
@@ -126,7 +126,7 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
 pub fn print(builder: &mut GlobalsBuilder) {
     fn print(args: Vec<Value>) -> NoneType {
         // In practice most users should want to put the print somewhere else, but this does for now
-        eprintln!("{}", args.iter().join(" "));
+        eprintln!("{}", args.iter().map(|x| x.to_str()).join(" "));
         Ok(NoneType)
     }
 }
@@ -147,32 +147,60 @@ pub fn abs(builder: &mut GlobalsBuilder) {
 
 #[derive(Debug, Coerce, Trace)]
 #[repr(C)]
-struct PartialGen<V> {
+struct PartialGen<V, S> {
     func: V,
-    pos: Vec<V>,
+    // Always references a tuple.
+    pos: V,
     named: Vec<V>,
-    names: Vec<(Symbol, V)>,
-    signature: ParametersSpec<V>,
+    names: Vec<(Symbol, S)>,
 }
 
-starlark_complex_value!(Partial);
+impl<'v, V: ValueLike<'v>, S> PartialGen<V, S> {
+    fn pos_content(&self) -> &'v [Value<'v>] {
+        Tuple::from_value(self.pos.to_value()).unwrap().content()
+    }
+}
+
+impl<'v, V: ValueLike<'v>, S> Display for PartialGen<V, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "partial({}, *[", self.func)?;
+        for (i, v) in self.pos_content().iter().enumerate() {
+            if i != 0 {
+                write!(f, ",")?;
+            }
+            v.fmt(f)?;
+        }
+        write!(f, "], **{{")?;
+        for (i, (k, v)) in self.names.iter().zip(self.named.iter()).enumerate() {
+            if i != 0 {
+                write!(f, ",")?;
+            }
+            write!(f, "{}:", k.0.as_str())?;
+            v.to_value().fmt(f)?;
+        }
+        write!(f, "}})")
+    }
+}
+
+type Partial<'v> = PartialGen<Value<'v>, StringValue<'v>>;
+type FrozenPartial = PartialGen<FrozenValue, FrozenStringValue>;
+starlark_complex_values!(Partial);
 
 impl<'v> ComplexValue<'v> for Partial<'v> {
     type Frozen = FrozenPartial;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenPartial {
             func: self.func.freeze(freezer)?,
-            pos: self.pos.try_map(|x| x.freeze(freezer))?,
+            pos: freezer.freeze(self.pos)?,
             named: self.named.try_map(|x| x.freeze(freezer))?,
             names: self
                 .names
                 .into_try_map(|(s, x)| Ok::<_, anyhow::Error>((s, x.freeze(freezer)?)))?,
-            signature: self.signature.freeze(freezer)?,
         })
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for PartialGen<V>
+impl<'v, V: ValueLike<'v>, S: StringValueLike<'v>> StarlarkValue<'v> for PartialGen<V, S>
 where
     Self: AnyLifetime<'v>,
 {
@@ -187,7 +215,7 @@ where
     ) -> anyhow::Result<Value<'v>> {
         // apply the partial arguments first, then the remaining arguments I was given
 
-        let self_pos = coerce_ref(&self.pos);
+        let self_pos = self.pos_content();
         let self_named = coerce_ref(&self.named);
         let self_names = coerce_ref(&self.names);
 
@@ -203,25 +231,7 @@ where
     }
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str("partial(");
-        self.func.collect_repr(collector);
-        collector.push_str(", *[");
-        for (i, v) in self.pos.iter().enumerate() {
-            if i != 0 {
-                collector.push(',');
-            }
-            v.collect_repr(collector);
-        }
-        collector.push_str("], **{");
-        for (i, (k, v)) in self.names.iter().zip(self.named.iter()).enumerate() {
-            if i != 0 {
-                collector.push(',');
-            }
-            collector.push_str(k.0.as_str());
-            collector.push(':');
-            v.collect_repr(collector);
-        }
-        collector.push_str("})");
+        write!(collector, "{}", self).unwrap()
     }
 }
 

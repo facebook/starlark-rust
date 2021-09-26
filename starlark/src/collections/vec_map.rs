@@ -325,6 +325,10 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
+    pub fn capacity(&self) -> usize {
+        self.values.capacity()
+    }
+
     pub fn get_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<&V>
     where
         Q: ?Sized + Equivalent<K>,

@@ -26,17 +26,20 @@ use crate::{
         runtime::{
             call_stack::CallStack,
             flame_profile::FlameProfile,
-            heap_profile::HeapProfile,
+            heap_profile::{HeapProfile, HeapProfileFormat},
             slots::{LocalSlotId, LocalSlots},
             stmt_profile::StmtProfile,
         },
         FileLoader,
     },
-    values::{FrozenHeap, Heap, Trace, Tracer, Value, ValueRef},
+    values::{
+        value_captured_get, FrozenHeap, Heap, Trace, Tracer, Value, ValueCaptured, ValueLike,
+    },
 };
 use gazebo::{any::AnyLifetime, cast};
 use once_cell::sync::Lazy;
 use std::{
+    cell::Cell,
     intrinsics::unlikely,
     mem::{self, MaybeUninit},
     path::Path,
@@ -71,7 +74,7 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) globals: &'a Globals,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
-    // The codemap that corresponds to this module.
+    // The codemap that corresponds to currently executed function.
     pub(crate) codemap: &'v CodeMap,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
@@ -151,7 +154,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Set the [`FileLoader`] used to resolve `load()` statements.
     /// A list of all load statements can be obtained through
     /// [`AstModule::loads`](crate::syntax::AstModule::loads).
-    pub fn set_loader(&mut self, loader: &'a mut dyn FileLoader) {
+    pub fn set_loader(&mut self, loader: &'a dyn FileLoader) {
         self.loader = Some(loader);
     }
 
@@ -172,7 +175,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ///   performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     ///   This profiling mode is the recommended one.
     /// * The `stmt_profile` mode provides information about time spent in each statement.
-    /// * The `flame_profile` mode provides input compatible with
+    /// * The `flame_profile` and the `heap_profile` mode provide input compatible with
     ///   [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     pub fn enable_heap_profile(&mut self) {
         self.heap_profile.enable();
@@ -186,7 +189,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
-        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, eval.codemap));
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.
@@ -196,12 +199,26 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.heap_or_flame_profile = true;
     }
 
-    /// Write a profile (as a `.csv` file) to a file.
+    /// Write a profile (as a summarized `.csv` file) to a file.
     /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
     /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
     pub fn write_heap_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
         self.heap_profile
-            .write(filename.as_ref(), self.heap())
+            .write(filename.as_ref(), self.heap(), HeapProfileFormat::Summary)
+            .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
+    }
+
+    /// Write a heap profile as a flamegraph, suitable as input to
+    /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
+    /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
+    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
+    pub fn write_heap_flame_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        self.heap_profile
+            .write(
+                filename.as_ref(),
+                self.heap(),
+                HeapProfileFormat::FlameGraph,
+            )
             .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
     }
 
@@ -238,6 +255,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Called before every statement is run with the [`Span`] and a reference to the containing [`Evaluator`].
     /// A list of all possible statements can be obtained in advance by
     /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
+    ///
+    /// This function may have no effect is called mid evaluation.
     pub fn before_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
         self.before_stmt.push(f)
     }
@@ -270,6 +289,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         span: Option<Span>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
+        #[cold]
         #[inline(never)]
         fn add_diagnostics(e: anyhow::Error, me: &Evaluator) -> anyhow::Error {
             Diagnostic::modify(e, |d: &mut Diagnostic| {
@@ -298,7 +318,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn set_codemap(&mut self, codemap: &'v CodeMap) -> &'v CodeMap {
-        self.stmt_profile.set_codemap(codemap);
         mem::replace(&mut self.codemap, codemap)
     }
 
@@ -349,6 +368,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     pub(crate) fn get_slot_module(&self, slot: ModuleSlotId) -> anyhow::Result<Value<'v>> {
         // Make sure the error-path doesn't get inlined into the normal-path execution
+        #[cold]
         #[inline(never)]
         fn error<'v>(eval: &Evaluator<'v, '_>, slot: ModuleSlotId) -> anyhow::Error {
             let name = match &eval.module_variables {
@@ -366,24 +386,51 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         .ok_or_else(|| error(self, slot))
     }
 
+    // Make sure the error-path doesn't get inlined into the normal-path execution
+    #[cold]
+    #[inline(never)]
+    fn local_var_referenced_before_assignment(name: &str) -> anyhow::Error {
+        EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
+    }
+
     pub(crate) fn get_slot_local(
         &self,
         slot: LocalSlotId,
         name: &str,
     ) -> anyhow::Result<Value<'v>> {
-        // Make sure the error-path doesn't get inlined into the normal-path execution
-        #[inline(never)]
-        fn error(name: &str) -> anyhow::Error {
-            EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
-        }
-
         self.local_variables
             .get_slot(slot)
-            .ok_or_else(|| error(name))
+            .ok_or_else(|| Self::local_var_referenced_before_assignment(name))
     }
 
-    pub(crate) fn clone_slot_reference(&self, slot: LocalSlotId, heap: &'v Heap) -> ValueRef<'v> {
-        self.local_variables.clone_slot_reference(slot, heap)
+    pub(crate) fn get_slot_local_captured(
+        &self,
+        slot: LocalSlotId,
+        name: &str,
+    ) -> anyhow::Result<Value<'v>> {
+        let value_captured = self.get_slot_local(slot, name)?;
+        let value_captured = value_captured_get(value_captured);
+        value_captured.ok_or_else(|| Self::local_var_referenced_before_assignment(name))
+    }
+
+    pub(crate) fn clone_slot_capture(&self, slot: LocalSlotId) -> Value<'v> {
+        match self.local_variables.get_slot(slot) {
+            Some(value_captured) => {
+                debug_assert!(
+                    value_captured.downcast_ref::<ValueCaptured>().is_some(),
+                    "slot {:?} is expected to be ValueCaptured, it is {:?} ({})",
+                    slot,
+                    value_captured,
+                    value_captured.get_type()
+                );
+                value_captured
+            }
+            None => {
+                let value_captured = self.heap().alloc_complex(ValueCaptured(Cell::new(None)));
+                self.local_variables.set_slot(slot, value_captured);
+                value_captured
+            }
+        }
     }
 
     /// Set a variable in the top-level module currently being processed.
@@ -412,10 +459,45 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.local_variables.set_slot(slot, value)
     }
 
+    pub(crate) fn set_slot_local_captured(&mut self, slot: LocalSlotId, value: Value<'v>) {
+        match self.local_variables.get_slot(slot) {
+            Some(value_captured) => {
+                let value_captured = value_captured
+                    .downcast_ref::<ValueCaptured>()
+                    .expect("not a ValueCaptured");
+                value_captured.set(value);
+            }
+            None => {
+                let value_captured = self
+                    .heap()
+                    .alloc_complex(ValueCaptured(Cell::new(Some(value))));
+                self.local_variables.set_slot(slot, value_captured);
+            }
+        };
+    }
+
+    /// Take a value from the local slot and store it back wrapped in [`ValueCaptured`].
+    pub(crate) fn wrap_local_slot_captured(&mut self, slot: LocalSlotId) {
+        let value = self.local_variables.get_slot(slot).expect("slot unset");
+        debug_assert!(value.downcast_ref::<ValueCaptured>().is_none());
+        let value_captured = self
+            .heap()
+            .alloc_complex(ValueCaptured(Cell::new(Some(value))));
+        self.local_variables.set_slot(slot, value_captured);
+    }
+
     /// Cause a GC to be triggered next time it's possible.
     pub(crate) fn trigger_gc(&mut self) {
         // We will GC next time we can, since the threshold is if 0 or more bytes are allocated
         self.next_gc_level = 0;
+    }
+
+    /// Perform a garbage collection.
+    /// After this operation all [`Value`]s not reachable from the evaluator will be invalid,
+    /// and using them will lead to a segfault.
+    /// Do not call during Starlark evaluation.
+    pub unsafe fn garbage_collect(&mut self) {
+        self.heap().garbage_collect(|tracer| self.trace(tracer))
     }
 
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,

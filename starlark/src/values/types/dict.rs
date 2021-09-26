@@ -24,8 +24,8 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
         string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
-        FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value,
-        ValueLike,
+        FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
+        UnpackValue, Value, ValueLike,
     },
 };
 use gazebo::{
@@ -36,14 +36,31 @@ use gazebo::{
 use indexmap::Equivalent;
 use std::{
     cell::{Ref, RefCell, RefMut},
-    fmt::Debug,
+    fmt,
+    fmt::{Debug, Display},
     hash::{Hash, Hasher},
+    intrinsics::unlikely,
     marker::PhantomData,
     ops::Deref,
 };
 
 #[derive(Clone, Default, Trace, Debug)]
 struct DictGen<T>(T);
+
+impl<'v, T: DictLike<'v>> Display for DictGen<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        for (i, (name, value)) in self.0.content().iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            Display::fmt(name, f)?;
+            write!(f, ": ")?;
+            Display::fmt(value, f)?;
+        }
+        write!(f, "}}")
+    }
+}
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
 #[derive(Clone, Default, Trace, Debug)]
@@ -88,17 +105,16 @@ impl<'v> Dict<'v> {
             x.downcast_ref::<DictGen<FrozenDict>>()
                 .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
         } else {
-            let ptr = x.get_ref();
-            let ptr = ptr.downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
+            let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
             Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
 
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
-        if x.unpack_frozen().is_some() {
+        if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
-        let ptr = x.get_ref().downcast_ref::<DictGen<RefCell<Dict<'v>>>>();
+        let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>();
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {
@@ -119,9 +135,8 @@ impl FrozenDict {
     /// Obtain the [`FrozenDict`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
-    pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenDict>> {
-        x.downcast_ref::<DictGen<FrozenDict>>()
-            .map(|x| ARef::map(x, |x| &x.0))
+    pub fn from_frozen_value(x: &FrozenValue) -> Option<&FrozenDict> {
+        x.downcast_ref::<DictGen<FrozenDict>>().map(|x| &x.0)
     }
 }
 
@@ -150,6 +165,10 @@ impl Equivalent<FrozenValue> for ValueStr<'_> {
 impl<'v> Dict<'v> {
     /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
+
+    pub fn get_type_value_static() -> FrozenStringValue {
+        DictGen::<FrozenDict>::get_type_value_static()
+    }
 
     /// Create a new [`Dict`].
     pub fn new(content: SmallMap<Value<'v>, Value<'v>>) -> Self {
@@ -270,6 +289,7 @@ where
     }
 
     fn collect_repr(&self, r: &mut String) {
+        // Fast path as repr() for dicts is quite hot
         r.push('{');
         for (i, (name, value)) in self.0.content().iter().enumerate() {
             if i != 0 {
@@ -315,6 +335,10 @@ where
             Some(v) => Ok(v.to_value()),
             None => Err(ValueError::KeyNotFound(index.to_repr()).into()),
         }
+    }
+
+    fn extra_memory(&self) -> usize {
+        self.0.content().extra_memory()
     }
 
     fn length(&self) -> anyhow::Result<i32> {

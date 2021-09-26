@@ -18,12 +18,19 @@
 //! Implementation of `def`.
 
 use crate::{
-    codemap::{CodeMap, Span},
+    codemap::{CodeMap, Span, Spanned},
     environment::FrozenModuleValue,
     eval::{
         compiler::{
-            scope::{CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames},
-            Compiler, EvalException, ExprCompiled, ExprCompiledValue, StmtCompiled,
+            expr_throw,
+            scope::{
+                Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
+            },
+            throw_eval_exception, Compiler, EvalException,
+        },
+        fragment::{
+            expr::{ExprCompiled, ExprCompiledValue, MaybeNot},
+            stmt::{StmtCompiled, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -38,24 +45,34 @@ use crate::{
         docs::{DocItem, DocString},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        ComplexValue, Freezer, FrozenValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
-        ValueRef,
+        ComplexValue, Freezer, FrozenRef, FrozenStringValue, FrozenValue, StarlarkValue, Trace,
+        Tracer, Value, ValueLike,
     },
 };
 use derivative::Derivative;
-use gazebo::prelude::*;
-use std::{collections::HashMap, mem, sync::Arc};
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, prelude::*};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display, Write},
+    mem,
+};
+
+struct ParameterName {
+    name: String,
+    captured: Captured,
+}
 
 enum ParameterCompiled<T> {
-    Normal(String, Option<T>),
-    WithDefaultValue(String, Option<T>, T),
+    Normal(ParameterName, Option<T>),
+    WithDefaultValue(ParameterName, Option<T>, T),
     NoArgs,
-    Args(String, Option<T>),
-    KwArgs(String, Option<T>),
+    Args(ParameterName, Option<T>),
+    KwArgs(ParameterName, Option<T>),
 }
 
 impl<T> ParameterCompiled<T> {
-    fn name(&self) -> Option<&str> {
+    fn param_name(&self) -> Option<&ParameterName> {
         match self {
             Self::Normal(x, _) => Some(x),
             Self::WithDefaultValue(x, _, _) => Some(x),
@@ -63,6 +80,22 @@ impl<T> ParameterCompiled<T> {
             Self::Args(x, _) => Some(x),
             Self::KwArgs(x, _) => Some(x),
         }
+    }
+
+    fn accepts_positional(&self) -> bool {
+        match self {
+            ParameterCompiled::Normal(_, _) => true,
+            ParameterCompiled::WithDefaultValue(_, _, _) => true,
+            _ => false,
+        }
+    }
+
+    fn name(&self) -> Option<&str> {
+        self.param_name().map(|n| n.name.as_str())
+    }
+
+    fn captured(&self) -> Captured {
+        self.param_name().map_or(Captured::No, |n| n.captured)
     }
 
     fn ty(&self) -> Option<&T> {
@@ -76,37 +109,72 @@ impl<T> ParameterCompiled<T> {
     }
 }
 
-#[derive(Derivative)]
+#[derive(Derivative, Display)]
 #[derivative(Debug)]
-struct DefInfo {
+#[display(fmt = "DefInfo")]
+pub(crate) struct DefInfo {
+    /// Codemap of the file where the function is declared.
+    codemap: CodeMap,
+    /// The raw docstring pulled out of the AST.
+    pub(crate) docstring: Option<String>,
     scope_names: ScopeNames,
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
     #[derivative(Debug = "ignore")]
     body: StmtCompiled,
+    /// Function body is `type(x) == "y"`
+    pub(crate) returns_type_is: Option<FrozenStringValue>,
 }
 
 impl Compiler<'_> {
-    fn parameter(&mut self, x: CstParameter) -> ParameterCompiled<ExprCompiled> {
-        match x.node {
-            ParameterP::Normal(x, t) => ParameterCompiled::Normal(
-                x.node.0,
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-            ),
-            ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
-                x.node.0,
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-                self.expr(*v).as_compiled(),
-            ),
-            ParameterP::NoArgs => ParameterCompiled::NoArgs,
-            ParameterP::Args(x, t) => ParameterCompiled::Args(
-                x.node.0,
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-            ),
-            ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
-                x.node.0,
-                self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-            ),
+    fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
+        let binding_id = ident.1.expect("no binding for parameter");
+        let binding = self.scope_data.get_binding(binding_id);
+        ParameterName {
+            name: ident.node.0,
+            captured: binding.captured,
+        }
+    }
+
+    fn parameter(&mut self, x: CstParameter) -> Spanned<ParameterCompiled<ExprCompiled>> {
+        Spanned {
+            span: x.span,
+            node: match x.node {
+                ParameterP::Normal(x, t) => ParameterCompiled::Normal(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                ),
+                ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                    self.expr(*v).as_compiled(),
+                ),
+                ParameterP::NoArgs => ParameterCompiled::NoArgs,
+                ParameterP::Args(x, t) => ParameterCompiled::Args(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                ),
+                ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
+                    self.parameter_name(x),
+                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                ),
+            },
+        }
+    }
+
+    /// If a statement is `return type(x) == "y"` where `x` is a first slot.
+    fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
+        match stmt.first() {
+            Some(StmtCompiledValue::Return(
+                _,
+                Some(ExprCompiledValue::TypeIs(
+                    // Slot 0 is a slot for the first function argument.
+                    box ExprCompiledValue::Local(LocalSlotId(0), ..),
+                    t,
+                    MaybeNot::Id,
+                )),
+            )) => Some(*t),
+            _ => None,
         }
     }
 
@@ -124,9 +192,10 @@ impl Compiler<'_> {
         // The parameters run in the scope of the parent, so compile them with the outer
         // scope
         let params = params.into_map(|x| self.parameter(x));
-        let return_type = self
-            .expr_opt(return_type)
-            .map(ExprCompiledValue::as_compiled);
+        let return_type = return_type.map(|return_type| Spanned {
+            span: return_type.span,
+            node: self.expr(*return_type).as_compiled(),
+        });
 
         self.enter_scope(scope_id);
 
@@ -136,12 +205,25 @@ impl Compiler<'_> {
 
         let scope_names = mem::take(scope_names);
 
-        let info = Arc::new(DefInfo { scope_names, body });
+        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
+            Self::is_return_type_is(&body)
+        } else {
+            None
+        };
+
+        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
+            codemap: self.codemap.dupe(),
+            docstring,
+            scope_names,
+            body: body.as_compiled(self),
+            returns_type_is,
+        });
 
         expr!("def", |eval| {
             let mut parameters =
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
             let mut parameter_types = Vec::new();
+            let mut parameter_captures = Vec::new();
 
             // count here rather than enumerate because '*' doesn't get a real
             // index in the parameter mapping, and it messes up the indexes
@@ -150,35 +232,46 @@ impl Compiler<'_> {
                 if let Some(t) = x.ty() {
                     let v = t(eval)?;
                     let name = x.name().unwrap_or("unknown").to_owned();
-                    parameter_types.push((i, name, v, TypeCompiled::new(v, eval.heap())?));
+                    parameter_types.push((
+                        i,
+                        name,
+                        v,
+                        expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval)?,
+                    ));
                 }
-                if !matches!(x, ParameterCompiled::NoArgs) {
-                    i += 1;
-                }
-                match x {
-                    ParameterCompiled::Normal(n, _) => parameters.required(n),
+                match &x.node {
+                    ParameterCompiled::Normal(n, _) => parameters.required(&n.name),
                     ParameterCompiled::WithDefaultValue(n, _, v) => {
-                        parameters.defaulted(n, v(eval)?);
+                        parameters.defaulted(&n.name, v(eval)?)
                     }
                     ParameterCompiled::NoArgs => parameters.no_args(),
                     ParameterCompiled::Args(_, _) => parameters.args(),
                     ParameterCompiled::KwArgs(_, _) => parameters.kwargs(),
+                };
+                if let Captured::Yes = x.captured() {
+                    parameter_captures.push(i);
+                }
+                if !matches!(x.node, ParameterCompiled::NoArgs) {
+                    i += 1;
                 }
             }
             let return_type = match &return_type {
                 None => None,
                 Some(v) => {
-                    let v = v(eval)?;
-                    Some((v, TypeCompiled::new(v, eval.heap())?))
+                    let value = (v.node)(eval)?;
+                    Some((
+                        value,
+                        expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)?,
+                    ))
                 }
             };
             Def::new(
                 parameters,
+                parameter_captures,
                 parameter_types,
                 return_type,
-                info.dupe(),
+                info,
                 eval,
-                docstring.clone(),
             )
         })
     }
@@ -188,52 +281,58 @@ impl Compiler<'_> {
 /// [`StarlarkValue`].
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub(crate) struct DefGen<V, RefV> {
+pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
+    parameter_captures: Vec<usize>, // Indices of parameters, which are captured in nested defs
     parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
-    codemap: CodeMap,                       // Codemap that was active during this module
-    stmt: Arc<DefInfo>,                     // The source code and metadata for this function
-    captured: Vec<RefV>, // Any variables captured from the outer scope (nested def/lambda), see stmt.parent
+    pub(crate) stmt: FrozenRef<DefInfo>,    // The source code and metadata for this function
+    /// Any variables captured from the outer scope (nested def/lambda).
+    /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
+    /// [`ValueCaptured`] or [`FrozenValueCaptured`].
+    captured: Vec<V>,
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
     module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
-    docstring: Option<String>, // The raw docstring pulled out of the AST
 }
 
-// We can't use the `starlark_complex_value!` macro because we have two type arguments.
-pub(crate) type Def<'v> = DefGen<Value<'v>, ValueRef<'v>>;
-pub(crate) type FrozenDef = DefGen<FrozenValue, Option<FrozenValue>>;
+impl<V> Display for DefGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.parameters.signature())
+    }
+}
+
+pub(crate) type Def<'v> = DefGen<Value<'v>>;
+pub(crate) type FrozenDef = DefGen<FrozenValue>;
 
 starlark_complex_values!(Def);
 
 impl<'v> Def<'v> {
     fn new(
         parameters: ParametersSpec<Value<'v>>,
+        parameter_captures: Vec<usize>,
         parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
-        stmt: Arc<DefInfo>,
+        stmt: FrozenRef<DefInfo>,
         eval: &mut Evaluator<'v, '_>,
-        docstring: Option<String>,
     ) -> Value<'v> {
         let captured = stmt
             .scope_names
             .parent
-            .map(|(x, _)| eval.clone_slot_reference(*x, eval.heap()));
+            .map(|(x, _)| eval.clone_slot_capture(*x));
         eval.heap().alloc(Self {
             parameters,
+            parameter_captures,
             parameter_types,
             return_type,
             stmt,
-            codemap: eval.codemap.dupe(),
             captured,
             module: eval.module_variables.map(|x| x.1),
-            docstring,
         })
     }
 }
 
-impl<'v, T1: ValueLike<'v>, T2> DefGen<T1, T2> {
+impl<'v, T1: ValueLike<'v>> DefGen<T1> {
     /// Extract a few key things out of the main function docstring
     fn parse_docstring(
         &self,
@@ -243,6 +342,7 @@ impl<'v, T1: ValueLike<'v>, T2> DefGen<T1, T2> {
         Option<DocString>,
     ) {
         let docstring = self
+            .stmt
             .docstring
             .as_ref()
             .and_then(|s| DocString::from_docstring(s));
@@ -332,7 +432,7 @@ impl<'v, T1: ValueLike<'v>, T2> DefGen<T1, T2> {
     }
 }
 
-impl<T1, T2> DefGen<T1, T2> {
+impl<T1> DefGen<T1> {
     pub(crate) fn scope_names(&self) -> &ScopeNames {
         &self.stmt.scope_names
     }
@@ -371,56 +471,36 @@ impl<'v> ComplexValue<'v> for Def<'v> {
         );
         Ok(FrozenDef {
             parameters,
+            parameter_captures: self.parameter_captures,
             parameter_types,
             return_type,
-            codemap: self.codemap,
             stmt: self.stmt,
             captured,
             module,
-            docstring: self.docstring,
         })
     }
 }
 
-// We define two different StarlarkValue instances because
-// the invoker uses different types for both of them.
-impl<'v> StarlarkValue<'v> for FrozenDef {
-    starlark_type!(FUNCTION_TYPE);
-
-    fn collect_repr(&self, collector: &mut String) {
-        collector.push_str(&self.parameters.signature());
-    }
-
-    fn invoke(
-        &self,
-        me: Value<'v>,
-        location: Option<Span>,
-        args: Arguments<'v, '_>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
-        eval.ann("invoke_frozen_def", |eval| {
-            let local_slots = self.stmt.scope_names.used;
-            let slot_base = eval.local_variables.reserve(local_slots);
-            let slots = eval.local_variables.get_slots_at(slot_base);
-            self.parameters.collect_inline(args, slots, eval.heap())?;
-            eval.with_call_stack(me, location, |eval| {
-                eval.ann("invoke_frozen_def_raw", |eval| {
-                    self.invoke_raw(slot_base, eval)
-                })
-            })
-        })
-    }
-
-    fn documentation(&self) -> Option<DocItem> {
-        self.docs()
-    }
+pub(crate) trait DefLike<'v> {
+    const FROZEN: bool;
 }
 
-impl<'v> StarlarkValue<'v> for Def<'v> {
+impl<'v> DefLike<'v> for DefGen<Value<'v>> {
+    const FROZEN: bool = false;
+}
+
+impl<'v> DefLike<'v> for DefGen<FrozenValue> {
+    const FROZEN: bool = true;
+}
+
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DefGen<V>
+where
+    Self: AnyLifetime<'v> + DefLike<'v>,
+{
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str(&self.parameters.signature());
+        write!(collector, "{}", self).unwrap()
     }
 
     fn invoke(
@@ -446,24 +526,11 @@ impl<'v> StarlarkValue<'v> for Def<'v> {
     }
 }
 
-pub(crate) trait AsValueRef<'v> {
-    fn to_value_ref(&self) -> ValueRef<'v>;
-}
-
-impl<'v> AsValueRef<'v> for Option<FrozenValue> {
-    fn to_value_ref(&self) -> ValueRef<'v> {
-        ValueRef::new_frozen(*self)
-    }
-}
-
-impl<'v> AsValueRef<'v> for ValueRef<'v> {
-    fn to_value_ref(&self) -> ValueRef<'v> {
-        self.dupe_reference()
-    }
-}
-
-impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
-    pub fn invoke_raw(
+impl<'v, V: ValueLike<'v>> DefGen<V>
+where
+    Self: DefLike<'v>,
+{
+    fn invoke_raw(
         &self,
         locals: LocalSlotBase,
         eval: &mut Evaluator<'v, '_>,
@@ -482,6 +549,13 @@ impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
             }
         }
 
+        // Parameters are collected into local slots without captures
+        // (to avoid even more branches in parameter capture),
+        // and this loop wraps captured parameters.
+        for &captured in &self.parameter_captures {
+            eval.wrap_local_slot_captured(LocalSlotId::new(captured));
+        }
+
         // Copy over the parent slots
         for ((_, me), captured) in self
             .stmt
@@ -490,17 +564,20 @@ impl<'v, V: ValueLike<'v>, RefV: AsValueRef<'v>> DefGen<V, RefV> {
             .iter()
             .zip(self.captured.iter())
         {
-            eval.local_variables
-                .set_slot_ref(*me, captured.to_value_ref());
+            eval.local_variables.set_slot(*me, captured.to_value());
         }
 
-        let res =
-            eval.with_function_context(self.module, &self.codemap, |eval| (self.stmt.body)(eval));
+        if Self::FROZEN {
+            debug_assert!(self.module.is_some());
+        }
+        let res = eval.with_function_context(self.module, &self.stmt.codemap, |eval| {
+            (self.stmt.body)(eval)
+        });
         eval.local_variables.release(old_locals);
 
         let ret = match res {
             Err(EvalException::Return(ret)) => ret,
-            Err(e) => return Err(e.into()),
+            Err(e) => return throw_eval_exception(e),
             Ok(_) => Value::new_none(),
         };
 

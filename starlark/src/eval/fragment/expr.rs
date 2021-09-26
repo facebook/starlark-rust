@@ -22,24 +22,88 @@ use crate::{
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
-            scope::{AssignCount, CstExpr, ResolvedIdent, Slot},
-            throw, Compiler, EvalException, ExprCompiled, ExprCompiledValue,
+            expr_throw,
+            scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
+            Compiler, ExprEvalException,
         },
         fragment::known::{list_to_tuple, Conditional},
-        runtime::evaluator::Evaluator,
+        runtime::{evaluator::Evaluator, slots::LocalSlotId},
     },
-    syntax::ast::{AstExprP, AstLiteral, AstPayload, BinOp, ExprP, StmtP},
+    syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
         list::List,
         tuple::{FrozenTuple, Tuple},
-        AttrType, FrozenHeap, FrozenValue, Heap, Value, ValueError, ValueLike,
+        AttrType, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
 use gazebo::{coerce::coerce_ref, prelude::*};
 use std::cmp::Ordering;
 use thiserror::Error;
+
+/// `bool` operation.
+#[derive(Copy, Clone, Dupe)]
+pub(crate) enum MaybeNot {
+    Id,
+    Not,
+}
+
+impl MaybeNot {
+    fn as_fn(self) -> fn(bool) -> bool {
+        match self {
+            MaybeNot::Id => |x| x,
+            MaybeNot::Not => |x| !x,
+        }
+    }
+}
+
+pub(crate) type ExprCompiled = Box<
+    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
+>;
+pub(crate) enum ExprCompiledValue {
+    Value(FrozenValue),
+    Compiled(ExprCompiled),
+    /// Read local non-captured variable.
+    Local(LocalSlotId, Spanned<String>),
+    /// `type(x)`
+    Type(Box<ExprCompiledValue>),
+    /// `maybe_not(type(x) == "y")`
+    TypeIs(Box<ExprCompiledValue>, FrozenStringValue, MaybeNot),
+}
+
+impl ExprCompiledValue {
+    pub fn as_value(&self) -> Option<FrozenValue> {
+        match self {
+            Self::Value(x) => Some(*x),
+            _ => None,
+        }
+    }
+
+    pub fn as_compiled(self) -> ExprCompiled {
+        match self {
+            Self::Value(x) => box move |_| Ok(x.to_value()),
+            Self::Compiled(x) => x,
+            Self::Local(slot, name) => expr!("local", |eval| expr_throw(
+                eval.get_slot_local(slot, &name.node),
+                name.span,
+                eval
+            )?)
+            .as_compiled(),
+            Self::Type(x) => expr!("type", x, |_eval| {
+                x.get_ref().get_type_value().unpack().to_value()
+            })
+            .as_compiled(),
+            ExprCompiledValue::TypeIs(e, t, maybe_not) => {
+                let cmp = maybe_not.as_fn();
+                expr!("type_is", e, |_eval| {
+                    Value::new_bool(cmp(e.get_type_value() == t))
+                })
+                .as_compiled()
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Error)]
 pub(crate) enum EvalError {
@@ -61,16 +125,36 @@ fn eval_compare(
     }
 
     expr!("compare", l, r, |eval| {
-        Value::new_bool(cmp(throw(l.compare(r), span, eval)?))
+        Value::new_bool(cmp(expr_throw(l.compare(r), span, eval)?))
     })
+}
+
+/// Try fold expression `cmp(l == r)` into `cmp(type(x) == "y")`.
+/// Return original `l` and `r` arguments if fold was unsuccessful.
+fn try_eval_type_is(
+    l: ExprCompiledValue,
+    r: ExprCompiledValue,
+    maybe_not: MaybeNot,
+) -> Result<ExprCompiledValue, (ExprCompiledValue, ExprCompiledValue)> {
+    match (l, r) {
+        (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
+            if let Some(r) = FrozenStringValue::new(r) {
+                Ok(ExprCompiledValue::TypeIs(l, r, maybe_not))
+            } else {
+                Err((ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)))
+            }
+        }
+        (l, r) => Err((l, r)),
+    }
 }
 
 fn eval_equals(
     span: Span,
     l: ExprCompiledValue,
     r: ExprCompiledValue,
-    cmp: fn(bool) -> bool,
+    maybe_not: MaybeNot,
 ) -> ExprCompiledValue {
+    let cmp = maybe_not.as_fn();
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
         // If comparison fails, let it fail in runtime.
         if let Ok(r) = l.equals(r.to_value()) {
@@ -78,8 +162,18 @@ fn eval_equals(
         }
     }
 
+    let (l, r) = match try_eval_type_is(l, r, maybe_not) {
+        Ok(e) => return e,
+        Err((l, r)) => (l, r),
+    };
+
+    let (r, l) = match try_eval_type_is(r, l, maybe_not) {
+        Ok(e) => return e,
+        Err((r, l)) => (r, l),
+    };
+
     expr!("equals", l, r, |eval| {
-        Value::new_bool(cmp(throw(l.equals(r), span, eval)?))
+        Value::new_bool(cmp(expr_throw(l.equals(r), span, eval)?))
     })
 }
 
@@ -106,7 +200,7 @@ fn eval_slice(
             Some(ref e) => Some(e(eval)?),
             None => None,
         };
-        throw(
+        expr_throw(
             collection.slice(start, stop, stride, eval.heap()),
             span,
             eval,
@@ -214,50 +308,68 @@ impl Compiler<'_> {
         Some((attr_type, field))
     }
 
+    fn expr_ident(
+        &mut self,
+        ident: AstString,
+        resolved_ident: Option<ResolvedIdent>,
+    ) -> ExprCompiledValue {
+        let resolved_ident =
+            resolved_ident.unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
+        let name = ident.node;
+        let span = ident.span;
+        match resolved_ident {
+            ResolvedIdent::Slot((Slot::Local(slot), binding_id)) => {
+                let binding = self.scope_data.get_binding(binding_id);
+
+                // We can't look up the local variabless in advance, because they are different each time
+                // we go through a new function call.
+                match binding.captured {
+                    Captured::Yes => expr!("local_captured", |eval| expr_throw(
+                        eval.get_slot_local_captured(slot, &name),
+                        span,
+                        eval
+                    )?),
+                    Captured::No => ExprCompiledValue::Local(slot, Spanned { node: name, span }),
+                }
+            }
+            ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
+                let binding = self.scope_data.get_binding(binding_id);
+
+                // We can only inline variables if they were assigned once
+                // otherwise we might inline the wrong value.
+                if binding.assign_count == AssignCount::AtMostOnce {
+                    if let Some(v) = self.module_env.slots().get_slot(slot) {
+                        // We could inline non-frozen values, but these values
+                        // can be garbage-collected, so it is somewhat harder to implement.
+                        if let Some(v) = v.unpack_frozen() {
+                            return value!(v);
+                        }
+                    }
+                }
+                // We can't look up the module variables in advance because the first time around they are
+                // mutables, but after freezing they point at a different set of frozen slots.
+                expr!("module", |eval| expr_throw(
+                    eval.get_slot_module(slot),
+                    span,
+                    eval
+                )?)
+            }
+            ResolvedIdent::Global(v) => value!(v),
+        }
+    }
+
+    pub(crate) fn expr_spanned(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
+        Spanned {
+            span: expr.span,
+            node: self.expr(expr),
+        }
+    }
+
     pub fn expr(&mut self, expr: CstExpr) -> ExprCompiledValue {
         // println!("compile {}", expr.node);
         let span = expr.span;
         match expr.node {
-            ExprP::Identifier(ident, resolved_ident) => {
-                let resolved_ident = resolved_ident
-                    .unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
-                let name = ident.node;
-                let span = ident.span;
-                match resolved_ident {
-                    ResolvedIdent::Slot((Slot::Local(slot), _binding_id)) => {
-                        // We can't look up the local variabless in advance, because they are different each time
-                        // we go through a new function call.
-                        expr!("local", |eval| throw(
-                            eval.get_slot_local(slot, &name),
-                            span,
-                            eval
-                        )?)
-                    }
-                    ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
-                        let binding = self.scope_data.get_binding(binding_id);
-
-                        // We can only inline variables if they were assigned once
-                        // otherwise we might inline the wrong value.
-                        if binding.assign_count == AssignCount::AtMostOnce {
-                            if let Some(v) = self.module_env.slots().get_slot(slot) {
-                                // We could inline non-frozen values, but these values
-                                // can be garbage-collected, so it is somewhat harder to implement.
-                                if let Some(v) = v.unpack_frozen() {
-                                    return value!(v);
-                                }
-                            }
-                        }
-                        // We can't look up the module variables in advance because the first time around they are
-                        // mutables, but after freezing they point at a different set of frozen slots.
-                        expr!("module", |eval| throw(
-                            eval.get_slot_module(slot),
-                            span,
-                            eval
-                        )?)
-                    }
-                    ResolvedIdent::Global(v) => value!(v),
-                }
-            }
+            ExprP::Identifier(ident, resolved_ident) => self.expr_ident(ident, resolved_ident),
             ExprP::Lambda(params, box inner, scope_id) => {
                 let suite = Spanned {
                     span: expr.span,
@@ -269,7 +381,10 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self.module_env.frozen_heap().alloc(FrozenTuple { content });
+                    let result = self
+                        .module_env
+                        .frozen_heap()
+                        .alloc(FrozenTuple::new(content));
                     value!(result)
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());
@@ -296,7 +411,7 @@ impl Compiler<'_> {
                 }
             }
             ExprP::Dict(exprs) => {
-                let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                let xs = exprs.into_map(|(k, v)| (self.expr_spanned(k), self.expr(v)));
                 if xs.is_empty() {
                     return expr!("dict_empty", |eval| eval.heap().alloc(Dict::default()));
                 }
@@ -337,7 +452,7 @@ impl Compiler<'_> {
                             let mut r = SmallMap::with_capacity(xs.len());
                             for (k, v) in &xs {
                                 if r.insert_hashed(k.to_hashed_value(), v(eval)?).is_some() {
-                                    throw(
+                                    expr_throw(
                                         Err(EvalError::DuplicateDictionaryKey(k.key().to_string())
                                             .into()),
                                         span,
@@ -350,14 +465,27 @@ impl Compiler<'_> {
                     }
                 }
 
-                let xs = xs.into_map(|(k, v)| (k.as_compiled(), v.as_compiled()));
+                let xs = xs.into_map(|(k, v)| {
+                    (
+                        Spanned {
+                            span: k.span,
+                            node: k.node.as_compiled(),
+                        },
+                        v.as_compiled(),
+                    )
+                });
                 expr!("dict", |eval| {
                     let mut r = SmallMap::with_capacity(xs.len());
                     for (k, v) in &xs {
-                        let k = k(eval)?;
-                        if r.insert_hashed(k.get_hashed()?, v(eval)?).is_some() {
-                            throw(
-                                Err(EvalError::DuplicateDictionaryKey(k.to_string()).into()),
+                        let k_value = k(eval)?;
+                        if r.insert_hashed(
+                            expr_throw(k_value.get_hashed(), k.span, eval)?,
+                            v(eval)?,
+                        )
+                        .is_some()
+                        {
+                            expr_throw(
+                                Err(EvalError::DuplicateDictionaryKey(k_value.to_string()).into()),
                                 span,
                                 eval,
                             )?;
@@ -377,12 +505,8 @@ impl Compiler<'_> {
                 };
                 let t = t.as_compiled();
                 let f = f.as_compiled();
-                expr!("if_expr", |eval| {
-                    if cond(eval)?.to_bool() {
-                        t(eval)?
-                    } else {
-                        f(eval)?
-                    }
+                expr!("if_expr", cond, |eval| {
+                    if cond.to_bool() { t(eval)? } else { f(eval)? }
                 })
             }
             ExprP::Dot(left, right) => {
@@ -401,11 +525,12 @@ impl Compiler<'_> {
                 }
 
                 expr!("dot", left, |eval| {
-                    let (attr_type, v) = throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
+                    let (attr_type, v) =
+                        expr_throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
                     if attr_type == AttrType::Field {
                         v
                     } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                        throw(v_attr.call(left, eval), span, eval)?
+                        expr_throw(v_attr.call(left, eval), span, eval)?
                     } else {
                         // Insert self so the method see the object it is acting on
                         eval.heap().alloc(BoundMethod::new(left, v))
@@ -417,7 +542,7 @@ impl Compiler<'_> {
                 let array = self.expr(array);
                 let index = self.expr(index);
                 expr!("index", array, index, |eval| {
-                    throw(array.at(index, eval.heap()), span, eval)?
+                    expr_throw(array.at(index, eval.heap()), span, eval)?
                 })
             }
             ExprP::Slice(collection, start, stop, stride) => {
@@ -444,7 +569,7 @@ impl Compiler<'_> {
                     .and_then(i32::checked_neg)
                 {
                     Some(i) => value!(FrozenValue::new_int(i)),
-                    _ => expr!("minus", expr, |eval| throw(
+                    _ => expr!("minus", expr, |eval| expr_throw(
                         expr.minus(eval.heap()),
                         span,
                         eval
@@ -455,7 +580,7 @@ impl Compiler<'_> {
                 let expr = self.expr(*expr);
                 match expr.as_value() {
                     Some(x) if x.unpack_int().is_some() => value!(x),
-                    _ => expr!("plus", expr, |eval| throw(
+                    _ => expr!("plus", expr, |eval| expr_throw(
                         expr.plus(eval.heap()),
                         span,
                         eval
@@ -464,7 +589,11 @@ impl Compiler<'_> {
             }
             ExprP::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                expr!("bit_not", expr, |_eval| Value::new_int(!expr.to_int()?))
+                expr!("bit_not", expr, |eval| Value::new_int(!expr_throw(
+                    expr.to_int(),
+                    span,
+                    eval
+                )?))
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
@@ -504,20 +633,20 @@ impl Compiler<'_> {
                                 })
                             }
                         }
-                        BinOp::Equal => eval_equals(span, l, r, |x| x),
-                        BinOp::NotEqual => eval_equals(span, l, r, |x| !x),
+                        BinOp::Equal => eval_equals(span, l, r, MaybeNot::Id),
+                        BinOp::NotEqual => eval_equals(span, l, r, MaybeNot::Not),
                         BinOp::Less => eval_compare(span, l, r, |x| x == Ordering::Less),
                         BinOp::Greater => eval_compare(span, l, r, |x| x == Ordering::Greater),
                         BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
                         BinOp::GreaterOrEqual => eval_compare(span, l, r, |x| x != Ordering::Less),
                         BinOp::In => expr!("in", r, l, |eval| {
-                            throw(r.is_in(l).map(Value::new_bool), span, eval)?
+                            expr_throw(r.is_in(l).map(Value::new_bool), span, eval)?
                         }),
                         BinOp::NotIn => expr!("not_in", r, l, |eval| {
-                            throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
+                            expr_throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
                         }),
                         BinOp::Subtract => {
-                            expr!("subtract", l, r, |eval| throw(
+                            expr!("subtract", l, r, |eval| expr_throw(
                                 l.sub(r, eval.heap()),
                                 span,
                                 eval
@@ -538,42 +667,50 @@ impl Compiler<'_> {
                             }
 
                             // Written using Value::add so that Rust Analyzer doesn't think it is an error.
-                            throw(Value::add(l, r, eval.heap()), span, eval)?
+                            expr_throw(Value::add(l, r, eval.heap()), span, eval)?
                         }),
                         BinOp::Multiply => {
-                            expr!("multiply", l, r, |eval| throw(
+                            expr!("multiply", l, r, |eval| expr_throw(
                                 l.mul(r, eval.heap()),
                                 span,
                                 eval
                             )?)
                         }
                         BinOp::Percent => expr!("percent", l, r, |eval| {
-                            throw(l.percent(r, eval.heap()), span, eval)?
+                            expr_throw(l.percent(r, eval.heap()), span, eval)?
                         }),
                         BinOp::Divide => expr!("divide", l, r, |eval| {
                             throw(l.div(r, eval.heap()), span, eval)?
                         }),
                         BinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
-                            throw(l.floor_div(r, eval.heap()), span, eval)?
+                            expr_throw(l.floor_div(r, eval.heap()), span, eval)?
                         }),
                         BinOp::BitAnd => {
-                            expr!("bit_and", l, r, |eval| throw(l.bit_and(r), span, eval)?)
+                            expr!("bit_and", l, r, |eval| expr_throw(
+                                l.bit_and(r),
+                                span,
+                                eval
+                            )?)
                         }
                         BinOp::BitOr => {
-                            expr!("bit_or", l, r, |eval| throw(l.bit_or(r), span, eval)?)
+                            expr!("bit_or", l, r, |eval| expr_throw(l.bit_or(r), span, eval)?)
                         }
                         BinOp::BitXor => {
-                            expr!("bit_xor", l, r, |eval| throw(l.bit_xor(r), span, eval)?)
+                            expr!("bit_xor", l, r, |eval| expr_throw(
+                                l.bit_xor(r),
+                                span,
+                                eval
+                            )?)
                         }
                         BinOp::LeftShift => {
-                            expr!("left_shift", l, r, |eval| throw(
+                            expr!("left_shift", l, r, |eval| expr_throw(
                                 l.left_shift(r),
                                 span,
                                 eval
                             )?)
                         }
                         BinOp::RightShift => {
-                            expr!("right_shift", l, r, |eval| throw(
+                            expr!("right_shift", l, r, |eval| expr_throw(
                                 l.right_shift(r),
                                 span,
                                 eval

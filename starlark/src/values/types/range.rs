@@ -19,10 +19,14 @@
 
 use crate::values::{
     index::{convert_index, convert_slice_indices},
-    Heap, StarlarkValue, Value, ValueError,
+    Heap, StarlarkValue, Value, ValueError, ValueLike,
 };
 use gazebo::prelude::*;
-use std::{marker::PhantomData, num::NonZeroI32};
+use std::{
+    fmt::{self, Display, Write},
+    marker::PhantomData,
+    num::NonZeroI32,
+};
 
 /// Representation of `range()` type.
 #[derive(Clone, Copy, Dupe, Debug)]
@@ -30,6 +34,18 @@ pub struct Range {
     start: i32,
     stop: i32,
     step: NonZeroI32,
+}
+
+impl Display for Range {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.step.get() != 1 {
+            write!(f, "range({}, {}, {})", self.start, self.stop, self.step)
+        } else if self.start != 0 {
+            write!(f, "range({}, {})", self.start, self.stop)
+        } else {
+            write!(f, "range({})", self.stop)
+        }
+    }
 }
 
 starlark_simple_value!(Range);
@@ -93,16 +109,7 @@ impl<'v> StarlarkValue<'v> for Range {
     starlark_type!(Range::TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        if self.step.get() != 1 {
-            s.push_str(&format!(
-                "range({}, {}, {})",
-                self.start, self.stop, self.step
-            ));
-        } else if self.start != 0 {
-            s.push_str(&format!("range({}, {})", self.start, self.stop));
-        } else {
-            s.push_str(&format!("range({})", self.stop));
-        }
+        write!(s, "{}", self).unwrap()
     }
 
     fn to_bool(&self) -> bool {

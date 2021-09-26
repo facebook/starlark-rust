@@ -32,33 +32,6 @@ use gazebo::prelude::*;
 use once_cell::sync::Lazy;
 use std::fmt::Debug;
 
-pub(crate) type ExprCompiled = Box<
-    dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException<'v>> + Send + Sync,
->;
-pub(crate) enum ExprCompiledValue {
-    Value(FrozenValue),
-    Compiled(ExprCompiled),
-}
-
-impl ExprCompiledValue {
-    pub fn as_value(&self) -> Option<FrozenValue> {
-        match self {
-            Self::Value(x) => Some(*x),
-            Self::Compiled(_) => None,
-        }
-    }
-
-    pub fn as_compiled(self) -> ExprCompiled {
-        match self {
-            Self::Value(x) => box move |_| Ok(x.to_value()),
-            Self::Compiled(x) => x,
-        }
-    }
-}
-
-pub(crate) type StmtCompiled =
-    Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
-
 #[derive(Debug)]
 pub(crate) enum EvalException<'v> {
     // Flow control statement reached, impossible to escape with
@@ -70,13 +43,18 @@ pub(crate) enum EvalException<'v> {
     Error(anyhow::Error),
 }
 
-impl<'v> From<anyhow::Error> for EvalException<'v> {
-    fn from(x: anyhow::Error) -> Self {
-        Self::Error(x)
+/// Error of evaluation of an expression.
+#[derive(Debug)]
+pub(crate) struct ExprEvalException(anyhow::Error);
+
+impl<'v> From<ExprEvalException> for EvalException<'v> {
+    fn from(ExprEvalException(e): ExprEvalException) -> Self {
+        Self::Error(e)
     }
 }
 
 // Make sure the error-path doesn't get inlined into the normal-path execution
+#[cold]
 #[inline(never)]
 fn throw_error<'v, T>(
     e: anyhow::Error,
@@ -88,6 +66,20 @@ fn throw_error<'v, T>(
         d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
     });
     Err(EvalException::Error(e))
+}
+
+#[cold]
+#[inline(never)]
+fn expr_throw_error<'v, T>(
+    e: anyhow::Error,
+    span: Span,
+    eval: &Evaluator<'v, '_>,
+) -> Result<T, ExprEvalException> {
+    let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
+        d.set_span(span, eval.codemap.dupe());
+        d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
+    });
+    Err(ExprEvalException(e))
 }
 
 /// Convert syntax error to spanned evaluation exception
@@ -102,17 +94,29 @@ pub(crate) fn throw<'v, T>(
     }
 }
 
-impl From<EvalException<'_>> for anyhow::Error {
-    fn from(x: EvalException) -> Self {
-        match x {
-            EvalException::Error(e) => e,
-            EvalException::Break => anyhow!("Break statement used outside of a loop"),
-            EvalException::Continue => anyhow!("Continue statement used outside of a loop"),
-            EvalException::Return(..) => {
-                anyhow!("Return statement used outside of a function call")
-            }
-        }
+/// Convert syntax error to spanned evaluation exception
+pub(crate) fn expr_throw<'v, T>(
+    r: anyhow::Result<T>,
+    span: Span,
+    eval: &Evaluator<'v, '_>,
+) -> Result<T, ExprEvalException> {
+    match r {
+        Ok(v) => Ok(v),
+        Err(e) => expr_throw_error(e, span, eval),
     }
+}
+
+#[cold]
+#[inline(never)]
+pub(crate) fn throw_eval_exception<T>(x: EvalException<'_>) -> anyhow::Result<T> {
+    Err(match x {
+        EvalException::Error(e) => e,
+        EvalException::Break => anyhow!("Break statement used outside of a loop"),
+        EvalException::Continue => anyhow!("Continue statement used outside of a loop"),
+        EvalException::Return(..) => {
+            anyhow!("Return statement used outside of a function call")
+        }
+    })
 }
 
 pub(crate) struct Compiler<'a> {
@@ -121,6 +125,7 @@ pub(crate) struct Compiler<'a> {
     pub(crate) module_env: &'a Module,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
+    pub(crate) has_before_stmt: bool,
 }
 
 impl Compiler<'_> {

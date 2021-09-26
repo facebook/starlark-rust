@@ -21,7 +21,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
-    eval::compiler::{scope::Scope, Compiler, Constants, EvalException},
+    eval::compiler::{scope::Scope, Compiler, Constants, EvalException, ExprEvalException},
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::Value,
 };
@@ -29,7 +29,10 @@ use gazebo::{cast, prelude::*};
 use std::{intrinsics::unlikely, mem};
 
 use crate::{
-    eval::compiler::scope::{CompilerAstMap, ScopeData},
+    eval::compiler::{
+        scope::{CompilerAstMap, ScopeData},
+        throw_eval_exception,
+    },
     values::docs::DocString,
 };
 pub(crate) use compiler::scope::ScopeNames;
@@ -139,6 +142,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             module_env: self.module_env,
             codemap: codemap.dupe(),
             constants: Constants::new(),
+            has_before_stmt: !self.before_stmt.is_empty(),
         };
 
         let res = compiler.eval_module(statement, self);
@@ -156,7 +160,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         match res {
             Ok(_) => Ok(Value::new_none()),
             Err(EvalException::Return(x)) => Ok(x),
-            Err(e) => Err(e.into()),
+            Err(e) => throw_eval_exception(e),
         }
     }
 
@@ -167,7 +171,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         positional: &[Value<'v>],
         named: &[(&str, Value<'v>)],
     ) -> anyhow::Result<Value<'v>> {
-        let names = named.map(|(s, _)| (Symbol::new(*s), self.heap().alloc(*s)));
+        let names = named.map(|(s, _)| (Symbol::new(*s), self.heap().alloc_string_value(*s)));
         let named = named.map(|x| x.1);
         let params = Arguments {
             this: None,

@@ -30,7 +30,7 @@ use crate::{
     values::{ControlError, Trace, Tracer, Value},
 };
 use gazebo::prelude::*;
-use std::{fmt, fmt::Debug};
+use std::{fmt, fmt::Debug, intrinsics::unlikely};
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
 // anything in advance.
@@ -115,7 +115,7 @@ impl<'v> CallStack<'v> {
         span: Span,
         file: Option<&'v CodeMap>,
     ) -> anyhow::Result<()> {
-        if self.count >= MAX_CALLSTACK_RECURSION {
+        if unlikely(self.count >= MAX_CALLSTACK_RECURSION) {
             return Err(ControlError::TooManyRecursionLevel.into());
         }
         self.stack[self.count] = CheapFrame {

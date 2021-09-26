@@ -23,14 +23,14 @@ use crate::{
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{
-        tuple::FrozenTuple, ComplexValue, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value,
-    },
+    values::{ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value},
 };
+use derive_more::Display;
 use gazebo::any::AnyLifetime;
 use std::cell::RefCell;
 
 mod basic;
+mod before_stmt;
 mod call;
 mod comprehension;
 mod def;
@@ -38,6 +38,7 @@ mod docstring;
 mod go;
 mod interop;
 mod runtime;
+mod type_is;
 
 #[test]
 fn alias_test() {
@@ -402,6 +403,49 @@ fn test_load_reexport() {
 }
 
 #[test]
+fn test_module_visibility_preserved_by_evaluator() -> anyhow::Result<()> {
+    // Make sure that when we use a module in the evaluator, the entering / exiting the
+    // module with ScopeData preserves the visibility of symbols.
+
+    let globals = Globals::standard();
+
+    let import = Module::new();
+    import.set("a", Value::new_int(1));
+    import.set_private("b", Value::new_int(2));
+
+    let mut eval = Evaluator::new(&import, &globals);
+    let ast = AstModule::parse("prelude.bzl", "c = 3".to_owned(), &Dialect::Standard).unwrap();
+    // This mutates the original module named `import`
+    let _: Value = eval.eval_module(ast)?;
+    let frozen_import = import.freeze()?;
+
+    let m_uses_public = Module::new();
+    m_uses_public.import_public_symbols(&frozen_import);
+    let mut eval = Evaluator::new(&m_uses_public, &globals);
+    let ast = AstModule::parse("code.bzl", "d = a".to_owned(), &Dialect::Standard).unwrap();
+    let _: Value = eval.eval_module(ast)?;
+
+    let m_uses_private = Module::new();
+    m_uses_private.import_public_symbols(&frozen_import);
+    let mut eval = Evaluator::new(&m_uses_private, &globals);
+    let ast = AstModule::parse("code.bzl", "d = b".to_owned(), &Dialect::Standard).unwrap();
+    let err = eval
+        .eval_module(ast)
+        .expect_err("Evaluation should have failed using a private symbol");
+
+    let msg = err.to_string();
+    let expected_msg = "Variable `b` not found";
+    if !msg.contains(expected_msg) {
+        panic!(
+            "Expected `{}` to be in error message `{}`",
+            expected_msg, msg
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_load_did_you_mean() {
     let mut a = Assert::new();
     a.module("categories", "colour = 1");
@@ -526,7 +570,8 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug, Trace, AnyLifetime)]
+    #[derive(Debug, Trace, AnyLifetime, Display)]
+    #[display(fmt = "{:?}", self)]
     struct Wrapper<'v>(RefCell<SmallMap<String, Value<'v>>>);
 
     impl<'v> StarlarkValue<'v> for Wrapper<'v>
@@ -545,10 +590,19 @@ fn test_label_assign() {
         }
     }
 
+    #[derive(Debug, AnyLifetime)]
+    struct FrozenWrapper;
+
+    impl<'v> StarlarkValue<'v> for FrozenWrapper {
+        starlark_type!("wrapper");
+    }
+
+    impl SimpleValue for FrozenWrapper {}
+
     impl<'v> ComplexValue<'v> for Wrapper<'v> {
-        type Frozen = FrozenTuple;
+        type Frozen = FrozenWrapper;
         fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-            Ok(FrozenTuple::default())
+            Ok(FrozenWrapper)
         }
     }
 

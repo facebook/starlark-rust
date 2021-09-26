@@ -19,6 +19,7 @@
 
 use crate::{
     assert,
+    assert::Assert,
     environment::{Module, ModuleDocs},
     values::Value,
 };
@@ -281,7 +282,15 @@ Some extra details can go here,
 fn test_module_docs_return() {
     use crate::values::docs::{DocItem, DocString, Function, Module, Return};
 
-    let m1 = assert::pass_module(
+    let mut a = Assert::new();
+    let mod_a = r#"
+def a():
+    """ This is a function summary that should not re-export """
+    pass
+"#;
+    a.module("a", mod_a);
+
+    let m1 = a.pass_module(
         r#"
 """
 This is the summary of the module's docs

@@ -32,16 +32,27 @@
 //! use starlark::environment::GlobalsBuilder;
 //! use starlark::values::Value;
 //! use starlark::values::any::StarlarkAny;
+//! use std::fmt;
+//! use std::fmt::Display;
 //! use std::time::Instant;
+//!
+//! #[derive(Debug)]
+//! struct MyInstant(Instant);
+//!
+//! impl Display for MyInstant {
+//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         write!(f, "{:?}", self)
+//!     }
+//! }
 //!
 //! #[starlark_module]
 //! fn globals(builder: &mut GlobalsBuilder) {
-//!     fn start() -> StarlarkAny {
-//!         Ok(StarlarkAny::new(Instant::now()))
+//!     fn start() -> StarlarkAny<MyInstant> {
+//!         Ok(StarlarkAny::new(MyInstant(Instant::now())))
 //!     }
 //!
 //!     fn elapsed(x: Value) -> String {
-//!         Ok(StarlarkAny::get::<Instant>(x).unwrap().elapsed().as_secs_f64().to_string())
+//!         Ok(StarlarkAny::<MyInstant>::get(x).unwrap().0.elapsed().as_secs_f64().to_string())
 //!     }
 //! }
 //!
@@ -57,59 +68,54 @@
 //! # }
 //! ```
 
-use crate::{
-    starlark_simple_value,
-    values::{StarlarkValue, Value},
-};
-use std::{
-    any::Any,
-    fmt::{self, Debug},
-};
-
-trait AnyDebugSendSync: Any + Debug + Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-}
-impl<T: Any + Debug + Send + Sync> AnyDebugSendSync for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+use crate::values::{AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike};
+use gazebo::any::AnyLifetime;
+use std::fmt::{self, Debug, Display};
 
 /// A type that can be passed around as a Starlark [`Value`], but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with
 /// [`new`](StarlarkAny::new) and decomposed with [`get`](StarlarkAny::get).
-pub struct StarlarkAny(Box<dyn AnyDebugSendSync>);
+pub struct StarlarkAny<T: Debug + Display + Send + Sync + 'static>(pub T);
 
-impl StarlarkAny {
-    /// The result of calling `type()` on [`StarlarkAny`].
-    pub const TYPE: &'static str = "any";
+unsafe impl<'a, T: Debug + Display + Send + Sync + 'static> AnyLifetime<'a> for StarlarkAny<T> {
+    any_lifetime_body!(StarlarkAny<T>);
 }
 
-starlark_simple_value!(StarlarkAny);
+impl<'v, T: Debug + Display + Send + Sync + 'static> StarlarkValue<'v> for StarlarkAny<T> {
+    starlark_type!("any");
+}
 
-impl Debug for StarlarkAny {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+impl<'v, T: Debug + Display + Send + Sync + 'static> AllocValue<'v> for StarlarkAny<T> {
+    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
+        heap.alloc_simple(self)
     }
 }
 
-impl StarlarkAny {
+impl<T: Debug + Display + Send + Sync + 'static> SimpleValue for StarlarkAny<T> {}
+
+impl<T: Debug + Display + Send + Sync + 'static> Debug for StarlarkAny<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.0, f)
+    }
+}
+
+impl<T: Debug + Display + Send + Sync + 'static> Display for StarlarkAny<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
+impl<T: Debug + Display + Send + Sync + 'static> StarlarkAny<T> {
     /// Create a new [`StarlarkAny`] value. Such a value can be allocated on a heap with
     /// `heap.alloc(StarlarkAny::new(x))`.
-    pub fn new<T: Any + Debug + Send + Sync>(x: T) -> Self {
-        Self(box x)
+    pub fn new(x: T) -> Self {
+        StarlarkAny(x)
     }
 
     /// Extract from a [`Value`] that contains a [`StarlarkAny`] underneath. Returns [`None`] if
     /// the value does not match the expected type.
-    pub fn get<'v, T: Any + Debug + Send + Sync>(x: Value<'v>) -> Option<&'v T> {
-        let x: &'v Self = x.downcast_ref()?;
-        let x: &'v dyn Any = x.0.as_ref().as_any();
-        x.downcast_ref::<T>()
+    pub fn get<'v>(x: Value<'v>) -> Option<&'v T> {
+        let x: &StarlarkAny<T> = x.downcast_ref()?;
+        Some(&x.0)
     }
-}
-
-/// Define the any type
-impl StarlarkValue<'_> for StarlarkAny {
-    starlark_type!(StarlarkAny::TYPE);
 }

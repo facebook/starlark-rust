@@ -29,14 +29,38 @@ use gazebo::{
     coerce::{coerce, Coerce},
     prelude::*,
 };
-use std::{cmp::Ordering, collections::hash_map::DefaultHasher, hash::Hasher};
+use std::{
+    cmp::Ordering,
+    collections::hash_map::DefaultHasher,
+    fmt,
+    fmt::{Display, Write},
+    hash::Hasher,
+    mem,
+};
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[derive(Clone, Default_, Debug, Trace, Coerce)]
 #[repr(transparent)]
 pub struct TupleGen<V> {
     /// The data stored by the tuple.
-    pub content: Vec<V>,
+    content: Vec<V>,
+}
+
+impl<'v, V: ValueLike<'v>> Display for TupleGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(")?;
+        for (i, v) in self.content().iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            Display::fmt(&v, f)?;
+        }
+
+        if self.len() == 1 {
+            write!(f, ",")?;
+        }
+        write!(f, ")")
+    }
 }
 
 starlark_complex_value!(pub Tuple);
@@ -49,7 +73,12 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 
     /// Get the length of the tuple.
     pub fn len(&self) -> usize {
-        self.content.len()
+        self.content().len()
+    }
+
+    /// Tuple elements.
+    pub fn content(&self) -> &[V] {
+        &self.content
     }
 
     /// Iterate over the elements of the tuple.
@@ -57,7 +86,7 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
     where
         'v: 'a,
     {
-        self.content.iter().map(|e| e.to_value())
+        self.content().iter().map(|e| e.to_value())
     }
 }
 
@@ -81,28 +110,15 @@ where
     starlark_type!(Tuple::TYPE);
 
     fn collect_repr(&self, s: &mut String) {
-        s.push('(');
-        let mut first = true;
-        for v in &self.content {
-            if first {
-                first = false;
-            } else {
-                s.push_str(", ");
-            }
-            v.collect_repr(s);
-        }
-
-        if self.content.len() == 1 {
-            s.push(',');
-        }
-        s.push(')');
+        write!(s, "{}", self).unwrap()
     }
+
     fn to_bool(&self) -> bool {
-        !self.content.is_empty()
+        self.len() != 0
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = DefaultHasher::new();
-        for v in self.content.iter() {
+        for v in self.content() {
             s.write_u64(v.get_hash()?)
         }
         Ok(s.finish())
@@ -111,7 +127,7 @@ where
     fn to_json(&self) -> anyhow::Result<String> {
         let mut res = String::new();
         res.push('[');
-        for (i, e) in self.content.iter().enumerate() {
+        for (i, e) in self.content().iter().enumerate() {
             if i != 0 {
                 res.push_str(", ");
             }
@@ -121,31 +137,35 @@ where
         Ok(res)
     }
 
+    fn extra_memory(&self) -> usize {
+        self.content.capacity() * mem::size_of::<Value>()
+    }
+
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Tuple::from_value(other) {
             None => Ok(false),
-            Some(other) => equals_slice(&self.content, &other.content, |x, y| x.equals(*y)),
+            Some(other) => equals_slice(self.content(), other.content(), |x, y| x.equals(*y)),
         }
     }
 
     fn compare(&self, other: Value<'v>) -> anyhow::Result<Ordering> {
         match Tuple::from_value(other) {
             None => ValueError::unsupported_with(self, "cmp()", other),
-            Some(other) => compare_slice(&self.content, &other.content, |x, y| x.compare(*y)),
+            Some(other) => compare_slice(self.content(), other.content(), |x, y| x.compare(*y)),
         }
     }
 
     fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        let i = convert_index(index, self.content.len() as i32)? as usize;
-        Ok(self.content[i].to_value())
+        let i = convert_index(index, self.len() as i32)? as usize;
+        Ok(self.content()[i].to_value())
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(self.content.len() as i32)
+        Ok(self.len() as i32)
     }
 
     fn is_in(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        for x in self.content.iter() {
+        for x in self.content() {
             if x.equals(other)? {
                 return Ok(true);
             }
@@ -161,7 +181,7 @@ where
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
         Ok(heap.alloc(Tuple::new(apply_slice(
-            coerce(self.content.as_slice()),
+            coerce(self.content()),
             start,
             stop,
             stride,
@@ -189,7 +209,7 @@ where
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = Tuple::from_value(other) {
             let mut result = Tuple {
-                content: Vec::with_capacity(self.content.len() + other.len()),
+                content: Vec::with_capacity(self.len() + other.len()),
             };
             for x in self.iter() {
                 result.content.push(x);
@@ -212,7 +232,7 @@ where
                 for _i in 0..l {
                     result
                         .content
-                        .extend(self.content.iter().map(|e| e.to_value()));
+                        .extend(self.content().iter().map(|e| e.to_value()));
                 }
                 Ok(heap.alloc(result))
             }
@@ -223,17 +243,13 @@ where
 
 impl<'v, T1: AllocValue<'v>> AllocValue<'v> for (T1,) {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(Tuple {
-            content: vec![self.0.alloc_value(heap)],
-        })
+        heap.alloc_tuple(&[self.0.alloc_value(heap)])
     }
 }
 
 impl<'v, T1: AllocValue<'v>, T2: AllocValue<'v>> AllocValue<'v> for (T1, T2) {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(Tuple {
-            content: vec![self.0.alloc_value(heap), self.1.alloc_value(heap)],
-        })
+        heap.alloc_tuple(&[self.0.alloc_value(heap), self.1.alloc_value(heap)])
     }
 }
 
@@ -241,13 +257,11 @@ impl<'v, T1: AllocValue<'v>, T2: AllocValue<'v>, T3: AllocValue<'v>> AllocValue<
     for (T1, T2, T3)
 {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(Tuple {
-            content: vec![
-                self.0.alloc_value(heap),
-                self.1.alloc_value(heap),
-                self.2.alloc_value(heap),
-            ],
-        })
+        heap.alloc_tuple(&[
+            self.0.alloc_value(heap),
+            self.1.alloc_value(heap),
+            self.2.alloc_value(heap),
+        ])
     }
 }
 
@@ -258,8 +272,8 @@ impl<'v, T1: UnpackValue<'v>, T2: UnpackValue<'v>> UnpackValue<'v> for (T1, T2) 
             return None;
         }
         Some((
-            T1::unpack_value(t.content[0])?,
-            T2::unpack_value(t.content[1])?,
+            T1::unpack_value(t.content()[0])?,
+            T2::unpack_value(t.content()[1])?,
         ))
     }
 }

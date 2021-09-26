@@ -557,10 +557,50 @@ impl<K, V> SmallMap<K, V> {
                     self.upgrade_vec_to_map(want);
                 }
             }
-            MapHolder::Map(_) => {
-                // The reserve on IndexMap is useless - just reserves a single
-                // slot so no benefit to reserving in advance
-                // Nothing to do
+            MapHolder::Map(mp) => mp.reserve(additional),
+        }
+    }
+
+    pub fn capacity(&self) -> usize {
+        match &self.state {
+            MapHolder::Empty => 0,
+            MapHolder::Vec(x) => x.capacity(),
+            MapHolder::Map(x) => x.capacity(),
+        }
+    }
+
+    /// Give a best guess as to how much heap memory is being used.
+    /// Used internally, but not exported as this isn't a usual API.
+    pub(crate) fn extra_memory(&self) -> usize {
+        match &self.state {
+            MapHolder::Empty => 0,
+            MapHolder::Vec(x) => x.capacity() * mem::size_of::<(K, V)>(),
+            MapHolder::Map(x) => {
+                // Copy-pasted from hashbrown. Comments are stripped for succinctness, the point of
+                // this function is to be what hashbrown uses under the hood.
+                fn capacity_to_buckets(cap: usize) -> Option<usize> {
+                    if cap < 8 {
+                        return Some(if cap < 4 { 4 } else { 8 });
+                    }
+                    let adjusted_cap = cap.checked_mul(8)? / 7;
+                    Some(adjusted_cap.next_power_of_two())
+                }
+
+                // For each key, IndexMap stores the key / value pair and its hash value (which is
+                // a usize), so we take that first.
+                let mut ret = (mem::size_of::<(K, V)>() + mem::size_of::<usize>()) * x.capacity();
+
+                // Next, it also stores a hashbrown RawTable and stores indices in it. We estimate
+                // the size of the hashtable (for this we just use hashbrown's code), and it
+                // contains usizes as well (the indices) so that goes in too. Finally, there are
+                // control bytes for each of the buckets. There is one control byte per entry, but
+                // also an implementation-dependent extra padding. When SSE2 is enabled, that's 16
+                // bytes.
+                ret += capacity_to_buckets(x.capacity()).unwrap_or(0)
+                    * (mem::size_of::<usize>() + 1)
+                    + 16;
+
+                ret
             }
         }
     }

@@ -24,7 +24,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use gazebo::cell::ARef;
-use std::mem;
+use std::{intrinsics::unlikely, mem};
 
 #[starlark_module]
 pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
@@ -321,7 +321,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
                     let mut it = v.iterate(heap)?;
                     let k = it.next();
                     let v = if k.is_some() { it.next() } else { None };
-                    if v.is_none() || it.next().is_some() {
+                    if unlikely(v.is_none() || it.next().is_some()) {
                         return Err(anyhow!(
                             "dict.update expect a list of pairs or a dictionary as first argument, got a list of non-pairs.",
                         ));

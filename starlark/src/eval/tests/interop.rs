@@ -26,6 +26,7 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{any::StarlarkAny, none::NoneType, StarlarkValue, Value},
 };
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, cell::AsARef};
 use std::{
     cell::RefCell,
@@ -40,7 +41,7 @@ fn test_export_as() {
         AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
     };
     use gazebo::any::AnyLifetime;
-    use std::fmt::Debug;
+    use std::fmt::{self, Debug, Display, Write};
 
     #[derive(Debug, Trace)]
     struct Exporter<T> {
@@ -51,6 +52,12 @@ fn test_export_as() {
     any_lifetime!(Exporter<RefCell<String>>);
     any_lifetime!(Exporter<String>);
 
+    impl<T: AsARef<String>> Display for Exporter<T> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}={}", self.named.as_aref(), self.value)
+        }
+    }
+
     impl<'v, T: AsARef<String> + Debug> StarlarkValue<'v> for Exporter<T>
     where
         Self: AnyLifetime<'v>,
@@ -58,9 +65,7 @@ fn test_export_as() {
         starlark_type!("exporter");
 
         fn collect_repr(&self, collector: &mut String) {
-            collector.push_str(self.named.as_aref().as_str());
-            collector.push('=');
-            collector.push_str(&self.value.to_string());
+            write!(collector, "{}", self).unwrap()
         }
 
         fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
@@ -136,6 +141,19 @@ fn test_load_symbols() {
 }
 
 #[test]
+fn test_load_public_symbols_does_not_reexport() -> anyhow::Result<()> {
+    let mut a = Assert::new();
+
+    let module_b = a.module("b", "x = 5");
+    let module_a = Module::new();
+    module_a.import_public_symbols(&module_b);
+    a.module_add("a", module_a.freeze()?);
+    // Trying to load a symbol transitively should fail.
+    a.fail("load('a', 'x')", "Module symbol `x` is not exported");
+    Ok(())
+}
+
+#[test]
 // Test that we can express something that loads symbols into the exported module,
 // but not using the very dubious `set_module_variable_at_some_point`.
 fn test_load_symbols_extra() -> anyhow::Result<()> {
@@ -174,12 +192,13 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
 
 #[test]
 fn test_repr_str() {
-    #[derive(AnyLifetime, Debug)]
+    #[derive(AnyLifetime, Debug, Display)]
+    #[display(fmt = "{:?}", self)]
     struct Foo(Option<usize>);
 
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn mk_foo() -> StarlarkAny {
+        fn mk_foo() -> StarlarkAny<Foo> {
             Ok(StarlarkAny::new(Foo(Some(42))))
         }
     }
@@ -355,7 +374,8 @@ mod value_of {
 
 #[test]
 fn test_derive_attrs() {
-    #[derive(Debug, StarlarkAttrs)]
+    #[derive(Debug, StarlarkAttrs, Display)]
+    #[display(fmt = "{:?}", self)]
     struct Example {
         hello: String,
         #[starlark(skip)]
@@ -369,7 +389,8 @@ fn test_derive_attrs() {
         starlark_attrs!();
     }
 
-    #[derive(Debug, Clone, StarlarkAttrs)]
+    #[derive(Debug, Clone, StarlarkAttrs, Display)]
+    #[display(fmt = "{}", foo)]
     struct Nested {
         foo: String,
     }

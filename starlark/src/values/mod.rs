@@ -72,7 +72,9 @@ unsafe impl<'v> CoerceKey<Value<'v>> for FrozenValue {}
 
 impl Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_str())
+        // We want to reuse Display for `repr`, so that means that
+        // strings must display "with quotes", so we get everything consistent.
+        write!(f, "{}", self.to_repr())
     }
 }
 
@@ -132,11 +134,12 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// allowing implementations of [`ComplexValue`] to be agnostic of their contained type.
 /// For details about each function, see the documentation for [`Value`],
 /// which provides the same functions (and more).
-pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
+pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> {
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
-    fn get_ref(self) -> &'v dyn AValue<'v>;
+    /// Get referenced [`StarlarkValue`] a value as [`AnyLifetime`].
+    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v>;
 
     fn invoke(
         self,
@@ -147,9 +150,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
         self.to_value().invoke(location, args, eval)
     }
 
-    fn get_hash(self) -> anyhow::Result<u64> {
-        self.get_ref().get_hash()
-    }
+    fn get_hash(self) -> anyhow::Result<u64>;
 
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         Ok(Hashed::new_unchecked(
@@ -158,31 +159,17 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + CoerceKey<Value<'v>> {
         ))
     }
 
-    fn collect_repr(self, collector: &mut String) {
-        self.get_ref().collect_repr(collector);
-    }
+    fn collect_repr(self, collector: &mut String);
 
-    fn to_json(self) -> anyhow::Result<String> {
-        self.get_ref().to_json()
-    }
+    fn to_json(self) -> anyhow::Result<String>;
 
-    fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
-        if self.to_value().ptr_eq(other) {
-            Ok(true)
-        } else {
-            let _guard = stack_guard::stack_guard()?;
-            self.get_ref().equals(other)
-        }
-    }
+    fn equals(self, other: Value<'v>) -> anyhow::Result<bool>;
 
-    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
-        let _guard = stack_guard::stack_guard()?;
-        self.get_ref().compare(other)
-    }
+    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering>;
 
-    fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<ARef<'v, T>> {
-        ARef::filter_map(ARef::new_ptr(self.get_ref()), |e| e.downcast_ref::<T>()).ok()
-    }
+    /// Get a reference to underlying data or [`None`]
+    /// if contained object has different type than requested.
+    fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T>;
 }
 
 impl<'v, V: ValueLike<'v>> Hashed<V> {
@@ -215,22 +202,76 @@ impl Default for FrozenValue {
 }
 
 impl<'v> ValueLike<'v> for Value<'v> {
-    fn get_ref(self) -> &'v dyn AValue<'v> {
-        Value::get_ref(self)
-    }
-
     fn to_value(self) -> Value<'v> {
         self
+    }
+
+    fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T> {
+        self.get_ref().downcast_ref::<T>()
+    }
+
+    fn collect_repr(self, collector: &mut String) {
+        self.get_ref().collect_repr(collector);
+    }
+
+    fn get_hash(self) -> anyhow::Result<u64> {
+        self.get_ref().get_hash()
+    }
+
+    fn to_json(self) -> anyhow::Result<String> {
+        self.get_ref().to_json()
+    }
+
+    fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
+        if self.ptr_eq(other) {
+            Ok(true)
+        } else {
+            let _guard = stack_guard::stack_guard()?;
+            self.get_ref().equals(other)
+        }
+    }
+
+    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
+        let _guard = stack_guard::stack_guard()?;
+        self.get_ref().compare(other)
+    }
+
+    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
+        self.get_ref().value_as_dyn_any()
     }
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
-    fn get_ref(self) -> &'v dyn AValue<'v> {
-        self.get_ref()
-    }
-
     fn to_value(self) -> Value<'v> {
         Value::new_frozen(self)
+    }
+
+    fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T> {
+        self.to_value().downcast_ref()
+    }
+
+    fn collect_repr(self, collector: &mut String) {
+        self.to_value().collect_repr(collector)
+    }
+
+    fn get_hash(self) -> anyhow::Result<u64> {
+        self.to_value().get_hash()
+    }
+
+    fn to_json(self) -> anyhow::Result<String> {
+        self.to_value().to_json()
+    }
+
+    fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
+        self.to_value().equals(other)
+    }
+
+    fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
+        self.to_value().compare(other)
+    }
+
+    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
+        self.get_ref().value_as_dyn_any()
     }
 }
 
@@ -331,17 +372,6 @@ impl<'v> Value<'v> {
     /// Get the [`Hashed`] version of this [`Value`].
     pub fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         ValueLike::get_hashed(self)
-    }
-
-    /// Get a reference to underlying data or [`None`]
-    /// if contained object has different type than requested.
-    ///
-    /// This function panics if the [`Value`] is borrowed mutably.
-    ///
-    /// In many cases you may wish to call [`FromValue`] instead, as that can
-    /// get a non-frozen value from an underlying frozen value.
-    pub fn downcast_ref<T: AnyLifetime<'v>>(self) -> Option<&'v T> {
-        self.get_ref().downcast_ref::<T>()
     }
 
     /// Are two values equal. If the values are of different types it will
@@ -542,7 +572,7 @@ impl<'v> Value<'v> {
         self.invoke(location, params, eval)
     }
 
-    pub fn get_type_value(self) -> FrozenValue {
+    pub fn get_type_value(self) -> FrozenStringValue {
         self.get_ref().get_type_value()
     }
 }

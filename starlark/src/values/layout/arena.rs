@@ -29,10 +29,12 @@
 use crate::values::layout::avalue::{AValue, BlackHole};
 use bumpalo::Bump;
 use either::Either;
+use gazebo::prelude::*;
 use std::{
     alloc::Layout,
     any::TypeId,
     cmp,
+    collections::HashMap,
     intrinsics::copy_nonoverlapping,
     marker::PhantomData,
     mem::{self, MaybeUninit},
@@ -47,15 +49,18 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
-#[doc(hidden)] // Appears in a trait, but don't want it to
+#[derive(Hash, PartialEq, Eq, Clone)]
 #[repr(transparent)]
-pub struct AValueHeader(DynMetadata<dyn AValue<'static>>);
+pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
+
+// Implements Copy so this is fine
+impl Dupe for AValueHeader {}
 
 /// How object is represented in arena.
 #[repr(C)]
 pub(crate) struct AValueRepr<T> {
-    header: AValueHeader,
-    payload: T,
+    pub(crate) header: AValueHeader,
+    pub(crate) payload: T,
 }
 
 /// This is object written over [`AValueRepr`] during GC.
@@ -78,7 +83,7 @@ pub(crate) struct Reservation<'v> {
 
 impl<'v> Reservation<'v> {
     pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
-        assert_eq!(self.typ, T::static_type_id());
+        assert_eq!(self.typ, T::static_type_id_of_value());
         unsafe {
             let p = self.pointer as *mut AValueRepr<T>;
             ptr::write(
@@ -96,9 +101,24 @@ impl<'v> Reservation<'v> {
     }
 }
 
+#[derive(Debug)]
+/// Information about the data stored on a heap. Accessible through
+/// the function `allocated_summary` available on [`Heap`](crate::values::Heap)
+/// and [`FrozenHeap`](crate::values::FrozenHeap)
+pub struct HeapSummary {
+    /// For each type, give the (number of entries, size of all entries).
+    /// The size may be approximate as it includes information from
+    /// the approximate [`memory_size`](StarlarkValue::memory_size) function.
+    pub summary: HashMap<String, (usize, usize)>,
+}
+
 impl Arena {
     pub fn allocated_bytes(&self) -> usize {
         self.drop.allocated_bytes() + self.non_drop.allocated_bytes()
+    }
+
+    pub fn available_bytes(&self) -> usize {
+        self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
     /// Bytes allocated which can't be iterated over
@@ -134,13 +154,16 @@ impl Arena {
         let x = BlackHole(mem::size_of::<T>());
         unsafe {
             ptr::write(
-                p as *mut (AValueHeader, BlackHole),
-                (AValueHeader::new(&x), x),
+                p as *mut AValueRepr<BlackHole>,
+                AValueRepr {
+                    header: AValueHeader::new(&x),
+                    payload: x,
+                },
             )
         };
 
         Reservation {
-            typ: T::static_type_id(),
+            typ: T::static_type_id_of_value(),
             pointer: p as *mut AValueRepr<()>,
             phantom: PhantomData,
         }
@@ -168,7 +191,9 @@ impl Arena {
         &'v self,
         x: T,
         extra: usize,
-    ) -> &'v AValueHeader {
+    ) -> *mut AValueRepr<T> {
+        assert!(!mem::needs_drop::<T>());
+
         let p = Self::alloc_empty::<T>(&self.non_drop, extra);
         unsafe {
             ptr::write(
@@ -178,7 +203,7 @@ impl Arena {
                     payload: x,
                 },
             );
-            &(*p).header
+            p
         }
     }
 
@@ -231,6 +256,54 @@ impl Arena {
             .iter_allocated_chunks()
             .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
     }
+
+    // For each Rust-level type (the String) report how many entries there are in the heap, and how much size they consume
+    pub fn allocated_summary(&self) -> HeapSummary {
+        #[cold] // Try and avoid problematic UB :-(
+        #[inline(never)]
+        fn for_each<'a>(bump: &'a Bump, mut f: impl FnMut(&'a AValueHeader)) {
+            // We have a problem that `iter_allocated_chunks` requires a &mut, and for things like
+            // FrozenModule we don't have a mutable Bump. The only reason that the function requires &mut
+            // is to make sure new values don't get allocated while you have references to old values,
+            // but that's not a problem for us, since we immediately use the values and don't keep them around.
+            //
+            // We have requested an alternative function in terms of *const, which would be safe,
+            // but until that arrives, we cast the & pointer to &mut, accepting a small amount of UB.
+            // See https://github.com/fitzgen/bumpalo/issues/121.
+            //
+            // This might not be safe if the function `f` allocated on the heap,
+            // but since this is a local function with a controlled closure, we know that it doesn't.
+            #[allow(clippy::cast_ref_to_mut)]
+            let bump = unsafe { &mut *(bump as *const Bump as *mut Bump) };
+            bump.iter_allocated_chunks()
+                .for_each(|chunk| Arena::iter_chunk(chunk, &mut f))
+        }
+
+        // Record how many times each header occurs
+        // We deliberately hash by the AValueHeader for higher performance, less type lookup
+        let mut entries: HashMap<AValueHeader, (&'static str, (usize, usize))> = HashMap::new();
+        let mut f = |x: &AValueHeader| {
+            let v = x.unpack();
+            let e = entries
+                .entry(x.dupe())
+                .or_insert_with(|| (v.get_type(), (0, 0)));
+            e.1.0 += 1;
+            e.1.1 += v.total_memory()
+        };
+        for_each(&self.drop, &mut f);
+        for_each(&self.non_drop, &mut f);
+
+        // For a given type, the AValueHeader isn't always unique
+        // (if they get compiled in different translation units),
+        // so not just a simple map.
+        let mut summary = HashMap::new();
+        for (_, (name, (count, memory))) in entries {
+            let v = summary.entry(name.to_owned()).or_insert((0, 0));
+            v.0 += count;
+            v.1 += memory;
+        }
+        HeapSummary { summary }
+    }
 }
 
 impl AValueHeader {
@@ -250,15 +323,16 @@ impl AValueHeader {
         AValueHeader(metadata)
     }
 
-    pub fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
+    pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
         unsafe {
-            let res = &*(from_raw_parts((self as *const AValueHeader).add(1) as *const (), self.0));
+            let self_repr = self.as_repr::<()>();
+            let res = &*(from_raw_parts(&self_repr.payload, self.0));
             mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
         }
     }
 
     /// Unpack something that might have been overwritten.
-    pub fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
+    pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
         let x = unsafe { *(self as *const AValueHeader as *const usize) };
         if x & 1 == 1 {
             Either::Left(x & !1)
@@ -274,8 +348,8 @@ impl AValueHeader {
         assert_eq!(self.0.layout(), Layout::new::<T>());
 
         let sz = self.unpack().memory_size();
-        let p = self as *const AValueHeader as *const (AValueHeader, T);
-        let res = ptr::read(p).1;
+        let p = self as *const AValueHeader as *const AValueRepr<T>;
+        let res = ptr::read(p).payload;
         let p = self as *const AValueHeader as *mut AValueForward;
         *p = AValueForward {
             forward_ptr: x | 1,
@@ -294,6 +368,11 @@ impl AValueHeader {
         let p = self as *const AValueHeader as *mut u8;
         p.add(mem::size_of::<AValueHeader>() + n)
     }
+
+    /// Cast header pointer to repr pointer.
+    pub(crate) unsafe fn as_repr<T>(&self) -> &AValueRepr<T> {
+        &*(self as *const AValueHeader as *const AValueRepr<T>)
+    }
 }
 
 impl<T> AValueRepr<T> {
@@ -305,10 +384,6 @@ impl<T> AValueRepr<T> {
             header: AValueHeader::with_metadata(metadata),
             payload,
         }
-    }
-
-    pub(crate) const fn header(&self) -> &AValueHeader {
-        &self.header
     }
 }
 
@@ -398,5 +473,17 @@ mod test {
         assert_eq!(res.len(), 3);
         assert_eq!(to_repr(res[0]), "\"test\"");
         assert_eq!(to_repr(res[2]), "\"hello\"");
+    }
+
+    #[test]
+    fn test_allocated_summary() {
+        let arena = Arena::default();
+        arena.alloc(mk_str("test"));
+        arena.alloc(mk_str("test"));
+        let res = arena.allocated_summary().summary;
+        assert_eq!(res.len(), 1);
+        let entry = res.values().next().unwrap();
+        assert_eq!(entry.0, 2);
+        assert_eq!(entry.1, arena.allocated_bytes());
     }
 }

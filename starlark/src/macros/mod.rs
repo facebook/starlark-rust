@@ -16,7 +16,7 @@
  */
 
 /// Define the [`get_type`](crate::values::StarlarkValue::get_type) and
-/// [`get_type_value`](crate::values::StarlarkValue::get_type_value) fields of
+/// [`get_type_value`](crate::values::StarlarkValue::get_type_value_static) fields of
 /// [`StarlarkValue`](crate::values::StarlarkValue).
 #[macro_export]
 macro_rules! starlark_type {
@@ -24,11 +24,10 @@ macro_rules! starlark_type {
         fn get_type(&self) -> &'static str {
             $typ
         }
-        fn get_type_value(&self) -> $crate::values::FrozenValue {
+        fn get_type_value_static() -> $crate::values::FrozenStringValue {
             const N: usize = $typ.len();
-            static RES: $crate::values::ConstFrozenStringN<N> =
-                $crate::values::ConstFrozenStringN::new($typ);
-            RES.unpack()
+            static RES: $crate::values::StarlarkStrN<N> = $crate::values::StarlarkStrN::new($typ);
+            RES.erase()
         }
     };
 }
@@ -140,7 +139,7 @@ macro_rules! starlark_simple_value {
 
             impl $x {
                 pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<&'v Self> {
-                    x.downcast_ref::< $x >()
+                    $crate::values::ValueLike::downcast_ref::< $x >(x)
                 }
             }
 

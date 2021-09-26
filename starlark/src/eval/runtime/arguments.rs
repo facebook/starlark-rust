@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::collections::BorrowHashed;
+use crate::{collections::BorrowHashed, values::StringValue};
 /// Deal with all aspects of runtime parameter evaluation.
 /// First build a Parameters structure, then use collect to collect the
 /// parameters into slots.
@@ -26,7 +26,7 @@ use crate::{
     },
     values::{
         dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
-        ValueError, ValueLike, ValueRef,
+        ValueError, ValueLike,
     },
 };
 use either::Either;
@@ -36,7 +36,7 @@ use gazebo::{
     prelude::*,
 };
 use itertools::Itertools;
-use std::{cell::Cell, cmp, convert::TryInto, iter};
+use std::{cell::Cell, cmp, convert::TryInto, intrinsics::unlikely, iter};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -325,7 +325,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
-        self.collect_inline(args, coerce(slots), heap)
+        self.collect_inline(args, slots, heap)
     }
 
     pub fn collect_into<const N: usize>(
@@ -344,7 +344,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     pub(crate) fn collect_inline(
         &self,
         args: Arguments<'v, '_>,
-        slots: &[ValueRef<'v>],
+        slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
         // If the arguments equal the length and the kinds, and we don't have any other args,
@@ -357,7 +357,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             && args.kwargs.is_none()
         {
             for (v, s) in args.pos.iter().zip(slots.iter()) {
-                s.set_direct(*v);
+                s.set(Some(*v));
             }
 
             return Ok(());
@@ -369,24 +369,24 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     fn collect_slow(
         &self,
         args: Arguments<'v, '_>,
-        slots: &[ValueRef<'v>],
+        slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
         // Return true if the value is a duplicate
         #[inline(always)]
         fn add_kwargs<'v>(
-            kwargs: &mut Option<Box<Dict<'v>>>,
-            key: Hashed<Value<'v>>,
+            kwargs: &mut Option<Box<SmallMap<StringValue<'v>, Value<'v>>>>,
+            key: Hashed<StringValue<'v>>,
             val: Value<'v>,
         ) -> bool {
             match kwargs {
                 None => {
                     let mut mp = SmallMap::with_capacity_largest_vec();
                     mp.insert_hashed(key, val);
-                    *kwargs = Some(box Dict::new(mp));
+                    *kwargs = Some(box mp);
                     false
                 }
-                Some(mp) => mp.content.insert_hashed(key, val).is_some(),
+                Some(mp) => mp.insert_hashed(key, val).is_some(),
             }
         }
 
@@ -402,13 +402,13 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         if args.pos.len() <= self.positional {
             // fast path for when we don't need to bounce down to filling in args
             for (v, s) in args.pos.iter().zip(slots.iter()) {
-                s.set_direct(*v);
+                s.set(Some(*v));
             }
             next_position = args.pos.len();
         } else {
             for v in args.pos {
                 if next_position < self.positional {
-                    slots[next_position].set_direct(*v);
+                    slots[next_position].set(Some(*v));
                     next_position += 1;
                 } else {
                     star_args.push(*v);
@@ -434,7 +434,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                         );
                     }
                     Some(i) => {
-                        slots[*i].set_direct(*v);
+                        slots[*i].set(Some(*v));
                         lowest_name = cmp::min(lowest_name, *i);
                     }
                 }
@@ -447,7 +447,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                 .with_iterator(heap, |it| {
                     for v in it {
                         if next_position < self.positional {
-                            slots[next_position].set_direct(v);
+                            slots[next_position].set(Some(v));
                             next_position += 1;
                         } else {
                             star_args.push(v);
@@ -458,7 +458,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         // Check if the named arguments clashed with the positional arguments
-        if next_position > lowest_name {
+        if unlikely(next_position > lowest_name) {
             return Err(FunctionError::RepeatedParameter {
                 name: self.param_name_at(lowest_name),
             }
@@ -470,24 +470,27 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             match Dict::from_value(param_kwargs) {
                 Some(y) => {
                     for (k, v) in y.iter_hashed() {
-                        match k.key().unpack_str() {
+                        match StringValue::new(*k.key()) {
                             None => return Err(FunctionError::ArgsValueIsNotString.into()),
                             Some(s) => {
-                                let repeat = match self
-                                    .names
-                                    .get_hashed_str(BorrowHashed::new_unchecked(k.hash(), s))
-                                {
-                                    None => add_kwargs(&mut kwargs, k, v),
+                                let repeat = match self.names.get_hashed_str(
+                                    BorrowHashed::new_unchecked(k.hash(), s.as_str()),
+                                ) {
+                                    None => add_kwargs(
+                                        &mut kwargs,
+                                        Hashed::new_unchecked(k.hash(), s),
+                                        v,
+                                    ),
                                     Some(i) => {
                                         let this_slot = &slots[*i];
-                                        let repeat = this_slot.get_direct().is_some();
-                                        this_slot.set_direct(v);
+                                        let repeat = this_slot.get().is_some();
+                                        this_slot.set(Some(v));
                                         repeat
                                     }
                                 };
-                                if repeat {
+                                if unlikely(repeat) {
                                     return Err(FunctionError::RepeatedParameter {
-                                        name: s.to_owned(),
+                                        name: s.as_str().to_owned(),
                                     }
                                     .into());
                                 }
@@ -510,7 +513,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             let def = unsafe { kinds.get_unchecked(index) };
 
             // We know that up to next_position got filled positionally, so we don't need to check those
-            if slot.get_direct().is_some() {
+            if slot.get().is_some() {
                 continue;
             }
             match def {
@@ -522,7 +525,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                     .into());
                 }
                 ParameterKind::Defaulted(x) => {
-                    slot.set_direct(x.to_value());
+                    slot.set(Some(x.to_value()));
                 }
                 _ => {}
             }
@@ -532,8 +535,8 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // Note that we deliberately give warnings about missing parameters _before_ giving warnings
         // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
         if let Some(args_pos) = self.args {
-            slots[args_pos].set_direct(heap.alloc(Tuple::new(star_args)));
-        } else if !star_args.is_empty() {
+            slots[args_pos].set(Some(heap.alloc(Tuple::new(star_args))));
+        } else if unlikely(!star_args.is_empty()) {
             return Err(FunctionError::ExtraPositionalParameters {
                 count: star_args.len(),
                 function: self.signature(),
@@ -542,11 +545,14 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         if let Some(kwargs_pos) = self.kwargs {
-            let kwargs = kwargs.take().unwrap_or_default();
-            slots[kwargs_pos].set_direct(heap.alloc(*kwargs));
+            let kwargs = match kwargs.take() {
+                Some(kwargs) => Dict::new(coerce(*kwargs)),
+                None => Dict::default(),
+            };
+            slots[kwargs_pos].set(Some(heap.alloc(kwargs)));
         } else if let Some(kwargs) = kwargs {
             return Err(FunctionError::ExtraNamedParameters {
-                names: kwargs.content.keys().map(|x| x.to_str()).collect(),
+                names: kwargs.keys().map(|x| x.as_str().to_owned()).collect(),
                 function: self.signature(),
             }
             .into());
@@ -637,7 +643,7 @@ pub struct Arguments<'v, 'a> {
     /// Names of named arguments.
     ///
     /// `named` length must be equal to `names` length.
-    pub names: &'a [(Symbol, Value<'v>)],
+    pub names: &'a [(Symbol, StringValue<'v>)],
     /// `*args` argument.
     pub args: Option<Value<'v>>,
     /// `**kwargs` argument.
@@ -653,7 +659,8 @@ impl<'v, 'a> Arguments<'v, 'a> {
             None => {
                 let mut result = SmallMap::with_capacity(self.names.len());
                 for (k, v) in self.names.iter().zip(self.named) {
-                    result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
+                    result
+                        .insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1.to_value()), *v);
                 }
                 Ok(Dict::new(result))
             }
@@ -668,12 +675,15 @@ impl<'v, 'a> Arguments<'v, 'a> {
                     let mut result =
                         SmallMap::with_capacity(self.names.len() + kwargs.content.len());
                     for (k, v) in self.names.iter().zip(self.named) {
-                        result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
+                        result.insert_hashed(
+                            Hashed::new_unchecked(k.0.small_hash(), k.1.to_value()),
+                            *v,
+                        );
                     }
                     for (k, v) in kwargs.iter_hashed() {
                         let s = Arguments::unpack_kwargs_key(*k.key())?;
                         let old = result.insert_hashed(k, v);
-                        if old.is_some() {
+                        if unlikely(old.is_some()) {
                             return Err(
                                 FunctionError::RepeatedParameter { name: s.to_owned() }.into()
                             );
@@ -989,7 +999,7 @@ mod test {
         p.kwargs = None;
         let named = [Value::new_none()];
         p.named = &named;
-        let names = [(Symbol::new("test"), heap.alloc("test"))];
+        let names = [(Symbol::new("test"), heap.alloc_string_value("test"))];
         p.names = &names;
         assert!(p.no_named_args().is_err());
     }

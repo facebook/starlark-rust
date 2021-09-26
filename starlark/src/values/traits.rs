@@ -34,41 +34,17 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
-        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenValue, Heap, Tracer,
-        Value, ValueError,
+        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenStringValue, Heap,
+        Tracer, Value, ValueError,
     },
 };
 use gazebo::any::AnyLifetime;
 use std::{
+    any::TypeId,
     cell::{Cell, RefCell},
     cmp::Ordering,
     fmt::{Debug, Write},
 };
-
-/// Helper trait used in [`StarlarkValue`] - has a single global implementation.
-pub trait AsStarlarkValue<'v> {
-    fn as_starlark_value(&self) -> &dyn StarlarkValue<'v>;
-    fn as_dyn_any(&self) -> &dyn AnyLifetime<'v>;
-    fn as_debug(&self) -> &dyn Debug;
-
-    fn type_name(&self) -> &'static str;
-}
-
-impl<'v, T: StarlarkValue<'v>> AsStarlarkValue<'v> for T {
-    fn as_starlark_value(&self) -> &dyn StarlarkValue<'v> {
-        self
-    }
-    fn as_dyn_any(&self) -> &dyn AnyLifetime<'v> {
-        self
-    }
-    fn as_debug(&self) -> &dyn Debug {
-        self
-    }
-
-    fn type_name(&self) -> &'static str {
-        std::any::type_name::<T>()
-    }
-}
 
 /// Called by the garbage collection, and must walk over every contained `Value` in the type.
 /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
@@ -307,6 +283,18 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
 /// All users defining [`SimpleValue`] should use this macro.
 pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 
+/// Non-instantiatable type implementing [`SimpleValue`].
+///
+/// Useful when implementing [`ComplexValue`], which is not meant to be frozen
+/// (e.g. when evaluating code which is never frozen or in tests).
+#[derive(Debug, AnyLifetime)]
+pub enum NoSimpleValue {}
+impl<'v> StarlarkValue<'v> for NoSimpleValue {
+    starlark_type!("no_simple_value");
+}
+
+impl SimpleValue for NoSimpleValue {}
+
 /// How to put a Rust values into [`Value`]s.
 ///
 /// Every Rust value stored in a [`Value`] must implement this trait, along with
@@ -319,7 +307,8 @@ pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 /// See those two traits for examples of how to implement them.
 ///
 /// There are only two required methods of [`StarlarkValue`], namely
-/// [`get_type`](StarlarkValue::get_type) and [`get_type_value`](StarlarkValue::get_type_value).
+/// [`get_type`](StarlarkValue::get_type)
+/// and [`get_type_value_static`](StarlarkValue::get_type_value_static).
 /// Both these should be implemented with the [`starlark_type!`] macro:
 ///
 /// ```
@@ -342,19 +331,21 @@ pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 /// Any additional methods that are added to this trait also need to be added to the
 /// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
 /// any implementations other than the default implementation will not be run.
-pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug {
+pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///
     /// Usually implemented by the [`starlark_type!`] macro.
     fn get_type(&self) -> &'static str;
 
-    /// Like get_type, but returns a reusable [`FrozenValue`] pointer to it.
-    /// This function deliberately doesn't take a heap, as it would not be performant
-    /// to allocate a new value each time.
+    /// Like [`get_type`](Self::get_type), but returns a reusable [`FrozenStringValue`]
+    /// pointer to it. This function deliberately doesn't take a heap,
+    /// as it would not be performant to allocate a new value each time.
     ///
     /// Usually implemented by the [`starlark_type!`] macro.
-    fn get_type_value(&self) -> FrozenValue;
+    fn get_type_value_static() -> FrozenStringValue
+    where
+        Self: Sized;
 
     /// Is this value a match for a named type. Usually returns `true` for
     /// values matching `get_type`, but might also work for subtypes it implements.
@@ -432,6 +423,13 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
         } else {
             Err(ControlError::NotHashableValue(self.get_type().to_owned()).into())
         }
+    }
+
+    /// Return how much extra memory is consumed by this data type, in bytes, in addition to the
+    /// direct `size_of` measurements. Used for profiling, so best effort rather than precise. Defaults to 0.
+    /// Should not reported any memory held on to by a [`Value`].
+    fn extra_memory(&self) -> usize {
+        0
     }
 
     /// Compare `self` with `other` for equality.
@@ -754,4 +752,84 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + AsStarlarkValue<'v> + Debug 
     fn set_attr(&self, attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
         ValueError::unsupported(self, &format!(".{}=", attribute))
     }
+}
+
+/// Trait implemented by a value stored in arena which delegates
+/// it's operations to contained [`StarlarkValue`].
+pub(crate) trait StarlarkValueDyn<'v>: 'v {
+    // `AValue` is not a `StarlarkValue`, but a `Wrapper` type (or `BlackHole`).
+    // `static_type_xxx_of_value` operations return `TypeId` of that `StarlarkValue`,
+    // which is not the same of `TypeId` of `AValue` (because `AValue` is a wrapper).
+    fn static_type_id_of_value() -> TypeId
+    where
+        Self: Sized;
+    fn static_type_of_value(&self) -> TypeId;
+
+    fn as_debug(&self) -> &dyn Debug;
+    /// Get [`StarlarkValue`] as [`AnyLifetime`].
+    fn value_as_dyn_any(&self) -> &dyn AnyLifetime<'v>;
+
+    // Remaining operations are identical to operations of `StarlarkValue`.
+    // `Wrapper` implementation of these operations delegate to `StarlarkValue`.
+
+    fn get_type(&self) -> &'static str;
+    fn get_type_value(&self) -> FrozenStringValue;
+    fn matches_type(&self, _ty: &str) -> bool;
+    fn get_methods(&self) -> Option<&'static Globals>;
+    fn documentation(&self) -> Option<DocItem>;
+    fn collect_repr(&self, _collector: &mut String);
+    fn to_json(&self) -> anyhow::Result<String>;
+    fn to_bool(&self) -> bool;
+    fn to_int(&self) -> anyhow::Result<i32>;
+    fn get_hash(&self) -> anyhow::Result<u64>;
+    fn extra_memory(&self) -> usize;
+    fn equals(&self, _other: Value<'v>) -> anyhow::Result<bool>;
+    fn compare(&self, _other: Value<'v>) -> anyhow::Result<Ordering>;
+    fn invoke(
+        &self,
+        _me: Value<'v>,
+        _location: Option<Span>,
+        _args: Arguments<'v, '_>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>>;
+    fn at(&self, _index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn slice(
+        &self,
+        _start: Option<Value<'v>>,
+        _stop: Option<Value<'v>>,
+        _stride: Option<Value<'v>>,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<Value<'v>>;
+    fn iterate<'a>(
+        &'a self,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a;
+    fn with_iterator(
+        &self,
+        _heap: &'v Heap,
+        _f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()>;
+    fn length(&self) -> anyhow::Result<i32>;
+    fn get_attr(&self, _attribute: &str, _heap: &'v Heap) -> Option<Value<'v>>;
+    fn has_attr(&self, _attribute: &str) -> bool;
+    fn dir_attr(&self) -> Vec<String>;
+    fn is_in(&self, _other: Value<'v>) -> anyhow::Result<bool>;
+    fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn minus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn radd(&self, _lhs: Value<'v>, _heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>>;
+    fn add(&self, _rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn sub(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn mul(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn percent(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn bit_or(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn bit_xor(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn left_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn right_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>);
+    fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()>;
+    fn set_attr(&self, _attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()>;
 }

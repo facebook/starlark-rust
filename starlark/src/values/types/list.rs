@@ -25,8 +25,9 @@ use crate::{
         error::ValueError,
         index::{apply_slice, convert_index},
         iter::ARefIterator,
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap, FrozenValue,
-        Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
+        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
+        FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value,
+        ValueLike,
     },
 };
 use gazebo::{
@@ -40,8 +41,10 @@ use std::{
     cell::{Ref, RefCell},
     cmp,
     cmp::Ordering,
-    fmt::Debug,
+    fmt::{self, Debug, Display},
+    intrinsics::unlikely,
     marker::PhantomData,
+    mem,
     ops::Deref,
 };
 
@@ -91,16 +94,16 @@ impl<'v> List<'v> {
             x.downcast_ref::<ListGen<FrozenList>>()
                 .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
         } else {
-            let ptr = x.get_ref().downcast_ref::<ListGen<RefCell<List>>>()?;
+            let ptr = x.downcast_ref::<ListGen<RefCell<List>>>()?;
             Some(ARef::new_ref(ptr.0.borrow()))
         }
     }
 
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
-        if x.unpack_frozen().is_some() {
+        if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
-        let ptr = x.get_ref().downcast_ref::<ListGen<RefCell<List<'v>>>>();
+        let ptr = x.downcast_ref::<ListGen<RefCell<List<'v>>>>();
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {
@@ -159,9 +162,8 @@ impl FrozenList {
     /// Obtain the [`FrozenList`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
-    pub fn from_frozen_value(x: &FrozenValue) -> Option<ARef<FrozenList>> {
-        x.downcast_ref::<ListGen<FrozenList>>()
-            .map(|x| ARef::map(x, |x| &x.0))
+    pub fn from_frozen_value(x: &FrozenValue) -> Option<&FrozenList> {
+        x.downcast_ref::<ListGen<FrozenList>>().map(|x| &x.0)
     }
 }
 
@@ -182,6 +184,10 @@ impl<'v> List<'v> {
     /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 
+    pub fn get_type_value_static() -> FrozenStringValue {
+        ListGen::<FrozenList>::get_type_value_static()
+    }
+
     pub fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }
@@ -198,11 +204,17 @@ impl<'v> List<'v> {
     {
         self.content.iter().copied()
     }
+}
 
-    pub fn to_repr(&self) -> String {
-        let mut s = String::new();
-        collect_repr(&self.content, &mut s);
-        s
+impl<'v> Display for List<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(&self.content, f)
+    }
+}
+
+impl Display for FrozenList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(coerce_ref(&self.content), f)
     }
 }
 
@@ -217,13 +229,13 @@ impl FrozenList {
 }
 
 trait ListLike<'v>: Debug {
-    fn content(&self) -> ARef<[Value<'v>]>;
+    fn content(&self) -> ARef<Vec<Value<'v>>>;
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
 }
 
 impl<'v> ListLike<'v> for RefCell<List<'v>> {
-    fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ref(Ref::map(self.borrow(), |x| x.content.as_slice()))
+    fn content(&self) -> ARef<Vec<Value<'v>>> {
+        ARef::new_ref(Ref::map(self.borrow(), |x| &x.content))
     }
 
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
@@ -238,8 +250,8 @@ impl<'v> ListLike<'v> for RefCell<List<'v>> {
 }
 
 impl<'v> ListLike<'v> for FrozenList {
-    fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ptr(coerce_ref(&self.content).as_slice())
+    fn content(&self) -> ARef<Vec<Value<'v>>> {
+        ARef::new_ptr(coerce_ref(&self.content))
     }
 
     fn set_at(&self, _i: usize, _v: Value<'v>) -> anyhow::Result<()> {
@@ -247,15 +259,21 @@ impl<'v> ListLike<'v> for FrozenList {
     }
 }
 
-fn collect_repr(xs: &[Value], s: &mut String) {
-    s.push('[');
+impl<'v, T: ListLike<'v>> Display for ListGen<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(&*self.0.content(), f)
+    }
+}
+
+fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "[")?;
     for (i, v) in xs.iter().enumerate() {
         if i != 0 {
-            s.push_str(", ");
+            write!(f, ", ")?;
         }
-        v.collect_repr(s);
+        Display::fmt(v, f)?;
     }
-    s.push(']');
+    write!(f, "]")
 }
 
 impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>
@@ -270,7 +288,15 @@ where
     }
 
     fn collect_repr(&self, s: &mut String) {
-        collect_repr(&*self.0.content(), s)
+        // Fast path as repr() for lists is quite hot
+        s.push('[');
+        for (i, v) in self.0.content().iter().enumerate() {
+            if i != 0 {
+                s.push_str(", ");
+            }
+            v.collect_repr(s);
+        }
+        s.push(']');
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
@@ -307,6 +333,10 @@ where
     fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let i = convert_index(index, self.0.content().len() as i32)? as usize;
         Ok(self.0.content()[i])
+    }
+
+    fn extra_memory(&self) -> usize {
+        self.0.content().capacity() * mem::size_of::<Value>()
     }
 
     fn length(&self) -> anyhow::Result<i32> {

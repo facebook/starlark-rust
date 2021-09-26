@@ -20,44 +20,40 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
+        bool::StarlarkBool,
         docs::DocItem,
         layout::arena::{AValueHeader, AValueRepr},
         none::NoneType,
         string::StarlarkStr,
-        ComplexValue, Freezer, FrozenValue, Heap, SimpleValue, StarlarkValue, Tracer, Value,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
+        StarlarkValueDyn, Tracer, Value,
     },
 };
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
-use std::{
-    any::TypeId,
-    cmp::Ordering,
-    fmt::{self, Debug},
-    mem,
-    ptr::metadata,
-};
+use std::{any::TypeId, cmp::Ordering, fmt::Debug, mem, ptr::metadata};
 
 pub(crate) static VALUE_NONE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
     const DYN: &dyn AValue<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, NoneType>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    DATA.header()
+    &DATA.header
 };
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, false);
+    const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(false));
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, bool>> =
+    static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    DATA.header()
+    &DATA.header
 };
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, bool> = Wrapper(Basic, true);
+    const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(true));
     const DYN: &dyn AValue<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, bool>> =
+    static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    DATA.header()
+    &DATA.header
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
@@ -70,16 +66,13 @@ pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
 
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
-pub trait AValue<'v>: StarlarkValue<'v> {
-    #[doc(hidden)]
+pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> {
     // How much memory I take up on the heap.
     // Included to allow unsized types to live on the heap.
     fn memory_size(&self) -> usize;
 
-    #[doc(hidden)]
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
 
-    #[doc(hidden)]
     fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
 
     fn unpack_str(&self) -> Option<&str> {
@@ -93,13 +86,20 @@ impl<'v> dyn AValue<'v> {
     /// Downcast a reference to type `T`, or return [`None`](None) if it is not the
     /// right type.
     // We'd love to reuse the type from as_dyn_any, but that doesn't seem to have the right vtable-ness
-    pub fn downcast_ref<T: AnyLifetime<'v>>(&self) -> Option<&T> {
-        if self.static_type_of() == T::static_type_id() {
+    pub fn downcast_ref<T: StarlarkValue<'v>>(&self) -> Option<&T> {
+        if self.static_type_of_value() == T::static_type_id() {
             // SAFETY: just checked whether we are pointing to the correct type.
             unsafe { Some(&*(self as *const Self as *const T)) }
         } else {
             None
         }
+    }
+
+    /// Returns the amount of memory a given AValue uses summed with how much it's holding onto.
+    /// This is for profiling, this value is not guaranteed to be exact, and might be expensive to
+    /// compute.
+    pub(crate) fn total_memory(&self) -> usize {
+        mem::size_of::<AValueHeader>() + self.memory_size() + self.extra_memory()
     }
 }
 
@@ -179,7 +179,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
         unsafe {
-            me.overwrite::<Self>(fv.0.ptr_value() & !1)
+            me.overwrite::<Self>(fv.0.ptr_value())
         };
         Ok(fv)
     }
@@ -208,7 +208,7 @@ where
 
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Self>();
-        let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
+        let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
         r.fill(x);
         Ok(fv)
     }
@@ -232,7 +232,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
 
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
-        let x = unsafe { me.overwrite::<Self>(clear_lsb(fv.0.ptr_value())) };
+        let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
         let res = x.1.freeze(freezer)?;
         r.fill(simple(res));
         Ok(fv)
@@ -252,29 +252,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
     }
 }
 
-impl<Mode, T: Debug> Debug for Wrapper<Mode, T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.1.fmt(f)
-    }
-}
-
-// This is somewhat dubious. We can't define Wrapper<T> to be AnyLifetime, since these things
-// don't compose properly. We do layout Wrapper such that it is really a T underneath,
-// so we can pretend it really is just a T.
-unsafe impl<'v, Mode: 'static, T: AnyLifetime<'v>> AnyLifetime<'v> for Wrapper<Mode, T> {
-    fn static_type_id() -> TypeId
-    where
-        Self: Sized,
-    {
-        T::static_type_id()
-    }
-
-    fn static_type_of(&self) -> std::any::TypeId {
-        Self::static_type_id()
-    }
-}
-
-#[derive(Debug, AnyLifetime)]
+#[derive(Debug)]
 pub(crate) struct BlackHole(pub(crate) usize);
 
 impl<'v> AValue<'v> for BlackHole {
@@ -293,22 +271,203 @@ impl<'v> AValue<'v> for BlackHole {
     }
 }
 
-impl<'v> StarlarkValue<'v> for BlackHole {
-    starlark_type!("BlackHole");
+impl<'v> StarlarkValueDyn<'v> for BlackHole {
+    fn static_type_id_of_value() -> TypeId
+    where
+        Self: Sized,
+    {
+        panic!()
+    }
+
+    fn static_type_of_value(&self) -> TypeId {
+        panic!()
+    }
+
+    fn as_debug(&self) -> &dyn Debug {
+        self
+    }
+
+    fn value_as_dyn_any(&self) -> &dyn AnyLifetime<'v> {
+        panic!()
+    }
+
+    // The remaining operations are implementations of starlark operations,
+    // all of them panic because they are not supposed to be called on `BlackHole`.
+
+    fn get_type(&self) -> &'static str {
+        panic!()
+    }
+    fn get_type_value(&self) -> FrozenStringValue {
+        panic!()
+    }
+    fn matches_type(&self, _ty: &str) -> bool {
+        panic!()
+    }
+    fn get_methods(&self) -> Option<&'static Globals> {
+        panic!()
+    }
+    fn documentation(&self) -> Option<DocItem> {
+        panic!()
+    }
+    fn collect_repr(&self, _collector: &mut String) {
+        panic!()
+    }
+    fn to_json(&self) -> anyhow::Result<String> {
+        panic!()
+    }
+    fn to_bool(&self) -> bool {
+        panic!()
+    }
+    fn to_int(&self) -> anyhow::Result<i32> {
+        panic!()
+    }
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        panic!()
+    }
+    fn extra_memory(&self) -> usize {
+        panic!()
+    }
+    fn equals(&self, _other: Value<'v>) -> anyhow::Result<bool> {
+        panic!()
+    }
+    fn compare(&self, _other: Value<'v>) -> anyhow::Result<Ordering> {
+        panic!()
+    }
+    fn invoke(
+        &self,
+        _me: Value<'v>,
+        _location: Option<Span>,
+        _args: Arguments<'v, '_>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn at(&self, _index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn slice(
+        &self,
+        _start: Option<Value<'v>>,
+        _stop: Option<Value<'v>>,
+        _stride: Option<Value<'v>>,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn iterate<'a>(
+        &'a self,
+        _heap: &'v Heap,
+    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
+    where
+        'v: 'a,
+    {
+        panic!()
+    }
+    fn with_iterator(
+        &self,
+        _heap: &'v Heap,
+        _f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        panic!()
+    }
+    fn length(&self) -> anyhow::Result<i32> {
+        panic!()
+    }
+    fn get_attr(&self, _attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
+        panic!()
+    }
+    fn has_attr(&self, _attribute: &str) -> bool {
+        panic!()
+    }
+    fn dir_attr(&self) -> Vec<String> {
+        panic!()
+    }
+    fn is_in(&self, _other: Value<'v>) -> anyhow::Result<bool> {
+        panic!()
+    }
+    fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn minus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn radd(&self, _lhs: Value<'v>, _heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
+        panic!()
+    }
+    fn add(&self, _rhs: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn sub(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn mul(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn percent(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn bit_or(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn bit_xor(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn left_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn right_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
+    fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
+        panic!()
+    }
+    fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()> {
+        panic!()
+    }
+    fn set_attr(&self, _attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()> {
+        panic!()
+    }
 }
 
-impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode, T> {
+impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<Mode, T> {
+    fn static_type_id_of_value() -> TypeId
+    where
+        Self: Sized,
+    {
+        T::static_type_id()
+    }
+    fn static_type_of_value(&self) -> TypeId {
+        T::static_type_id()
+    }
+    fn as_debug(&self) -> &dyn Debug {
+        &self.1
+    }
+    fn value_as_dyn_any(&self) -> &dyn AnyLifetime<'v> {
+        &self.1
+    }
+
+    // Following operations delegate to `StarlarkValue`.
+
     fn get_type(&self) -> &'static str {
         self.1.get_type()
     }
-    fn get_type_value(&self) -> FrozenValue {
-        self.1.get_type_value()
+    fn get_type_value(&self) -> FrozenStringValue {
+        T::get_type_value_static()
     }
     fn matches_type(&self, ty: &str) -> bool {
         self.1.matches_type(ty)
     }
     fn get_methods(&self) -> Option<&'static Globals> {
         self.1.get_methods()
+    }
+    fn documentation(&self) -> Option<DocItem> {
+        self.1.documentation()
     }
     fn collect_repr(&self, collector: &mut String) {
         self.1.collect_repr(collector)
@@ -324,6 +483,9 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
         self.1.get_hash()
+    }
+    fn extra_memory(&self) -> usize {
+        self.1.extra_memory()
     }
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         self.1.equals(other)
@@ -433,8 +595,5 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValue<'v> for Wrapper<Mode
     }
     fn set_attr(&self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
         self.1.set_attr(attribute, new_value)
-    }
-    fn documentation(&self) -> Option<DocItem> {
-        self.1.documentation()
     }
 }

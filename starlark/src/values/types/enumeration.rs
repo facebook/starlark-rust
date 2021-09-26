@@ -52,7 +52,10 @@ use gazebo::{
     cell::AsARef,
     coerce::{coerce_ref, Coerce},
 };
-use std::{cell::RefCell, fmt::Debug};
+use std::{
+    cell::RefCell,
+    fmt::{self, Debug, Display, Write},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -78,6 +81,19 @@ pub struct EnumTypeGen<V, Typ> {
     constructor: V,
 }
 
+impl<V: Display, Typ> Display for EnumTypeGen<V, Typ> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "enum(")?;
+        for (i, (v, _)) in self.elements.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            v.fmt(f)?;
+        }
+        write!(f, ")")
+    }
+}
+
 pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenEnumType = EnumTypeGen<FrozenValue, Option<String>>;
 
@@ -91,6 +107,12 @@ pub struct EnumValueGen<V> {
     typ: V, // Must be EnumType it points back to (so it can get the type)
     value: V,   // The value of this enumeration
     index: i32, // The index in the enumeration
+}
+
+impl<V: Display> Display for EnumValueGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.value.fmt(f)
+    }
 }
 
 starlark_complex_values!(EnumType);
@@ -172,9 +194,7 @@ impl<'v> EnumType<'v> {
                     .either(|x| &x.elements, |x| coerce_ref(&x.elements));
                 match elements.get_hashed(val.get_hashed()?.borrow()) {
                     Some(v) => Ok(*v),
-                    None => {
-                        Err(EnumError::InvalidElement(val.to_string(), this.to_string()).into())
-                    }
+                    None => Err(EnumError::InvalidElement(val.to_str(), this.to_repr()).into()),
                 }
             },
             "enum(value)".to_owned(),
@@ -200,14 +220,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str("enum(");
-        for (i, (v, _)) in self.elements.iter().enumerate() {
-            if i != 0 {
-                collector.push_str(", ");
-            }
-            v.collect_repr(collector);
-        }
-        collector.push(')');
+        write!(collector, "{}", self).unwrap()
     }
 
     fn invoke(
@@ -219,6 +232,11 @@ where
     ) -> anyhow::Result<Value<'v>> {
         args.this = Some(me);
         self.constructor.invoke(location, args, eval)
+    }
+
+    fn extra_memory(&self) -> usize {
+        let typ = self.typ.as_aref();
+        typ.as_ref().map_or(0, |s| s.capacity()) + self.elements.extra_memory()
     }
 
     fn length(&self) -> anyhow::Result<i32> {
@@ -322,7 +340,7 @@ where
     }
 
     fn collect_repr(&self, collector: &mut String) {
-        self.value.collect_repr(collector)
+        write!(collector, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

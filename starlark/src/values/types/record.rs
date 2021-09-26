@@ -63,7 +63,8 @@ use gazebo::{
 use std::{
     cell::RefCell,
     collections::hash_map::DefaultHasher,
-    fmt::Debug,
+    fmt,
+    fmt::{Debug, Display, Write},
     hash::{Hash, Hasher},
 };
 
@@ -72,6 +73,18 @@ use std::{
 pub struct FieldGen<V> {
     pub(crate) typ: V,
     default: Option<V>,
+}
+
+impl<V: Display> Display for FieldGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "field(")?;
+        self.typ.fmt(f)?;
+        if let Some(d) = &self.default {
+            write!(f, ", ")?;
+            d.fmt(f)?;
+        }
+        write!(f, ")")
+    }
 }
 
 // Manual because no instance for Option<V>
@@ -92,6 +105,20 @@ pub struct RecordTypeGen<V, Typ> {
     constructor: V,
 }
 
+impl<V: Display, Typ> Display for RecordTypeGen<V, Typ> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "record(")?;
+        for (i, (name, typ)) in self.fields.iter().enumerate() {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}=", name)?;
+            typ.0.fmt(f)?;
+        }
+        write!(f, ")")
+    }
+}
+
 pub type RecordType<'v> = RecordTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenRecordType = RecordTypeGen<FrozenValue, Option<String>>;
 
@@ -103,6 +130,25 @@ pub struct RecordGen<V> {
     values: Vec<V>,
 }
 
+impl<'v, V: ValueLike<'v>> Display for RecordGen<V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "record(")?;
+        for (i, (name, typ)) in self
+            .get_record_fields()
+            .keys()
+            .zip(&self.values)
+            .enumerate()
+        {
+            if i != 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}=", name)?;
+            Display::fmt(typ, f)?;
+        }
+        write!(f, ")")
+    }
+}
+
 starlark_complex_value!(pub(crate) Field);
 starlark_complex_values!(RecordType);
 starlark_complex_value!(pub Record);
@@ -111,23 +157,6 @@ impl<V> FieldGen<V> {
     pub(crate) fn new(typ: V, default: Option<V>) -> Self {
         Self { typ, default }
     }
-}
-
-fn collect_repr_record<'s, 't, V: 't>(
-    items: impl Iterator<Item = (&'s String, &'t V)>,
-    add: impl Fn(&'t V, &mut String),
-    collector: &mut String,
-) {
-    collector.push_str("record(");
-    for (i, (name, typ)) in items.enumerate() {
-        if i != 0 {
-            collector.push_str(", ");
-        }
-        collector.push_str(name);
-        collector.push('=');
-        add(typ, collector);
-    }
-    collector.push(')');
 }
 
 fn record_fields<'v>(
@@ -226,13 +255,7 @@ where
     starlark_type!("field");
 
     fn collect_repr(&self, collector: &mut String) {
-        collector.push_str("field(");
-        self.typ.collect_repr(collector);
-        if let Some(d) = self.default {
-            collector.push_str(", ");
-            d.collect_repr(collector);
-        }
-        collector.push(')');
+        write!(collector, "{}", self).unwrap()
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
@@ -270,7 +293,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn collect_repr(&self, collector: &mut String) {
-        collect_repr_record(self.fields.iter(), |x, s| x.0.collect_repr(s), collector);
+        write!(collector, "{}", self).unwrap()
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
@@ -292,6 +315,13 @@ where
     ) -> anyhow::Result<Value<'v>> {
         args.this = Some(me);
         self.constructor.invoke(location, args, eval)
+    }
+
+    fn extra_memory(&self) -> usize {
+        // We don't capture the memory beneath the TypeCompiled, since we don't know how big
+        // those closures are.
+        let typ = self.typ.as_aref();
+        typ.as_ref().map_or(0, |s| s.capacity()) + self.fields.extra_memory()
     }
 
     fn dir_attr(&self) -> Vec<String> {
@@ -391,11 +421,7 @@ where
     }
 
     fn collect_repr(&self, collector: &mut String) {
-        collect_repr_record(
-            self.get_record_fields().keys().zip(&self.values),
-            |x, s| x.collect_repr(s),
-            collector,
-        );
+        write!(collector, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

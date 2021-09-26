@@ -24,6 +24,7 @@ use crate::{
     environment::GlobalsBuilder,
     values::{any::StarlarkAny, Heap},
 };
+use derive_more::Display;
 use once_cell::sync::Lazy;
 use std::{
     mem,
@@ -47,7 +48,7 @@ fn test_deallocation() {
     // Check that we really do deallocate values we create
     static COUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
-    #[derive(Default, Debug)]
+    #[derive(Default, Debug, Display)]
     struct Dealloc;
 
     impl Drop for Dealloc {
@@ -58,7 +59,7 @@ fn test_deallocation() {
 
     #[starlark_module]
     fn globals(builder: &mut GlobalsBuilder) {
-        fn mk() -> StarlarkAny {
+        fn mk() -> StarlarkAny<Dealloc> {
             Ok(StarlarkAny::new(Dealloc))
         }
     }
@@ -208,7 +209,7 @@ fn test_display_debug() {
     assert_eq!(val.to_str(), "([1, 2], \"test\", True)");
     assert_eq!(
         format!("{:?}", val),
-        "Value(TupleGen { content: [Value(ListGen(RefCell { value: List { content: [Value(1), Value(2)] } })), Value(\"test\"), Value(true)] })"
+        "Value(TupleGen { content: [Value(ListGen(RefCell { value: List { content: [Value(1), Value(2)] } })), Value(\"test\"), Value(StarlarkBool(true))] })"
     );
     assert_eq!(
         format!("{:#?}", val),
@@ -235,7 +236,9 @@ fn test_display_debug() {
                 "test",
             ),
             Value(
-                true,
+                StarlarkBool(
+                    true,
+                ),
             ),
         ],
     },
@@ -243,7 +246,7 @@ fn test_display_debug() {
     );
 
     let val = heap.alloc("test");
-    assert_eq!(format!("{}", val), "test");
+    assert_eq!(format!("{}", val), "\"test\"");
     assert_eq!(val.to_repr(), "\"test\"");
     assert_eq!(val.to_str(), "test");
     assert_eq!(format!("{:?}", val), "Value(\"test\")");

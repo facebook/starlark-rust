@@ -20,11 +20,11 @@
 use crate::{
     codemap::Spanned,
     eval::{
-        compiler::{scope::CstExpr, Compiler, ExprCompiled, ExprCompiledValue},
-        EvalException, Evaluator,
+        compiler::{scope::CstExpr, Compiler},
+        fragment::expr::ExprCompiledValue,
     },
     syntax::ast::ExprP,
-    values::{dict::Dict, list::List, Value},
+    values::{dict::Dict, list::List},
 };
 
 /// Convert a list into a tuple. In many cases (iteration, `in`) these types
@@ -50,8 +50,8 @@ pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
 pub(crate) enum Conditional {
     True,
     False,
-    Normal(ExprCompiled),
-    Negate(ExprCompiled),
+    Normal(ExprCompiledValue),
+    Negate(ExprCompiledValue),
 }
 
 impl Compiler<'_> {
@@ -71,7 +71,7 @@ impl Compiler<'_> {
                     Conditional::False
                 }
             }
-            ExprCompiledValue::Compiled(v) => {
+            v => {
                 if expect {
                     Conditional::Normal(v)
                 } else {
@@ -88,25 +88,19 @@ impl Compiler<'_> {
         // In practice people only really use the empty versions as constants.
         match &expr.node {
             ExprP::Dict(xs) if xs.is_empty() => {
-                return ExprCompiledValue::Value(
-                    self.module_env.frozen_heap().alloc_str(Dict::TYPE),
-                );
+                return ExprCompiledValue::Value(Dict::get_type_value_static().unpack());
             }
             ExprP::List(xs) if xs.is_empty() => {
-                return ExprCompiledValue::Value(
-                    self.module_env.frozen_heap().alloc_str(List::TYPE),
-                );
+                return ExprCompiledValue::Value(List::get_type_value_static().unpack());
             }
             // No need to handle Tuple as it will become frozen if it has no inner-calls
             _ => {}
         }
         match self.expr(expr) {
-            ExprCompiledValue::Value(x) => ExprCompiledValue::Value(x.to_value().get_type_value()),
-            ExprCompiledValue::Compiled(x) => {
-                expr!("type", |eval| {
-                    x(eval)?.get_ref().get_type_value().to_value()
-                })
+            ExprCompiledValue::Value(x) => {
+                ExprCompiledValue::Value(x.to_value().get_type_value().unpack())
             }
+            x => ExprCompiledValue::Type(box x),
         }
     }
 }
