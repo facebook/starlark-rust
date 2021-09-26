@@ -176,6 +176,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
     }
 
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        debug_assert!(self.1.len() > 1, "short strings are allocated statically");
+
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
         unsafe {
@@ -185,6 +187,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
     }
 
     fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+        debug_assert!(self.1.len() > 1, "short strings are allocated statically");
+
         let s = self.1.unpack();
         let v = tracer.alloc_str(s);
         unsafe {
