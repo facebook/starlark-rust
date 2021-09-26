@@ -53,7 +53,6 @@ fn test_go() {
     assert.conformance(&ignore_bad_lines(
         test_case!("builtin.star"),
         &[
-            "2.0",                   // Floats, unsupported
             "[] not in {123: \"\"}", // We disagree, see test_not_in_unhashable
             // Exponents, unsupported
             "1e15",

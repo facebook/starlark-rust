@@ -212,9 +212,19 @@ impl<'v> StarlarkValue<'v> for Range {
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
-        let other = match other.unpack_int() {
-            Some(other) => other,
-            None => {
+        let other = match (other.unpack_int(), other.get_ref().downcast_ref::<f64>()) {
+            (Some(other), _) => other,
+            (None, Some(&other)) => {
+                // If the float doesn't have fractional part and is within int bounds then proceed with it as int.
+                let int_candidate = other.trunc();
+                if other == int_candidate && int_candidate <= i32::MAX as f64 && int_candidate >= i32::MIN as f64 {
+                    int_candidate as i32
+                } else {
+                    // Has fractional part or out of bounds -> not in range.
+                    return Ok(false);
+                }
+            }
+            (None, None) => {
                 // Consider `"a" in range(3)`
                 //
                 // Should we error or return false?
