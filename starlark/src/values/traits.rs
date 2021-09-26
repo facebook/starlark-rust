@@ -823,6 +823,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn sub(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn mul(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn percent(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
     fn bit_or(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;

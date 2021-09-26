@@ -49,7 +49,7 @@ fn f64_arith_bin_op<'v, F>(
 where
     F: FnOnce(f64, f64) -> anyhow::Result<f64>,
 {
-    if let Some(other) = right.downcast_ref::<f64>() {
+    if let Some(other) = right.get_ref().downcast_ref::<f64>() {
         Ok(heap.alloc_simple(f(left, *other)?))
     } else if let Some(other) = right.unpack_int() {
         Ok(heap.alloc_simple(f(left, other as f64)?))
@@ -60,7 +60,7 @@ where
 
 
 pub fn unpack_and_coerce_to_float(value: Value) -> Option<f64> {
-    if let Some(f) = value.downcast_ref::<f64>() {
+    if let Some(f) = value.get_ref().downcast_ref::<f64>() {
         Some(*f)
     } else if let Some(i) = value.unpack_int() {
         Some(i as f64)
@@ -74,7 +74,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     starlark_type!(FLOAT_TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        if let Some(other) = other.downcast_ref::<f64>() {
+        if let Some(other) = other.get_ref().downcast_ref::<f64>() {
             Ok(self == other)
         } else if let Some(other) = other.unpack_int() {
             Ok(*self == other as f64)

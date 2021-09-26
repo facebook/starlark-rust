@@ -680,7 +680,7 @@ impl Compiler<'_> {
                             expr_throw(l.percent(r, eval.heap()), span, eval)?
                         }),
                         BinOp::Divide => expr!("divide", l, r, |eval| {
-                            throw(l.div(r, eval.heap()), span, eval)?
+                            expr_throw(l.div(r, eval.heap()), span, eval)?
                         }),
                         BinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
                             expr_throw(l.floor_div(r, eval.heap()), span, eval)?

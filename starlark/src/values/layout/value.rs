@@ -131,7 +131,7 @@ impl<'v> Value<'v> {
 
     /// Is this value a float.
     pub fn is_float(self) -> bool {
-        self.downcast_ref::<f64>().is_some()
+        self.get_ref().downcast_ref::<f64>().is_some()
     }
 
     /// Obtain the underlying `bool` if it is a boolean.

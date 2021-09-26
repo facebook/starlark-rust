@@ -80,7 +80,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if let Some(other) = other.unpack_int() {
             Ok(self.get() == other)
-        } else if let Some(other) = other.downcast_ref::<f64>() {
+        } else if let Some(other) = other.get_ref().downcast_ref::<f64>() {
             Ok(self.get() as f64 == *other)
         } else {
             Ok(false)
