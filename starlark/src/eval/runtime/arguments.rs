@@ -66,6 +66,10 @@ pub(crate) enum FunctionError {
 #[repr(C)]
 pub(crate) enum ParameterKind<V> {
     Required,
+    /// When optional parameter is not supplied, there's no error,
+    /// but the slot remains `None`.
+    ///
+    /// This is used only in native code, parameters of type `Option<T>` become `Optional`.
     Optional,
     Defaulted(V),
     Args,
