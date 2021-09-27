@@ -19,7 +19,7 @@
 
 use crate::{
     codemap::{CodeMap, Span, Spanned},
-    environment::FrozenModuleValue,
+    environment::FrozenModuleRef,
     eval::{
         compiler::{
             expr_throw,
@@ -59,27 +59,30 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-// Logically `Atomic<FrozenModuleValue>`.
+// Logically `Atomic<FrozenRef<FrozenModuleRef>>`.
 struct AtomicFrozenModuleOption(AtomicUsize);
 
 impl AtomicFrozenModuleOption {
-    fn from(module: Option<FrozenModuleValue>) -> AtomicFrozenModuleOption {
+    fn from(module: Option<FrozenRef<FrozenModuleRef>>) -> AtomicFrozenModuleOption {
         AtomicFrozenModuleOption(AtomicUsize::new(match module {
-            Some(v) => v.0.0.ptr_value(),
+            Some(v) => v.as_ref() as *const FrozenModuleRef as usize,
             None => 0,
         }))
     }
 
-    fn get(&self) -> Option<FrozenModuleValue> {
+    fn get(&self) -> Option<FrozenRef<FrozenModuleRef>> {
         // Note this is relaxed load which is cheap.
         match self.0.load(Ordering::Relaxed) {
             0 => None,
-            v => Some(FrozenModuleValue(FrozenValue::new_ptr_usize(v))),
+            v => Some(FrozenRef::new(unsafe { &*(v as *const FrozenModuleRef) })),
         }
     }
 
-    fn set(&self, module: FrozenModuleValue) {
-        self.0.store(module.0.0.ptr_value(), Ordering::Relaxed);
+    fn set(&self, module: FrozenRef<FrozenModuleRef>) {
+        self.0.store(
+            module.as_ref() as *const FrozenModuleRef as usize,
+            Ordering::Relaxed,
+        );
     }
 }
 
@@ -618,7 +621,7 @@ where
 }
 
 impl FrozenDef {
-    pub(crate) fn post_freeze(&self, module: FrozenModuleValue) {
+    pub(crate) fn post_freeze(&self, module: FrozenRef<FrozenModuleRef>) {
         if self.module.get().is_none() {
             self.module.set(module);
         }

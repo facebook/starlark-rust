@@ -19,7 +19,7 @@ use crate::{
     codemap::{CodeMap, FileSpan, Span},
     collections::alloca::Alloca,
     environment::{
-        slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleValue, Globals, Module,
+        slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleRef, Globals, Module,
     },
     errors::{Diagnostic, Frame},
     eval::{
@@ -33,7 +33,8 @@ use crate::{
         FileLoader,
     },
     values::{
-        value_captured_get, FrozenHeap, Heap, Trace, Tracer, Value, ValueCaptured, ValueLike,
+        value_captured_get, FrozenHeap, FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured,
+        ValueLike,
     },
 };
 use gazebo::{any::AnyLifetime, cast};
@@ -67,7 +68,7 @@ pub struct Evaluator<'v, 'a> {
     // The module-level variables in scope at the moment.
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
-    pub(crate) module_variables: Option<(&'static FrozenModuleData, FrozenModuleValue)>,
+    pub(crate) module_variables: Option<(&'static FrozenModuleData, FrozenRef<FrozenModuleRef>)>,
     // Local variables for this function, and older stack frames too.
     pub(crate) local_variables: LocalSlots<'v>,
     // Globals used to resolve global variables.
@@ -320,7 +321,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     #[inline(always)] // There is only one caller
     pub(crate) fn with_function_context<R>(
         &mut self,
-        module: Option<FrozenModuleValue>, // None == use module_env
+        module: Option<FrozenRef<FrozenModuleRef>>, // None == use module_env
         codemap: &CodeMap,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
@@ -334,8 +335,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let old_codemap = self.set_codemap(codemap);
 
         // Set up for the new function call
-        let old_module_variables =
-            mem::replace(&mut self.module_variables, module.map(|x| (x.get(), x)));
+        let old_module_variables = mem::replace(
+            &mut self.module_variables,
+            module.map(|x| (x.as_ref().get_module_data(), x)),
+        );
 
         // Run the computation
         let res = within(self);

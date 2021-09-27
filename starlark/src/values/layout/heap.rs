@@ -218,7 +218,7 @@ impl FrozenHeap {
     }
 
     /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
-    fn alloc_simple_frozen_ref<T: SimpleValue>(&self, value: T) -> FrozenRef<T> {
+    pub(crate) fn alloc_simple_frozen_ref<T: SimpleValue>(&self, value: T) -> FrozenRef<T> {
         let value = self.alloc_simple(value);
         // Here we could avoid dynamic cast, but this code is not executed frequently.
         value.downcast_frozen_ref().unwrap()
