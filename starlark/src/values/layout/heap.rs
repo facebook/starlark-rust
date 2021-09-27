@@ -41,6 +41,7 @@ use std::{
     hash::{Hash, Hasher},
     intrinsics::copy_nonoverlapping,
     marker::PhantomData,
+    mem,
     ops::Deref,
     ptr,
     sync::Arc,
@@ -206,8 +207,13 @@ impl FrozenHeap {
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
-    pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
-        self.alloc_raw(WhichBump::Drop, simple(val))
+    pub fn alloc_simple<T: SimpleValue>(&self, val: T) -> FrozenValue {
+        let which_bump = if mem::needs_drop::<T>() {
+            WhichBump::Drop
+        } else {
+            WhichBump::NonDrop
+        };
+        self.alloc_raw(which_bump, simple(val))
     }
 
     /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
@@ -411,20 +417,38 @@ impl Heap {
     }
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
-    pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
+    pub fn alloc_simple<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
+        if mem::needs_drop::<T>() {
+            self.alloc_simple_in_drop(x)
+        } else {
+            self.alloc_simple_in_non_drop(x)
+        }
+    }
+
+    pub(crate) fn alloc_simple_in_drop<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
         self.alloc_raw(WhichBump::Drop, simple(x))
     }
 
-    pub(crate) fn alloc_simple_in_non_drop<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
+    pub(crate) fn alloc_simple_in_non_drop<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
+        assert!(!mem::needs_drop::<T>());
         self.alloc_raw(WhichBump::NonDrop, simple(x))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
-    pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
+    pub fn alloc_complex<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
+        if mem::needs_drop::<T>() {
+            self.alloc_complex_in_drop(x)
+        } else {
+            self.alloc_complex_in_non_drop(x)
+        }
+    }
+
+    pub(crate) fn alloc_complex_in_drop<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
         self.alloc_raw(WhichBump::Drop, complex(x))
     }
 
-    pub(crate) fn alloc_complex_in_non_drop<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
+    pub(crate) fn alloc_complex_in_non_drop<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
+        assert!(!mem::needs_drop::<T>());
         self.alloc_raw(WhichBump::NonDrop, complex(x))
     }
 

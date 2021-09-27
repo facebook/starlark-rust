@@ -138,7 +138,7 @@ impl HeapProfile {
     pub(crate) fn record_call_enter<'v>(&self, function: Value<'v>, heap: &'v Heap) {
         if self.enabled {
             let time = Instant::now();
-            heap.alloc_complex(CallEnter { function, time });
+            heap.alloc_complex_in_drop(CallEnter { function, time });
             heap.alloc_complex_in_non_drop(CallEnter { function, time });
         }
     }
@@ -146,7 +146,7 @@ impl HeapProfile {
     pub(crate) fn record_call_exit<'v>(&self, heap: &'v Heap) {
         if self.enabled {
             let time = Instant::now();
-            heap.alloc_simple(CallExit { time });
+            heap.alloc_simple_in_drop(CallExit { time });
             heap.alloc_simple_in_non_drop(CallExit { time });
         }
     }
