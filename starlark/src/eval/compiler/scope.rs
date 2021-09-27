@@ -66,7 +66,7 @@ struct Unscope(HashMap<String, UnscopeBinding>);
 pub(crate) struct ScopeNames {
     /// The number of slots this scope uses, including for parameters and `parent`.
     /// The next required slot would be at index `used`.
-    pub used: usize,
+    pub used: u32,
     /// The names that are in this scope
     pub mp: HashMap<String, (LocalSlotId, BindingId)>,
     /// Slots to copy from the parent. (index in parent, index in child).
@@ -208,7 +208,7 @@ impl<'a> Scope<'a> {
     }
 
     // Number of module slots I need, number of local anon slots I need
-    pub fn exit_module(mut self) -> (usize, usize, ScopeData) {
+    pub fn exit_module(mut self) -> (u32, u32, ScopeData) {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
         let scope_id = self.locals.pop().unwrap();

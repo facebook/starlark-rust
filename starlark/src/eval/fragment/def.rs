@@ -283,8 +283,8 @@ impl Compiler<'_> {
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
-    parameter_captures: Vec<usize>, // Indices of parameters, which are captured in nested defs
-    parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
+    parameter_captures: Vec<u32>,  // Indices of parameters, which are captured in nested defs
+    parameter_types: Vec<(u32, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
     pub(crate) stmt: FrozenRef<DefInfo>,    // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
@@ -310,8 +310,8 @@ starlark_complex_values!(Def);
 impl<'v> Def<'v> {
     fn new(
         parameters: ParametersSpec<Value<'v>>,
-        parameter_captures: Vec<usize>,
-        parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
+        parameter_captures: Vec<u32>,
+        parameter_types: Vec<(u32, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: FrozenRef<DefInfo>,
         eval: &mut Evaluator<'v, '_>,
@@ -372,7 +372,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
             .iter()
             .map(|(idx, _, v, _)| {
                 (
-                    *idx,
+                    *idx as usize,
                     docs::Type {
                         raw_type: v.to_value().to_repr(),
                     },

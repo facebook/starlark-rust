@@ -17,7 +17,7 @@
 
 use crate::{environment::slots::ModuleSlotId, syntax::ast::Visibility};
 use indexmap::map::IndexMap;
-use std::{cell::RefCell, iter::Iterator};
+use std::{cell::RefCell, convert::TryInto, iter::Iterator};
 
 /// MutableNames are how we allocate slots (index-based) to variables
 /// (name-based). The slots field is the current active mapping of names to
@@ -47,8 +47,8 @@ impl MutableNames {
         Self(RefCell::new(IndexMap::new()))
     }
 
-    pub fn slot_count(&self) -> usize {
-        self.0.borrow().len()
+    pub fn slot_count(&self) -> u32 {
+        self.0.borrow().len().try_into().unwrap()
     }
 
     /// Try and go back from a slot to a name.
@@ -78,7 +78,7 @@ impl MutableNames {
                 *slot
             }
             None => {
-                let slot = ModuleSlotId::new(x.len());
+                let slot = ModuleSlotId::new(x.len().try_into().unwrap());
                 x.insert(name.to_owned(), (slot, vis));
                 slot
             }
