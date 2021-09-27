@@ -18,7 +18,7 @@
 use crate::{
     codemap::Span,
     environment::Globals,
-    eval::{Arguments, Evaluator},
+    eval::{Arguments, Evaluator, FrozenDef},
     values::{
         bool::StarlarkBool,
         docs::DocItem,
@@ -239,6 +239,10 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
         let res = x.1.freeze(freezer)?;
         r.fill(simple(res));
+        if TypeId::of::<T::Frozen>() == TypeId::of::<FrozenDef>() {
+            let frozen_def = fv.downcast_frozen_ref().unwrap();
+            freezer.frozen_defs.borrow_mut().push(frozen_def);
+        }
         Ok(fv)
     }
 

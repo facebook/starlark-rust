@@ -56,7 +56,32 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
     mem,
+    sync::atomic::{AtomicUsize, Ordering},
 };
+
+// Logically `Atomic<FrozenModuleValue>`.
+struct AtomicFrozenModuleOption(AtomicUsize);
+
+impl AtomicFrozenModuleOption {
+    fn from(module: Option<FrozenModuleValue>) -> AtomicFrozenModuleOption {
+        AtomicFrozenModuleOption(AtomicUsize::new(match module {
+            Some(v) => v.0.0.ptr_value(),
+            None => 0,
+        }))
+    }
+
+    fn get(&self) -> Option<FrozenModuleValue> {
+        // Note this is relaxed load which is cheap.
+        match self.0.load(Ordering::Relaxed) {
+            0 => None,
+            v => Some(FrozenModuleValue(FrozenValue::new_ptr_usize(v))),
+        }
+    }
+
+    fn set(&self, module: FrozenModuleValue) {
+        self.0.store(module.0.0.ptr_value(), Ordering::Relaxed);
+    }
+}
 
 struct ParameterName {
     name: String,
@@ -293,7 +318,10 @@ pub(crate) struct DefGen<V> {
     captured: Vec<V>,
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
-    module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
+    /// A reference to the module where the function is defined after the module has been frozen.
+    /// When the module is not frozen yet, this field contains `None`, and function's module
+    /// can be accessed from evaluator's module.
+    module: AtomicFrozenModuleOption,
 }
 
 impl<V> Display for DefGen<V> {
@@ -327,7 +355,7 @@ impl<'v> Def<'v> {
             return_type,
             stmt,
             captured,
-            module: eval.module_variables.map(|x| x.1),
+            module: AtomicFrozenModuleOption::from(eval.module_variables.map(|x| x.1)),
         })
     }
 }
@@ -465,10 +493,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             .return_type
             .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
-        let module = Some(
-            self.module
-                .unwrap_or_else(|| FrozenModuleValue::new(freezer)),
-        );
+        let module = AtomicFrozenModuleOption::from(self.module.get());
         Ok(FrozenDef {
             parameters,
             parameter_captures: self.parameter_captures,
@@ -564,9 +589,9 @@ where
         }
 
         if Self::FROZEN {
-            debug_assert!(self.module.is_some());
+            debug_assert!(self.module.get().is_some());
         }
-        let res = eval.with_function_context(self.module, &self.stmt.codemap, |eval| {
+        let res = eval.with_function_context(self.module.get(), &self.stmt.codemap, |eval| {
             (self.stmt.body)(eval)
         });
         eval.local_variables.release(old_locals);
@@ -589,5 +614,13 @@ where
             }
         }
         Ok(ret)
+    }
+}
+
+impl FrozenDef {
+    pub(crate) fn post_freeze(&self, module: FrozenModuleValue) {
+        if self.module.get().is_none() {
+            self.module.set(module);
+        }
     }
 }

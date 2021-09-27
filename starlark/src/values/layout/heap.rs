@@ -17,6 +17,7 @@
 
 use crate::{
     collections::Hashed,
+    eval::FrozenDef,
     values::{
         any::StarlarkAny,
         layout::{
@@ -252,48 +253,17 @@ impl FrozenHeap {
 // but could be used for anything.
 pub struct Freezer {
     /// Freezing into this heap.
-    heap: FrozenHeap,
-    /// Future module, `BlackHole` initially, then `FrozenModuleRef`.
-    magic: FrozenValue,
-    /// Reservation for that module.
-    reservation: Option<Reservation<'static>>,
+    pub(crate) heap: FrozenHeap,
+    /// Defs frozen by this freezer.
+    pub(crate) frozen_defs: RefCell<Vec<FrozenRef<FrozenDef>>>,
 }
 
 impl Freezer {
-    pub(crate) fn new<T: SimpleValue>(heap: FrozenHeap) -> Self {
-        fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(
-            heap: &'v FrozenHeap,
-            _ty: Option<T>,
-        ) -> Reservation<'v> {
-            heap.arena.reserve::<T>()
-        }
-
-        // Slightly odd construction as we want to produce a reservation with type
-        // simple(T), but simple is a function with an opaque impl return, so fake up
-        // an empty Option containing the right type.
-        let ty: Option<T> = None;
-        let ty = ty.map(simple);
-        let reservation = reserve(&heap, ty);
-        // Morally the type is tied to the heap, but we want to have them both next to each other
-        let reservation = unsafe { transmute!(Reservation, Reservation<'static>, reservation) };
-        let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(reservation.ptr()) });
+    pub(crate) fn new(heap: FrozenHeap) -> Self {
         Freezer {
             heap,
-            magic: fv,
-            reservation: Some(reservation),
+            frozen_defs: RefCell::new(Vec::new()),
         }
-    }
-
-    pub(crate) fn set_magic(&mut self, val: impl SimpleValue) {
-        let reservation = self
-            .reservation
-            .take()
-            .expect("Can only call set_magic once");
-        reservation.fill(simple(val))
-    }
-
-    pub(crate) fn get_magic(&self) -> FrozenValue {
-        self.magic
     }
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {

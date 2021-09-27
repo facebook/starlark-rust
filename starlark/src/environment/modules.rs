@@ -73,7 +73,7 @@ pub(crate) struct FrozenModuleData {
 #[derive(Clone, Dupe, Copy)]
 // Deliberately don't derive Debug, since this value often occurs in cycles,
 // and Debug printing of that would be bad.
-pub(crate) struct FrozenModuleValue(FrozenValue); // Must contain a FrozenModuleRef inside it
+pub(crate) struct FrozenModuleValue(pub(crate) FrozenValue); // Must contain a FrozenModuleRef inside it
 
 /// Container for the documentation for a module
 #[derive(Clone, Debug, PartialEq)]
@@ -209,14 +209,6 @@ impl<'v> StarlarkValue<'v> for FrozenModuleRef {
 impl SimpleValue for FrozenModuleRef {}
 
 impl FrozenModuleValue {
-    pub fn new(freezer: &Freezer) -> Self {
-        Self(freezer.get_magic())
-    }
-
-    pub fn set(freezer: &mut Freezer, val: &FrozenModuleRef) {
-        freezer.set_magic(val.dupe())
-    }
-
     pub fn get<'v>(self) -> &'v FrozenModuleData {
         &self.0.downcast_ref::<FrozenModuleRef>().unwrap().0
     }
@@ -289,14 +281,17 @@ impl Module {
         // Note that we even freeze anonymous slots, since they are accessed by
         // slot-index in the code, and we don't walk into them, so don't know if
         // they are used.
-        let mut freezer = Freezer::new::<FrozenModuleRef>(frozen_heap);
+        let freezer = Freezer::new(frozen_heap);
         let slots = slots.freeze(&freezer)?;
         let rest = FrozenModuleRef(Arc::new(FrozenModuleData {
             names: names.freeze(),
             slots,
             docstring: docstring.into_inner(),
         }));
-        FrozenModuleValue::set(&mut freezer, &rest);
+        let frozen_module_value = FrozenModuleValue(freezer.heap.alloc_simple(rest.dupe()));
+        for frozen_def in freezer.frozen_defs.borrow().as_slice() {
+            frozen_def.post_freeze(frozen_module_value);
+        }
         // The values MUST be alive up until this point (as the above line uses them),
         // but can now be dropped
         mem::drop(heap);
