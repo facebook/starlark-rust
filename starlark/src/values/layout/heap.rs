@@ -187,7 +187,7 @@ impl FrozenHeap {
                 .arena
                 .alloc_extra_non_drop(starlark_str(x.len()), x.len());
             unsafe {
-                (*v).header.write_extra(x.as_bytes())
+                (*v).write_extra(x.as_bytes())
             };
             FrozenValue::new_repr(unsafe { cast::ptr_lifetime(&*v) })
         }
@@ -368,7 +368,7 @@ impl Heap {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
         let v: *mut AValueRepr<_> = arena.alloc_extra_non_drop(starlark_str(len), len);
-        init(unsafe { (*v).header.get_extra() });
+        init(unsafe { (*v).get_extra() });
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -487,7 +487,7 @@ impl<'v> Tracer<'v> {
             .arena
             .alloc_extra_non_drop(starlark_str(x.len()), x.len());
         unsafe {
-            (*v).header.write_extra(x.as_bytes())
+            (*v).write_extra(x.as_bytes())
         };
         Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
     }

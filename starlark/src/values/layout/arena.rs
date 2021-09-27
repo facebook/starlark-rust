@@ -358,17 +358,6 @@ impl AValueHeader {
         res
     }
 
-    pub unsafe fn write_extra(&self, bytes: &[u8]) {
-        debug_assert_eq!(self.unpack().memory_size(), self.0.size_of() + bytes.len());
-        copy_nonoverlapping(bytes.as_ptr(), self.get_extra(), bytes.len());
-    }
-
-    pub unsafe fn get_extra(&self) -> *mut u8 {
-        let n = self.0.size_of();
-        let p = self as *const AValueHeader as *mut u8;
-        p.add(mem::size_of::<AValueHeader>() + n)
-    }
-
     /// Cast header pointer to repr pointer.
     pub(crate) unsafe fn as_repr<T>(&self) -> &AValueRepr<T> {
         &*(self as *const AValueHeader as *const AValueRepr<T>)
@@ -384,6 +373,22 @@ impl<T> AValueRepr<T> {
             header: AValueHeader::with_metadata(metadata),
             payload,
         }
+    }
+
+    pub unsafe fn write_extra(&self, bytes: &[u8]) {
+        debug_assert_eq!(
+            self.header.unpack().memory_size(),
+            mem::size_of::<T>() + bytes.len()
+        );
+        copy_nonoverlapping(bytes.as_ptr(), self.get_extra(), bytes.len());
+    }
+
+    pub unsafe fn get_extra(&self) -> *mut u8 {
+        // sanity check
+        assert_ne!(mem::size_of::<T>(), 0);
+
+        let p = self as *const AValueRepr<T> as *mut u8;
+        p.add(mem::size_of::<AValueRepr<T>>())
     }
 }
 
