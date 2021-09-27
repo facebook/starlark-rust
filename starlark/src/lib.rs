@@ -342,6 +342,7 @@
 //! ```
 
 // Features we use
+#![feature(alloc_layout_extra)]
 #![feature(backtrace)]
 #![feature(box_patterns)]
 #![feature(box_syntax)]

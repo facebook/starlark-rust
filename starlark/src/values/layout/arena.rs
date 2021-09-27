@@ -377,20 +377,23 @@ impl<T> AValueRepr<T> {
         }
     }
 
-    pub unsafe fn write_extra(&self, bytes: &[u8]) {
+    pub unsafe fn write_extra<E: Copy>(&self, extra: &[E]) {
         debug_assert_eq!(
             self.header.unpack().memory_size(),
-            mem::size_of::<T>() + bytes.len()
+            mem::size_of::<T>() + (extra.len() * mem::size_of::<E>())
         );
-        copy_nonoverlapping(bytes.as_ptr(), self.get_extra(), bytes.len());
+        debug_assert!(Layout::new::<T>().padding_needed_for(mem::align_of::<E>()) == 0);
+        copy_nonoverlapping(extra.as_ptr(), self.get_extra(), extra.len());
     }
 
-    pub unsafe fn get_extra(&self) -> *mut u8 {
+    pub unsafe fn get_extra<E: Copy>(&self) -> *mut E {
         // sanity check
         assert_ne!(mem::size_of::<T>(), 0);
 
         let p = self as *const AValueRepr<T> as *mut u8;
-        p.add(mem::size_of::<AValueRepr<T>>())
+        let extra = p.add(mem::size_of::<AValueRepr<T>>()) as *mut E;
+        debug_assert!(extra as usize % mem::align_of::<E>() == 0);
+        extra
     }
 }
 
