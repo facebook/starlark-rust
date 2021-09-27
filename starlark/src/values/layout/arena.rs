@@ -240,6 +240,8 @@ impl Arena {
         // It seems that we get the chunks from most newest to oldest.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
+        // TODO(nga): this should either iterate both `drop` and `non_drop` bumps
+        //   or function need to be renamed.
         let chunks = self.drop.iter_allocated_chunks().collect::<Vec<_>>();
         // Use a single buffer to reduce allocations, but clear it after use
         let mut buffer = Vec::new();
@@ -250,8 +252,8 @@ impl Arena {
         }
     }
 
-    // Iterate over the values in the heap in any order
-    pub fn for_each_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
+    // Iterate over the values in the drop bump in any order
+    pub fn for_each_drop_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
         self.drop
             .iter_allocated_chunks()
             .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
@@ -394,7 +396,7 @@ impl<T> AValueRepr<T> {
 
 impl Drop for Arena {
     fn drop(&mut self) {
-        self.for_each_unordered(|x| {
+        self.for_each_drop_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
             let x = x.unpack() as *const dyn AValue as *mut dyn AValue;
             unsafe {
@@ -461,7 +463,7 @@ mod test {
         });
         assert_eq!(j, LIMIT);
         j = 0;
-        arena.for_each_unordered(|_| j += 1);
+        arena.for_each_drop_unordered(|_| j += 1);
         assert_eq!(j, LIMIT);
     }
 
