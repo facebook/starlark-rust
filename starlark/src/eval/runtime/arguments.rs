@@ -148,11 +148,6 @@ impl<V> ParametersSpec<V> {
         }
     }
 
-    /// Change the function name.
-    pub fn set_function_name(&mut self, name: String) {
-        self.function_name = name
-    }
-
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
         assert!(!matches!(val, ParameterKind::Args | ParameterKind::KWargs));
 
