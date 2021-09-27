@@ -49,6 +49,11 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
+pub(crate) enum WhichBump {
+    NonDrop,
+    Drop,
+}
+
 #[derive(Hash, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
@@ -121,11 +126,6 @@ impl Arena {
         self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
-    /// Bytes allocated which can't be iterated over
-    pub fn allocated_bytes_inline(&self) -> usize {
-        self.non_drop.allocated_bytes()
-    }
-
     fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
         bump: &'v Bump,
         extra: usize,
@@ -170,8 +170,19 @@ impl Arena {
     }
 
     /// Allocate a type `T`.
-    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValueHeader {
-        let p = Self::alloc_empty::<T>(&self.drop, 0);
+    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+        which_bump: WhichBump,
+        x: T,
+    ) -> &'v AValueHeader {
+        let bump = match which_bump {
+            WhichBump::NonDrop => {
+                assert!(!mem::needs_drop::<T>());
+                &self.non_drop
+            }
+            WhichBump::Drop => &self.drop,
+        };
+        let p = Self::alloc_empty::<T>(bump, 0);
         unsafe {
             ptr::write(
                 p,
@@ -240,15 +251,15 @@ impl Arena {
         // It seems that we get the chunks from most newest to oldest.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
-        // TODO(nga): this should either iterate both `drop` and `non_drop` bumps
-        //   or function need to be renamed.
-        let chunks = self.drop.iter_allocated_chunks().collect::<Vec<_>>();
-        // Use a single buffer to reduce allocations, but clear it after use
-        let mut buffer = Vec::new();
-        for chunk in chunks.iter().rev() {
-            Self::iter_chunk(chunk, |x| buffer.push(x));
-            buffer.iter().rev().for_each(|x| f(*x));
-            buffer.clear();
+        for bump in [&mut self.drop, &mut self.non_drop] {
+            let chunks = bump.iter_allocated_chunks().collect::<Vec<_>>();
+            // Use a single buffer to reduce allocations, but clear it after use
+            let mut buffer = Vec::new();
+            for chunk in chunks.iter().rev() {
+                Self::iter_chunk(chunk, |x| buffer.push(x));
+                buffer.iter().rev().for_each(|x| f(*x));
+                buffer.clear();
+            }
         }
     }
 
@@ -445,7 +456,7 @@ mod test {
                 let r = reserve_str(&arena);
                 reserved.push((r, i));
             } else {
-                arena.alloc(mk_str(&i.to_string()));
+                arena.alloc(WhichBump::Drop, mk_str(&i.to_string()));
             }
         }
         assert!(!reserved.is_empty());
@@ -474,10 +485,10 @@ mod test {
     // Make sure that even if there are some blackholes when we drop, we can still walk to heap
     fn drop_with_blackhole() {
         let mut arena = Arena::default();
-        arena.alloc(mk_str("test"));
+        arena.alloc(WhichBump::Drop, mk_str("test"));
         // reserve but do not fill!
         reserve_str(&arena);
-        arena.alloc(mk_str("hello"));
+        arena.alloc(WhichBump::Drop, mk_str("hello"));
         let mut res = Vec::new();
         arena.for_each_ordered(|x| res.push(x));
         assert_eq!(res.len(), 3);
@@ -488,8 +499,8 @@ mod test {
     #[test]
     fn test_allocated_summary() {
         let arena = Arena::default();
-        arena.alloc(mk_str("test"));
-        arena.alloc(mk_str("test"));
+        arena.alloc(WhichBump::Drop, mk_str("test"));
+        arena.alloc(WhichBump::Drop, mk_str("test"));
         let res = arena.allocated_summary().summary;
         assert_eq!(res.len(), 1);
         let entry = res.values().next().unwrap();

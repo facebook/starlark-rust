@@ -20,7 +20,7 @@ use crate::{
     values::{
         any::StarlarkAny,
         layout::{
-            arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation},
+            arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation, WhichBump},
             avalue::{complex, simple, starlark_str, AValue},
             constant::constant_string,
             value::{FrozenValue, Value},
@@ -172,8 +172,8 @@ impl FrozenHeap {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
 
-    fn alloc_raw(&self, x: impl AValue<'static>) -> FrozenValue {
-        let v: &AValueHeader = self.arena.alloc(x);
+    fn alloc_raw(&self, which_bump: WhichBump, x: impl AValue<'static>) -> FrozenValue {
+        let v: &AValueHeader = self.arena.alloc(which_bump, x);
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
@@ -207,7 +207,7 @@ impl FrozenHeap {
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
     pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
-        self.alloc_raw(simple(val))
+        self.alloc_raw(WhichBump::Drop, simple(val))
     }
 
     /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
@@ -344,15 +344,10 @@ impl Heap {
         self.arena.borrow().available_bytes()
     }
 
-    /// Only those allocated on the inline heap (mostly strings)
-    pub(crate) fn allocated_bytes_inline(&self) -> usize {
-        self.arena.borrow().allocated_bytes_inline()
-    }
-
-    fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2>) -> Value<'v> {
+    fn alloc_raw<'v, 'v2: 'v2>(&'v self, which_bump: WhichBump, x: impl AValue<'v2>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValueHeader = arena.alloc(x);
+        let v: &AValueHeader = arena.alloc(which_bump, x);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -417,12 +412,20 @@ impl Heap {
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
     pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
-        self.alloc_raw(simple(x))
+        self.alloc_raw(WhichBump::Drop, simple(x))
+    }
+
+    pub(crate) fn alloc_simple_in_non_drop<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
+        self.alloc_raw(WhichBump::NonDrop, simple(x))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        self.alloc_raw(complex(x))
+        self.alloc_raw(WhichBump::Drop, complex(x))
+    }
+
+    pub(crate) fn alloc_complex_in_non_drop<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
+        self.alloc_raw(WhichBump::NonDrop, complex(x))
     }
 
     pub(crate) fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
