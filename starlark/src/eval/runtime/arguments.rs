@@ -154,6 +154,11 @@ impl<V> ParametersSpec<V> {
     }
 
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
+        assert!(!matches!(val, ParameterKind::Args | ParameterKind::KWargs));
+
+        // Regular arguments cannot follow `**kwargs`, but can follow `*args`.
+        assert!(self.kwargs.is_none());
+
         let i = self.kinds.len();
         self.kinds.push(val);
         let old = self.names.insert(name, i);
@@ -192,7 +197,7 @@ impl<V> ParametersSpec<V> {
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn args(&mut self) {
-        assert!(self.args.is_none() && !self.no_args);
+        assert!(self.args.is_none() && !self.no_args && self.kwargs.is_none());
         self.kinds.push(ParameterKind::Args);
         self.args = Some(self.kinds.len() - 1);
     }
@@ -202,7 +207,7 @@ impl<V> ParametersSpec<V> {
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn no_args(&mut self) {
-        assert!(self.args.is_none() && !self.no_args);
+        assert!(self.args.is_none() && !self.no_args && self.kwargs.is_none());
         self.no_args = true;
     }
 
