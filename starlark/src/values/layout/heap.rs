@@ -22,12 +22,11 @@ use crate::{
         any::StarlarkAny,
         layout::{
             arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation, WhichBump},
-            avalue::{complex, simple, starlark_str, AValue},
+            avalue::{complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue},
             constant::constant_string,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
-        tuple::{FrozenTuple, Tuple},
         AllocFrozenValue, ComplexValue, FrozenRef, SimpleValue,
     },
 };
@@ -203,7 +202,14 @@ impl FrozenHeap {
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
-        self.alloc_simple(FrozenTuple::new(elems.to_vec()))
+        unsafe {
+            let avalue = self.arena.alloc_extra_non_drop(
+                frozen_tuple_avalue(elems.len()),
+                elems.len() * mem::size_of::<FrozenValue>(),
+            );
+            (*avalue).write_extra(elems);
+            FrozenValue::new_repr(&*avalue)
+        }
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -268,6 +274,10 @@ impl Freezer {
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {
         self.heap.into_ref()
+    }
+
+    pub(crate) fn heap(&self) -> &FrozenHeap {
+        &self.heap
     }
 
     /// Allocate a new value while freezing. Usually not a great idea.
@@ -377,7 +387,14 @@ impl Heap {
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
-        self.alloc_complex(Tuple::new(elems.to_vec()))
+        unsafe {
+            let avalue = self.arena.borrow().alloc_extra_non_drop(
+                tuple_avalue(elems.len()),
+                elems.len() * mem::size_of::<Value>(),
+            );
+            (*avalue).write_extra(elems);
+            Value::new_repr(&*avalue)
+        }
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
@@ -474,7 +491,14 @@ impl<'v> Tracer<'v> {
     pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
         &'a self,
     ) -> (Value<'v>, Reservation<'a>) {
-        let r = self.arena.reserve::<T>();
+        self.reserve_with_extra::<T>(0)
+    }
+
+    pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
+        &'a self,
+        extra: usize,
+    ) -> (Value<'v>, Reservation<'a>) {
+        let r = self.arena.reserve_with_extra::<T>(extra);
         let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (v, r)
     }

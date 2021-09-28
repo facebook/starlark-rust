@@ -34,7 +34,6 @@ use crate::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
         list::List,
-        tuple::{FrozenTuple, Tuple},
         AttrType, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
@@ -380,16 +379,14 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self
-                        .module_env
-                        .frozen_heap()
-                        .alloc(FrozenTuple::new(content));
+                    let result = self.module_env.frozen_heap().alloc_tuple(&content);
                     value!(result)
                 } else {
                     let xs = xs.into_map(|x| x.as_compiled());
-                    expr!("tuple", |eval| eval
-                        .heap()
-                        .alloc(Tuple::new(xs.try_map(|x| x(eval))?)))
+                    expr!("tuple", |eval| {
+                        let xs = xs.try_map(|x| x(eval))?;
+                        eval.heap().alloc_tuple(&xs)
+                    })
                 }
             }
             ExprP::List(exprs) => {

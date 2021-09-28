@@ -25,8 +25,8 @@ use crate::{
         Hashed, SmallMap,
     },
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
-        ValueError, ValueLike,
+        dict::Dict, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value, ValueError,
+        ValueLike,
     },
 };
 use either::Either;
@@ -539,7 +539,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // Note that we deliberately give warnings about missing parameters _before_ giving warnings
         // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
         if let Some(args_pos) = self.args {
-            slots[args_pos].set(Some(heap.alloc(Tuple::new(star_args))));
+            slots[args_pos].set(Some(heap.alloc_tuple(&star_args)));
         } else if unlikely(!star_args.is_empty()) {
             return Err(FunctionError::ExtraPositionalParameters {
                 count: star_args.len(),

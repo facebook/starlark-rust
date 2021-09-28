@@ -87,7 +87,7 @@ pub(crate) struct Reservation<'v> {
 }
 
 impl<'v> Reservation<'v> {
-    pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
+    fn do_fill<'v2: 'v, T: AValue<'v2>>(&self, x: T) {
         assert_eq!(self.typ, T::static_type_id_of_value());
         unsafe {
             let p = self.pointer as *mut AValueRepr<T>;
@@ -98,6 +98,18 @@ impl<'v> Reservation<'v> {
                     payload: x,
                 },
             );
+        }
+    }
+
+    pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
+        self.do_fill(x);
+    }
+
+    pub(crate) fn fill_with_extra<'v2: 'v, T: AValue<'v2>, E: Copy>(self, x: T, extra: &[E]) {
+        self.do_fill(x);
+        unsafe {
+            let p = self.pointer as *mut AValueRepr<T>;
+            (*p).write_extra(extra);
         }
     }
 
@@ -146,12 +158,20 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
-        let p = Self::alloc_empty::<T>(&self.drop, 0);
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
+        self.reserve_with_extra::<T>(0)
+    }
+
+    // Reservation should really be an incremental type
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+        extra: usize,
+    ) -> Reservation<'v> {
+        let p = Self::alloc_empty::<T>(&self.drop, extra);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
-        let x = BlackHole(mem::size_of::<T>());
+        let x = BlackHole(mem::size_of::<T>() + extra);
         unsafe {
             ptr::write(
                 p as *mut AValueRepr<BlackHole>,

@@ -25,11 +25,12 @@ use crate::{
         layout::arena::{AValueHeader, AValueRepr},
         none::NoneType,
         string::StarlarkStr,
+        types::tuple::{FrozenTuple, Tuple},
         ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
         StarlarkValueDyn, Tracer, Value,
     },
 };
-use gazebo::{any::AnyLifetime, cast, coerce::Coerce};
+use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 use std::{any::TypeId, cmp::Ordering, fmt::Debug, mem, ptr::metadata};
 
 pub(crate) static VALUE_NONE: &AValueHeader = {
@@ -105,6 +106,14 @@ impl<'v> dyn AValue<'v> {
 
 pub(crate) fn starlark_str(len: usize) -> impl AValue<'static> + Send + Sync {
     Wrapper(Direct, unsafe { StarlarkStr::new(len) })
+}
+
+pub(crate) fn tuple_avalue<'v>(len: usize) -> impl AValue<'v> {
+    Wrapper(Direct, unsafe { Tuple::new(len) })
+}
+
+pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValue<'static> {
+    Wrapper(Direct, unsafe { FrozenTuple::new(len) })
 }
 
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
@@ -199,6 +208,60 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         Some(&self.1)
+    }
+}
+
+impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
+    fn memory_size(&self) -> usize {
+        mem::size_of::<Tuple>() + self.1.len() * mem::size_of::<Value>()
+    }
+
+    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        // This could be done without extra allocation, but it is not trivial to do that safely.
+        let frozen_values = self.1.content().try_map(|v| freezer.freeze(*v))?;
+        let fv = freezer.heap().alloc_tuple(&frozen_values);
+        unsafe {
+            me.overwrite::<Self>(fv.0.ptr_value())
+        };
+        Ok(fv)
+    }
+
+    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+        // This could be done without extra allocation, but it is not trivial to do that safely.
+        let mut content = self.1.content().to_vec();
+
+        let (v, r) = tracer.reserve_with_extra::<Self>(mem::size_of::<Value>() * content.len());
+        let x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
+
+        debug_assert_eq!(content.len(), x.1.len());
+
+        for elem in &mut content {
+            tracer.trace(elem);
+        }
+        r.fill_with_extra(x, &content);
+        v
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        None
+    }
+}
+
+impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
+    fn memory_size(&self) -> usize {
+        mem::size_of::<FrozenTuple>() + self.1.len() * mem::size_of::<FrozenValue>()
+    }
+
+    fn heap_freeze(&self, _me: &AValueHeader, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        panic!("already frozen");
+    }
+
+    fn heap_copy(&self, _me: &AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
+        panic!("shouldn't be copying frozen values");
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        None
     }
 }
 
