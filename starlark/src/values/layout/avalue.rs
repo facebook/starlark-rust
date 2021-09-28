@@ -65,6 +65,14 @@ pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
     ))
 };
 
+pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
+    const PAYLOAD: Wrapper<Direct, FrozenTuple> = Wrapper(Direct, unsafe { FrozenTuple::new(0) });
+    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    static DATA: AValueRepr<Wrapper<Direct, FrozenTuple>> =
+        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
+    &DATA.header
+};
+
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> {
@@ -217,6 +225,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     }
 
     fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
+
         // This could be done without extra allocation, but it is not trivial to do that safely.
         let frozen_values = self.1.content().try_map(|v| freezer.freeze(*v))?;
         let fv = freezer.heap().alloc_tuple(&frozen_values);
@@ -227,6 +237,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     }
 
     fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+        debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
+
         // This could be done without extra allocation, but it is not trivial to do that safely.
         let mut content = self.1.content().to_vec();
 

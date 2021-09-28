@@ -74,7 +74,7 @@ impl<'v, V: ValueLike<'v>> Debug for TupleGen<V> {
 impl<V> TupleGen<V> {
     pub const TYPE: &'static str = "tuple";
 
-    pub(crate) unsafe fn new(len: usize) -> TupleGen<V> {
+    pub(crate) const unsafe fn new(len: usize) -> TupleGen<V> {
         TupleGen { len, content: [] }
     }
 }

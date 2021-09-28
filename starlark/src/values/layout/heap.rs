@@ -22,7 +22,10 @@ use crate::{
         any::StarlarkAny,
         layout::{
             arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation, WhichBump},
-            avalue::{complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue},
+            avalue::{
+                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue,
+                VALUE_EMPTY_TUPLE,
+            },
             constant::constant_string,
             value::{FrozenValue, Value},
         },
@@ -202,6 +205,10 @@ impl FrozenHeap {
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
+        if elems.is_empty() {
+            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE);
+        }
+
         unsafe {
             let avalue = self.arena.alloc_extra_non_drop(
                 frozen_tuple_avalue(elems.len()),
@@ -387,6 +394,10 @@ impl Heap {
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
+        if elems.is_empty() {
+            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE).to_value();
+        }
+
         unsafe {
             let avalue = self.arena.borrow().alloc_extra_non_drop(
                 tuple_avalue(elems.len()),
