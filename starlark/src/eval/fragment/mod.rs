@@ -32,7 +32,7 @@ macro_rules! expr {
                 Ok($body)
             });
         }
-        ExprCompiledValue::Compiled(res)
+        res
     }};
     ($name:expr, $v1:ident, |$eval:ident| $body:expr) => {{
         let $v1 = $v1.as_compiled();
@@ -49,7 +49,7 @@ macro_rules! expr {
                 Ok($body)
             });
         }
-        ExprCompiledValue::Compiled(res)
+        res
     }};
     ($name:expr, $v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
         let $v1 = $v1.as_compiled();
@@ -68,7 +68,7 @@ macro_rules! expr {
                 Ok($body)
             });
         }
-        ExprCompiledValue::Compiled(res)
+        res
     }};
 }
 

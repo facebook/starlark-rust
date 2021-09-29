@@ -151,7 +151,6 @@ fn eval_list(x: Spanned<ExprCompiledValue>, mut clauses: Vec<ClauseCompiled>) ->
                 eval,
             )??
         })
-        .into_compiled()
     } else {
         let x = x.as_compiled();
         let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
@@ -164,7 +163,6 @@ fn eval_list(x: Spanned<ExprCompiledValue>, mut clauses: Vec<ClauseCompiled>) ->
             clauses(&mut r, eval)?;
             eval.heap().alloc(List::new(r))
         })
-        .into_compiled()
     }
 }
 
@@ -188,7 +186,6 @@ fn eval_dict(
         clauses(&mut r, eval)?;
         eval.heap().alloc(Dict::new(r))
     })
-    .into_compiled()
 }
 
 pub(crate) enum ComprCompiled {

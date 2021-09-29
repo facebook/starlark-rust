@@ -100,6 +100,18 @@ enum ParameterCompiled<T> {
 }
 
 impl<T> ParameterCompiled<T> {
+    fn map_expr<U>(self, f: impl Fn(T) -> U) -> ParameterCompiled<U> {
+        match self {
+            ParameterCompiled::Normal(n, o) => ParameterCompiled::Normal(n, o.map(f)),
+            ParameterCompiled::WithDefaultValue(n, o, t) => {
+                ParameterCompiled::WithDefaultValue(n, o.map(&f), f(t))
+            }
+            ParameterCompiled::NoArgs => ParameterCompiled::NoArgs,
+            ParameterCompiled::Args(n, o) => ParameterCompiled::Args(n, o.map(f)),
+            ParameterCompiled::KwArgs(n, o) => ParameterCompiled::KwArgs(n, o.map(f)),
+        }
+    }
+
     fn param_name(&self) -> Option<&ParameterName> {
         match self {
             Self::Normal(x, _) => Some(x),
@@ -154,110 +166,26 @@ pub(crate) struct DefInfo {
     pub(crate) returns_type_is: Option<FrozenStringValue>,
 }
 
-impl Compiler<'_> {
-    fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
-        let binding_id = ident.1.expect("no binding for parameter");
-        let binding = self.scope_data.get_binding(binding_id);
-        ParameterName {
-            name: ident.node.0,
-            captured: binding.captured,
-        }
-    }
+pub(crate) struct DefCompiled {
+    function_name: String,
+    params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
+    return_type: Option<Box<Spanned<ExprCompiledValue>>>,
+    info: FrozenRef<DefInfo>,
+}
 
-    fn parameter(&mut self, x: CstParameter) -> Spanned<ParameterCompiled<ExprCompiled>> {
-        Spanned {
-            span: x.span,
-            node: match x.node {
-                ParameterP::Normal(x, t) => ParameterCompiled::Normal(
-                    self.parameter_name(x),
-                    self.expr_opt(t)
-                        .map(Spanned::<ExprCompiledValue>::as_compiled),
-                ),
-                ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
-                    self.parameter_name(x),
-                    self.expr_opt(t)
-                        .map(Spanned::<ExprCompiledValue>::as_compiled),
-                    self.expr(*v).as_compiled(),
-                ),
-                ParameterP::NoArgs => ParameterCompiled::NoArgs,
-                ParameterP::Args(x, t) => ParameterCompiled::Args(
-                    self.parameter_name(x),
-                    self.expr_opt(t)
-                        .map(Spanned::<ExprCompiledValue>::as_compiled),
-                ),
-                ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
-                    self.parameter_name(x),
-                    self.expr_opt(t)
-                        .map(Spanned::<ExprCompiledValue>::as_compiled),
-                ),
-            },
-        }
-    }
-
-    /// If a statement is `return type(x) == "y"` where `x` is a first slot.
-    fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
-        match stmt.first() {
-            Some(StmtCompiledValue::Return(
-                _,
-                Some(Spanned {
-                    node:
-                        ExprCompiledValue::TypeIs(
-                            // Slot 0 is a slot for the first function argument.
-                            box Spanned {
-                                node: ExprCompiledValue::Local(LocalSlotId(0), ..),
-                                ..
-                            },
-                            t,
-                            MaybeNot::Id,
-                        ),
-                    ..
-                }),
-            )) => Some(*t),
-            _ => None,
-        }
-    }
-
-    pub fn function(
-        &mut self,
-        name: &str,
-        scope_id: ScopeId,
-        params: Vec<CstParameter>,
-        return_type: Option<Box<CstExpr>>,
-        suite: CstStmt,
-    ) -> ExprCompiledValue {
-        let file = self.codemap.file_span(suite.span);
-        let function_name = format!("{}.{}", file.file.filename(), name);
-
-        // The parameters run in the scope of the parent, so compile them with the outer
-        // scope
-        let params = params.into_map(|x| self.parameter(x));
-        let return_type = return_type.map(|return_type| Spanned {
-            span: return_type.span,
-            node: self.expr(*return_type).as_compiled(),
+impl DefCompiled {
+    pub(crate) fn as_compiled(self) -> ExprCompiled {
+        let DefCompiled {
+            function_name,
+            params,
+            return_type,
+            info,
+        } = self;
+        let params = params.into_map(|p| p.into_map(|p| p.map_expr(|e| e.as_compiled())));
+        let return_type = return_type.map(|t| Spanned {
+            span: t.span,
+            node: t.as_compiled(),
         });
-
-        self.enter_scope(scope_id);
-
-        let docstring = DocString::extract_raw_starlark_docstring(&suite);
-        let body = self.stmt(suite, false);
-        let scope_names = self.exit_scope();
-
-        let scope_names = mem::take(scope_names);
-
-        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
-            Self::is_return_type_is(&body)
-        } else {
-            None
-        };
-
-        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
-            codemap: self.codemap.dupe(),
-            docstring,
-            scope_names,
-            body: body.as_compiled(self),
-            returns_type_is,
-        });
-
         expr!("def", |eval| {
             let mut parameters =
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
@@ -312,6 +240,112 @@ impl Compiler<'_> {
                 info,
                 eval,
             )
+        })
+    }
+}
+
+impl Compiler<'_> {
+    fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
+        let binding_id = ident.1.expect("no binding for parameter");
+        let binding = self.scope_data.get_binding(binding_id);
+        ParameterName {
+            name: ident.node.0,
+            captured: binding.captured,
+        }
+    }
+
+    fn parameter(
+        &mut self,
+        x: CstParameter,
+    ) -> Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>> {
+        Spanned {
+            span: x.span,
+            node: match x.node {
+                ParameterP::Normal(x, t) => {
+                    ParameterCompiled::Normal(self.parameter_name(x), self.expr_opt(t))
+                }
+                ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
+                    self.parameter_name(x),
+                    self.expr_opt(t),
+                    self.expr(*v),
+                ),
+                ParameterP::NoArgs => ParameterCompiled::NoArgs,
+                ParameterP::Args(x, t) => {
+                    ParameterCompiled::Args(self.parameter_name(x), self.expr_opt(t))
+                }
+                ParameterP::KwArgs(x, t) => {
+                    ParameterCompiled::KwArgs(self.parameter_name(x), self.expr_opt(t))
+                }
+            },
+        }
+    }
+
+    /// If a statement is `return type(x) == "y"` where `x` is a first slot.
+    fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
+        match stmt.first() {
+            Some(StmtCompiledValue::Return(
+                _,
+                Some(Spanned {
+                    node:
+                        ExprCompiledValue::TypeIs(
+                            // Slot 0 is a slot for the first function argument.
+                            box Spanned {
+                                node: ExprCompiledValue::Local(LocalSlotId(0), ..),
+                                ..
+                            },
+                            t,
+                            MaybeNot::Id,
+                        ),
+                    ..
+                }),
+            )) => Some(*t),
+            _ => None,
+        }
+    }
+
+    pub fn function(
+        &mut self,
+        name: &str,
+        scope_id: ScopeId,
+        params: Vec<CstParameter>,
+        return_type: Option<Box<CstExpr>>,
+        suite: CstStmt,
+    ) -> ExprCompiledValue {
+        let file = self.codemap.file_span(suite.span);
+        let function_name = format!("{}.{}", file.file.filename(), name);
+
+        // The parameters run in the scope of the parent, so compile them with the outer
+        // scope
+        let params = params.into_map(|x| self.parameter(x));
+        let return_type = return_type.map(|return_type| box self.expr(*return_type));
+
+        self.enter_scope(scope_id);
+
+        let docstring = DocString::extract_raw_starlark_docstring(&suite);
+        let body = self.stmt(suite, false);
+        let scope_names = self.exit_scope();
+
+        let scope_names = mem::take(scope_names);
+
+        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
+            Self::is_return_type_is(&body)
+        } else {
+            None
+        };
+
+        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
+            codemap: self.codemap.dupe(),
+            docstring,
+            scope_names,
+            body: body.as_compiled(self),
+            returns_type_is,
+        });
+
+        ExprCompiledValue::Def(DefCompiled {
+            function_name,
+            params,
+            return_type,
+            info,
         })
     }
 }
