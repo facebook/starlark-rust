@@ -220,7 +220,7 @@ impl<V> ParametersSpec<V> {
     /// Produce an approximate signature for the function, combining the name and arguments.
     pub fn signature(&self) -> String {
         let mut collector = String::new();
-        self.collect_repr(&mut collector);
+        self.collect_signature(&mut collector);
         collector
     }
 
@@ -242,7 +242,7 @@ impl<V> ParametersSpec<V> {
     }
 
     // Generate a good error message for it
-    pub(crate) fn collect_repr(&self, collector: &mut String) {
+    pub(crate) fn collect_signature(&self, collector: &mut String) {
         collector.push_str(&self.function_name);
 
         // We used to make the "name" of a function include all its parameters, but that is a lot of
