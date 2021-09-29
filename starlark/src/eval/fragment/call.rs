@@ -18,7 +18,7 @@
 //! Compile function calls.
 
 use crate::{
-    codemap::Span,
+    codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
     eval::{
         compiler::{
@@ -40,14 +40,14 @@ use std::mem::MaybeUninit;
 
 #[derive(Default)]
 struct ArgsCompiledValue {
-    pos_named: Vec<ExprCompiledValue>,
+    pos_named: Vec<Spanned<ExprCompiledValue>>,
     /// Named arguments compiled.
     ///
     /// Note names are guaranteed to be unique here because names are validated in AST:
     /// named arguments in [`Expr::Call`] are unique.
     names: Vec<(Symbol, FrozenStringValue)>,
-    args: Option<ExprCompiledValue>,
-    kwargs: Option<ExprCompiledValue>,
+    args: Option<Spanned<ExprCompiledValue>>,
+    kwargs: Option<Spanned<ExprCompiledValue>>,
 }
 
 #[derive(Default)]
@@ -326,7 +326,7 @@ impl Compiler<'_> {
     fn expr_call_fun_compiled(
         &mut self,
         span: Span,
-        left: ExprCompiledValue,
+        left: Spanned<ExprCompiledValue>,
         args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         if let Some(left) = left.as_value() {

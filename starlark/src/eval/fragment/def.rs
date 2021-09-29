@@ -170,21 +170,25 @@ impl Compiler<'_> {
             node: match x.node {
                 ParameterP::Normal(x, t) => ParameterCompiled::Normal(
                     self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                    self.expr_opt(t)
+                        .map(Spanned::<ExprCompiledValue>::as_compiled),
                 ),
                 ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
                     self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                    self.expr_opt(t)
+                        .map(Spanned::<ExprCompiledValue>::as_compiled),
                     self.expr(*v).as_compiled(),
                 ),
                 ParameterP::NoArgs => ParameterCompiled::NoArgs,
                 ParameterP::Args(x, t) => ParameterCompiled::Args(
                     self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                    self.expr_opt(t)
+                        .map(Spanned::<ExprCompiledValue>::as_compiled),
                 ),
                 ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
                     self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
+                    self.expr_opt(t)
+                        .map(Spanned::<ExprCompiledValue>::as_compiled),
                 ),
             },
         }
@@ -195,12 +199,19 @@ impl Compiler<'_> {
         match stmt.first() {
             Some(StmtCompiledValue::Return(
                 _,
-                Some(ExprCompiledValue::TypeIs(
-                    // Slot 0 is a slot for the first function argument.
-                    box ExprCompiledValue::Local(LocalSlotId(0), ..),
-                    t,
-                    MaybeNot::Id,
-                )),
+                Some(Spanned {
+                    node:
+                        ExprCompiledValue::TypeIs(
+                            // Slot 0 is a slot for the first function argument.
+                            box Spanned {
+                                node: ExprCompiledValue::Local(LocalSlotId(0), ..),
+                                ..
+                            },
+                            t,
+                            MaybeNot::Id,
+                        ),
+                    ..
+                }),
             )) => Some(*t),
             _ => None,
         }

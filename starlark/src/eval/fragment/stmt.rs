@@ -50,7 +50,7 @@ pub(crate) type StmtCompiled =
 
 pub(crate) enum StmtCompiledValue {
     Compiled(StmtCompiled),
-    Return(Span, Option<ExprCompiledValue>),
+    Return(Span, Option<Spanned<ExprCompiledValue>>),
 }
 
 impl StmtCompiledValue {
@@ -255,7 +255,7 @@ impl Compiler<'_> {
         &mut self,
         span_stmt: Span,
         lhs: CstAssign,
-        rhs: ExprCompiledValue,
+        rhs: Spanned<ExprCompiledValue>,
         op: AssignModifyOp,
     ) -> StmtsCompiled {
         let span_lhs = lhs.span;
@@ -478,7 +478,7 @@ impl Compiler<'_> {
     fn stmt_if_compiled(
         &mut self,
         span: Span,
-        cond: ExprCompiledValue,
+        cond: Spanned<ExprCompiledValue>,
         cond_is_positive: bool,
         then_block: StmtsCompiled,
     ) -> StmtsCompiled {
@@ -552,9 +552,16 @@ impl Compiler<'_> {
         }
     }
 
-    fn stmt_expr_compiled(&mut self, span: Span, expr: ExprCompiledValue) -> StmtsCompiled {
+    fn stmt_expr_compiled(
+        &mut self,
+        span: Span,
+        expr: Spanned<ExprCompiledValue>,
+    ) -> StmtsCompiled {
         match expr {
-            ExprCompiledValue::Value(_) => StmtsCompiled::empty(),
+            Spanned {
+                node: ExprCompiledValue::Value(_),
+                ..
+            } => StmtsCompiled::empty(),
             e => {
                 let e = e.as_compiled();
                 stmt!(self, "expr", span, |eval| {
@@ -574,9 +581,11 @@ impl Compiler<'_> {
         let span = stmt.span;
         match stmt.node {
             StmtP::Def(name, params, return_type, suite, scope_id) => {
-                let rhs = self
-                    .function(&name.0, scope_id, params, return_type, *suite)
-                    .as_compiled();
+                let rhs = Spanned {
+                    span,
+                    node: self.function(&name.0, scope_id, params, return_type, *suite),
+                }
+                .as_compiled();
                 let lhs = self.assign(Spanned {
                     span: name.span,
                     node: AssignP::Identifier(name),

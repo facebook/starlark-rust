@@ -50,8 +50,8 @@ pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
 pub(crate) enum Conditional {
     True,
     False,
-    Normal(ExprCompiledValue),
-    Negate(ExprCompiledValue),
+    Normal(Spanned<ExprCompiledValue>),
+    Negate(Spanned<ExprCompiledValue>),
 }
 
 impl Compiler<'_> {
@@ -63,7 +63,7 @@ impl Compiler<'_> {
             } => (false, self.expr(expr)),
             _ => (true, self.expr(expr)),
         };
-        match val {
+        match val.node {
             ExprCompiledValue::Value(x) => {
                 if x.get_ref().to_bool() == expect {
                     Conditional::True
@@ -71,11 +71,11 @@ impl Compiler<'_> {
                     Conditional::False
                 }
             }
-            v => {
+            _ => {
                 if expect {
-                    Conditional::Normal(v)
+                    Conditional::Normal(val)
                 } else {
-                    Conditional::Negate(v)
+                    Conditional::Negate(val)
                 }
             }
         }
@@ -97,9 +97,10 @@ impl Compiler<'_> {
             _ => {}
         }
         match self.expr(expr) {
-            ExprCompiledValue::Value(x) => {
-                ExprCompiledValue::Value(x.to_value().get_type_value().unpack())
-            }
+            Spanned {
+                node: ExprCompiledValue::Value(x),
+                ..
+            } => ExprCompiledValue::Value(x.to_value().get_type_value().unpack()),
             x => ExprCompiledValue::Type(box x),
         }
     }

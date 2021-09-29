@@ -59,7 +59,7 @@ impl Compiler<'_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
         let clauses = compile_clauses(for_, clauses, self);
-        let k = self.expr_spanned(k);
+        let k = self.expr(k);
         let v = self.expr(v);
         ExprCompiledValue::Compr(ComprCompiled::Dict(box (k, v), clauses))
     }
@@ -69,7 +69,10 @@ impl Compiler<'_> {
 fn compile_ifs(
     clauses: &mut Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
-) -> (Option<ForClauseP<CstPayload>>, Vec<ExprCompiledValue>) {
+) -> (
+    Option<ForClauseP<CstPayload>>,
+    Vec<Spanned<ExprCompiledValue>>,
+) {
     let mut ifs = Vec::new();
     while let Some(x) = clauses.pop() {
         match x {
@@ -123,7 +126,7 @@ fn compile_clauses(
     }
 }
 
-fn eval_list(x: ExprCompiledValue, mut clauses: Vec<ClauseCompiled>) -> ExprCompiled {
+fn eval_list(x: Spanned<ExprCompiledValue>, mut clauses: Vec<ClauseCompiled>) -> ExprCompiled {
     if clauses.len() == 1 && clauses[0].ifs.is_empty() {
         let c = clauses.pop().unwrap();
         let ClauseCompiled {
@@ -148,7 +151,7 @@ fn eval_list(x: ExprCompiledValue, mut clauses: Vec<ClauseCompiled>) -> ExprComp
                 eval,
             )??
         })
-        .as_compiled()
+        .into_compiled()
     } else {
         let x = x.as_compiled();
         let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
@@ -161,16 +164,16 @@ fn eval_list(x: ExprCompiledValue, mut clauses: Vec<ClauseCompiled>) -> ExprComp
             clauses(&mut r, eval)?;
             eval.heap().alloc(List::new(r))
         })
-        .as_compiled()
+        .into_compiled()
     }
 }
 
 fn eval_dict(
-    k: ExprCompiledValue,
-    k_span: Span,
-    v: ExprCompiledValue,
+    k: Spanned<ExprCompiledValue>,
+    v: Spanned<ExprCompiledValue>,
     clauses: Vec<ClauseCompiled>,
 ) -> ExprCompiled {
+    let k_span = k.span;
     let k = k.as_compiled();
     let v = v.as_compiled();
     let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, eval| {
@@ -185,13 +188,13 @@ fn eval_dict(
         clauses(&mut r, eval)?;
         eval.heap().alloc(Dict::new(r))
     })
-    .as_compiled()
+    .into_compiled()
 }
 
 pub(crate) enum ComprCompiled {
-    List(Box<ExprCompiledValue>, Vec<ClauseCompiled>),
+    List(Box<Spanned<ExprCompiledValue>>, Vec<ClauseCompiled>),
     Dict(
-        Box<(Spanned<ExprCompiledValue>, ExprCompiledValue)>,
+        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
         Vec<ClauseCompiled>,
     ),
 }
@@ -200,16 +203,16 @@ impl ComprCompiled {
     pub(crate) fn as_compiled(self) -> ExprCompiled {
         match self {
             ComprCompiled::List(box x, clauses) => eval_list(x, clauses),
-            ComprCompiled::Dict(box (k, v), clauses) => eval_dict(k.node, k.span, v, clauses),
+            ComprCompiled::Dict(box (k, v), clauses) => eval_dict(k, v, clauses),
         }
     }
 }
 
 pub(crate) struct ClauseCompiled {
     var: AssignCompiled,
-    over: ExprCompiledValue,
+    over: Spanned<ExprCompiledValue>,
     over_span: Span,
-    ifs: Vec<ExprCompiledValue>,
+    ifs: Vec<Spanned<ExprCompiledValue>>,
 }
 
 // FIXME: These two expressions are identical, but I need higher-kinded
