@@ -80,7 +80,7 @@ impl Display for Value<'_> {
 
 impl Display for FrozenValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", Value::new_frozen(*self).to_str())
+        Display::fmt(&self.to_value(), f)
     }
 }
 

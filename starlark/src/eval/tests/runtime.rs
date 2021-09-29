@@ -22,7 +22,7 @@ use crate::{
     assert,
     assert::Assert,
     environment::GlobalsBuilder,
-    values::{any::StarlarkAny, Heap},
+    values::{any::StarlarkAny, FrozenHeap, Heap},
 };
 use derive_more::Display;
 use once_cell::sync::Lazy;
@@ -245,10 +245,18 @@ fn test_display_debug() {
 )"#
     );
 
-    let val = heap.alloc("test");
-    assert_eq!(format!("{}", val), "\"test\"");
-    assert_eq!(val.to_repr(), "\"test\"");
-    assert_eq!(val.to_str(), "test");
-    assert_eq!(format!("{:?}", val), "Value(\"test\")");
-    assert_eq!(format!("{:#?}", val), "Value(\n    \"test\",\n)");
+    let v = heap.alloc("test");
+    assert_eq!(format!("{}", v), "\"test\"");
+    assert_eq!(v.to_repr(), "\"test\"");
+    assert_eq!(v.to_str(), "test");
+    assert_eq!(format!("{:?}", v), "Value(\"test\")");
+    assert_eq!(format!("{:#?}", v), "Value(\n    \"test\",\n)");
+
+    let frozen_heap = FrozenHeap::new();
+    let v = frozen_heap.alloc("test");
+    assert_eq!(format!("{}", v), "\"test\"");
+    assert_eq!(v.to_value().to_repr(), "\"test\"");
+    assert_eq!(v.to_value().to_str(), "test");
+    assert_eq!(format!("{:?}", v), "FrozenValue(\"test\")");
+    assert_eq!(format!("{:#?}", v), "FrozenValue(\n    \"test\",\n)");
 }
