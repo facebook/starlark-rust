@@ -292,6 +292,7 @@
 //! use starlark::syntax::{AstModule, Dialect};
 //! use starlark::values::{Heap, SimpleValue, StarlarkValue, Value, ValueError, ValueLike};
 //! use starlark::{starlark_type, starlark_simple_value};
+//! use std::fmt::{self, Display, Write};
 //!
 //! // Define complex numbers
 //! #[derive(Debug, PartialEq, Eq)]
@@ -301,12 +302,18 @@
 //! }
 //! starlark_simple_value!(Complex);
 //!
+//! impl Display for Complex {
+//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         write!(f, "{} + {}i", self.real, self.imaginary)
+//!     }
+//! }
+//!
 //! impl<'v> StarlarkValue<'v> for Complex {
 //!     starlark_type!("complex");
 //!
 //!     // How we display them
 //!     fn collect_repr(&self, collector: &mut String) {
-//!         collector.push_str(&format!("{} + {}i", self.real, self.imaginary))
+//!         write!(collector, "{}", self).unwrap()
 //!     }
 //!
 //!     // How we add them
