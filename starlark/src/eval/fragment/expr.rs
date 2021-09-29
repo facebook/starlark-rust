@@ -26,7 +26,10 @@ use crate::{
             scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
             Compiler, ExprEvalException,
         },
-        fragment::known::{list_to_tuple, Conditional},
+        fragment::{
+            compr::ComprCompiled,
+            known::{list_to_tuple, Conditional},
+        },
         runtime::{evaluator::Evaluator, slots::LocalSlotId},
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
@@ -69,6 +72,8 @@ pub(crate) enum ExprCompiledValue {
     Type(Box<ExprCompiledValue>),
     /// `maybe_not(type(x) == "y")`
     TypeIs(Box<ExprCompiledValue>, FrozenStringValue, MaybeNot),
+    /// Comprehension.
+    Compr(ComprCompiled),
 }
 
 impl ExprCompiledValue {
@@ -100,6 +105,7 @@ impl ExprCompiledValue {
                 })
                 .as_compiled()
             }
+            ExprCompiledValue::Compr(c) => c.as_compiled(),
         }
     }
 }
