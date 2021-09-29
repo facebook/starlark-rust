@@ -24,7 +24,7 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     codemap::{Span, Spanned},
-    environment::EnvironmentError,
+    environment::{slots::ModuleSlotId, EnvironmentError},
     eval::{
         compiler::{
             expr_throw,
@@ -35,7 +35,10 @@ use crate::{
             expr::ExprCompiledValue,
             known::{list_to_tuple, Conditional},
         },
-        runtime::evaluator::{Evaluator, GC_THRESHOLD},
+        runtime::{
+            evaluator::{Evaluator, GC_THRESHOLD},
+            slots::LocalSlotId,
+        },
     },
     syntax::ast::{AssignOp, AssignP, StmtP},
     values::{list::List, Heap, Value, ValueError},
@@ -174,6 +177,52 @@ pub(crate) type AssignCompiled = Box<
         + Send
         + Sync,
 >;
+pub(crate) enum AssignCompiledValue {
+    Dot(Spanned<ExprCompiledValue>, String),
+    ArrayIndirection(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
+    Tuple(Vec<Spanned<AssignCompiledValue>>),
+    Local(LocalSlotId, Captured),
+    Module(ModuleSlotId, String),
+}
+
+impl Spanned<AssignCompiledValue> {
+    pub(crate) fn as_compiled(self) -> AssignCompiled {
+        let span = self.span;
+        match self.node {
+            AssignCompiledValue::Dot(e, s) => {
+                let e = e.as_compiled();
+                box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
+            }
+            AssignCompiledValue::ArrayIndirection(array, index) => {
+                let array = array.as_compiled();
+                let index = index.as_compiled();
+                box move |value, eval| {
+                    expr_throw(array(eval)?.set_at(index(eval)?, value), span, eval)
+                }
+            }
+            AssignCompiledValue::Tuple(v) => {
+                let v = v.into_map(|v| v.as_compiled());
+                box move |value, eval| eval_assign_list(&v, span, value, eval)
+            }
+            AssignCompiledValue::Local(slot, Captured::Yes) => box move |value, eval| {
+                eval.set_slot_local_captured(slot, value);
+                Ok(())
+            },
+            AssignCompiledValue::Local(slot, Captured::No) => box move |value, eval| {
+                eval.set_slot_local(slot, value);
+                Ok(())
+            },
+            AssignCompiledValue::Module(slot, name) => {
+                box move |value, eval| {
+                    // Make sure that `ComplexValue`s get their name as soon as possible
+                    value.export_as(&name, eval);
+                    eval.set_slot_module(slot, value);
+                    Ok(())
+                }
+            }
+        }
+    }
+}
 
 fn eval_assign_list<'v>(
     lvalues: &[AssignCompiled],
@@ -204,22 +253,22 @@ pub(crate) type AssignModifyOp =
     for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>;
 
 impl Compiler<'_> {
-    pub fn assign(&mut self, expr: CstAssign) -> AssignCompiled {
+    pub fn assign(&mut self, expr: CstAssign) -> Spanned<AssignCompiledValue> {
         let span = expr.span;
-        match expr.node {
+        let assign = match expr.node {
             AssignP::Dot(e, s) => {
-                let e = self.expr(*e).as_compiled();
+                let e = self.expr(*e);
                 let s = s.node;
-                box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
+                AssignCompiledValue::Dot(e, s)
             }
             AssignP::ArrayIndirection(box (e, idx)) => {
-                let e = self.expr(e).as_compiled();
-                let idx = self.expr(idx).as_compiled();
-                box move |value, eval| expr_throw(e(eval)?.set_at(idx(eval)?, value), span, eval)
+                let e = self.expr(e);
+                let idx = self.expr(idx);
+                AssignCompiledValue::ArrayIndirection(e, idx)
             }
             AssignP::Tuple(v) => {
                 let v = v.into_map(|x| self.assign(x));
-                box move |value, eval| eval_assign_list(&v, span, value, eval)
+                AssignCompiledValue::Tuple(v)
             }
             AssignP::Identifier(ident) => {
                 let name = ident.node.0;
@@ -232,23 +281,12 @@ impl Compiler<'_> {
                     .slot
                     .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
                 match (slot, binding.captured) {
-                    (Slot::Local(slot), Captured::Yes) => box move |value, eval| {
-                        eval.set_slot_local_captured(slot, value);
-                        Ok(())
-                    },
-                    (Slot::Local(slot), Captured::No) => box move |value, eval| {
-                        eval.set_slot_local(slot, value);
-                        Ok(())
-                    },
-                    (Slot::Module(slot), _) => box move |value, eval| {
-                        // Make sure that `ComplexValue`s get their name as soon as possible
-                        value.export_as(&name, eval);
-                        eval.set_slot_module(slot, value);
-                        Ok(())
-                    },
+                    (Slot::Local(slot), captured) => AssignCompiledValue::Local(slot, captured),
+                    (Slot::Module(slot), _) => AssignCompiledValue::Module(slot, name),
                 }
             }
-        }
+        };
+        Spanned { node: assign, span }
     }
 
     fn assign_modify(
@@ -586,10 +624,12 @@ impl Compiler<'_> {
                     node: self.function(&name.0, scope_id, params, return_type, *suite),
                 }
                 .as_compiled();
-                let lhs = self.assign(Spanned {
-                    span: name.span,
-                    node: AssignP::Identifier(name),
-                });
+                let lhs = self
+                    .assign(Spanned {
+                        span: name.span,
+                        node: AssignP::Identifier(name),
+                    })
+                    .as_compiled();
                 stmt!(self, "define_def", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
                 })
@@ -597,7 +637,7 @@ impl Compiler<'_> {
             StmtP::For(var, box (over, body)) => {
                 let over = list_to_tuple(over);
                 let over_span = over.span;
-                let var = self.assign(var);
+                let var = self.assign(var).as_compiled();
                 let over = self.expr(over).as_compiled();
                 let st = self.stmt(body, false).as_compiled(self);
                 stmt!(self, "for", span, |eval| {
@@ -638,7 +678,7 @@ impl Compiler<'_> {
             StmtP::Expression(e) => self.stmt_expr(e),
             StmtP::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs).as_compiled();
-                let lhs = self.assign(lhs);
+                let lhs = self.assign(lhs).as_compiled();
                 stmt!(self, "assign", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
                 })

@@ -29,7 +29,7 @@ use crate::{
         fragment::{
             expr::{ExprCompiled, ExprCompiledValue},
             known::list_to_tuple,
-            stmt::AssignCompiled,
+            stmt::AssignCompiledValue,
         },
         runtime::evaluator::Evaluator,
         ExprEvalException,
@@ -137,6 +137,7 @@ fn eval_list(x: Spanned<ExprCompiledValue>, mut clauses: Vec<ClauseCompiled>) ->
         } = c;
         assert!(ifs.is_empty());
         let x = x.as_compiled();
+        let var = var.as_compiled();
         expr!("list_comp_map", over, |eval| {
             expr_throw(
                 over.with_iterator(eval.heap(), |it| -> Result<_, ExprEvalException> {
@@ -206,7 +207,7 @@ impl ComprCompiled {
 }
 
 pub(crate) struct ClauseCompiled {
-    var: AssignCompiled,
+    var: Spanned<AssignCompiledValue>,
     over: Spanned<ExprCompiledValue>,
     over_span: Span,
     ifs: Vec<Spanned<ExprCompiledValue>>,
@@ -241,6 +242,7 @@ fn eval_one_dimensional_comprehension_dict(
             ifs,
         } = c;
         let over = over.as_compiled();
+        let var = var.as_compiled();
         let ifs = ifs.into_map(|c| c.as_compiled());
         let rest = eval_one_dimensional_comprehension_dict(clauses, add);
         box move |accumulator, eval| {
@@ -282,6 +284,7 @@ fn eval_one_dimensional_comprehension_list(
             ifs,
         } = c;
         let over = over.as_compiled();
+        let var = var.as_compiled();
         let ifs = ifs.into_map(|c| c.as_compiled());
         let rest = eval_one_dimensional_comprehension_list(clauses, add);
         box move |accumulator, eval| {
