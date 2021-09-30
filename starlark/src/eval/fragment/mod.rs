@@ -82,12 +82,13 @@ macro_rules! stmt {
     ($self:ident, $name:expr, $span:ident, |$eval:ident| $body:expr) => {{
         paste::paste! {
             fn [<ann_stmt_ $name>](
+                span: Span,
                 f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
                     + Send + Sync + 'static,
             ) -> StmtsCompiled {
-                StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| f(eval)))
+                StmtsCompiled::one(Spanned { node: StmtCompiledValue::Compiled(box move |eval| f(eval)), span })
             }
-            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>](move |$eval| {
+            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>]($span, move |$eval| {
                 $body;
                 #[allow(unreachable_code)]
                 Ok(())

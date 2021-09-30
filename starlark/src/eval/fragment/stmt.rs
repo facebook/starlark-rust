@@ -53,20 +53,19 @@ pub(crate) type StmtCompiled =
 
 pub(crate) enum StmtCompiledValue {
     Compiled(StmtCompiled),
-    Return(Span, Option<Spanned<ExprCompiledValue>>),
+    Return(Option<Spanned<ExprCompiledValue>>),
 }
 
-impl StmtCompiledValue {
+impl Spanned<StmtCompiledValue> {
     pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
-        match self {
+        let span = self.span;
+        match self.node {
             StmtCompiledValue::Compiled(c) => c,
-            StmtCompiledValue::Return(span, None) => {
-                stmt!(compiler, "return_none", span, |_eval| {
-                    return Err(EvalException::Return(Value::new_none()));
-                })
-                .as_compiled(compiler)
-            }
-            StmtCompiledValue::Return(span, Some(e)) => {
+            StmtCompiledValue::Return(None) => stmt!(compiler, "return_none", span, |_eval| {
+                return Err(EvalException::Return(Value::new_none()));
+            })
+            .as_compiled(compiler),
+            StmtCompiledValue::Return(Some(e)) => {
                 let e = e.as_compiled();
                 stmt!(compiler, "return", span, |eval| {
                     return Err(EvalException::Return(e(eval)?));
@@ -105,14 +104,14 @@ impl<T> SmallVec1<T> {
     }
 }
 
-pub(crate) struct StmtsCompiled(SmallVec1<StmtCompiledValue>);
+pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiledValue>>);
 
 impl StmtsCompiled {
     pub(crate) fn empty() -> StmtsCompiled {
         StmtsCompiled(SmallVec1::Empty)
     }
 
-    pub(crate) fn one(stmt: StmtCompiledValue) -> StmtsCompiled {
+    pub(crate) fn one(stmt: Spanned<StmtCompiledValue>) -> StmtsCompiled {
         StmtsCompiled(SmallVec1::One(stmt))
     }
 
@@ -156,7 +155,7 @@ impl StmtsCompiled {
         }
     }
 
-    pub(crate) fn first(&self) -> Option<&StmtCompiledValue> {
+    pub(crate) fn first(&self) -> Option<&Spanned<StmtCompiledValue>> {
         match &self.0 {
             SmallVec1::Empty => None,
             SmallVec1::One(s) => Some(s),
@@ -487,16 +486,20 @@ impl Compiler<'_> {
         assert!(stmt.len() == 1);
         if self.has_before_stmt {
             let stmt = stmt.as_compiled(self);
-            StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
-                before_stmt(span, eval);
-                stmt(eval)
-            }))
+            StmtsCompiled::one(Spanned {
+                node: StmtCompiledValue::Compiled(box move |eval| {
+                    before_stmt(span, eval);
+                    stmt(eval)
+                }),
+                span,
+            })
         } else {
             stmt
         }
     }
 
     pub(crate) fn stmt(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {
+        let span = stmt.span;
         let is_statements = matches!(&stmt.node, StmtP::Statements(_));
         let res = self.stmt_direct(stmt, allow_gc);
         // No point inserting a GC point around statements, since they will contain inner statements we can do
@@ -504,10 +507,13 @@ impl Compiler<'_> {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
             let res = res.as_compiled(self);
-            StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
-                possible_gc(eval);
-                res(eval)
-            }))
+            StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiledValue::Compiled(box move |eval| {
+                    possible_gc(eval);
+                    res(eval)
+                }),
+            })
         } else {
             res
         }
@@ -661,9 +667,10 @@ impl Compiler<'_> {
                     )??;
                 })
             }
-            StmtP::Return(e) => {
-                StmtsCompiled::one(StmtCompiledValue::Return(span, e.map(|e| self.expr(e))))
-            }
+            StmtP::Return(e) => StmtsCompiled::one(Spanned {
+                node: StmtCompiledValue::Return(e.map(|e| self.expr(e))),
+                span,
+            }),
             StmtP::If(cond, box then_block) => self.stmt_if(span, cond, then_block, allow_gc),
             StmtP::IfElse(cond, box (then_block, else_block)) => {
                 self.stmt_if_else(span, cond, then_block, else_block, allow_gc)
