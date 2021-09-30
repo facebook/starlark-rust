@@ -62,11 +62,10 @@ impl Num {
         match self {
             Self::Int(i) => Some(i),
             Self::Float(f) => {
-                let int_candidate = f.trunc();
-                if f == int_candidate && int_candidate <= i32::MAX as f64 && int_candidate >= i32::MIN as f64 {
-                    Some(f as i32)
+                let int_candidate = f as i32;
+                if f == int_candidate as f64 {
+                    Some(int_candidate)
                 } else {
-                    // Has fractional part or out of bounds -> not in range.
                     None
                 }
             }
@@ -83,5 +82,30 @@ impl From<i32> for Num {
 impl From<f64> for Num {
     fn from(f: f64) -> Self {
         Self::Float(f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_conversion_to_int() {
+        assert_eq!(Num::Int(0).as_int(), Some(0));
+        assert_eq!(Num::Int(42).as_int(), Some(42));
+        assert_eq!(Num::Int(-42).as_int(), Some(-42));
+
+        assert_eq!(Num::Float(0_f64).as_int(), Some(0));
+        assert_eq!(Num::Float(42_f64).as_int(), Some(42));
+        assert_eq!(Num::Float(-42_f64).as_int(), Some(-42));
+
+        assert_eq!(Num::Float(i32::MIN as f64).as_int(), Some(i32::MIN));
+        assert_eq!(Num::Float(i32::MAX as f64).as_int(), Some(i32::MAX));
+
+        assert_eq!(Num::Float(42.75).as_int(), None);
+        assert_eq!(Num::Float(-42.75).as_int(), None);
+        assert_eq!(Num::Float(f64::NAN).as_int(), None);
+        assert_eq!(Num::Float(f64::INFINITY).as_int(), None);
+        assert_eq!(Num::Float(f64::NEG_INFINITY).as_int(), None);
     }
 }
