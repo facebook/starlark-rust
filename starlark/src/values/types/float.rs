@@ -73,6 +73,8 @@ impl<'v> StarlarkValue<'v> for f64 {
             s.push_str("nan")
         } else if self.is_infinite() {
             s.push_str(if self.is_sign_positive() { "+inf" } else { "-inf" })
+        } else if self.fract() == 0.0 {
+            s.push_str(&format!("{:.1}", self))
         } else {
             s.push_str(&self.to_string())
         }
@@ -205,6 +207,15 @@ mod tests {
 1.0 > 0
 0.0 < float("nan")
 float("+inf") < float("nan")
+"#,
+        );
+    }
+
+    #[test]
+    fn test_comparisons_by_sorting() {
+        assert::all_true(
+            r#"
+sorted([float('inf'), float('-inf'), float('nan'), 1e300, -1e300, 1.0, -1.0, 1, -1, 1e-300, -1e-300, 0, 0.0, float('-0.0'), 1e-300, -1e-300]) == [float('-inf'), -1e+300, -1.0, -1, -1e-300, -1e-300, 0, 0.0, -0.0, 1e-300, 1e-300, 1.0, 1, 1e+300, float('+inf'), float('nan')]
 "#,
         );
     }

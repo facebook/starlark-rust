@@ -111,20 +111,16 @@ fn test_go() {
             "1000000 * 1000000 * 1000000",
             "int overflow in starlark-rust",
 
-            // FIXME
-            "assert.eq(str(0.), ",  // str for floats
-            "assert.eq(str(.0), ",  // str for floats
-            "assert.eq(str(1 // neginf), ", // str for floats
-            "assert.eq(str(0.0),",  // str for floats
-            "assert.eq(str(123.0),",  // str for floats
-            "assert.eq(str(1.",  // str for floats
-            "assert.eq(str(-1.",  // str for floats
-            "assert.eq(str(negzero),",  // str for floats
-            "assert.eq(str(sorted([inf, neginf, nan, 1e300, -1e300,",   // str for floats
-            "%d",   // float format strings
-            "%e",   // float format strings
-            "%f",   // float format strings
-            "%g",   // float format strings
+            // str for floats doesn't conform to the spec
+            "assert.eq(str(1.23e45),",
+            "assert.eq(str(-1.23e-45),",
+            "assert.eq(str(sorted([inf, neginf, nan, 1e300, -1e300,",
+
+            // string interpolation for floats not implemented
+            "%d",
+            "%e",
+            "%f",
+            "%g",
         ],
     ));
     assert.conformance(&ignore_bad_lines(
