@@ -70,6 +70,7 @@ pub(crate) enum ExprBinOp {
     Add,
     Multiply,
     Percent,
+    Divide,
     FloorDivide,
     BitAnd,
     BitOr,
@@ -408,6 +409,9 @@ impl Spanned<ExprCompiledValue> {
                 )?),
                 ExprBinOp::Percent => expr!("percent", l, r, |eval| {
                     expr_throw(l.percent(r, eval.heap()), span, eval)?
+                }),
+                ExprBinOp::Divide => expr!("divide", l, r, |eval| {
+                    expr_throw(l.div(r, eval.heap()), span, eval)?
                 }),
                 ExprBinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
                     expr_throw(l.floor_div(r, eval.heap()), span, eval)?
@@ -861,6 +865,7 @@ impl Compiler<'_> {
                         BinOp::Add => ExprCompiledValue::Op(ExprBinOp::Add, box (l, r)),
                         BinOp::Multiply => ExprCompiledValue::Op(ExprBinOp::Multiply, box (l, r)),
                         BinOp::Percent => ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r)),
+                        BinOp::Divide => ExprCompiledValue::Op(ExprBinOp::Divide, box (l, r)),
                         BinOp::FloorDivide => {
                             ExprCompiledValue::Op(ExprBinOp::FloorDivide, box (l, r))
                         }
