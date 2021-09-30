@@ -338,6 +338,14 @@ assert_eq(repr(s1), "$[1]")
 assert_eq(repr(s1 + [3]), "$[1, 3]")
 assert_eq(repr([3] + s1), "$[3, 1]")
 assert_eq(repr(s1 + s2), "$[1, 2]")
+
+s1 += [3]
+v = [4]
+v += s2
+s2 += s1
+assert_eq(repr(s1), "$[1, 3]")
+assert_eq(repr(v), "$[4, 2]")
+assert_eq(repr(s2), "$[2, 1, 3]")
 "#,
     );
 }

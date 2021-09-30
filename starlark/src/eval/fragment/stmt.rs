@@ -461,23 +461,28 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
     // When mutating, be careful if they alias, so we don't have `lhs`
     // mutably borrowed when we iterate over `rhs`, as they might alias.
 
-    let lhs_aref = lhs.get_ref();
-    let lhs_ty = lhs_aref.static_type_of_value();
-
-    if List::is_list_type(lhs_ty) {
-        // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
-        let mut list = List::from_value_mut(lhs)?
-            .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
-        if lhs.ptr_eq(rhs) {
-            list.content.extend_from_within(..);
-        } else {
-            rhs.with_iterator(heap, |it| list.content.extend(it))?;
-        }
-        Ok(lhs)
-    } else if let Some(v) = rhs.get_ref().radd(lhs, heap) {
+    // In practice, select is the only thing that implements radd.
+    // If the users does x += select(...) we don't want an error,
+    // we really want to x = x + select, so check radd first.
+    if let Some(v) = rhs.get_ref().radd(lhs, heap) {
         v
     } else {
-        lhs_aref.add(rhs, heap)
+        let lhs_aref = lhs.get_ref();
+        let lhs_ty = lhs_aref.static_type_of_value();
+
+        if List::is_list_type(lhs_ty) {
+            // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
+            let mut list = List::from_value_mut(lhs)?
+                .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
+            if lhs.ptr_eq(rhs) {
+                list.content.extend_from_within(..);
+            } else {
+                rhs.with_iterator(heap, |it| list.content.extend(it))?;
+            }
+            Ok(lhs)
+        } else {
+            lhs_aref.add(rhs, heap)
+        }
     }
 }
 
