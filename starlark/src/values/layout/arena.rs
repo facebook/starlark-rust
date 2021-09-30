@@ -49,6 +49,11 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
+pub(crate) enum WhichBump {
+    NonDrop,
+    Drop,
+}
+
 #[derive(Hash, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
@@ -82,7 +87,7 @@ pub(crate) struct Reservation<'v> {
 }
 
 impl<'v> Reservation<'v> {
-    pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
+    fn do_fill<'v2: 'v, T: AValue<'v2>>(&self, x: T) {
         assert_eq!(self.typ, T::static_type_id_of_value());
         unsafe {
             let p = self.pointer as *mut AValueRepr<T>;
@@ -93,6 +98,18 @@ impl<'v> Reservation<'v> {
                     payload: x,
                 },
             );
+        }
+    }
+
+    pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
+        self.do_fill(x);
+    }
+
+    pub(crate) fn fill_with_extra<'v2: 'v, T: AValue<'v2>, E: Copy>(self, x: T, extra: &[E]) {
+        self.do_fill(x);
+        unsafe {
+            let p = self.pointer as *mut AValueRepr<T>;
+            (*p).write_extra(extra);
         }
     }
 
@@ -121,11 +138,6 @@ impl Arena {
         self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
-    /// Bytes allocated which can't be iterated over
-    pub fn allocated_bytes_inline(&self) -> usize {
-        self.non_drop.allocated_bytes()
-    }
-
     fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
         bump: &'v Bump,
         extra: usize,
@@ -146,12 +158,20 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
-        let p = Self::alloc_empty::<T>(&self.drop, 0);
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
+        self.reserve_with_extra::<T>(0)
+    }
+
+    // Reservation should really be an incremental type
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+        extra: usize,
+    ) -> Reservation<'v> {
+        let p = Self::alloc_empty::<T>(&self.drop, extra);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
-        let x = BlackHole(mem::size_of::<T>());
+        let x = BlackHole(mem::size_of::<T>() + extra);
         unsafe {
             ptr::write(
                 p as *mut AValueRepr<BlackHole>,
@@ -170,8 +190,19 @@ impl Arena {
     }
 
     /// Allocate a type `T`.
-    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(&'v self, x: T) -> &'v AValueHeader {
-        let p = Self::alloc_empty::<T>(&self.drop, 0);
+    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+        which_bump: WhichBump,
+        x: T,
+    ) -> &'v AValueHeader {
+        let bump = match which_bump {
+            WhichBump::NonDrop => {
+                assert!(!mem::needs_drop::<T>());
+                &self.non_drop
+            }
+            WhichBump::Drop => &self.drop,
+        };
+        let p = Self::alloc_empty::<T>(bump, 0);
         unsafe {
             ptr::write(
                 p,
@@ -240,18 +271,20 @@ impl Arena {
         // It seems that we get the chunks from most newest to oldest.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
-        let chunks = self.drop.iter_allocated_chunks().collect::<Vec<_>>();
-        // Use a single buffer to reduce allocations, but clear it after use
-        let mut buffer = Vec::new();
-        for chunk in chunks.iter().rev() {
-            Self::iter_chunk(chunk, |x| buffer.push(x));
-            buffer.iter().rev().for_each(|x| f(*x));
-            buffer.clear();
+        for bump in [&mut self.drop, &mut self.non_drop] {
+            let chunks = bump.iter_allocated_chunks().collect::<Vec<_>>();
+            // Use a single buffer to reduce allocations, but clear it after use
+            let mut buffer = Vec::new();
+            for chunk in chunks.iter().rev() {
+                Self::iter_chunk(chunk, |x| buffer.push(x));
+                buffer.iter().rev().for_each(|x| f(*x));
+                buffer.clear();
+            }
         }
     }
 
-    // Iterate over the values in the heap in any order
-    pub fn for_each_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
+    // Iterate over the values in the drop bump in any order
+    pub fn for_each_drop_unordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
         self.drop
             .iter_allocated_chunks()
             .for_each(|chunk| Self::iter_chunk(chunk, &mut f))
@@ -358,17 +391,6 @@ impl AValueHeader {
         res
     }
 
-    pub unsafe fn write_extra(&self, bytes: &[u8]) {
-        debug_assert_eq!(self.unpack().memory_size(), self.0.size_of() + bytes.len());
-        copy_nonoverlapping(bytes.as_ptr(), self.get_extra(), bytes.len());
-    }
-
-    pub unsafe fn get_extra(&self) -> *mut u8 {
-        let n = self.0.size_of();
-        let p = self as *const AValueHeader as *mut u8;
-        p.add(mem::size_of::<AValueHeader>() + n)
-    }
-
     /// Cast header pointer to repr pointer.
     pub(crate) unsafe fn as_repr<T>(&self) -> &AValueRepr<T> {
         &*(self as *const AValueHeader as *const AValueRepr<T>)
@@ -385,11 +407,30 @@ impl<T> AValueRepr<T> {
             payload,
         }
     }
+
+    pub unsafe fn write_extra<E: Copy>(&self, extra: &[E]) {
+        debug_assert_eq!(
+            self.header.unpack().memory_size(),
+            mem::size_of::<T>() + (extra.len() * mem::size_of::<E>())
+        );
+        debug_assert!(Layout::new::<T>().padding_needed_for(mem::align_of::<E>()) == 0);
+        copy_nonoverlapping(extra.as_ptr(), self.get_extra(), extra.len());
+    }
+
+    pub unsafe fn get_extra<E: Copy>(&self) -> *mut E {
+        // sanity check
+        assert_ne!(mem::size_of::<T>(), 0);
+
+        let p = self as *const AValueRepr<T> as *mut u8;
+        let extra = p.add(mem::size_of::<AValueRepr<T>>()) as *mut E;
+        debug_assert!(extra as usize % mem::align_of::<E>() == 0);
+        extra
+    }
 }
 
 impl Drop for Arena {
     fn drop(&mut self) {
-        self.for_each_unordered(|x| {
+        self.for_each_drop_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
             let x = x.unpack() as *const dyn AValue as *mut dyn AValue;
             unsafe {
@@ -435,7 +476,7 @@ mod test {
                 let r = reserve_str(&arena);
                 reserved.push((r, i));
             } else {
-                arena.alloc(mk_str(&i.to_string()));
+                arena.alloc(WhichBump::Drop, mk_str(&i.to_string()));
             }
         }
         assert!(!reserved.is_empty());
@@ -456,7 +497,7 @@ mod test {
         });
         assert_eq!(j, LIMIT);
         j = 0;
-        arena.for_each_unordered(|_| j += 1);
+        arena.for_each_drop_unordered(|_| j += 1);
         assert_eq!(j, LIMIT);
     }
 
@@ -464,10 +505,10 @@ mod test {
     // Make sure that even if there are some blackholes when we drop, we can still walk to heap
     fn drop_with_blackhole() {
         let mut arena = Arena::default();
-        arena.alloc(mk_str("test"));
+        arena.alloc(WhichBump::Drop, mk_str("test"));
         // reserve but do not fill!
         reserve_str(&arena);
-        arena.alloc(mk_str("hello"));
+        arena.alloc(WhichBump::Drop, mk_str("hello"));
         let mut res = Vec::new();
         arena.for_each_ordered(|x| res.push(x));
         assert_eq!(res.len(), 3);
@@ -478,8 +519,8 @@ mod test {
     #[test]
     fn test_allocated_summary() {
         let arena = Arena::default();
-        arena.alloc(mk_str("test"));
-        arena.alloc(mk_str("test"));
+        arena.alloc(WhichBump::Drop, mk_str("test"));
+        arena.alloc(WhichBump::Drop, mk_str("test"));
         let res = arena.allocated_summary().summary;
         assert_eq!(res.len(), 1);
         let entry = res.values().next().unwrap();

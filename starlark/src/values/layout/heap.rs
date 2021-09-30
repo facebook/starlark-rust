@@ -17,16 +17,19 @@
 
 use crate::{
     collections::Hashed,
+    eval::FrozenDef,
     values::{
         any::StarlarkAny,
         layout::{
-            arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation},
-            avalue::{complex, simple, starlark_str, AValue},
+            arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation, WhichBump},
+            avalue::{
+                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue,
+                VALUE_EMPTY_TUPLE,
+            },
             constant::constant_string,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
-        tuple::{FrozenTuple, Tuple},
         AllocFrozenValue, ComplexValue, FrozenRef, SimpleValue,
     },
 };
@@ -41,6 +44,7 @@ use std::{
     hash::{Hash, Hasher},
     intrinsics::copy_nonoverlapping,
     marker::PhantomData,
+    mem,
     ops::Deref,
     ptr,
     sync::Arc,
@@ -172,8 +176,8 @@ impl FrozenHeap {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
 
-    fn alloc_raw(&self, x: impl AValue<'static>) -> FrozenValue {
-        let v: &AValueHeader = self.arena.alloc(x);
+    fn alloc_raw(&self, which_bump: WhichBump, x: impl AValue<'static>) -> FrozenValue {
+        let v: &AValueHeader = self.arena.alloc(which_bump, x);
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
@@ -187,7 +191,7 @@ impl FrozenHeap {
                 .arena
                 .alloc_extra_non_drop(starlark_str(x.len()), x.len());
             unsafe {
-                (*v).header.write_extra(x.as_bytes())
+                (*v).write_extra(x.as_bytes())
             };
             FrozenValue::new_repr(unsafe { cast::ptr_lifetime(&*v) })
         }
@@ -201,17 +205,33 @@ impl FrozenHeap {
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
-        self.alloc_simple(FrozenTuple::new(elems.to_vec()))
+        if elems.is_empty() {
+            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE);
+        }
+
+        unsafe {
+            let avalue = self.arena.alloc_extra_non_drop(
+                frozen_tuple_avalue(elems.len()),
+                elems.len() * mem::size_of::<FrozenValue>(),
+            );
+            (*avalue).write_extra(elems);
+            FrozenValue::new_repr(&*avalue)
+        }
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
-    pub fn alloc_simple(&self, val: impl SimpleValue) -> FrozenValue {
-        self.alloc_raw(simple(val))
+    pub fn alloc_simple<T: SimpleValue>(&self, val: T) -> FrozenValue {
+        let which_bump = if mem::needs_drop::<T>() {
+            WhichBump::Drop
+        } else {
+            WhichBump::NonDrop
+        };
+        self.alloc_raw(which_bump, simple(val))
     }
 
     /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
-    fn alloc_simple_frozen_ref<T: SimpleValue>(&self, value: T) -> FrozenRef<T> {
+    pub(crate) fn alloc_simple_frozen_ref<T: SimpleValue>(&self, value: T) -> FrozenRef<T> {
         let value = self.alloc_simple(value);
         // Here we could avoid dynamic cast, but this code is not executed frequently.
         value.downcast_frozen_ref().unwrap()
@@ -246,52 +266,25 @@ impl FrozenHeap {
 // but could be used for anything.
 pub struct Freezer {
     /// Freezing into this heap.
-    heap: FrozenHeap,
-    /// Future module, `BlackHole` initially, then `FrozenModuleRef`.
-    magic: FrozenValue,
-    /// Reservation for that module.
-    reservation: Option<Reservation<'static>>,
+    pub(crate) heap: FrozenHeap,
+    /// Defs frozen by this freezer.
+    pub(crate) frozen_defs: RefCell<Vec<FrozenRef<FrozenDef>>>,
 }
 
 impl Freezer {
-    pub(crate) fn new<T: SimpleValue>(heap: FrozenHeap) -> Self {
-        fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(
-            heap: &'v FrozenHeap,
-            _ty: Option<T>,
-        ) -> Reservation<'v> {
-            heap.arena.reserve::<T>()
-        }
-
-        // Slightly odd construction as we want to produce a reservation with type
-        // simple(T), but simple is a function with an opaque impl return, so fake up
-        // an empty Option containing the right type.
-        let ty: Option<T> = None;
-        let ty = ty.map(simple);
-        let reservation = reserve(&heap, ty);
-        // Morally the type is tied to the heap, but we want to have them both next to each other
-        let reservation = unsafe { transmute!(Reservation, Reservation<'static>, reservation) };
-        let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(reservation.ptr()) });
+    pub(crate) fn new(heap: FrozenHeap) -> Self {
         Freezer {
             heap,
-            magic: fv,
-            reservation: Some(reservation),
+            frozen_defs: RefCell::new(Vec::new()),
         }
-    }
-
-    pub(crate) fn set_magic(&mut self, val: impl SimpleValue) {
-        let reservation = self
-            .reservation
-            .take()
-            .expect("Can only call set_magic once");
-        reservation.fill(simple(val))
-    }
-
-    pub(crate) fn get_magic(&self) -> FrozenValue {
-        self.magic
     }
 
     pub(crate) fn into_ref(self) -> FrozenHeapRef {
         self.heap.into_ref()
+    }
+
+    pub(crate) fn heap(&self) -> &FrozenHeap {
+        &self.heap
     }
 
     /// Allocate a new value while freezing. Usually not a great idea.
@@ -344,15 +337,10 @@ impl Heap {
         self.arena.borrow().available_bytes()
     }
 
-    /// Only those allocated on the inline heap (mostly strings)
-    pub(crate) fn allocated_bytes_inline(&self) -> usize {
-        self.arena.borrow().allocated_bytes_inline()
-    }
-
-    fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2>) -> Value<'v> {
+    fn alloc_raw<'v, 'v2: 'v2>(&'v self, which_bump: WhichBump, x: impl AValue<'v2>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValueHeader = arena.alloc(x);
+        let v: &AValueHeader = arena.alloc(which_bump, x);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -368,7 +356,7 @@ impl Heap {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
         let v: *mut AValueRepr<_> = arena.alloc_extra_non_drop(starlark_str(len), len);
-        init(unsafe { (*v).header.get_extra() });
+        init(unsafe { (*v).get_extra() });
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -406,7 +394,18 @@ impl Heap {
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
-        self.alloc_complex(Tuple::new(elems.to_vec()))
+        if elems.is_empty() {
+            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE).to_value();
+        }
+
+        unsafe {
+            let avalue = self.arena.borrow().alloc_extra_non_drop(
+                tuple_avalue(elems.len()),
+                elems.len() * mem::size_of::<Value>(),
+            );
+            (*avalue).write_extra(elems);
+            Value::new_repr(&*avalue)
+        }
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
@@ -416,13 +415,39 @@ impl Heap {
     }
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
-    pub fn alloc_simple<'v>(&'v self, x: impl SimpleValue) -> Value<'v> {
-        self.alloc_raw(simple(x))
+    pub fn alloc_simple<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
+        if mem::needs_drop::<T>() {
+            self.alloc_simple_in_drop(x)
+        } else {
+            self.alloc_simple_in_non_drop(x)
+        }
+    }
+
+    pub(crate) fn alloc_simple_in_drop<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
+        self.alloc_raw(WhichBump::Drop, simple(x))
+    }
+
+    pub(crate) fn alloc_simple_in_non_drop<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
+        assert!(!mem::needs_drop::<T>());
+        self.alloc_raw(WhichBump::NonDrop, simple(x))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
-    pub fn alloc_complex<'v>(&'v self, x: impl ComplexValue<'v>) -> Value<'v> {
-        self.alloc_raw(complex(x))
+    pub fn alloc_complex<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
+        if mem::needs_drop::<T>() {
+            self.alloc_complex_in_drop(x)
+        } else {
+            self.alloc_complex_in_non_drop(x)
+        }
+    }
+
+    pub(crate) fn alloc_complex_in_drop<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
+        self.alloc_raw(WhichBump::Drop, complex(x))
+    }
+
+    pub(crate) fn alloc_complex_in_non_drop<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
+        assert!(!mem::needs_drop::<T>());
+        self.alloc_raw(WhichBump::NonDrop, complex(x))
     }
 
     pub(crate) fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
@@ -477,7 +502,14 @@ impl<'v> Tracer<'v> {
     pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
         &'a self,
     ) -> (Value<'v>, Reservation<'a>) {
-        let r = self.arena.reserve::<T>();
+        self.reserve_with_extra::<T>(0)
+    }
+
+    pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
+        &'a self,
+        extra: usize,
+    ) -> (Value<'v>, Reservation<'a>) {
+        let r = self.arena.reserve_with_extra::<T>(extra);
         let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (v, r)
     }
@@ -487,7 +519,7 @@ impl<'v> Tracer<'v> {
             .arena
             .alloc_extra_non_drop(starlark_str(x.len()), x.len());
         unsafe {
-            (*v).header.write_extra(x.as_bytes())
+            (*v).write_extra(x.as_bytes())
         };
         Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
     }

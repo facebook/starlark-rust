@@ -19,7 +19,7 @@
 
 use crate::{
     codemap::{CodeMap, Span, Spanned},
-    environment::FrozenModuleValue,
+    environment::FrozenModuleRef,
     eval::{
         compiler::{
             expr_throw,
@@ -56,7 +56,35 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
     mem,
+    sync::atomic::{AtomicUsize, Ordering},
 };
+
+// Logically `Atomic<FrozenRef<FrozenModuleRef>>`.
+struct AtomicFrozenModuleOption(AtomicUsize);
+
+impl AtomicFrozenModuleOption {
+    fn from(module: Option<FrozenRef<FrozenModuleRef>>) -> AtomicFrozenModuleOption {
+        AtomicFrozenModuleOption(AtomicUsize::new(match module {
+            Some(v) => v.as_ref() as *const FrozenModuleRef as usize,
+            None => 0,
+        }))
+    }
+
+    fn get(&self) -> Option<FrozenRef<FrozenModuleRef>> {
+        // Note this is relaxed load which is cheap.
+        match self.0.load(Ordering::Relaxed) {
+            0 => None,
+            v => Some(FrozenRef::new(unsafe { &*(v as *const FrozenModuleRef) })),
+        }
+    }
+
+    fn set(&self, module: FrozenRef<FrozenModuleRef>) {
+        self.0.store(
+            module.as_ref() as *const FrozenModuleRef as usize,
+            Ordering::Relaxed,
+        );
+    }
+}
 
 struct ParameterName {
     name: String,
@@ -72,6 +100,18 @@ enum ParameterCompiled<T> {
 }
 
 impl<T> ParameterCompiled<T> {
+    fn map_expr<U>(self, f: impl Fn(T) -> U) -> ParameterCompiled<U> {
+        match self {
+            ParameterCompiled::Normal(n, o) => ParameterCompiled::Normal(n, o.map(f)),
+            ParameterCompiled::WithDefaultValue(n, o, t) => {
+                ParameterCompiled::WithDefaultValue(n, o.map(&f), f(t))
+            }
+            ParameterCompiled::NoArgs => ParameterCompiled::NoArgs,
+            ParameterCompiled::Args(n, o) => ParameterCompiled::Args(n, o.map(f)),
+            ParameterCompiled::KwArgs(n, o) => ParameterCompiled::KwArgs(n, o.map(f)),
+        }
+    }
+
     fn param_name(&self) -> Option<&ParameterName> {
         match self {
             Self::Normal(x, _) => Some(x),
@@ -126,99 +166,26 @@ pub(crate) struct DefInfo {
     pub(crate) returns_type_is: Option<FrozenStringValue>,
 }
 
-impl Compiler<'_> {
-    fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
-        let binding_id = ident.1.expect("no binding for parameter");
-        let binding = self.scope_data.get_binding(binding_id);
-        ParameterName {
-            name: ident.node.0,
-            captured: binding.captured,
-        }
-    }
+pub(crate) struct DefCompiled {
+    function_name: String,
+    params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
+    return_type: Option<Box<Spanned<ExprCompiledValue>>>,
+    info: FrozenRef<DefInfo>,
+}
 
-    fn parameter(&mut self, x: CstParameter) -> Spanned<ParameterCompiled<ExprCompiled>> {
-        Spanned {
-            span: x.span,
-            node: match x.node {
-                ParameterP::Normal(x, t) => ParameterCompiled::Normal(
-                    self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-                ),
-                ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
-                    self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-                    self.expr(*v).as_compiled(),
-                ),
-                ParameterP::NoArgs => ParameterCompiled::NoArgs,
-                ParameterP::Args(x, t) => ParameterCompiled::Args(
-                    self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-                ),
-                ParameterP::KwArgs(x, t) => ParameterCompiled::KwArgs(
-                    self.parameter_name(x),
-                    self.expr_opt(t).map(ExprCompiledValue::as_compiled),
-                ),
-            },
-        }
-    }
-
-    /// If a statement is `return type(x) == "y"` where `x` is a first slot.
-    fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
-        match stmt.first() {
-            Some(StmtCompiledValue::Return(
-                _,
-                Some(ExprCompiledValue::TypeIs(
-                    // Slot 0 is a slot for the first function argument.
-                    box ExprCompiledValue::Local(LocalSlotId(0), ..),
-                    t,
-                    MaybeNot::Id,
-                )),
-            )) => Some(*t),
-            _ => None,
-        }
-    }
-
-    pub fn function(
-        &mut self,
-        name: &str,
-        scope_id: ScopeId,
-        params: Vec<CstParameter>,
-        return_type: Option<Box<CstExpr>>,
-        suite: CstStmt,
-    ) -> ExprCompiledValue {
-        let file = self.codemap.file_span(suite.span);
-        let function_name = format!("{}.{}", file.file.filename(), name);
-
-        // The parameters run in the scope of the parent, so compile them with the outer
-        // scope
-        let params = params.into_map(|x| self.parameter(x));
-        let return_type = return_type.map(|return_type| Spanned {
-            span: return_type.span,
-            node: self.expr(*return_type).as_compiled(),
+impl DefCompiled {
+    pub(crate) fn as_compiled(self) -> ExprCompiled {
+        let DefCompiled {
+            function_name,
+            params,
+            return_type,
+            info,
+        } = self;
+        let params = params.into_map(|p| p.into_map(|p| p.map_expr(|e| e.as_compiled())));
+        let return_type = return_type.map(|t| Spanned {
+            span: t.span,
+            node: t.as_compiled(),
         });
-
-        self.enter_scope(scope_id);
-
-        let docstring = DocString::extract_raw_starlark_docstring(&suite);
-        let body = self.stmt(suite, false);
-        let scope_names = self.exit_scope();
-
-        let scope_names = mem::take(scope_names);
-
-        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
-            Self::is_return_type_is(&body)
-        } else {
-            None
-        };
-
-        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
-            codemap: self.codemap.dupe(),
-            docstring,
-            scope_names,
-            body: body.as_compiled(self),
-            returns_type_is,
-        });
-
         expr!("def", |eval| {
             let mut parameters =
                 ParametersSpec::with_capacity(function_name.to_owned(), params.len());
@@ -277,14 +244,117 @@ impl Compiler<'_> {
     }
 }
 
+impl Compiler<'_> {
+    fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
+        let binding_id = ident.1.expect("no binding for parameter");
+        let binding = self.scope_data.get_binding(binding_id);
+        ParameterName {
+            name: ident.node.0,
+            captured: binding.captured,
+        }
+    }
+
+    fn parameter(
+        &mut self,
+        x: CstParameter,
+    ) -> Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>> {
+        Spanned {
+            span: x.span,
+            node: match x.node {
+                ParameterP::Normal(x, t) => {
+                    ParameterCompiled::Normal(self.parameter_name(x), self.expr_opt(t))
+                }
+                ParameterP::WithDefaultValue(x, t, v) => ParameterCompiled::WithDefaultValue(
+                    self.parameter_name(x),
+                    self.expr_opt(t),
+                    self.expr(*v),
+                ),
+                ParameterP::NoArgs => ParameterCompiled::NoArgs,
+                ParameterP::Args(x, t) => {
+                    ParameterCompiled::Args(self.parameter_name(x), self.expr_opt(t))
+                }
+                ParameterP::KwArgs(x, t) => {
+                    ParameterCompiled::KwArgs(self.parameter_name(x), self.expr_opt(t))
+                }
+            },
+        }
+    }
+
+    /// If a statement is `return type(x) == "y"` where `x` is a first slot.
+    fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
+        match stmt.first().map(|s| &s.node) {
+            Some(StmtCompiledValue::Return(Some(Spanned {
+                node:
+                    ExprCompiledValue::TypeIs(
+                        box Spanned {
+                            // Slot 0 is a slot for the first function argument.
+                            node: ExprCompiledValue::Local(LocalSlotId(0), ..),
+                            ..
+                        },
+                        t,
+                        MaybeNot::Id,
+                    ),
+                ..
+            }))) => Some(*t),
+            _ => None,
+        }
+    }
+
+    pub fn function(
+        &mut self,
+        name: &str,
+        scope_id: ScopeId,
+        params: Vec<CstParameter>,
+        return_type: Option<Box<CstExpr>>,
+        suite: CstStmt,
+    ) -> ExprCompiledValue {
+        let file = self.codemap.file_span(suite.span);
+        let function_name = format!("{}.{}", file.file.filename(), name);
+
+        // The parameters run in the scope of the parent, so compile them with the outer
+        // scope
+        let params = params.into_map(|x| self.parameter(x));
+        let return_type = return_type.map(|return_type| box self.expr(*return_type));
+
+        self.enter_scope(scope_id);
+
+        let docstring = DocString::extract_raw_starlark_docstring(&suite);
+        let body = self.stmt(suite, false);
+        let scope_names = self.exit_scope();
+
+        let scope_names = mem::take(scope_names);
+
+        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
+            Self::is_return_type_is(&body)
+        } else {
+            None
+        };
+
+        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
+            codemap: self.codemap.dupe(),
+            docstring,
+            scope_names,
+            body: body.as_compiled(self),
+            returns_type_is,
+        });
+
+        ExprCompiledValue::Def(DefCompiled {
+            function_name,
+            params,
+            return_type,
+            info,
+        })
+    }
+}
+
 /// Starlark function internal representation and implementation of
 /// [`StarlarkValue`].
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
-    parameter_captures: Vec<usize>, // Indices of parameters, which are captured in nested defs
-    parameter_types: Vec<(usize, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
+    parameter_captures: Vec<u32>,  // Indices of parameters, which are captured in nested defs
+    parameter_types: Vec<(u32, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
     pub(crate) stmt: FrozenRef<DefInfo>,    // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
@@ -293,7 +363,10 @@ pub(crate) struct DefGen<V> {
     captured: Vec<V>,
     // Important to ignore these field as it probably references DefGen in a cycle
     #[derivative(Debug = "ignore")]
-    module: Option<FrozenModuleValue>, // A reference to the module variables, if we have been frozen
+    /// A reference to the module where the function is defined after the module has been frozen.
+    /// When the module is not frozen yet, this field contains `None`, and function's module
+    /// can be accessed from evaluator's module.
+    module: AtomicFrozenModuleOption,
 }
 
 impl<V> Display for DefGen<V> {
@@ -310,8 +383,8 @@ starlark_complex_values!(Def);
 impl<'v> Def<'v> {
     fn new(
         parameters: ParametersSpec<Value<'v>>,
-        parameter_captures: Vec<usize>,
-        parameter_types: Vec<(usize, String, Value<'v>, TypeCompiled)>,
+        parameter_captures: Vec<u32>,
+        parameter_types: Vec<(u32, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
         stmt: FrozenRef<DefInfo>,
         eval: &mut Evaluator<'v, '_>,
@@ -327,7 +400,7 @@ impl<'v> Def<'v> {
             return_type,
             stmt,
             captured,
-            module: eval.module_variables.map(|x| x.1),
+            module: AtomicFrozenModuleOption::from(eval.module_variables.map(|x| x.1)),
         })
     }
 }
@@ -372,7 +445,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
             .iter()
             .map(|(idx, _, v, _)| {
                 (
-                    *idx,
+                    *idx as usize,
                     docs::Type {
                         raw_type: v.to_value().to_repr(),
                     },
@@ -465,10 +538,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             .return_type
             .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
-        let module = Some(
-            self.module
-                .unwrap_or_else(|| FrozenModuleValue::new(freezer)),
-        );
+        let module = AtomicFrozenModuleOption::from(self.module.get());
         Ok(FrozenDef {
             parameters,
             parameter_captures: self.parameter_captures,
@@ -510,15 +580,11 @@ where
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        eval.ann("invoke_def", |eval| {
-            let local_slots = self.stmt.scope_names.used;
-            let slot_base = eval.local_variables.reserve(local_slots);
-            let slots = eval.local_variables.get_slots_at(slot_base);
-            self.parameters.collect_inline(args, slots, eval.heap())?;
-            eval.with_call_stack(me, location, |eval| {
-                eval.ann("invoke_def_raw", |eval| self.invoke_raw(slot_base, eval))
-            })
-        })
+        let local_slots = self.stmt.scope_names.used;
+        let slot_base = eval.local_variables.reserve(local_slots);
+        let slots = eval.local_variables.get_slots_at(slot_base);
+        self.parameters.collect_inline(args, slots, eval.heap())?;
+        eval.with_call_stack(me, location, |eval| self.invoke_raw(slot_base, eval))
     }
 
     fn documentation(&self) -> Option<DocItem> {
@@ -568,9 +634,9 @@ where
         }
 
         if Self::FROZEN {
-            debug_assert!(self.module.is_some());
+            debug_assert!(self.module.get().is_some());
         }
-        let res = eval.with_function_context(self.module, &self.stmt.codemap, |eval| {
+        let res = eval.with_function_context(self.module.get(), &self.stmt.codemap, |eval| {
             (self.stmt.body)(eval)
         });
         eval.local_variables.release(old_locals);
@@ -593,5 +659,13 @@ where
             }
         }
         Ok(ret)
+    }
+}
+
+impl FrozenDef {
+    pub(crate) fn post_freeze(&self, module: FrozenRef<FrozenModuleRef>) {
+        if self.module.get().is_none() {
+            self.module.set(module);
+        }
     }
 }

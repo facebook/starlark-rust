@@ -20,10 +20,10 @@ use gazebo::prelude::*;
 use std::cell::{RefCell, RefMut};
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
-pub(crate) struct ModuleSlotId(pub(crate) usize);
+pub(crate) struct ModuleSlotId(pub(crate) u32);
 
 impl ModuleSlotId {
-    pub fn new(index: usize) -> Self {
+    pub fn new(index: u32) -> Self {
         Self(index)
     }
 }
@@ -46,11 +46,11 @@ impl<'v> MutableSlots<'v> {
     }
 
     pub fn get_slot(&self, slot: ModuleSlotId) -> Option<Value<'v>> {
-        self.0.borrow()[slot.0]
+        self.0.borrow()[slot.0 as usize]
     }
 
     pub fn set_slot(&self, slot: ModuleSlotId, value: Value<'v>) {
-        self.0.borrow_mut()[slot.0] = Some(value);
+        self.0.borrow_mut()[slot.0 as usize] = Some(value);
     }
 
     pub fn ensure_slot(&self, slot: ModuleSlotId) {
@@ -58,12 +58,12 @@ impl<'v> MutableSlots<'v> {
         self.ensure_slots(slot.0 + 1);
     }
 
-    pub fn ensure_slots(&self, count: usize) {
+    pub fn ensure_slots(&self, count: u32) {
         let mut slots = self.0.borrow_mut();
-        if slots.len() >= count {
+        if slots.len() >= count as usize {
             return;
         }
-        let extra = count - slots.len();
+        let extra = count as usize - slots.len();
         slots.reserve(extra);
         for _ in 0..extra {
             slots.push(None);
@@ -81,6 +81,6 @@ impl<'v> MutableSlots<'v> {
 
 impl FrozenSlots {
     pub fn get_slot(&self, slot: ModuleSlotId) -> Option<FrozenValue> {
-        self.0[slot.0]
+        self.0[slot.0 as usize]
     }
 }

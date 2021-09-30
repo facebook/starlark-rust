@@ -24,7 +24,7 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     codemap::{Span, Spanned},
-    environment::EnvironmentError,
+    environment::slots::ModuleSlotId,
     eval::{
         compiler::{
             expr_throw,
@@ -35,7 +35,10 @@ use crate::{
             expr::ExprCompiledValue,
             known::{list_to_tuple, Conditional},
         },
-        runtime::evaluator::{Evaluator, GC_THRESHOLD},
+        runtime::{
+            evaluator::{Evaluator, GC_THRESHOLD},
+            slots::LocalSlotId,
+        },
     },
     syntax::ast::{AssignOp, AssignP, StmtP},
     values::{list::List, Heap, Value, ValueError},
@@ -50,20 +53,19 @@ pub(crate) type StmtCompiled =
 
 pub(crate) enum StmtCompiledValue {
     Compiled(StmtCompiled),
-    Return(Span, Option<ExprCompiledValue>),
+    Return(Option<Spanned<ExprCompiledValue>>),
 }
 
-impl StmtCompiledValue {
+impl Spanned<StmtCompiledValue> {
     pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
-        match self {
+        let span = self.span;
+        match self.node {
             StmtCompiledValue::Compiled(c) => c,
-            StmtCompiledValue::Return(span, None) => {
-                stmt!(compiler, "return_none", span, |_eval| {
-                    return Err(EvalException::Return(Value::new_none()));
-                })
-                .as_compiled(compiler)
-            }
-            StmtCompiledValue::Return(span, Some(e)) => {
+            StmtCompiledValue::Return(None) => stmt!(compiler, "return_none", span, |_eval| {
+                return Err(EvalException::Return(Value::new_none()));
+            })
+            .as_compiled(compiler),
+            StmtCompiledValue::Return(Some(e)) => {
                 let e = e.as_compiled();
                 stmt!(compiler, "return", span, |eval| {
                     return Err(EvalException::Return(e(eval)?));
@@ -102,14 +104,14 @@ impl<T> SmallVec1<T> {
     }
 }
 
-pub(crate) struct StmtsCompiled(SmallVec1<StmtCompiledValue>);
+pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiledValue>>);
 
 impl StmtsCompiled {
     pub(crate) fn empty() -> StmtsCompiled {
         StmtsCompiled(SmallVec1::Empty)
     }
 
-    pub(crate) fn one(stmt: StmtCompiledValue) -> StmtsCompiled {
+    pub(crate) fn one(stmt: Spanned<StmtCompiledValue>) -> StmtsCompiled {
         StmtsCompiled(SmallVec1::One(stmt))
     }
 
@@ -153,7 +155,7 @@ impl StmtsCompiled {
         }
     }
 
-    pub(crate) fn first(&self) -> Option<&StmtCompiledValue> {
+    pub(crate) fn first(&self) -> Option<&Spanned<StmtCompiledValue>> {
         match &self.0 {
             SmallVec1::Empty => None,
             SmallVec1::One(s) => Some(s),
@@ -174,6 +176,52 @@ pub(crate) type AssignCompiled = Box<
         + Send
         + Sync,
 >;
+pub(crate) enum AssignCompiledValue {
+    Dot(Spanned<ExprCompiledValue>, String),
+    ArrayIndirection(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
+    Tuple(Vec<Spanned<AssignCompiledValue>>),
+    Local(LocalSlotId, Captured),
+    Module(ModuleSlotId, String),
+}
+
+impl Spanned<AssignCompiledValue> {
+    pub(crate) fn as_compiled(self) -> AssignCompiled {
+        let span = self.span;
+        match self.node {
+            AssignCompiledValue::Dot(e, s) => {
+                let e = e.as_compiled();
+                box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
+            }
+            AssignCompiledValue::ArrayIndirection(array, index) => {
+                let array = array.as_compiled();
+                let index = index.as_compiled();
+                box move |value, eval| {
+                    expr_throw(array(eval)?.set_at(index(eval)?, value), span, eval)
+                }
+            }
+            AssignCompiledValue::Tuple(v) => {
+                let v = v.into_map(|v| v.as_compiled());
+                box move |value, eval| eval_assign_list(&v, span, value, eval)
+            }
+            AssignCompiledValue::Local(slot, Captured::Yes) => box move |value, eval| {
+                eval.set_slot_local_captured(slot, value);
+                Ok(())
+            },
+            AssignCompiledValue::Local(slot, Captured::No) => box move |value, eval| {
+                eval.set_slot_local(slot, value);
+                Ok(())
+            },
+            AssignCompiledValue::Module(slot, name) => {
+                box move |value, eval| {
+                    // Make sure that `ComplexValue`s get their name as soon as possible
+                    value.export_as(&name, eval);
+                    eval.set_slot_module(slot, value);
+                    Ok(())
+                }
+            }
+        }
+    }
+}
 
 fn eval_assign_list<'v>(
     lvalues: &[AssignCompiled],
@@ -204,22 +252,22 @@ pub(crate) type AssignModifyOp =
     for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>;
 
 impl Compiler<'_> {
-    pub fn assign(&mut self, expr: CstAssign) -> AssignCompiled {
+    pub fn assign(&mut self, expr: CstAssign) -> Spanned<AssignCompiledValue> {
         let span = expr.span;
-        match expr.node {
+        let assign = match expr.node {
             AssignP::Dot(e, s) => {
-                let e = self.expr(*e).as_compiled();
+                let e = self.expr(*e);
                 let s = s.node;
-                box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
+                AssignCompiledValue::Dot(e, s)
             }
             AssignP::ArrayIndirection(box (e, idx)) => {
-                let e = self.expr(e).as_compiled();
-                let idx = self.expr(idx).as_compiled();
-                box move |value, eval| expr_throw(e(eval)?.set_at(idx(eval)?, value), span, eval)
+                let e = self.expr(e);
+                let idx = self.expr(idx);
+                AssignCompiledValue::ArrayIndirection(e, idx)
             }
             AssignP::Tuple(v) => {
                 let v = v.into_map(|x| self.assign(x));
-                box move |value, eval| eval_assign_list(&v, span, value, eval)
+                AssignCompiledValue::Tuple(v)
             }
             AssignP::Identifier(ident) => {
                 let name = ident.node.0;
@@ -232,30 +280,19 @@ impl Compiler<'_> {
                     .slot
                     .unwrap_or_else(|| panic!("unresolved binding: `{}`", name));
                 match (slot, binding.captured) {
-                    (Slot::Local(slot), Captured::Yes) => box move |value, eval| {
-                        eval.set_slot_local_captured(slot, value);
-                        Ok(())
-                    },
-                    (Slot::Local(slot), Captured::No) => box move |value, eval| {
-                        eval.set_slot_local(slot, value);
-                        Ok(())
-                    },
-                    (Slot::Module(slot), _) => box move |value, eval| {
-                        // Make sure that `ComplexValue`s get their name as soon as possible
-                        value.export_as(&name, eval);
-                        eval.set_slot_module(slot, value);
-                        Ok(())
-                    },
+                    (Slot::Local(slot), captured) => AssignCompiledValue::Local(slot, captured),
+                    (Slot::Module(slot), _) => AssignCompiledValue::Module(slot, name),
                 }
             }
-        }
+        };
+        Spanned { node: assign, span }
     }
 
     fn assign_modify(
         &mut self,
         span_stmt: Span,
         lhs: CstAssign,
-        rhs: ExprCompiledValue,
+        rhs: Spanned<ExprCompiledValue>,
         op: AssignModifyOp,
     ) -> StmtsCompiled {
         let span_lhs = lhs.span;
@@ -394,15 +431,13 @@ fn possible_gc(eval: &mut Evaluator) {
         && eval.heap().allocated_bytes() >= eval.next_gc_level
         && eval.extra_v.is_none()
     {
-        eval.ann("garbage_collection", |eval| {
-            // When we are at a module scope (as checked above) the eval contains
-            // references to all values, so walking covers everything and the unsafe
-            // is satisfied.
-            unsafe {
-                eval.garbage_collect()
-            }
-            eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
-        })
+        // When we are at a module scope (as checked above) the eval contains
+        // references to all values, so walking covers everything and the unsafe
+        // is satisfied.
+        unsafe {
+            eval.garbage_collect()
+        }
+        eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
     }
 }
 
@@ -451,16 +486,20 @@ impl Compiler<'_> {
         assert!(stmt.len() == 1);
         if self.has_before_stmt {
             let stmt = stmt.as_compiled(self);
-            StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
-                before_stmt(span, eval);
-                stmt(eval)
-            }))
+            StmtsCompiled::one(Spanned {
+                node: StmtCompiledValue::Compiled(box move |eval| {
+                    before_stmt(span, eval);
+                    stmt(eval)
+                }),
+                span,
+            })
         } else {
             stmt
         }
     }
 
     pub(crate) fn stmt(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {
+        let span = stmt.span;
         let is_statements = matches!(&stmt.node, StmtP::Statements(_));
         let res = self.stmt_direct(stmt, allow_gc);
         // No point inserting a GC point around statements, since they will contain inner statements we can do
@@ -468,10 +507,13 @@ impl Compiler<'_> {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
             let res = res.as_compiled(self);
-            StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| {
-                possible_gc(eval);
-                res(eval)
-            }))
+            StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiledValue::Compiled(box move |eval| {
+                    possible_gc(eval);
+                    res(eval)
+                }),
+            })
         } else {
             res
         }
@@ -480,7 +522,7 @@ impl Compiler<'_> {
     fn stmt_if_compiled(
         &mut self,
         span: Span,
-        cond: ExprCompiledValue,
+        cond: Spanned<ExprCompiledValue>,
         cond_is_positive: bool,
         then_block: StmtsCompiled,
     ) -> StmtsCompiled {
@@ -554,9 +596,16 @@ impl Compiler<'_> {
         }
     }
 
-    fn stmt_expr_compiled(&mut self, span: Span, expr: ExprCompiledValue) -> StmtsCompiled {
+    fn stmt_expr_compiled(
+        &mut self,
+        span: Span,
+        expr: Spanned<ExprCompiledValue>,
+    ) -> StmtsCompiled {
         match expr {
-            ExprCompiledValue::Value(_) => StmtsCompiled::empty(),
+            Spanned {
+                node: ExprCompiledValue::Value(_),
+                ..
+            } => StmtsCompiled::empty(),
             e => {
                 let e = e.as_compiled();
                 stmt!(self, "expr", span, |eval| {
@@ -576,13 +625,17 @@ impl Compiler<'_> {
         let span = stmt.span;
         match stmt.node {
             StmtP::Def(name, params, return_type, suite, scope_id) => {
-                let rhs = self
-                    .function(&name.0, scope_id, params, return_type, *suite)
+                let rhs = Spanned {
+                    span,
+                    node: self.function(&name.0, scope_id, params, return_type, *suite),
+                }
+                .as_compiled();
+                let lhs = self
+                    .assign(Spanned {
+                        span: name.span,
+                        node: AssignP::Identifier(name),
+                    })
                     .as_compiled();
-                let lhs = self.assign(Spanned {
-                    span: name.span,
-                    node: AssignP::Identifier(name),
-                });
                 stmt!(self, "define_def", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
                 })
@@ -590,7 +643,7 @@ impl Compiler<'_> {
             StmtP::For(var, box (over, body)) => {
                 let over = list_to_tuple(over);
                 let over_span = over.span;
-                let var = self.assign(var);
+                let var = self.assign(var).as_compiled();
                 let over = self.expr(over).as_compiled();
                 let st = self.stmt(body, false).as_compiled(self);
                 stmt!(self, "for", span, |eval| {
@@ -614,9 +667,10 @@ impl Compiler<'_> {
                     )??;
                 })
             }
-            StmtP::Return(e) => {
-                StmtsCompiled::one(StmtCompiledValue::Return(span, e.map(|e| self.expr(e))))
-            }
+            StmtP::Return(e) => StmtsCompiled::one(Spanned {
+                node: StmtCompiledValue::Return(e.map(|e| self.expr(e))),
+                span,
+            }),
             StmtP::If(cond, box then_block) => self.stmt_if(span, cond, then_block, allow_gc),
             StmtP::IfElse(cond, box (then_block, else_block)) => {
                 self.stmt_if_else(span, cond, then_block, else_block, allow_gc)
@@ -631,7 +685,7 @@ impl Compiler<'_> {
             StmtP::Expression(e) => self.stmt_expr(e),
             StmtP::Assign(lhs, rhs) => {
                 let rhs = self.expr(*rhs).as_compiled();
-                let lhs = self.assign(lhs);
+                let lhs = self.assign(lhs).as_compiled();
                 stmt!(self, "assign", span, |eval| {
                     lhs(rhs(eval)?, eval)?;
                 })
@@ -667,38 +721,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            StmtP::Load(load) => {
-                let name = load.node.module.node;
-                let symbols = load.node.args.into_map(|(x, y)| {
-                    let (slot, _captured) = self.scope_data.get_assign_ident_slot(&x);
-                    (
-                        match slot {
-                            Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
-                            Slot::Module(slot) => slot,
-                        },
-                        y.node,
-                        x.span.merge(y.span),
-                    )
-                });
-                stmt!(self, "load", span, |eval| {
-                    let loadenv = match eval.loader.as_ref() {
-                        None => {
-                            return Err(EvalException::Error(
-                                EnvironmentError::NoImportsAvailable(name.to_owned()).into(),
-                            ));
-                        }
-                        Some(load) => load.load(&name).map_err(EvalException::Error)?,
-                    };
-                    for (new_name, orig_name, span) in &symbols {
-                        let value = throw(
-                            eval.module_env.load_symbol(&loadenv, orig_name),
-                            *span,
-                            eval,
-                        )?;
-                        eval.set_slot_module(*new_name, value)
-                    }
-                })
-            }
+            StmtP::Load(..) => unreachable!(),
             StmtP::Pass => StmtsCompiled::empty(),
             StmtP::Break => stmt!(self, "break", span, |_eval| return Err(
                 EvalException::Break

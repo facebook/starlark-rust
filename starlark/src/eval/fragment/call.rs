@@ -18,7 +18,7 @@
 //! Compile function calls.
 
 use crate::{
-    codemap::Span,
+    codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
     eval::{
         compiler::{
@@ -39,18 +39,105 @@ use gazebo::{coerce::coerce_ref, prelude::*};
 use std::mem::MaybeUninit;
 
 #[derive(Default)]
-struct ArgsCompiledValue {
-    pos_named: Vec<ExprCompiledValue>,
+pub(crate) struct ArgsCompiledValue {
+    pos_named: Vec<Spanned<ExprCompiledValue>>,
     /// Named arguments compiled.
     ///
     /// Note names are guaranteed to be unique here because names are validated in AST:
     /// named arguments in [`Expr::Call`] are unique.
     names: Vec<(Symbol, FrozenStringValue)>,
-    args: Option<ExprCompiledValue>,
-    kwargs: Option<ExprCompiledValue>,
+    args: Option<Spanned<ExprCompiledValue>>,
+    kwargs: Option<Spanned<ExprCompiledValue>>,
 }
 
-#[derive(Default)]
+// Helper that creates some specialised argument calls
+macro_rules! args {
+    ($args:ident, $e:expr) => {
+        match $args.spec() {
+            ArgsCompiledSpec::Args0($args) => $e,
+            ArgsCompiledSpec::Args1($args) => $e,
+            ArgsCompiledSpec::Args2($args) => $e,
+            ArgsCompiledSpec::Args($args) => $e,
+        }
+    };
+}
+
+pub(crate) enum CallCompiled {
+    Call(Box<(Spanned<ExprCompiledValue>, ArgsCompiledValue)>),
+    Frozen(Box<(Option<FrozenValue>, FrozenValue, ArgsCompiledValue)>),
+    Method(Box<(Spanned<ExprCompiledValue>, Symbol, ArgsCompiledValue)>),
+}
+
+impl Spanned<CallCompiled> {
+    pub(crate) fn as_compiled(self) -> ExprCompiled {
+        let span = self.span;
+        match self.node {
+            CallCompiled::Call(box (fun, args)) => {
+                args!(
+                    args,
+                    expr!("call", fun, |eval| {
+                        args.with_params(None, eval, |params, eval| {
+                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
+                        })?
+                    })
+                )
+            }
+            CallCompiled::Frozen(box (this, fun, args)) => {
+                if let Some(fun_ref) = fun.downcast_frozen_ref::<FrozenDef>() {
+                    assert!(this.is_none());
+                    args!(
+                        args,
+                        expr!("call_frozen_def", |eval| {
+                            args.with_params(None, eval, |params, eval| {
+                                expr_throw(
+                                    fun_ref.invoke(fun.to_value(), Some(span), params, eval),
+                                    span,
+                                    eval,
+                                )
+                            })?
+                        })
+                    )
+                } else if let Some(fun_ref) = fun.downcast_frozen_ref::<NativeFunction>() {
+                    args!(
+                        args,
+                        expr!("call_native_fun", |eval| {
+                            args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
+                                expr_throw(
+                                    fun_ref.invoke(fun.to_value(), Some(span), params, eval),
+                                    span,
+                                    eval,
+                                )
+                            })?
+                        })
+                    )
+                } else {
+                    args!(
+                        args,
+                        expr!("call_known_fn", |eval| {
+                            args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
+                                expr_throw(fun.invoke(Some(span), params, eval), span, eval)
+                            })?
+                        })
+                    )
+                }
+            }
+            CallCompiled::Method(box (this, s, args)) => {
+                args!(
+                    args,
+                    expr!("call_method", this, |eval| {
+                        // We don't need to worry about whether it's an attribute, method or field
+                        // since those that don't want the `this` just ignore it
+                        let fun = expr_throw(get_attr_hashed(this, &s, eval.heap()), span, eval)?.1;
+                        args.with_params(Some(this), eval, |params, eval| {
+                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
+                        })?
+                    })
+                )
+            }
+        }
+    }
+}
+
 struct ArgsCompiled {
     pos_named: Vec<ExprCompiled>,
     /// Named arguments compiled.
@@ -97,18 +184,6 @@ impl ArgsCompiledValue {
             })
         }
     }
-}
-
-// Helper that creates some specialised argument calls
-macro_rules! args {
-    ($args:ident, $e:expr) => {
-        match $args.spec() {
-            ArgsCompiledSpec::Args0($args) => $e,
-            ArgsCompiledSpec::Args1($args) => $e,
-            ArgsCompiledSpec::Args2($args) => $e,
-            ArgsCompiledSpec::Args($args) => $e,
-        }
-    };
 }
 
 struct Args0Compiled;
@@ -244,43 +319,10 @@ impl Compiler<'_> {
         args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         let args = self.args(args);
-        if let Some(fun_ref) = fun.downcast_frozen_ref::<FrozenDef>() {
-            assert!(this.is_none());
-            args!(
-                args,
-                expr!("call_frozen_def", |eval| {
-                    args.with_params(None, eval, |params, eval| {
-                        expr_throw(
-                            fun_ref.invoke(fun.to_value(), Some(span), params, eval),
-                            span,
-                            eval,
-                        )
-                    })?
-                })
-            )
-        } else if let Some(fun_ref) = fun.downcast_frozen_ref::<NativeFunction>() {
-            args!(
-                args,
-                expr!("call_native_fun", |eval| {
-                    args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
-                        expr_throw(
-                            fun_ref.invoke(fun.to_value(), Some(span), params, eval),
-                            span,
-                            eval,
-                        )
-                    })?
-                })
-            )
-        } else {
-            args!(
-                args,
-                expr!("call_known_fn", |eval| {
-                    args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
-                        expr_throw(fun.invoke(Some(span), params, eval), span, eval)
-                    })?
-                })
-            )
-        }
+        ExprCompiledValue::Call(Spanned {
+            span,
+            node: CallCompiled::Frozen(box (this, fun, args)),
+        })
     }
 
     fn expr_call_fun_frozen(
@@ -294,15 +336,7 @@ impl Compiler<'_> {
             self.fn_type(args.pop().unwrap().node.into_expr())
         } else if left == self.constants.fn_len && one_positional {
             let x = self.expr(args.pop().unwrap().node.into_expr());
-            // Technically the length command _could_ call other functions,
-            // and we'd not get entries on the call stack, which would be bad.
-            // But `len()` is super common, and no one expects it to call other functions,
-            // so let's just ignore that corner case for additional perf.
-            expr!("len", x, |eval| Value::new_int(expr_throw(
-                x.length(),
-                span,
-                eval
-            )?))
+            ExprCompiledValue::Len(box x)
         } else {
             if one_positional {
                 // Try to inline a function like `lambda x: type(x) == "y"`.
@@ -326,21 +360,17 @@ impl Compiler<'_> {
     fn expr_call_fun_compiled(
         &mut self,
         span: Span,
-        left: ExprCompiledValue,
+        left: Spanned<ExprCompiledValue>,
         args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         if let Some(left) = left.as_value() {
             self.expr_call_fun_frozen(span, left, args)
         } else {
             let args = self.args(args);
-            args!(
-                args,
-                expr!("call", left, |eval| {
-                    args.with_params(None, eval, |params, eval| {
-                        expr_throw(left.invoke(Some(span), params, eval), span, eval)
-                    })?
-                })
-            )
+            ExprCompiledValue::Call(Spanned {
+                span,
+                node: CallCompiled::Call(box (left, args)),
+            })
         }
     }
 
@@ -364,17 +394,10 @@ impl Compiler<'_> {
                     }
                 }
                 let args = self.args(args);
-                args!(
-                    args,
-                    expr!("call_method", e, |eval| {
-                        // We don't need to worry about whether it's an attribute, method or field
-                        // since those that don't want the `this` just ignore it
-                        let fun = expr_throw(get_attr_hashed(e, &s, eval.heap()), span, eval)?.1;
-                        args.with_params(Some(e), eval, |params, eval| {
-                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
-                        })?
-                    })
-                )
+                ExprCompiledValue::Call(Spanned {
+                    span,
+                    node: CallCompiled::Method(box (e, s, args)),
+                })
             }
             _ => {
                 let expr = self.expr(left);

@@ -19,6 +19,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
+    environment::slots::ModuleSlotId,
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
@@ -26,7 +27,12 @@ use crate::{
             scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
             Compiler, ExprEvalException,
         },
-        fragment::known::{list_to_tuple, Conditional},
+        fragment::{
+            call::CallCompiled,
+            compr::ComprCompiled,
+            def::DefCompiled,
+            known::{list_to_tuple, Conditional},
+        },
         runtime::{evaluator::Evaluator, slots::LocalSlotId},
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
@@ -34,7 +40,6 @@ use crate::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute},
         list::List,
-        tuple::{FrozenTuple, Tuple},
         AttrType, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
@@ -58,18 +63,81 @@ impl MaybeNot {
     }
 }
 
+pub(crate) enum ExprBinOp {
+    In,
+    NotIn,
+    Sub,
+    Add,
+    Multiply,
+    Percent,
+    FloorDivide,
+    BitAnd,
+    BitOr,
+    BitXor,
+    LeftShift,
+    RightShift,
+}
+
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
 >;
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
-    Compiled(ExprCompiled),
     /// Read local non-captured variable.
-    Local(LocalSlotId, Spanned<String>),
+    Local(LocalSlotId, String),
+    /// Read local captured variable.
+    LocalCaptured(LocalSlotId, String),
+    Module(ModuleSlotId),
+    /// `cmp(x <=> y)`
+    Equals(
+        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+        MaybeNot,
+    ),
+    /// `cmp(x <=> y)`
+    Compare(
+        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+        fn(Ordering) -> bool,
+    ),
     /// `type(x)`
-    Type(Box<ExprCompiledValue>),
+    Type(Box<Spanned<ExprCompiledValue>>),
+    /// `len(x)`
+    Len(Box<Spanned<ExprCompiledValue>>),
     /// `maybe_not(type(x) == "y")`
-    TypeIs(Box<ExprCompiledValue>, FrozenStringValue, MaybeNot),
+    TypeIs(Box<Spanned<ExprCompiledValue>>, FrozenStringValue, MaybeNot),
+    Tuple(Vec<Spanned<ExprCompiledValue>>),
+    List(Vec<Spanned<ExprCompiledValue>>),
+    Dict(Vec<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    /// Comprehension.
+    Compr(ComprCompiled),
+    Dot(Box<Spanned<ExprCompiledValue>>, Symbol),
+    ArrayIndirection(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    If(
+        Box<(
+            Spanned<ExprCompiledValue>,
+            Spanned<ExprCompiledValue>,
+            Spanned<ExprCompiledValue>,
+        )>,
+    ),
+    Slice(
+        Box<(
+            Spanned<ExprCompiledValue>,
+            Option<Spanned<ExprCompiledValue>>,
+            Option<Spanned<ExprCompiledValue>>,
+            Option<Spanned<ExprCompiledValue>>,
+        )>,
+    ),
+    Not(Box<Spanned<ExprCompiledValue>>),
+    Minus(Box<Spanned<ExprCompiledValue>>),
+    Plus(Box<Spanned<ExprCompiledValue>>),
+    BitNot(Box<Spanned<ExprCompiledValue>>),
+    And(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    Or(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    Op(
+        ExprBinOp,
+        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+    ),
+    Call(Spanned<CallCompiled>),
+    Def(DefCompiled),
 }
 
 impl ExprCompiledValue {
@@ -79,28 +147,295 @@ impl ExprCompiledValue {
             _ => None,
         }
     }
+}
 
+impl Spanned<ExprCompiledValue> {
     pub fn as_compiled(self) -> ExprCompiled {
-        match self {
-            Self::Value(x) => box move |_| Ok(x.to_value()),
-            Self::Compiled(x) => x,
-            Self::Local(slot, name) => expr!("local", |eval| expr_throw(
-                eval.get_slot_local(slot, &name.node),
-                name.span,
+        let span = self.span;
+        match self.node {
+            ExprCompiledValue::Value(x) => box move |_| Ok(x.to_value()),
+            ExprCompiledValue::Local(slot, name) => expr!("local", |eval| expr_throw(
+                eval.get_slot_local(slot, &name),
+                span,
                 eval
-            )?)
-            .as_compiled(),
-            Self::Type(x) => expr!("type", x, |_eval| {
+            )?),
+            ExprCompiledValue::LocalCaptured(slot, name) => {
+                expr!("local_captured", |eval| expr_throw(
+                    eval.get_slot_local_captured(slot, &name),
+                    span,
+                    eval
+                )?)
+            }
+            ExprCompiledValue::Module(slot) => expr!("module", |eval| expr_throw(
+                eval.get_slot_module(slot),
+                span,
+                eval
+            )?),
+            ExprCompiledValue::Type(x) => expr!("type", x, |_eval| {
                 x.get_ref().get_type_value().unpack().to_value()
-            })
-            .as_compiled(),
+            }),
+            ExprCompiledValue::Len(box x) => {
+                // Technically the length command _could_ call other functions,
+                // and we'd not get entries on the call stack, which would be bad.
+                // But `len()` is super common, and no one expects it to call other functions,
+                // so let's just ignore that corner case for additional perf.
+                expr!("len", x, |eval| Value::new_int(expr_throw(
+                    x.length(),
+                    span,
+                    eval
+                )?))
+            }
             ExprCompiledValue::TypeIs(e, t, maybe_not) => {
                 let cmp = maybe_not.as_fn();
                 expr!("type_is", e, |_eval| {
                     Value::new_bool(cmp(e.get_type_value() == t))
                 })
-                .as_compiled()
             }
+            ExprCompiledValue::Tuple(xs) => {
+                let xs = xs.into_map(|x| x.as_compiled());
+                expr!("tuple", |eval| {
+                    let xs = xs.try_map(|x| x(eval))?;
+                    eval.heap().alloc_tuple(&xs)
+                })
+            }
+            ExprCompiledValue::List(xs) => {
+                if xs.is_empty() {
+                    expr!("list_empty", |eval| eval.heap().alloc(List::default()))
+                } else if xs.iter().all(|x| x.as_value().is_some()) {
+                    let content = xs.map(|v| v.as_value().unwrap());
+                    expr!("list_static", |eval| {
+                        let content = coerce_ref(&content).clone();
+                        eval.heap().alloc(List::new(content))
+                    })
+                } else {
+                    let xs = xs.into_map(|x| x.as_compiled());
+                    expr!("list", |eval| eval
+                        .heap()
+                        .alloc(List::new(xs.try_map(|x| x(eval))?)))
+                }
+            }
+            ExprCompiledValue::Dict(xs) => {
+                if xs.is_empty() {
+                    return expr!("dict_empty", |eval| eval.heap().alloc(Dict::default()));
+                }
+                if xs.iter().all(|(k, _)| k.as_value().is_some()) {
+                    if xs.iter().all(|(_, v)| v.as_value().is_some()) {
+                        let mut res = SmallMap::new();
+                        for (k, v) in xs.iter() {
+                            res.insert_hashed(
+                                k.as_value()
+                                    .unwrap()
+                                    .get_hashed()
+                                    .expect("Dictionary literals are hashable"),
+                                v.as_value().unwrap(),
+                            );
+                        }
+                        // If we lost some elements, then there are duplicates, so don't take the fast-literal
+                        // path and go down the slow runtime path (which will raise the error).
+                        // We have a lint that will likely fire on this issue (and others).
+                        if res.len() == xs.len() {
+                            return expr!("dict_static", |eval| {
+                                let res = coerce_ref(&res).clone();
+                                eval.heap().alloc(Dict::new(res))
+                            });
+                        }
+                    } else {
+                        // The keys are all constant, but the variables change.
+                        // At least we can pre-hash these values.
+                        let xs = xs.into_map(|(k, v)| {
+                            (
+                                k.as_value()
+                                    .unwrap()
+                                    .get_hashed()
+                                    .expect("Dictionary literals are hashable"),
+                                v.as_compiled(),
+                            )
+                        });
+                        return expr!("dict_static_key", |eval| {
+                            let mut r = SmallMap::with_capacity(xs.len());
+                            for (k, v) in &xs {
+                                if r.insert_hashed(k.to_hashed_value(), v(eval)?).is_some() {
+                                    expr_throw(
+                                        Err(EvalError::DuplicateDictionaryKey(k.key().to_string())
+                                            .into()),
+                                        span,
+                                        eval,
+                                    )?;
+                                }
+                            }
+                            eval.heap().alloc(Dict::new(r))
+                        });
+                    }
+                }
+
+                let xs = xs.into_map(|(k, v)| {
+                    (
+                        Spanned {
+                            span: k.span,
+                            node: k.as_compiled(),
+                        },
+                        v.as_compiled(),
+                    )
+                });
+                expr!("dict", |eval| {
+                    let mut r = SmallMap::with_capacity(xs.len());
+                    for (k, v) in &xs {
+                        let k_value = k(eval)?;
+                        if r.insert_hashed(
+                            expr_throw(k_value.get_hashed(), k.span, eval)?,
+                            v(eval)?,
+                        )
+                        .is_some()
+                        {
+                            expr_throw(
+                                Err(EvalError::DuplicateDictionaryKey(k_value.to_string()).into()),
+                                span,
+                                eval,
+                            )?;
+                        }
+                    }
+                    eval.heap().alloc(Dict::new(r))
+                })
+            }
+            ExprCompiledValue::Compr(c) => c.as_compiled(),
+            ExprCompiledValue::If(box (cond, t, f)) => {
+                let t = t.as_compiled();
+                let f = f.as_compiled();
+                expr!("if_expr", cond, |eval| {
+                    if cond.to_bool() { t(eval)? } else { f(eval)? }
+                })
+            }
+            ExprCompiledValue::Dot(box left, s) => {
+                expr!("dot", left, |eval| {
+                    let (attr_type, v) =
+                        expr_throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
+                    if attr_type == AttrType::Field {
+                        v
+                    } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
+                        expr_throw(v_attr.call(left, eval), span, eval)?
+                    } else {
+                        // Insert self so the method see the object it is acting on
+                        eval.heap().alloc(BoundMethod::new(left, v))
+                    }
+                })
+            }
+            ExprCompiledValue::ArrayIndirection(box (array, index)) => {
+                expr!("index", array, index, |eval| {
+                    expr_throw(array.at(index, eval.heap()), span, eval)?
+                })
+            }
+            ExprCompiledValue::Equals(box (l, r), maybe_not) => {
+                let cmp = maybe_not.as_fn();
+                expr!("equals", l, r, |eval| {
+                    Value::new_bool(cmp(expr_throw(l.equals(r), span, eval)?))
+                })
+            }
+            ExprCompiledValue::Compare(box (l, r), cmp) => expr!("compare", l, r, |eval| {
+                Value::new_bool(cmp(expr_throw(l.compare(r), span, eval)?))
+            }),
+            ExprCompiledValue::Slice(box (coll, start, stop, step)) => {
+                eval_slice(span, coll, start, stop, step)
+            }
+            ExprCompiledValue::Not(box expr) => {
+                expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool()))
+            }
+            ExprCompiledValue::Minus(box expr) => expr!("minus", expr, |eval| expr_throw(
+                expr.minus(eval.heap()),
+                span,
+                eval
+            )?),
+            ExprCompiledValue::Plus(box expr) => expr!("plus", expr, |eval| expr_throw(
+                expr.plus(eval.heap()),
+                span,
+                eval
+            )?),
+            ExprCompiledValue::BitNot(box expr) => {
+                expr!("bit_not", expr, |eval| Value::new_int(!expr_throw(
+                    expr.to_int(),
+                    span,
+                    eval
+                )?))
+            }
+            ExprCompiledValue::Or(box (l, r)) => {
+                let r = r.as_compiled();
+                expr!("or", l, |eval| {
+                    if l.to_bool() { l } else { r(eval)? }
+                })
+            }
+            ExprCompiledValue::And(box (l, r)) => {
+                let r = r.as_compiled();
+                expr!("and", l, |eval| {
+                    if !l.to_bool() { l } else { r(eval)? }
+                })
+            }
+            ExprCompiledValue::Call(call) => call.as_compiled(),
+            ExprCompiledValue::Def(def) => def.as_compiled(),
+            ExprCompiledValue::Op(op, box (l, r)) => match op {
+                ExprBinOp::In => expr!("in", r, l, |eval| {
+                    expr_throw(r.is_in(l).map(Value::new_bool), span, eval)?
+                }),
+                ExprBinOp::NotIn => expr!("not_in", r, l, |eval| {
+                    expr_throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
+                }),
+                ExprBinOp::Add => {
+                    expr!("add", l, r, |eval| {
+                        // Addition of string is super common and pretty cheap, so have a special case for it.
+                        if let Some(ls) = l.unpack_str() {
+                            if let Some(rs) = r.unpack_str() {
+                                if ls.is_empty() {
+                                    return Ok(r);
+                                } else if rs.is_empty() {
+                                    return Ok(l);
+                                } else {
+                                    return Ok(eval.heap().alloc_str_concat(ls, rs));
+                                }
+                            }
+                        }
+
+                        // Written using Value::add so that Rust Analyzer doesn't think it is an error.
+                        expr_throw(Value::add(l, r, eval.heap()), span, eval)?
+                    })
+                }
+                ExprBinOp::Sub => expr!("subtract", l, r, |eval| expr_throw(
+                    l.sub(r, eval.heap()),
+                    span,
+                    eval
+                )?),
+                ExprBinOp::Multiply => expr!("multiply", l, r, |eval| expr_throw(
+                    l.mul(r, eval.heap()),
+                    span,
+                    eval
+                )?),
+                ExprBinOp::Percent => expr!("percent", l, r, |eval| {
+                    expr_throw(l.percent(r, eval.heap()), span, eval)?
+                }),
+                ExprBinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
+                    expr_throw(l.floor_div(r, eval.heap()), span, eval)?
+                }),
+                ExprBinOp::BitAnd => expr!("bit_and", l, r, |eval| expr_throw(
+                    l.bit_and(r),
+                    span,
+                    eval
+                )?),
+                ExprBinOp::BitOr => {
+                    expr!("bit_or", l, r, |eval| expr_throw(l.bit_or(r), span, eval)?)
+                }
+                ExprBinOp::BitXor => expr!("bit_xor", l, r, |eval| expr_throw(
+                    l.bit_xor(r),
+                    span,
+                    eval
+                )?),
+                ExprBinOp::LeftShift => expr!("left_shift", l, r, |eval| expr_throw(
+                    l.left_shift(r),
+                    span,
+                    eval
+                )?),
+                ExprBinOp::RightShift => expr!("right_shift", l, r, |eval| expr_throw(
+                    l.right_shift(r),
+                    span,
+                    eval
+                )?),
+            },
         }
     }
 }
@@ -112,9 +447,8 @@ pub(crate) enum EvalError {
 }
 
 fn eval_compare(
-    span: Span,
-    l: ExprCompiledValue,
-    r: ExprCompiledValue,
+    l: Spanned<ExprCompiledValue>,
+    r: Spanned<ExprCompiledValue>,
     cmp: fn(Ordering) -> bool,
 ) -> ExprCompiledValue {
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
@@ -124,24 +458,43 @@ fn eval_compare(
         }
     }
 
-    expr!("compare", l, r, |eval| {
-        Value::new_bool(cmp(expr_throw(l.compare(r), span, eval)?))
-    })
+    ExprCompiledValue::Compare(box (l, r), cmp)
 }
 
 /// Try fold expression `cmp(l == r)` into `cmp(type(x) == "y")`.
 /// Return original `l` and `r` arguments if fold was unsuccessful.
 fn try_eval_type_is(
-    l: ExprCompiledValue,
-    r: ExprCompiledValue,
+    l: Spanned<ExprCompiledValue>,
+    r: Spanned<ExprCompiledValue>,
     maybe_not: MaybeNot,
-) -> Result<ExprCompiledValue, (ExprCompiledValue, ExprCompiledValue)> {
+) -> Result<Spanned<ExprCompiledValue>, (Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)> {
     match (l, r) {
-        (ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)) => {
+        (
+            Spanned {
+                node: ExprCompiledValue::Type(l),
+                span: l_span,
+            },
+            Spanned {
+                node: ExprCompiledValue::Value(r),
+                span: r_span,
+            },
+        ) => {
             if let Some(r) = FrozenStringValue::new(r) {
-                Ok(ExprCompiledValue::TypeIs(l, r, maybe_not))
+                Ok(Spanned {
+                    node: ExprCompiledValue::TypeIs(l, r, maybe_not),
+                    span: l_span.merge(r_span),
+                })
             } else {
-                Err((ExprCompiledValue::Type(l), ExprCompiledValue::Value(r)))
+                Err((
+                    Spanned {
+                        node: ExprCompiledValue::Type(l),
+                        span: l_span,
+                    },
+                    Spanned {
+                        node: ExprCompiledValue::Value(r),
+                        span: r_span,
+                    },
+                ))
             }
         }
         (l, r) => Err((l, r)),
@@ -149,9 +502,8 @@ fn try_eval_type_is(
 }
 
 fn eval_equals(
-    span: Span,
-    l: ExprCompiledValue,
-    r: ExprCompiledValue,
+    l: Spanned<ExprCompiledValue>,
+    r: Spanned<ExprCompiledValue>,
     maybe_not: MaybeNot,
 ) -> ExprCompiledValue {
     let cmp = maybe_not.as_fn();
@@ -163,30 +515,28 @@ fn eval_equals(
     }
 
     let (l, r) = match try_eval_type_is(l, r, maybe_not) {
-        Ok(e) => return e,
+        Ok(e) => return e.node,
         Err((l, r)) => (l, r),
     };
 
     let (r, l) = match try_eval_type_is(r, l, maybe_not) {
-        Ok(e) => return e,
+        Ok(e) => return e.node,
         Err((r, l)) => (r, l),
     };
 
-    expr!("equals", l, r, |eval| {
-        Value::new_bool(cmp(expr_throw(l.equals(r), span, eval)?))
-    })
+    ExprCompiledValue::Equals(box (l, r), maybe_not)
 }
 
 fn eval_slice(
     span: Span,
-    collection: ExprCompiledValue,
-    start: Option<ExprCompiledValue>,
-    stop: Option<ExprCompiledValue>,
-    stride: Option<ExprCompiledValue>,
-) -> ExprCompiledValue {
-    let start = start.map(ExprCompiledValue::as_compiled);
-    let stop = stop.map(ExprCompiledValue::as_compiled);
-    let stride = stride.map(ExprCompiledValue::as_compiled);
+    collection: Spanned<ExprCompiledValue>,
+    start: Option<Spanned<ExprCompiledValue>>,
+    stop: Option<Spanned<ExprCompiledValue>>,
+    stride: Option<Spanned<ExprCompiledValue>>,
+) -> ExprCompiled {
+    let start = start.map(Spanned::<ExprCompiledValue>::as_compiled);
+    let stop = stop.map(Spanned::<ExprCompiledValue>::as_compiled);
+    let stride = stride.map(Spanned::<ExprCompiledValue>::as_compiled);
     expr!("slice", collection, |eval| {
         let start = match start {
             Some(ref e) => Some(e(eval)?),
@@ -290,7 +640,7 @@ pub(crate) fn get_attr_hashed<'v>(
 }
 
 impl Compiler<'_> {
-    pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<ExprCompiledValue> {
+    pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<Spanned<ExprCompiledValue>> {
         expr.map(|v| self.expr(*v))
     }
 
@@ -316,7 +666,6 @@ impl Compiler<'_> {
         let resolved_ident =
             resolved_ident.unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
         let name = ident.node;
-        let span = ident.span;
         match resolved_ident {
             ResolvedIdent::Slot((Slot::Local(slot), binding_id)) => {
                 let binding = self.scope_data.get_binding(binding_id);
@@ -324,12 +673,8 @@ impl Compiler<'_> {
                 // We can't look up the local variabless in advance, because they are different each time
                 // we go through a new function call.
                 match binding.captured {
-                    Captured::Yes => expr!("local_captured", |eval| expr_throw(
-                        eval.get_slot_local_captured(slot, &name),
-                        span,
-                        eval
-                    )?),
-                    Captured::No => ExprCompiledValue::Local(slot, Spanned { node: name, span }),
+                    Captured::Yes => ExprCompiledValue::LocalCaptured(slot, name),
+                    Captured::No => ExprCompiledValue::Local(slot, name),
                 }
             }
             ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
@@ -346,29 +691,17 @@ impl Compiler<'_> {
                         }
                     }
                 }
-                // We can't look up the module variables in advance because the first time around they are
-                // mutables, but after freezing they point at a different set of frozen slots.
-                expr!("module", |eval| expr_throw(
-                    eval.get_slot_module(slot),
-                    span,
-                    eval
-                )?)
+
+                ExprCompiledValue::Module(slot)
             }
             ResolvedIdent::Global(v) => value!(v),
         }
     }
 
-    pub(crate) fn expr_spanned(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
-        Spanned {
-            span: expr.span,
-            node: self.expr(expr),
-        }
-    }
-
-    pub fn expr(&mut self, expr: CstExpr) -> ExprCompiledValue {
+    pub(crate) fn expr(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
         // println!("compile {}", expr.node);
         let span = expr.span;
-        match expr.node {
+        let expr = match expr.node {
             ExprP::Identifier(ident, resolved_ident) => self.expr_ident(ident, resolved_ident),
             ExprP::Lambda(params, box inner, scope_id) => {
                 let suite = Spanned {
@@ -381,118 +714,19 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self
-                        .module_env
-                        .frozen_heap()
-                        .alloc(FrozenTuple::new(content));
+                    let result = self.module_env.frozen_heap().alloc_tuple(&content);
                     value!(result)
                 } else {
-                    let xs = xs.into_map(|x| x.as_compiled());
-                    expr!("tuple", |eval| eval
-                        .heap()
-                        .alloc(Tuple::new(xs.try_map(|x| x(eval))?)))
+                    ExprCompiledValue::Tuple(xs)
                 }
             }
             ExprP::List(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
-                if xs.is_empty() {
-                    expr!("list_empty", |eval| eval.heap().alloc(List::default()))
-                } else if xs.iter().all(|x| x.as_value().is_some()) {
-                    let content = xs.map(|v| v.as_value().unwrap());
-                    expr!("list_static", |eval| {
-                        let content = coerce_ref(&content).clone();
-                        eval.heap().alloc(List::new(content))
-                    })
-                } else {
-                    let xs = xs.into_map(|x| x.as_compiled());
-                    expr!("list", |eval| eval
-                        .heap()
-                        .alloc(List::new(xs.try_map(|x| x(eval))?)))
-                }
+                ExprCompiledValue::List(xs)
             }
             ExprP::Dict(exprs) => {
-                let xs = exprs.into_map(|(k, v)| (self.expr_spanned(k), self.expr(v)));
-                if xs.is_empty() {
-                    return expr!("dict_empty", |eval| eval.heap().alloc(Dict::default()));
-                }
-                if xs.iter().all(|(k, _)| k.as_value().is_some()) {
-                    if xs.iter().all(|(_, v)| v.as_value().is_some()) {
-                        let mut res = SmallMap::new();
-                        for (k, v) in xs.iter() {
-                            res.insert_hashed(
-                                k.as_value()
-                                    .unwrap()
-                                    .get_hashed()
-                                    .expect("Dictionary literals are hashable"),
-                                v.as_value().unwrap(),
-                            );
-                        }
-                        // If we lost some elements, then there are duplicates, so don't take the fast-literal
-                        // path and go down the slow runtime path (which will raise the error).
-                        // We have a lint that will likely fire on this issue (and others).
-                        if res.len() == xs.len() {
-                            return expr!("dict_static", |eval| {
-                                let res = coerce_ref(&res).clone();
-                                eval.heap().alloc(Dict::new(res))
-                            });
-                        }
-                    } else {
-                        // The keys are all constant, but the variables change.
-                        // At least we can pre-hash these values.
-                        let xs = xs.into_map(|(k, v)| {
-                            (
-                                k.as_value()
-                                    .unwrap()
-                                    .get_hashed()
-                                    .expect("Dictionary literals are hashable"),
-                                v.as_compiled(),
-                            )
-                        });
-                        return expr!("dict_static_key", |eval| {
-                            let mut r = SmallMap::with_capacity(xs.len());
-                            for (k, v) in &xs {
-                                if r.insert_hashed(k.to_hashed_value(), v(eval)?).is_some() {
-                                    expr_throw(
-                                        Err(EvalError::DuplicateDictionaryKey(k.key().to_string())
-                                            .into()),
-                                        span,
-                                        eval,
-                                    )?;
-                                }
-                            }
-                            eval.heap().alloc(Dict::new(r))
-                        });
-                    }
-                }
-
-                let xs = xs.into_map(|(k, v)| {
-                    (
-                        Spanned {
-                            span: k.span,
-                            node: k.node.as_compiled(),
-                        },
-                        v.as_compiled(),
-                    )
-                });
-                expr!("dict", |eval| {
-                    let mut r = SmallMap::with_capacity(xs.len());
-                    for (k, v) in &xs {
-                        let k_value = k(eval)?;
-                        if r.insert_hashed(
-                            expr_throw(k_value.get_hashed(), k.span, eval)?,
-                            v(eval)?,
-                        )
-                        .is_some()
-                        {
-                            expr_throw(
-                                Err(EvalError::DuplicateDictionaryKey(k_value.to_string()).into()),
-                                span,
-                                eval,
-                            )?;
-                        }
-                    }
-                    eval.heap().alloc(Dict::new(r))
-                })
+                let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                ExprCompiledValue::Dict(xs)
             }
             ExprP::If(box (cond, then_expr, else_expr)) => {
                 let then_expr = self.expr(then_expr);
@@ -503,11 +737,7 @@ impl Compiler<'_> {
                     Conditional::Normal(cond) => (cond, then_expr, else_expr),
                     Conditional::Negate(cond) => (cond, else_expr, then_expr),
                 };
-                let t = t.as_compiled();
-                let f = f.as_compiled();
-                expr!("if_expr", cond, |eval| {
-                    if cond.to_bool() { t(eval)? } else { f(eval)? }
-                })
+                ExprCompiledValue::If(box (cond, t, f))
             }
             ExprP::Dot(left, right) => {
                 let left = self.expr(*left);
@@ -516,7 +746,10 @@ impl Compiler<'_> {
                 if let Some(left) = left.as_value() {
                     if let Some((attr_type, v)) = self.compile_time_getattr(left, &s) {
                         if attr_type == AttrType::Field {
-                            return ExprCompiledValue::Value(v);
+                            return Spanned {
+                                span,
+                                node: ExprCompiledValue::Value(v),
+                            };
                         } else {
                             // TODO: maybe call attribute at compile time
                             // TODO: maybe create bound method at compile time
@@ -524,41 +757,31 @@ impl Compiler<'_> {
                     }
                 }
 
-                expr!("dot", left, |eval| {
-                    let (attr_type, v) =
-                        expr_throw(get_attr_hashed(left, &s, eval.heap()), span, eval)?;
-                    if attr_type == AttrType::Field {
-                        v
-                    } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                        expr_throw(v_attr.call(left, eval), span, eval)?
-                    } else {
-                        // Insert self so the method see the object it is acting on
-                        eval.heap().alloc(BoundMethod::new(left, v))
-                    }
-                })
+                ExprCompiledValue::Dot(box left, s)
             }
             ExprP::Call(box left, args) => self.expr_call(span, left, args),
             ExprP::ArrayIndirection(box (array, index)) => {
                 let array = self.expr(array);
                 let index = self.expr(index);
-                expr!("index", array, index, |eval| {
-                    expr_throw(array.at(index, eval.heap()), span, eval)?
-                })
+                ExprCompiledValue::ArrayIndirection(box (array, index))
             }
             ExprP::Slice(collection, start, stop, stride) => {
                 let collection = self.expr(*collection);
                 let start = start.map(|x| self.expr(*x));
                 let stop = stop.map(|x| self.expr(*x));
                 let stride = stride.map(|x| self.expr(*x));
-                eval_slice(span, collection, start, stop, stride)
+                ExprCompiledValue::Slice(box (collection, start, stop, stride))
             }
             ExprP::Not(expr) => {
                 let expr = self.expr(*expr);
-                match expr.as_value() {
-                    Some(x) => {
+                match expr {
+                    Spanned {
+                        node: ExprCompiledValue::Value(x),
+                        ..
+                    } => {
                         value!(FrozenValue::new_bool(!x.get_ref().to_bool()))
                     }
-                    _ => expr!("not", expr, |_eval| Value::new_bool(!expr.to_bool())),
+                    expr => ExprCompiledValue::Not(box expr),
                 }
             }
             ExprP::Minus(expr) => {
@@ -569,31 +792,19 @@ impl Compiler<'_> {
                     .and_then(i32::checked_neg)
                 {
                     Some(i) => value!(FrozenValue::new_int(i)),
-                    _ => expr!("minus", expr, |eval| expr_throw(
-                        expr.minus(eval.heap()),
-                        span,
-                        eval
-                    )?),
+                    _ => ExprCompiledValue::Minus(box expr),
                 }
             }
             ExprP::Plus(expr) => {
                 let expr = self.expr(*expr);
                 match expr.as_value() {
                     Some(x) if x.unpack_int().is_some() => value!(x),
-                    _ => expr!("plus", expr, |eval| expr_throw(
-                        expr.plus(eval.heap()),
-                        span,
-                        eval
-                    )?),
+                    _ => ExprCompiledValue::Plus(box expr),
                 }
             }
             ExprP::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                expr!("bit_not", expr, |eval| Value::new_int(!expr_throw(
-                    expr.to_int(),
-                    span,
-                    eval
-                )?))
+                ExprCompiledValue::BitNot(box expr)
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
@@ -608,113 +819,57 @@ impl Compiler<'_> {
 
                     let l = self.expr(*left);
                     let r = self.expr(right);
+                    // ExprCompiledValue::Op(span, op, box(l, r))
                     match op {
                         BinOp::Or => {
                             if let Some(l) = l.as_value() {
-                                if l.to_value().to_bool() { value!(l) } else { r }
+                                return if l.to_value().to_bool() {
+                                    Spanned {
+                                        span,
+                                        node: value!(l),
+                                    }
+                                } else {
+                                    r
+                                };
                             } else {
-                                let r = r.as_compiled();
-                                expr!("or", l, |eval| {
-                                    if l.to_bool() { l } else { r(eval)? }
-                                })
+                                ExprCompiledValue::Or(box (l, r))
                             }
                         }
                         BinOp::And => {
                             if let Some(l) = l.as_value() {
-                                if !l.to_value().to_bool() {
-                                    value!(l)
+                                return if !l.to_value().to_bool() {
+                                    Spanned {
+                                        span,
+                                        node: value!(l),
+                                    }
                                 } else {
                                     r
-                                }
+                                };
                             } else {
-                                let r = r.as_compiled();
-                                expr!("and", l, |eval| {
-                                    if !l.to_bool() { l } else { r(eval)? }
-                                })
+                                ExprCompiledValue::And(box (l, r))
                             }
                         }
-                        BinOp::Equal => eval_equals(span, l, r, MaybeNot::Id),
-                        BinOp::NotEqual => eval_equals(span, l, r, MaybeNot::Not),
-                        BinOp::Less => eval_compare(span, l, r, |x| x == Ordering::Less),
-                        BinOp::Greater => eval_compare(span, l, r, |x| x == Ordering::Greater),
-                        BinOp::LessOrEqual => eval_compare(span, l, r, |x| x != Ordering::Greater),
-                        BinOp::GreaterOrEqual => eval_compare(span, l, r, |x| x != Ordering::Less),
-                        BinOp::In => expr!("in", r, l, |eval| {
-                            expr_throw(r.is_in(l).map(Value::new_bool), span, eval)?
-                        }),
-                        BinOp::NotIn => expr!("not_in", r, l, |eval| {
-                            expr_throw(r.is_in(l).map(|x| Value::new_bool(!x)), span, eval)?
-                        }),
-                        BinOp::Subtract => {
-                            expr!("subtract", l, r, |eval| expr_throw(
-                                l.sub(r, eval.heap()),
-                                span,
-                                eval
-                            )?)
+                        BinOp::Equal => eval_equals(l, r, MaybeNot::Id),
+                        BinOp::NotEqual => eval_equals(l, r, MaybeNot::Not),
+                        BinOp::Less => eval_compare(l, r, |x| x == Ordering::Less),
+                        BinOp::Greater => eval_compare(l, r, |x| x == Ordering::Greater),
+                        BinOp::LessOrEqual => eval_compare(l, r, |x| x != Ordering::Greater),
+                        BinOp::GreaterOrEqual => eval_compare(l, r, |x| x != Ordering::Less),
+                        BinOp::In => ExprCompiledValue::Op(ExprBinOp::In, box (l, r)),
+                        BinOp::NotIn => ExprCompiledValue::Op(ExprBinOp::NotIn, box (l, r)),
+                        BinOp::Subtract => ExprCompiledValue::Op(ExprBinOp::Sub, box (l, r)),
+                        BinOp::Add => ExprCompiledValue::Op(ExprBinOp::Add, box (l, r)),
+                        BinOp::Multiply => ExprCompiledValue::Op(ExprBinOp::Multiply, box (l, r)),
+                        BinOp::Percent => ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r)),
+                        BinOp::FloorDivide => {
+                            ExprCompiledValue::Op(ExprBinOp::FloorDivide, box (l, r))
                         }
-                        BinOp::Add => expr!("add", l, r, |eval| {
-                            // Addition of string is super common and pretty cheap, so have a special case for it.
-                            if let Some(ls) = l.unpack_str() {
-                                if let Some(rs) = r.unpack_str() {
-                                    if ls.is_empty() {
-                                        return Ok(r);
-                                    } else if rs.is_empty() {
-                                        return Ok(l);
-                                    } else {
-                                        return Ok(eval.heap().alloc_str_concat(ls, rs));
-                                    }
-                                }
-                            }
-
-                            // Written using Value::add so that Rust Analyzer doesn't think it is an error.
-                            expr_throw(Value::add(l, r, eval.heap()), span, eval)?
-                        }),
-                        BinOp::Multiply => {
-                            expr!("multiply", l, r, |eval| expr_throw(
-                                l.mul(r, eval.heap()),
-                                span,
-                                eval
-                            )?)
-                        }
-                        BinOp::Percent => expr!("percent", l, r, |eval| {
-                            expr_throw(l.percent(r, eval.heap()), span, eval)?
-                        }),
-                        BinOp::Divide => expr!("divide", l, r, |eval| {
-                            expr_throw(l.div(r, eval.heap()), span, eval)?
-                        }),
-                        BinOp::FloorDivide => expr!("floor_divide", l, r, |eval| {
-                            expr_throw(l.floor_div(r, eval.heap()), span, eval)?
-                        }),
-                        BinOp::BitAnd => {
-                            expr!("bit_and", l, r, |eval| expr_throw(
-                                l.bit_and(r),
-                                span,
-                                eval
-                            )?)
-                        }
-                        BinOp::BitOr => {
-                            expr!("bit_or", l, r, |eval| expr_throw(l.bit_or(r), span, eval)?)
-                        }
-                        BinOp::BitXor => {
-                            expr!("bit_xor", l, r, |eval| expr_throw(
-                                l.bit_xor(r),
-                                span,
-                                eval
-                            )?)
-                        }
-                        BinOp::LeftShift => {
-                            expr!("left_shift", l, r, |eval| expr_throw(
-                                l.left_shift(r),
-                                span,
-                                eval
-                            )?)
-                        }
+                        BinOp::BitAnd => ExprCompiledValue::Op(ExprBinOp::BitAnd, box (l, r)),
+                        BinOp::BitOr => ExprCompiledValue::Op(ExprBinOp::BitOr, box (l, r)),
+                        BinOp::BitXor => ExprCompiledValue::Op(ExprBinOp::BitXor, box (l, r)),
+                        BinOp::LeftShift => ExprCompiledValue::Op(ExprBinOp::LeftShift, box (l, r)),
                         BinOp::RightShift => {
-                            expr!("right_shift", l, r, |eval| expr_throw(
-                                l.right_shift(r),
-                                span,
-                                eval
-                            )?)
+                            ExprCompiledValue::Op(ExprBinOp::RightShift, box (l, r))
                         }
                     }
                 }
@@ -729,6 +884,7 @@ impl Compiler<'_> {
                 let val = x.compile(self.module_env.frozen_heap());
                 value!(val)
             }
-        }
+        };
+        Spanned { node: expr, span }
     }
 }

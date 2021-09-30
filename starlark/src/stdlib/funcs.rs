@@ -951,14 +951,14 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// tuple([1,2,3]) == (1, 2, 3)
     /// # "#);
     #[starlark_type(Tuple::TYPE)]
-    fn tuple(ref a: Option<Value>) -> Tuple<'v> {
+    fn tuple(ref a: Option<Value>) -> Value<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
             a.with_iterator(heap, |it| {
                 l.extend(it);
             })?;
         }
-        Ok(Tuple::new(l))
+        Ok(heap.alloc_tuple(&l))
     }
 
     /// [type](

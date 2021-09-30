@@ -29,10 +29,10 @@ macro_rules! expr {
                 box move |eval| f(eval)
             }
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
-                $eval.ann($name, |$eval| Ok($body))
+                Ok($body)
             });
         }
-        ExprCompiledValue::Compiled(res)
+        res
     }};
     ($name:expr, $v1:ident, |$eval:ident| $body:expr) => {{
         let $v1 = $v1.as_compiled();
@@ -46,10 +46,10 @@ macro_rules! expr {
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
                 let $v1 = $v1($eval)?;
                 #[allow(clippy::needless_question_mark)]
-                $eval.ann($name, |$eval| Ok($body))
+                Ok($body)
             });
         }
-        ExprCompiledValue::Compiled(res)
+        res
     }};
     ($name:expr, $v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
         let $v1 = $v1.as_compiled();
@@ -65,10 +65,10 @@ macro_rules! expr {
                 let $v1 = $v1($eval)?;
                 let $v2 = $v2($eval)?;
                 #[allow(clippy::needless_question_mark)]
-                $eval.ann($name, |$eval| Ok($body))
+                Ok($body)
             });
         }
-        ExprCompiledValue::Compiled(res)
+        res
     }};
 }
 
@@ -82,18 +82,17 @@ macro_rules! stmt {
     ($self:ident, $name:expr, $span:ident, |$eval:ident| $body:expr) => {{
         paste::paste! {
             fn [<ann_stmt_ $name>](
+                span: Span,
                 f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>>
                     + Send + Sync + 'static,
             ) -> StmtsCompiled {
-                StmtsCompiled::one(StmtCompiledValue::Compiled(box move |eval| f(eval)))
+                StmtsCompiled::one(Spanned { node: StmtCompiledValue::Compiled(box move |eval| f(eval)), span })
             }
-            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>](move |$eval|
-                $eval.ann($name, |$eval| {
-                    $body;
-                    #[allow(unreachable_code)]
-                    Ok(())
-                })
-            ))
+            $self.maybe_wrap_before_stmt($span, [<ann_stmt_ $name>]($span, move |$eval| {
+                $body;
+                #[allow(unreachable_code)]
+                Ok(())
+            }))
         }
     }};
 }

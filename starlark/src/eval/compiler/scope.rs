@@ -22,9 +22,9 @@ use crate::{
     eval::runtime::slots::LocalSlotId,
     syntax::{
         ast::{
-            Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstNoPayload,
-            AstParameterP, AstPayload, AstStmtP, AstString, ClauseP, ExprP, ForClauseP, ParameterP,
-            Stmt, StmtP, Visibility,
+            Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstLoadP,
+            AstNoPayload, AstParameterP, AstPayload, AstStmtP, AstString, ClauseP, ExprP,
+            ForClauseP, ParameterP, Stmt, StmtP, Visibility,
         },
         payload_map::AstPayloadFunction,
         uniplate::VisitMut,
@@ -66,7 +66,7 @@ struct Unscope(HashMap<String, UnscopeBinding>);
 pub(crate) struct ScopeNames {
     /// The number of slots this scope uses, including for parameters and `parent`.
     /// The next required slot would be at index `used`.
-    pub used: usize,
+    pub used: u32,
     /// The names that are in this scope
     pub mp: HashMap<String, (LocalSlotId, BindingId)>,
     /// Slots to copy from the parent. (index in parent, index in child).
@@ -208,7 +208,7 @@ impl<'a> Scope<'a> {
     }
 
     // Number of module slots I need, number of local anon slots I need
-    pub fn exit_module(mut self) -> (usize, usize, ScopeData) {
+    pub fn exit_module(mut self) -> (u32, u32, ScopeData) {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
         let scope_id = self.locals.pop().unwrap();
@@ -781,6 +781,7 @@ pub(crate) type CstAssignIdent = AstAssignIdentP<CstPayload>;
 pub(crate) type CstArgument = AstArgumentP<CstPayload>;
 pub(crate) type CstParameter = AstParameterP<CstPayload>;
 pub(crate) type CstStmt = AstStmtP<CstPayload>;
+pub(crate) type CstLoad = AstLoadP<CstPayload>;
 
 #[cfg(test)]
 mod test {

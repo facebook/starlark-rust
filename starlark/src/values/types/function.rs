@@ -162,9 +162,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        eval.ann("invoke_native", |eval| {
-            eval.with_call_stack(me, location, |eval| (self.function)(eval, args))
-        })
+        eval.with_call_stack(me, location, |eval| (self.function)(eval, args))
     }
 
     fn extra_memory(&self) -> usize {

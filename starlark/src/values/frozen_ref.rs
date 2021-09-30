@@ -33,6 +33,14 @@ pub struct FrozenRef<T: 'static + ?Sized> {
 }
 
 impl<T: 'static + ?Sized> FrozenRef<T> {
+    pub(crate) fn new(value: &'static T) -> FrozenRef<T> {
+        FrozenRef { value }
+    }
+
+    pub fn as_ref(self) -> &'static T {
+        self.value
+    }
+
     /// Converts `self` into a new reference that points at something reachable from the previous.
     pub fn map<F, U: 'static + ?Sized>(self, f: F) -> FrozenRef<U>
     where
@@ -68,12 +76,6 @@ impl<T: ?Sized> Deref for FrozenRef<T> {
 
     fn deref(&self) -> &T {
         self.value
-    }
-}
-
-impl<T: ?Sized> AsRef<T> for FrozenRef<T> {
-    fn as_ref(&self) -> &T {
-        &*self
     }
 }
 

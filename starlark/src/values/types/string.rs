@@ -525,19 +525,19 @@ mod tests {
     fn test_escape_characters() {
         // Test cases from the Starlark spec
         assert_eq!(
-            assert::pass(r#"'\a\b\f\n\r\t\v'"#).to_string(),
+            assert::pass(r#"'\a\b\f\n\r\t\v'"#).unpack_str().unwrap(),
             "\x07\x08\x0C\x0A\x0D\x09\x0B"
         );
-        assert_eq!(assert::pass(r#"'\0'"#).to_string(), "\x00");
-        assert_eq!(assert::pass(r#"'\12'"#).to_string(), "\n");
-        assert_eq!(assert::pass(r#"'\101-\132'"#).to_string(), "A-Z");
+        assert_eq!(assert::pass(r#"'\0'"#).unpack_str().unwrap(), "\x00");
+        assert_eq!(assert::pass(r#"'\12'"#).unpack_str().unwrap(), "\n");
+        assert_eq!(assert::pass(r#"'\101-\132'"#).unpack_str().unwrap(), "A-Z");
         // 9 is not an octal digit, so it terminates early
-        assert_eq!(assert::pass(r#"'\119'"#).to_string(), "\t9");
-        assert_eq!(assert::pass(r#"'\117'"#).to_string(), "O");
-        assert_eq!(assert::pass(r#"'\u0041'"#).to_string(), "A");
-        assert_eq!(assert::pass(r#"'\u0414'"#).to_string(), "Д");
-        assert_eq!(assert::pass(r#"'\u754c'"#).to_string(), "界");
-        assert_eq!(assert::pass(r#"'\U0001F600'"#).to_string(), "😀");
+        assert_eq!(assert::pass(r#"'\119'"#).unpack_str().unwrap(), "\t9");
+        assert_eq!(assert::pass(r#"'\117'"#).unpack_str().unwrap(), "O");
+        assert_eq!(assert::pass(r#"'\u0041'"#).unpack_str().unwrap(), "A");
+        assert_eq!(assert::pass(r#"'\u0414'"#).unpack_str().unwrap(), "Д");
+        assert_eq!(assert::pass(r#"'\u754c'"#).unpack_str().unwrap(), "界");
+        assert_eq!(assert::pass(r#"'\U0001F600'"#).unpack_str().unwrap(), "😀");
     }
 
     const EXAMPLES: &[&str] = &[

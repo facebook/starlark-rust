@@ -17,33 +17,33 @@
 
 //! The list type, an immutable sequence of values.
 
-use crate as starlark;
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{apply_slice, convert_index},
-    AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError,
-    ValueLike,
+    ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, Trace, Tracer, UnpackValue,
+    Value, ValueError, ValueLike,
 };
 use gazebo::{
     any::AnyLifetime,
-    coerce::{coerce, Coerce},
+    coerce::{coerce, coerce_ref, Coerce},
     prelude::*,
 };
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
     fmt,
-    fmt::{Display, Write},
+    fmt::{Debug, Display, Formatter, Write},
     hash::Hasher,
-    mem,
+    slice,
 };
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
-#[derive(Clone, Default_, Debug, Trace, Coerce)]
-#[repr(transparent)]
+#[derive(Clone, Default_)]
+#[repr(C)]
 pub struct TupleGen<V> {
+    len: usize,
     /// The data stored by the tuple.
-    content: Vec<V>,
+    content: [V; 0],
 }
 
 impl<'v, V: ValueLike<'v>> Display for TupleGen<V> {
@@ -63,14 +63,60 @@ impl<'v, V: ValueLike<'v>> Display for TupleGen<V> {
     }
 }
 
-starlark_complex_value!(pub Tuple);
+impl<'v, V: ValueLike<'v>> Debug for TupleGen<V> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TupleGen")
+            .field("content", &self.content())
+            .finish()
+    }
+}
+
+impl<V> TupleGen<V> {
+    pub const TYPE: &'static str = "tuple";
+
+    pub(crate) const unsafe fn new(len: usize) -> TupleGen<V> {
+        TupleGen { len, content: [] }
+    }
+}
+
+pub type Tuple<'v> = TupleGen<Value<'v>>;
+pub type FrozenTuple = TupleGen<FrozenValue>;
+
+unsafe impl<'v> Coerce<Tuple<'v>> for FrozenTuple {}
+
+unsafe impl<'v> AnyLifetime<'v> for TupleGen<Value<'v>> {
+    any_lifetime_body!(TupleGen<Value<'static>>);
+}
+
+unsafe impl<'v> AnyLifetime<'v> for TupleGen<FrozenValue> {
+    any_lifetime_body!(TupleGen<FrozenValue>);
+}
+
+unsafe impl<'v> Trace<'v> for Tuple<'v> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        for v in self.content_mut() {
+            tracer.trace(v);
+        }
+    }
+}
+
+impl<'v> Tuple<'v> {
+    pub fn from_value(value: Value<'v>) -> Option<&'v Self> {
+        if value.unpack_frozen().is_some() {
+            value.downcast_ref::<FrozenTuple>().map(coerce_ref)
+        } else {
+            value.downcast_ref::<Tuple<'v>>()
+        }
+    }
+}
+
+impl<'v> FromValue<'v> for TupleGen<Value<'v>> {
+    fn from_value(value: Value<'v>) -> Option<ARef<'v, Self>> {
+        Tuple::from_value(value).map(ARef::new_ptr)
+    }
+}
 
 impl<'v, V: ValueLike<'v>> TupleGen<V> {
-    /// Create a new tuple.
-    pub fn new(content: Vec<V>) -> Self {
-        Self { content }
-    }
-
     /// Get the length of the tuple.
     pub fn len(&self) -> usize {
         self.content().len()
@@ -78,7 +124,11 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 
     /// Tuple elements.
     pub fn content(&self) -> &[V] {
-        &self.content
+        unsafe { slice::from_raw_parts(self.content.as_ptr(), self.len) }
+    }
+
+    fn content_mut(&mut self) -> &mut [V] {
+        unsafe { slice::from_raw_parts_mut(self.content.as_mut_ptr(), self.len) }
     }
 
     /// Iterate over the elements of the tuple.
@@ -88,19 +138,6 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
     {
         self.content().iter().map(|e| e.to_value())
     }
-}
-
-impl<'v> ComplexValue<'v> for Tuple<'v> {
-    type Frozen = FrozenTuple;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(FrozenTuple {
-            content: self.content.into_try_map(|v| v.freeze(freezer))?,
-        })
-    }
-}
-
-impl<V> TupleGen<V> {
-    pub const TYPE: &'static str = "tuple";
 }
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for TupleGen<V>
@@ -135,10 +172,6 @@ where
         }
         res.push(']');
         Ok(res)
-    }
-
-    fn extra_memory(&self) -> usize {
-        self.content.capacity() * mem::size_of::<Value>()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -180,12 +213,7 @@ where
         stride: Option<Value>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc(Tuple::new(apply_slice(
-            coerce(self.content()),
-            start,
-            stop,
-            stride,
-        )?)))
+        Ok(heap.alloc_tuple(&apply_slice(coerce(self.content()), start, stop, stride)?))
     }
 
     fn iterate<'a>(
@@ -208,16 +236,14 @@ where
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = Tuple::from_value(other) {
-            let mut result = Tuple {
-                content: Vec::with_capacity(self.len() + other.len()),
-            };
+            let mut result = Vec::with_capacity(self.len() + other.len());
             for x in self.iter() {
-                result.content.push(x);
+                result.push(x);
             }
             for x in other.iter() {
-                result.content.push(x);
+                result.push(x);
             }
-            Ok(heap.alloc(result))
+            Ok(heap.alloc_tuple(&result))
         } else {
             ValueError::unsupported_with(self, "a", other)
         }
@@ -226,15 +252,11 @@ where
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_int() {
             Some(l) => {
-                let mut result = Tuple {
-                    content: Vec::new(),
-                };
+                let mut result = Vec::new();
                 for _i in 0..l {
-                    result
-                        .content
-                        .extend(self.content().iter().map(|e| e.to_value()));
+                    result.extend(self.content().iter().map(|e| e.to_value()));
                 }
-                Ok(heap.alloc(result))
+                Ok(heap.alloc_tuple(&result))
             }
             None => Err(ValueError::IncorrectParameterType.into()),
         }

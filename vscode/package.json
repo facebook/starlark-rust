@@ -106,6 +106,6 @@
         "typescript": "^4.0.2"
     },
     "dependencies": {
-        "vsce": "^1.96.1"
+        "vsce": "^1.100.1"
     }
 }

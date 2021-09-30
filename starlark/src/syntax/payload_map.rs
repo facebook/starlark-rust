@@ -24,7 +24,7 @@ use crate::{
         ParameterP, StmtP,
     },
 };
-use gazebo::prelude::VecExt;
+use gazebo::prelude::*;
 
 pub(crate) trait AstPayloadFunction<A: AstPayload, B: AstPayload> {
     fn map_ident(&mut self, a: A::IdentPayload) -> B::IdentPayload;

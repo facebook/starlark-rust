@@ -25,8 +25,8 @@ use crate::{
         Hashed, SmallMap,
     },
     values::{
-        dict::Dict, tuple::Tuple, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value,
-        ValueError, ValueLike,
+        dict::Dict, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value, ValueError,
+        ValueLike,
     },
 };
 use either::Either;
@@ -66,6 +66,10 @@ pub(crate) enum FunctionError {
 #[repr(C)]
 pub(crate) enum ParameterKind<V> {
     Required,
+    /// When optional parameter is not supplied, there's no error,
+    /// but the slot remains `None`.
+    ///
+    /// This is used only in native code, parameters of type `Option<T>` become `Optional`.
     Optional,
     Defaulted(V),
     Args,
@@ -144,12 +148,12 @@ impl<V> ParametersSpec<V> {
         }
     }
 
-    /// Change the function name.
-    pub fn set_function_name(&mut self, name: String) {
-        self.function_name = name
-    }
-
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
+        assert!(!matches!(val, ParameterKind::Args | ParameterKind::KWargs));
+
+        // Regular arguments cannot follow `**kwargs`, but can follow `*args`.
+        assert!(self.kwargs.is_none());
+
         let i = self.kinds.len();
         self.kinds.push(val);
         let old = self.names.insert(name, i);
@@ -188,7 +192,7 @@ impl<V> ParametersSpec<V> {
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn args(&mut self) {
-        assert!(self.args.is_none() && !self.no_args);
+        assert!(self.args.is_none() && !self.no_args && self.kwargs.is_none());
         self.kinds.push(ParameterKind::Args);
         self.args = Some(self.kinds.len() - 1);
     }
@@ -198,7 +202,7 @@ impl<V> ParametersSpec<V> {
     /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn no_args(&mut self) {
-        assert!(self.args.is_none() && !self.no_args);
+        assert!(self.args.is_none() && !self.no_args && self.kwargs.is_none());
         self.no_args = true;
     }
 
@@ -216,7 +220,7 @@ impl<V> ParametersSpec<V> {
     /// Produce an approximate signature for the function, combining the name and arguments.
     pub fn signature(&self) -> String {
         let mut collector = String::new();
-        self.collect_repr(&mut collector);
+        self.collect_signature(&mut collector);
         collector
     }
 
@@ -238,7 +242,7 @@ impl<V> ParametersSpec<V> {
     }
 
     // Generate a good error message for it
-    pub(crate) fn collect_repr(&self, collector: &mut String) {
+    pub(crate) fn collect_signature(&self, collector: &mut String) {
         collector.push_str(&self.function_name);
 
         // We used to make the "name" of a function include all its parameters, but that is a lot of
@@ -535,7 +539,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // Note that we deliberately give warnings about missing parameters _before_ giving warnings
         // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
         if let Some(args_pos) = self.args {
-            slots[args_pos].set(Some(heap.alloc(Tuple::new(star_args))));
+            slots[args_pos].set(Some(heap.alloc_tuple(&star_args)));
         } else if unlikely(!star_args.is_empty()) {
             return Err(FunctionError::ExtraPositionalParameters {
                 count: star_args.len(),

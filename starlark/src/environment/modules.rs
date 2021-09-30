@@ -32,7 +32,7 @@ use crate::{
         docs,
         docs::{DocItem, DocString},
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
-        StarlarkValue, Value, ValueLike,
+        StarlarkValue, Value,
     },
 };
 use derive_more::Display;
@@ -56,24 +56,18 @@ pub struct FrozenModule(FrozenHeapRef, FrozenModuleRef);
 #[display(fmt = "{:?}", self)] // Type should not be user visible
 pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
+impl FrozenModuleRef {
+    pub(crate) fn get_module_data(&self) -> &FrozenModuleData {
+        self.0.as_ref()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct FrozenModuleData {
     pub(crate) names: FrozenNames,
     pub(crate) slots: FrozenSlots,
     docstring: Option<String>,
 }
-
-// When a definition is frozen, it still needs to get at some module info,
-// specifically the slots (for execution) and the names (for debugging).
-// Since the module slots also reference the definitions, they can't use a
-// normal Arc since otherwise we'll have a loop and never collect a module.
-// Solution is to put the slots in the heap, as a `FrozenValue`, then
-// we wrap a `FrozenModuleValue` around it to give some type safety and a place
-// to put the APIs.
-#[derive(Clone, Dupe, Copy)]
-// Deliberately don't derive Debug, since this value often occurs in cycles,
-// and Debug printing of that would be bad.
-pub(crate) struct FrozenModuleValue(FrozenValue); // Must contain a FrozenModuleRef inside it
 
 /// Container for the documentation for a module
 #[derive(Clone, Debug, PartialEq)]
@@ -208,20 +202,6 @@ impl<'v> StarlarkValue<'v> for FrozenModuleRef {
 
 impl SimpleValue for FrozenModuleRef {}
 
-impl FrozenModuleValue {
-    pub fn new(freezer: &Freezer) -> Self {
-        Self(freezer.get_magic())
-    }
-
-    pub fn set(freezer: &mut Freezer, val: &FrozenModuleRef) {
-        freezer.set_magic(val.dupe())
-    }
-
-    pub fn get<'v>(self) -> &'v FrozenModuleData {
-        &self.0.downcast_ref::<FrozenModuleRef>().unwrap().0
-    }
-}
-
 impl Default for Module {
     fn default() -> Self {
         Self::new()
@@ -289,14 +269,17 @@ impl Module {
         // Note that we even freeze anonymous slots, since they are accessed by
         // slot-index in the code, and we don't walk into them, so don't know if
         // they are used.
-        let mut freezer = Freezer::new::<FrozenModuleRef>(frozen_heap);
+        let freezer = Freezer::new(frozen_heap);
         let slots = slots.freeze(&freezer)?;
         let rest = FrozenModuleRef(Arc::new(FrozenModuleData {
             names: names.freeze(),
             slots,
             docstring: docstring.into_inner(),
         }));
-        FrozenModuleValue::set(&mut freezer, &rest);
+        let frozen_module_ref = freezer.heap.alloc_simple_frozen_ref(rest.dupe());
+        for frozen_def in freezer.frozen_defs.borrow().as_slice() {
+            frozen_def.post_freeze(frozen_module_ref);
+        }
         // The values MUST be alive up until this point (as the above line uses them),
         // but can now be dropped
         mem::drop(heap);

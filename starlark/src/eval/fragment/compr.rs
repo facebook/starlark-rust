@@ -18,7 +18,7 @@
 //! List/dict/set comprenension evaluation.
 
 use crate::{
-    codemap::Span,
+    codemap::{Span, Spanned},
     collections::SmallMap,
     eval::{
         compiler::{
@@ -29,7 +29,7 @@ use crate::{
         fragment::{
             expr::{ExprCompiled, ExprCompiledValue},
             known::list_to_tuple,
-            stmt::AssignCompiled,
+            stmt::AssignCompiledValue,
         },
         runtime::evaluator::Evaluator,
         ExprEvalException,
@@ -37,6 +37,7 @@ use crate::{
     syntax::ast::{ClauseP, ForClauseP},
     values::{dict::Dict, list::List, Value},
 };
+use gazebo::prelude::*;
 
 impl Compiler<'_> {
     pub fn list_comprehension(
@@ -46,8 +47,8 @@ impl Compiler<'_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
         let clauses = compile_clauses(for_, clauses, self);
-        let x = self.expr(x).as_compiled();
-        eval_list(x, clauses)
+        let x = self.expr(x);
+        ExprCompiledValue::Compr(ComprCompiled::List(box x, clauses))
     }
 
     pub fn dict_comprehension(
@@ -58,9 +59,9 @@ impl Compiler<'_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiledValue {
         let clauses = compile_clauses(for_, clauses, self);
-        let k = self.expr_spanned(k);
+        let k = self.expr(k);
         let v = self.expr(v);
-        eval_dict(k.node.as_compiled(), k.span, v.as_compiled(), clauses)
+        ExprCompiledValue::Compr(ComprCompiled::Dict(box (k, v), clauses))
     }
 }
 
@@ -68,7 +69,10 @@ impl Compiler<'_> {
 fn compile_ifs(
     clauses: &mut Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
-) -> (Option<ForClauseP<CstPayload>>, Vec<ExprCompiled>) {
+) -> (
+    Option<ForClauseP<CstPayload>>,
+    Vec<Spanned<ExprCompiledValue>>,
+) {
     let mut ifs = Vec::new();
     while let Some(x) = clauses.pop() {
         match x {
@@ -77,7 +81,7 @@ fn compile_ifs(
                 return (Some(f), ifs);
             }
             ClauseP::If(x) => {
-                ifs.push(compiler.expr(x).as_compiled());
+                ifs.push(compiler.expr(x));
             }
         }
     }
@@ -103,7 +107,7 @@ fn compile_clauses(
             None => {
                 res.push(ClauseCompiled {
                     var: compiler.assign(for_.var),
-                    over: over.as_compiled(),
+                    over,
                     over_span,
                     ifs,
                 });
@@ -112,7 +116,7 @@ fn compile_clauses(
             Some(f) => {
                 let over_span = f.over.span;
                 res.push(ClauseCompiled {
-                    over: compiler.expr(f.over).as_compiled(),
+                    over: compiler.expr(f.over),
                     var: compiler.assign(f.var),
                     over_span,
                     ifs,
@@ -122,25 +126,34 @@ fn compile_clauses(
     }
 }
 
-fn eval_list(x: ExprCompiled, mut clauses: Vec<ClauseCompiled>) -> ExprCompiledValue {
+fn eval_list(x: Spanned<ExprCompiledValue>, mut clauses: Vec<ClauseCompiled>) -> ExprCompiled {
     if clauses.len() == 1 && clauses[0].ifs.is_empty() {
         let c = clauses.pop().unwrap();
-        expr!("list_comp_map", |eval| {
-            let iterable = (c.over)(eval)?;
+        let ClauseCompiled {
+            var,
+            over,
+            over_span,
+            ifs,
+        } = c;
+        assert!(ifs.is_empty());
+        let x = x.as_compiled();
+        let var = var.as_compiled();
+        expr!("list_comp_map", over, |eval| {
             expr_throw(
-                iterable.with_iterator(eval.heap(), |it| -> Result<_, ExprEvalException> {
+                over.with_iterator(eval.heap(), |it| -> Result<_, ExprEvalException> {
                     let mut res = Vec::with_capacity(it.size_hint().0);
                     for i in it {
-                        (c.var)(i, eval)?;
+                        var(i, eval)?;
                         res.push(x(eval)?);
                     }
                     Ok(eval.heap().alloc(List::new(res)))
                 }),
-                c.over_span,
+                over_span,
                 eval,
             )??
         })
     } else {
+        let x = x.as_compiled();
         let clauses = eval_one_dimensional_comprehension_list(clauses, box move |me, eval| {
             let x = x(eval)?;
             me.push(x);
@@ -155,11 +168,13 @@ fn eval_list(x: ExprCompiled, mut clauses: Vec<ClauseCompiled>) -> ExprCompiledV
 }
 
 fn eval_dict(
-    k: ExprCompiled,
-    k_span: Span,
-    v: ExprCompiled,
+    k: Spanned<ExprCompiledValue>,
+    v: Spanned<ExprCompiledValue>,
     clauses: Vec<ClauseCompiled>,
-) -> ExprCompiledValue {
+) -> ExprCompiled {
+    let k_span = k.span;
+    let k = k.as_compiled();
+    let v = v.as_compiled();
     let clauses = eval_one_dimensional_comprehension_dict(clauses, box move |me, eval| {
         let k = k(eval)?;
         let v = v(eval)?;
@@ -174,11 +189,28 @@ fn eval_dict(
     })
 }
 
-struct ClauseCompiled {
-    var: AssignCompiled,
-    over: ExprCompiled,
+pub(crate) enum ComprCompiled {
+    List(Box<Spanned<ExprCompiledValue>>, Vec<ClauseCompiled>),
+    Dict(
+        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+        Vec<ClauseCompiled>,
+    ),
+}
+
+impl ComprCompiled {
+    pub(crate) fn as_compiled(self) -> ExprCompiled {
+        match self {
+            ComprCompiled::List(box x, clauses) => eval_list(x, clauses),
+            ComprCompiled::Dict(box (k, v), clauses) => eval_dict(k, v, clauses),
+        }
+    }
+}
+
+pub(crate) struct ClauseCompiled {
+    var: Spanned<AssignCompiledValue>,
+    over: Spanned<ExprCompiledValue>,
     over_span: Span,
-    ifs: Vec<ExprCompiled>,
+    ifs: Vec<Spanned<ExprCompiledValue>>,
 }
 
 // FIXME: These two expressions are identical, but I need higher-kinded
@@ -203,13 +235,22 @@ fn eval_one_dimensional_comprehension_dict(
         + Sync,
 > {
     if let Some(c) = clauses.pop() {
+        let ClauseCompiled {
+            var,
+            over,
+            over_span,
+            ifs,
+        } = c;
+        let over = over.as_compiled();
+        let var = var.as_compiled();
+        let ifs = ifs.into_map(|c| c.as_compiled());
         let rest = eval_one_dimensional_comprehension_dict(clauses, add);
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
-            let iterable = (c.over)(eval)?;
-            'f: for i in expr_throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
-                (c.var)(i, eval)?;
-                for ifc in &c.ifs {
+            let iterable = over(eval)?;
+            'f: for i in expr_throw(iterable.iterate(eval.heap()), over_span, eval)? {
+                var(i, eval)?;
+                for ifc in &ifs {
                     if !ifc(eval)?.to_bool() {
                         continue 'f;
                     }
@@ -236,13 +277,22 @@ fn eval_one_dimensional_comprehension_list(
         + Sync,
 > {
     if let Some(c) = clauses.pop() {
+        let ClauseCompiled {
+            var,
+            over,
+            over_span,
+            ifs,
+        } = c;
+        let over = over.as_compiled();
+        let var = var.as_compiled();
+        let ifs = ifs.into_map(|c| c.as_compiled());
         let rest = eval_one_dimensional_comprehension_list(clauses, add);
         box move |accumulator, eval| {
             // println!("eval1 {:?} {:?}", ***e, clauses);
-            let iterable = (c.over)(eval)?;
-            'f: for i in expr_throw(iterable.iterate(eval.heap()), c.over_span, eval)? {
-                (c.var)(i, eval)?;
-                for ifc in &c.ifs {
+            let iterable = over(eval)?;
+            'f: for i in expr_throw(iterable.iterate(eval.heap()), over_span, eval)? {
+                var(i, eval)?;
+                for ifc in &ifs {
                     if !ifc(eval)?.to_bool() {
                         continue 'f;
                     }

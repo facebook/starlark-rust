@@ -47,7 +47,6 @@ pub(crate) struct HeapProfile {
 struct CallEnter<'v> {
     function: Value<'v>,
     time: Instant,
-    memory: usize,
 }
 
 impl<'v> ComplexValue<'v> for CallEnter<'v> {
@@ -65,7 +64,6 @@ impl<'v> StarlarkValue<'v> for CallEnter<'v> {
 #[display(fmt = "CallExit")]
 struct CallExit {
     time: Instant,
-    memory: usize,
 }
 
 impl SimpleValue for CallExit {}
@@ -139,20 +137,17 @@ impl HeapProfile {
 
     pub(crate) fn record_call_enter<'v>(&self, function: Value<'v>, heap: &'v Heap) {
         if self.enabled {
-            heap.alloc_complex(CallEnter {
-                function,
-                time: Instant::now(),
-                memory: heap.allocated_bytes_inline(),
-            });
+            let time = Instant::now();
+            heap.alloc_complex_in_drop(CallEnter { function, time });
+            heap.alloc_complex_in_non_drop(CallEnter { function, time });
         }
     }
 
     pub(crate) fn record_call_exit<'v>(&self, heap: &'v Heap) {
         if self.enabled {
-            heap.alloc_simple(CallExit {
-                time: Instant::now(),
-                memory: heap.allocated_bytes_inline(),
-            });
+            let time = Instant::now();
+            heap.alloc_simple_in_drop(CallExit { time });
+            heap.alloc_simple_in_non_drop(CallExit { time });
         }
     }
 
@@ -207,7 +202,7 @@ impl HeapProfile {
         let mut info = Info {
             ids,
             info: Vec::new(),
-            last_changed: (start, 0),
+            last_changed: start,
             call_stack: vec![(root, Duration::default(), start)],
         };
         info.ensure(root);
@@ -232,7 +227,7 @@ impl HeapProfile {
 
         write!(
             file,
-            "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Bytes,Allocs"
+            "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Allocs"
         )?;
         for x in &columns {
             write!(file, ",\"{}\"", &x.0)?;
@@ -247,17 +242,22 @@ impl HeapProfile {
                 .iter()
                 .max_by_key(|x| x.1)
                 .unwrap_or((&blank, &0));
+            assert!(
+                info.calls % 2 == 0,
+                "we enter calls twice, for drop and non_drop"
+            );
+            // We divide calls and time by two
+            // because we could calls twice: for drop and non-drop bumps.
             write!(
                 file,
-                "\"{}\",{:.3},{:.3},{},{},\"{}\",{},{},{}",
+                "\"{}\",{:.3},{:.3},{},{},\"{}\",{},{}",
                 un_ids[rowname],
-                info.time.as_secs_f64(),
-                info.time_rec.as_secs_f64(),
-                info.calls,
+                info.time.as_secs_f64() / 2.0,
+                info.time_rec.as_secs_f64() / 2.0,
+                info.calls / 2,
                 info.callers.len(),
                 un_ids[callers.0.0],
                 callers.1,
-                info.memory,
                 allocs
             )?;
             for x in &columns {
@@ -281,8 +281,6 @@ mod summary {
         pub callers: HashMap<FunctionId, usize>,
         /// Time spent directly in this function
         pub time: Duration,
-        /// Inline memory used directly in this function
-        pub memory: usize,
         /// Time spent directly in this function and recursive functions.
         pub time_rec: Duration,
         /// Allocations made by this function
@@ -295,7 +293,6 @@ mod summary {
             for x in xs {
                 result.calls += x.calls;
                 result.time += x.time;
-                result.memory += x.memory;
                 for (k, v) in x.allocs.iter() {
                     *result.allocs.entry(k).or_insert(0) += v;
                 }
@@ -318,7 +315,7 @@ mod summary {
         /// Information about all functions
         pub info: Vec<FuncInfo>,
         /// When the top of the stack last changed
-        pub last_changed: (Instant, usize),
+        pub last_changed: Instant,
         /// Each entry is (Function, time_rec when I started, time I started)
         /// The time_rec is recorded so that recursion doesn't screw up time_rec
         pub call_stack: Vec<(FunctionId, Duration, Instant)>,
@@ -341,33 +338,27 @@ mod summary {
         }
 
         /// Called before you change the top of the stack
-        fn change(&mut self, time: Instant, memory: usize) {
-            let (old_time, old_memory) = self.last_changed;
+        fn change(&mut self, time: Instant) {
+            let old_time = self.last_changed;
             let ti = self.top_info();
             ti.time += time.checked_duration_since(old_time).unwrap_or_default();
-            ti.memory += memory - old_memory;
-            self.last_changed = (time, memory);
+            self.last_changed = time;
         }
 
         /// Process each ValueMem in their chronological order
         pub fn process<'v>(&mut self, x: Value<'v>) {
-            if let Some(CallEnter {
-                function,
-                time,
-                memory,
-            }) = x.downcast_ref()
-            {
+            if let Some(CallEnter { function, time }) = x.downcast_ref() {
                 let id = self.ids.get_value(*function);
                 self.ensure(id);
-                self.change(*time, *memory);
+                self.change(*time);
 
                 let top = self.top_id();
                 let mut me = &mut self.info[id.0];
                 me.calls += 1;
                 *me.callers.entry(top).or_insert(0) += 1;
                 self.call_stack.push((id, me.time_rec, *time));
-            } else if let Some(CallExit { time, memory }) = x.downcast_ref() {
-                self.change(*time, *memory);
+            } else if let Some(CallExit { time }) = x.downcast_ref() {
+                self.change(*time);
                 let (name, time_rec, start) = self.call_stack.pop().unwrap();
                 self.info[name.0].time_rec =
                     time_rec + time.checked_duration_since(start).unwrap_or_default();

@@ -17,19 +17,19 @@
 
 use crate::values::{Trace, Tracer, Value};
 use gazebo::prelude::*;
-use std::{cell::Cell, mem};
+use std::{cell::Cell, convert::TryInto, mem};
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
-pub(crate) struct LocalSlotId(pub(crate) usize);
+pub(crate) struct LocalSlotId(pub(crate) u32);
 
 impl LocalSlotId {
-    pub fn new(index: usize) -> Self {
+    pub fn new(index: u32) -> Self {
         Self(index)
     }
 }
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
-pub(crate) struct LocalSlotBase(usize);
+pub(crate) struct LocalSlotBase(u32);
 
 /// Slots that are used in a local context, e.g. for a function that is executing.
 /// Always mutable, never frozen. Uses the `ValueRef` because they have reference
@@ -64,9 +64,10 @@ impl<'v> LocalSlots<'v> {
         }
     }
 
-    pub fn reserve(&mut self, len: usize) -> LocalSlotBase {
-        let res = LocalSlotBase(self.slots.len());
-        self.slots.resize(self.slots.len() + len, Cell::new(None));
+    pub fn reserve(&mut self, len: u32) -> LocalSlotBase {
+        let res = LocalSlotBase(self.slots.len().try_into().unwrap());
+        self.slots
+            .resize(self.slots.len() + len as usize, Cell::new(None));
         res
     }
 
@@ -78,7 +79,7 @@ impl<'v> LocalSlots<'v> {
         // If people create two reservations and use them in an odd manner, we probably get issues here
         // but they will be caught by the bound check.
         // NOTE: If we ever remove bounds checks, this probably needs to check its the final reservation.
-        self.slots.truncate(base.0);
+        self.slots.truncate(base.0 as usize);
     }
 
     pub fn release(&mut self, new_base: LocalSlotBase) {
@@ -87,15 +88,15 @@ impl<'v> LocalSlots<'v> {
     }
 
     pub fn get_slots_at(&self, base: LocalSlotBase) -> &[Cell<Option<Value<'v>>>] {
-        &self.slots[base.0..]
+        &self.slots[base.0 as usize..]
     }
 
     /// Gets a local variable. Returns None to indicate the variable is not yet assigned.
     pub fn get_slot(&self, slot: LocalSlotId) -> Option<Value<'v>> {
-        self.slots[self.base.0 + slot.0].get()
+        self.slots[self.base.0 as usize + slot.0 as usize].get()
     }
 
     pub fn set_slot(&self, slot: LocalSlotId, value: Value<'v>) {
-        self.slots[self.base.0 + slot.0].set(Some(value));
+        self.slots[self.base.0 as usize + slot.0 as usize].set(Some(value));
     }
 }
