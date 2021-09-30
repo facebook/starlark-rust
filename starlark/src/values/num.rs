@@ -27,6 +27,7 @@ pub enum Num {
 
 
 impl Num {
+    /// Try unpacking Value into a Num
     pub fn try_from_value(value: Value) -> Option<Self> {
         if let Some(i) = value.unpack_int() {
             Some(Self::Int(i))
@@ -37,20 +38,7 @@ impl Num {
         }
     }
 
-    pub fn is_int(self) -> bool {
-        match self {
-            Self::Int(_) => true,
-            Self::Float(_) => false,
-        }
-    }
-
-    pub fn is_float(self) -> bool {
-        match self {
-            Self::Int(_) => false,
-            Self::Float(_) => true,
-        }
-    }
-
+    /// Get underlying value as float
     pub fn as_float(self) -> f64 {
         match self {
             Self::Int(i) => i as f64,
@@ -58,10 +46,16 @@ impl Num {
         }
     }
 
+    /// Get underlying value as int (if it can be precisely expressed as int)
     pub fn as_int(self) -> Option<i32> {
         match self {
             Self::Int(i) => Some(i),
             Self::Float(f) => {
+                // f64 can precisely represent all i32 values
+                // by a simple cast here we get for free:
+                // - making sure f doesn't have fractional part
+                // - i32 boundary checks
+                // - handling of special floats (+/- inf, nan)
                 let int_candidate = f as i32;
                 if f == int_candidate as f64 {
                     Some(int_candidate)
@@ -72,6 +66,7 @@ impl Num {
         }
     }
 
+    /// Get hash of the underlying number
     pub fn get_hash(self) -> u64 {
         match (self.as_int(), self) {
             // equal ints and floats should have the same hash
@@ -111,6 +106,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_from_value() {
+        assert!(Num::try_from_value(Value::new_bool(true)).is_none());
+        assert!(Num::try_from_value(Value::new_bool(false)).is_none());
+        assert!(Num::try_from_value(Value::new_empty_string()).is_none());
+        assert!(Num::try_from_value(Value::new_none()).is_none());
+
+        assert_eq!(Num::try_from_value(Value::new_int(0)).unwrap().as_int(), Some(0));
+        assert_eq!(Num::try_from_value(Value::new_int(42)).unwrap().as_int(), Some(42));
+        assert_eq!(Num::try_from_value(Value::new_int(-42)).unwrap().as_int(), Some(-42));
+    }
+
+    #[test]
+    fn test_converstion_to_float() {
+        assert_eq!(Num::Int(0).as_float(), 0.0);
+        assert_eq!(Num::Int(i32::MAX).as_float(), i32::MAX as f64);
+        assert_eq!(Num::Int(i32::MIN).as_float(), i32::MIN as f64);
+
+        assert_eq!(Num::Float(0.0).as_float(), 0.0);
+        assert!(Num::Float(f64::NAN).as_float().is_nan());
+    }
+
+    #[test]
     fn test_conversion_to_int() {
         assert_eq!(Num::Int(0).as_int(), Some(0));
         assert_eq!(Num::Int(42).as_int(), Some(42));
@@ -128,5 +145,14 @@ mod tests {
         assert_eq!(Num::Float(f64::NAN).as_int(), None);
         assert_eq!(Num::Float(f64::INFINITY).as_int(), None);
         assert_eq!(Num::Float(f64::NEG_INFINITY).as_int(), None);
+    }
+
+    #[test]
+    fn test_hashing() {
+        assert_eq!(Num::Int(0).get_hash(), Num::Float(0.0).get_hash());
+        assert_eq!(Num::Int(42).get_hash(), Num::Float(42.0).get_hash());
+
+        assert_eq!(Num::Float(f64::INFINITY + f64::NEG_INFINITY).get_hash(), Num::Float(f64::NAN).get_hash());
+        assert_eq!(Num::Float("0.25".parse().unwrap()).get_hash(), Num::Float("25e-2".parse().unwrap()).get_hash());
     }
 }
