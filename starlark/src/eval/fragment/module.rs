@@ -18,10 +18,11 @@
 //! Compile and evaluate module top-level statements.
 
 use crate::{
+    environment::EnvironmentError,
     eval::{
         compiler::{
-            scope::{CstStmt, ScopeId},
-            Compiler, EvalException,
+            scope::{CstLoad, CstStmt, ScopeId, Slot},
+            throw, Compiler, EvalException,
         },
         Evaluator,
     },
@@ -29,6 +30,39 @@ use crate::{
 };
 
 impl Compiler<'_> {
+    fn eval_load<'v>(
+        &mut self,
+        load: CstLoad,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> Result<(), EvalException<'v>> {
+        let name = load.node.module.node;
+
+        let loadenv = match eval.loader.as_ref() {
+            None => {
+                return Err(EvalException::Error(
+                    EnvironmentError::NoImportsAvailable(name).into(),
+                ));
+            }
+            Some(load) => load.load(&name).map_err(EvalException::Error)?,
+        };
+
+        for (our_name, their_name) in load.node.args {
+            let (slot, _captured) = self.scope_data.get_assign_ident_slot(&our_name);
+            let slot = match slot {
+                Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
+                Slot::Module(slot) => slot,
+            };
+            let value = throw(
+                eval.module_env.load_symbol(&loadenv, &their_name.node),
+                our_name.span.merge(their_name.span),
+                eval,
+            )?;
+            eval.set_slot_module(slot, value)
+        }
+
+        Ok(())
+    }
+
     fn eval_top_level_stmt<'v>(
         &mut self,
         stmt: CstStmt,
@@ -41,6 +75,7 @@ impl Compiler<'_> {
                 }
                 Ok(())
             }
+            StmtP::Load(load) => self.eval_load(load, evaluator),
             _ => {
                 let stmt = self.stmt(stmt, true).as_compiled(self);
                 stmt(evaluator)

@@ -22,9 +22,9 @@ use crate::{
     eval::runtime::slots::LocalSlotId,
     syntax::{
         ast::{
-            Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstNoPayload,
-            AstParameterP, AstPayload, AstStmtP, AstString, ClauseP, ExprP, ForClauseP, ParameterP,
-            Stmt, StmtP, Visibility,
+            Assign, AssignIdent, AstArgumentP, AstAssignIdentP, AstAssignP, AstExprP, AstLoadP,
+            AstNoPayload, AstParameterP, AstPayload, AstStmtP, AstString, ClauseP, ExprP,
+            ForClauseP, ParameterP, Stmt, StmtP, Visibility,
         },
         payload_map::AstPayloadFunction,
         uniplate::VisitMut,
@@ -781,6 +781,7 @@ pub(crate) type CstAssignIdent = AstAssignIdentP<CstPayload>;
 pub(crate) type CstArgument = AstArgumentP<CstPayload>;
 pub(crate) type CstParameter = AstParameterP<CstPayload>;
 pub(crate) type CstStmt = AstStmtP<CstPayload>;
+pub(crate) type CstLoad = AstLoadP<CstPayload>;
 
 #[cfg(test)]
 mod test {

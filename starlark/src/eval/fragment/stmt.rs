@@ -24,7 +24,7 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     codemap::{Span, Spanned},
-    environment::{slots::ModuleSlotId, EnvironmentError},
+    environment::slots::ModuleSlotId,
     eval::{
         compiler::{
             expr_throw,
@@ -711,38 +711,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            StmtP::Load(load) => {
-                let name = load.node.module.node;
-                let symbols = load.node.args.into_map(|(x, y)| {
-                    let (slot, _captured) = self.scope_data.get_assign_ident_slot(&x);
-                    (
-                        match slot {
-                            Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
-                            Slot::Module(slot) => slot,
-                        },
-                        y.node,
-                        x.span.merge(y.span),
-                    )
-                });
-                stmt!(self, "load", span, |eval| {
-                    let loadenv = match eval.loader.as_ref() {
-                        None => {
-                            return Err(EvalException::Error(
-                                EnvironmentError::NoImportsAvailable(name.to_owned()).into(),
-                            ));
-                        }
-                        Some(load) => load.load(&name).map_err(EvalException::Error)?,
-                    };
-                    for (new_name, orig_name, span) in &symbols {
-                        let value = throw(
-                            eval.module_env.load_symbol(&loadenv, orig_name),
-                            *span,
-                            eval,
-                        )?;
-                        eval.set_slot_module(*new_name, value)
-                    }
-                })
-            }
+            StmtP::Load(..) => unreachable!(),
             StmtP::Pass => StmtsCompiled::empty(),
             StmtP::Break => stmt!(self, "break", span, |_eval| return Err(
                 EvalException::Break
