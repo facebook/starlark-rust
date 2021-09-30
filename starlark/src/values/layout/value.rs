@@ -130,7 +130,7 @@ impl<'v> Value<'v> {
         self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
     }
 
-    /// Otain the underlying numerical value, if it is one.
+    /// Obtain the underlying numerical value, if it is one.
     pub fn unpack_num(self) -> Option<Num> {
         Num::try_from_value(self)
     }
