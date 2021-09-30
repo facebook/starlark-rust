@@ -82,34 +82,12 @@ impl<'v> StarlarkValue<'v> for f64 {
         Ok(self.to_string())
     }
 
-    fn to_int(&self) -> anyhow::Result<i32> {
-        match Num::from(self.trunc()).as_int() {
-            Some(i) => Ok(i),
-            None => Err(ValueError::IntegerOverflow.into()),
-        }
-    }
-
     fn to_bool(&self) -> bool {
         *self != 0.0
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        Ok(
-            if self.is_nan() {
-                // all possible NaNs should hash to the same value
-                0
-            } else if *self == f64::INFINITY {
-                u64::MAX
-            } else if *self == f64::NEG_INFINITY {
-                u64::MIN
-            } else {
-                // match hash of int when possible
-                match self.to_int() {
-                    Ok(i) => i as u64,
-                    Err(_) => self.to_bits(),
-                }
-            }
-        )
+        Ok(Num::from(*self).get_hash())
     }
 
     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

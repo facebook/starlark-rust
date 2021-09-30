@@ -71,6 +71,27 @@ impl Num {
             }
         }
     }
+
+    pub fn get_hash(self) -> u64 {
+        match (self.as_int(), self) {
+            // equal ints and floats should have the same hash
+            (Some(i), _) => i as u64,
+            (None, Self::Float(f)) => {
+                if f.is_nan() {
+                    // all possible NaNs should hash to the same value
+                    0
+                } else if f.is_infinite() {
+                    u64::MAX
+                } else {
+                    f.to_bits()
+                }
+            }
+            (None, Self::Int(i)) => {
+                // shouldn't happen - as_int() should have resulted in an int
+                i as u64
+            }
+        }
+    }
 }
 
 impl From<i32> for Num {

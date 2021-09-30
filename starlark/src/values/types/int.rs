@@ -99,7 +99,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         self.get() != 0
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
-        Ok(self.get() as u64)
+        Ok(Num::from(self.get()).get_hash())
     }
     fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_int(self.get()))

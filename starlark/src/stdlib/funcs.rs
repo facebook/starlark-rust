@@ -31,6 +31,7 @@ use crate::{
         int::INT_TYPE,
         list::List,
         none::NoneType,
+        num::Num,
         range::Range,
         string::STRING_TYPE,
         tuple::Tuple,
@@ -558,14 +559,21 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     x,
                 )),
             }
-        } else {
-            match base {
-                Some(base) => Err(anyhow!(
+        } else if let Some(base) = base {
+            Err(anyhow!(
                     "int() cannot convert non-string with explicit base '{}'",
                     base.to_repr()
-                )),
-                None => Ok(a.to_int()?),
+            ))
+        } else if let Some(Num::Float(f)) = a.unpack_num() {
+            match Num::from(f.trunc()).as_int() {
+                Some(i) => Ok(i),
+                None => Err(anyhow!(
+                    "int() cannot convert float to integer: {}",
+                    a.to_repr()
+                ))
             }
+        } else {
+            Ok(a.to_int()?)
         }
     }
 

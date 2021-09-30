@@ -112,7 +112,6 @@ fn test_go() {
             "int overflow in starlark-rust",
 
             // FIXME
-            "duplicate key: 123",   // float dict keys lint - works for integer floats but not caught here
             "assert.eq(str(0.), ",  // str for floats
             "assert.eq(str(.0), ",  // str for floats
             "assert.eq(str(1 // neginf), ", // str for floats
@@ -122,9 +121,7 @@ fn test_go() {
             "assert.eq(str(-1.",  // str for floats
             "assert.eq(str(negzero),",  // str for floats
             "assert.eq(str(sorted([inf, neginf, nan, 1e300, -1e300,",   // str for floats
-            "want int",     // float used for indexing strings/ranges/lists (should fail)
-            "assert.eq(str(nandict),",  // float as dict keys
-            "assert.eq(str({inf: 1, neginf: 2}),",
+            "%d",   // float format strings
             "%e",   // float format strings
             "%f",   // float format strings
             "%g",   // float format strings
