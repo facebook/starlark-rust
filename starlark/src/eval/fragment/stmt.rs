@@ -51,26 +51,194 @@ use thiserror::Error;
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
 
+pub(crate) enum AssignModifyLhs {
+    Dot(Spanned<ExprCompiledValue>, String),
+    Array(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
+    Local(Spanned<(LocalSlotId, Captured, String)>),
+    Module(Spanned<ModuleSlotId>),
+}
+
 pub(crate) enum StmtCompiledValue {
-    Compiled(StmtCompiled),
+    PossibleGc,
     Return(Option<Spanned<ExprCompiledValue>>),
+    Expr(Spanned<ExprCompiledValue>),
+    Assign(Spanned<AssignCompiledValue>, Spanned<ExprCompiledValue>),
+    AssignModify(AssignModifyLhs, AssignModifyOp, Spanned<ExprCompiledValue>),
+    If(Box<(Spanned<ExprCompiledValue>, StmtsCompiled, StmtsCompiled)>),
+    For(
+        Box<(
+            Spanned<AssignCompiledValue>,
+            Spanned<ExprCompiledValue>,
+            StmtsCompiled,
+        )>,
+    ),
+    Break,
+    Continue,
 }
 
 impl Spanned<StmtCompiledValue> {
     pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
         let span = self.span;
         match self.node {
-            StmtCompiledValue::Compiled(c) => c,
-            StmtCompiledValue::Return(None) => stmt!(compiler, "return_none", span, |_eval| {
-                return Err(EvalException::Return(Value::new_none()));
-            })
-            .as_compiled(compiler),
+            StmtCompiledValue::PossibleGc => box move |eval| {
+                possible_gc(eval);
+                Ok(())
+            },
+            StmtCompiledValue::Return(None) => {
+                stmt!(compiler, "return_none", span, |_eval| {
+                    return Err(EvalException::Return(Value::new_none()));
+                })
+            }
             StmtCompiledValue::Return(Some(e)) => {
                 let e = e.as_compiled();
                 stmt!(compiler, "return", span, |eval| {
                     return Err(EvalException::Return(e(eval)?));
                 })
-                .as_compiled(compiler)
+            }
+            StmtCompiledValue::Expr(e) => {
+                let e = e.as_compiled();
+                stmt!(compiler, "expr", span, |eval| {
+                    e(eval)?;
+                })
+            }
+            StmtCompiledValue::Assign(lhs, rhs) => {
+                let lhs = lhs.as_compiled();
+                let rhs = rhs.as_compiled();
+                stmt!(compiler, "assign", span, |eval| {
+                    lhs(rhs(eval)?, eval)?;
+                })
+            }
+            StmtCompiledValue::AssignModify(AssignModifyLhs::Dot(e, s), op, rhs) => {
+                let span_stmt = span;
+                let span_lhs = e.span;
+                let e = e.as_compiled();
+                let rhs = rhs.as_compiled();
+                stmt!(compiler, "assign_dot", span_stmt, |eval| {
+                    let e: Value = e(eval)?;
+                    let (_, v) = throw(e.get_attr_error(&s, eval.heap()), span_lhs, eval)?;
+                    let rhs = rhs(eval)?;
+                    throw(
+                        e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?),
+                        span_stmt,
+                        eval,
+                    )?;
+                })
+            }
+            StmtCompiledValue::AssignModify(AssignModifyLhs::Array(lhs, idx), op, rhs) => {
+                let span_stmt = span;
+                let span_lhs = lhs.span;
+                let e = lhs.as_compiled();
+                let idx = idx.as_compiled();
+                let rhs = rhs.as_compiled();
+                stmt!(compiler, "assign_array", span_stmt, |eval| {
+                    let e: Value = e(eval)?;
+                    let idx = idx(eval)?;
+                    let v = throw(e.at(idx, eval.heap()), span_lhs, eval)?;
+                    let rhs = rhs(eval)?;
+                    throw(
+                        e.set_at(idx, throw(op(v, rhs, eval), span_stmt, eval)?),
+                        span_stmt,
+                        eval,
+                    )?;
+                })
+            }
+            StmtCompiledValue::AssignModify(AssignModifyLhs::Local(lhs), op, rhs) => {
+                let span_stmt = span;
+                let span_lhs = lhs.span;
+                let (slot, captured, name) = lhs.node;
+                let rhs = rhs.as_compiled();
+                match captured {
+                    Captured::Yes => stmt!(compiler, "assign_local_captured", span_stmt, |eval| {
+                        let v = throw(eval.get_slot_local_captured(slot, &name), span_lhs, eval)?;
+                        let rhs = rhs(eval)?;
+                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                        eval.set_slot_local_captured(slot, v);
+                    }),
+                    Captured::No => stmt!(compiler, "assign_local", span_stmt, |eval| {
+                        let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
+                        let rhs = rhs(eval)?;
+                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                        eval.set_slot_local(slot, v);
+                    }),
+                }
+            }
+            StmtCompiledValue::AssignModify(AssignModifyLhs::Module(lhs), op, rhs) => {
+                let span_stmt = span;
+                let span_lhs = lhs.span;
+                let slot = lhs.node;
+                let rhs = rhs.as_compiled();
+                stmt!(compiler, "assign_module", span_stmt, |eval| {
+                    let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
+                    let rhs = rhs(eval)?;
+                    let v = throw(op(v, rhs, eval), span_stmt, eval)?;
+                    eval.set_slot_module(slot, v);
+                })
+            }
+            StmtCompiledValue::If(box (cond, then_block, else_block)) => {
+                let cond = cond.as_compiled();
+                if else_block.is_empty() {
+                    let then_block = then_block.as_compiled(compiler);
+                    stmt!(compiler, "if_then", span, |eval| if cond(eval)?.to_bool() {
+                        then_block(eval)?
+                    })
+                } else if then_block.is_empty() {
+                    let else_block = else_block.as_compiled(compiler);
+                    stmt!(
+                        compiler,
+                        "if_not_then",
+                        span,
+                        |eval| if !cond(eval)?.to_bool() {
+                            else_block(eval)?
+                        }
+                    )
+                } else {
+                    let then_block = then_block.as_compiled(compiler);
+                    let else_block = else_block.as_compiled(compiler);
+                    stmt!(
+                        compiler,
+                        "if_then_else",
+                        span,
+                        |eval| if cond(eval)?.to_bool() {
+                            then_block(eval)?
+                        } else {
+                            else_block(eval)?
+                        }
+                    )
+                }
+            }
+            StmtCompiledValue::For(box (var, over, body)) => {
+                let var = var.as_compiled();
+                let over_span = over.span;
+                let over = over.as_compiled();
+                let st = body.as_compiled(compiler);
+                stmt!(compiler, "for", span, |eval| {
+                    let heap = eval.heap();
+                    let iterable = over(eval)?;
+                    throw(
+                        iterable.with_iterator(heap, |it| {
+                            for v in it {
+                                var(v, eval)?;
+                                match st(eval) {
+                                    Err(EvalException::Break) => break,
+                                    Err(EvalException::Continue) => {}
+                                    Err(e) => return Err(e),
+                                    _ => {}
+                                }
+                            }
+                            Ok(())
+                        }),
+                        over_span,
+                        eval,
+                    )??;
+                })
+            }
+            StmtCompiledValue::Break => stmt!(compiler, "break", span, |_eval| return Err(
+                EvalException::Break
+            )),
+            StmtCompiledValue::Continue => {
+                stmt!(compiler, "continue", span, |_eval| return Err(
+                    EvalException::Continue
+                ))
             }
         }
     }
@@ -113,14 +281,6 @@ impl StmtsCompiled {
 
     pub(crate) fn one(stmt: Spanned<StmtCompiledValue>) -> StmtsCompiled {
         StmtsCompiled(SmallVec1::One(stmt))
-    }
-
-    pub(crate) fn len(&self) -> usize {
-        match &self.0 {
-            SmallVec1::Empty => 0,
-            SmallVec1::One(_) => 1,
-            SmallVec1::Many(stmts) => stmts.len(),
-        }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -298,74 +458,50 @@ impl Compiler<'_> {
         let span_lhs = lhs.span;
         match lhs.node {
             AssignP::Dot(e, s) => {
-                let e = self.expr(*e).as_compiled();
-                let s = s.node;
-                let rhs = rhs.as_compiled();
-                stmt!(self, "assign_dot", span_stmt, |eval| {
-                    let e: Value = e(eval)?;
-                    let (_, v) = throw(e.get_attr_error(&s, eval.heap()), span_lhs, eval)?;
-                    let rhs = rhs(eval)?;
-                    throw(
-                        e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?),
-                        span_stmt,
-                        eval,
-                    )?;
+                let e = self.expr(*e);
+                StmtsCompiled::one(Spanned {
+                    span: span_stmt,
+                    node: StmtCompiledValue::AssignModify(AssignModifyLhs::Dot(e, s.node), op, rhs),
                 })
             }
             AssignP::ArrayIndirection(box (e, idx)) => {
-                let e = self.expr(e).as_compiled();
-                let idx = self.expr(idx).as_compiled();
-                let rhs = rhs.as_compiled();
-                stmt!(self, "assign_array", span_stmt, |eval| {
-                    let e: Value = e(eval)?;
-                    let idx = idx(eval)?;
-                    let v = throw(e.at(idx, eval.heap()), span_lhs, eval)?;
-                    let rhs = rhs(eval)?;
-                    throw(
-                        e.set_at(idx, throw(op(v, rhs, eval), span_stmt, eval)?),
-                        span_stmt,
-                        eval,
-                    )?;
+                let e = self.expr(e);
+                let idx = self.expr(idx);
+                StmtsCompiled::one(Spanned {
+                    span: span_stmt,
+                    node: StmtCompiledValue::AssignModify(AssignModifyLhs::Array(e, idx), op, rhs),
                 })
             }
             AssignP::Identifier(ident) => {
                 let (slot, captured) = self.scope_data.get_assign_ident_slot(&ident);
-                let name = ident.node;
+                let name = ident.node.0;
                 match slot {
                     Slot::Local(slot) => {
-                        let rhs = rhs.as_compiled();
-                        let name = name.0;
-                        match captured {
-                            Captured::Yes => {
-                                stmt!(self, "assign_local_captured", span_stmt, |eval| {
-                                    let v = throw(
-                                        eval.get_slot_local_captured(slot, &name),
-                                        span_lhs,
-                                        eval,
-                                    )?;
-                                    let rhs = rhs(eval)?;
-                                    let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                                    eval.set_slot_local_captured(slot, v);
-                                })
-                            }
-                            Captured::No => {
-                                stmt!(self, "assign_local", span_stmt, |eval| {
-                                    let v =
-                                        throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
-                                    let rhs = rhs(eval)?;
-                                    let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                                    eval.set_slot_local(slot, v);
-                                })
-                            }
-                        }
+                        let lhs = Spanned {
+                            node: (slot, captured, name),
+                            span: span_lhs,
+                        };
+                        StmtsCompiled::one(Spanned {
+                            span: span_stmt,
+                            node: StmtCompiledValue::AssignModify(
+                                AssignModifyLhs::Local(lhs),
+                                op,
+                                rhs,
+                            ),
+                        })
                     }
                     Slot::Module(slot) => {
-                        let rhs = rhs.as_compiled();
-                        stmt!(self, "assign_module", span_stmt, |eval| {
-                            let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
-                            let rhs = rhs(eval)?;
-                            let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                            eval.set_slot_module(slot, v);
+                        let lhs = Spanned {
+                            node: slot,
+                            span: span_lhs,
+                        };
+                        StmtsCompiled::one(Spanned {
+                            span: span_stmt,
+                            node: StmtCompiledValue::AssignModify(
+                                AssignModifyLhs::Module(lhs),
+                                op,
+                                rhs,
+                            ),
                         })
                     }
                 }
@@ -487,17 +623,12 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
 }
 
 impl Compiler<'_> {
-    fn maybe_wrap_before_stmt(&mut self, span: Span, stmt: StmtsCompiled) -> StmtsCompiled {
-        assert!(stmt.len() == 1);
+    fn maybe_wrap_before_stmt(&mut self, span: Span, stmt: StmtCompiled) -> StmtCompiled {
         if self.has_before_stmt {
-            let stmt = stmt.as_compiled(self);
-            StmtsCompiled::one(Spanned {
-                node: StmtCompiledValue::Compiled(box move |eval| {
-                    before_stmt(span, eval);
-                    stmt(eval)
-                }),
-                span,
-            })
+            box move |eval| {
+                before_stmt(span, eval);
+                stmt(eval)
+            }
         } else {
             stmt
         }
@@ -511,14 +642,12 @@ impl Compiler<'_> {
         if allow_gc && !is_statements {
             // We could do this more efficiently by fusing the possible_gc
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
-            let res = res.as_compiled(self);
-            StmtsCompiled::one(Spanned {
+            let mut with_gc = StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::Compiled(box move |eval| {
-                    possible_gc(eval);
-                    res(eval)
-                }),
-            })
+                node: StmtCompiledValue::PossibleGc,
+            });
+            with_gc.extend(res);
+            with_gc
         } else {
             res
         }
@@ -534,15 +663,16 @@ impl Compiler<'_> {
         if then_block.is_empty() {
             self.stmt_expr_compiled(span, cond)
         } else {
-            let then_block = then_block.as_compiled(self);
-            let cond = cond.as_compiled();
+            #[allow(clippy::collapsible_else_if)]
             if cond_is_positive {
-                stmt!(self, "if_then", span, |eval| if cond(eval)?.to_bool() {
-                    then_block(eval)?
+                StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::If(box (cond, then_block, StmtsCompiled::empty())),
                 })
             } else {
-                stmt!(self, "if_then", span, |eval| if !cond(eval)?.to_bool() {
-                    then_block(eval)?
+                StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::If(box (cond, StmtsCompiled::empty(), then_block)),
                 })
             }
         }
@@ -585,19 +715,10 @@ impl Compiler<'_> {
         } else if t.is_empty() {
             self.stmt_if_compiled(span, cond, false, f)
         } else {
-            let cond = cond.as_compiled();
-            let t = t.as_compiled(self);
-            let f = f.as_compiled(self);
-            stmt!(
-                self,
-                "if_then_else",
+            StmtsCompiled::one(Spanned {
                 span,
-                |eval| if cond(eval)?.to_bool() {
-                    t(eval)?
-                } else {
-                    f(eval)?
-                }
-            )
+                node: StmtCompiledValue::If(box (cond, t, f)),
+            })
         }
     }
 
@@ -611,12 +732,10 @@ impl Compiler<'_> {
                 node: ExprCompiledValue::Value(_),
                 ..
             } => StmtsCompiled::empty(),
-            e => {
-                let e = e.as_compiled();
-                stmt!(self, "expr", span, |eval| {
-                    e(eval)?;
-                })
-            }
+            e => StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiledValue::Expr(e),
+            }),
         }
     }
 
@@ -631,45 +750,26 @@ impl Compiler<'_> {
         match stmt.node {
             StmtP::Def(name, params, return_type, suite, scope_id) => {
                 let rhs = Spanned {
-                    span,
                     node: self.function(&name.0, scope_id, params, return_type, *suite),
-                }
-                .as_compiled();
-                let lhs = self
-                    .assign(Spanned {
-                        span: name.span,
-                        node: AssignP::Identifier(name),
-                    })
-                    .as_compiled();
-                stmt!(self, "define_def", span, |eval| {
-                    lhs(rhs(eval)?, eval)?;
+                    span,
+                };
+                let lhs = self.assign(Spanned {
+                    span: name.span,
+                    node: AssignP::Identifier(name),
+                });
+                StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::Assign(lhs, rhs),
                 })
             }
             StmtP::For(var, box (over, body)) => {
                 let over = list_to_tuple(over);
-                let over_span = over.span;
-                let var = self.assign(var).as_compiled();
-                let over = self.expr(over).as_compiled();
-                let st = self.stmt(body, false).as_compiled(self);
-                stmt!(self, "for", span, |eval| {
-                    let heap = eval.heap();
-                    let iterable = over(eval)?;
-                    throw(
-                        iterable.with_iterator(heap, |it| {
-                            for v in it {
-                                var(v, eval)?;
-                                match st(eval) {
-                                    Err(EvalException::Break) => break,
-                                    Err(EvalException::Continue) => {}
-                                    Err(e) => return Err(e),
-                                    _ => {}
-                                }
-                            }
-                            Ok(())
-                        }),
-                        over_span,
-                        eval,
-                    )??;
+                let var = self.assign(var);
+                let over = self.expr(over);
+                let st = self.stmt(body, false);
+                StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::For(box (var, over, st)),
                 })
             }
             StmtP::Return(e) => StmtsCompiled::one(Spanned {
@@ -689,10 +789,11 @@ impl Compiler<'_> {
             }
             StmtP::Expression(e) => self.stmt_expr(e),
             StmtP::Assign(lhs, rhs) => {
-                let rhs = self.expr(*rhs).as_compiled();
-                let lhs = self.assign(lhs).as_compiled();
-                stmt!(self, "assign", span, |eval| {
-                    lhs(rhs(eval)?, eval)?;
+                let rhs = self.expr(*rhs);
+                let lhs = self.assign(lhs);
+                StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::Assign(lhs, rhs),
                 })
             }
             StmtP::AssignModify(lhs, op, rhs) => {
@@ -725,12 +826,14 @@ impl Compiler<'_> {
             }
             StmtP::Load(..) => unreachable!(),
             StmtP::Pass => StmtsCompiled::empty(),
-            StmtP::Break => stmt!(self, "break", span, |_eval| return Err(
-                EvalException::Break
-            )),
-            StmtP::Continue => stmt!(self, "continue", span, |_eval| return Err(
-                EvalException::Continue
-            )),
+            StmtP::Break => StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiledValue::Break,
+            }),
+            StmtP::Continue => StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiledValue::Continue,
+            }),
         }
     }
 }
