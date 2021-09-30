@@ -54,9 +54,6 @@ fn test_go() {
         test_case!("builtin.star"),
         &[
             "[] not in {123: \"\"}", // We disagree, see test_not_in_unhashable
-            // Exponents, unsupported
-            "1e15",
-            "1e100",
             // Set, unsupported
             "set(",
             "(myset)",
