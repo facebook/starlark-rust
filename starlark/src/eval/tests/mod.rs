@@ -27,7 +27,7 @@ use crate::{
 };
 use derive_more::Display;
 use gazebo::any::AnyLifetime;
-use std::cell::RefCell;
+use std::{cell::RefCell, fmt::Write};
 
 mod basic;
 mod before_stmt;
@@ -278,6 +278,67 @@ xs = (1, 2)
 xs[1] += 1
 "#,
         "Immutable",
+    );
+}
+
+#[test]
+fn test_radd() {
+    // We want select append to always produce a select, much like the
+    // Bazel/Buck `select` function.
+    #[derive(Debug, Display, Clone)]
+    #[display(fmt = "${:?}", _0)]
+    struct Select(Vec<i32>);
+    starlark_simple_value!(Select);
+
+    impl<'v> UnpackValue<'v> for Select {
+        fn unpack_value(value: Value<'v>) -> Option<Self> {
+            match Select::from_value(value) {
+                Some(x) => Some(x.clone()),
+                None => Some(Select(UnpackValue::unpack_value(value)?)),
+            }
+        }
+    }
+
+    impl Select {
+        fn add(mut self, x: &Select) -> Self {
+            self.0.extend(x.0.iter().copied());
+            self
+        }
+    }
+
+    impl<'v> StarlarkValue<'v> for Select {
+        starlark_type!("select");
+        fn radd(&self, lhs: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
+            let lhs: Select = UnpackValue::unpack_value(lhs).unwrap();
+            Some(Ok(heap.alloc(lhs.add(self))))
+        }
+        fn add(&self, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+            let rhs: Select = UnpackValue::unpack_value(rhs).unwrap();
+            Ok(heap.alloc(self.clone().add(&rhs)))
+        }
+        fn collect_repr(&self, collector: &mut String) {
+            write!(collector, "{}", self).unwrap()
+        }
+    }
+
+    #[starlark_module]
+    fn module(build: &mut GlobalsBuilder) {
+        fn select(xs: Vec<i32>) -> Select {
+            Ok(Select(xs))
+        }
+    }
+
+    let mut a = Assert::new();
+    a.globals_add(module);
+    a.pass(
+        r#"
+s1 = select([1])
+s2 = select([2])
+assert_eq(repr(s1), "$[1]")
+assert_eq(repr(s1 + [3]), "$[1, 3]")
+assert_eq(repr([3] + s1), "$[3, 1]")
+assert_eq(repr(s1 + s2), "$[1, 2]")
+"#,
     );
 }
 
