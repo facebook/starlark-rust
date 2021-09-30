@@ -19,7 +19,10 @@
 
 use std::cmp::Ordering;
 
-use crate::values::{AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Value, ValueError, num::Num};
+use crate::values::{
+    num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
+    StarlarkValue, Value, ValueError,
+};
 
 /// The result of calling `type()` on floats.
 pub const FLOAT_TYPE: &str = "float";
@@ -38,7 +41,6 @@ impl AllocFrozenValue for f64 {
 
 impl SimpleValue for f64 {}
 
-
 fn f64_arith_bin_op<'v, F>(
     left: f64,
     right: Value,
@@ -56,7 +58,6 @@ where
     }
 }
 
-
 impl<'v> StarlarkValue<'v> for f64 {
     starlark_type!(FLOAT_TYPE);
 
@@ -72,7 +73,11 @@ impl<'v> StarlarkValue<'v> for f64 {
         if self.is_nan() {
             s.push_str("nan")
         } else if self.is_infinite() {
-            s.push_str(if self.is_sign_positive() { "+inf" } else { "-inf" })
+            s.push_str(if self.is_sign_positive() {
+                "+inf"
+            } else {
+                "-inf"
+            })
         } else if self.fract() == 0.0 {
             s.push_str(&format!("{:.1}", self))
         } else {
@@ -81,15 +86,18 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
-        Ok(
-            if self.is_nan() {
-                "NaN".to_string()
-            } else if self.is_infinite() {
-                if self.is_sign_positive() { "Infinity" } else { "-Infinity" }.to_string()
+        Ok(if self.is_nan() {
+            "NaN".to_string()
+        } else if self.is_infinite() {
+            if self.is_sign_positive() {
+                "Infinity"
             } else {
-                self.to_string()
+                "-Infinity"
             }
-        )
+            .to_string()
+        } else {
+            self.to_string()
+        })
     }
 
     fn to_bool(&self) -> bool {
@@ -109,21 +117,15 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn add(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "+", |l, r| {
-            Ok(l + r)
-        })
+        f64_arith_bin_op(*self, other, heap, "+", |l, r| Ok(l + r))
     }
 
     fn sub(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "-", |l, r| {
-            Ok(l - r)
-        })
+        f64_arith_bin_op(*self, other, heap, "-", |l, r| Ok(l - r))
     }
 
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "*", |l, r| {
-            Ok(l * r)
-        })
+        f64_arith_bin_op(*self, other, heap, "*", |l, r| Ok(l * r))
     }
 
     fn div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -169,11 +171,13 @@ impl<'v> StarlarkValue<'v> for f64 {
                 (true, true) => Ok(Ordering::Equal),
                 (true, false) => Ok(Ordering::Greater),
                 (false, true) => Ok(Ordering::Less),
-                (false, false) => if let Some(ordering) = self.partial_cmp(&other_float) {
-                    Ok(ordering)
-                } else {
-                    // This shouldn't happen as we handle potential NaNs above
-                    ValueError::unsupported_with(self, "==", other)
+                (false, false) => {
+                    if let Some(ordering) = self.partial_cmp(&other_float) {
+                        Ok(ordering)
+                    } else {
+                        // This shouldn't happen as we handle potential NaNs above
+                        ValueError::unsupported_with(self, "==", other)
+                    }
                 }
             }
         } else {

@@ -24,8 +24,8 @@
 //! integer values will be stored on the heap.
 
 use crate::values::{
-    error::ValueError, layout::PointerI32, num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue,
-    Heap, StarlarkValue, UnpackValue, Value,
+    error::ValueError, layout::PointerI32, num::Num, AllocFrozenValue, AllocValue, FrozenHeap,
+    FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
 };
 use std::{
     cmp::Ordering,
@@ -112,32 +112,29 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_num() {
-            Some(Num::Int(other)) => {
-                self.get()
-                    .checked_add(other)
-                    .map(Value::new_int)
-                    .ok_or_else(|| ValueError::IntegerOverflow.into())
-            }
+            Some(Num::Int(other)) => self
+                .get()
+                .checked_add(other)
+                .map(Value::new_int)
+                .ok_or_else(|| ValueError::IntegerOverflow.into()),
             Some(Num::Float(_)) => (self.get() as f64).add(other, heap),
             None => ValueError::unsupported_with(self, "+", other),
         }
     }
     fn sub(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_num() {
-            Some(Num::Int(other)) => {
-                self.get()
-                    .checked_sub(other)
-                    .map(Value::new_int)
-                    .ok_or_else(|| ValueError::IntegerOverflow.into())
-            }
+            Some(Num::Int(other)) => self
+                .get()
+                .checked_sub(other)
+                .map(Value::new_int)
+                .ok_or_else(|| ValueError::IntegerOverflow.into()),
             Some(Num::Float(_)) => (self.get() as f64).sub(other, heap),
             None => ValueError::unsupported_with(self, "-", other),
         }
     }
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
-            self
-                .get()
+            self.get()
                 .checked_mul(other)
                 .ok_or_else(|| ValueError::IntegerOverflow.into())
                 .map(Value::new_int)
@@ -154,7 +151,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(Num::Float(_)) = other.unpack_num() {
-            return (self.get() as f64).percent(other, heap)
+            return (self.get() as f64).percent(other, heap);
         }
         i64_arith_bin_op(self.get(), other, "%", |a, b| {
             if b == 0 {
@@ -174,7 +171,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
     fn floor_div(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(Num::Float(_)) = other.unpack_num() {
-            return (self.get() as f64).floor_div(other, heap)
+            return (self.get() as f64).floor_div(other, heap);
         }
         i64_arith_bin_op(self.get(), other, "//", |a, b| {
             if b == 0 {

@@ -367,11 +367,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                         Ok(f)
                     }
                 }
-                Err(x) => Err(anyhow!(
-                    "{} is not a valid number: {}",
-                    a.to_repr(),
-                    x
-                )),
+                Err(x) => Err(anyhow!("{} is not a valid number: {}", a.to_repr(), x)),
             }
         } else if let Some(b) = a.unpack_bool() {
             Ok(if b { 1.0 } else { 0.0 })
@@ -561,8 +557,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             }
         } else if let Some(base) = base {
             Err(anyhow!(
-                    "int() cannot convert non-string with explicit base '{}'",
-                    base.to_repr()
+                "int() cannot convert non-string with explicit base '{}'",
+                base.to_repr()
             ))
         } else if let Some(Num::Float(f)) = a.unpack_num() {
             match Num::from(f.trunc()).as_int() {
@@ -570,7 +566,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 None => Err(anyhow!(
                     "int() cannot convert float to integer: {}",
                     a.to_repr()
-                ))
+                )),
             }
         } else {
             Ok(a.to_int()?)

@@ -65,7 +65,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
                         // use bits representation of float to be able to always compare them for equality
                         Some((Key::Float(x.node.to_bits()), x.span))
                     }
-                },
+                }
                 AstLiteral::StringLiteral(x) => Some((Key::String(&x.node), x.span)),
             },
             Expr::Identifier(x, ()) => Some((Key::Identifier(&x.node), x.span)),

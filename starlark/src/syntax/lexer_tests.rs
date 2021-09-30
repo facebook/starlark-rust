@@ -284,7 +284,16 @@ fn test_lexer_error_messages() {
 #[test]
 fn test_float_lit() {
     assert_eq!(assert::lex("0.0 0. .0"), "0 0 0 \n");
-    assert_eq!(assert::lex("1e10 1e+10 1e-10"), "10000000000 10000000000 0.0000000001 \n");
-    assert_eq!(assert::lex("1.1e10 1.1e+10 1.1e-10"), "11000000000 11000000000 0.00000000011 \n");
-    assert_eq!(assert::lex("0. .123 3.14 .2e3 1E+4"), "0 0.123 3.14 200 10000 \n");
+    assert_eq!(
+        assert::lex("1e10 1e+10 1e-10"),
+        "10000000000 10000000000 0.0000000001 \n"
+    );
+    assert_eq!(
+        assert::lex("1.1e10 1.1e+10 1.1e-10"),
+        "11000000000 11000000000 0.00000000011 \n"
+    );
+    assert_eq!(
+        assert::lex("0. .123 3.14 .2e3 1E+4"),
+        "0 0.123 3.14 200 10000 \n"
+    );
 }

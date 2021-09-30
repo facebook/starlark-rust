@@ -25,7 +25,6 @@ pub enum Num {
     Float(f64),
 }
 
-
 impl Num {
     /// Try unpacking Value into a Num
     pub fn try_from_value(value: Value) -> Option<Self> {
@@ -112,9 +111,18 @@ mod tests {
         assert!(Num::try_from_value(Value::new_empty_string()).is_none());
         assert!(Num::try_from_value(Value::new_none()).is_none());
 
-        assert_eq!(Num::try_from_value(Value::new_int(0)).unwrap().as_int(), Some(0));
-        assert_eq!(Num::try_from_value(Value::new_int(42)).unwrap().as_int(), Some(42));
-        assert_eq!(Num::try_from_value(Value::new_int(-42)).unwrap().as_int(), Some(-42));
+        assert_eq!(
+            Num::try_from_value(Value::new_int(0)).unwrap().as_int(),
+            Some(0)
+        );
+        assert_eq!(
+            Num::try_from_value(Value::new_int(42)).unwrap().as_int(),
+            Some(42)
+        );
+        assert_eq!(
+            Num::try_from_value(Value::new_int(-42)).unwrap().as_int(),
+            Some(-42)
+        );
     }
 
     #[test]
@@ -152,7 +160,13 @@ mod tests {
         assert_eq!(Num::Int(0).get_hash(), Num::Float(0.0).get_hash());
         assert_eq!(Num::Int(42).get_hash(), Num::Float(42.0).get_hash());
 
-        assert_eq!(Num::Float(f64::INFINITY + f64::NEG_INFINITY).get_hash(), Num::Float(f64::NAN).get_hash());
-        assert_eq!(Num::Float("0.25".parse().unwrap()).get_hash(), Num::Float("25e-2".parse().unwrap()).get_hash());
+        assert_eq!(
+            Num::Float(f64::INFINITY + f64::NEG_INFINITY).get_hash(),
+            Num::Float(f64::NAN).get_hash()
+        );
+        assert_eq!(
+            Num::Float("0.25".parse().unwrap()).get_hash(),
+            Num::Float("25e-2".parse().unwrap()).get_hash()
+        );
     }
 }
