@@ -81,7 +81,15 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
-        Ok(self.to_string())
+        Ok(
+            if self.is_nan() {
+                "NaN".to_string()
+            } else if self.is_infinite() {
+                if self.is_sign_positive() { "Infinity" } else { "-Infinity" }.to_string()
+            } else {
+                self.to_string()
+            }
+        )
     }
 
     fn to_bool(&self) -> bool {
