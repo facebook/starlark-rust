@@ -173,6 +173,69 @@ enum ArgumentUseOrderError {
     MultipleKwargs,
 }
 
+fn check_parameters(parameters: &[AstParameter], codemap: &CodeMap) -> anyhow::Result<()> {
+    let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
+
+    // you can't repeat argument names
+    let mut argset = HashSet::new();
+    // You can't have more than one *args/*, **kwargs
+    // **kwargs must be last
+    // You can't have a required `x` after an optional `y=1`
+    let mut seen_args = false;
+    let mut seen_kwargs = false;
+    let mut seen_optional = false;
+
+    for arg in parameters.iter() {
+        match &arg.node {
+            Parameter::Normal(n, ..) => {
+                if seen_kwargs || seen_optional {
+                    return err(arg.span, ArgumentUseOrderError::PositionalThenNonPositional);
+                }
+                test_param_name(&mut argset, n, arg, codemap)?;
+            }
+            Parameter::WithDefaultValue(n, ..) => {
+                if seen_kwargs {
+                    return err(arg.span, ArgumentUseOrderError::DefaultParameterAfterStars);
+                }
+                seen_optional = true;
+                test_param_name(&mut argset, n, arg, codemap)?;
+            }
+            Parameter::NoArgs => {
+                if seen_args || seen_kwargs {
+                    return err(arg.span, ArgumentUseOrderError::ArgsParameterAfterStars);
+                }
+                seen_args = true;
+            }
+            Parameter::Args(n, ..) => {
+                if seen_args || seen_kwargs {
+                    return err(arg.span, ArgumentUseOrderError::ArgsParameterAfterStars);
+                }
+                seen_args = true;
+                test_param_name(&mut argset, n, arg, codemap)?;
+            }
+            Parameter::KwArgs(n, ..) => {
+                if seen_kwargs {
+                    return err(arg.span, ArgumentUseOrderError::MultipleKwargs);
+                }
+                seen_kwargs = true;
+                test_param_name(&mut argset, n, arg, codemap)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+impl Expr {
+    pub fn check_lambda(
+        parameters: Vec<AstParameter>,
+        body: AstExpr,
+        codemap: &CodeMap,
+    ) -> anyhow::Result<Expr> {
+        check_parameters(&parameters, codemap)?;
+        Ok(Expr::Lambda(parameters, box body, ()))
+    }
+}
+
 impl Stmt {
     pub fn check_def(
         name: AstString,
@@ -181,54 +244,7 @@ impl Stmt {
         stmts: AstStmt,
         codemap: &CodeMap,
     ) -> anyhow::Result<Stmt> {
-        let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
-
-        // you can't repeat argument names
-        let mut argset = HashSet::new();
-        // You can't have more than one *args/*, **kwargs
-        // **kwargs must be last
-        // You can't have a required `x` after an optional `y=1`
-        let mut seen_args = false;
-        let mut seen_kwargs = false;
-        let mut seen_optional = false;
-
-        for arg in parameters.iter() {
-            match &arg.node {
-                Parameter::Normal(n, ..) => {
-                    if seen_kwargs || seen_optional {
-                        return err(arg.span, ArgumentUseOrderError::PositionalThenNonPositional);
-                    }
-                    test_param_name(&mut argset, n, arg, codemap)?;
-                }
-                Parameter::WithDefaultValue(n, ..) => {
-                    if seen_kwargs {
-                        return err(arg.span, ArgumentUseOrderError::DefaultParameterAfterStars);
-                    }
-                    seen_optional = true;
-                    test_param_name(&mut argset, n, arg, codemap)?;
-                }
-                Parameter::NoArgs => {
-                    if seen_args || seen_kwargs {
-                        return err(arg.span, ArgumentUseOrderError::ArgsParameterAfterStars);
-                    }
-                    seen_args = true;
-                }
-                Parameter::Args(n, ..) => {
-                    if seen_args || seen_kwargs {
-                        return err(arg.span, ArgumentUseOrderError::ArgsParameterAfterStars);
-                    }
-                    seen_args = true;
-                    test_param_name(&mut argset, n, arg, codemap)?;
-                }
-                Parameter::KwArgs(n, ..) => {
-                    if seen_kwargs {
-                        return err(arg.span, ArgumentUseOrderError::MultipleKwargs);
-                    }
-                    seen_kwargs = true;
-                    test_param_name(&mut argset, n, arg, codemap)?;
-                }
-            }
-        }
+        check_parameters(&parameters, codemap)?;
         let name = name.into_map(|s| AssignIdentP(s, ()));
         Ok(Stmt::Def(name, parameters, return_type, box stmts, ()))
     }

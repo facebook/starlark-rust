@@ -187,3 +187,9 @@ fn test_context_captured() {
     // Import `f` but do not import `x`
     a.is_true("load('f.bzl', 'f')\nf() == 17");
 }
+
+#[test]
+fn test_lambda_errors() {
+    // Test from https://github.com/facebookexperimental/starlark-rust/issues/36
+    assert::fail("lambda a,a:a", "duplicated parameter name");
+}

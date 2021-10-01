@@ -289,7 +289,7 @@ Test: AstExpr = {
 
 LambDef: AstExpr = {
     <l:@L> "lambda" <p:COMMA<Parameter>> ":" <e:Test> <r:@R>
-        =>? Ok(dialect.check_lambda(codemap, Expr::Lambda(p, box e, ()).ast(l, r))?),
+        =>? Ok(dialect.check_lambda(codemap, Expr::check_lambda(p, e, codemap)?.ast(l, r))?),
 }
 
 // Binary operators
