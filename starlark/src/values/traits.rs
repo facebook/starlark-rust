@@ -38,6 +38,7 @@ use crate::{
         Tracer, Value, ValueError,
     },
 };
+use derive_more::Display;
 use gazebo::any::AnyLifetime;
 use std::{
     any::TypeId,
@@ -287,7 +288,8 @@ pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
 ///
 /// Useful when implementing [`ComplexValue`], which is not meant to be frozen
 /// (e.g. when evaluating code which is never frozen or in tests).
-#[derive(Debug, AnyLifetime)]
+#[derive(Debug, AnyLifetime, Display)]
+#[display(fmt = "NoSimpleValue")] // Can't actually be invoked since no &self
 pub enum NoSimpleValue {}
 impl<'v> StarlarkValue<'v> for NoSimpleValue {
     starlark_type!("no_simple_value");

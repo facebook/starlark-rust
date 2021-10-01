@@ -659,7 +659,8 @@ fn test_label_assign() {
         }
     }
 
-    #[derive(Debug, AnyLifetime)]
+    #[derive(Debug, AnyLifetime, Display)]
+    #[display(fmt = "FrozenWrapper")]
     struct FrozenWrapper;
 
     impl<'v> StarlarkValue<'v> for FrozenWrapper {
