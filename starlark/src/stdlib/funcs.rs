@@ -373,7 +373,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             Ok(if b { 1.0 } else { 0.0 })
         } else {
             Err(anyhow!(
-                "float() argument must be a string or a number, not '{}'",
+                "float() argument must be a string or a number, not `{}`",
                 a.get_type()
             ))
         }
@@ -483,10 +483,23 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// int('16', 10) == 16
     /// int('16', 8) == 14
     /// int('16', 16) == 22
+    /// int(0.0) == 0
+    /// int(3.14) == 3
+    /// int(-12345.6789) == -12345
+    /// int(2e9) == 2000000000
     /// # "#);
     /// # starlark::assert::fail(r#"
     /// int("hello")   # error: not a valid number
     /// # "#, "not a valid number");
+    /// # starlark::assert::fail(r#"
+    /// int(1e100)   # error: overflow
+    /// # "#, "cannot convert float to integer");
+    /// # starlark::assert::fail(r#"
+    /// int(float("nan"))   # error: cannot convert NaN to int
+    /// # "#, "cannot convert float to integer");
+    /// # starlark::assert::fail(r#"
+    /// int(float("inf"))   # error: cannot convert infinity to int
+    /// # "#, "cannot convert float to integer");
     /// ```
     #[starlark_type(INT_TYPE)]
     fn int(ref a: Option<Value>, base: Option<Value>) -> i32 {

@@ -17,8 +17,13 @@
 
 //! Helpers for numerical values.
 
-use super::Value;
+use crate::values::Value;
 
+/// [`Num`] represents a numerical value that can be unpacked from a [`Value`].
+///
+/// It's an intermediate representation that facilitates conversions between
+/// numerical types and helps in implementation of arithmetical operations
+/// between them.
 #[derive(Clone, Copy, Debug)]
 pub enum Num {
     Int(i32),
