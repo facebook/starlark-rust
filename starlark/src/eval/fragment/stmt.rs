@@ -76,8 +76,25 @@ pub(crate) enum StmtCompiledValue {
     Continue,
 }
 
+pub(crate) struct StmtCompileContext {
+    pub(crate) has_before_stmt: bool,
+}
+
+impl StmtCompileContext {
+    fn maybe_wrap_before_stmt(&self, span: Span, stmt: StmtCompiled) -> StmtCompiled {
+        if self.has_before_stmt {
+            box move |eval| {
+                before_stmt(span, eval);
+                stmt(eval)
+            }
+        } else {
+            stmt
+        }
+    }
+}
+
 impl Spanned<StmtCompiledValue> {
-    pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
+    pub(crate) fn as_compiled(self, compiler: &StmtCompileContext) -> StmtCompiled {
         let span = self.span;
         match self.node {
             StmtCompiledValue::PossibleGc => box move |eval| {
@@ -298,7 +315,7 @@ impl StmtsCompiled {
         self.0.extend(right.0);
     }
 
-    pub(crate) fn as_compiled(self, compiler: &mut Compiler) -> StmtCompiled {
+    pub(crate) fn as_compiled(self, compiler: &StmtCompileContext) -> StmtCompiled {
         match self.0 {
             SmallVec1::Empty => box |_eval| Ok(()),
             SmallVec1::One(stmt) => stmt.as_compiled(compiler),
@@ -623,14 +640,9 @@ fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Res
 }
 
 impl Compiler<'_> {
-    fn maybe_wrap_before_stmt(&mut self, span: Span, stmt: StmtCompiled) -> StmtCompiled {
-        if self.has_before_stmt {
-            box move |eval| {
-                before_stmt(span, eval);
-                stmt(eval)
-            }
-        } else {
-            stmt
+    pub(crate) fn compile_context(&self) -> StmtCompileContext {
+        StmtCompileContext {
+            has_before_stmt: self.has_before_stmt,
         }
     }
 

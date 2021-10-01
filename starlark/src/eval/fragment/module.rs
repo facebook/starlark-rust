@@ -77,7 +77,7 @@ impl Compiler<'_> {
             }
             StmtP::Load(load) => self.eval_load(load, evaluator),
             _ => {
-                let stmt = self.stmt(stmt, true).as_compiled(self);
+                let stmt = self.stmt(stmt, true).as_compiled(&self.compile_context());
                 stmt(evaluator)
             }
         }

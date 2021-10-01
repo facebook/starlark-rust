@@ -334,7 +334,7 @@ impl Compiler<'_> {
             codemap: self.codemap.dupe(),
             docstring,
             scope_names,
-            body: body.as_compiled(self),
+            body: body.as_compiled(&self.compile_context()),
             returns_type_is,
         });
 
