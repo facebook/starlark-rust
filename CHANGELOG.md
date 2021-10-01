@@ -28,6 +28,13 @@ There have been many changes since the last release, primarily focused on perfor
 * Add `#[starlark_module]` proc-macro.
 * Significant rewrite of most code, changing most APIs.
 
+## 0.3.2
+
+* Commits and tag exist in https://github.com/indygreg/starlark-rust.
+* Changed dependency versions from `X.Y.Z` to `X.Y` to allow adopting newer point releases.
+* lalrpop crate upgraded from 0.16 to 0.19 and code ported to enable building on Rust 1.56+.
+* Fixed compiler warnings on Rust 1.56+ related to semicolons in macro expansions.
+
 ## 0.3.1 and before
 
 * The code was developed at https://github.com/google/starlark-rust.
