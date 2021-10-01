@@ -126,6 +126,9 @@ pub(crate) fn apply_slice<T: Copy>(
     } else {
         (start, stop)
     };
+    if start >= stop {
+        return Ok(Vec::new());
+    }
     let mut res = xs[start as usize..stop as usize].to_vec();
     if stride == -1 {
         res.reverse();
@@ -222,5 +225,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(x, &[6, 5, 4, 3, 2, 1]);
+
+        let x = apply_slice(
+            &[1, 2, 3],
+            Some(Value::new_int(0)),
+            Some(Value::new_int(-2)),
+            Some(Value::new_int(-1)),
+        )
+        .unwrap();
+        assert_eq!(x, &[]);
     }
 }
