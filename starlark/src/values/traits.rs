@@ -154,8 +154,9 @@ unsafe impl<'v> Trace<'v> for std::time::Instant {
 /// ```
 /// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer};
 /// use starlark::{starlark_complex_value, starlark_type};
+/// use derive_more::Display;
 ///
-/// #[derive(Debug, Trace, Coerce)]
+/// #[derive(Debug, Trace, Coerce, Display)]
 /// #[repr(C)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
@@ -248,8 +249,9 @@ pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
 /// ```
 /// use starlark::values::{Heap, StarlarkValue, Value};
 /// use starlark::{starlark_simple_value, starlark_type};
+/// use derive_more::Display;
 ///
-/// #[derive(Debug)]
+/// #[derive(Debug, Display)]
 /// struct MyObject(String);
 /// starlark_simple_value!(MyObject);
 /// impl<'v> StarlarkValue<'v> for MyObject {
@@ -317,8 +319,10 @@ impl SimpleValue for NoSimpleValue {}
 /// use starlark::values::StarlarkValue;
 /// # use starlark::starlark_simple_value;
 /// use starlark::starlark_type;
+/// use derive_more::Display;
 ///
-/// #[derive(Debug)]
+/// #[derive(Debug, Display)]
+/// #[display(fmt = "Foo")]
 /// struct Foo;
 /// # starlark_simple_value!(Foo);
 /// impl<'v> StarlarkValue<'v> for Foo {
