@@ -362,22 +362,23 @@ pub(crate) enum AssignCompiledValue {
 }
 
 impl Spanned<AssignCompiledValue> {
-    pub(crate) fn as_compiled(self) -> AssignCompiled {
+    pub(crate) fn as_compiled(&self) -> AssignCompiled {
         let span = self.span;
         match self.node {
-            AssignCompiledValue::Dot(e, s) => {
+            AssignCompiledValue::Dot(ref e, ref s) => {
                 let e = e.as_compiled();
+                let s = s.clone();
                 box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
             }
-            AssignCompiledValue::ArrayIndirection(array, index) => {
+            AssignCompiledValue::ArrayIndirection(ref array, ref index) => {
                 let array = array.as_compiled();
                 let index = index.as_compiled();
                 box move |value, eval| {
                     expr_throw(array(eval)?.set_at(index(eval)?, value), span, eval)
                 }
             }
-            AssignCompiledValue::Tuple(v) => {
-                let v = v.into_map(|v| v.as_compiled());
+            AssignCompiledValue::Tuple(ref v) => {
+                let v = v.map(|v| v.as_compiled());
                 box move |value, eval| eval_assign_list(&v, span, value, eval)
             }
             AssignCompiledValue::Local(slot, Captured::Yes) => box move |value, eval| {
@@ -388,7 +389,8 @@ impl Spanned<AssignCompiledValue> {
                 eval.set_slot_local(slot, value);
                 Ok(())
             },
-            AssignCompiledValue::Module(slot, name) => {
+            AssignCompiledValue::Module(slot, ref name) => {
+                let name = name.clone();
                 box move |value, eval| {
                     // Make sure that `ComplexValue`s get their name as soon as possible
                     value.export_as(&name, eval);

@@ -121,6 +121,13 @@ impl<T> Spanned<T> {
             span: self.span,
         }
     }
+
+    pub fn map<U>(&self, f: impl FnOnce(&T) -> U) -> Spanned<U> {
+        Spanned {
+            node: f(&self.node),
+            span: self.span,
+        }
+    }
 }
 
 impl<T> Deref for Spanned<T> {

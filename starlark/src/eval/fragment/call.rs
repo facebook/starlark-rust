@@ -29,13 +29,14 @@ use crate::{
         fragment::expr::{get_attr_hashed, ExprCompiled, ExprCompiledValue, MaybeNot},
         Arguments, Evaluator, FrozenDef,
     },
+    gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, ExprP},
     values::{
         function::NativeFunction, AttrType, FrozenStringValue, FrozenValue, StarlarkValue, Value,
         ValueLike,
     },
 };
-use gazebo::{coerce::coerce_ref, prelude::*};
+use gazebo::coerce::coerce_ref;
 use std::mem::MaybeUninit;
 
 #[derive(Default)]
@@ -69,10 +70,10 @@ pub(crate) enum CallCompiled {
 }
 
 impl Spanned<CallCompiled> {
-    pub(crate) fn as_compiled(self) -> ExprCompiled {
+    pub(crate) fn as_compiled(&self) -> ExprCompiled {
         let span = self.span;
         match self.node {
-            CallCompiled::Call(box (fun, args)) => {
+            CallCompiled::Call(box (ref fun, ref args)) => {
                 args!(
                     args,
                     expr!("call", fun, |eval| {
@@ -82,7 +83,7 @@ impl Spanned<CallCompiled> {
                     })
                 )
             }
-            CallCompiled::Frozen(box (this, fun, args)) => {
+            CallCompiled::Frozen(box (this, fun, ref args)) => {
                 if let Some(fun_ref) = fun.downcast_frozen_ref::<FrozenDef>() {
                     assert!(this.is_none());
                     args!(
@@ -121,7 +122,8 @@ impl Spanned<CallCompiled> {
                     )
                 }
             }
-            CallCompiled::Method(box (this, s, args)) => {
+            CallCompiled::Method(box (ref this, ref s, ref args)) => {
+                let s = s.clone();
                 args!(
                     args,
                     expr!("call_method", this, |eval| {
@@ -160,27 +162,26 @@ enum ArgsCompiledSpec {
 }
 
 impl ArgsCompiledValue {
-    fn spec(mut self) -> ArgsCompiledSpec {
+    fn spec(&self) -> ArgsCompiledSpec {
         if self.names.is_empty()
             && self.args.is_none()
             && self.kwargs.is_none()
             && self.pos_named.len() <= 2
         {
-            match self.pos_named.pop() {
-                None => ArgsCompiledSpec::Args0(Args0Compiled),
-                Some(a1) => match self.pos_named.pop() {
-                    None => ArgsCompiledSpec::Args1(Args1Compiled(a1.as_compiled())),
-                    Some(a2) => {
-                        ArgsCompiledSpec::Args2(Args2Compiled(a2.as_compiled(), a1.as_compiled()))
-                    }
-                },
+            match self.pos_named.as_slice() {
+                [] => ArgsCompiledSpec::Args0(Args0Compiled),
+                [a0] => ArgsCompiledSpec::Args1(Args1Compiled(a0.as_compiled())),
+                [a0, a1] => {
+                    ArgsCompiledSpec::Args2(Args2Compiled(a0.as_compiled(), a1.as_compiled()))
+                }
+                _ => unreachable!(),
             }
         } else {
             ArgsCompiledSpec::Args(ArgsCompiled {
-                pos_named: self.pos_named.into_map(|a| a.as_compiled()),
-                names: self.names,
-                args: self.args.map(|a| a.as_compiled()),
-                kwargs: self.kwargs.map(|a| a.as_compiled()),
+                pos_named: self.pos_named.map(|a| a.as_compiled()),
+                names: self.names.clone(),
+                args: self.args.as_ref().map(|a| a.as_compiled()),
+                kwargs: self.kwargs.as_ref().map(|a| a.as_compiled()),
             })
         }
     }

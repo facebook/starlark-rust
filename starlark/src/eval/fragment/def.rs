@@ -86,6 +86,7 @@ impl AtomicFrozenModuleOption {
     }
 }
 
+#[derive(Clone)]
 struct ParameterName {
     name: String,
     captured: Captured,
@@ -100,15 +101,19 @@ enum ParameterCompiled<T> {
 }
 
 impl<T> ParameterCompiled<T> {
-    fn map_expr<U>(self, f: impl Fn(T) -> U) -> ParameterCompiled<U> {
+    fn map_expr<U>(&self, f: impl Fn(&T) -> U) -> ParameterCompiled<U> {
         match self {
-            ParameterCompiled::Normal(n, o) => ParameterCompiled::Normal(n, o.map(f)),
+            ParameterCompiled::Normal(n, o) => {
+                ParameterCompiled::Normal(n.clone(), o.as_ref().map(f))
+            }
             ParameterCompiled::WithDefaultValue(n, o, t) => {
-                ParameterCompiled::WithDefaultValue(n, o.map(&f), f(t))
+                ParameterCompiled::WithDefaultValue(n.clone(), o.as_ref().map(&f), f(t))
             }
             ParameterCompiled::NoArgs => ParameterCompiled::NoArgs,
-            ParameterCompiled::Args(n, o) => ParameterCompiled::Args(n, o.map(f)),
-            ParameterCompiled::KwArgs(n, o) => ParameterCompiled::KwArgs(n, o.map(f)),
+            ParameterCompiled::Args(n, o) => ParameterCompiled::Args(n.clone(), o.as_ref().map(f)),
+            ParameterCompiled::KwArgs(n, o) => {
+                ParameterCompiled::KwArgs(n.clone(), o.as_ref().map(f))
+            }
         }
     }
 
@@ -174,15 +179,16 @@ pub(crate) struct DefCompiled {
 }
 
 impl DefCompiled {
-    pub(crate) fn as_compiled(self) -> ExprCompiled {
+    pub(crate) fn as_compiled(&self) -> ExprCompiled {
         let DefCompiled {
-            function_name,
-            params,
-            return_type,
+            ref function_name,
+            ref params,
+            ref return_type,
             info,
-        } = self;
-        let params = params.into_map(|p| p.into_map(|p| p.map_expr(|e| e.as_compiled())));
-        let return_type = return_type.map(|t| Spanned {
+        } = *self;
+        let function_name = function_name.clone();
+        let params = params.map(|p| p.map(|p| p.map_expr(|e| e.as_compiled())));
+        let return_type = return_type.as_ref().map(|t| Spanned {
             span: t.span,
             node: t.as_compiled(),
         });
