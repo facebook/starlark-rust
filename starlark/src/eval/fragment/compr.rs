@@ -20,6 +20,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::SmallMap,
+    environment::FrozenModuleRef,
     eval::{
         compiler::{
             expr_throw,
@@ -205,6 +206,19 @@ impl ComprCompiled {
             ComprCompiled::Dict(box (ref k, ref v), ref clauses) => eval_dict(k, v, clauses),
         }
     }
+
+    pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ExprCompiledValue {
+        ExprCompiledValue::Compr(match self {
+            ComprCompiled::List(box ref x, ref clauses) => ComprCompiled::List(
+                box x.optimize_on_freeze(module),
+                clauses.map(|c| c.optimize_on_freeze(module)),
+            ),
+            ComprCompiled::Dict(box (ref k, ref v), ref clauses) => ComprCompiled::Dict(
+                box (k.optimize_on_freeze(module), v.optimize_on_freeze(module)),
+                clauses.map(|c| c.optimize_on_freeze(module)),
+            ),
+        })
+    }
 }
 
 #[derive(Clone)]
@@ -213,6 +227,23 @@ pub(crate) struct ClauseCompiled {
     over: Spanned<ExprCompiledValue>,
     over_span: Span,
     ifs: Vec<Spanned<ExprCompiledValue>>,
+}
+
+impl ClauseCompiled {
+    fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ClauseCompiled {
+        let ClauseCompiled {
+            ref var,
+            ref over,
+            over_span,
+            ref ifs,
+        } = *self;
+        ClauseCompiled {
+            var: var.optimize_on_freeze(module),
+            over: over.optimize_on_freeze(module),
+            over_span,
+            ifs: ifs.map(|e| e.optimize_on_freeze(module)),
+        }
+    }
 }
 
 // FIXME: These two expressions are identical, but I need higher-kinded

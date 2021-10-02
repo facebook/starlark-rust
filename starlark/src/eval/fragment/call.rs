@@ -20,6 +20,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
+    environment::FrozenModuleRef,
     eval::{
         compiler::{
             expr_throw,
@@ -139,6 +140,34 @@ impl Spanned<CallCompiled> {
             }
         }
     }
+
+    pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ExprCompiledValue {
+        ExprCompiledValue::Call(self.map(|call| match *call {
+            CallCompiled::Call(box (ref fun, ref args)) => {
+                let fun = fun.optimize_on_freeze(module);
+                let args = args.optimize_on_freeze(module);
+                if let Spanned {
+                    node: ExprCompiledValue::Value(fun),
+                    ..
+                } = fun
+                {
+                    CallCompiled::Frozen(box (None, fun, args))
+                } else {
+                    CallCompiled::Call(box (fun, args))
+                }
+            }
+            CallCompiled::Frozen(box (this, fun, ref args)) => {
+                let args = args.optimize_on_freeze(module);
+                CallCompiled::Frozen(box (this, fun, args))
+            }
+            CallCompiled::Method(box (ref this, ref field, ref args)) => {
+                let this = this.optimize_on_freeze(module);
+                let field = field.clone();
+                let args = args.optimize_on_freeze(module);
+                CallCompiled::Method(box (this, field, args))
+            }
+        }))
+    }
 }
 
 struct ArgsCompiled {
@@ -184,6 +213,21 @@ impl ArgsCompiledValue {
                 args: self.args.as_ref().map(|a| a.as_compiled()),
                 kwargs: self.kwargs.as_ref().map(|a| a.as_compiled()),
             })
+        }
+    }
+
+    fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ArgsCompiledValue {
+        let ArgsCompiledValue {
+            ref pos_named,
+            ref names,
+            ref args,
+            ref kwargs,
+        } = *self;
+        ArgsCompiledValue {
+            pos_named: pos_named.map(|p| p.optimize_on_freeze(module)),
+            names: names.clone(),
+            args: args.as_ref().map(|a| a.optimize_on_freeze(module)),
+            kwargs: kwargs.as_ref().map(|a| a.optimize_on_freeze(module)),
         }
     }
 }

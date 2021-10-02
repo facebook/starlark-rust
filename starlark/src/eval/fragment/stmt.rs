@@ -31,10 +31,7 @@ use crate::{
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
             throw, Compiler, EvalException, ExprEvalException,
         },
-        fragment::{
-            expr::ExprCompiledValue,
-            known::{list_to_tuple, Conditional},
-        },
+        fragment::{expr::ExprCompiledValue, known::list_to_tuple},
         runtime::{
             evaluator::{Evaluator, GC_THRESHOLD},
             slots::LocalSlotId,
@@ -271,18 +268,95 @@ impl Spanned<StmtCompiledValue> {
     fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
         let span = self.span;
         match self.node {
-            StmtCompiledValue::Expr(ref expr) => match expr.optimize_on_freeze(module) {
-                Spanned {
-                    node: ExprCompiledValue::Value(..),
-                    ..
-                } => StmtsCompiled::empty(),
-                e => StmtsCompiled::one(Spanned {
+            StmtCompiledValue::Return(Some(ref e)) => StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiledValue::Return(Some(e.optimize_on_freeze(module))),
+            }),
+            StmtCompiledValue::Expr(ref expr) => {
+                let expr = expr.optimize_on_freeze(module);
+                Self::expr(expr)
+            }
+            StmtCompiledValue::Assign(ref lhs, ref rhs) => {
+                let lhs = lhs.optimize_on_freeze(module);
+                let rhs = rhs.optimize_on_freeze(module);
+                StmtsCompiled::one(Spanned {
                     span,
-                    node: StmtCompiledValue::Expr(e),
-                }),
-            },
-            // TODO: optimize other stmts
-            _ => StmtsCompiled::one(self.clone()),
+                    node: StmtCompiledValue::Assign(lhs, rhs),
+                })
+            }
+            StmtCompiledValue::If(box (ref cond, ref t, ref f)) => {
+                let cond = cond.optimize_on_freeze(module);
+                let t = t.optimize_on_freeze(module);
+                let f = f.optimize_on_freeze(module);
+                Self::if_stmt(span, cond, t, f)
+            }
+            StmtCompiledValue::For(box (ref var, ref over, ref body)) => {
+                let var = var.optimize_on_freeze(module);
+                let over = over.optimize_on_freeze(module);
+                let body = body.optimize_on_freeze(module);
+                StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::For(box (var, over, body)),
+                })
+            }
+            ref s @ (StmtCompiledValue::PossibleGc
+            | StmtCompiledValue::Break
+            | StmtCompiledValue::Continue
+            | StmtCompiledValue::Return(None)) => StmtsCompiled::one(Spanned {
+                span,
+                node: s.clone(),
+            }),
+            ref s @ StmtCompiledValue::AssignModify(..) => StmtsCompiled::one(Spanned {
+                span,
+                node: s.clone(),
+            }),
+        }
+    }
+
+    fn expr(expr: Spanned<ExprCompiledValue>) -> StmtsCompiled {
+        match expr {
+            Spanned {
+                node: ExprCompiledValue::Value(..),
+                ..
+            } => StmtsCompiled::empty(),
+            expr => StmtsCompiled::one(Spanned {
+                span: expr.span,
+                node: StmtCompiledValue::Expr(expr),
+            }),
+        }
+    }
+
+    fn if_stmt(
+        span: Span,
+        cond: Spanned<ExprCompiledValue>,
+        t: StmtsCompiled,
+        f: StmtsCompiled,
+    ) -> StmtsCompiled {
+        match cond {
+            Spanned {
+                node: ExprCompiledValue::Value(cond),
+                ..
+            } => {
+                if cond.to_value().to_bool() {
+                    t
+                } else {
+                    f
+                }
+            }
+            Spanned {
+                node: ExprCompiledValue::Not(box cond),
+                ..
+            } => Self::if_stmt(span, cond, f, t),
+            cond => {
+                if t.is_empty() && f.is_empty() {
+                    Self::expr(cond)
+                } else {
+                    StmtsCompiled::one(Spanned {
+                        span,
+                        node: StmtCompiledValue::If(box (cond, t, f)),
+                    })
+                }
+            }
         }
     }
 }
@@ -442,6 +516,31 @@ impl Spanned<AssignCompiledValue> {
                 }
             }
         }
+    }
+
+    pub(crate) fn optimize_on_freeze(
+        &self,
+        module: &FrozenModuleRef,
+    ) -> Spanned<AssignCompiledValue> {
+        let span = self.span;
+        let assign = match self.node {
+            AssignCompiledValue::Dot(ref object, ref field) => {
+                let object = object.optimize_on_freeze(module);
+                let field = field.clone();
+                AssignCompiledValue::Dot(object, field)
+            }
+            AssignCompiledValue::ArrayIndirection(ref array, ref index) => {
+                let array = array.optimize_on_freeze(module);
+                let index = index.optimize_on_freeze(module);
+                AssignCompiledValue::ArrayIndirection(array, index)
+            }
+            AssignCompiledValue::Tuple(ref xs) => {
+                let xs = xs.map(|x| x.optimize_on_freeze(module));
+                AssignCompiledValue::Tuple(xs)
+            }
+            ref e @ (AssignCompiledValue::Local(..) | AssignCompiledValue::Module(..)) => e.clone(),
+        };
+        Spanned { node: assign, span }
     }
 }
 
@@ -710,31 +809,6 @@ impl Compiler<'_> {
         }
     }
 
-    fn stmt_if_compiled(
-        &mut self,
-        span: Span,
-        cond: Spanned<ExprCompiledValue>,
-        cond_is_positive: bool,
-        then_block: StmtsCompiled,
-    ) -> StmtsCompiled {
-        if then_block.is_empty() {
-            self.stmt_expr_compiled(span, cond)
-        } else {
-            #[allow(clippy::collapsible_else_if)]
-            if cond_is_positive {
-                StmtsCompiled::one(Spanned {
-                    span,
-                    node: StmtCompiledValue::If(box (cond, then_block, StmtsCompiled::empty())),
-                })
-            } else {
-                StmtsCompiled::one(Spanned {
-                    span,
-                    node: StmtCompiledValue::If(box (cond, StmtsCompiled::empty(), then_block)),
-                })
-            }
-        }
-    }
-
     fn stmt_if(
         &mut self,
         span: Span,
@@ -742,13 +816,9 @@ impl Compiler<'_> {
         then_block: CstStmt,
         allow_gc: bool,
     ) -> StmtsCompiled {
+        let cond = self.expr(cond);
         let then_block = self.stmt(then_block, allow_gc);
-        match self.conditional(cond) {
-            Conditional::True => then_block,
-            Conditional::False => StmtsCompiled::empty(),
-            Conditional::Normal(cond) => self.stmt_if_compiled(span, cond, true, then_block),
-            Conditional::Negate(cond) => self.stmt_if_compiled(span, cond, false, then_block),
-        }
+        <Spanned<StmtCompiledValue>>::if_stmt(span, cond, then_block, StmtsCompiled::empty())
     }
 
     fn stmt_if_else(
@@ -759,47 +829,15 @@ impl Compiler<'_> {
         else_block: CstStmt,
         allow_gc: bool,
     ) -> StmtsCompiled {
+        let cond = self.expr(cond);
         let then_block = self.stmt(then_block, allow_gc);
         let else_block = self.stmt(else_block, allow_gc);
-        let (cond, t, f) = match self.conditional(cond) {
-            Conditional::True => return then_block,
-            Conditional::False => return else_block,
-            Conditional::Normal(cond) => (cond, then_block, else_block),
-            Conditional::Negate(cond) => (cond, else_block, then_block),
-        };
-        if f.is_empty() {
-            self.stmt_if_compiled(span, cond, true, t)
-        } else if t.is_empty() {
-            self.stmt_if_compiled(span, cond, false, f)
-        } else {
-            StmtsCompiled::one(Spanned {
-                span,
-                node: StmtCompiledValue::If(box (cond, t, f)),
-            })
-        }
-    }
-
-    fn stmt_expr_compiled(
-        &mut self,
-        span: Span,
-        expr: Spanned<ExprCompiledValue>,
-    ) -> StmtsCompiled {
-        match expr {
-            Spanned {
-                node: ExprCompiledValue::Value(_),
-                ..
-            } => StmtsCompiled::empty(),
-            e => StmtsCompiled::one(Spanned {
-                span,
-                node: StmtCompiledValue::Expr(e),
-            }),
-        }
+        <Spanned<StmtCompiledValue>>::if_stmt(span, cond, then_block, else_block)
     }
 
     fn stmt_expr(&mut self, expr: CstExpr) -> StmtsCompiled {
-        let span = expr.span;
         let expr = self.expr(expr);
-        self.stmt_expr_compiled(span, expr)
+        <Spanned<StmtCompiledValue>>::expr(expr)
     }
 
     fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {

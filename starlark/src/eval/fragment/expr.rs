@@ -28,10 +28,7 @@ use crate::{
             Compiler, ExprEvalException,
         },
         fragment::{
-            call::CallCompiled,
-            compr::ComprCompiled,
-            def::DefCompiled,
-            known::{list_to_tuple, Conditional},
+            call::CallCompiled, compr::ComprCompiled, def::DefCompiled, known::list_to_tuple,
         },
         runtime::{evaluator::Evaluator, slots::LocalSlotId},
     },
@@ -452,9 +449,210 @@ impl Spanned<ExprCompiledValue> {
 
     pub(crate) fn optimize_on_freeze(
         &self,
-        _module: &FrozenModuleRef,
+        module: &FrozenModuleRef,
     ) -> Spanned<ExprCompiledValue> {
-        self.clone()
+        let span = self.span;
+        let expr = match self.node {
+            ref e @ (ExprCompiledValue::Value(..)
+            | ExprCompiledValue::Local(..)
+            | ExprCompiledValue::LocalCaptured(..)) => e.clone(),
+            ExprCompiledValue::Module(slot) => {
+                match module.get_module_data().get_slot(slot) {
+                    None => {
+                        // Let if fail at runtime.
+                        ExprCompiledValue::Module(slot)
+                    }
+                    Some(v) => ExprCompiledValue::Value(v),
+                }
+            }
+            ExprCompiledValue::Equals(box (ref l, ref r), maybe_not) => {
+                let l = l.optimize_on_freeze(module);
+                let r = r.optimize_on_freeze(module);
+                eval_equals(l, r, maybe_not)
+            }
+            ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
+                let l = l.optimize_on_freeze(module);
+                let r = r.optimize_on_freeze(module);
+                ExprCompiledValue::Compare(box (l, r), cmp)
+            }
+            ExprCompiledValue::Type(box ref e) => {
+                ExprCompiledValue::Type(box e.optimize_on_freeze(module))
+            }
+            ExprCompiledValue::Len(box ref e) => {
+                ExprCompiledValue::Len(box e.optimize_on_freeze(module))
+            }
+            ExprCompiledValue::TypeIs(box ref e, t, maybe_not) => {
+                ExprCompiledValue::TypeIs(box e.optimize_on_freeze(module), t, maybe_not)
+            }
+            ExprCompiledValue::Tuple(ref xs) => {
+                ExprCompiledValue::Tuple(xs.map(|e| e.optimize_on_freeze(module)))
+            }
+            ExprCompiledValue::List(ref xs) => {
+                ExprCompiledValue::List(xs.map(|e| e.optimize_on_freeze(module)))
+            }
+            ExprCompiledValue::Dict(ref kvs) => ExprCompiledValue::Dict(
+                kvs.map(|(k, v)| (k.optimize_on_freeze(module), v.optimize_on_freeze(module))),
+            ),
+            ExprCompiledValue::Compr(ref compr) => compr.optimize_on_freeze(module),
+            ExprCompiledValue::Dot(box ref object, ref field) => {
+                ExprCompiledValue::Dot(box object.optimize_on_freeze(module), field.clone())
+            }
+            ExprCompiledValue::ArrayIndirection(box (ref array, ref index)) => {
+                let array = array.optimize_on_freeze(module);
+                let index = index.optimize_on_freeze(module);
+                ExprCompiledValue::ArrayIndirection(box (array, index))
+            }
+            ExprCompiledValue::If(box (ref cond, ref t, ref f)) => {
+                let cond = cond.optimize_on_freeze(module);
+                let t = t.optimize_on_freeze(module);
+                let f = f.optimize_on_freeze(module);
+                return ExprCompiledValue::if_expr(cond, t, f);
+            }
+            ExprCompiledValue::Slice(box (ref v, ref start, ref stop, ref step)) => {
+                let v = v.optimize_on_freeze(module);
+                let start = start.as_ref().map(|x| x.optimize_on_freeze(module));
+                let stop = stop.as_ref().map(|x| x.optimize_on_freeze(module));
+                let step = step.as_ref().map(|x| x.optimize_on_freeze(module));
+                ExprCompiledValue::Slice(box (v, start, stop, step))
+            }
+            ExprCompiledValue::Not(box ref e) => {
+                let e = e.optimize_on_freeze(module);
+                return ExprCompiledValue::not(span, e);
+            }
+            ExprCompiledValue::Minus(box ref e) => {
+                let e = e.optimize_on_freeze(module);
+                ExprCompiledValue::minus(e)
+            }
+            ExprCompiledValue::Plus(box ref e) => {
+                ExprCompiledValue::Plus(box e.optimize_on_freeze(module))
+            }
+            ExprCompiledValue::BitNot(box ref e) => {
+                ExprCompiledValue::BitNot(box e.optimize_on_freeze(module))
+            }
+            ExprCompiledValue::And(box (ref l, ref r)) => {
+                let l = l.optimize_on_freeze(module);
+                let r = r.optimize_on_freeze(module);
+                return ExprCompiledValue::and(l, r);
+            }
+            ExprCompiledValue::Or(box (ref l, ref r)) => {
+                let l = l.optimize_on_freeze(module);
+                let r = r.optimize_on_freeze(module);
+                return ExprCompiledValue::or(l, r);
+            }
+            ExprCompiledValue::Op(op, box (ref l, ref r)) => {
+                let l = l.optimize_on_freeze(module);
+                let r = r.optimize_on_freeze(module);
+                ExprCompiledValue::Op(op, box (l, r))
+            }
+            ref d @ ExprCompiledValue::Def(..) => d.clone(),
+            ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(module),
+        };
+        Spanned { node: expr, span }
+    }
+}
+
+impl ExprCompiledValue {
+    fn not(span: Span, expr: Spanned<ExprCompiledValue>) -> Spanned<ExprCompiledValue> {
+        match expr {
+            Spanned {
+                node: ExprCompiledValue::Value(x),
+                ..
+            } => Spanned {
+                node: value!(FrozenValue::new_bool(!x.to_value().to_bool())),
+                span,
+            },
+            expr => Spanned {
+                node: ExprCompiledValue::Not(box expr),
+                span,
+            },
+        }
+    }
+
+    fn or(
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+    ) -> Spanned<ExprCompiledValue> {
+        let l_span = l.span;
+        if let Some(l) = l.as_value() {
+            if l.to_value().to_bool() {
+                Spanned {
+                    node: value!(l),
+                    span: l_span,
+                }
+            } else {
+                r
+            }
+        } else {
+            let span = l.span.merge(r.span);
+            Spanned {
+                node: ExprCompiledValue::Or(box (l, r)),
+                span,
+            }
+        }
+    }
+
+    fn and(
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+    ) -> Spanned<ExprCompiledValue> {
+        let l_span = l.span;
+        if let Some(l) = l.as_value() {
+            if !l.to_value().to_bool() {
+                Spanned {
+                    node: value!(l),
+                    span: l_span,
+                }
+            } else {
+                r
+            }
+        } else {
+            let span = l.span.merge(r.span);
+            Spanned {
+                node: ExprCompiledValue::And(box (l, r)),
+                span,
+            }
+        }
+    }
+
+    fn if_expr(
+        cond: Spanned<ExprCompiledValue>,
+        t: Spanned<ExprCompiledValue>,
+        f: Spanned<ExprCompiledValue>,
+    ) -> Spanned<ExprCompiledValue> {
+        match cond {
+            Spanned {
+                node: ExprCompiledValue::Value(cond),
+                ..
+            } => {
+                if cond.to_value().to_bool() {
+                    t
+                } else {
+                    f
+                }
+            }
+            Spanned {
+                node: ExprCompiledValue::Not(box cond),
+                ..
+            } => Self::if_expr(cond, f, t),
+            cond => {
+                let span = cond.span.merge(t.span).merge(f.span);
+                Spanned {
+                    node: ExprCompiledValue::If(box (cond, t, f)),
+                    span,
+                }
+            }
+        }
+    }
+
+    fn minus(expr: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+        match expr
+            .as_value()
+            .and_then(FrozenValue::unpack_int)
+            .and_then(i32::checked_neg)
+        {
+            Some(i) => value!(FrozenValue::new_int(i)),
+            _ => ExprCompiledValue::Minus(box expr),
+        }
     }
 }
 
@@ -746,15 +944,10 @@ impl Compiler<'_> {
                 ExprCompiledValue::Dict(xs)
             }
             ExprP::If(box (cond, then_expr, else_expr)) => {
+                let cond = self.expr(cond);
                 let then_expr = self.expr(then_expr);
                 let else_expr = self.expr(else_expr);
-                let (cond, t, f) = match self.conditional(cond) {
-                    Conditional::True => return then_expr,
-                    Conditional::False => return else_expr,
-                    Conditional::Normal(cond) => (cond, then_expr, else_expr),
-                    Conditional::Negate(cond) => (cond, else_expr, then_expr),
-                };
-                ExprCompiledValue::If(box (cond, t, f))
+                return ExprCompiledValue::if_expr(cond, then_expr, else_expr);
             }
             ExprP::Dot(left, right) => {
                 let left = self.expr(*left);
@@ -791,26 +984,11 @@ impl Compiler<'_> {
             }
             ExprP::Not(expr) => {
                 let expr = self.expr(*expr);
-                match expr {
-                    Spanned {
-                        node: ExprCompiledValue::Value(x),
-                        ..
-                    } => {
-                        value!(FrozenValue::new_bool(!x.get_ref().to_bool()))
-                    }
-                    expr => ExprCompiledValue::Not(box expr),
-                }
+                return ExprCompiledValue::not(span, expr);
             }
             ExprP::Minus(expr) => {
                 let expr = self.expr(*expr);
-                match expr
-                    .as_value()
-                    .and_then(FrozenValue::unpack_int)
-                    .and_then(i32::checked_neg)
-                {
-                    Some(i) => value!(FrozenValue::new_int(i)),
-                    _ => ExprCompiledValue::Minus(box expr),
-                }
+                ExprCompiledValue::minus(expr)
             }
             ExprP::Plus(expr) => {
                 let expr = self.expr(*expr);
@@ -838,34 +1016,8 @@ impl Compiler<'_> {
                     let r = self.expr(right);
                     // ExprCompiledValue::Op(span, op, box(l, r))
                     match op {
-                        BinOp::Or => {
-                            if let Some(l) = l.as_value() {
-                                return if l.to_value().to_bool() {
-                                    Spanned {
-                                        span,
-                                        node: value!(l),
-                                    }
-                                } else {
-                                    r
-                                };
-                            } else {
-                                ExprCompiledValue::Or(box (l, r))
-                            }
-                        }
-                        BinOp::And => {
-                            if let Some(l) = l.as_value() {
-                                return if !l.to_value().to_bool() {
-                                    Spanned {
-                                        span,
-                                        node: value!(l),
-                                    }
-                                } else {
-                                    r
-                                };
-                            } else {
-                                ExprCompiledValue::And(box (l, r))
-                            }
-                        }
+                        BinOp::Or => return ExprCompiledValue::or(l, r),
+                        BinOp::And => return ExprCompiledValue::and(l, r),
                         BinOp::Equal => eval_equals(l, r, MaybeNot::Id),
                         BinOp::NotEqual => eval_equals(l, r, MaybeNot::Not),
                         BinOp::Less => eval_compare(l, r, |x| x == Ordering::Less),

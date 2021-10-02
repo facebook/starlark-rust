@@ -45,42 +45,7 @@ pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
     }
 }
 
-/// Conditional statements are fairly common, some have literals (or imported values)
-/// and quite a few start with a `not`, so encode those options statically.
-pub(crate) enum Conditional {
-    True,
-    False,
-    Normal(Spanned<ExprCompiledValue>),
-    Negate(Spanned<ExprCompiledValue>),
-}
-
 impl Compiler<'_> {
-    pub fn conditional(&mut self, expr: CstExpr) -> Conditional {
-        let (expect, val) = match expr {
-            Spanned {
-                node: ExprP::Not(box expr),
-                ..
-            } => (false, self.expr(expr)),
-            _ => (true, self.expr(expr)),
-        };
-        match val.node {
-            ExprCompiledValue::Value(x) => {
-                if x.get_ref().to_bool() == expect {
-                    Conditional::True
-                } else {
-                    Conditional::False
-                }
-            }
-            _ => {
-                if expect {
-                    Conditional::Normal(val)
-                } else {
-                    Conditional::Negate(val)
-                }
-            }
-        }
-    }
-
     /// Compile the operation `type(expr)`, trying to produce a constant
     /// where possible.
     pub fn fn_type(&mut self, expr: CstExpr) -> ExprCompiledValue {
