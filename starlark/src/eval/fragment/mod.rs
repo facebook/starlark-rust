@@ -19,7 +19,7 @@
 // makes it into the debug symbols, and is thus visible in system profilers (e.g. `perf`).
 
 macro_rules! expr {
-    ($name:expr, |$eval:ident| $body:expr) => {{
+    (fn $name:expr) => {
         paste::paste! {
             fn [<ann_expr_ $name>](
                 f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, crate::eval::ExprEvalException>
@@ -28,6 +28,11 @@ macro_rules! expr {
                 #[allow(clippy::needless_question_mark)]
                 box move |eval| f(eval)
             }
+        }
+    };
+    ($name:expr, |$eval:ident| $body:expr) => {{
+        expr!(fn $name);
+        paste::paste! {
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
                 Ok($body)
             });
@@ -35,14 +40,9 @@ macro_rules! expr {
         res
     }};
     ($name:expr, $v1:ident, |$eval:ident| $body:expr) => {{
+        expr!(fn $name);
         let $v1 = $v1.as_compiled();
         paste::paste! {
-            fn [<ann_expr_ $name>](
-                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, crate::eval::ExprEvalException>
-                    + Send + Sync + 'static,
-            ) -> ExprCompiled {
-                box move |eval| f(eval)
-            }
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
                 let $v1 = $v1($eval)?;
                 #[allow(clippy::needless_question_mark)]
@@ -52,15 +52,10 @@ macro_rules! expr {
         res
     }};
     ($name:expr, $v1:ident, $v2:ident, |$eval:ident| $body:expr) => {{
+        expr!(fn $name);
         let $v1 = $v1.as_compiled();
         let $v2 = $v2.as_compiled();
         paste::paste! {
-            fn [<ann_expr_ $name>](
-                f: impl for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, crate::eval::ExprEvalException>
-                    + Send + Sync + 'static,
-            ) -> ExprCompiled {
-                box move |eval| f(eval)
-            }
             let res: ExprCompiled = [<ann_expr_ $name>](move |$eval| {
                 let $v1 = $v1($eval)?;
                 let $v2 = $v2($eval)?;
