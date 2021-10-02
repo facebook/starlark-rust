@@ -19,7 +19,7 @@
 use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
-    environment::slots::ModuleSlotId,
+    environment::{slots::ModuleSlotId, FrozenModuleRef},
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
@@ -82,6 +82,7 @@ pub(crate) enum ExprBinOp {
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
 >;
+#[derive(Clone)]
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
     /// Read local non-captured variable.
@@ -447,6 +448,13 @@ impl Spanned<ExprCompiledValue> {
                 )?),
             },
         }
+    }
+
+    pub(crate) fn optimize_on_freeze(
+        &self,
+        _module: &FrozenModuleRef,
+    ) -> Spanned<ExprCompiledValue> {
+        self.clone()
     }
 }
 

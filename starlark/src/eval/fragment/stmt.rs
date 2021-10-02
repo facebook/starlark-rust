@@ -24,7 +24,7 @@
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 use crate::{
     codemap::{Span, Spanned},
-    environment::slots::ModuleSlotId,
+    environment::{slots::ModuleSlotId, FrozenModuleRef},
     eval::{
         compiler::{
             expr_throw,
@@ -51,6 +51,7 @@ use thiserror::Error;
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
 
+#[derive(Clone)]
 pub(crate) enum AssignModifyLhs {
     Dot(Spanned<ExprCompiledValue>, String),
     Array(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
@@ -58,6 +59,7 @@ pub(crate) enum AssignModifyLhs {
     Module(Spanned<ModuleSlotId>),
 }
 
+#[derive(Clone)]
 pub(crate) enum StmtCompiledValue {
     PossibleGc,
     Return(Option<Spanned<ExprCompiledValue>>),
@@ -76,6 +78,7 @@ pub(crate) enum StmtCompiledValue {
     Continue,
 }
 
+#[derive(Debug)]
 pub(crate) struct StmtCompileContext {
     pub(crate) has_before_stmt: bool,
 }
@@ -264,8 +267,27 @@ impl Spanned<StmtCompiledValue> {
             }
         }
     }
+
+    fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
+        let span = self.span;
+        match self.node {
+            StmtCompiledValue::Expr(ref expr) => match expr.optimize_on_freeze(module) {
+                Spanned {
+                    node: ExprCompiledValue::Value(..),
+                    ..
+                } => StmtsCompiled::empty(),
+                e => StmtsCompiled::one(Spanned {
+                    span,
+                    node: StmtCompiledValue::Expr(e),
+                }),
+            },
+            // TODO: optimize other stmts
+            _ => StmtsCompiled::one(self.clone()),
+        }
+    }
 }
 
+#[derive(Clone)]
 enum SmallVec1<T> {
     Empty,
     One(T),
@@ -294,6 +316,7 @@ impl<T> SmallVec1<T> {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiledValue>>);
 
 impl StmtsCompiled {
@@ -337,6 +360,20 @@ impl StmtsCompiled {
         }
     }
 
+    pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
+        let mut stmts = StmtsCompiled::empty();
+        match &self.0 {
+            SmallVec1::Empty => {}
+            SmallVec1::One(s) => stmts.extend(s.optimize_on_freeze(module)),
+            SmallVec1::Many(ss) => {
+                for s in ss {
+                    stmts.extend(s.optimize_on_freeze(module));
+                }
+            }
+        }
+        stmts
+    }
+
     pub(crate) fn first(&self) -> Option<&Spanned<StmtCompiledValue>> {
         match &self.0 {
             SmallVec1::Empty => None,
@@ -358,6 +395,7 @@ pub(crate) type AssignCompiled = Box<
         + Send
         + Sync,
 >;
+#[derive(Clone)]
 pub(crate) enum AssignCompiledValue {
     Dot(Spanned<ExprCompiledValue>, String),
     ArrayIndirection(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),

@@ -30,7 +30,7 @@ use crate::{
         },
         fragment::{
             expr::{ExprCompiled, ExprCompiledValue, MaybeNot},
-            stmt::{StmtCompiled, StmtCompiledValue, StmtsCompiled},
+            stmt::{StmtCompileContext, StmtCompiled, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -53,9 +53,10 @@ use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 use std::{
+    cell::UnsafeCell,
     collections::HashMap,
     fmt::{self, Display, Write},
-    mem,
+    mem, ptr,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -86,12 +87,40 @@ impl AtomicFrozenModuleOption {
     }
 }
 
+/// Store frozen `StmtCompiled`.
+/// This is initialized in `post_freeze`.
+struct StmtCompiledCell {
+    cell: UnsafeCell<StmtCompiled>,
+}
+
+unsafe impl Sync for StmtCompiledCell {}
+unsafe impl Send for StmtCompiledCell {}
+
+impl StmtCompiledCell {
+    fn new() -> StmtCompiledCell {
+        StmtCompiledCell {
+            cell: UnsafeCell::new(box |_| panic!("cell should be filled in optimize_on_freeze")),
+        }
+    }
+
+    /// This function is unsafe if other thread is executing the stmt.
+    unsafe fn set(&self, value: StmtCompiled) {
+        ptr::drop_in_place(self.cell.get());
+        ptr::write(self.cell.get(), value);
+    }
+
+    fn get(&self) -> &StmtCompiled {
+        unsafe { &*self.cell.get() }
+    }
+}
+
 #[derive(Clone)]
 struct ParameterName {
     name: String,
     captured: Captured,
 }
 
+#[derive(Clone)]
 enum ParameterCompiled<T> {
     Normal(ParameterName, Option<T>),
     WithDefaultValue(ParameterName, Option<T>, T),
@@ -163,14 +192,20 @@ pub(crate) struct DefInfo {
     /// The raw docstring pulled out of the AST.
     pub(crate) docstring: Option<String>,
     scope_names: ScopeNames,
+    /// Statement compiled for non-frozen def.
+    #[derivative(Debug = "ignore")]
+    stmt_compiled: StmtCompiled,
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
     #[derivative(Debug = "ignore")]
-    body: StmtCompiled,
+    body_stmts: StmtsCompiled,
+    /// How to compile the statement on freeze.
+    stmt_compile_context: StmtCompileContext,
     /// Function body is `type(x) == "y"`
     pub(crate) returns_type_is: Option<FrozenStringValue>,
 }
 
+#[derive(Clone)]
 pub(crate) struct DefCompiled {
     function_name: String,
     params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
@@ -340,8 +375,10 @@ impl Compiler<'_> {
             codemap: self.codemap.dupe(),
             docstring,
             scope_names,
-            body: body.as_compiled(&self.compile_context()),
+            stmt_compiled: body.as_compiled(&self.compile_context()),
+            body_stmts: body,
             returns_type_is,
+            stmt_compile_context: self.compile_context(),
         });
 
         ExprCompiledValue::Def(DefCompiled {
@@ -373,6 +410,9 @@ pub(crate) struct DefGen<V> {
     /// When the module is not frozen yet, this field contains `None`, and function's module
     /// can be accessed from evaluator's module.
     module: AtomicFrozenModuleOption,
+    /// This field is only used in `FrozenDef`. It is populated in `post_freeze`.
+    #[derivative(Debug = "ignore")]
+    optimized_on_freeze_stmt: StmtCompiledCell,
 }
 
 impl<V> Display for DefGen<V> {
@@ -404,9 +444,10 @@ impl<'v> Def<'v> {
             parameter_captures,
             parameter_types,
             return_type,
-            def_info: stmt,
             captured,
             module: AtomicFrozenModuleOption::from(eval.module_variables.map(|x| x.1)),
+            optimized_on_freeze_stmt: StmtCompiledCell::new(),
+            def_info: stmt,
         })
     }
 }
@@ -553,6 +594,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             def_info: self.def_info,
             captured,
             module,
+            optimized_on_freeze_stmt: self.optimized_on_freeze_stmt,
         })
     }
 }
@@ -643,7 +685,11 @@ where
             debug_assert!(self.module.get().is_some());
         }
         let res = eval.with_function_context(self.module.get(), &self.def_info.codemap, |eval| {
-            (self.def_info.body)(eval)
+            if Self::FROZEN {
+                (self.optimized_on_freeze_stmt.get())(eval)
+            } else {
+                (self.def_info.stmt_compiled)(eval)
+            }
         });
         eval.local_variables.release(old_locals);
 
@@ -670,8 +716,30 @@ where
 
 impl FrozenDef {
     pub(crate) fn post_freeze(&self, module: FrozenRef<FrozenModuleRef>) {
-        if self.module.get().is_none() {
-            self.module.set(module);
+        // Module passed to this function is not always module where the function is declared:
+        // A function can be created in a frozen module and frozen later in another module.
+        // `def_module` variable contains a module where this `def` is declared.
+        let def_module = match self.module.get() {
+            None => {
+                self.module.set(module);
+                module
+            }
+            Some(module) => module,
+        };
+
+        // Now perform the optimization of function body with fully frozen module:
+        // all module variables are frozen, so we can inline more aggressively.
+        let body_optimized = self
+            .def_info
+            .body_stmts
+            .optimize_on_freeze(def_module.as_ref())
+            .as_compiled(&self.def_info.stmt_compile_context);
+
+        // Store the optimized body.
+        // This is (relatively) safe because we know that during freeze
+        // nobody has a reference to stmt: nobody is executing this `def`.
+        unsafe {
+            self.optimized_on_freeze_stmt.set(body_optimized);
         }
     }
 }
