@@ -49,24 +49,21 @@ impl Compiler<'_> {
     /// Compile the operation `type(expr)`, trying to produce a constant
     /// where possible.
     pub fn fn_type(&mut self, expr: CstExpr) -> ExprCompiledValue {
-        // Note that `type([fail("bad")])` must still raise an exception.
-        // In practice people only really use the empty versions as constants.
-        match &expr.node {
-            ExprP::Dict(xs) if xs.is_empty() => {
-                return ExprCompiledValue::Value(Dict::get_type_value_static().unpack());
+        let span = expr.span;
+        match self.expr(expr).node {
+            ExprCompiledValue::Value(x) => {
+                ExprCompiledValue::Value(x.to_value().get_type_value().unpack())
             }
-            ExprP::List(xs) if xs.is_empty() => {
-                return ExprCompiledValue::Value(List::get_type_value_static().unpack());
+            ExprCompiledValue::List(xs) if xs.is_empty() => {
+                ExprCompiledValue::Value(List::get_type_value_static().unpack())
             }
-            // No need to handle Tuple as it will become frozen if it has no inner-calls
-            _ => {}
-        }
-        match self.expr(expr) {
-            Spanned {
-                node: ExprCompiledValue::Value(x),
-                ..
-            } => ExprCompiledValue::Value(x.to_value().get_type_value().unpack()),
-            x => ExprCompiledValue::Type(box x),
+            ExprCompiledValue::Dict(xs) if xs.is_empty() => {
+                ExprCompiledValue::Value(Dict::get_type_value_static().unpack())
+            }
+            ExprCompiledValue::Tuple(xs) if xs.is_empty() => {
+                unreachable!("empty tuple expression must have been compiled to value")
+            }
+            x => ExprCompiledValue::Type(box Spanned { node: x, span }),
         }
     }
 }
