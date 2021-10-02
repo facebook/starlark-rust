@@ -386,6 +386,20 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
         // > `s[0]*31^(n-1) + s[1]*31^(n-2) + ... + s[n-1]`
         // As per spec the function should only support string and bytes types.
         // We don't have support for bytes, so parameter is forced to be a string.
+
+        // Most strings are ASCII strings, try them first.
+        #[allow(clippy::never_loop)]
+        'ascii: loop {
+            let mut hash = 0i32;
+            for &b in a.as_bytes() {
+                if b > 0x7f {
+                    break 'ascii;
+                }
+                hash = hash.wrapping_mul(31i32).wrapping_add(b as i32);
+            }
+            return Ok(hash);
+        }
+
         Ok(a.encode_utf16().fold(0i32, |hash: i32, c: u16| {
             31i32.wrapping_mul(hash).wrapping_add(c as i32)
         }))
