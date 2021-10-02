@@ -29,9 +29,9 @@ use crate::{
 fn globals(builder: &mut GlobalsBuilder) {
     fn returns_type_is(value: Value<'v>) -> bool {
         Ok(if let Some(def) = value.downcast_ref::<FrozenDef>() {
-            def.stmt.returns_type_is.is_some()
+            def.def_info.returns_type_is.is_some()
         } else if let Some(def) = value.downcast_ref::<Def>() {
-            def.stmt.returns_type_is.is_some()
+            def.def_info.returns_type_is.is_some()
         } else {
             panic!("not def")
         })

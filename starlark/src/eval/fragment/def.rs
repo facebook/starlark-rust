@@ -362,7 +362,7 @@ pub(crate) struct DefGen<V> {
     parameter_captures: Vec<u32>,  // Indices of parameters, which are captured in nested defs
     parameter_types: Vec<(u32, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
-    pub(crate) stmt: FrozenRef<DefInfo>,    // The source code and metadata for this function
+    pub(crate) def_info: FrozenRef<DefInfo>, // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
     /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
     /// [`ValueCaptured`] or [`FrozenValueCaptured`].
@@ -404,7 +404,7 @@ impl<'v> Def<'v> {
             parameter_captures,
             parameter_types,
             return_type,
-            stmt,
+            def_info: stmt,
             captured,
             module: AtomicFrozenModuleOption::from(eval.module_variables.map(|x| x.1)),
         })
@@ -421,7 +421,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
         Option<DocString>,
     ) {
         let docstring = self
-            .stmt
+            .def_info
             .docstring
             .as_ref()
             .and_then(|s| DocString::from_docstring(s));
@@ -513,7 +513,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
 
 impl<T1> DefGen<T1> {
     pub(crate) fn scope_names(&self) -> &ScopeNames {
-        &self.stmt.scope_names
+        &self.def_info.scope_names
     }
 }
 
@@ -550,7 +550,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             parameter_captures: self.parameter_captures,
             parameter_types,
             return_type,
-            stmt: self.stmt,
+            def_info: self.def_info,
             captured,
             module,
         })
@@ -586,7 +586,7 @@ where
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let local_slots = self.stmt.scope_names.used;
+        let local_slots = self.def_info.scope_names.used;
         let slot_base = eval.local_variables.reserve(local_slots);
         let slots = eval.local_variables.get_slots_at(slot_base);
         self.parameters.collect_inline(args, slots, eval.heap())?;
@@ -630,7 +630,7 @@ where
 
         // Copy over the parent slots
         for ((_, me), captured) in self
-            .stmt
+            .def_info
             .scope_names
             .parent
             .iter()
@@ -642,8 +642,8 @@ where
         if Self::FROZEN {
             debug_assert!(self.module.get().is_some());
         }
-        let res = eval.with_function_context(self.module.get(), &self.stmt.codemap, |eval| {
-            (self.stmt.body)(eval)
+        let res = eval.with_function_context(self.module.get(), &self.def_info.codemap, |eval| {
+            (self.def_info.body)(eval)
         });
         eval.local_variables.release(old_locals);
 
