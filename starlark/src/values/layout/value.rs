@@ -37,6 +37,7 @@ use crate::values::{
         pointer::Pointer,
         pointer_i32::PointerI32,
     },
+    num::Num,
     string::StarlarkStr,
 };
 use either::Either;
@@ -127,6 +128,11 @@ impl<'v> Value<'v> {
     pub fn is_none(self) -> bool {
         // Safe because frozen values never have a tag
         self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
+    }
+
+    /// Obtain the underlying numerical value, if it is one.
+    pub fn unpack_num(self) -> Option<Num> {
+        Num::try_from_value(self)
     }
 
     /// Obtain the underlying `bool` if it is a boolean.

@@ -902,6 +902,9 @@ impl Compiler<'_> {
                     AssignOp::Multiply => {
                         self.assign_modify(span, lhs, rhs, |l, r, eval| l.mul(r, eval.heap()))
                     }
+                    AssignOp::Divide => {
+                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.div(r, eval.heap()))
+                    }
                     AssignOp::FloorDivide => {
                         self.assign_modify(span, lhs, rhs, |l, r, eval| l.floor_div(r, eval.heap()))
                     }

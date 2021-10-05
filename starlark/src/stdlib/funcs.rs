@@ -26,10 +26,12 @@ use crate::{
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
+        float::FLOAT_TYPE,
         function::{BoundMethod, NativeAttribute},
         int::INT_TYPE,
         list::List,
         none::NoneType,
+        num::Num,
         range::Range,
         string::STRING_TYPE,
         tuple::Tuple,
@@ -320,6 +322,63 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
         Ok(List::new(v))
     }
 
+    /// [float](
+    /// https://github.com/google/skylark/blob/a5f7082aabed29c0e429c722292c66ec8ecf9591/doc/spec.md#float
+    /// ): interprets its argument as a floating-point number.
+    ///
+    /// If x is a `float`, the result is x.
+    /// if x is an `int`, the result is the nearest floating point value to x.
+    /// If x is a string, the string is interpreted as a floating-point literal.
+    /// With no arguments, `float()` returns `0.0`.
+    ///
+    /// ```
+    /// # starlark::assert::all_true(r#"
+    /// float() == 0.0
+    /// float(1) == 1.0
+    /// float('1') == 1.0
+    /// float('1.0') == 1.0
+    /// float('.25') == 0.25
+    /// float('1e2') == 100.0
+    /// float(False) == 0.0
+    /// float(True) == 1.0
+    /// # "#);
+    /// # starlark::assert::fail(r#"
+    /// float("hello")   # error: not a valid number
+    /// # "#, "not a valid number");
+    /// # starlark::assert::fail(r#"
+    /// float([])   # error: argument must be a string, a number, or a boolean
+    /// # "#, "argument must be a string, a number, or a boolean");
+    /// ```
+    #[starlark_type(FLOAT_TYPE)]
+    fn float(ref a: Option<Value>) -> f64 {
+        if a.is_none() {
+            return Ok(0.0);
+        }
+        let a = a.unwrap();
+        if let Some(f) = a.unpack_num().map(|n| n.as_float()) {
+            Ok(f)
+        } else if let Some(s) = a.unpack_str() {
+            match s.parse::<f64>() {
+                Ok(f) => {
+                    if f.is_infinite() && !s.to_lowercase().contains("inf") {
+                        // if a resulting float is infinite but the parsed string is not explicitly infinity then we should fail with an error
+                        Err(anyhow!("float() floating-point number too large: {}", s))
+                    } else {
+                        Ok(f)
+                    }
+                }
+                Err(x) => Err(anyhow!("{} is not a valid number: {}", a.to_repr(), x)),
+            }
+        } else if let Some(b) = a.unpack_bool() {
+            Ok(if b { 1.0 } else { 0.0 })
+        } else {
+            Err(anyhow!(
+                "float() argument must be a string, a number, or a boolean, not `{}`",
+                a.get_type()
+            ))
+        }
+    }
+
     /// [getattr](
     /// https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#getattr
     /// ): returns the value of an attribute
@@ -438,10 +497,23 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// int('16', 10) == 16
     /// int('16', 8) == 14
     /// int('16', 16) == 22
+    /// int(0.0) == 0
+    /// int(3.14) == 3
+    /// int(-12345.6789) == -12345
+    /// int(2e9) == 2000000000
     /// # "#);
     /// # starlark::assert::fail(r#"
     /// int("hello")   # error: not a valid number
     /// # "#, "not a valid number");
+    /// # starlark::assert::fail(r#"
+    /// int(1e100)   # error: overflow
+    /// # "#, "cannot convert float to integer");
+    /// # starlark::assert::fail(r#"
+    /// int(float("nan"))   # error: cannot convert NaN to int
+    /// # "#, "cannot convert float to integer");
+    /// # starlark::assert::fail(r#"
+    /// int(float("inf"))   # error: cannot convert infinity to int
+    /// # "#, "cannot convert float to integer");
     /// ```
     #[starlark_type(INT_TYPE)]
     fn int(ref a: Option<Value>, base: Option<Value>) -> i32 {
@@ -510,14 +582,21 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     x,
                 )),
             }
-        } else {
-            match base {
-                Some(base) => Err(anyhow!(
-                    "int() cannot convert non-string with explicit base '{}'",
-                    base.to_repr()
+        } else if let Some(base) = base {
+            Err(anyhow!(
+                "int() cannot convert non-string with explicit base '{}'",
+                base.to_repr()
+            ))
+        } else if let Some(Num::Float(f)) = a.unpack_num() {
+            match Num::from(f.trunc()).as_int() {
+                Some(i) => Ok(i),
+                None => Err(anyhow!(
+                    "int() cannot convert float to integer: {}",
+                    a.to_repr()
                 )),
-                None => Ok(a.to_int()?),
             }
+        } else {
+            Ok(a.to_int()?)
         }
     }
 

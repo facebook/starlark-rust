@@ -534,6 +534,11 @@ pub enum Token {
     #[regex("0[oO][0-7]+", |_| 8)]
     IntegerLiteral(i32), // An integer literal (123, 0x1, 0b1011, 0o755, ...)
 
+    #[regex("[0-9]+\\.[0-9]*([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
+    #[regex("[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice().parse::<f64>())]
+    #[regex("\\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
+    FloatLiteral(f64), // A float literal (3.14, .3, 1e6, 0.)
+
     StringLiteral(String), // A string literal
 
     // Keywords
@@ -752,6 +757,7 @@ impl Display for Token {
             Token::Reserved => write!(f, "reserved keyword"),
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
             Token::IntegerLiteral(i) => write!(f, "integer literal '{}'", i),
+            Token::FloatLiteral(n) => write!(f, "float literal '{}'", n),
             Token::StringLiteral(s) => write!(f, "string literal '{}'", s),
             Token::RawSingleQuote => write!(f, "starting '"),
             Token::RawDoubleQuote => write!(f, "starting \""),

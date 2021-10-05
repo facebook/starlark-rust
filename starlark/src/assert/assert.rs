@@ -68,6 +68,14 @@ fn assert_different<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> 
     }
 }
 
+fn assert_less_than<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
+    if a.compare(b)? != std::cmp::Ordering::Less {
+        Err(anyhow!("assert_lt: but {} >= {}", a, b))
+    } else {
+        Ok(NoneType)
+    }
+}
+
 /// How often we garbage collection _should_ be transparent to the tests,
 /// so we run each test in three configurations.
 #[derive(Clone, Copy, Dupe, Debug)]
@@ -87,6 +95,10 @@ fn assert_star(builder: &mut crate::environment::GlobalsBuilder) {
 
     fn ne(a: Value, b: Value) -> NoneType {
         assert_different(a, b)
+    }
+
+    fn lt(a: Value, b: Value) -> NoneType {
+        assert_less_than(a, b)
     }
 
     fn contains(xs: Value, x: Value) -> NoneType {
@@ -135,6 +147,10 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 
     fn assert_ne(a: Value, b: Value) -> NoneType {
         assert_different(a, b)
+    }
+
+    fn assert_lt(a: Value, b: Value) -> NoneType {
+        assert_less_than(a, b)
     }
 
     fn assert_true(a: Value) -> NoneType {

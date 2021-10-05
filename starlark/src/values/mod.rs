@@ -60,6 +60,7 @@ mod index;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
 mod layout;
+pub(crate) mod num;
 mod owned;
 mod stack_guard;
 mod traits;
@@ -523,6 +524,10 @@ impl<'v> Value<'v> {
 
     pub fn percent(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().percent(other, heap)
+    }
+
+    pub fn div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().div(other, heap)
     }
 
     pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

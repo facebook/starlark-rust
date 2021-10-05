@@ -658,6 +658,20 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug {
         ValueError::unsupported_with(self, "*", other)
     }
 
+    /// Divide the current value by `other`. Always results in a float value.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # starlark::assert::all_true(r#"
+    /// 4 / 2.0 == 2.0
+    /// 7 / 2 == 3.5
+    /// # "#);
+    /// ```
+    fn div(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        ValueError::unsupported_with(self, "/", other)
+    }
+
     /// Apply the percent operator between the current value and `other`. Usually used on
     /// strings, as per
     /// [the Starlark spec](https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#string-interpolation).
@@ -688,6 +702,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug {
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// 7 // 2 == 3
+    /// 3.0 // 2.0 == 1.0
     /// # "#);
     /// ```
     fn floor_div(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -815,6 +830,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn sub(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn mul(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn percent(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
     fn bit_or(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;

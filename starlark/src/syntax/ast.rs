@@ -70,6 +70,7 @@ pub type AstArgument = AstArgumentP<AstNoPayload>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = AstParameterP<AstNoPayload>;
 pub type AstInt = Spanned<i32>;
+pub type AstFloat = Spanned<f64>;
 pub type AstLoad = AstLoadP<AstNoPayload>;
 pub type AstStmt = AstStmtP<AstNoPayload>;
 
@@ -128,8 +129,10 @@ pub enum ParameterP<P: AstPayload> {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::enum_variant_names)]
 pub enum AstLiteral {
     IntLiteral(AstInt),
+    FloatLiteral(AstFloat),
     StringLiteral(AstString),
 }
 
@@ -215,6 +218,7 @@ pub enum BinOp {
     Add,
     Multiply,
     Percent,
+    Divide,
     FloorDivide,
     BitAnd,
     BitOr,
@@ -228,6 +232,7 @@ pub enum AssignOp {
     Add,         // +=
     Subtract,    // -=
     Multiply,    // *=
+    Divide,      // /=
     FloorDivide, // //=
     Percent,     // %=
     BitAnd,      // &=
@@ -317,6 +322,7 @@ impl Display for BinOp {
             BinOp::Add => f.write_str(" + "),
             BinOp::Multiply => f.write_str(" * "),
             BinOp::Percent => f.write_str(" % "),
+            BinOp::Divide => f.write_str(" / "),
             BinOp::FloorDivide => f.write_str(" // "),
             BinOp::BitAnd => f.write_str(" & "),
             BinOp::BitOr => f.write_str(" | "),
@@ -333,6 +339,7 @@ impl Display for AssignOp {
             AssignOp::Add => f.write_str(" += "),
             AssignOp::Subtract => f.write_str(" += "),
             AssignOp::Multiply => f.write_str(" *= "),
+            AssignOp::Divide => f.write_str(" /= "),
             AssignOp::FloorDivide => f.write_str(" //= "),
             AssignOp::Percent => f.write_str(" %= "),
             AssignOp::BitAnd => f.write_str(" &= "),
@@ -383,6 +390,7 @@ impl Display for AstLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AstLiteral::IntLiteral(i) => write!(f, "{}", &i.node),
+            AstLiteral::FloatLiteral(n) => write!(f, "{}", &n.node),
             AstLiteral::StringLiteral(s) => fmt_string_literal(f, &s.node),
         }
     }

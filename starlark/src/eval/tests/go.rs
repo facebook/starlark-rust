@@ -49,20 +49,11 @@ fn test_go() {
         ],
     );
     // Skip benchmark.star, for benchmarking not testing
-    assert.conformance(&ignore_bad_lines(
-        test_case!("bool.star"),
-        &[
-            "0.0", // Floats, unsupported
-        ],
-    ));
+    assert.conformance(test_case!("bool.star"));
     assert.conformance(&ignore_bad_lines(
         test_case!("builtin.star"),
         &[
-            "2.0",                   // Floats, unsupported
             "[] not in {123: \"\"}", // We disagree, see test_not_in_unhashable
-            // Exponents, unsupported
-            "1e15",
-            "1e100",
             // Set, unsupported
             "set(",
             "(myset)",
@@ -101,7 +92,32 @@ fn test_go() {
             "Verify position of an \"unhashable key\"", // FIXME: we should do better
         ],
     );
-    // Skip float.star, since we don't support floats
+    assert.conformance(&ignore_bad_lines(
+        test_case!("float.star"),
+        &[
+            // int's outside our range
+            "1229999999999999973",
+            "9223372036854775808",
+            "1000000000000000000",
+            "1230000000000000049",
+            "9223372036854775807",
+            "p53",
+            "maxint64",
+            "int too large to convert to float",
+            "int(1e100)",
+            "1000000 * 1000000 * 1000000",
+            "int overflow in starlark-rust",
+            // str for floats doesn't conform to the spec
+            "assert.eq(str(1.23e45),",
+            "assert.eq(str(-1.23e-45),",
+            "assert.eq(str(sorted([inf, neginf, nan, 1e300, -1e300,",
+            // string interpolation for floats not implemented
+            "%d",
+            "%e",
+            "%f",
+            "%g",
+        ],
+    ));
     assert.conformance(&ignore_bad_lines(
         test_case!("function.star"),
         &[
@@ -117,7 +133,6 @@ fn test_go() {
         &ignore_bad_lines(
             test_case!("misc.star"),
             &[
-                "2.0",                          // We don't support float
                 "'<built-in function freeze>'", // Different display of functions
             ],
         ),

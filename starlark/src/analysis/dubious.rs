@@ -22,6 +22,7 @@ use crate::{
         ast::{AstExpr, AstLiteral, Expr},
         AstModule,
     },
+    values::num::Num,
 };
 use gazebo::variants::VariantName;
 use std::collections::HashMap;
@@ -46,6 +47,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
     #[derive(PartialEq, Eq, Hash)]
     enum Key<'a> {
         Int(i32),
+        Float(u64),
         String(&'a str),
         Identifier(&'a str),
     }
@@ -54,6 +56,18 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
         match &**x {
             Expr::Literal(x) => match &*x {
                 AstLiteral::IntLiteral(x) => Some((Key::Int(x.node), x.span)),
+                AstLiteral::FloatLiteral(x) => {
+                    let n = Num::from(x.node);
+                    if let Some(i) = n.as_int() {
+                        // make an integer float always collide with other ints
+                        Some((Key::Int(i), x.span))
+                    } else {
+                        // use bits representation of float to be able to always compare them for equality
+                        // First normalise -0.0
+                        let v = if x.node == 0.0 { 0.0 } else { x.node };
+                        Some((Key::Float(v.to_bits()), x.span))
+                    }
+                }
                 AstLiteral::StringLiteral(x) => Some((Key::String(&x.node), x.span)),
             },
             Expr::Identifier(x, ()) => Some((Key::Identifier(&x.node), x.span)),
@@ -117,6 +131,8 @@ mod test {
             r#"
 {'no1': 1, 'no1': 2}
 {42: 1, 78: 9, 'no2': 100, 42: 6, 'no2': 8}
+{123.0: "f", 123: "i"}
+{0.25: "frac", 25e-2: "exp"}
 
 # Variables can't change as a result of expression evaluation,
 # so it's always an error if you see the same expression
@@ -130,7 +146,9 @@ mod test {
         duplicate_dictionary_key(&m, &mut res);
         assert_eq!(
             res.map(|x| x.problem.about()),
-            &["\"no1\"", "42", "\"no2\"", "no3", "no3", "no4"]
+            &[
+                "\"no1\"", "42", "\"no2\"", "123", "0.25", "no3", "no3", "no4"
+            ]
         );
     }
 }
