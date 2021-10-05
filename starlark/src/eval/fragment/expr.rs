@@ -60,6 +60,26 @@ impl MaybeNot {
     }
 }
 
+/// Map result of comparison to boolean.
+#[derive(Copy, Clone, Dupe)]
+pub(crate) enum CompareOp {
+    Less,
+    Greater,
+    LessOrEqual,
+    GreaterOrEqual,
+}
+
+impl CompareOp {
+    fn as_fn(self) -> fn(Ordering) -> bool {
+        match self {
+            CompareOp::Less => |x| x == Ordering::Less,
+            CompareOp::Greater => |x| x == Ordering::Greater,
+            CompareOp::LessOrEqual => |x| x != Ordering::Greater,
+            CompareOp::GreaterOrEqual => |x| x != Ordering::Less,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Dupe)]
 pub(crate) enum ExprBinOp {
     In,
@@ -96,7 +116,7 @@ pub(crate) enum ExprCompiledValue {
     /// `cmp(x <=> y)`
     Compare(
         Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
-        fn(Ordering) -> bool,
+        CompareOp,
     ),
     /// `type(x)`
     Type(Box<Spanned<ExprCompiledValue>>),
@@ -336,6 +356,7 @@ impl Spanned<ExprCompiledValue> {
                 })
             }
             ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
+                let cmp = cmp.as_fn();
                 expr!("compare", l, r, |eval| {
                     Value::new_bool(cmp(expr_throw(l.compare(r), span, eval)?))
                 })
@@ -669,12 +690,12 @@ pub(crate) enum EvalError {
 fn eval_compare(
     l: Spanned<ExprCompiledValue>,
     r: Spanned<ExprCompiledValue>,
-    cmp: fn(Ordering) -> bool,
+    cmp: CompareOp,
 ) -> ExprCompiledValue {
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
         // If comparison fails, let it fail in runtime.
         if let Ok(r) = l.compare(r.to_value()) {
-            return value!(FrozenValue::new_bool(cmp(r)));
+            return value!(FrozenValue::new_bool((cmp.as_fn())(r)));
         }
     }
 
@@ -1025,10 +1046,10 @@ impl Compiler<'_> {
                         BinOp::And => return ExprCompiledValue::and(l, r),
                         BinOp::Equal => eval_equals(l, r, MaybeNot::Id),
                         BinOp::NotEqual => eval_equals(l, r, MaybeNot::Not),
-                        BinOp::Less => eval_compare(l, r, |x| x == Ordering::Less),
-                        BinOp::Greater => eval_compare(l, r, |x| x == Ordering::Greater),
-                        BinOp::LessOrEqual => eval_compare(l, r, |x| x != Ordering::Greater),
-                        BinOp::GreaterOrEqual => eval_compare(l, r, |x| x != Ordering::Less),
+                        BinOp::Less => eval_compare(l, r, CompareOp::Less),
+                        BinOp::Greater => eval_compare(l, r, CompareOp::Greater),
+                        BinOp::LessOrEqual => eval_compare(l, r, CompareOp::LessOrEqual),
+                        BinOp::GreaterOrEqual => eval_compare(l, r, CompareOp::GreaterOrEqual),
                         BinOp::In => ExprCompiledValue::Op(ExprBinOp::In, box (l, r)),
                         BinOp::NotIn => ExprCompiledValue::Op(ExprBinOp::NotIn, box (l, r)),
                         BinOp::Subtract => ExprCompiledValue::Op(ExprBinOp::Sub, box (l, r)),
