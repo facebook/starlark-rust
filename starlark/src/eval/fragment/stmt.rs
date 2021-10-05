@@ -62,7 +62,7 @@ pub(crate) enum StmtCompiledValue {
     Return(Option<Spanned<ExprCompiledValue>>),
     Expr(Spanned<ExprCompiledValue>),
     Assign(Spanned<AssignCompiledValue>, Spanned<ExprCompiledValue>),
-    AssignModify(AssignModifyLhs, AssignModifyOp, Spanned<ExprCompiledValue>),
+    AssignModify(AssignModifyLhs, AssignOp, Spanned<ExprCompiledValue>),
     If(Box<(Spanned<ExprCompiledValue>, StmtsCompiled, StmtsCompiled)>),
     For(
         Box<(
@@ -130,6 +130,7 @@ impl Spanned<StmtCompiledValue> {
                 let span_lhs = e.span;
                 let e = e.as_compiled();
                 let s = s.clone();
+                let op = op.as_fn();
                 let rhs = rhs.as_compiled();
                 stmt!(compiler, "assign_dot", span_stmt, |eval| {
                     let e: Value = e(eval)?;
@@ -151,6 +152,7 @@ impl Spanned<StmtCompiledValue> {
                 let span_lhs = lhs.span;
                 let e = lhs.as_compiled();
                 let idx = idx.as_compiled();
+                let op = op.as_fn();
                 let rhs = rhs.as_compiled();
                 stmt!(compiler, "assign_array", span_stmt, |eval| {
                     let e: Value = e(eval)?;
@@ -168,6 +170,7 @@ impl Spanned<StmtCompiledValue> {
                 let span_stmt = span;
                 let span_lhs = lhs.span;
                 let (slot, captured, name) = lhs.node.clone();
+                let op = op.as_fn();
                 let rhs = rhs.as_compiled();
                 match captured {
                     Captured::Yes => stmt!(compiler, "assign_local_captured", span_stmt, |eval| {
@@ -188,6 +191,7 @@ impl Spanned<StmtCompiledValue> {
                 let span_stmt = span;
                 let span_lhs = lhs.span;
                 let slot = lhs.node;
+                let op = op.as_fn();
                 let rhs = rhs.as_compiled();
                 stmt!(compiler, "assign_module", span_stmt, |eval| {
                     let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
@@ -569,8 +573,26 @@ fn eval_assign_list<'v>(
     }
 }
 
-pub(crate) type AssignModifyOp =
+pub(crate) type AssignModifyOpFn =
     for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>;
+
+impl AssignOp {
+    fn as_fn(self) -> AssignModifyOpFn {
+        match self {
+            AssignOp::Add => |l, r, eval| add_assign(l, r, eval.heap()),
+            AssignOp::Subtract => |l, r, eval| l.sub(r, eval.heap()),
+            AssignOp::Multiply => |l, r, eval| l.mul(r, eval.heap()),
+            AssignOp::Divide => |l, r, eval| l.div(r, eval.heap()),
+            AssignOp::FloorDivide => |l, r, eval| l.floor_div(r, eval.heap()),
+            AssignOp::Percent => |l, r, eval| l.percent(r, eval.heap()),
+            AssignOp::BitAnd => |l, r, _| l.bit_and(r),
+            AssignOp::BitOr => |l, r, _| l.bit_or(r),
+            AssignOp::BitXor => |l, r, _| l.bit_xor(r),
+            AssignOp::LeftShift => |l, r, _| l.left_shift(r),
+            AssignOp::RightShift => |l, r, _| l.right_shift(r),
+        }
+    }
+}
 
 impl Compiler<'_> {
     pub fn assign(&mut self, expr: CstAssign) -> Spanned<AssignCompiledValue> {
@@ -614,7 +636,7 @@ impl Compiler<'_> {
         span_stmt: Span,
         lhs: CstAssign,
         rhs: Spanned<ExprCompiledValue>,
-        op: AssignModifyOp,
+        op: AssignOp,
     ) -> StmtsCompiled {
         let span_lhs = lhs.span;
         match lhs.node {
@@ -893,34 +915,7 @@ impl Compiler<'_> {
             }
             StmtP::AssignModify(lhs, op, rhs) => {
                 let rhs = self.expr(*rhs);
-                match op {
-                    AssignOp::Add => self
-                        .assign_modify(span, lhs, rhs, |l, r, eval| add_assign(l, r, eval.heap())),
-                    AssignOp::Subtract => {
-                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.sub(r, eval.heap()))
-                    }
-                    AssignOp::Multiply => {
-                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.mul(r, eval.heap()))
-                    }
-                    AssignOp::Divide => {
-                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.div(r, eval.heap()))
-                    }
-                    AssignOp::FloorDivide => {
-                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.floor_div(r, eval.heap()))
-                    }
-                    AssignOp::Percent => {
-                        self.assign_modify(span, lhs, rhs, |l, r, eval| l.percent(r, eval.heap()))
-                    }
-                    AssignOp::BitAnd => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_and(r)),
-                    AssignOp::BitOr => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_or(r)),
-                    AssignOp::BitXor => self.assign_modify(span, lhs, rhs, |l, r, _| l.bit_xor(r)),
-                    AssignOp::LeftShift => {
-                        self.assign_modify(span, lhs, rhs, |l, r, _| l.left_shift(r))
-                    }
-                    AssignOp::RightShift => {
-                        self.assign_modify(span, lhs, rhs, |l, r, _| l.right_shift(r))
-                    }
-                }
+                self.assign_modify(span, lhs, rhs, op)
             }
             StmtP::Load(..) => unreachable!(),
             StmtP::Pass => StmtsCompiled::empty(),
