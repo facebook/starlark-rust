@@ -23,6 +23,7 @@ use crate::{
     },
     errors::{Diagnostic, Frame},
     eval::{
+        fragment::def::DefInfo,
         runtime::{
             call_stack::CallStack,
             flame_profile::FlameProfile,
@@ -77,6 +78,10 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // The codemap that corresponds to currently executed function.
     pub(crate) codemap: &'v CodeMap,
+    // `DefInfo` of currently executed function.
+    pub(crate) def_info: Option<FrozenRef<DefInfo>>,
+    // Module local variable names.
+    pub(crate) module_local_names: Vec<String>,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
     // Should we enable flame profiling or not
@@ -142,6 +147,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             flame_profile: FlameProfile::new(),
             heap_or_flame_profile: false,
             before_stmt: Vec::new(),
+            def_info: None,
+            module_local_names: Vec::new(),
         }
     }
 
@@ -322,17 +329,18 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_function_context<R>(
         &mut self,
         module: Option<FrozenRef<FrozenModuleRef>>, // None == use module_env
-        codemap: &CodeMap,
+        def_info: FrozenRef<DefInfo>,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
         // Safe because we promise to put codemap back to how it was before this function terminates.
         // And because anyone who gets access to the CodeMap does so with a dupe, taking ownership.
         // We'd like to express that `Evaluator` has a lifetime for the codemap that lasts only
         // this function, but Rust can't express that.
-        let codemap = unsafe { cast::ptr_lifetime(codemap) };
+        let codemap = unsafe { cast::ptr_lifetime(&def_info.codemap) };
 
         // Capture the variables we will be mutating
         let old_codemap = self.set_codemap(codemap);
+        let old_def_info = mem::replace(&mut self.def_info, Some(def_info));
 
         // Set up for the new function call
         let old_module_variables = mem::replace(
@@ -344,6 +352,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let res = within(self);
 
         // Restore them all back
+        self.def_info = old_def_info;
         self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
         res
@@ -386,28 +395,25 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     // Make sure the error-path doesn't get inlined into the normal-path execution
     #[cold]
     #[inline(never)]
-    fn local_var_referenced_before_assignment(name: &str) -> anyhow::Error {
-        EnvironmentError::LocalVariableReferencedBeforeAssignment(name.to_owned()).into()
+    fn local_var_referenced_before_assignment(&self, slot: LocalSlotId) -> anyhow::Error {
+        let names = match &self.def_info {
+            Some(def_info) => &def_info.scope_names.used,
+            None => &self.module_local_names,
+        };
+        let name = names[slot.0 as usize].clone();
+        EnvironmentError::LocalVariableReferencedBeforeAssignment(name).into()
     }
 
-    pub(crate) fn get_slot_local(
-        &self,
-        slot: LocalSlotId,
-        name: &str,
-    ) -> anyhow::Result<Value<'v>> {
+    pub(crate) fn get_slot_local(&self, slot: LocalSlotId) -> anyhow::Result<Value<'v>> {
         self.local_variables
             .get_slot(slot)
-            .ok_or_else(|| Self::local_var_referenced_before_assignment(name))
+            .ok_or_else(|| self.local_var_referenced_before_assignment(slot))
     }
 
-    pub(crate) fn get_slot_local_captured(
-        &self,
-        slot: LocalSlotId,
-        name: &str,
-    ) -> anyhow::Result<Value<'v>> {
-        let value_captured = self.get_slot_local(slot, name)?;
+    pub(crate) fn get_slot_local_captured(&self, slot: LocalSlotId) -> anyhow::Result<Value<'v>> {
+        let value_captured = self.get_slot_local(slot)?;
         let value_captured = value_captured_get(value_captured);
-        value_captured.ok_or_else(|| Self::local_var_referenced_before_assignment(name))
+        value_captured.ok_or_else(|| self.local_var_referenced_before_assignment(slot))
     }
 
     pub(crate) fn clone_slot_capture(&self, slot: LocalSlotId) -> Value<'v> {

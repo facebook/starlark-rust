@@ -42,6 +42,7 @@ pub use runtime::{
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
 };
+use std::convert::TryInto;
 
 mod compiler;
 mod fragment;
@@ -116,8 +117,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let (module_slots, local_slots, scope_data) = scope.exit_module();
 
         self.module_env.slots().ensure_slots(module_slots);
-        let new_locals = self.local_variables.reserve(local_slots);
+        let new_locals = self
+            .local_variables
+            .reserve(local_slots.len().try_into().unwrap());
         let old_locals = self.local_variables.utilise(new_locals);
+        assert!(self.module_local_names.is_empty());
+        self.module_local_names = local_slots;
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
 
@@ -155,6 +160,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
         self.set_codemap(old_codemap);
         self.local_variables.release(old_locals);
+        self.module_local_names.clear();
 
         // Return the result of evaluation
         match res {

@@ -104,9 +104,9 @@ pub(crate) type ExprCompiled = Box<
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
     /// Read local non-captured variable.
-    Local(LocalSlotId, String),
+    Local(LocalSlotId),
     /// Read local captured variable.
-    LocalCaptured(LocalSlotId, String),
+    LocalCaptured(LocalSlotId),
     Module(ModuleSlotId),
     /// `cmp(x <=> y)`
     Equals(
@@ -174,18 +174,14 @@ impl Spanned<ExprCompiledValue> {
         let span = self.span;
         match self.node {
             ExprCompiledValue::Value(x) => box move |_| Ok(x.to_value()),
-            ExprCompiledValue::Local(slot, ref name) => {
-                let name = name.clone();
-                expr!("local", |eval| expr_throw(
-                    eval.get_slot_local(slot, &name),
-                    span,
-                    eval
-                )?)
-            }
-            ExprCompiledValue::LocalCaptured(slot, ref name) => {
-                let name = name.clone();
+            ExprCompiledValue::Local(slot) => expr!("local", |eval| expr_throw(
+                eval.get_slot_local(slot),
+                span,
+                eval
+            )?),
+            ExprCompiledValue::LocalCaptured(slot) => {
                 expr!("local_captured", |eval| expr_throw(
-                    eval.get_slot_local_captured(slot, &name),
+                    eval.get_slot_local_captured(slot),
                     span,
                     eval
                 )?)
@@ -906,7 +902,6 @@ impl Compiler<'_> {
     ) -> ExprCompiledValue {
         let resolved_ident =
             resolved_ident.unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
-        let name = ident.node;
         match resolved_ident {
             ResolvedIdent::Slot((Slot::Local(slot), binding_id)) => {
                 let binding = self.scope_data.get_binding(binding_id);
@@ -914,8 +909,8 @@ impl Compiler<'_> {
                 // We can't look up the local variabless in advance, because they are different each time
                 // we go through a new function call.
                 match binding.captured {
-                    Captured::Yes => ExprCompiledValue::LocalCaptured(slot, name),
-                    Captured::No => ExprCompiledValue::Local(slot, name),
+                    Captured::Yes => ExprCompiledValue::LocalCaptured(slot),
+                    Captured::No => ExprCompiledValue::Local(slot),
                 }
             }
             ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {

@@ -52,7 +52,7 @@ pub(crate) type StmtCompiled =
 pub(crate) enum AssignModifyLhs {
     Dot(Spanned<ExprCompiledValue>, String),
     Array(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
-    Local(Spanned<(LocalSlotId, Captured, String)>),
+    Local(Spanned<(LocalSlotId, Captured)>),
     Module(Spanned<ModuleSlotId>),
 }
 
@@ -169,18 +169,18 @@ impl Spanned<StmtCompiledValue> {
             StmtCompiledValue::AssignModify(AssignModifyLhs::Local(ref lhs), op, ref rhs) => {
                 let span_stmt = span;
                 let span_lhs = lhs.span;
-                let (slot, captured, name) = lhs.node.clone();
+                let (slot, captured) = lhs.node;
                 let op = op.as_fn();
                 let rhs = rhs.as_compiled();
                 match captured {
                     Captured::Yes => stmt!(compiler, "assign_local_captured", span_stmt, |eval| {
-                        let v = throw(eval.get_slot_local_captured(slot, &name), span_lhs, eval)?;
+                        let v = throw(eval.get_slot_local_captured(slot), span_lhs, eval)?;
                         let rhs = rhs(eval)?;
                         let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                         eval.set_slot_local_captured(slot, v);
                     }),
                     Captured::No => stmt!(compiler, "assign_local", span_stmt, |eval| {
-                        let v = throw(eval.get_slot_local(slot, &name), span_lhs, eval)?;
+                        let v = throw(eval.get_slot_local(slot), span_lhs, eval)?;
                         let rhs = rhs(eval)?;
                         let v = throw(op(v, rhs, eval), span_stmt, eval)?;
                         eval.set_slot_local(slot, v);
@@ -657,11 +657,10 @@ impl Compiler<'_> {
             }
             AssignP::Identifier(ident) => {
                 let (slot, captured) = self.scope_data.get_assign_ident_slot(&ident);
-                let name = ident.node.0;
                 match slot {
                     Slot::Local(slot) => {
                         let lhs = Spanned {
-                            node: (slot, captured, name),
+                            node: (slot, captured),
                             span: span_lhs,
                         };
                         StmtsCompiled::one(Spanned {

@@ -188,10 +188,10 @@ impl<T> ParameterCompiled<T> {
 #[display(fmt = "DefInfo")]
 pub(crate) struct DefInfo {
     /// Codemap of the file where the function is declared.
-    codemap: CodeMap,
+    pub(crate) codemap: CodeMap,
     /// The raw docstring pulled out of the AST.
     pub(crate) docstring: Option<String>,
-    scope_names: ScopeNames,
+    pub(crate) scope_names: ScopeNames,
     /// Statement compiled for non-frozen def.
     #[derivative(Debug = "ignore")]
     stmt_compiled: StmtCompiled,
@@ -624,7 +624,7 @@ where
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let local_slots = self.def_info.scope_names.used;
+        let local_slots = self.def_info.scope_names.used.len() as u32;
         let slot_base = eval.local_variables.reserve(local_slots);
         let slots = eval.local_variables.get_slots_at(slot_base);
         self.parameters.collect_inline(args, slots, eval.heap())?;
@@ -650,11 +650,11 @@ where
 
         if eval.check_types() {
             for (i, arg_name, ty, ty2) in &self.parameter_types {
-                match eval.get_slot_local(LocalSlotId::new(*i), arg_name.as_str()) {
-                    Err(_) => {
+                match eval.local_variables.get_slot(LocalSlotId::new(*i)) {
+                    None => {
                         panic!("Not allowed optional unassigned with type annotations on them")
                     }
-                    Ok(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
+                    Some(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
                 }
             }
         }
@@ -680,7 +680,7 @@ where
         if Self::FROZEN {
             debug_assert!(self.module.get().is_some());
         }
-        let res = eval.with_function_context(self.module.get(), &self.def_info.codemap, |eval| {
+        let res = eval.with_function_context(self.module.get(), self.def_info, |eval| {
             if Self::FROZEN {
                 (self.optimized_on_freeze_stmt.get())(eval)
             } else {

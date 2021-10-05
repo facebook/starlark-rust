@@ -33,7 +33,7 @@ use crate::{
 };
 use gazebo::dupe::Dupe;
 use indexmap::map::IndexMap;
-use std::{collections::HashMap, iter, mem};
+use std::{collections::HashMap, convert::TryInto, iter, mem};
 
 pub(crate) struct Scope<'a> {
     pub(crate) scope_data: ScopeData,
@@ -64,9 +64,9 @@ struct Unscope(HashMap<String, UnscopeBinding>);
 
 #[derive(Default, Debug)]
 pub(crate) struct ScopeNames {
-    /// The number of slots this scope uses, including for parameters and `parent`.
-    /// The next required slot would be at index `used`.
-    pub used: u32,
+    /// Slots this scope uses, including for parameters and `parent`.
+    /// Indexed by [`LocalSlotId`], values are variable names.
+    pub used: Vec<String>,
     /// The names that are in this scope
     pub mp: HashMap<String, (LocalSlotId, BindingId)>,
     /// Slots to copy from the parent. (index in parent, index in child).
@@ -87,14 +87,14 @@ impl ScopeNames {
         res
     }
 
-    fn next_slot(&mut self) -> LocalSlotId {
-        let res = LocalSlotId::new(self.used);
-        self.used += 1;
+    fn next_slot(&mut self, name: &str) -> LocalSlotId {
+        let res = LocalSlotId::new(self.used.len().try_into().unwrap());
+        self.used.push(name.to_owned());
         res
     }
 
     fn add_name(&mut self, name: &str, binding_id: BindingId) -> LocalSlotId {
-        let slot = self.next_slot();
+        let slot = self.next_slot(name);
         let old = self.mp.insert(name.to_owned(), (slot, binding_id));
         assert!(old.is_none());
         slot
@@ -106,7 +106,7 @@ impl ScopeNames {
         binding_id: BindingId,
         unscope: &mut Unscope,
     ) -> LocalSlotId {
-        let slot = self.next_slot();
+        let slot = self.next_slot(name);
         let undo = match self.mp.get_mut(name) {
             Some(v) => {
                 let old = *v;
@@ -207,15 +207,19 @@ impl<'a> Scope<'a> {
         scope
     }
 
-    // Number of module slots I need, number of local anon slots I need
-    pub fn exit_module(mut self) -> (u32, u32, ScopeData) {
+    // Number of module slots I need, local anon slot names
+    pub fn exit_module(mut self) -> (u32, Vec<String>, ScopeData) {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
         let scope_id = self.locals.pop().unwrap();
         assert!(scope_id == ScopeId::module());
         let scope = self.scope_data.get_scope(scope_id);
         assert!(scope.parent.is_empty());
-        (self.module.slot_count(), scope.used, self.scope_data)
+        (
+            self.module.slot_count(),
+            scope.used.clone(),
+            self.scope_data,
+        )
     }
 
     fn collect_defines_in_def(
