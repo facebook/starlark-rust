@@ -680,6 +680,13 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// 5 % 3 == 2
+    /// -5 % -3 == -2
+    /// 5 % -3 == -1
+    /// -5 % 3 == 1
+    /// 5.5 % 3.0 == 2.5
+    /// -5.5 % 3.0 == 0.5
+    /// 5.5 % -3.0 == -0.5
+    /// -5.5 % -3.0 == -2.5
     /// "a %s c" % 3 == "a 3 c"
     /// "Hello %s, your score is %d" % ("Bob", 75) == "Hello Bob, your score is 75"
     /// "%d %o %x" % (65, 65, 65) == "65 101 41"
@@ -701,6 +708,13 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// 7 // 2 == 3
+    /// -7 // -2 == 3
+    /// 7 // -2 == -4
+    /// -7 // 2 == -4
+    /// 7.0 // 2.0 == 3.0
+    /// -7.0 // -2.0 == 3.0
+    /// 7.0 // -2.0 == -4.0
+    /// -7.0 // 2.0 == -4.0
     /// 3.0 // 2.0 == 1.0
     /// # "#);
     /// ```
