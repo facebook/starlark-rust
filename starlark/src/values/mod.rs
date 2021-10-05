@@ -29,7 +29,8 @@
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
 pub use crate::values::{
-    alloc_value::*, error::*, frozen_ref::*, layout::*, owned::*, traits::*, types::*, unpack::*,
+    alloc_value::*, error::*, frozen_ref::*, layout::*, owned::*, traits::*, typed::*, types::*,
+    unpack::*,
 };
 use crate::{
     codemap::Span,
