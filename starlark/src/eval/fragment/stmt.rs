@@ -48,7 +48,7 @@ use thiserror::Error;
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum AssignModifyLhs {
     Dot(Spanned<ExprCompiledValue>, String),
     Array(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
@@ -56,7 +56,7 @@ pub(crate) enum AssignModifyLhs {
     Module(Spanned<ModuleSlotId>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum StmtCompiledValue {
     PossibleGc,
     Return(Option<Spanned<ExprCompiledValue>>),
@@ -365,7 +365,7 @@ impl Spanned<StmtCompiledValue> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum SmallVec1<T> {
     Empty,
     One(T),
@@ -394,7 +394,7 @@ impl<T> SmallVec1<T> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiledValue>>);
 
 impl StmtsCompiled {
@@ -473,7 +473,7 @@ pub(crate) type AssignCompiled = Box<
         + Send
         + Sync,
 >;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum AssignCompiledValue {
     Dot(Spanned<ExprCompiledValue>, String),
     ArrayIndirection(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),

@@ -45,7 +45,7 @@ use std::cmp::Ordering;
 use thiserror::Error;
 
 /// `bool` operation.
-#[derive(Copy, Clone, Dupe)]
+#[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) enum MaybeNot {
     Id,
     Not,
@@ -61,7 +61,7 @@ impl MaybeNot {
 }
 
 /// Map result of comparison to boolean.
-#[derive(Copy, Clone, Dupe)]
+#[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) enum CompareOp {
     Less,
     Greater,
@@ -80,7 +80,7 @@ impl CompareOp {
     }
 }
 
-#[derive(Copy, Clone, Dupe)]
+#[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) enum ExprBinOp {
     In,
     NotIn,
@@ -100,7 +100,7 @@ pub(crate) enum ExprBinOp {
 pub(crate) type ExprCompiled = Box<
     dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<Value<'v>, ExprEvalException> + Send + Sync,
 >;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
     /// Read local non-captured variable.

@@ -190,7 +190,7 @@ fn eval_dict(
     })
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum ComprCompiled {
     List(Box<Spanned<ExprCompiledValue>>, Vec<ClauseCompiled>),
     Dict(
@@ -221,7 +221,7 @@ impl ComprCompiled {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct ClauseCompiled {
     var: Spanned<AssignCompiledValue>,
     over: Spanned<ExprCompiledValue>,

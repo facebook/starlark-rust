@@ -40,7 +40,7 @@ use crate::{
 use gazebo::coerce::coerce_ref;
 use std::mem::MaybeUninit;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub(crate) struct ArgsCompiledValue {
     pos_named: Vec<Spanned<ExprCompiledValue>>,
     /// Named arguments compiled.
@@ -64,7 +64,7 @@ macro_rules! args {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum CallCompiled {
     Call(Box<(Spanned<ExprCompiledValue>, ArgsCompiledValue)>),
     Frozen(Box<(Option<FrozenValue>, FrozenValue, ArgsCompiledValue)>),
