@@ -44,7 +44,7 @@ use std::{
     any::TypeId,
     cell::{Cell, RefCell},
     cmp::Ordering,
-    fmt::{Debug, Write},
+    fmt::{Debug, Display, Write},
 };
 
 /// Called by the garbage collection, and must walk over every contained `Value` in the type.
@@ -337,7 +337,7 @@ impl SimpleValue for NoSimpleValue {}
 /// Any additional methods that are added to this trait also need to be added to the
 /// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
 /// any implementations other than the default implementation will not be run.
-pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug {
+pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///
