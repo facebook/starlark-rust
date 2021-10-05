@@ -36,7 +36,7 @@ use gazebo::{
 use itertools::Itertools;
 use std::{
     collections::HashSet,
-    fmt::{self, Display, Write},
+    fmt::{self, Display},
 };
 
 #[starlark_module]
@@ -228,10 +228,6 @@ where
             kwargs: args.kwargs,
         };
         self.func.invoke(location, params, eval)
-    }
-
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
     }
 }
 

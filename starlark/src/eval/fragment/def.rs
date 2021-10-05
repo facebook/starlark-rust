@@ -55,7 +55,7 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use std::{
     cell::UnsafeCell,
     collections::HashMap,
-    fmt::{self, Display, Write},
+    fmt::{self, Display},
     mem, ptr,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -616,10 +616,6 @@ where
     Self: AnyLifetime<'v> + DefLike<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
-
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
-    }
 
     fn invoke(
         &self,

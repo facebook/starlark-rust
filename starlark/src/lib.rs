@@ -311,11 +311,6 @@
 //! impl<'v> StarlarkValue<'v> for Complex {
 //!     starlark_type!("complex");
 //!
-//!     // How we display them
-//!     fn collect_repr(&self, collector: &mut String) {
-//!         write!(collector, "{}", self).unwrap()
-//!     }
-//!
 //!     // How we add them
 //!     fn add(&self, rhs: Value<'v>, heap: &'v Heap)
 //!             -> anyhow::Result<Value<'v>> {

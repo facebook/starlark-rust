@@ -54,7 +54,7 @@ use gazebo::{
 };
 use std::{
     cell::RefCell,
-    fmt::{self, Debug, Display, Write},
+    fmt::{self, Debug, Display},
 };
 use thiserror::Error;
 
@@ -219,10 +219,6 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
-    }
-
     fn invoke(
         &self,
         me: Value<'v>,
@@ -337,10 +333,6 @@ where
 
     fn to_json(&self) -> anyhow::Result<String> {
         self.value.to_json()
-    }
-
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

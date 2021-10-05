@@ -22,7 +22,6 @@ use crate::values::{
 };
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
-use std::fmt::Write;
 
 /// Define the None type, use [`NoneType`] in Rust.
 #[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
@@ -40,10 +39,6 @@ impl<'v> StarlarkValue<'v> for NoneType {
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         Ok(other.is_none())
-    }
-
-    fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
     }
 
     fn to_json(&self) -> anyhow::Result<String> {

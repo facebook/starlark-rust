@@ -29,7 +29,7 @@ use crate::values::{
 };
 use std::{
     cmp::Ordering,
-    fmt::{self, Display, Write},
+    fmt::{self, Display},
 };
 
 /// The result of calling `type()` on integers.
@@ -83,10 +83,6 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
             Some(Num::Float(other)) => self.get() as f64 == other,
             None => false,
         })
-    }
-
-    fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
     }
 
     fn to_json(&self) -> anyhow::Result<String> {

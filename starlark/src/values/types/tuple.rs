@@ -32,7 +32,7 @@ use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
     fmt,
-    fmt::{Debug, Display, Formatter, Write},
+    fmt::{Debug, Display, Formatter},
     hash::Hasher,
     slice,
 };
@@ -145,10 +145,6 @@ where
     Self: AnyLifetime<'v>,
 {
     starlark_type!(Tuple::TYPE);
-
-    fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
-    }
 
     fn to_bool(&self) -> bool {
         self.len() != 0

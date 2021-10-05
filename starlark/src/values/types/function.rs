@@ -29,7 +29,7 @@ use crate::{
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce};
-use std::{cell::Cell, fmt::Write, mem::MaybeUninit};
+use std::{cell::Cell, mem::MaybeUninit};
 
 pub const FUNCTION_TYPE: &str = "function";
 
@@ -151,10 +151,6 @@ impl<'v> AllocValue<'v> for NativeFunction {
 impl<'v> StarlarkValue<'v> for NativeFunction {
     starlark_type!(FUNCTION_TYPE);
 
-    fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
-    }
-
     fn invoke(
         &self,
         me: Value<'v>,
@@ -273,10 +269,6 @@ where
     Self: AnyLifetime<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
-
-    fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
-    }
 
     fn invoke(
         &self,

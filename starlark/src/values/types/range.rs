@@ -23,7 +23,7 @@ use crate::values::{
 };
 use gazebo::prelude::*;
 use std::{
-    fmt::{self, Display, Write},
+    fmt::{self, Display},
     marker::PhantomData,
     num::NonZeroI32,
 };
@@ -107,10 +107,6 @@ impl<'a> Iterator for RangeIterator<'a> {
 
 impl<'v> StarlarkValue<'v> for Range {
     starlark_type!(Range::TYPE);
-
-    fn collect_repr(&self, s: &mut String) {
-        write!(s, "{}", self).unwrap()
-    }
 
     fn to_bool(&self) -> bool {
         (self.start < self.stop && self.step.get() > 0)

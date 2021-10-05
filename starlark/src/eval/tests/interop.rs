@@ -41,7 +41,7 @@ fn test_export_as() {
         AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
     };
     use gazebo::any::AnyLifetime;
-    use std::fmt::{self, Debug, Display, Write};
+    use std::fmt::{self, Debug, Display};
 
     #[derive(Debug, Trace)]
     struct Exporter<T> {
@@ -63,10 +63,6 @@ fn test_export_as() {
         Self: AnyLifetime<'v>,
     {
         starlark_type!("exporter");
-
-        fn collect_repr(&self, collector: &mut String) {
-            write!(collector, "{}", self).unwrap()
-        }
 
         fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
             if let Some(named) = self.named.as_ref_cell() {

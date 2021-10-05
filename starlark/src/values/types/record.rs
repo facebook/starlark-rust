@@ -64,7 +64,7 @@ use std::{
     cell::RefCell,
     collections::hash_map::DefaultHasher,
     fmt,
-    fmt::{Debug, Display, Write},
+    fmt::{Debug, Display},
     hash::{Hash, Hasher},
 };
 
@@ -254,10 +254,6 @@ where
 {
     starlark_type!("field");
 
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
-    }
-
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = DefaultHasher::new();
         s.write_u64(self.typ.get_hash()?);
@@ -291,10 +287,6 @@ where
     Typ: AsARef<Option<String>> + Debug,
 {
     starlark_type!(FUNCTION_TYPE);
-
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
-    }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = DefaultHasher::new();
@@ -418,10 +410,6 @@ where
             .join(",");
         s += "}";
         Ok(s)
-    }
-
-    fn collect_repr(&self, collector: &mut String) {
-        write!(collector, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

@@ -52,7 +52,7 @@ use gazebo::{
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
-    fmt::{self, Display, Write},
+    fmt::{self, Display},
     hash::{Hash, Hasher},
 };
 
@@ -159,10 +159,6 @@ where
             .join(",");
         s += "}";
         Ok(s)
-    }
-
-    fn collect_repr(&self, r: &mut String) {
-        write!(r, "{}", self).unwrap()
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
