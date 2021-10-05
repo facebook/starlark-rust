@@ -373,9 +373,8 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         None
     }
 
-    /// Return a string representation of self, as returned by the repr()
-    /// function.
-    /// Defaults to the `Debug` instance, but most types should override this method.
+    /// Return a string representation of self, as returned by the `repr()` function.
+    /// Defaults to the `Display` instance - which should be fine for nearly all types.
     /// In many cases the `repr()` representation will also be a Starlark expression
     /// for creating the value.
     ///
@@ -391,7 +390,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// ```
     fn collect_repr(&self, collector: &mut String) {
         // Rust won't return Err when writing to a String, so safe unwrap
-        write!(collector, "{:?}", self).unwrap()
+        write!(collector, "{}", self).unwrap()
     }
 
     /// Convert the type to a JSON string.
