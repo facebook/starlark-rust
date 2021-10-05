@@ -1,4 +1,10 @@
 edition = "2018"
-merge_derives = true
+imports_granularity = "Crate"
+merge_imports = true
 use_field_init_shorthand = true
 use_try_shorthand = true
+
+# We'd like to be this to be true, but...
+# For long lines of derive, which are already merged, this will change
+# where it indents it. That seems like a bug.
+merge_derives = false
