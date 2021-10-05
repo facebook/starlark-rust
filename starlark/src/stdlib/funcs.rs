@@ -26,7 +26,7 @@ use crate::{
     values::{
         bool::BOOL_TYPE,
         dict::Dict,
-        float::FLOAT_TYPE,
+        float::StarlarkFloat,
         function::{BoundMethod, NativeAttribute},
         int::INT_TYPE,
         list::List,
@@ -349,7 +349,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// float([])   # error: argument must be a string, a number, or a boolean
     /// # "#, "argument must be a string, a number, or a boolean");
     /// ```
-    #[starlark_type(FLOAT_TYPE)]
+    #[starlark_type(StarlarkFloat::TYPE)]
     fn float(ref a: Option<Value>) -> f64 {
         if a.is_none() {
             return Ok(0.0);

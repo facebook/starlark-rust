@@ -17,7 +17,7 @@
 
 //! Helpers for numerical values.
 
-use crate::values::Value;
+use crate::values::{float::StarlarkFloat, Value};
 use gazebo::prelude::*;
 
 /// [`Num`] represents a numerical value that can be unpacked from a [`Value`].
@@ -36,8 +36,8 @@ impl Num {
     pub fn try_from_value(value: Value) -> Option<Self> {
         if let Some(i) = value.unpack_int() {
             Some(Self::Int(i))
-        } else if let Some(&f) = value.get_ref().downcast_ref::<f64>() {
-            Some(Self::Float(f))
+        } else if let Some(&f) = value.get_ref().downcast_ref::<StarlarkFloat>() {
+            Some(Self::Float(f.0))
         } else {
             None
         }

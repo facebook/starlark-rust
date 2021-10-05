@@ -21,24 +21,33 @@ use crate::values::{
     num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
     StarlarkValue, Value, ValueError,
 };
-use std::cmp::Ordering;
+use gazebo::{any::AnyLifetime, prelude::*};
+use std::{
+    cmp::Ordering,
+    fmt::{self, Display, Write},
+};
 
-/// The result of calling `type()` on floats.
-pub const FLOAT_TYPE: &str = "float";
+#[derive(Clone, Dupe, Copy, Debug, AnyLifetime)]
+pub struct StarlarkFloat(pub f64);
+
+impl StarlarkFloat {
+    /// The result of calling `type()` on floats.
+    pub const TYPE: &'static str = "float";
+}
 
 impl<'v> AllocValue<'v> for f64 {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(self)
+        heap.alloc_simple(StarlarkFloat(self))
     }
 }
 
 impl AllocFrozenValue for f64 {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(self)
+        heap.alloc_simple(StarlarkFloat(self))
     }
 }
 
-impl SimpleValue for f64 {}
+impl SimpleValue for StarlarkFloat {}
 
 fn f64_arith_bin_op<'v, F>(
     left: f64,
@@ -51,14 +60,32 @@ where
     F: FnOnce(f64, f64) -> anyhow::Result<f64>,
 {
     if let Some(right) = right.unpack_num().map(|n| n.as_float()) {
-        Ok(heap.alloc_simple(f(left, right)?))
+        Ok(heap.alloc_simple(StarlarkFloat(f(left, right)?)))
     } else {
-        ValueError::unsupported_with(&left, op, right)
+        ValueError::unsupported_with(&StarlarkFloat(left), op, right)
     }
 }
 
-impl<'v> StarlarkValue<'v> for f64 {
-    starlark_type!(FLOAT_TYPE);
+impl Display for StarlarkFloat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_nan() {
+            write!(f, "nan")
+        } else if self.0.is_infinite() {
+            if self.0.is_sign_positive() {
+                write!(f, "+inf")
+            } else {
+                write!(f, "-inf")
+            }
+        } else if self.0.fract() == 0.0 {
+            write!(f, "{:.1}", self.0)
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
+impl<'v> StarlarkValue<'v> for StarlarkFloat {
+    starlark_type!(StarlarkFloat::TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if other.unpack_num().is_some() {
@@ -69,19 +96,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn collect_repr(&self, s: &mut String) {
-        if self.is_nan() {
-            s.push_str("nan")
-        } else if self.is_infinite() {
-            s.push_str(if self.is_sign_positive() {
-                "+inf"
-            } else {
-                "-inf"
-            })
-        } else if self.fract() == 0.0 {
-            s.push_str(&format!("{:.1}", self))
-        } else {
-            s.push_str(&self.to_string())
-        }
+        write!(s, "{}", self).unwrap()
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
@@ -89,10 +104,10 @@ impl<'v> StarlarkValue<'v> for f64 {
         // but it's unclear what should go here.
         // Perhaps strings with these values? null?
         // Leave it with these values for now.
-        Ok(if self.is_nan() {
+        Ok(if self.0.is_nan() {
             "NaN".to_owned()
-        } else if self.is_infinite() {
-            if self.is_sign_positive() {
+        } else if self.0.is_infinite() {
+            if self.0.is_sign_positive() {
                 "Infinity"
             } else {
                 "-Infinity"
@@ -104,11 +119,11 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn to_bool(&self) -> bool {
-        *self != 0.0
+        self.0 != 0.0
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        Ok(Num::from(*self).get_hash())
+        Ok(Num::from(self.0).get_hash())
     }
 
     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -116,23 +131,23 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn minus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc_simple(-*self))
+        Ok(heap.alloc_simple(StarlarkFloat(-self.0)))
     }
 
     fn add(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "+", |l, r| Ok(l + r))
+        f64_arith_bin_op(self.0, other, heap, "+", |l, r| Ok(l + r))
     }
 
     fn sub(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "-", |l, r| Ok(l - r))
+        f64_arith_bin_op(self.0, other, heap, "-", |l, r| Ok(l - r))
     }
 
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "*", |l, r| Ok(l * r))
+        f64_arith_bin_op(self.0, other, heap, "*", |l, r| Ok(l * r))
     }
 
     fn div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "/", |l, r| {
+        f64_arith_bin_op(self.0, other, heap, "/", |l, r| {
             if r == 0.0 {
                 Err(ValueError::DivisionByZero.into())
             } else {
@@ -142,7 +157,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn percent(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "%", |a, b| {
+        f64_arith_bin_op(self.0, other, heap, "%", |a, b| {
             if b == 0.0 {
                 Err(ValueError::DivisionByZero.into())
             } else {
@@ -157,7 +172,7 @@ impl<'v> StarlarkValue<'v> for f64 {
     }
 
     fn floor_div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(*self, other, heap, "//", |l, r| {
+        f64_arith_bin_op(self.0, other, heap, "//", |l, r| {
             if r == 0.0 {
                 Err(ValueError::DivisionByZero.into())
             } else {
@@ -170,12 +185,12 @@ impl<'v> StarlarkValue<'v> for f64 {
         if let Some(other_float) = other.unpack_num().map(|n| n.as_float()) {
             // According to the spec (https://github.com/bazelbuild/starlark/blob/689f54426951638ef5b7c41a14d8fc48e65c5f77/spec.md#floating-point-numbers)
             // All NaN values compare equal to each other, but greater than any non-NaN float value.
-            match (self.is_nan(), other_float.is_nan()) {
+            match (self.0.is_nan(), other_float.is_nan()) {
                 (true, true) => Ok(Ordering::Equal),
                 (true, false) => Ok(Ordering::Greater),
                 (false, true) => Ok(Ordering::Less),
                 (false, false) => {
-                    if let Some(ordering) = self.partial_cmp(&other_float) {
+                    if let Some(ordering) = self.0.partial_cmp(&other_float) {
                         Ok(ordering)
                     } else {
                         // This shouldn't happen as we handle potential NaNs above
