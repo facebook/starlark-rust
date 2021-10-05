@@ -198,7 +198,7 @@ fn test_span() {
         (25, Dedent, 25),
         (25, Identifier("test".to_owned()), 29),
         (29, OpeningRound, 30),
-        (30, StringLiteral("abc".to_owned()), 35),
+        (30, String("abc".to_owned()), 35),
         (35, ClosingRound, 36),
         (36, Newline, 37),
         (37, Newline, 37),

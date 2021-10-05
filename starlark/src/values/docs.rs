@@ -43,7 +43,7 @@ impl DocString {
             if let Some(Spanned {
                 node:
                     StmtP::Expression(Spanned {
-                        node: ExprP::Literal(AstLiteral::StringLiteral(s)),
+                        node: ExprP::Literal(AstLiteral::String(s)),
                         ..
                     }),
                 ..

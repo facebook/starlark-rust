@@ -129,11 +129,10 @@ pub enum ParameterP<P: AstPayload> {
 }
 
 #[derive(Debug, Clone)]
-#[allow(clippy::enum_variant_names)]
 pub enum AstLiteral {
-    IntLiteral(AstInt),
-    FloatLiteral(AstFloat),
-    StringLiteral(AstString),
+    Int(AstInt),
+    Float(AstFloat),
+    String(AstString),
 }
 
 #[derive(Debug)]
@@ -389,9 +388,9 @@ fn fmt_string_literal(f: &mut Formatter<'_>, s: &str) -> fmt::Result {
 impl Display for AstLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            AstLiteral::IntLiteral(i) => write!(f, "{}", &i.node),
-            AstLiteral::FloatLiteral(n) => write!(f, "{}", &n.node),
-            AstLiteral::StringLiteral(s) => fmt_string_literal(f, &s.node),
+            AstLiteral::Int(i) => write!(f, "{}", &i.node),
+            AstLiteral::Float(n) => write!(f, "{}", &n.node),
+            AstLiteral::String(s) => fmt_string_literal(f, &s.node),
         }
     }
 }

@@ -246,11 +246,11 @@ Operand: AstExpr = {
     <l:@L> <i:identifier> <r:@R>
         => Expr::Identifier(i, ()).ast(l, r),
     <l:@L> <i:integer> <r:@R>
-        => Expr::Literal(AstLiteral::IntLiteral(i)).ast(l, r),
+        => Expr::Literal(AstLiteral::Int(i)).ast(l, r),
     <l:@L> <f:float> <r:@R>
-        => Expr::Literal(AstLiteral::FloatLiteral(f)).ast(l, r),
+        => Expr::Literal(AstLiteral::Float(f)).ast(l, r),
     <l:@L> <s:string> <r:@R>
-        => Expr::Literal(AstLiteral::StringLiteral(s)).ast(l, r),
+        => Expr::Literal(AstLiteral::String(s)).ast(l, r),
     <l:@L> "[" <e:COMMA<Test>> "]" <r:@R>
         => Expr::List(e).ast(l, r),
     ListComp,
@@ -468,8 +468,8 @@ extern {
 
 
       "IDENTIFIER" => lexer::Token::Identifier(<String>),
-      "INTEGER" => lexer::Token::IntegerLiteral(<i32>),
-      "FLOAT" => lexer::Token::FloatLiteral(<f64>),
-      "STRING" => lexer::Token::StringLiteral(<String>)
+      "INTEGER" => lexer::Token::Int(<i32>),
+      "FLOAT" => lexer::Token::Float(<f64>),
+      "STRING" => lexer::Token::String(<String>)
     }
 }

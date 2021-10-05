@@ -304,7 +304,7 @@ impl<'a> Lexer<'a> {
                         self.lexer.bump(it.pos());
                         return Ok((
                             string_start,
-                            Token::StringLiteral(contents.to_owned()),
+                            Token::String(contents.to_owned()),
                             string_end + it.pos(),
                         ));
                     } else if c == '\\' || c == '\r' || (c == '\n' && !triple) {
@@ -326,11 +326,7 @@ impl<'a> Lexer<'a> {
                 if triple {
                     res.truncate(res.len() - 2);
                 }
-                return Ok((
-                    string_start,
-                    Token::StringLiteral(res),
-                    string_end + it.pos(),
-                ));
+                return Ok((string_start, Token::String(res), string_end + it.pos()));
             }
             match c {
                 '\n' if !triple => {
@@ -419,7 +415,7 @@ impl<'a> Lexer<'a> {
                         }
                         Token::Reserved => Some(self.err_now(LexemeError::ReservedKeyword)),
                         Token::Error => Some(self.err_now(LexemeError::InvalidInput)),
-                        Token::IntegerLiteral(radix) => {
+                        Token::Int(radix) => {
                             let mut s = self.lexer.slice();
                             if radix == 10 {
                                 if s.len() > 1 && &s[0..1] == "0" {
@@ -432,7 +428,7 @@ impl<'a> Lexer<'a> {
                             match i32::from_str_radix(s, radix as u32) {
                                 Ok(i) => {
                                     let span = self.lexer.span();
-                                    Some(Ok((span.start, Token::IntegerLiteral(i), span.end)))
+                                    Some(Ok((span.start, Token::Int(i), span.end)))
                                 }
                                 Err(_) => {
                                     // Because we validated the characters going in, it must have been an overflow
@@ -532,14 +528,14 @@ pub enum Token {
     #[regex("0[xX][A-Fa-f0-9]+", |_| 16)]
     #[regex("0[bB][01]+", |_| 2)]
     #[regex("0[oO][0-7]+", |_| 8)]
-    IntegerLiteral(i32), // An integer literal (123, 0x1, 0b1011, 0o755, ...)
+    Int(i32), // An integer literal (123, 0x1, 0b1011, 0o755, ...)
 
     #[regex("[0-9]+\\.[0-9]*([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
     #[regex("[0-9]+[eE][-+]?[0-9]+", |lex| lex.slice().parse::<f64>())]
     #[regex("\\.[0-9]+([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
-    FloatLiteral(f64), // A float literal (3.14, .3, 1e6, 0.)
+    Float(f64), // A float literal (3.14, .3, 1e6, 0.)
 
-    StringLiteral(String), // A string literal
+    String(String), // A string literal
 
     // Keywords
     #[token("and")]
@@ -668,7 +664,7 @@ impl Token {
             Token::Indent => "\t".to_owned(),
             Token::Newline => "\n".to_owned(),
             Token::Dedent => "#dedent".to_owned(),
-            Token::StringLiteral(x) => {
+            Token::String(x) => {
                 // The Rust {:?} is unstable, so changes between versions,
                 // instead use the JSON standard for string escapes.
                 // Reuse the StarlarkValue implementation since it's close to hand.
@@ -756,9 +752,9 @@ impl Display for Token {
             Token::ClosingRound => write!(f, "symbol ')'"),
             Token::Reserved => write!(f, "reserved keyword"),
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
-            Token::IntegerLiteral(i) => write!(f, "integer literal '{}'", i),
-            Token::FloatLiteral(n) => write!(f, "float literal '{}'", n),
-            Token::StringLiteral(s) => write!(f, "string literal '{}'", s),
+            Token::Int(i) => write!(f, "integer literal '{}'", i),
+            Token::Float(n) => write!(f, "float literal '{}'", n),
+            Token::String(s) => write!(f, "string literal '{}'", s),
             Token::RawSingleQuote => write!(f, "starting '"),
             Token::RawDoubleQuote => write!(f, "starting \""),
             Token::Tabs => Ok(()),

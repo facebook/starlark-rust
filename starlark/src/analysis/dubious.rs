@@ -55,8 +55,8 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
     fn to_key<'a>(x: &'a AstExpr) -> Option<(Key<'a>, Span)> {
         match &**x {
             Expr::Literal(x) => match &*x {
-                AstLiteral::IntLiteral(x) => Some((Key::Int(x.node), x.span)),
-                AstLiteral::FloatLiteral(x) => {
+                AstLiteral::Int(x) => Some((Key::Int(x.node), x.span)),
+                AstLiteral::Float(x) => {
                     let n = Num::from(x.node);
                     if let Some(i) = n.as_int() {
                         // make an integer float always collide with other ints
@@ -68,7 +68,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
                         Some((Key::Float(v.to_bits()), x.span))
                     }
                 }
-                AstLiteral::StringLiteral(x) => Some((Key::String(&x.node), x.span)),
+                AstLiteral::String(x) => Some((Key::String(&x.node), x.span)),
             },
             Expr::Identifier(x, ()) => Some((Key::Identifier(&x.node), x.span)),
             _ => None,

@@ -781,9 +781,9 @@ fn eval_slice(
 impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
-            AstLiteral::IntLiteral(i) => FrozenValue::new_int(i.node),
-            AstLiteral::FloatLiteral(f) => heap.alloc(f.node),
-            AstLiteral::StringLiteral(x) => heap.alloc(x.node.as_str()),
+            AstLiteral::Int(i) => FrozenValue::new_int(i.node),
+            AstLiteral::Float(f) => heap.alloc(f.node),
+            AstLiteral::String(x) => heap.alloc(x.node.as_str()),
         }
     }
 }
@@ -791,7 +791,7 @@ impl AstLiteral {
 impl<P: AstPayload> ExprP<P> {
     fn unpack_string_literal(&self) -> Option<&str> {
         match self {
-            ExprP::Literal(AstLiteral::StringLiteral(i)) => Some(&i.node),
+            ExprP::Literal(AstLiteral::String(i)) => Some(&i.node),
             _ => None,
         }
     }

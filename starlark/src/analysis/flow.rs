@@ -247,7 +247,7 @@ fn misplaced_load(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<FlowIssue>
                 }
             }
             Stmt::Expression(Spanned {
-                node: Expr::Literal(AstLiteral::StringLiteral(_)),
+                node: Expr::Literal(AstLiteral::String(_)),
                 ..
             }) => {
                 // Still allow loads after a literal string (probably documentation)
