@@ -788,6 +788,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn static_type_of_value(&self) -> TypeId;
 
     fn as_debug(&self) -> &dyn Debug;
+    fn as_display(&self) -> &dyn Display;
     /// Get [`StarlarkValue`] as [`AnyLifetime`].
     fn value_as_dyn_any(&self) -> &dyn AnyLifetime<'v>;
 

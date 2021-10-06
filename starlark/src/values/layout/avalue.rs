@@ -15,8 +15,15 @@
  * limitations under the License.
  */
 
-use std::{any::TypeId, cmp::Ordering, fmt::Debug, mem, ptr::metadata};
+use std::{
+    any::TypeId,
+    cmp::Ordering,
+    fmt::{Debug, Display},
+    mem,
+    ptr::metadata,
+};
 
+use derive_more::Display;
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 
 use crate::{
@@ -337,7 +344,8 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display)]
+#[display(fmt = "BlackHole")]
 pub(crate) struct BlackHole(pub(crate) usize);
 
 impl<'v> AValue<'v> for BlackHole {
@@ -369,6 +377,10 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     }
 
     fn as_debug(&self) -> &dyn Debug {
+        self
+    }
+
+    fn as_display(&self) -> &dyn Display {
         self
     }
 
@@ -534,6 +546,9 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<M
         T::static_type_id()
     }
     fn as_debug(&self) -> &dyn Debug {
+        &self.1
+    }
+    fn as_display(&self) -> &dyn Display {
         &self.1
     }
     fn value_as_dyn_any(&self) -> &dyn AnyLifetime<'v> {
