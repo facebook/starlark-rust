@@ -361,6 +361,7 @@
 #![feature(maybe_uninit_extra)]
 #![feature(maybe_uninit_slice)]
 #![feature(ptr_metadata)]
+#![feature(thread_local)]
 #![feature(try_blocks)]
 #![feature(iter_intersperse)]
 //
