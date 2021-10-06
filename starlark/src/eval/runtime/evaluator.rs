@@ -15,6 +15,17 @@
  * limitations under the License.
  */
 
+use std::{
+    cell::Cell,
+    intrinsics::unlikely,
+    mem::{self, MaybeUninit},
+    path::Path,
+};
+
+use gazebo::{any::AnyLifetime, cast};
+use once_cell::sync::Lazy;
+use thiserror::Error;
+
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     collections::alloca::Alloca,
@@ -38,15 +49,6 @@ use crate::{
         ValueLike,
     },
 };
-use gazebo::{any::AnyLifetime, cast};
-use once_cell::sync::Lazy;
-use std::{
-    cell::Cell,
-    intrinsics::unlikely,
-    mem::{self, MaybeUninit},
-    path::Path,
-};
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]

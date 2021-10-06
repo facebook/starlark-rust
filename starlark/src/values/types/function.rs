@@ -17,6 +17,12 @@
 
 //! Function types, including native functions and `object.member` functions.
 
+use std::{cell::Cell, mem::MaybeUninit};
+
+use derivative::Derivative;
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, coerce::Coerce};
+
 use crate as starlark;
 use crate::{
     codemap::Span,
@@ -26,10 +32,6 @@ use crate::{
         SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
-use derivative::Derivative;
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, coerce::Coerce};
-use std::{cell::Cell, mem::MaybeUninit};
 
 pub const FUNCTION_TYPE: &str = "function";
 

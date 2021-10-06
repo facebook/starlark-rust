@@ -15,17 +15,6 @@
  * limitations under the License.
  */
 
-use crate::eval::{dialect, globals, Context};
-use debugserver_types::*;
-use gazebo::prelude::*;
-pub use library::*;
-use serde_json::{Map, Value};
-use starlark::{
-    codemap::{FileSpan, Span},
-    environment::Module,
-    eval::Evaluator,
-    syntax::{AstModule, Dialect},
-};
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -36,6 +25,19 @@ use std::{
     },
     thread,
 };
+
+use debugserver_types::*;
+use gazebo::prelude::*;
+pub use library::*;
+use serde_json::{Map, Value};
+use starlark::{
+    codemap::{FileSpan, Span},
+    environment::Module,
+    eval::Evaluator,
+    syntax::{AstModule, Dialect},
+};
+
+use crate::eval::{dialect, globals, Context};
 
 mod library;
 

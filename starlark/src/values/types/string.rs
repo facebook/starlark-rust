@@ -17,18 +17,6 @@
 
 //! The string type. All strings must be valid UTF8.
 
-use crate as starlark;
-use crate::{
-    collections::{BorrowHashed, SmallHashResult},
-    environment::{Globals, GlobalsStatic},
-    values::{
-        fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
-        Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue,
-        Value, ValueError, ValueLike,
-    },
-};
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
 use std::{
     cmp,
     cmp::Ordering,
@@ -38,6 +26,20 @@ use std::{
     hash::{Hash, Hasher},
     slice, str,
     sync::atomic,
+};
+
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
+
+use crate as starlark;
+use crate::{
+    collections::{BorrowHashed, SmallHashResult},
+    environment::{Globals, GlobalsStatic},
+    values::{
+        fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
+        Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue,
+        Value, ValueError, ValueLike,
+    },
 };
 
 /// The result of calling `type()` on strings.

@@ -15,6 +15,17 @@
  * limitations under the License.
  */
 
+use std::{cell::Cell, cmp, convert::TryInto, intrinsics::unlikely, iter};
+
+use either::Either;
+use gazebo::{
+    cell::ARef,
+    coerce::{coerce, Coerce},
+    prelude::*,
+};
+use itertools::Itertools;
+use thiserror::Error;
+
 use crate::{collections::BorrowHashed, values::StringValue};
 /// Deal with all aspects of runtime parameter evaluation.
 /// First build a Parameters structure, then use collect to collect the
@@ -29,15 +40,6 @@ use crate::{
         ValueLike,
     },
 };
-use either::Either;
-use gazebo::{
-    cell::ARef,
-    coerce::{coerce, Coerce},
-    prelude::*,
-};
-use itertools::Itertools;
-use std::{cell::Cell, cmp, convert::TryInto, intrinsics::unlikely, iter};
-use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
 pub(crate) enum FunctionError {

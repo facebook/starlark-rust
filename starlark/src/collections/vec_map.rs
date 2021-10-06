@@ -15,10 +15,12 @@
  * limitations under the License.
  */
 
-use crate::collections::hash::{BorrowHashed, Hashed, SmallHashResult};
+use std::{fmt, hash::BuildHasher, mem};
+
 use gazebo::prelude::*;
 use indexmap::{Equivalent, IndexMap};
-use std::{fmt, hash::BuildHasher, mem};
+
+use crate::collections::hash::{BorrowHashed, Hashed, SmallHashResult};
 
 // TODO: benchmark, is this the right threshold
 const THRESHOLD: usize = 12;

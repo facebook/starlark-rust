@@ -25,10 +25,11 @@
 // This lint is fairly new, so have to also enable unknown-clippy-lints.
 #![allow(clippy::unusual_byte_groupings)]
 
+use std::{mem, num::NonZeroUsize};
+
 use either::Either;
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};
 use static_assertions::assert_eq_size;
-use std::{mem, num::NonZeroUsize};
 
 // A structure that is morally a `PointerUnpack`, but gets encoded in one
 // pointer sized lump. The two types P1 and P2 are arbitrary pointers (which we

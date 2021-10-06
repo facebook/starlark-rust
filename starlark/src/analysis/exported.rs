@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
+use indexmap::IndexMap;
+
 use crate::{
     codemap::FileSpan,
     syntax::{ast::Stmt, AstModule},
 };
-use indexmap::IndexMap;
 
 impl AstModule {
     /// Which symbols are exported by this module. These are the top-level assignments,
@@ -49,9 +50,10 @@ impl AstModule {
 
 #[cfg(test)]
 mod test {
+    use gazebo::prelude::*;
+
     use super::*;
     use crate::syntax::Dialect;
-    use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
         AstModule::parse("X", x.to_owned(), &Dialect::Extended).unwrap()

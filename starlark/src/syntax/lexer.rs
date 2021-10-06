@@ -15,6 +15,12 @@
  * limitations under the License.
  */
 
+use std::{char, collections::VecDeque, fmt, fmt::Display};
+
+use gazebo::dupe::Dupe;
+use logos::Logos;
+use thiserror::Error;
+
 use crate::{
     codemap::{CodeMap, Pos, Span},
     errors::Diagnostic,
@@ -23,10 +29,6 @@ use crate::{
         dialect::Dialect,
     },
 };
-use gazebo::dupe::Dupe;
-use logos::Logos;
-use std::{char, collections::VecDeque, fmt, fmt::Display};
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub(crate) enum LexemeError {

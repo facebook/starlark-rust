@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+use std::collections::HashMap;
+
+use gazebo::variants::VariantName;
+use thiserror::Error;
+
 use crate::{
     analysis::types::{LintT, LintWarning},
     codemap::{CodeMap, FileSpan, Span},
@@ -24,9 +29,6 @@ use crate::{
     },
     values::num::Num,
 };
-use gazebo::variants::VariantName;
-use std::collections::HashMap;
-use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum Dubious {
@@ -109,9 +111,10 @@ pub(crate) fn dubious(module: &AstModule) -> Vec<LintT<Dubious>> {
 
 #[cfg(test)]
 mod test {
+    use gazebo::prelude::*;
+
     use super::*;
     use crate::syntax::Dialect;
-    use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
         AstModule::parse("X", x.to_owned(), &Dialect::Extended).unwrap()

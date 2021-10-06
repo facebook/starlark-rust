@@ -24,13 +24,15 @@
 // * When an exception happens, decorate it with the call stack on the way back
 //   up, in eval_call.
 
+use std::{fmt, fmt::Debug, intrinsics::unlikely};
+
+use gazebo::prelude::*;
+
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     errors::Frame,
     values::{ControlError, Trace, Tracer, Value},
 };
-use gazebo::prelude::*;
-use std::{fmt, fmt::Debug, intrinsics::unlikely};
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
 // anything in advance.

@@ -23,13 +23,14 @@
 //! [Starlark spec](https://github.com/bazelbuild/starlark/blob/master/spec.md#integers)), and those larger
 //! integer values will be stored on the heap.
 
-use crate::values::{
-    error::ValueError, float::StarlarkFloat, layout::PointerI32, num::Num, AllocFrozenValue,
-    AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
-};
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
+};
+
+use crate::values::{
+    error::ValueError, float::StarlarkFloat, layout::PointerI32, num::Num, AllocFrozenValue,
+    AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
 };
 
 /// The result of calling `type()` on integers.

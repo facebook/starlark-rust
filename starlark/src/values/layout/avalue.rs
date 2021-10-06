@@ -15,6 +15,10 @@
  * limitations under the License.
  */
 
+use std::{any::TypeId, cmp::Ordering, fmt::Debug, mem, ptr::metadata};
+
+use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
+
 use crate::{
     codemap::Span,
     environment::Globals,
@@ -30,8 +34,6 @@ use crate::{
         StarlarkValueDyn, Tracer, Value,
     },
 };
-use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
-use std::{any::TypeId, cmp::Ordering, fmt::Debug, mem, ptr::metadata};
 
 pub(crate) static VALUE_NONE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);

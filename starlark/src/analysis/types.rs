@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-use crate::codemap::{CodeMap, FileSpan, Span};
-use gazebo::variants::VariantName;
 use std::fmt::{self, Display};
+
+use gazebo::variants::VariantName;
+
+use crate::codemap::{CodeMap, FileSpan, Span};
 
 pub(crate) trait LintWarning: Display + VariantName {
     fn is_serious(&self) -> bool;

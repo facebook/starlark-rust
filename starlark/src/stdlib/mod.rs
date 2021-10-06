@@ -106,14 +106,15 @@ impl LibraryExtension {
 
 #[cfg(test)]
 mod tests {
+    use derive_more::Display;
+    use gazebo::prelude::*;
+
     use crate::{
         self as starlark,
         assert::Assert,
         environment::{Globals, GlobalsBuilder, GlobalsStatic},
         values::{none::NoneType, StarlarkValue, UnpackValue, Value, ValueLike},
     };
-    use derive_more::Display;
-    use gazebo::prelude::*;
 
     #[test]
     fn test_no_arg() {

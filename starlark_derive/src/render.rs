@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-use crate::{typ::*, util::*};
 use gazebo::prelude::*;
 use proc_macro2::TokenStream;
 use quote::quote;
+
+use crate::{typ::*, util::*};
 
 pub(crate) fn render(x: StarModule) -> TokenStream {
     let StarModule {

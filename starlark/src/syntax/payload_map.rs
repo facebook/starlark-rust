@@ -17,6 +17,8 @@
 
 //! Map AST payload.
 
+use gazebo::prelude::*;
+
 use crate::{
     codemap::Spanned,
     syntax::ast::{
@@ -24,7 +26,6 @@ use crate::{
         ParameterP, StmtP,
     },
 };
-use gazebo::prelude::*;
 
 pub(crate) trait AstPayloadFunction<A: AstPayload, B: AstPayload> {
     fn map_ident(&mut self, a: A::IdentPayload) -> B::IdentPayload;

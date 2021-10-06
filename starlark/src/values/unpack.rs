@@ -17,10 +17,12 @@
 
 //! Parameter conversion utilities for `starlark_module` macros.
 
-use crate::values::{list::List, tuple::Tuple, Value};
+use std::ops::Deref;
+
 use either::Either;
 use gazebo::cell::ARef;
-use std::ops::Deref;
+
+use crate::values::{list::List, tuple::Tuple, Value};
 
 /// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {

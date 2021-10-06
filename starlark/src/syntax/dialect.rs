@@ -15,13 +15,14 @@
  * limitations under the License.
  */
 
+use gazebo::prelude::*;
+use thiserror::Error;
+
 use crate::{
     codemap::{CodeMap, Pos, Span, Spanned},
     errors::Diagnostic,
     syntax::ast::Visibility,
 };
-use gazebo::prelude::*;
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum DialectError {

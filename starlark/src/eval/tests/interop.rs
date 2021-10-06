@@ -17,6 +17,15 @@
 
 //! Test starlark-rust embedding.
 
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
+
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, cell::AsARef};
+
 use crate as starlark;
 use crate::{
     assert,
@@ -26,22 +35,17 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{any::StarlarkAny, none::NoneType, StarlarkValue, Value},
 };
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, cell::AsARef};
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
 
 #[test]
 fn test_export_as() {
+    use std::fmt::{self, Debug, Display};
+
+    use gazebo::any::AnyLifetime;
+
     use crate as starlark;
     use crate::values::{
         AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
     };
-    use gazebo::any::AnyLifetime;
-    use std::fmt::{self, Debug, Display};
 
     #[derive(Debug, Trace)]
     struct Exporter<T> {
@@ -225,6 +229,9 @@ fn test_starlark_module() {
 }
 
 mod value_of {
+    use either::Either;
+    use itertools::Itertools;
+
     use super::*;
     use crate::{
         self as starlark,
@@ -232,8 +239,6 @@ mod value_of {
         environment::GlobalsBuilder,
         values::{dict::DictOf, list::ListOf, ValueOf},
     };
-    use either::Either;
-    use itertools::Itertools;
 
     // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
     #[starlark_module]

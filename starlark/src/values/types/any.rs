@@ -68,9 +68,11 @@
 //! # }
 //! ```
 
-use crate::values::{AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike};
-use gazebo::any::AnyLifetime;
 use std::fmt::{self, Debug, Display};
+
+use gazebo::any::AnyLifetime;
+
+use crate::values::{AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike};
 
 /// A type that can be passed around as a Starlark [`Value`], but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with

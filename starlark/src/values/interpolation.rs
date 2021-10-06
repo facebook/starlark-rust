@@ -18,11 +18,13 @@
 //! String interpolation-related code.
 //! Based on <https://docs.python.org/3/library/stdtypes.html#printf-style-string-formatting>
 
-use crate::values::{dict::Dict, tuple::Tuple, Value, ValueError, ValueLike};
+use std::{fmt::Write, str::FromStr};
+
 use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
-use std::{fmt::Write, str::FromStr};
 use thiserror::Error;
+
+use crate::values::{dict::Dict, tuple::Tuple, Value, ValueError, ValueLike};
 
 /// Operator `%` format or evaluation errors
 #[derive(Clone, Dupe, Debug, Error)]

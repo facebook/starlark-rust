@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use crate::{assert, assert::Assert, syntax::ast::Stmt};
 use gazebo::prelude::*;
+
+use crate::{assert, assert::Assert, syntax::ast::Stmt};
 
 #[test]
 fn test_empty() {

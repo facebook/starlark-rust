@@ -15,13 +15,14 @@
  * limitations under the License.
  */
 
+use std::fmt::{self, Display};
+
 use gazebo::prelude::*;
 use serde::Serialize;
 use starlark::{
     codemap::ResolvedSpan,
     errors::{Diagnostic, Lint},
 };
-use std::fmt::{self, Display};
 
 /// A standardised set of severities.
 #[derive(Debug, Serialize, Dupe, Clone, Copy)]

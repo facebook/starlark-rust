@@ -28,6 +28,17 @@
 //!   trait.
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
+use std::{
+    cmp::Ordering,
+    fmt,
+    fmt::{Debug, Display},
+};
+
+use gazebo::coerce::CoerceKey;
+pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
+use indexmap::Equivalent;
+pub use starlark_derive::{starlark_attrs, StarlarkAttrs, Trace};
+
 pub use crate::values::{
     alloc_value::*, error::*, frozen_ref::*, layout::*, owned::*, traits::*, typed::*, types::*,
     unpack::*,
@@ -37,15 +48,6 @@ use crate::{
     collections::{Hashed, SmallHashResult},
     eval::{Arguments, Evaluator},
     values::function::FUNCTION_TYPE,
-};
-use gazebo::coerce::CoerceKey;
-pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
-use indexmap::Equivalent;
-pub use starlark_derive::{starlark_attrs, StarlarkAttrs, Trace};
-use std::{
-    cmp::Ordering,
-    fmt,
-    fmt::{Debug, Display},
 };
 
 #[macro_use]

@@ -15,15 +15,17 @@
  * limitations under the License.
  */
 
-use crate::collections::small_map::SmallMap;
-use gazebo::prelude::*;
-use indexmap::Equivalent;
 use std::{
     cmp::Ordering,
     fmt::{self, Debug},
     hash::{Hash, Hasher},
     iter::FromIterator,
 };
+
+use gazebo::prelude::*;
+use indexmap::Equivalent;
+
+use crate::collections::small_map::SmallMap;
 
 /// An memory-efficient set with determinstic order, based on [`SmallMap`].
 #[derive(Clone, Default_)]

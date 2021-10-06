@@ -17,9 +17,10 @@
 
 //! Run conformance tests, which are used by the Go starlark.
 //! e.g. <https://github.com/google/skylark/tree/master/testdata>
-use crate::{assert::assert::Assert, errors::Diagnostic};
 use gazebo::prelude::*;
 use itertools::Itertools;
+
+use crate::{assert::assert::Assert, errors::Diagnostic};
 
 impl Assert {
     /// Run a conformance test, e.g. the Go Starlark tests

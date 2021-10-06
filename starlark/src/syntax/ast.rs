@@ -17,14 +17,16 @@
 
 //! AST for parsed starlark files.
 
-use crate::codemap::{CodeMap, Pos, Span, Spanned};
-use derivative::Derivative;
-use gazebo::prelude::*;
-use static_assertions::assert_eq_size;
 use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
 };
+
+use derivative::Derivative;
+use gazebo::prelude::*;
+use static_assertions::assert_eq_size;
+
+use crate::codemap::{CodeMap, Pos, Span, Spanned};
 
 /// Payload types attached to AST nodes.
 pub trait AstPayload: Debug {

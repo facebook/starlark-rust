@@ -15,15 +15,17 @@
  * limitations under the License.
  */
 
-use crate::{
-    codemap::Spanned,
-    syntax::ast::{AstLiteral, AstPayload, AstStmtP, ExprP, StmtP},
-};
+use std::collections::HashMap;
+
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
+use crate::{
+    codemap::Spanned,
+    syntax::ast::{AstLiteral, AstPayload, AstStmtP, ExprP, StmtP},
+};
 
 /// The documentation provided by a user for a specific module, object, function, etc.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

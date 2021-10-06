@@ -17,6 +17,11 @@
 
 //! AST for parsed starlark files.
 
+use std::collections::HashSet;
+
+use gazebo::prelude::*;
+use thiserror::Error;
+
 use crate::{
     codemap::{CodeMap, Spanned},
     errors::Diagnostic,
@@ -28,9 +33,6 @@ use crate::{
         Dialect,
     },
 };
-use gazebo::prelude::*;
-use std::collections::HashSet;
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum ValidateError {

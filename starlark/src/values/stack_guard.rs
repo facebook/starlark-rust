@@ -17,8 +17,9 @@
 
 //! Guard to check we don't recurse too deeply with nested operations like Equals.
 
-use crate::values::ControlError;
 use std::{cell::Cell, intrinsics::unlikely};
+
+use crate::values::ControlError;
 
 // Maximum recursion level for comparison
 // TODO(dmarting): those are rather short, maybe make it configurable?

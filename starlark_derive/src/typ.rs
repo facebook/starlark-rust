@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use crate::util::*;
 use syn::*;
+
+use crate::util::*;
 
 #[derive(Debug)]
 pub(crate) struct StarModule {

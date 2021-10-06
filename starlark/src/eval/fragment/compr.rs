@@ -17,6 +17,8 @@
 
 //! List/dict/set comprenension evaluation.
 
+use gazebo::prelude::*;
+
 use crate::{
     codemap::{Span, Spanned},
     collections::SmallMap,
@@ -38,7 +40,6 @@ use crate::{
     syntax::ast::{ClauseP, ForClauseP},
     values::{dict::Dict, list::List, Value},
 };
-use gazebo::prelude::*;
 
 impl Compiler<'_> {
     pub fn list_comprehension(

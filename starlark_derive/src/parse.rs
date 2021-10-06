@@ -15,9 +15,10 @@
  * limitations under the License.
  */
 
-use crate::{typ::*, util::*};
 use gazebo::prelude::*;
 use syn::*;
+
+use crate::{typ::*, util::*};
 
 pub(crate) fn parse(mut input: ItemFn) -> StarModule {
     let visibility = input.vis;

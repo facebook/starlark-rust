@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+use std::{cell::RefCell, fmt::Write};
+
+use derive_more::Display;
+use gazebo::any::AnyLifetime;
+
 use crate::{
     self as starlark,
     assert::{self, Assert},
@@ -25,9 +30,6 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::{ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value},
 };
-use derive_more::Display;
-use gazebo::any::AnyLifetime;
-use std::{cell::RefCell, fmt::Write};
 
 mod basic;
 mod before_stmt;

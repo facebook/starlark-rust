@@ -15,6 +15,9 @@
  * limitations under the License.
  */
 
+use gazebo::variants::VariantName;
+use thiserror::Error;
+
 use crate::{
     analysis::types::{LintT, LintWarning},
     codemap::{CodeMap, ResolvedFileSpan, Span, Spanned},
@@ -23,8 +26,6 @@ use crate::{
         AstModule,
     },
 };
-use gazebo::variants::VariantName;
-use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum FlowIssue {
@@ -268,9 +269,10 @@ pub(crate) fn flow_issues(module: &AstModule) -> Vec<LintT<FlowIssue>> {
 
 #[cfg(test)]
 mod test {
+    use gazebo::prelude::*;
+
     use super::*;
     use crate::syntax::Dialect;
-    use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
         AstModule::parse("X", x.to_owned(), &Dialect::Extended).unwrap()

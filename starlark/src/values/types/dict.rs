@@ -17,6 +17,23 @@
 
 //! The dictionary type, a mutable associative-map, which iterates in insertion order.
 
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    fmt,
+    fmt::{Debug, Display},
+    hash::{Hash, Hasher},
+    intrinsics::unlikely,
+    marker::PhantomData,
+    ops::Deref,
+};
+
+use gazebo::{
+    any::AnyLifetime,
+    cell::ARef,
+    coerce::{coerce_ref, Coerce},
+};
+use indexmap::Equivalent;
+
 use crate as starlark;
 use crate::{
     collections::{Hashed, SmallMap},
@@ -27,21 +44,6 @@ use crate::{
         FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
         UnpackValue, Value, ValueLike,
     },
-};
-use gazebo::{
-    any::AnyLifetime,
-    cell::ARef,
-    coerce::{coerce_ref, Coerce},
-};
-use indexmap::Equivalent;
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    fmt,
-    fmt::{Debug, Display},
-    hash::{Hash, Hasher},
-    intrinsics::unlikely,
-    marker::PhantomData,
-    ops::Deref,
 };
 
 #[derive(Clone, Default, Trace, Debug)]

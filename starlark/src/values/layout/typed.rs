@@ -15,15 +15,17 @@
  * limitations under the License.
  */
 
-use crate::{
-    gazebo::any::AnyLifetime,
-    values::{FrozenValue, PointerI32, StarlarkValue, Value, ValueLike},
-};
-use gazebo::dupe::Dupe;
 use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
     marker,
+};
+
+use gazebo::dupe::Dupe;
+
+use crate::{
+    gazebo::any::AnyLifetime,
+    values::{FrozenValue, PointerI32, StarlarkValue, Value, ValueLike},
 };
 
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.

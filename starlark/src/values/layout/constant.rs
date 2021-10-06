@@ -15,20 +15,22 @@
  * limitations under the License.
  */
 
-use crate::values::{
-    layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
-    string::StarlarkStr,
-    Freezer, Trace, Tracer, Value,
-};
-use gazebo::{
-    coerce::{Coerce, CoerceKey},
-    prelude::*,
-};
 use std::{
     fmt,
     fmt::{Debug, Formatter},
     intrinsics::copy_nonoverlapping,
     ptr,
+};
+
+use gazebo::{
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
+
+use crate::values::{
+    layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
+    string::StarlarkStr,
+    Freezer, Trace, Tracer, Value,
 };
 
 /// A constant string that can be converted to a [`FrozenValue`].

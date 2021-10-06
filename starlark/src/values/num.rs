@@ -17,8 +17,9 @@
 
 //! Helpers for numerical values.
 
-use crate::values::{float::StarlarkFloat, Value};
 use gazebo::prelude::*;
+
+use crate::values::{float::StarlarkFloat, Value};
 
 /// [`Num`] represents a numerical value that can be unpacked from a [`Value`].
 ///

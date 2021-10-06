@@ -15,7 +15,11 @@
  * limitations under the License.
  */
 
-use crate::types::Message;
+use std::{
+    fs, iter,
+    path::{Path, PathBuf},
+};
+
 use gazebo::prelude::*;
 use itertools::Either;
 use starlark::{
@@ -23,10 +27,8 @@ use starlark::{
     eval::Evaluator,
     syntax::{AstModule, Dialect},
 };
-use std::{
-    fs, iter,
-    path::{Path, PathBuf},
-};
+
+use crate::types::Message;
 
 #[derive(Debug)]
 pub struct Context {

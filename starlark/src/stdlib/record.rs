@@ -16,6 +16,8 @@
  */
 
 //! Implementation of `record` function.
+use gazebo::prelude::*;
+
 use crate as starlark;
 use crate::{
     collections::SmallMap,
@@ -26,7 +28,6 @@ use crate::{
         Value,
     },
 };
-use gazebo::prelude::*;
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {

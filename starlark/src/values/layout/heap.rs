@@ -15,6 +15,25 @@
  * limitations under the License.
  */
 
+use std::{
+    cell::{Cell, RefCell},
+    cmp,
+    collections::HashSet,
+    fmt,
+    fmt::{Debug, Display, Formatter},
+    hash::{Hash, Hasher},
+    intrinsics::copy_nonoverlapping,
+    marker::PhantomData,
+    mem,
+    ops::Deref,
+    ptr,
+    sync::Arc,
+    usize,
+};
+
+use either::Either;
+use gazebo::{cast, prelude::*};
+
 use crate::{
     collections::Hashed,
     eval::FrozenDef,
@@ -32,23 +51,6 @@ use crate::{
         string::hash_string_result,
         AllocFrozenValue, ComplexValue, FrozenRef, SimpleValue,
     },
-};
-use either::Either;
-use gazebo::{cast, prelude::*};
-use std::{
-    cell::{Cell, RefCell},
-    cmp,
-    collections::HashSet,
-    fmt,
-    fmt::{Debug, Display, Formatter},
-    hash::{Hash, Hasher},
-    intrinsics::copy_nonoverlapping,
-    marker::PhantomData,
-    mem,
-    ops::Deref,
-    ptr,
-    sync::Arc,
-    usize,
 };
 
 /// A heap on which [`Value`]s can be allocated. The values will be annotated with the heap lifetime.

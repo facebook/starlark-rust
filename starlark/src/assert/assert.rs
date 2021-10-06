@@ -16,6 +16,12 @@
  */
 
 //! Utilities to test Starlark code execution.
+use std::collections::HashMap;
+
+use anyhow::anyhow;
+use gazebo::prelude::*;
+use once_cell::sync::Lazy;
+
 use crate::{
     self as starlark,
     codemap::{CodeMap, Pos, Span},
@@ -29,10 +35,6 @@ use crate::{
     },
     values::{none::NoneType, structs::Struct, OwnedFrozenValue, Value},
 };
-use anyhow::anyhow;
-use gazebo::prelude::*;
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 
 fn mk_environment() -> GlobalsBuilder {
     GlobalsBuilder::extended().with(test_methods)

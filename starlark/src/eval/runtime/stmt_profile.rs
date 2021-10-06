@@ -15,9 +15,6 @@
  * limitations under the License.
  */
 
-use crate::codemap::{CodeMap, FileSpan, Span};
-use anyhow::Context;
-use gazebo::prelude::*;
 use std::{
     collections::{hash_map::Entry, HashMap},
     fs::File,
@@ -27,6 +24,11 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+
+use anyhow::Context;
+use gazebo::prelude::*;
+
+use crate::codemap::{CodeMap, FileSpan, Span};
 
 // When line profiling is not enabled, we want this to be small and cheap
 pub(crate) struct StmtProfile(Option<Box<StmtProfileData>>);

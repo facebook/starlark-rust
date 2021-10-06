@@ -16,6 +16,11 @@
  */
 
 //! Evaluation of an expression.
+use std::cmp::Ordering;
+
+use gazebo::{coerce::coerce_ref, prelude::*};
+use thiserror::Error;
+
 use crate::{
     codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, SmallMap},
@@ -40,9 +45,6 @@ use crate::{
         AttrType, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
-use gazebo::{coerce::coerce_ref, prelude::*};
-use std::cmp::Ordering;
-use thiserror::Error;
 
 /// `bool` operation.
 #[derive(Copy, Clone, Dupe, Debug)]

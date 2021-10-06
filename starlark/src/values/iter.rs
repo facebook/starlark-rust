@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use crate::values::Value;
 use gazebo::{cast, cell::ARef};
+
+use crate::values::Value;
 
 /// A relatively safe way of implementing an iterator over an ARef.
 /// If this is properly safe, why doesn't exist for Ref?

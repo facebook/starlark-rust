@@ -17,6 +17,25 @@
 
 //! The list type, a mutable sequence of values.
 
+use std::{
+    any::TypeId,
+    cell::{Ref, RefCell},
+    cmp,
+    cmp::Ordering,
+    fmt::{self, Debug, Display},
+    intrinsics::unlikely,
+    marker::PhantomData,
+    mem,
+    ops::Deref,
+};
+
+use gazebo::{
+    any::AnyLifetime,
+    cell::ARef,
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
+
 use crate as starlark;
 use crate::{
     environment::{Globals, GlobalsStatic},
@@ -29,23 +48,6 @@ use crate::{
         FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value,
         ValueLike,
     },
-};
-use gazebo::{
-    any::AnyLifetime,
-    cell::ARef,
-    coerce::{coerce_ref, Coerce},
-    prelude::*,
-};
-use std::{
-    any::TypeId,
-    cell::{Ref, RefCell},
-    cmp,
-    cmp::Ordering,
-    fmt::{self, Debug, Display},
-    intrinsics::unlikely,
-    marker::PhantomData,
-    mem,
-    ops::Deref,
 };
 
 #[derive(Clone, Default, Trace, Debug)]

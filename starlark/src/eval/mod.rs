@@ -18,31 +18,27 @@
 //! Evaluate some code, typically done by creating an [`Evaluator`], then calling
 //! [`eval_module`](Evaluator::eval_module).
 
-use crate::{
-    codemap::{Span, Spanned},
-    collections::symbol_map::Symbol,
-    eval::compiler::{scope::Scope, Compiler, Constants, EvalException, ExprEvalException},
-    syntax::ast::{AstModule, AstStmt, Expr, Stmt},
-    values::Value,
-};
-use gazebo::{cast, prelude::*};
-use std::{intrinsics::unlikely, mem};
+use std::{convert::TryInto, intrinsics::unlikely, mem};
 
-use crate::{
-    eval::compiler::{
-        scope::{CompilerAstMap, ScopeData},
-        throw_eval_exception,
-    },
-    values::docs::DocString,
-};
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
+use gazebo::{cast, prelude::*};
 pub use runtime::{
     arguments::{Arguments, ParametersParser, ParametersSpec},
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},
 };
-use std::convert::TryInto;
+
+use crate::{
+    codemap::{Span, Spanned},
+    collections::symbol_map::Symbol,
+    eval::compiler::{
+        scope::{CompilerAstMap, Scope, ScopeData},
+        throw_eval_exception, Compiler, Constants, EvalException, ExprEvalException,
+    },
+    syntax::ast::{AstModule, AstStmt, Expr, Stmt},
+    values::{docs::DocString, Value},
+};
 
 mod compiler;
 mod fragment;

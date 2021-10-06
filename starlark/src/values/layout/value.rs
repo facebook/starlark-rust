@@ -29,6 +29,13 @@
 // our val_ref requires a pointer to the value. We need to put that pointer
 // somewhere. The solution is to have a separate value storage vs vtable.
 
+use either::Either;
+use gazebo::{
+    cast,
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
+
 use crate::values::{
     layout::{
         arena::{AValueHeader, AValueRepr},
@@ -39,12 +46,6 @@ use crate::values::{
     },
     num::Num,
     string::StarlarkStr,
-};
-use either::Either;
-use gazebo::{
-    cast,
-    coerce::{Coerce, CoerceKey},
-    prelude::*,
 };
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.

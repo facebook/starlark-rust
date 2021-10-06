@@ -34,6 +34,20 @@
 //! assert_eq([v.value for v in Colors], ["Red", "Green", "Blue"])
 //! # "#);
 //! ```
+use std::{
+    cell::RefCell,
+    fmt::{self, Debug, Display},
+};
+
+use derivative::Derivative;
+use either::Either;
+use gazebo::{
+    any::AnyLifetime,
+    cell::AsARef,
+    coerce::{coerce_ref, Coerce},
+};
+use thiserror::Error;
+
 use crate as starlark;
 use crate::{
     codemap::Span,
@@ -45,18 +59,6 @@ use crate::{
         ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
-use derivative::Derivative;
-use either::Either;
-use gazebo::{
-    any::AnyLifetime,
-    cell::AsARef,
-    coerce::{coerce_ref, Coerce},
-};
-use std::{
-    cell::RefCell,
-    fmt::{self, Debug, Display},
-};
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum EnumError {

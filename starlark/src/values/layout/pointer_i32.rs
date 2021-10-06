@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use gazebo::{any::AnyLifetime, cast};
 use std::fmt::{self, Debug};
+
+use gazebo::{any::AnyLifetime, cast};
 
 // WARNING: This type isn't a real type, a pointer to this is secretly an i32.
 // Therefore, don't derive stuff on it, since it will be wrong.

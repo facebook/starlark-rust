@@ -18,10 +18,12 @@
 //! Define variants of the evaluation function with different support
 //! for the `load(...)` statement.
 
-use crate::environment::FrozenModule;
+use std::collections::HashMap;
+
 use anyhow::anyhow;
 use gazebo::prelude::*;
-use std::collections::HashMap;
+
+use crate::environment::FrozenModule;
 
 /// A trait for turning a `path` given by a `load()` statement into a [`FrozenModule`].
 pub trait FileLoader {

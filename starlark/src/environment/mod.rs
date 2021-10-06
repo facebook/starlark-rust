@@ -29,7 +29,6 @@ pub(crate) mod slots;
 
 pub use globals::*;
 pub use modules::*;
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]

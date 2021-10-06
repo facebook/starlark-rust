@@ -17,16 +17,18 @@
 
 //! Error types used by Starlark, mostly [`Diagnostic`].
 
-pub use crate::analysis::Lint;
-use crate::codemap::{CodeMap, FileSpan, Span};
-use annotate_snippets::{
-    display_list::{DisplayList, FormatOptions},
-    snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
-};
 use std::{
     error::Error,
     fmt::{self, Display, Formatter},
 };
+
+use annotate_snippets::{
+    display_list::{DisplayList, FormatOptions},
+    snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
+};
+
+pub use crate::analysis::Lint;
+use crate::codemap::{CodeMap, FileSpan, Span};
 
 pub(crate) mod did_you_mean;
 

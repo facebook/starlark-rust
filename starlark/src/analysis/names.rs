@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+use std::collections::{HashMap, HashSet};
+
+use gazebo::{prelude::*, variants::VariantName};
+use thiserror::Error;
+
 use crate::{
     analysis::{
         bind,
@@ -27,9 +32,6 @@ use crate::{
         AstModule,
     },
 };
-use gazebo::{prelude::*, variants::VariantName};
-use std::collections::{HashMap, HashSet};
-use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum NameWarning {

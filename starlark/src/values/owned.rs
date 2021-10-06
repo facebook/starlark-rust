@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-use crate::values::{AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value};
-use gazebo::prelude::*;
 use std::{fmt, fmt::Display};
+
+use gazebo::prelude::*;
+
+use crate::values::{AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, Value};
 
 /// A [`FrozenValue`] along with a [`FrozenHeapRef`] that ensures it is kept alive.
 /// Obtained from [`FrozenModule::get`](crate::environment::FrozenModule::get) or

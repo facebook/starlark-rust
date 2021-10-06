@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use crate::{debug::inspect::to_scope_names, eval::Evaluator, syntax::AstModule, values::Value};
 use std::{collections::HashMap, mem};
+
+use crate::{debug::inspect::to_scope_names, eval::Evaluator, syntax::AstModule, values::Value};
 
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate statements in the existing context. This function is designed for debugging,
@@ -97,9 +98,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
     use super::*;
     use crate::{self as starlark, assert, environment::GlobalsBuilder, syntax::Dialect};
-    use itertools::Itertools;
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {

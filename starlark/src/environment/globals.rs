@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+use std::{mem, sync::Arc};
+
+use gazebo::prelude::*;
+use itertools::Itertools;
+use once_cell::sync::OnceCell;
+
+pub use crate::stdlib::LibraryExtension;
 use crate::{
     collections::{
         symbol_map::{Symbol, SymbolMap},
@@ -26,12 +33,6 @@ use crate::{
         FrozenHeapRef, FrozenValue, Value,
     },
 };
-use gazebo::prelude::*;
-use itertools::Itertools;
-use once_cell::sync::OnceCell;
-use std::{mem, sync::Arc};
-
-pub use crate::stdlib::LibraryExtension;
 
 /// The global values available during execution.
 #[derive(Clone, Dupe, Debug)]
@@ -287,9 +288,10 @@ impl GlobalsStatic {
 
 #[cfg(test)]
 mod test {
+    use derive_more::Display;
+
     use super::*;
     use crate::{assert::Assert, starlark_type, values::StarlarkValue};
-    use derive_more::Display;
 
     #[test]
     fn test_send_sync()

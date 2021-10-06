@@ -17,6 +17,9 @@
 
 //! Methods for the `list` type.
 
+use anyhow::anyhow;
+use gazebo::cell::ARef;
+
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
@@ -27,8 +30,6 @@ use crate::{
         Value, ValueError,
     },
 };
-use anyhow::anyhow;
-use gazebo::cell::ARef;
 
 #[starlark_module]
 pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {

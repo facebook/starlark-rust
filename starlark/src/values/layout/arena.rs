@@ -26,10 +26,6 @@
 //! to tag it as being a usize, and the word after is the size of the
 //! item it replaced.
 
-use crate::values::layout::avalue::{AValue, BlackHole};
-use bumpalo::Bump;
-use either::Either;
-use gazebo::prelude::*;
 use std::{
     alloc::Layout,
     any::TypeId,
@@ -40,6 +36,12 @@ use std::{
     mem::{self, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
 };
+
+use bumpalo::Bump;
+use either::Either;
+use gazebo::prelude::*;
+
+use crate::values::layout::avalue::{AValue, BlackHole};
 
 #[derive(Default)]
 pub(crate) struct Arena {

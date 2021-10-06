@@ -17,14 +17,16 @@
 
 //! Methods for the `dict` type.
 
+use std::{intrinsics::unlikely, mem};
+
+use anyhow::anyhow;
+use gazebo::cell::ARef;
+
 use crate as starlark;
 use crate::{
     environment::GlobalsBuilder,
     values::{dict::Dict, list::List, none::NoneType, Value},
 };
-use anyhow::anyhow;
-use gazebo::cell::ARef;
-use std::{intrinsics::unlikely, mem};
 
 #[starlark_module]
 pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {

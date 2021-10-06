@@ -15,6 +15,10 @@
  * limitations under the License.
  */
 
+use std::collections::HashMap;
+
+use gazebo::prelude::*;
+
 use crate::{
     codemap::Span,
     syntax::{
@@ -25,8 +29,6 @@ use crate::{
         AstModule,
     },
 };
-use gazebo::prelude::*;
-use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq)]
 pub enum Assigner {

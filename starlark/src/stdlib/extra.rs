@@ -15,6 +15,19 @@
  * limitations under the License.
  */
 
+use std::{
+    collections::HashSet,
+    fmt::{self, Display},
+};
+
+use gazebo::{
+    any::AnyLifetime,
+    cell::ARef,
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
+use itertools::Itertools;
+
 use crate::{
     self as starlark,
     codemap::Span,
@@ -26,17 +39,6 @@ use crate::{
         ComplexValue, Freezer, FrozenStringValue, FrozenValue, StarlarkValue, StringValue,
         StringValueLike, Trace, Value, ValueLike,
     },
-};
-use gazebo::{
-    any::AnyLifetime,
-    cell::ARef,
-    coerce::{coerce_ref, Coerce},
-    prelude::*,
-};
-use itertools::Itertools;
-use std::{
-    collections::HashSet,
-    fmt::{self, Display},
 };
 
 #[starlark_module]

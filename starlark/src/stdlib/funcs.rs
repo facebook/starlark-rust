@@ -18,6 +18,11 @@
 //! A module with the standard function and constants that are by default in all
 //! dialect of Starlark
 
+use std::{cmp::Ordering, num::NonZeroI32};
+
+use anyhow::anyhow;
+use gazebo::prelude::*;
+
 use crate::{
     self as starlark,
     collections::SmallMap,
@@ -38,9 +43,6 @@ use crate::{
         AttrType, Heap, Value, ValueError, ValueLike,
     },
 };
-use anyhow::anyhow;
-use gazebo::prelude::*;
-use std::{cmp::Ordering, num::NonZeroI32};
 
 fn unpack_pair<'v>(pair: Value<'v>, heap: &'v Heap) -> anyhow::Result<(Value<'v>, Value<'v>)> {
     pair.with_iterator(heap, |it| {

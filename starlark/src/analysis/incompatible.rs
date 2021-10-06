@@ -15,6 +15,12 @@
  * limitations under the License.
  */
 
+use std::collections::{HashMap, HashSet};
+
+use gazebo::variants::VariantName;
+use once_cell::sync::Lazy;
+use thiserror::Error;
+
 use crate::{
     analysis::types::{LintT, LintWarning},
     codemap::{CodeMap, FileSpan, Span},
@@ -23,10 +29,6 @@ use crate::{
         AstModule,
     },
 };
-use gazebo::variants::VariantName;
-use once_cell::sync::Lazy;
-use std::collections::{HashMap, HashSet};
-use thiserror::Error;
 
 #[derive(Error, Debug, VariantName)]
 pub(crate) enum Incompatibility {
@@ -189,9 +191,10 @@ pub(crate) fn incompatibilities(module: &AstModule) -> Vec<LintT<Incompatibility
 
 #[cfg(test)]
 mod test {
+    use gazebo::prelude::*;
+
     use super::*;
     use crate::syntax::Dialect;
-    use gazebo::prelude::*;
 
     fn module(x: &str) -> AstModule {
         AstModule::parse("bad.py", x.to_owned(), &Dialect::Extended).unwrap()

@@ -17,11 +17,12 @@
 
 //! The `None` type.
 
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, prelude::*};
+
 use crate::values::{
     AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
 };
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, prelude::*};
 
 /// Define the None type, use [`NoneType`] in Rust.
 #[derive(Debug, Clone, Dupe, AnyLifetime, Display)]

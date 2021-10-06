@@ -32,16 +32,18 @@
 //! Measuring some sample strings, the P50 = 21 bytes, P75 = 27, P95 = 35,
 //! so we can reasonably expect to hit the smaller cases most often.
 
-use crate::{
-    collections::{idhasher::mix_u32, BorrowHashed, SmallHashResult},
-    values::{Trace, Tracer},
-};
-use gazebo::coerce::Coerce;
-use hashbrown::raw::RawTable;
 use std::{
     fmt::{self, Debug},
     intrinsics::copy_nonoverlapping,
     mem, slice, str,
+};
+
+use gazebo::coerce::Coerce;
+use hashbrown::raw::RawTable;
+
+use crate::{
+    collections::{idhasher::mix_u32, BorrowHashed, SmallHashResult},
+    values::{Trace, Tracer},
 };
 
 // We use a RawTable (the thing that underlies HashMap) so we can look up efficiently

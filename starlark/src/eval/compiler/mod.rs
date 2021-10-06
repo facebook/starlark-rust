@@ -17,6 +17,12 @@
 
 pub(crate) mod scope;
 
+use std::fmt::Debug;
+
+use anyhow::anyhow;
+use gazebo::prelude::*;
+use once_cell::sync::Lazy;
+
 use crate::{
     codemap::{CodeMap, Span},
     environment::{Globals, Module},
@@ -27,10 +33,6 @@ use crate::{
     },
     values::{FrozenValue, Value},
 };
-use anyhow::anyhow;
-use gazebo::prelude::*;
-use once_cell::sync::Lazy;
-use std::fmt::Debug;
 
 #[derive(Debug)]
 pub(crate) enum EvalException<'v> {

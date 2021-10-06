@@ -34,6 +34,18 @@
 //! # "#);
 //! ```
 
+use std::{
+    cmp::Ordering,
+    collections::hash_map::DefaultHasher,
+    fmt::{self, Display},
+    hash::{Hash, Hasher},
+};
+
+use gazebo::{
+    any::AnyLifetime,
+    coerce::{coerce_ref, Coerce},
+};
+
 use crate as starlark;
 use crate::{
     collections::SmallMap,
@@ -44,16 +56,6 @@ use crate::{
         error::ValueError,
         AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
-};
-use gazebo::{
-    any::AnyLifetime,
-    coerce::{coerce_ref, Coerce},
-};
-use std::{
-    cmp::Ordering,
-    collections::hash_map::DefaultHasher,
-    fmt::{self, Display},
-    hash::{Hash, Hasher},
 };
 
 impl<V> StructGen<V> {

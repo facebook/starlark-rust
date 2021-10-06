@@ -20,13 +20,15 @@
 //!
 //! `Value` holding `ValueCaptured` is equivalent to `Box<Option<Value>>`.
 
+use std::cell::Cell;
+
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, prelude::*};
+
 use crate as starlark;
 use crate::values::{
     ComplexValue, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike,
 };
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, prelude::*};
-use std::cell::Cell;
 
 #[derive(Debug, Trace, AnyLifetime, Display)]
 #[display(fmt = "{:?}", self)] // This type should never be user visible

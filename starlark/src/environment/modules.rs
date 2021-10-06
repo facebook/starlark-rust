@@ -20,6 +20,12 @@
 //! is the list of variable in the current scope. It can be frozen, after which
 //! all values from this environment become immutable.
 
+use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
+
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, prelude::*};
+use itertools::Itertools;
+
 use crate::{
     environment::{
         names::{FrozenNames, MutableNames},
@@ -35,10 +41,6 @@ use crate::{
         StarlarkValue, Value,
     },
 };
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, prelude::*};
-use itertools::Itertools;
-use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
 
 /// The result of freezing a [`Module`], making it and its contained values immutable.
 ///

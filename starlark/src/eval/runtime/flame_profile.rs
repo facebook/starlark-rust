@@ -15,10 +15,6 @@
  * limitations under the License.
  */
 
-use crate as starlark;
-use crate::values::{Trace, Tracer, Value};
-use anyhow::Context;
-use gazebo::prelude::*;
 use std::{
     collections::{hash_map::Entry, HashMap},
     fs::File,
@@ -28,6 +24,12 @@ use std::{
     slice,
     time::{Duration, Instant},
 };
+
+use anyhow::Context;
+use gazebo::prelude::*;
+
+use crate as starlark;
+use crate::values::{Trace, Tracer, Value};
 
 /// Index into FlameData.values
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Dupe)]

@@ -17,6 +17,18 @@
 
 //! Implementation of `def`.
 
+use std::{
+    cell::UnsafeCell,
+    collections::HashMap,
+    fmt::{self, Display},
+    mem, ptr,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+use derivative::Derivative;
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, prelude::*};
+
 use crate::{
     codemap::{CodeMap, Span, Spanned},
     environment::FrozenModuleRef,
@@ -48,16 +60,6 @@ use crate::{
         ComplexValue, Freezer, FrozenRef, FrozenStringValue, FrozenValue, StarlarkValue, Trace,
         Tracer, Value, ValueLike,
     },
-};
-use derivative::Derivative;
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, prelude::*};
-use std::{
-    cell::UnsafeCell,
-    collections::HashMap,
-    fmt::{self, Display},
-    mem, ptr,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 // Logically `Atomic<FrozenRef<FrozenModuleRef>>`.

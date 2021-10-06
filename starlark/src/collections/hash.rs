@@ -15,13 +15,15 @@
  * limitations under the License.
  */
 
-use crate as starlark;
-use gazebo::{coerce::Coerce, prelude::*};
-use indexmap::Equivalent;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
+
+use gazebo::{coerce::Coerce, prelude::*};
+use indexmap::Equivalent;
+
+use crate as starlark;
 
 /// A hash result.
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default, Trace)]
@@ -173,8 +175,9 @@ impl<K> Hashed<K> {
 
 #[cfg(test)]
 mod tests {
-    use crate::collections::{BorrowHashed, Hashed};
     use indexmap::map::IndexMap;
+
+    use crate::collections::{BorrowHashed, Hashed};
 
     #[test]
     fn borrow_and_hashed_equivalent() {

@@ -17,10 +17,6 @@
 
 //! Based on the reference lsp-server example at <https://github.com/rust-analyzer/lsp-server/blob/master/examples/goto_def.rs>.
 
-use crate::{
-    eval::Context,
-    types::{Message as StarlarkMessage, Severity},
-};
 use lsp_server::{Connection, Message, Notification};
 use lsp_types::{
     notification::{
@@ -33,6 +29,11 @@ use lsp_types::{
     TextDocumentSyncKind, Url,
 };
 use serde::de::DeserializeOwned;
+
+use crate::{
+    eval::Context,
+    types::{Message as StarlarkMessage, Severity},
+};
 
 struct Backend {
     connection: Connection,

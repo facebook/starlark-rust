@@ -63,11 +63,12 @@ fn inspect_module_variables<'v>(eval: &Evaluator<'v, '_>) -> SmallMap<String, Va
 
 #[cfg(test)]
 mod tests {
+    use gazebo::prelude::*;
+
     use crate::{
         self as starlark, assert, collections::SmallMap, environment::GlobalsBuilder,
         values::dict::Dict,
     };
-    use gazebo::prelude::*;
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {

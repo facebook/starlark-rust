@@ -25,15 +25,17 @@
 // Disagree these are good hints
 #![allow(clippy::type_complexity)]
 
-use crate::types::{LintMessage, Message, Severity};
+use std::{ffi::OsStr, fmt, fmt::Display, fs, path::PathBuf, sync::Arc};
+
 use anyhow::anyhow;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
 use rustyline::{error::ReadlineError, Editor};
-use std::{ffi::OsStr, fmt, fmt::Display, fs, path::PathBuf, sync::Arc};
 use structopt::{clap::AppSettings, StructOpt};
 use walkdir::WalkDir;
+
+use crate::types::{LintMessage, Message, Severity};
 
 mod dap;
 mod eval;

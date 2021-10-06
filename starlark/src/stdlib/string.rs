@@ -17,6 +17,11 @@
 
 //! Methods for the `string` type.
 
+use std::cmp;
+
+use anyhow::anyhow;
+use gazebo::prelude::*;
+
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
@@ -27,9 +32,6 @@ use crate::{
         Value, ValueError, ValueOf,
     },
 };
-use anyhow::anyhow;
-use gazebo::prelude::*;
-use std::cmp;
 
 // This does not exists in rust, split would cut the string incorrectly and
 // split_whitespace cannot take a n parameter.

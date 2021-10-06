@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use crate::dap::library::{events::*, requests::*, stream::*};
 use debugserver_types as ds;
+
+use crate::dap::library::{events::*, requests::*, stream::*};
 
 pub struct DapService {
     _private: (),

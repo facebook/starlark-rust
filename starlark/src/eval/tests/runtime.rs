@@ -17,18 +17,20 @@
 
 //! Test of runtime.
 
+use std::{
+    mem,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+use derive_more::Display;
+use once_cell::sync::Lazy;
+
 use crate as starlark;
 use crate::{
     assert,
     assert::Assert,
     environment::GlobalsBuilder,
     values::{any::StarlarkAny, FrozenHeap, Heap},
-};
-use derive_more::Display;
-use once_cell::sync::Lazy;
-use std::{
-    mem,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[test]

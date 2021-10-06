@@ -17,8 +17,9 @@
 
 //! Define a common set of errors.
 
-use crate::values::{StarlarkValue, Value};
 use thiserror::Error;
+
+use crate::values::{StarlarkValue, Value};
 
 /// Common errors returned by Starlark evaluation.
 #[derive(Debug, Error)]

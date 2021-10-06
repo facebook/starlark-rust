@@ -20,6 +20,21 @@
 //! and the ['IndexMap'](IndexMap) crate for larger number of entries
 //!
 
+use std::{
+    cmp::Ordering,
+    collections::hash_map::DefaultHasher,
+    fmt::{self, Debug},
+    hash::{Hash, Hasher},
+    iter::FromIterator,
+    mem,
+};
+
+use gazebo::{
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
+use indexmap::{Equivalent, IndexMap};
+
 use crate::collections::{
     hash::{BorrowHashed, Hashed},
     idhasher::BuildIdHasher,
@@ -28,19 +43,6 @@ use crate::collections::{
         VMIntoIter, VMIntoIterHash, VMIter, VMIterHash, VMIterMut, VMKeys, VMValues, VMValuesMut,
         VecMap,
     },
-};
-use gazebo::{
-    coerce::{Coerce, CoerceKey},
-    prelude::*,
-};
-use indexmap::{Equivalent, IndexMap};
-use std::{
-    cmp::Ordering,
-    collections::hash_map::DefaultHasher,
-    fmt::{self, Debug},
-    hash::{Hash, Hasher},
-    iter::FromIterator,
-    mem,
 };
 
 #[derive(Debug, Clone)]

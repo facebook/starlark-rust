@@ -21,7 +21,6 @@
 //! 32-bit `Pos` indexing into the `CodeMap`, under the assumption that the total amount of parsed
 //! source code will not exceed 4GiB. The `CodeMap` can look up the source file, line, and column
 //! of a `Pos` or `Span`, as well as provide source code snippets for error reporting.
-use gazebo::prelude::*;
 use std::{
     cmp,
     fmt::{self, Display},
@@ -29,6 +28,8 @@ use std::{
     ops::{Add, Deref, DerefMut},
     sync::Arc,
 };
+
+use gazebo::prelude::*;
 
 /// A small, `Copy`, value representing a position in a `CodeMap`'s file.
 #[derive(

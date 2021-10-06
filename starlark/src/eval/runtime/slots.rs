@@ -15,9 +15,11 @@
  * limitations under the License.
  */
 
-use crate::values::{Trace, Tracer, Value};
-use gazebo::prelude::*;
 use std::{cell::Cell, convert::TryInto, mem};
+
+use gazebo::prelude::*;
+
+use crate::values::{Trace, Tracer, Value};
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
 pub(crate) struct LocalSlotId(pub(crate) u32);

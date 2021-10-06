@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-use crate::collections::SmallMap;
+use std::{cmp::Ordering, hash::Hash};
+
 use gazebo::prelude::*;
 use indexmap::Equivalent;
 use itertools::Itertools;
-use std::{cmp::Ordering, hash::Hash};
+
+use crate::collections::SmallMap;
 
 pub fn equals_slice<E, X1, X2>(
     xs: &[X1],

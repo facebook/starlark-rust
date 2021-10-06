@@ -17,17 +17,6 @@
 
 //! The list type, an immutable sequence of values.
 
-use crate::values::{
-    comparison::{compare_slice, equals_slice},
-    index::{apply_slice, convert_index},
-    ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, Trace, Tracer, UnpackValue,
-    Value, ValueError, ValueLike,
-};
-use gazebo::{
-    any::AnyLifetime,
-    coerce::{coerce, coerce_ref, Coerce},
-    prelude::*,
-};
 use std::{
     cmp::Ordering,
     collections::hash_map::DefaultHasher,
@@ -35,6 +24,19 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::Hasher,
     slice,
+};
+
+use gazebo::{
+    any::AnyLifetime,
+    coerce::{coerce, coerce_ref, Coerce},
+    prelude::*,
+};
+
+use crate::values::{
+    comparison::{compare_slice, equals_slice},
+    index::{apply_slice, convert_index},
+    ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, Trace, Tracer, UnpackValue,
+    Value, ValueError, ValueLike,
 };
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.

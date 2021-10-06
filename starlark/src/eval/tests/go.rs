@@ -17,8 +17,9 @@
 
 //! Run Go implementation tests.
 
-use crate::{assert, assert::Assert};
 use itertools::Itertools;
+
+use crate::{assert, assert::Assert};
 
 #[test]
 fn test_go() {

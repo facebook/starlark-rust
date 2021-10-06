@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
+use std::cell::Cell;
+
 use crate::{
     environment::{Globals, Module},
     eval::Evaluator,
     syntax::{AstModule, Dialect},
 };
-use std::cell::Cell;
 
 #[test]
 fn before_stmt() {

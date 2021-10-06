@@ -15,13 +15,6 @@
  * limitations under the License.
  */
 
-use crate as starlark;
-use crate::values::{
-    ComplexValue, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
-};
-use anyhow::Context;
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, prelude::*};
 use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
@@ -30,6 +23,15 @@ use std::{
     path::Path,
     rc::Rc,
     time::{Duration, Instant},
+};
+
+use anyhow::Context;
+use derive_more::Display;
+use gazebo::{any::AnyLifetime, prelude::*};
+
+use crate as starlark;
+use crate::values::{
+    ComplexValue, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
 };
 
 #[derive(Copy, Clone, Dupe, Debug)]

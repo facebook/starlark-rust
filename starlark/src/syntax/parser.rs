@@ -15,6 +15,12 @@
  * limitations under the License.
  */
 
+use std::{fs, path::Path};
+
+use anyhow::anyhow;
+use gazebo::prelude::*;
+use lalrpop_util as lu;
+
 use crate::{
     codemap::{CodeMap, FileSpan, Pos, Span},
     errors::Diagnostic,
@@ -25,10 +31,6 @@ use crate::{
         lexer::{Lexer, Token},
     },
 };
-use anyhow::anyhow;
-use gazebo::prelude::*;
-use lalrpop_util as lu;
-use std::{fs, path::Path};
 
 fn one_of(expected: &[String]) -> String {
     let mut result = String::new();

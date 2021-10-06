@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-use crate::dap::library::stream::{log, send};
 use debugserver_types::*;
 use gazebo::prelude::*;
 use serde::Serialize;
 use serde_json::Value;
+
+use crate::dap::library::stream::{log, send};
 
 #[derive(Debug, Clone, Dupe)]
 pub struct Client {

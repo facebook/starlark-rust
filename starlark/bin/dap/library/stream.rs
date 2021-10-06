@@ -19,13 +19,14 @@
 //! Because DAP debugging is hard, we write everything we see to stdout (for the protocol)
 //! AND stderr (for debugging).
 
-use serde_json::Value;
 use std::{
     env,
     fs::{File, OpenOptions},
     io::{self, Read, Write},
     path::PathBuf,
 };
+
+use serde_json::Value;
 
 // Debugging anything through DAP is a nightmare, because VS Code doesn't surface any logs.
 // Therefore, do the hacky thing of putting logs next to the binary.

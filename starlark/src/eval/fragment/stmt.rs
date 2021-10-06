@@ -22,6 +22,12 @@
 //! All evaluation function can evaluate the full Starlark language (i.e.
 //! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
+use std::mem;
+
+use anyhow::anyhow;
+use gazebo::prelude::*;
+use thiserror::Error;
+
 use crate::{
     codemap::{Span, Spanned},
     environment::{slots::ModuleSlotId, FrozenModuleRef},
@@ -40,10 +46,6 @@ use crate::{
     syntax::ast::{AssignOp, AssignP, StmtP},
     values::{list::List, Heap, Value, ValueError},
 };
-use anyhow::anyhow;
-use gazebo::prelude::*;
-use std::mem;
-use thiserror::Error;
 
 pub(crate) type StmtCompiled =
     Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;

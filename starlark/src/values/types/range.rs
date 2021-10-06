@@ -17,15 +17,17 @@
 
 //! The range type, constructed with `range()`.
 
-use crate::values::{
-    index::{convert_index, convert_slice_indices},
-    Heap, StarlarkValue, Value, ValueError, ValueLike,
-};
-use gazebo::prelude::*;
 use std::{
     fmt::{self, Display},
     marker::PhantomData,
     num::NonZeroI32,
+};
+
+use gazebo::prelude::*;
+
+use crate::values::{
+    index::{convert_index, convert_slice_indices},
+    Heap, StarlarkValue, Value, ValueError, ValueLike,
 };
 
 /// Representation of `range()` type.
@@ -251,8 +253,9 @@ impl PartialEq for Range {
 
 #[cfg(test)]
 mod tests {
-    use crate::values::{range::Range, Heap, StarlarkValue, Value};
     use std::num::NonZeroI32;
+
+    use crate::values::{range::Range, Heap, StarlarkValue, Value};
 
     fn range(start: i32, stop: i32, range: i32) -> Range {
         Range {

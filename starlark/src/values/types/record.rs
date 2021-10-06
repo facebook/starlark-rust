@@ -41,6 +41,22 @@
 //! # "#);
 //! ```
 
+use std::{
+    cell::RefCell,
+    collections::hash_map::DefaultHasher,
+    fmt,
+    fmt::{Debug, Display},
+    hash::{Hash, Hasher},
+};
+
+use either::Either;
+use gazebo::{
+    any::AnyLifetime,
+    cell::AsARef,
+    coerce::{coerce_ref, Coerce},
+    prelude::*,
+};
+
 use crate as starlark;
 use crate::{
     codemap::Span,
@@ -52,20 +68,6 @@ use crate::{
         typing::TypeCompiled,
         ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
-};
-use either::Either;
-use gazebo::{
-    any::AnyLifetime,
-    cell::AsARef,
-    coerce::{coerce_ref, Coerce},
-    prelude::*,
-};
-use std::{
-    cell::RefCell,
-    collections::hash_map::DefaultHasher,
-    fmt,
-    fmt::{Debug, Display},
-    hash::{Hash, Hasher},
 };
 
 /// The result of `field()`.

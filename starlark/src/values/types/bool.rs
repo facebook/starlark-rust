@@ -20,14 +20,16 @@
 //! Can be created with [`new_bool`](Value::new_bool) and unwrapped with [`unpack_bool`](Value::unpack_bool).
 //! Unlike most Starlark values, these aren't actually represented on the [`Heap`], but as special values.
 
-use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
-    ValueError,
-};
-use gazebo::any::AnyLifetime;
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
+};
+
+use gazebo::any::AnyLifetime;
+
+use crate::values::{
+    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+    ValueError,
 };
 
 /// The result of calling `type()` on booleans.

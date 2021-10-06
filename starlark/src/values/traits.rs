@@ -28,6 +28,16 @@
 //! https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#sequence-types).
 //! We also use the term _container_ for denoting any of those type that can
 //! hold several values.
+use std::{
+    any::TypeId,
+    cell::{Cell, RefCell},
+    cmp::Ordering,
+    fmt::{Debug, Display, Write},
+};
+
+use derive_more::Display;
+use gazebo::any::AnyLifetime;
+
 use crate::{
     codemap::Span,
     collections::SmallMap,
@@ -37,14 +47,6 @@ use crate::{
         docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenStringValue, Heap,
         Tracer, Value, ValueError,
     },
-};
-use derive_more::Display;
-use gazebo::any::AnyLifetime;
-use std::{
-    any::TypeId,
-    cell::{Cell, RefCell},
-    cmp::Ordering,
-    fmt::{Debug, Display, Write},
 };
 
 /// Called by the garbage collection, and must walk over every contained `Value` in the type.

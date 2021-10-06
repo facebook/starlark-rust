@@ -15,14 +15,16 @@
  * limitations under the License.
  */
 
-use crate::values::{string::StarlarkStr, FrozenValue, SimpleValue, ValueLike};
-use gazebo::prelude::*;
 use std::{
     borrow::Borrow,
     cmp::Ordering,
     hash::{Hash, Hasher},
     ops::Deref,
 };
+
+use gazebo::prelude::*;
+
+use crate::values::{string::StarlarkStr, FrozenValue, SimpleValue, ValueLike};
 
 /// A [`FrozenRef`] is essentially a [`FrozenValue`], and has the same memory and access guarantees
 /// as it. However, this keeps the type of the type `T` of the actual [`FrozenValue`] as a

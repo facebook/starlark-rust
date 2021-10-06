@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+use std::fmt::{self, Debug};
+
+use gazebo::{coerce::Coerce, prelude::*};
+use thiserror::Error;
+
 use crate::{
     collections::{BorrowHashed, Hashed},
     values::{
@@ -24,9 +29,6 @@ use crate::{
         Heap, Trace, Tracer, Value,
     },
 };
-use gazebo::{coerce::Coerce, prelude::*};
-use std::fmt::{self, Debug};
-use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum TypingError {

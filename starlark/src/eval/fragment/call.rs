@@ -17,6 +17,10 @@
 
 //! Compile function calls.
 
+use std::mem::MaybeUninit;
+
+use gazebo::coerce::coerce_ref;
+
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
@@ -37,8 +41,6 @@ use crate::{
         ValueLike,
     },
 };
-use gazebo::coerce::coerce_ref;
-use std::mem::MaybeUninit;
 
 #[derive(Default, Clone, Debug)]
 pub(crate) struct ArgsCompiledValue {

@@ -17,14 +17,16 @@
 
 //! The floating point number type (3.14, 4e2).
 
-use crate::values::{
-    num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
-    StarlarkValue, Value, ValueError,
-};
-use gazebo::{any::AnyLifetime, prelude::*};
 use std::{
     cmp::Ordering,
     fmt::{self, Display, Write},
+};
+
+use gazebo::{any::AnyLifetime, prelude::*};
+
+use crate::values::{
+    num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
+    StarlarkValue, Value, ValueError,
 };
 
 #[derive(Clone, Dupe, Copy, Debug, AnyLifetime)]

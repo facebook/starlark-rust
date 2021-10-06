@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+use std::{collections::HashMap, convert::TryInto, iter, mem};
+
+use gazebo::dupe::Dupe;
+use indexmap::map::IndexMap;
+
 use crate::{
     codemap::CodeMap,
     environment::{names::MutableNames, slots::ModuleSlotId, EnvironmentError, Globals, Module},
@@ -31,9 +36,6 @@ use crate::{
     },
     values::FrozenValue,
 };
-use gazebo::dupe::Dupe;
-use indexmap::map::IndexMap;
-use std::{collections::HashMap, convert::TryInto, iter, mem};
 
 pub(crate) struct Scope<'a> {
     pub(crate) scope_data: ScopeData,
@@ -789,6 +791,8 @@ pub(crate) type CstLoad = AstLoadP<CstPayload>;
 
 #[cfg(test)]
 mod test {
+    use std::fmt::Write;
+
     use crate::{
         environment::{names::MutableNames, Globals},
         eval::compiler::scope::{
@@ -801,7 +805,6 @@ mod test {
             AstModule, Dialect,
         },
     };
-    use std::fmt::Write;
 
     fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
         let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::Extended).unwrap();

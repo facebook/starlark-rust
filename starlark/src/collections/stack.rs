@@ -22,8 +22,9 @@
 // Once everything is stable, it might be worth removing what we don't need.
 #![allow(dead_code)]
 
-use gazebo::prelude::*;
 use std::{iter, mem};
+
+use gazebo::prelude::*;
 
 #[derive(Default_)]
 pub(crate) struct Stack<T> {

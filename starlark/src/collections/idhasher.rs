@@ -15,8 +15,9 @@
  * limitations under the License.
  */
 
-use gazebo::prelude::*;
 use std::hash::{BuildHasherDefault, Hasher};
+
+use gazebo::prelude::*;
 
 /*
  * IdHasher is a simple hasher that computes

@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+use std::sync::Mutex;
+
+use anyhow::anyhow;
+use itertools::Itertools;
+use once_cell::sync::Lazy;
+use rustyline::{error::ReadlineError, Editor};
+
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
@@ -22,11 +29,6 @@ use crate::{
     syntax::{AstModule, Dialect},
     values::none::NoneType,
 };
-use anyhow::anyhow;
-use itertools::Itertools;
-use once_cell::sync::Lazy;
-use rustyline::{error::ReadlineError, Editor};
-use std::sync::Mutex;
 
 // A breakpoint takes over the console UI, so having two going at once confuses everything.
 // Have a global mutex to ensure one at a time.
@@ -173,9 +175,10 @@ pub fn global(builder: &mut GlobalsBuilder) {
 
 #[cfg(test)]
 mod test {
+    use std::env;
+
     use super::*;
     use crate::assert::Assert;
-    use std::env;
 
     #[test]
     // Test with: BREAKPOINT=1 cargo test -p starlark breakpoint -- --nocapture
