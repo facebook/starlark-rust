@@ -55,36 +55,37 @@ impl<'v> From<ExprEvalException> for EvalException<'v> {
     }
 }
 
-// Make sure the error-path doesn't get inlined into the normal-path execution
 #[cold]
 #[inline(never)]
-fn throw_error<'v, T>(
-    e: anyhow::Error,
-    span: Span,
-    eval: &Evaluator<'v, '_>,
-) -> Result<T, EvalException<'v>> {
-    let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
+fn add_span_to_error(e: anyhow::Error, span: Span, eval: &Evaluator) -> anyhow::Error {
+    Diagnostic::modify(e, |d: &mut Diagnostic| {
         d.set_span(span, eval.codemap.dupe());
         d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
-    });
-    Err(EvalException::Error(e))
+    })
 }
 
 #[cold]
 #[inline(never)]
-fn expr_throw_error<'v, T>(
+pub(crate) fn add_span_to_expr_error(
     e: anyhow::Error,
     span: Span,
-    eval: &Evaluator<'v, '_>,
-) -> Result<T, ExprEvalException> {
-    let e = Diagnostic::modify(e, |d: &mut Diagnostic| {
-        d.set_span(span, eval.codemap.dupe());
-        d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
-    });
-    Err(ExprEvalException(e))
+    eval: &Evaluator,
+) -> ExprEvalException {
+    ExprEvalException(add_span_to_error(e, span, eval))
+}
+
+#[cold]
+#[inline(never)]
+pub(crate) fn add_span_to_stmt_error<'v>(
+    e: anyhow::Error,
+    span: Span,
+    eval: &Evaluator,
+) -> EvalException<'v> {
+    EvalException::Error(add_span_to_error(e, span, eval))
 }
 
 /// Convert syntax error to spanned evaluation exception
+#[inline(always)]
 pub(crate) fn throw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
@@ -92,11 +93,12 @@ pub(crate) fn throw<'v, T>(
 ) -> Result<T, EvalException<'v>> {
     match r {
         Ok(v) => Ok(v),
-        Err(e) => throw_error(e, span, eval),
+        Err(e) => Err(add_span_to_stmt_error(e, span, eval)),
     }
 }
 
 /// Convert syntax error to spanned evaluation exception
+#[inline(always)]
 pub(crate) fn expr_throw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
@@ -104,7 +106,7 @@ pub(crate) fn expr_throw<'v, T>(
 ) -> Result<T, ExprEvalException> {
     match r {
         Ok(v) => Ok(v),
-        Err(e) => expr_throw_error(e, span, eval),
+        Err(e) => Err(add_span_to_expr_error(e, span, eval)),
     }
 }
 
