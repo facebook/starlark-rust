@@ -20,6 +20,8 @@ use std::{
     cmp::Ordering,
     hash::{Hash, Hasher},
     ops::Deref,
+    ptr,
+    sync::atomic,
 };
 
 use gazebo::prelude::*;
@@ -128,5 +130,34 @@ where
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         (&*self as &T).hash(state);
+    }
+}
+
+/// `Atomic<Option<FrozenRef<T>>>`.
+pub(crate) struct AtomicFrozenRefOption<T>(atomic::AtomicPtr<T>);
+
+impl<T> AtomicFrozenRefOption<T> {
+    pub(crate) fn new(module: Option<FrozenRef<T>>) -> AtomicFrozenRefOption<T> {
+        AtomicFrozenRefOption(atomic::AtomicPtr::new(match module {
+            Some(v) => v.as_ref() as *const T as *mut T,
+            None => ptr::null_mut(),
+        }))
+    }
+
+    pub(crate) fn load_relaxed(&self) -> Option<FrozenRef<T>> {
+        // Note this is relaxed load which is cheap.
+        let ptr = self.0.load(atomic::Ordering::Relaxed);
+        if ptr.is_null() {
+            None
+        } else {
+            Some(FrozenRef::new(unsafe { &*ptr }))
+        }
+    }
+
+    pub(crate) fn store_relaxed(&self, module: FrozenRef<T>) {
+        self.0.store(
+            module.as_ref() as *const T as *mut T,
+            atomic::Ordering::Relaxed,
+        );
     }
 }

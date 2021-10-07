@@ -22,7 +22,6 @@ use std::{
     collections::HashMap,
     fmt::{self, Display},
     mem, ptr,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use derivative::Derivative;
@@ -57,37 +56,10 @@ use crate::{
         docs::{DocItem, DocString},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        ComplexValue, Freezer, FrozenRef, FrozenStringValue, FrozenValue, StarlarkValue, Trace,
-        Tracer, Value, ValueLike,
+        AtomicFrozenRefOption, ComplexValue, Freezer, FrozenRef, FrozenStringValue, FrozenValue,
+        StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
-
-// Logically `Atomic<FrozenRef<FrozenModuleRef>>`.
-struct AtomicFrozenModuleOption(AtomicUsize);
-
-impl AtomicFrozenModuleOption {
-    fn from(module: Option<FrozenRef<FrozenModuleRef>>) -> AtomicFrozenModuleOption {
-        AtomicFrozenModuleOption(AtomicUsize::new(match module {
-            Some(v) => v.as_ref() as *const FrozenModuleRef as usize,
-            None => 0,
-        }))
-    }
-
-    fn get(&self) -> Option<FrozenRef<FrozenModuleRef>> {
-        // Note this is relaxed load which is cheap.
-        match self.0.load(Ordering::Relaxed) {
-            0 => None,
-            v => Some(FrozenRef::new(unsafe { &*(v as *const FrozenModuleRef) })),
-        }
-    }
-
-    fn set(&self, module: FrozenRef<FrozenModuleRef>) {
-        self.0.store(
-            module.as_ref() as *const FrozenModuleRef as usize,
-            Ordering::Relaxed,
-        );
-    }
-}
 
 /// Store frozen `StmtCompiled`.
 /// This is initialized in `post_freeze`.
@@ -411,7 +383,7 @@ pub(crate) struct DefGen<V> {
     /// A reference to the module where the function is defined after the module has been frozen.
     /// When the module is not frozen yet, this field contains `None`, and function's module
     /// can be accessed from evaluator's module.
-    module: AtomicFrozenModuleOption,
+    module: AtomicFrozenRefOption<FrozenModuleRef>,
     /// This field is only used in `FrozenDef`. It is populated in `post_freeze`.
     #[derivative(Debug = "ignore")]
     optimized_on_freeze_stmt: StmtCompiledCell,
@@ -447,7 +419,7 @@ impl<'v> Def<'v> {
             parameter_types,
             return_type,
             captured,
-            module: AtomicFrozenModuleOption::from(eval.module_variables.map(|x| x.1)),
+            module: AtomicFrozenRefOption::new(eval.module_variables.map(|x| x.1)),
             optimized_on_freeze_stmt: StmtCompiledCell::new(),
             def_info: stmt,
         })
@@ -587,7 +559,7 @@ impl<'v> ComplexValue<'v> for Def<'v> {
             .return_type
             .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
-        let module = AtomicFrozenModuleOption::from(self.module.get());
+        let module = AtomicFrozenRefOption::new(self.module.load_relaxed());
         Ok(FrozenDef {
             parameters,
             parameter_captures: self.parameter_captures,
@@ -680,9 +652,9 @@ where
         }
 
         if Self::FROZEN {
-            debug_assert!(self.module.get().is_some());
+            debug_assert!(self.module.load_relaxed().is_some());
         }
-        let res = eval.with_function_context(self.module.get(), self.def_info, |eval| {
+        let res = eval.with_function_context(self.module.load_relaxed(), self.def_info, |eval| {
             if Self::FROZEN {
                 (self.optimized_on_freeze_stmt.get())(eval)
             } else {
@@ -717,9 +689,9 @@ impl FrozenDef {
         // Module passed to this function is not always module where the function is declared:
         // A function can be created in a frozen module and frozen later in another module.
         // `def_module` variable contains a module where this `def` is declared.
-        let def_module = match self.module.get() {
+        let def_module = match self.module.load_relaxed() {
             None => {
-                self.module.set(module);
+                self.module.store_relaxed(module);
                 module
             }
             Some(module) => module,
