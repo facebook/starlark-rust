@@ -18,6 +18,7 @@
 use std::{
     alloc::{alloc, dealloc, Layout},
     cell::{Cell, RefCell},
+    intrinsics::likely,
     mem::MaybeUninit,
     slice,
 };
@@ -61,6 +62,15 @@ impl Alloca {
         }
     }
 
+    fn assert_state(&self) {
+        unsafe {
+            debug_assert!(self.end.get().offset_from(self.alloc.get()) >= 0);
+            debug_assert!(
+                self.end.get().offset_from(self.alloc.get()) as usize <= self.last_size.get()
+            );
+        }
+    }
+
     #[cold]
     #[inline(never)]
     fn allocate_more(&self, want: Layout) {
@@ -77,6 +87,8 @@ impl Alloca {
     /// or you call it yourself.
     #[inline(always)]
     pub fn alloca_uninit<T, R>(&self, len: usize, f: impl FnOnce(&mut [MaybeUninit<T>]) -> R) -> R {
+        self.assert_state();
+
         let layout = Layout::array::<T>(len).unwrap();
         let mut offset = self.alloc.get().align_offset(layout.align());
         let mut start = self.alloc.get().wrapping_add(offset);
@@ -92,7 +104,16 @@ impl Alloca {
         let data = start as *mut MaybeUninit<T>;
         let slice = unsafe { slice::from_raw_parts_mut(data, len) };
         let res = f(slice);
-        self.alloc.set(old);
+
+        // If the pointer changed, it means a callback called alloca again,
+        // which allocated a new buffer. So we are abandoning the current allocation here,
+        // and new allocations will use the new buffer even if the current buffer has space.
+        if likely(self.alloc.get() == stop) {
+            self.alloc.set(old);
+        }
+
+        self.assert_state();
+
         res
     }
 
@@ -128,5 +149,17 @@ mod tests {
             a.alloca_fill(3, 1u8, |_| {});
             assert_eq!(xs[2], 8 + 5 + 15);
         })
+    }
+
+    #[test]
+    fn trigger_bug() {
+        let a = Alloca::with_capacity(100);
+        for _ in 0..100 {
+            a.alloca_fill(10, 17usize, |_| {
+                a.alloca_fill(1000, 19usize, |_| {});
+            });
+        }
+
+        assert_eq!(2, a.buffers.borrow().len());
     }
 }
