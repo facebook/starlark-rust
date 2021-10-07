@@ -60,9 +60,9 @@ macro_rules! starlark_complex_value {
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<&'v Self> {
                     if x.unpack_frozen().is_some() {
-                        x.downcast_ref::< [< Frozen $x >] >().map($crate::__macro_refs::coerce_ref)
+                        $crate::values::ValueLike::downcast_ref::< [< Frozen $x >] >(x).map($crate::__macro_refs::coerce_ref)
                     } else {
-                        x.downcast_ref::< $x<'v> >()
+                        $crate::values::ValueLike::downcast_ref::< $x<'v> >(x)
                     }
                 }
             }
@@ -105,9 +105,9 @@ macro_rules! starlark_complex_values {
                     x: $crate::values::Value<'v>,
                 ) -> Option<$crate::__macro_refs::Either<&'v Self, &'v [< Frozen $x >]>> {
                     if x.unpack_frozen().is_some() {
-                        x.downcast_ref().map($crate::__macro_refs::Either::Right)
+                        $crate::values::ValueLike::downcast_ref(x).map($crate::__macro_refs::Either::Right)
                     } else {
-                        x.downcast_ref().map($crate::__macro_refs::Either::Left)
+                        $crate::values::ValueLike::downcast_ref(x).map($crate::__macro_refs::Either::Left)
                     }
                 }
             }
