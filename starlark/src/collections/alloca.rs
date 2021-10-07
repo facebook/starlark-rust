@@ -61,6 +61,7 @@ impl Alloca {
         }
     }
 
+    #[cold]
     #[inline(never)]
     fn allocate_more(&self, want: Layout) {
         let size = self.last_size.get() * 2 + want.align() + want.size();
