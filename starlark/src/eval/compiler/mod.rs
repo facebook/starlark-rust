@@ -59,7 +59,7 @@ impl<'v> From<ExprEvalException> for EvalException<'v> {
 #[inline(never)]
 fn add_span_to_error(e: anyhow::Error, span: Span, eval: &Evaluator) -> anyhow::Error {
     Diagnostic::modify(e, |d: &mut Diagnostic| {
-        d.set_span(span, eval.codemap.dupe());
+        d.set_span(span, eval.def_info.codemap.dupe());
         d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
     })
 }

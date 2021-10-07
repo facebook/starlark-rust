@@ -23,11 +23,10 @@ use std::{
 };
 
 use gazebo::{any::AnyLifetime, cast};
-use once_cell::sync::Lazy;
 use thiserror::Error;
 
 use crate::{
-    codemap::{CodeMap, FileSpan, Span},
+    codemap::{FileSpan, Span},
     collections::alloca::Alloca,
     environment::{
         slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleRef, Globals, Module,
@@ -78,12 +77,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) globals: &'a Globals,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
-    // The codemap that corresponds to currently executed function.
-    pub(crate) codemap: &'v CodeMap,
-    // `DefInfo` of currently executed function.
-    pub(crate) def_info: Option<FrozenRef<DefInfo>>,
-    // Module local variable names.
-    pub(crate) module_local_names: Vec<String>,
+    // `DefInfo` of currently executed function or module.
+    pub(crate) def_info: FrozenRef<DefInfo>,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
     // Should we enable flame profiling or not
@@ -128,8 +123,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// If your program contains `load()` statements, you also need to call
     /// [`set_loader`](Evaluator::set_loader).
     pub fn new(module: &'v Module, globals: &'a Globals) -> Self {
-        static CODEMAP: Lazy<CodeMap> = Lazy::new(CodeMap::default);
-
         module.frozen_heap().add_reference(globals.heap());
         Evaluator {
             call_stack: CallStack::default(),
@@ -138,7 +131,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             local_variables: LocalSlots::new(),
             globals,
             loader: None,
-            codemap: &CODEMAP, // Will be replaced before it is used
             extra: None,
             extra_v: None,
             next_gc_level: GC_THRESHOLD,
@@ -149,8 +141,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             flame_profile: FlameProfile::new(),
             heap_or_flame_profile: false,
             before_stmt: Vec::new(),
-            def_info: None,
-            module_local_names: Vec::new(),
+            def_info: DefInfo::empty(), // Will be replaced before it is used
         }
     }
 
@@ -199,7 +190,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
-        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, eval.codemap));
+        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, &eval.def_info.codemap));
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.
@@ -275,7 +266,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// whatever module is currently at the top of the stack.
     /// This function can be used in conjunction with [`before_stmt`](Evaluator::before_stmt).
     pub fn file_span(&self, span: Span) -> FileSpan {
-        self.codemap.file_span(span)
+        self.def_info.codemap.file_span(span)
     }
 
     pub(crate) fn check_types(&self) -> bool {
@@ -305,7 +296,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack.push(
             function,
             span.unwrap_or_default(),
-            span.map(|_| self.codemap),
+            span.map(|_| self.def_info),
         )?;
         if unlikely(self.heap_or_flame_profile) {
             self.heap_profile.record_call_enter(function, self.heap());
@@ -321,10 +312,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         res
     }
 
-    pub(crate) fn set_codemap(&mut self, codemap: &'v CodeMap) -> &'v CodeMap {
-        mem::replace(&mut self.codemap, codemap)
-    }
-
     /// Called to change the local variables, from the callee.
     /// Only called for user written functions.
     #[inline(always)] // There is only one caller
@@ -334,15 +321,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         def_info: FrozenRef<DefInfo>,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        // Safe because we promise to put codemap back to how it was before this function terminates.
-        // And because anyone who gets access to the CodeMap does so with a dupe, taking ownership.
-        // We'd like to express that `Evaluator` has a lifetime for the codemap that lasts only
-        // this function, but Rust can't express that.
-        let codemap = unsafe { cast::ptr_lifetime(&def_info.codemap) };
-
         // Capture the variables we will be mutating
-        let old_codemap = self.set_codemap(codemap);
-        let old_def_info = mem::replace(&mut self.def_info, Some(def_info));
+        let old_def_info = mem::replace(&mut self.def_info, def_info);
 
         // Set up for the new function call
         let old_module_variables = mem::replace(
@@ -355,7 +335,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         // Restore them all back
         self.def_info = old_def_info;
-        self.set_codemap(old_codemap);
         self.module_variables = old_module_variables;
         res
     }
@@ -398,10 +377,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     #[cold]
     #[inline(never)]
     fn local_var_referenced_before_assignment(&self, slot: LocalSlotId) -> anyhow::Error {
-        let names = match &self.def_info {
-            Some(def_info) => &def_info.scope_names.used,
-            None => &self.module_local_names,
-        };
+        let names = &self.def_info.scope_names.used;
         let name = names[slot.0 as usize].clone();
         EnvironmentError::LocalVariableReferencedBeforeAssignment(name).into()
     }

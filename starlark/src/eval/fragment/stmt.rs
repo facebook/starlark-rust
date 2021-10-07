@@ -77,7 +77,7 @@ pub(crate) enum StmtCompiledValue {
     Continue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct StmtCompileContext {
     pub(crate) has_before_stmt: bool,
 }

@@ -32,9 +32,12 @@ pub use runtime::{
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
-    eval::compiler::{
-        scope::{CompilerAstMap, Scope, ScopeData},
-        throw_eval_exception, Compiler, Constants, EvalException, ExprEvalException,
+    eval::{
+        compiler::{
+            scope::{CompilerAstMap, Scope, ScopeData},
+            throw_eval_exception, Compiler, Constants, EvalException, ExprEvalException,
+        },
+        fragment::def::DefInfo,
     },
     syntax::ast::{AstModule, AstStmt, Expr, Stmt},
     values::{docs::DocString, Value},
@@ -110,15 +113,19 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let span = statement.span;
 
-        let (module_slots, local_slots, scope_data) = scope.exit_module();
+        let (module_slots, scope_names, scope_data) = scope.exit_module();
 
         self.module_env.slots().ensure_slots(module_slots);
         let new_locals = self
             .local_variables
-            .reserve(local_slots.len().try_into().unwrap());
+            .reserve(scope_names.used.len().try_into().unwrap());
         let old_locals = self.local_variables.utilise(new_locals);
-        assert!(self.module_local_names.is_empty());
-        self.module_local_names = local_slots;
+        let old_def_info = mem::replace(
+            &mut self.def_info,
+            self.module_env
+                .frozen_heap()
+                .alloc_any(DefInfo::for_module(codemap.dupe(), scope_names)),
+        );
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
 
@@ -126,9 +133,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // See with_function_context for more safety arguments.
         let codemap = unsafe { cast::ptr_lifetime(&codemap) };
 
-        let old_codemap = self.set_codemap(codemap);
         self.call_stack
-            .push(Value::new_none(), span, Some(codemap))
+            .push(Value::new_none(), span, Some(self.def_info))
             .unwrap();
         if unlikely(self.heap_or_flame_profile) {
             self.heap_profile
@@ -154,9 +160,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.heap_profile.record_call_exit(self.heap());
             self.flame_profile.record_call_exit();
         }
-        self.set_codemap(old_codemap);
         self.local_variables.release(old_locals);
-        self.module_local_names.clear();
+        self.def_info = old_def_info;
 
         // Return the result of evaluation
         match res {

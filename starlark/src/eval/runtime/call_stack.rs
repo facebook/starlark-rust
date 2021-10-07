@@ -29,9 +29,10 @@ use std::{fmt, fmt::Debug, intrinsics::unlikely};
 use gazebo::prelude::*;
 
 use crate::{
-    codemap::{CodeMap, FileSpan, Span},
+    codemap::{FileSpan, Span},
     errors::Frame,
-    values::{ControlError, Trace, Tracer, Value},
+    eval::fragment::def::DefInfo,
+    values::{ControlError, FrozenRef, Trace, Tracer, Value},
 };
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
@@ -40,14 +41,14 @@ use crate::{
 #[derive(Clone, Copy, Dupe)]
 struct CheapFrame<'v> {
     function: Value<'v>,
-    file: Option<&'v CodeMap>,
+    file: Option<FrozenRef<DefInfo>>,
     span: Span,
 }
 
 impl CheapFrame<'_> {
     fn location(&self) -> Option<FileSpan> {
         self.file.map(|file| FileSpan {
-            file: file.dupe(),
+            file: file.codemap.dupe(),
             span: self.span,
         })
     }
@@ -115,7 +116,7 @@ impl<'v> CallStack<'v> {
         &mut self,
         function: Value<'v>,
         span: Span,
-        file: Option<&'v CodeMap>,
+        file: Option<FrozenRef<DefInfo>>,
     ) -> anyhow::Result<()> {
         if unlikely(self.count >= MAX_CALLSTACK_RECURSION) {
             return Err(ControlError::TooManyRecursionLevel.into());

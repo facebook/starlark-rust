@@ -27,6 +27,7 @@ use std::{
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
+use once_cell::sync::Lazy;
 
 use crate::{
     codemap::{CodeMap, Span, Spanned},
@@ -157,6 +158,7 @@ impl<T> ParameterCompiled<T> {
     }
 }
 
+/// Static info for `def`, `lambda` or module.
 #[derive(Derivative, Display)]
 #[derivative(Debug)]
 #[display(fmt = "DefInfo")]
@@ -177,6 +179,33 @@ pub(crate) struct DefInfo {
     stmt_compile_context: StmtCompileContext,
     /// Function body is `type(x) == "y"`
     pub(crate) returns_type_is: Option<FrozenStringValue>,
+}
+
+impl DefInfo {
+    pub(crate) fn empty() -> FrozenRef<DefInfo> {
+        static EMPTY: Lazy<DefInfo> = Lazy::new(|| DefInfo {
+            codemap: CodeMap::default(),
+            docstring: None,
+            scope_names: ScopeNames::default(),
+            stmt_compiled: box |_eval| panic!("empty"),
+            body_stmts: StmtsCompiled::empty(),
+            stmt_compile_context: StmtCompileContext::default(),
+            returns_type_is: None,
+        });
+        FrozenRef::new(&EMPTY)
+    }
+
+    pub(crate) fn for_module(codemap: CodeMap, scope_names: ScopeNames) -> DefInfo {
+        DefInfo {
+            codemap,
+            docstring: None,
+            scope_names,
+            stmt_compiled: box |_eval| panic!("not to be called"),
+            body_stmts: StmtsCompiled::empty(),
+            stmt_compile_context: StmtCompileContext::default(),
+            returns_type_is: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
