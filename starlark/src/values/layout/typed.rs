@@ -21,7 +21,7 @@ use std::{
     marker,
 };
 
-use gazebo::dupe::Dupe;
+use gazebo::prelude::*;
 
 use crate::{
     gazebo::any::AnyLifetime,
@@ -29,16 +29,8 @@ use crate::{
 };
 
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.
+#[derive(Copy_, Clone_, Dupe_)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
-
-impl<'v, T: StarlarkValue<'v>> Clone for FrozenValueTyped<'v, T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<'v, T: StarlarkValue<'v>> Copy for FrozenValueTyped<'v, T> {}
-impl<'v, T: StarlarkValue<'v>> Dupe for FrozenValueTyped<'v, T> {}
 
 impl<'v, T: StarlarkValue<'v>> Debug for FrozenValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -68,9 +60,27 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
     }
 
     pub fn as_ref(self) -> &'v T {
-        // `FrozenValueTyped` is OK for `int`, but we cannot have a pointer to that int.
-        assert!(T::static_type_id() != PointerI32::static_type_id());
+        if T::static_type_id() == PointerI32::static_type_id() {
+            unsafe {
+                transmute!(
+                    &PointerI32,
+                    &T,
+                    PointerI32::new(self.0.0.unpack_int_unchecked())
+                )
+            }
+        } else {
+            unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
+        }
+    }
+}
 
-        unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
+#[cfg(test)]
+mod test {
+    use crate::values::{FrozenValue, FrozenValueTyped, PointerI32, StarlarkValue};
+
+    #[test]
+    fn int() {
+        let v = FrozenValueTyped::<PointerI32>::new(FrozenValue::new_int(17)).unwrap();
+        assert_eq!(17, v.as_ref().to_int().unwrap());
     }
 }

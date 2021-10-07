@@ -141,6 +141,13 @@ impl<'p, P> Pointer<'p, P> {
         untag_pointer(p)
     }
 
+    /// Unpack integer when it is known to be not a pointer.
+    pub(crate) unsafe fn unpack_int_unchecked(self) -> i32 {
+        let p = self.pointer.get();
+        debug_assert!(p & TAG_BITS == TAG_INT);
+        untag_int(p)
+    }
+
     pub fn ptr_eq(self, other: Pointer<'_, P>) -> bool {
         self.pointer == other.pointer
     }
