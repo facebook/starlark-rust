@@ -142,10 +142,10 @@ impl Arena {
         self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
-    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>, E>(
+    fn alloc_uninit<'v, 'v2: 'v, T: AValue<'v2>, E>(
         bump: &'v Bump,
         extra_len: usize,
-    ) -> *mut AValueRepr<T> {
+    ) -> &'v mut MaybeUninit<AValueRepr<T>> {
         assert!(
             mem::align_of::<T>() <= mem::align_of::<AValueHeader>(),
             "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
@@ -161,7 +161,7 @@ impl Arena {
             + cmp::max(mem::size_of::<T>() + extra_bytes, mem::size_of::<usize>());
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout);
-        p.as_ptr() as *mut AValueRepr<T>
+        unsafe { &mut *(p.as_ptr() as *mut MaybeUninit<AValueRepr<T>>) }
     }
 
     // Reservation should really be an incremental type
@@ -169,7 +169,7 @@ impl Arena {
         &'v self,
         extra_len: usize,
     ) -> Reservation<'v, 'v2, T> {
-        let p = Self::alloc_empty::<T, E>(&self.drop, extra_len);
+        let p = Self::alloc_uninit::<T, E>(&self.drop, extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
@@ -177,18 +177,21 @@ impl Arena {
         let extra_bytes = extra_len * mem::size_of::<E>();
 
         let x = BlackHole(mem::size_of::<T>() + extra_bytes);
-        unsafe {
-            ptr::write(
-                p as *mut AValueRepr<BlackHole>,
-                AValueRepr {
-                    header: AValueHeader::new(&x),
-                    payload: x,
-                },
+        let p = unsafe {
+            transmute!(
+                &mut MaybeUninit<AValueRepr<T>>,
+                &mut MaybeUninit<AValueRepr<BlackHole>>,
+                p
             )
         };
+        let p = p.write(AValueRepr {
+            header: AValueHeader::new(&x),
+            payload: x,
+        });
+        let p = unsafe { transmute!(&mut AValueRepr<BlackHole>, &mut AValueRepr<T>, p) };
 
         Reservation {
-            pointer: p as *mut AValueRepr<T>,
+            pointer: p,
             phantom: PhantomData,
         }
     }
@@ -206,17 +209,12 @@ impl Arena {
             }
             WhichBump::Drop => &self.drop,
         };
-        let p = Self::alloc_empty::<T, ()>(bump, 0);
-        unsafe {
-            ptr::write(
-                p,
-                AValueRepr {
-                    header: AValueHeader::new(&x),
-                    payload: x,
-                },
-            );
-            &(*p).header
-        }
+        let p = Self::alloc_uninit::<T, ()>(bump, 0);
+        let p = p.write(AValueRepr {
+            header: AValueHeader::new(&x),
+            payload: x,
+        });
+        &p.header
     }
 
     /// Allocate a type `T` plus `extra` bytes.
@@ -229,17 +227,11 @@ impl Arena {
     ) -> *mut AValueRepr<T> {
         assert!(!mem::needs_drop::<T>());
 
-        let p = Self::alloc_empty::<T, E>(&self.non_drop, extra_len);
-        unsafe {
-            ptr::write(
-                p,
-                AValueRepr {
-                    header: AValueHeader::new(&x),
-                    payload: x,
-                },
-            );
-            p
-        }
+        let p = Self::alloc_uninit::<T, E>(&self.non_drop, extra_len);
+        p.write(AValueRepr {
+            header: AValueHeader::new(&x),
+            payload: x,
+        })
     }
 
     fn iter_chunk<'a>(chunk: &'a [MaybeUninit<u8>], mut f: impl FnMut(&'a AValueHeader)) {
