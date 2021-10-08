@@ -40,7 +40,7 @@ use bumpalo::Bump;
 use either::Either;
 use gazebo::prelude::*;
 
-use crate::values::layout::avalue::{AValue, BlackHole};
+use crate::values::layout::avalue::{AValueDyn, BlackHole};
 
 #[derive(Default)]
 pub(crate) struct Arena {
@@ -57,7 +57,7 @@ pub(crate) enum WhichBump {
 
 #[derive(Hash, PartialEq, Eq, Clone)]
 #[repr(transparent)]
-pub(crate) struct AValueHeader(DynMetadata<dyn AValue<'static>>);
+pub(crate) struct AValueHeader(DynMetadata<dyn AValueDyn<'static>>);
 
 // Implements Copy so this is fine
 impl Dupe for AValueHeader {}
@@ -79,7 +79,7 @@ pub(crate) struct AValueForward {
 }
 
 impl AValueForward {
-    pub(crate) fn assert_does_not_overwrite_extra<'v, T: AValue<'v>>() {
+    pub(crate) fn assert_does_not_overwrite_extra<'v, T: AValueDyn<'v>>() {
         assert!(mem::size_of::<AValueForward>() <= mem::size_of::<AValueRepr<T>>());
     }
 }
@@ -87,12 +87,12 @@ impl AValueForward {
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
-pub(crate) struct Reservation<'v, 'v2, T: AValue<'v2>> {
+pub(crate) struct Reservation<'v, 'v2, T: AValueDyn<'v2>> {
     pointer: *mut AValueRepr<T>, // Secretly AValueObject<T>
     phantom: PhantomData<(&'v (), &'v2 T)>,
 }
 
-impl<'v, 'v2, T: AValue<'v2>> Reservation<'v, 'v2, T> {
+impl<'v, 'v2, T: AValueDyn<'v2>> Reservation<'v, 'v2, T> {
     pub(crate) fn fill(self, x: T) {
         unsafe {
             ptr::write(
@@ -130,7 +130,7 @@ impl Arena {
         self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
-    fn alloc_uninit<'v, 'v2: 'v, T: AValue<'v2>, E>(
+    fn alloc_uninit<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
         bump: &'v Bump,
         extra_len: usize,
     ) -> (&'v mut MaybeUninit<AValueRepr<T>>, &'v mut [MaybeUninit<E>]) {
@@ -158,7 +158,7 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>, E>(
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
         &'v self,
         extra_len: usize,
     ) -> (Reservation<'v, 'v2, T>, &'v mut [MaybeUninit<E>]) {
@@ -193,7 +193,7 @@ impl Arena {
     }
 
     /// Allocate a type `T`.
-    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2>>(
+    pub(crate) fn alloc<'v, 'v2: 'v, T: AValueDyn<'v2>>(
         &'v self,
         which_bump: WhichBump,
         x: T,
@@ -217,7 +217,7 @@ impl Arena {
     /// Allocate a type `T` plus `extra` bytes.
     ///
     /// The type `T` will never be dropped, so had better not do any memory allocation.
-    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValue<'v2>, E>(
+    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
         &'v self,
         x: T,
         extra_len: usize,
@@ -334,32 +334,32 @@ impl Arena {
 }
 
 impl AValueHeader {
-    pub(crate) fn new<'a, 'b>(x: &'a dyn AValue<'b>) -> Self
+    pub(crate) fn new<'a, 'b>(x: &'a dyn AValueDyn<'b>) -> Self
     where
         'b: 'a,
     {
-        let metadata: DynMetadata<dyn AValue> = metadata(x);
+        let metadata: DynMetadata<dyn AValueDyn> = metadata(x);
         // The vtable is invariant based on the lifetime, so this is safe
-        let metadata: DynMetadata<dyn AValue<'static>> = unsafe { mem::transmute(metadata) };
+        let metadata: DynMetadata<dyn AValueDyn<'static>> = unsafe { mem::transmute(metadata) };
         // Check that the LSB is not set, as we reuse that for overwrite
         debug_assert!(unsafe { mem::transmute::<_, usize>(metadata) } & 1 == 0);
         AValueHeader(metadata)
     }
 
-    pub(crate) const fn with_metadata(metadata: DynMetadata<dyn AValue<'static>>) -> Self {
+    pub(crate) const fn with_metadata(metadata: DynMetadata<dyn AValueDyn<'static>>) -> Self {
         AValueHeader(metadata)
     }
 
-    pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValue<'v> {
+    pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValueDyn<'v> {
         unsafe {
             let self_repr = self.as_repr::<()>();
             let res = &*(from_raw_parts(&self_repr.payload, self.0));
-            mem::transmute::<&'v dyn AValue<'static>, &'v dyn AValue<'v>>(res)
+            mem::transmute::<&'v dyn AValueDyn<'static>, &'v dyn AValueDyn<'v>>(res)
         }
     }
 
     /// Unpack something that might have been overwritten.
-    pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValue<'v>> {
+    pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValueDyn<'v>> {
         let x = unsafe { *(self as *const AValueHeader as *const usize) };
         if x & 1 == 1 {
             Either::Left(x & !1)
@@ -370,7 +370,7 @@ impl AValueHeader {
 
     /// After performing the overwrite any existing pointers to this value
     /// are corrupted.
-    pub unsafe fn overwrite<'v, T: AValue<'v>>(me: *mut AValueHeader, x: usize) -> T {
+    pub unsafe fn overwrite<'v, T: AValueDyn<'v>>(me: *mut AValueHeader, x: usize) -> T {
         assert!(x & 1 == 0, "Can't have the lowest bit set");
         assert_eq!((*me).0.layout(), Layout::new::<T>());
 
@@ -398,7 +398,7 @@ impl AValueHeader {
 
 impl<T> AValueRepr<T> {
     pub(crate) const fn with_metadata(
-        metadata: DynMetadata<dyn AValue<'static>>,
+        metadata: DynMetadata<dyn AValueDyn<'static>>,
         payload: T,
     ) -> AValueRepr<T> {
         AValueRepr {
@@ -412,7 +412,7 @@ impl Drop for Arena {
     fn drop(&mut self) {
         self.for_each_drop_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
-            let x = x.unpack() as *const dyn AValue as *mut dyn AValue;
+            let x = x.unpack() as *const dyn AValueDyn as *mut dyn AValueDyn;
             unsafe {
                 ptr::drop_in_place(x)
             };
@@ -433,11 +433,14 @@ mod test {
         s
     }
 
-    fn mk_str(x: &str) -> impl AValue<'static> {
+    fn mk_str(x: &str) -> impl AValueDyn<'static> {
         simple(StarlarkAny::new(x.to_owned()))
     }
 
-    fn reserve_str<'v, T: AValue<'static>>(arena: &'v Arena, _: &T) -> Reservation<'v, 'static, T> {
+    fn reserve_str<'v, T: AValueDyn<'static>>(
+        arena: &'v Arena,
+        _: &T,
+    ) -> Reservation<'v, 'static, T> {
         arena.reserve_with_extra::<T, ()>(0).0
     }
 

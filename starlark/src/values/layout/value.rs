@@ -39,7 +39,7 @@ use gazebo::{
 use crate::values::{
     layout::{
         arena::{AValueHeader, AValueRepr},
-        avalue::{basic_ref, AValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
+        avalue::{basic_ref, AValueDyn, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
         constant::VALUE_EMPTY_STRING,
         pointer::Pointer,
         pointer_i32::PointerI32,
@@ -171,7 +171,7 @@ impl<'v> Value<'v> {
     }
 
     /// Get a pointer to a [`AValue`].
-    pub(crate) fn get_ref(self) -> &'v dyn AValue<'v> {
+    pub(crate) fn get_ref(self) -> &'v dyn AValueDyn<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(PointerI32::new(x)),
@@ -269,7 +269,7 @@ impl FrozenValue {
     }
 
     /// Get a pointer to the [`AValue`] object this value represents.
-    pub(crate) fn get_ref<'v>(self) -> &'v dyn AValue<'v> {
+    pub(crate) fn get_ref<'v>(self) -> &'v dyn AValueDyn<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(PointerI32::new(x)),

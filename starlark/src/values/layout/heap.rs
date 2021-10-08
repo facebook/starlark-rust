@@ -43,7 +43,7 @@ use crate::{
         layout::{
             arena::{AValueHeader, Arena, HeapSummary, Reservation, WhichBump},
             avalue::{
-                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue,
+                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValueDyn,
                 VALUE_EMPTY_TUPLE,
             },
             constant::constant_string,
@@ -179,7 +179,7 @@ impl FrozenHeap {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
 
-    fn alloc_raw(&self, which_bump: WhichBump, x: impl AValue<'static>) -> FrozenValue {
+    fn alloc_raw(&self, which_bump: WhichBump, x: impl AValueDyn<'static>) -> FrozenValue {
         let v: &AValueHeader = self.arena.alloc(which_bump, x);
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
@@ -289,7 +289,7 @@ impl Freezer {
         val.alloc_frozen_value(&self.heap)
     }
 
-    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValueDyn<'v2>>(
         &'v self,
     ) -> (FrozenValue, Reservation<'v, 'v2, T>) {
         let (fv, r, extra) = self.reserve_with_extra::<T, ()>(0);
@@ -297,7 +297,7 @@ impl Freezer {
         (fv, r)
     }
 
-    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>, E>(
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
         &'v self,
         extra_len: usize,
     ) -> (
@@ -351,7 +351,11 @@ impl Heap {
         self.arena.borrow().available_bytes()
     }
 
-    fn alloc_raw<'v, 'v2: 'v2>(&'v self, which_bump: WhichBump, x: impl AValue<'v2>) -> Value<'v> {
+    fn alloc_raw<'v, 'v2: 'v2>(
+        &'v self,
+        which_bump: WhichBump,
+        x: impl AValueDyn<'v2>,
+    ) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
         let v: &AValueHeader = arena.alloc(which_bump, x);
@@ -512,7 +516,7 @@ impl<'v> Tracer<'v> {
         *value = self.adjust(*value)
     }
 
-    pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
+    pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValueDyn<'v2>>(
         &'a self,
     ) -> (Value<'v>, Reservation<'a, 'v2, T>) {
         let (v, r, extra) = self.reserve_with_extra::<T, ()>(0);
@@ -520,7 +524,7 @@ impl<'v> Tracer<'v> {
         (v, r)
     }
 
-    pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValue<'v2>, E>(
+    pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValueDyn<'v2>, E>(
         &'a self,
         extra_len: usize,
     ) -> (Value<'v>, Reservation<'a, 'v2, T>, &'a mut [MaybeUninit<E>]) {

@@ -45,7 +45,7 @@ use crate::{
 
 pub(crate) static VALUE_NONE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
-    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, NoneType>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
@@ -53,7 +53,7 @@ pub(crate) static VALUE_NONE: &AValueHeader = {
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(false));
-    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
@@ -61,7 +61,7 @@ pub(crate) static VALUE_FALSE: &AValueHeader = {
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
     const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(true));
-    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
@@ -71,13 +71,13 @@ pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
     #[allow(clippy::declare_interior_mutable_const)]
     const VTABLE: Wrapper<Direct, StarlarkStr> = Wrapper(Direct, unsafe { StarlarkStr::new(0) });
     AValueHeader::with_metadata(metadata(
-        &VTABLE as *const Wrapper<Direct, StarlarkStr> as *const dyn AValue<'static>,
+        &VTABLE as *const Wrapper<Direct, StarlarkStr> as *const dyn AValueDyn<'static>,
     ))
 };
 
 pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
     const PAYLOAD: Wrapper<Direct, FrozenTuple> = Wrapper(Direct, unsafe { FrozenTuple::new(0) });
-    const DYN: &dyn AValue<'static> = &PAYLOAD;
+    const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
     static DATA: AValueRepr<Wrapper<Direct, FrozenTuple>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
@@ -85,7 +85,7 @@ pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
 
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
-pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> {
+pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
     // How much memory I take up on the heap.
     // Included to allow unsized types to live on the heap.
     fn memory_size(&self) -> usize;
@@ -107,7 +107,7 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> {
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
 }
 
-impl<'v> dyn AValue<'v> {
+impl<'v> dyn AValueDyn<'v> {
     /// Downcast a reference to type `T`, or return [`None`](None) if it is not the
     /// right type.
     // We'd love to reuse the type from as_dyn_any, but that doesn't seem to have the right vtable-ness
@@ -128,29 +128,29 @@ impl<'v> dyn AValue<'v> {
     }
 }
 
-pub(crate) fn starlark_str(len: usize) -> impl AValue<'static> + Send + Sync {
+pub(crate) fn starlark_str(len: usize) -> impl AValueDyn<'static> + Send + Sync {
     Wrapper(Direct, unsafe { StarlarkStr::new(len) })
 }
 
-pub(crate) fn tuple_avalue<'v>(len: usize) -> impl AValue<'v> {
+pub(crate) fn tuple_avalue<'v>(len: usize) -> impl AValueDyn<'v> {
     Wrapper(Direct, unsafe { Tuple::new(len) })
 }
 
-pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValue<'static> {
+pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValueDyn<'static> {
     Wrapper(Direct, unsafe { FrozenTuple::new(len) })
 }
 
-pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValue<'v> {
+pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValueDyn<'v> {
     // These are the same representation, so safe to convert
     let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
     x
 }
 
-pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static> + Send + Sync {
+pub(crate) fn simple(x: impl SimpleValue) -> impl AValueDyn<'static> + Send + Sync {
     Wrapper(Simple, x)
 }
 
-pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v> {
+pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValueDyn<'v> {
     Wrapper(Complex, x)
 }
 
@@ -186,7 +186,7 @@ fn clear_lsb(x: usize) -> usize {
     x & !1
 }
 
-impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
+impl<'v, T: StarlarkValue<'v>> AValueDyn<'v> for Wrapper<Basic, T> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Self>()
     }
@@ -207,7 +207,7 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
+impl<'v> AValueDyn<'v> for Wrapper<Direct, StarlarkStr> {
     fn memory_size(&self) -> usize {
         mem::size_of::<StarlarkStr>() + self.1.len()
     }
@@ -239,7 +239,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
+impl<'v> AValueDyn<'v> for Wrapper<Direct, Tuple<'v>> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Tuple>() + self.1.len() * mem::size_of::<Value>()
     }
@@ -290,7 +290,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
+impl<'v> AValueDyn<'v> for Wrapper<Direct, FrozenTuple> {
     fn memory_size(&self) -> usize {
         mem::size_of::<FrozenTuple>() + self.1.len() * mem::size_of::<FrozenValue>()
     }
@@ -312,7 +312,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
     }
 }
 
-impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
+impl<'v, T: SimpleValue> AValueDyn<'v> for Wrapper<Simple, T>
 where
     'v: 'static,
 {
@@ -343,7 +343,7 @@ where
     }
 }
 
-impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
+impl<'v, T: ComplexValue<'v>> AValueDyn<'v> for Wrapper<Complex, T> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Self>()
     }
@@ -382,7 +382,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
 #[display(fmt = "BlackHole")]
 pub(crate) struct BlackHole(pub(crate) usize);
 
-impl<'v> AValue<'v> for BlackHole {
+impl<'v> AValueDyn<'v> for BlackHole {
     fn memory_size(&self) -> usize {
         self.0
     }
