@@ -83,6 +83,25 @@ pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
     &DATA.header
 };
 
+/// Sized counterpart of [`AValueDyn`].
+pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
+    fn memory_size(&self) -> usize;
+
+    unsafe fn heap_freeze(
+        &self,
+        me: *mut AValueHeader,
+        freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue>;
+
+    unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
+
+    fn unpack_str(&self) -> Option<&str> {
+        self.unpack_starlark_str().map(|x| x.unpack())
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
+}
+
 /// A trait that covers [`StarlarkValue`].
 /// If you need a real [`StarlarkValue`] see [`AsStarlarkValue`](crate::values::AsStarlarkValue).
 pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
@@ -105,6 +124,32 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
+}
+
+impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
+    fn memory_size(&self) -> usize {
+        self.memory_size()
+    }
+
+    unsafe fn heap_freeze(
+        &self,
+        me: *mut AValueHeader,
+        freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue> {
+        self.heap_freeze(me, freezer)
+    }
+
+    unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+        self.heap_copy(me, tracer)
+    }
+
+    fn unpack_str(&self) -> Option<&str> {
+        self.unpack_str()
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        self.unpack_starlark_str()
+    }
 }
 
 impl<'v> dyn AValueDyn<'v> {
@@ -186,7 +231,7 @@ fn clear_lsb(x: usize) -> usize {
     x & !1
 }
 
-impl<'v, T: StarlarkValue<'v>> AValueDyn<'v> for Wrapper<Basic, T> {
+impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Self>()
     }
@@ -207,7 +252,7 @@ impl<'v, T: StarlarkValue<'v>> AValueDyn<'v> for Wrapper<Basic, T> {
     }
 }
 
-impl<'v> AValueDyn<'v> for Wrapper<Direct, StarlarkStr> {
+impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
     fn memory_size(&self) -> usize {
         mem::size_of::<StarlarkStr>() + self.1.len()
     }
@@ -239,7 +284,7 @@ impl<'v> AValueDyn<'v> for Wrapper<Direct, StarlarkStr> {
     }
 }
 
-impl<'v> AValueDyn<'v> for Wrapper<Direct, Tuple<'v>> {
+impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Tuple>() + self.1.len() * mem::size_of::<Value>()
     }
@@ -290,7 +335,7 @@ impl<'v> AValueDyn<'v> for Wrapper<Direct, Tuple<'v>> {
     }
 }
 
-impl<'v> AValueDyn<'v> for Wrapper<Direct, FrozenTuple> {
+impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
     fn memory_size(&self) -> usize {
         mem::size_of::<FrozenTuple>() + self.1.len() * mem::size_of::<FrozenValue>()
     }
@@ -312,7 +357,7 @@ impl<'v> AValueDyn<'v> for Wrapper<Direct, FrozenTuple> {
     }
 }
 
-impl<'v, T: SimpleValue> AValueDyn<'v> for Wrapper<Simple, T>
+impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
 where
     'v: 'static,
 {
@@ -343,7 +388,7 @@ where
     }
 }
 
-impl<'v, T: ComplexValue<'v>> AValueDyn<'v> for Wrapper<Complex, T> {
+impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
     fn memory_size(&self) -> usize {
         mem::size_of::<Self>()
     }
