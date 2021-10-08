@@ -80,7 +80,7 @@ impl<'v> Value<'v> {
         Self(Pointer::new_unfrozen(x))
     }
 
-    pub(crate) fn new_repr<'a, T: 'a>(x: &'static AValueRepr<T>) -> Self {
+    pub(crate) fn new_repr<T: 'v>(x: &'v AValueRepr<T>) -> Self {
         Self::new_ptr(&x.header)
     }
 
