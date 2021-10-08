@@ -85,7 +85,12 @@ pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
 
 /// Sized counterpart of [`AValueDyn`].
 pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
-    fn memory_size(&self) -> usize;
+    /// Certain types like `Tuple` or `StarlarkStr` have payload array
+    /// placed in a heap after `Self`. This is the type of an element of that array.
+    type ExtraElem: 'v;
+
+    /// Payload array length.
+    fn extra_len(&self) -> usize;
 
     unsafe fn heap_freeze(
         &self,
@@ -128,7 +133,7 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
 
 impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
     fn memory_size(&self) -> usize {
-        self.memory_size()
+        mem::size_of::<A>() + (mem::size_of::<A::ExtraElem>() * self.extra_len())
     }
 
     unsafe fn heap_freeze(
@@ -173,15 +178,15 @@ impl<'v> dyn AValueDyn<'v> {
     }
 }
 
-pub(crate) fn starlark_str(len: usize) -> impl AValueDyn<'static> + Send + Sync {
+pub(crate) fn starlark_str(len: usize) -> impl AValue<'static, ExtraElem = u8> + Send + Sync {
     Wrapper(Direct, unsafe { StarlarkStr::new(len) })
 }
 
-pub(crate) fn tuple_avalue<'v>(len: usize) -> impl AValueDyn<'v> {
+pub(crate) fn tuple_avalue<'v>(len: usize) -> impl AValue<'v, ExtraElem = Value<'v>> {
     Wrapper(Direct, unsafe { Tuple::new(len) })
 }
 
-pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValueDyn<'static> {
+pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValue<'static, ExtraElem = FrozenValue> {
     Wrapper(Direct, unsafe { FrozenTuple::new(len) })
 }
 
@@ -191,11 +196,11 @@ pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValueDyn<'v> {
     x
 }
 
-pub(crate) fn simple(x: impl SimpleValue) -> impl AValueDyn<'static> + Send + Sync {
+pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static, ExtraElem = ()> {
     Wrapper(Simple, x)
 }
 
-pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValueDyn<'v> {
+pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v, ExtraElem = ()> {
     Wrapper(Complex, x)
 }
 
@@ -232,8 +237,10 @@ fn clear_lsb(x: usize) -> usize {
 }
 
 impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
-    fn memory_size(&self) -> usize {
-        mem::size_of::<Self>()
+    type ExtraElem = ();
+
+    fn extra_len(&self) -> usize {
+        0
     }
 
     unsafe fn heap_freeze(
@@ -253,9 +260,12 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
-    fn memory_size(&self) -> usize {
-        mem::size_of::<StarlarkStr>() + self.1.len()
+    type ExtraElem = u8;
+
+    fn extra_len(&self) -> usize {
+        self.1.len()
     }
+
 
     unsafe fn heap_freeze(
         &self,
@@ -285,8 +295,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
-    fn memory_size(&self) -> usize {
-        mem::size_of::<Tuple>() + self.1.len() * mem::size_of::<Value>()
+    type ExtraElem = Value<'v>;
+
+    fn extra_len(&self) -> usize {
+        self.1.len()
     }
 
     unsafe fn heap_freeze(
@@ -300,7 +312,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         let content = ((*me).as_repr::<Self>()).payload.1.content();
 
         let (fv, r, extra) =
-            freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>, FrozenValue>(content.len());
+            freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>>(content.len());
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
 
         // TODO: this allocation is unnecessary
@@ -317,7 +329,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         AValueForward::assert_does_not_overwrite_extra::<Self>();
         let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
 
-        let (v, r, extra) = tracer.reserve_with_extra::<Self, Value>(content.len());
+        let (v, r, extra) = tracer.reserve_with_extra::<Self>(content.len());
         let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
 
         debug_assert_eq!(content.len(), x.1.len());
@@ -336,8 +348,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
-    fn memory_size(&self) -> usize {
-        mem::size_of::<FrozenTuple>() + self.1.len() * mem::size_of::<FrozenValue>()
+    type ExtraElem = FrozenValue;
+
+    fn extra_len(&self) -> usize {
+        self.1.len()
     }
 
     unsafe fn heap_freeze(
@@ -361,8 +375,10 @@ impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
 where
     'v: 'static,
 {
-    fn memory_size(&self) -> usize {
-        mem::size_of::<Self>()
+    type ExtraElem = ();
+
+    fn extra_len(&self) -> usize {
+        0
     }
 
     unsafe fn heap_freeze(
@@ -389,8 +405,10 @@ where
 }
 
 impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
-    fn memory_size(&self) -> usize {
-        mem::size_of::<Self>()
+    type ExtraElem = ();
+
+    fn extra_len(&self) -> usize {
+        0
     }
 
     unsafe fn heap_freeze(

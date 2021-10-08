@@ -43,7 +43,7 @@ use crate::{
         layout::{
             arena::{AValueHeader, Arena, HeapSummary, Reservation, WhichBump},
             avalue::{
-                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValueDyn,
+                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue,
                 VALUE_EMPTY_TUPLE,
             },
             constant::constant_string,
@@ -179,7 +179,11 @@ impl FrozenHeap {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
 
-    fn alloc_raw(&self, which_bump: WhichBump, x: impl AValueDyn<'static>) -> FrozenValue {
+    fn alloc_raw(
+        &self,
+        which_bump: WhichBump,
+        x: impl AValue<'static, ExtraElem = ()>,
+    ) -> FrozenValue {
         let v: &AValueHeader = self.arena.alloc(which_bump, x);
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
@@ -190,9 +194,7 @@ impl FrozenHeap {
         if let Some(x) = constant_string(x) {
             x
         } else {
-            let (v, extra) = self
-                .arena
-                .alloc_extra_non_drop::<_, u8>(starlark_str(x.len()), x.len());
+            let (v, extra) = self.arena.alloc_extra_non_drop(starlark_str(x.len()));
             MaybeUninit::write_slice(extra, x.as_bytes());
             FrozenValue::new_repr(unsafe { cast::ptr_lifetime(&*v) })
         }
@@ -211,10 +213,9 @@ impl FrozenHeap {
         }
 
         unsafe {
-            let (avalue, extra) = self.arena.alloc_extra_non_drop::<_, FrozenValue>(
-                frozen_tuple_avalue(elems.len()),
-                elems.len(),
-            );
+            let (avalue, extra) = self
+                .arena
+                .alloc_extra_non_drop::<_>(frozen_tuple_avalue(elems.len()));
             MaybeUninit::write_slice(extra, elems);
             FrozenValue::new_repr(&*avalue)
         }
@@ -289,23 +290,23 @@ impl Freezer {
         val.alloc_frozen_value(&self.heap)
     }
 
-    pub(crate) fn reserve<'v, 'v2: 'v, T: AValueDyn<'v2>>(
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2, ExtraElem = ()>>(
         &'v self,
     ) -> (FrozenValue, Reservation<'v, 'v2, T>) {
-        let (fv, r, extra) = self.reserve_with_extra::<T, ()>(0);
+        let (fv, r, extra) = self.reserve_with_extra::<T>(0);
         debug_assert!(extra.is_empty());
         (fv, r)
     }
 
-    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         extra_len: usize,
     ) -> (
         FrozenValue,
         Reservation<'v, 'v2, T>,
-        &'v mut [MaybeUninit<E>],
+        &'v mut [MaybeUninit<T::ExtraElem>],
     ) {
-        let (r, extra) = self.heap.arena.reserve_with_extra::<T, E>(extra_len);
+        let (r, extra) = self.heap.arena.reserve_with_extra::<T>(extra_len);
         let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (fv, r, extra)
     }
@@ -354,7 +355,7 @@ impl Heap {
     fn alloc_raw<'v, 'v2: 'v2>(
         &'v self,
         which_bump: WhichBump,
-        x: impl AValueDyn<'v2>,
+        x: impl AValue<'v2, ExtraElem = ()>,
     ) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
@@ -373,7 +374,7 @@ impl Heap {
     ) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let (v, extra) = arena.alloc_extra_non_drop::<_, u8>(starlark_str(len), len);
+        let (v, extra) = arena.alloc_extra_non_drop::<_>(starlark_str(len));
         init(extra.as_mut_ptr() as *mut u8);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
@@ -418,8 +419,7 @@ impl Heap {
 
         unsafe {
             let arena = self.arena.borrow();
-            let (avalue, extra) =
-                arena.alloc_extra_non_drop::<_, Value>(tuple_avalue(elems.len()), elems.len());
+            let (avalue, extra) = arena.alloc_extra_non_drop(tuple_avalue(elems.len()));
             MaybeUninit::write_slice(extra, elems);
             Value::new_repr(&*avalue)
         }
@@ -516,27 +516,29 @@ impl<'v> Tracer<'v> {
         *value = self.adjust(*value)
     }
 
-    pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValueDyn<'v2>>(
+    pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2, ExtraElem = ()>>(
         &'a self,
     ) -> (Value<'v>, Reservation<'a, 'v2, T>) {
-        let (v, r, extra) = self.reserve_with_extra::<T, ()>(0);
+        let (v, r, extra) = self.reserve_with_extra::<T>(0);
         debug_assert!(extra.is_empty());
         (v, r)
     }
 
-    pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValueDyn<'v2>, E>(
+    pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
         &'a self,
         extra_len: usize,
-    ) -> (Value<'v>, Reservation<'a, 'v2, T>, &'a mut [MaybeUninit<E>]) {
-        let (r, extra) = self.arena.reserve_with_extra::<T, E>(extra_len);
+    ) -> (
+        Value<'v>,
+        Reservation<'a, 'v2, T>,
+        &'a mut [MaybeUninit<T::ExtraElem>],
+    ) {
+        let (r, extra) = self.arena.reserve_with_extra::<T>(extra_len);
         let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (v, r, extra)
     }
 
     pub(crate) fn alloc_str(&self, x: &str) -> Value<'v> {
-        let (v, extra) = self
-            .arena
-            .alloc_extra_non_drop::<_, u8>(starlark_str(x.len()), x.len());
+        let (v, extra) = self.arena.alloc_extra_non_drop(starlark_str(x.len()));
         MaybeUninit::write_slice(extra, x.as_bytes());
         Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
     }

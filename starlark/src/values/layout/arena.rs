@@ -40,7 +40,7 @@ use bumpalo::Bump;
 use either::Either;
 use gazebo::prelude::*;
 
-use crate::values::layout::avalue::{AValueDyn, BlackHole};
+use crate::values::layout::avalue::{AValue, AValueDyn, BlackHole};
 
 #[derive(Default)]
 pub(crate) struct Arena {
@@ -130,10 +130,13 @@ impl Arena {
         self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
-    fn alloc_uninit<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
+    fn alloc_uninit<'v, 'v2: 'v, T: AValue<'v2>>(
         bump: &'v Bump,
         extra_len: usize,
-    ) -> (&'v mut MaybeUninit<AValueRepr<T>>, &'v mut [MaybeUninit<E>]) {
+    ) -> (
+        &'v mut MaybeUninit<AValueRepr<T>>,
+        &'v mut [MaybeUninit<T::ExtraElem>],
+    ) {
         assert!(
             mem::align_of::<T>() <= mem::align_of::<AValueHeader>(),
             "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
@@ -142,7 +145,7 @@ impl Arena {
             mem::align_of::<AValueHeader>()
         );
 
-        let extra_bytes = extra_len * mem::size_of::<E>();
+        let extra_bytes = extra_len * mem::size_of::<T::ExtraElem>();
 
         // We require at least usize space available for overwrite/blackhole
         let size = mem::size_of::<AValueHeader>()
@@ -158,16 +161,16 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         extra_len: usize,
-    ) -> (Reservation<'v, 'v2, T>, &'v mut [MaybeUninit<E>]) {
-        let (p, extra) = Self::alloc_uninit::<T, E>(&self.drop, extra_len);
+    ) -> (Reservation<'v, 'v2, T>, &'v mut [MaybeUninit<T::ExtraElem>]) {
+        let (p, extra) = Self::alloc_uninit::<T>(&self.drop, extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
 
-        let extra_bytes = extra_len * mem::size_of::<E>();
+        let extra_bytes = extra_len * mem::size_of::<T::ExtraElem>();
 
         let x = BlackHole(mem::size_of::<T>() + extra_bytes);
         let p = unsafe {
@@ -193,11 +196,12 @@ impl Arena {
     }
 
     /// Allocate a type `T`.
-    pub(crate) fn alloc<'v, 'v2: 'v, T: AValueDyn<'v2>>(
+    pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2, ExtraElem = ()>>(
         &'v self,
         which_bump: WhichBump,
         x: T,
     ) -> &'v AValueHeader {
+        debug_assert!(x.extra_len() == 0);
         let bump = match which_bump {
             WhichBump::NonDrop => {
                 assert!(!mem::needs_drop::<T>());
@@ -205,7 +209,7 @@ impl Arena {
             }
             WhichBump::Drop => &self.drop,
         };
-        let (p, extra) = Self::alloc_uninit::<T, ()>(bump, 0);
+        let (p, extra) = Self::alloc_uninit::<T>(bump, 0);
         debug_assert!(extra.is_empty());
         let p = p.write(AValueRepr {
             header: AValueHeader::new(&x),
@@ -217,14 +221,13 @@ impl Arena {
     /// Allocate a type `T` plus `extra` bytes.
     ///
     /// The type `T` will never be dropped, so had better not do any memory allocation.
-    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValueDyn<'v2>, E>(
+    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         x: T,
-        extra_len: usize,
-    ) -> (*mut AValueRepr<T>, &'v mut [MaybeUninit<E>]) {
+    ) -> (*mut AValueRepr<T>, &'v mut [MaybeUninit<T::ExtraElem>]) {
         assert!(!mem::needs_drop::<T>());
 
-        let (p, extra) = Self::alloc_uninit::<T, E>(&self.non_drop, extra_len);
+        let (p, extra) = Self::alloc_uninit::<T>(&self.non_drop, x.extra_len());
         let p = p.write(AValueRepr {
             header: AValueHeader::new(&x),
             payload: x,
@@ -433,15 +436,12 @@ mod test {
         s
     }
 
-    fn mk_str(x: &str) -> impl AValueDyn<'static> {
+    fn mk_str(x: &str) -> impl AValue<'static, ExtraElem = ()> {
         simple(StarlarkAny::new(x.to_owned()))
     }
 
-    fn reserve_str<'v, T: AValueDyn<'static>>(
-        arena: &'v Arena,
-        _: &T,
-    ) -> Reservation<'v, 'static, T> {
-        arena.reserve_with_extra::<T, ()>(0).0
+    fn reserve_str<'v, T: AValue<'static>>(arena: &'v Arena, _: &T) -> Reservation<'v, 'static, T> {
+        arena.reserve_with_extra::<T>(0).0
     }
 
     #[test]
