@@ -28,7 +28,6 @@
 
 use std::{
     alloc::Layout,
-    any::TypeId,
     cmp,
     collections::HashMap,
     intrinsics::copy_nonoverlapping,
@@ -82,19 +81,16 @@ pub(crate) struct AValueForward {
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
-pub(crate) struct Reservation<'v> {
-    typ: TypeId,                  // The type of T
-    pointer: *mut AValueRepr<()>, // Secretly AValueObject<T>
-    phantom: PhantomData<&'v ()>,
+pub(crate) struct Reservation<'v, 'v2, T: AValue<'v2>> {
+    pointer: *mut AValueRepr<T>, // Secretly AValueObject<T>
+    phantom: PhantomData<(&'v (), &'v2 T)>,
 }
 
-impl<'v> Reservation<'v> {
-    fn do_fill<'v2: 'v, T: AValue<'v2>>(&self, x: T) {
-        assert_eq!(self.typ, T::static_type_id_of_value());
+impl<'v, 'v2, T: AValue<'v2>> Reservation<'v, 'v2, T> {
+    pub(crate) fn do_fill(&mut self, x: T) {
         unsafe {
-            let p = self.pointer as *mut AValueRepr<T>;
             ptr::write(
-                p,
+                self.pointer,
                 AValueRepr {
                     header: AValueHeader::new(&x),
                     payload: x,
@@ -103,11 +99,11 @@ impl<'v> Reservation<'v> {
         }
     }
 
-    pub(crate) fn fill<'v2: 'v, T: AValue<'v2>>(self, x: T) {
-        self.do_fill(x);
+    pub(crate) fn fill(mut self, x: T) {
+        self.do_fill(x)
     }
 
-    pub(crate) fn fill_with_extra<'v2: 'v, T: AValue<'v2>, E: Copy>(self, x: T, extra: &[E]) {
+    pub(crate) fn fill_with_extra<E: Copy>(mut self, x: T, extra: &[E]) {
         self.do_fill(x);
         unsafe {
             let p = self.pointer as *mut AValueRepr<T>;
@@ -160,7 +156,7 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v> {
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v, 'v2, T> {
         self.reserve_with_extra::<T>(0)
     }
 
@@ -168,7 +164,7 @@ impl Arena {
     pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         extra: usize,
-    ) -> Reservation<'v> {
+    ) -> Reservation<'v, 'v2, T> {
         let p = Self::alloc_empty::<T>(&self.drop, extra);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
@@ -185,8 +181,7 @@ impl Arena {
         };
 
         Reservation {
-            typ: T::static_type_id_of_value(),
-            pointer: p as *mut AValueRepr<()>,
+            pointer: p as *mut AValueRepr<T>,
             phantom: PhantomData,
         }
     }
@@ -459,11 +454,8 @@ mod test {
         simple(StarlarkAny::new(x.to_owned()))
     }
 
-    fn reserve_str<'v>(arena: &'v Arena) -> Reservation<'v> {
-        fn f<'v, 'v2: 'v, T: AValue<'v2>>(arena: &'v Arena, _: T) -> Reservation<'v> {
-            arena.reserve::<T>()
-        }
-        f(arena, mk_str(""))
+    fn reserve_str<'v, T: AValue<'static>>(arena: &'v Arena, _: &T) -> Reservation<'v, 'static, T> {
+        arena.reserve::<T>()
     }
 
     #[test]
@@ -475,7 +467,7 @@ mod test {
         let mut reserved = Vec::new();
         for i in 0..LIMIT {
             if i % 100 == 0 {
-                let r = reserve_str(&arena);
+                let r = reserve_str(&arena, &mk_str(""));
                 reserved.push((r, i));
             } else {
                 arena.alloc(WhichBump::Drop, mk_str(&i.to_string()));
@@ -509,7 +501,7 @@ mod test {
         let mut arena = Arena::default();
         arena.alloc(WhichBump::Drop, mk_str("test"));
         // reserve but do not fill!
-        reserve_str(&arena);
+        reserve_str(&arena, &mk_str(""));
         arena.alloc(WhichBump::Drop, mk_str("hello"));
         let mut res = Vec::new();
         arena.for_each_ordered(|x| res.push(x));

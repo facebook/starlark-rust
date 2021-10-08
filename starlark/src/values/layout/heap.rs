@@ -294,7 +294,9 @@ impl Freezer {
         val.alloc_frozen_value(&self.heap)
     }
 
-    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> (FrozenValue, Reservation<'v>) {
+    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+    ) -> (FrozenValue, Reservation<'v, 'v2, T>) {
         let r = self.heap.arena.reserve::<T>();
         let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (fv, r)
@@ -503,14 +505,14 @@ impl<'v> Tracer<'v> {
 
     pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
         &'a self,
-    ) -> (Value<'v>, Reservation<'a>) {
+    ) -> (Value<'v>, Reservation<'a, 'v2, T>) {
         self.reserve_with_extra::<T>(0)
     }
 
     pub(crate) fn reserve_with_extra<'a, 'v2: 'v + 'a, T: AValue<'v2>>(
         &'a self,
         extra: usize,
-    ) -> (Value<'v>, Reservation<'a>) {
+    ) -> (Value<'v>, Reservation<'a, 'v2, T>) {
         let r = self.arena.reserve_with_extra::<T>(extra);
         let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (v, r)

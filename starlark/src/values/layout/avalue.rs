@@ -322,7 +322,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
         let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
         let res = x.1.freeze(freezer)?;
-        r.fill(simple(res));
+        r.fill(Wrapper(Simple, res));
         if TypeId::of::<T::Frozen>() == TypeId::of::<FrozenDef>() {
             let frozen_def = fv.downcast_frozen_ref().unwrap();
             freezer.frozen_defs.borrow_mut().push(frozen_def);
