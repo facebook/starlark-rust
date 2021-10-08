@@ -101,7 +101,7 @@ impl Alloca {
 
         let mut start = self.alloc.get();
         let mut stop = start.wrapping_add(size_words);
-        if stop >= self.end.get() {
+        if stop > self.end.get() {
             self.allocate_more(layout);
             start = self.alloc.get();
             stop = start.wrapping_add(size_words);
