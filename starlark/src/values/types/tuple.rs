@@ -129,7 +129,7 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
         unsafe { slice::from_raw_parts(self.content.as_ptr(), self.len) }
     }
 
-    fn content_mut(&mut self) -> &mut [V] {
+    pub(crate) fn content_mut(&mut self) -> &mut [V] {
         unsafe { slice::from_raw_parts_mut(self.content.as_mut_ptr(), self.len) }
     }
 

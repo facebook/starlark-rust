@@ -33,7 +33,7 @@ use crate::{
     values::{
         bool::StarlarkBool,
         docs::DocItem,
-        layout::arena::{AValueHeader, AValueRepr},
+        layout::arena::{AValueForward, AValueHeader, AValueRepr},
         none::NoneType,
         string::StarlarkStr,
         types::tuple::{FrozenTuple, Tuple},
@@ -250,8 +250,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     ) -> anyhow::Result<FrozenValue> {
         debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
 
-        // This could be done without extra allocation, but it is not trivial to do that safely.
-        let content = self.1.content().to_vec();
+        AValueForward::assert_does_not_overwrite_extra::<Self>();
+        let content = ((*me).as_repr::<Self>()).payload.1.content();
 
         let (fv, r) = freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>>(
             mem::size_of::<Value>() * content.len(),
@@ -271,18 +271,18 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
 
-        // This could be done without extra allocation, but it is not trivial to do that safely.
-        let mut content = self.1.content().to_vec();
+        AValueForward::assert_does_not_overwrite_extra::<Self>();
+        let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
 
         let (v, r) = tracer.reserve_with_extra::<Self>(mem::size_of::<Value>() * content.len());
         let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
 
         debug_assert_eq!(content.len(), x.1.len());
 
-        for elem in &mut content {
+        for elem in content.iter_mut() {
             tracer.trace(elem);
         }
-        r.fill_with_extra(x, &content);
+        r.fill_with_extra(x, content);
         v
     }
 

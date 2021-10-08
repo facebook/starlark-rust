@@ -78,6 +78,12 @@ pub(crate) struct AValueForward {
     object_size: usize,
 }
 
+impl AValueForward {
+    pub(crate) fn assert_does_not_overwrite_extra<'v, T: AValue<'v>>() {
+        assert!(mem::size_of::<AValueForward>() <= mem::size_of::<AValueRepr<T>>());
+    }
+}
+
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
@@ -386,6 +392,11 @@ impl AValueHeader {
     /// Cast header pointer to repr pointer.
     pub(crate) unsafe fn as_repr<T>(&self) -> &AValueRepr<T> {
         &*(self as *const AValueHeader as *const AValueRepr<T>)
+    }
+
+    /// Cast header pointer to repr pointer.
+    pub(crate) unsafe fn as_repr_mut<T>(&mut self) -> &mut AValueRepr<T> {
+        &mut *(self as *mut AValueHeader as *mut AValueRepr<T>)
     }
 }
 
