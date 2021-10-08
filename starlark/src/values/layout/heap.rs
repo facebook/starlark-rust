@@ -285,10 +285,6 @@ impl Freezer {
         self.heap.into_ref()
     }
 
-    pub(crate) fn heap(&self) -> &FrozenHeap {
-        &self.heap
-    }
-
     /// Allocate a new value while freezing. Usually not a great idea.
     pub fn alloc<'v, T: AllocFrozenValue>(&'v self, val: T) -> FrozenValue {
         val.alloc_frozen_value(&self.heap)
@@ -297,7 +293,14 @@ impl Freezer {
     pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
     ) -> (FrozenValue, Reservation<'v, 'v2, T>) {
-        let r = self.heap.arena.reserve::<T>();
+        self.reserve_with_extra(0)
+    }
+
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
+        &'v self,
+        extra: usize,
+    ) -> (FrozenValue, Reservation<'v, 'v2, T>) {
+        let r = self.heap.arena.reserve_with_extra::<T>(extra);
         let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
         (fv, r)
     }

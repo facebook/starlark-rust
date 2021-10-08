@@ -156,11 +156,6 @@ impl Arena {
     }
 
     // Reservation should really be an incremental type
-    pub(crate) fn reserve<'v, 'v2: 'v, T: AValue<'v2>>(&'v self) -> Reservation<'v, 'v2, T> {
-        self.reserve_with_extra::<T>(0)
-    }
-
-    // Reservation should really be an incremental type
     pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         extra: usize,
@@ -455,7 +450,7 @@ mod test {
     }
 
     fn reserve_str<'v, T: AValue<'static>>(arena: &'v Arena, _: &T) -> Reservation<'v, 'static, T> {
-        arena.reserve::<T>()
+        arena.reserve_with_extra::<T>(0)
     }
 
     #[test]

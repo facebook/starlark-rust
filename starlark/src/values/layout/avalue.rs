@@ -237,11 +237,24 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
 
         // This could be done without extra allocation, but it is not trivial to do that safely.
-        let frozen_values = self.1.content().try_map(|v| freezer.freeze(*v))?;
-        let fv = freezer.heap().alloc_tuple(&frozen_values);
+        let content = self.1.content().to_vec();
+
+        let (fv, r) = freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>>(
+            mem::size_of::<Value>() * content.len(),
+        );
         unsafe {
             me.overwrite::<Self>(fv.0.ptr_value())
         };
+
+        // TODO: this allocation is unnecessary
+        let frozen_values = content.try_map(|v| freezer.freeze(*v))?;
+        unsafe {
+            r.fill_with_extra(
+                Wrapper(Direct, FrozenTuple::new(content.len())),
+                &frozen_values,
+            );
+        }
+
         Ok(fv)
     }
 
@@ -698,5 +711,24 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<M
     }
     fn set_attr(&self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
         self.1.set_attr(attribute, new_value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{environment::Module, values::list::List};
+
+    #[test]
+    fn tuple_cycle_freeze() {
+        let module = Module::new();
+        let list = module.heap().alloc(List::new(Vec::new()));
+        let tuple = module.heap().alloc_tuple(&[list]);
+        List::from_value_mut(list)
+            .unwrap()
+            .unwrap()
+            .content
+            .push(tuple);
+        module.set("t", tuple);
+        module.freeze().unwrap();
     }
 }
