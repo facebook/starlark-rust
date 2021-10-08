@@ -30,10 +30,10 @@ use std::{
     alloc::Layout,
     cmp,
     collections::HashMap,
-    intrinsics::copy_nonoverlapping,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
+    slice,
 };
 
 use bumpalo::Bump;
@@ -93,7 +93,7 @@ pub(crate) struct Reservation<'v, 'v2, T: AValue<'v2>> {
 }
 
 impl<'v, 'v2, T: AValue<'v2>> Reservation<'v, 'v2, T> {
-    pub(crate) fn do_fill(&mut self, x: T) {
+    pub(crate) fn fill(self, x: T) {
         unsafe {
             ptr::write(
                 self.pointer,
@@ -102,18 +102,6 @@ impl<'v, 'v2, T: AValue<'v2>> Reservation<'v, 'v2, T> {
                     payload: x,
                 },
             );
-        }
-    }
-
-    pub(crate) fn fill(mut self, x: T) {
-        self.do_fill(x)
-    }
-
-    pub(crate) fn fill_with_extra<E: Copy>(mut self, x: T, extra: &[E]) {
-        self.do_fill(x);
-        unsafe {
-            let p = self.pointer as *mut AValueRepr<T>;
-            (*p).write_extra(extra);
         }
     }
 
@@ -145,7 +133,7 @@ impl Arena {
     fn alloc_uninit<'v, 'v2: 'v, T: AValue<'v2>, E>(
         bump: &'v Bump,
         extra_len: usize,
-    ) -> &'v mut MaybeUninit<AValueRepr<T>> {
+    ) -> (&'v mut MaybeUninit<AValueRepr<T>>, &'v mut [MaybeUninit<E>]) {
         assert!(
             mem::align_of::<T>() <= mem::align_of::<AValueHeader>(),
             "Unexpected alignment in Starlark arena. Type {} has alignment {}, expected <= {}",
@@ -160,16 +148,21 @@ impl Arena {
         let size = mem::size_of::<AValueHeader>()
             + cmp::max(mem::size_of::<T>() + extra_bytes, mem::size_of::<usize>());
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
-        let p = bump.alloc_layout(layout);
-        unsafe { &mut *(p.as_ptr() as *mut MaybeUninit<AValueRepr<T>>) }
+        let p = bump.alloc_layout(layout).as_ptr();
+        unsafe {
+            let repr = &mut *(p as *mut MaybeUninit<AValueRepr<T>>);
+            let extra =
+                slice::from_raw_parts_mut((p as *mut AValueRepr<T>).add(1) as *mut _, extra_len);
+            (repr, extra)
+        }
     }
 
     // Reservation should really be an incremental type
     pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>, E>(
         &'v self,
         extra_len: usize,
-    ) -> Reservation<'v, 'v2, T> {
-        let p = Self::alloc_uninit::<T, E>(&self.drop, extra_len);
+    ) -> (Reservation<'v, 'v2, T>, &'v mut [MaybeUninit<E>]) {
+        let (p, extra) = Self::alloc_uninit::<T, E>(&self.drop, extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
@@ -190,10 +183,13 @@ impl Arena {
         });
         let p = unsafe { transmute!(&mut AValueRepr<BlackHole>, &mut AValueRepr<T>, p) };
 
-        Reservation {
-            pointer: p,
-            phantom: PhantomData,
-        }
+        (
+            Reservation {
+                pointer: p,
+                phantom: PhantomData,
+            },
+            extra,
+        )
     }
 
     /// Allocate a type `T`.
@@ -209,7 +205,8 @@ impl Arena {
             }
             WhichBump::Drop => &self.drop,
         };
-        let p = Self::alloc_uninit::<T, ()>(bump, 0);
+        let (p, extra) = Self::alloc_uninit::<T, ()>(bump, 0);
+        debug_assert!(extra.is_empty());
         let p = p.write(AValueRepr {
             header: AValueHeader::new(&x),
             payload: x,
@@ -224,14 +221,15 @@ impl Arena {
         &'v self,
         x: T,
         extra_len: usize,
-    ) -> *mut AValueRepr<T> {
+    ) -> (*mut AValueRepr<T>, &'v mut [MaybeUninit<E>]) {
         assert!(!mem::needs_drop::<T>());
 
-        let p = Self::alloc_uninit::<T, E>(&self.non_drop, extra_len);
-        p.write(AValueRepr {
+        let (p, extra) = Self::alloc_uninit::<T, E>(&self.non_drop, extra_len);
+        let p = p.write(AValueRepr {
             header: AValueHeader::new(&x),
             payload: x,
-        })
+        });
+        (p, extra)
     }
 
     fn iter_chunk<'a>(chunk: &'a [MaybeUninit<u8>], mut f: impl FnMut(&'a AValueHeader)) {
@@ -408,25 +406,6 @@ impl<T> AValueRepr<T> {
             payload,
         }
     }
-
-    pub unsafe fn write_extra<E: Copy>(&self, extra: &[E]) {
-        debug_assert_eq!(
-            self.header.unpack().memory_size(),
-            mem::size_of::<T>() + (extra.len() * mem::size_of::<E>())
-        );
-        debug_assert!(Layout::new::<T>().padding_needed_for(mem::align_of::<E>()) == 0);
-        copy_nonoverlapping(extra.as_ptr(), self.get_extra(), extra.len());
-    }
-
-    pub unsafe fn get_extra<E: Copy>(&self) -> *mut E {
-        // sanity check
-        assert_ne!(mem::size_of::<T>(), 0);
-
-        let p = self as *const AValueRepr<T> as *mut u8;
-        let extra = p.add(mem::size_of::<AValueRepr<T>>()) as *mut E;
-        debug_assert!(extra as usize % mem::align_of::<E>() == 0);
-        extra
-    }
 }
 
 impl Drop for Arena {
@@ -459,7 +438,7 @@ mod test {
     }
 
     fn reserve_str<'v, T: AValue<'static>>(arena: &'v Arena, _: &T) -> Reservation<'v, 'static, T> {
-        arena.reserve_with_extra::<T, ()>(0)
+        arena.reserve_with_extra::<T, ()>(0).0
     }
 
     #[test]

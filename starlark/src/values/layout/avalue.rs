@@ -20,6 +20,7 @@ use std::{
     cmp::Ordering,
     fmt::{Debug, Display},
     mem,
+    mem::MaybeUninit,
     ptr::metadata,
 };
 
@@ -253,16 +254,14 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         AValueForward::assert_does_not_overwrite_extra::<Self>();
         let content = ((*me).as_repr::<Self>()).payload.1.content();
 
-        let (fv, r) =
+        let (fv, r, extra) =
             freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>, FrozenValue>(content.len());
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
 
         // TODO: this allocation is unnecessary
         let frozen_values = content.try_map(|v| freezer.freeze(*v))?;
-        r.fill_with_extra(
-            Wrapper(Direct, FrozenTuple::new(content.len())),
-            &frozen_values,
-        );
+        r.fill(Wrapper(Direct, FrozenTuple::new(content.len())));
+        MaybeUninit::write_slice(extra, &frozen_values);
 
         Ok(fv)
     }
@@ -273,7 +272,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         AValueForward::assert_does_not_overwrite_extra::<Self>();
         let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
 
-        let (v, r) = tracer.reserve_with_extra::<Self, Value>(content.len());
+        let (v, r, extra) = tracer.reserve_with_extra::<Self, Value>(content.len());
         let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
 
         debug_assert_eq!(content.len(), x.1.len());
@@ -281,7 +280,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         for elem in content.iter_mut() {
             tracer.trace(elem);
         }
-        r.fill_with_extra(x, content);
+        r.fill(x);
+        MaybeUninit::write_slice(extra, content);
         v
     }
 

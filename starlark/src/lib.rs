@@ -360,6 +360,7 @@
 #![feature(iter_advance_by)]
 #![feature(maybe_uninit_extra)]
 #![feature(maybe_uninit_slice)]
+#![feature(maybe_uninit_write_slice)]
 #![feature(ptr_metadata)]
 #![feature(thread_local)]
 #![feature(try_blocks)]
