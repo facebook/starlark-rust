@@ -368,14 +368,14 @@ impl AValueHeader {
 
     /// After performing the overwrite any existing pointers to this value
     /// are corrupted.
-    pub unsafe fn overwrite<'v, T>(&'v self, x: usize) -> T {
+    pub unsafe fn overwrite<'v, T: AValue<'v>>(me: *mut AValueHeader, x: usize) -> T {
         assert!(x & 1 == 0, "Can't have the lowest bit set");
-        assert_eq!(self.0.layout(), Layout::new::<T>());
+        assert_eq!((*me).0.layout(), Layout::new::<T>());
 
-        let sz = self.unpack().memory_size();
-        let p = self as *const AValueHeader as *const AValueRepr<T>;
+        let sz = (*me).unpack().memory_size();
+        let p = me as *const AValueRepr<T>;
         let res = ptr::read(p).payload;
-        let p = self as *const AValueHeader as *mut AValueForward;
+        let p = me as *mut AValueForward;
         *p = AValueForward {
             forward_ptr: x | 1,
             object_size: sz,

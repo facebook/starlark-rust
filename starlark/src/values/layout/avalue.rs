@@ -89,9 +89,9 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> {
     // Included to allow unsized types to live on the heap.
     fn memory_size(&self) -> usize;
 
-    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
+    fn heap_freeze(&self, me: *mut AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue>;
 
-    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
+    fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
 
     fn unpack_str(&self) -> Option<&str> {
         self.unpack_starlark_str().map(|x| x.unpack())
@@ -184,10 +184,14 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
         mem::size_of::<Self>()
     }
 
-    fn heap_freeze(&self, _me: &AValueHeader, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(
+        &self,
+        _me: *mut AValueHeader,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue> {
         unreachable!("Basic types don't appear in the heap")
     }
-    fn heap_copy(&self, _me: &AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!("Basic types don't appear in the heap")
     }
 
@@ -201,24 +205,24 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         mem::size_of::<StarlarkStr>() + self.1.len()
     }
 
-    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: *mut AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         debug_assert!(self.1.len() > 1, "short strings are allocated statically");
 
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
         unsafe {
-            me.overwrite::<Self>(fv.0.ptr_value())
+            AValueHeader::overwrite::<Self>(me, fv.0.ptr_value())
         };
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         debug_assert!(self.1.len() > 1, "short strings are allocated statically");
 
         let s = self.1.unpack();
         let v = tracer.alloc_str(s);
         unsafe {
-            me.overwrite::<Self>(v.0.ptr_value() & !1)
+            AValueHeader::overwrite::<Self>(me, v.0.ptr_value() & !1)
         };
         v
     }
@@ -233,7 +237,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         mem::size_of::<Tuple>() + self.1.len() * mem::size_of::<Value>()
     }
 
-    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: *mut AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
 
         // This could be done without extra allocation, but it is not trivial to do that safely.
@@ -243,7 +247,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
             mem::size_of::<Value>() * content.len(),
         );
         unsafe {
-            me.overwrite::<Self>(fv.0.ptr_value())
+            AValueHeader::overwrite::<Self>(me, fv.0.ptr_value())
         };
 
         // TODO: this allocation is unnecessary
@@ -258,14 +262,14 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         debug_assert!(self.1.len() != 0, "empty tuple is allocated statically");
 
         // This could be done without extra allocation, but it is not trivial to do that safely.
         let mut content = self.1.content().to_vec();
 
         let (v, r) = tracer.reserve_with_extra::<Self>(mem::size_of::<Value>() * content.len());
-        let x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
+        let x = unsafe { AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value())) };
 
         debug_assert_eq!(content.len(), x.1.len());
 
@@ -286,11 +290,15 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
         mem::size_of::<FrozenTuple>() + self.1.len() * mem::size_of::<FrozenValue>()
     }
 
-    fn heap_freeze(&self, _me: &AValueHeader, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(
+        &self,
+        _me: *mut AValueHeader,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue> {
         panic!("already frozen");
     }
 
-    fn heap_copy(&self, _me: &AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         panic!("shouldn't be copying frozen values");
     }
 
@@ -307,16 +315,16 @@ where
         mem::size_of::<Self>()
     }
 
-    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: *mut AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Self>();
-        let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
+        let x = unsafe { AValueHeader::overwrite::<Self>(me, fv.0.ptr_value()) };
         r.fill(x);
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         let (v, r) = tracer.reserve::<Self>();
-        let x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
+        let x = unsafe { AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value())) };
         r.fill(x);
         v
     }
@@ -331,9 +339,9 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         mem::size_of::<Self>()
     }
 
-    fn heap_freeze(&self, me: &AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(&self, me: *mut AValueHeader, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
-        let x = unsafe { me.overwrite::<Self>(fv.0.ptr_value()) };
+        let x = unsafe { AValueHeader::overwrite::<Self>(me, fv.0.ptr_value()) };
         let res = x.1.freeze(freezer)?;
         r.fill(Wrapper(Simple, res));
         if TypeId::of::<T::Frozen>() == TypeId::of::<FrozenDef>() {
@@ -343,9 +351,9 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         Ok(fv)
     }
 
-    fn heap_copy(&self, me: &AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         let (v, r) = tracer.reserve::<Self>();
-        let mut x = unsafe { me.overwrite::<Self>(clear_lsb(v.0.ptr_value())) };
+        let mut x = unsafe { AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value())) };
         // We have to put the forwarding node in _before_ we trace in case there are cycles
         x.1.trace(tracer);
         r.fill(x);
@@ -366,10 +374,14 @@ impl<'v> AValue<'v> for BlackHole {
         self.0
     }
 
-    fn heap_freeze(&self, _me: &AValueHeader, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+    fn heap_freeze(
+        &self,
+        _me: *mut AValueHeader,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue> {
         unreachable!()
     }
-    fn heap_copy(&self, _me: &AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
+    fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!()
     }
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
