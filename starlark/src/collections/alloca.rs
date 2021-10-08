@@ -19,6 +19,7 @@ use std::{
     alloc::{alloc, dealloc, Layout},
     cell::{Cell, RefCell},
     intrinsics::likely,
+    mem,
     mem::MaybeUninit,
     slice,
 };
@@ -30,16 +31,16 @@ pub(crate) struct Alloca {
     // An alternative design would be to bake the <T> into the type, so all allocations are of the same type.
     // Benchmarking that, even if the most optimistic scenario (just reallocating a single element)
     // the performance difference is only 2%, so keep the flexibility of not needing to predeclare the type.
-    alloc: Cell<*mut u8>,
-    end: Cell<*mut u8>,
-    last_size: Cell<usize>,
-    buffers: RefCell<Vec<(*mut u8, Layout)>>,
+    alloc: Cell<*mut usize>,
+    end: Cell<*mut usize>,
+    last_size_words: Cell<usize>,
+    buffers: RefCell<Vec<(*mut usize, Layout)>>,
 }
 
 impl Drop for Alloca {
     fn drop(&mut self) {
         for (ptr, layout) in self.buffers.borrow_mut().drain(0..) {
-            unsafe { dealloc(ptr, layout) }
+            unsafe { dealloc(ptr as *mut u8, layout) }
         }
     }
 }
@@ -51,13 +52,14 @@ impl Alloca {
         Self::with_capacity(INITIAL_SIZE)
     }
 
-    pub fn with_capacity(size: usize) -> Self {
-        let layout = Layout::from_size_align(size, 1).unwrap();
-        let pointer = unsafe { alloc(layout) };
+    pub fn with_capacity(size_bytes: usize) -> Self {
+        let size_words = (size_bytes + (mem::size_of::<usize>() - 1)) / mem::size_of::<usize>();
+        let layout = Layout::array::<usize>(size_words).unwrap();
+        let pointer = unsafe { alloc(layout) as *mut usize };
         Self {
             alloc: Cell::new(pointer),
-            end: Cell::new(pointer.wrapping_add(size)),
-            last_size: Cell::new(size),
+            end: Cell::new(pointer.wrapping_add(size_words)),
+            last_size_words: Cell::new(size_words),
             buffers: RefCell::new(vec![(pointer, layout)]),
         }
     }
@@ -66,7 +68,7 @@ impl Alloca {
         unsafe {
             debug_assert!(self.end.get().offset_from(self.alloc.get()) >= 0);
             debug_assert!(
-                self.end.get().offset_from(self.alloc.get()) as usize <= self.last_size.get()
+                self.end.get().offset_from(self.alloc.get()) as usize <= self.last_size_words.get()
             );
         }
     }
@@ -74,13 +76,15 @@ impl Alloca {
     #[cold]
     #[inline(never)]
     fn allocate_more(&self, want: Layout) {
-        let size = self.last_size.get() * 2 + want.align() + want.size();
-        let layout = Layout::from_size_align(size, 1).unwrap();
-        let pointer = unsafe { alloc(layout) };
+        assert!(want.size() % mem::size_of::<usize>() == 0);
+        assert!(want.align() % mem::size_of::<usize>() == 0);
+        let size_words = self.last_size_words.get() * 2 + want.size() / mem::size_of::<usize>();
+        let layout = Layout::array::<usize>(size_words).unwrap();
+        let pointer = unsafe { alloc(layout) as *mut usize };
         self.buffers.borrow_mut().push((pointer, layout));
         self.alloc.set(pointer);
-        self.last_size.set(size);
-        self.end.set(pointer.wrapping_add(size));
+        self.last_size_words.set(size_words);
+        self.end.set(pointer.wrapping_add(size_words));
     }
 
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
@@ -89,15 +93,18 @@ impl Alloca {
     pub fn alloca_uninit<T, R>(&self, len: usize, f: impl FnOnce(&mut [MaybeUninit<T>]) -> R) -> R {
         self.assert_state();
 
+        assert_eq!(mem::size_of::<T>() % mem::size_of::<usize>(), 0);
+        assert_eq!(mem::align_of::<T>(), mem::size_of::<usize>());
+
         let layout = Layout::array::<T>(len).unwrap();
-        let mut offset = self.alloc.get().align_offset(layout.align());
-        let mut start = self.alloc.get().wrapping_add(offset);
-        let mut stop = start.wrapping_add(layout.size());
+        let size_words = layout.size() / mem::size_of::<usize>();
+
+        let mut start = self.alloc.get();
+        let mut stop = start.wrapping_add(size_words);
         if stop >= self.end.get() {
             self.allocate_more(layout);
-            offset = self.alloc.get().align_offset(layout.align());
-            start = self.alloc.get().wrapping_add(offset);
-            stop = start.wrapping_add(layout.size());
+            start = self.alloc.get();
+            stop = start.wrapping_add(size_words);
         }
         let old = self.alloc.get();
         self.alloc.set(stop);
@@ -146,7 +153,7 @@ mod tests {
                 assert_eq!(ys[0], 18);
                 assert_eq!(ys[200 - 1], 18);
             });
-            a.alloca_fill(3, 1u8, |_| {});
+            a.alloca_fill(3, 1u64, |_| {});
             assert_eq!(xs[2], 8 + 5 + 15);
         })
     }
