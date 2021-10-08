@@ -142,9 +142,9 @@ impl Arena {
         self.drop.chunk_capacity() + self.non_drop.chunk_capacity()
     }
 
-    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>>(
+    fn alloc_empty<'v, 'v2: 'v, T: AValue<'v2>, E>(
         bump: &'v Bump,
-        extra: usize,
+        extra_len: usize,
     ) -> *mut AValueRepr<T> {
         assert!(
             mem::align_of::<T>() <= mem::align_of::<AValueHeader>(),
@@ -153,24 +153,30 @@ impl Arena {
             mem::align_of::<T>(),
             mem::align_of::<AValueHeader>()
         );
+
+        let extra_bytes = extra_len * mem::size_of::<E>();
+
         // We require at least usize space available for overwrite/blackhole
         let size = mem::size_of::<AValueHeader>()
-            + cmp::max(mem::size_of::<T>() + extra, mem::size_of::<usize>());
+            + cmp::max(mem::size_of::<T>() + extra_bytes, mem::size_of::<usize>());
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout);
         p.as_ptr() as *mut AValueRepr<T>
     }
 
     // Reservation should really be an incremental type
-    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
+    pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>, E>(
         &'v self,
-        extra: usize,
+        extra_len: usize,
     ) -> Reservation<'v, 'v2, T> {
-        let p = Self::alloc_empty::<T>(&self.drop, extra);
+        let p = Self::alloc_empty::<T, E>(&self.drop, extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
-        let x = BlackHole(mem::size_of::<T>() + extra);
+
+        let extra_bytes = extra_len * mem::size_of::<E>();
+
+        let x = BlackHole(mem::size_of::<T>() + extra_bytes);
         unsafe {
             ptr::write(
                 p as *mut AValueRepr<BlackHole>,
@@ -200,7 +206,7 @@ impl Arena {
             }
             WhichBump::Drop => &self.drop,
         };
-        let p = Self::alloc_empty::<T>(bump, 0);
+        let p = Self::alloc_empty::<T, ()>(bump, 0);
         unsafe {
             ptr::write(
                 p,
@@ -216,14 +222,14 @@ impl Arena {
     /// Allocate a type `T` plus `extra` bytes.
     ///
     /// The type `T` will never be dropped, so had better not do any memory allocation.
-    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValue<'v2>>(
+    pub(crate) fn alloc_extra_non_drop<'v, 'v2: 'v, T: AValue<'v2>, E>(
         &'v self,
         x: T,
-        extra: usize,
+        extra_len: usize,
     ) -> *mut AValueRepr<T> {
         assert!(!mem::needs_drop::<T>());
 
-        let p = Self::alloc_empty::<T>(&self.non_drop, extra);
+        let p = Self::alloc_empty::<T, E>(&self.non_drop, extra_len);
         unsafe {
             ptr::write(
                 p,
@@ -461,7 +467,7 @@ mod test {
     }
 
     fn reserve_str<'v, T: AValue<'static>>(arena: &'v Arena, _: &T) -> Reservation<'v, 'static, T> {
-        arena.reserve_with_extra::<T>(0)
+        arena.reserve_with_extra::<T, ()>(0)
     }
 
     #[test]

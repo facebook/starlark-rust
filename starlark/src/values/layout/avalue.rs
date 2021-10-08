@@ -253,9 +253,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         AValueForward::assert_does_not_overwrite_extra::<Self>();
         let content = ((*me).as_repr::<Self>()).payload.1.content();
 
-        let (fv, r) = freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>>(
-            mem::size_of::<Value>() * content.len(),
-        );
+        let (fv, r) =
+            freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>, FrozenValue>(content.len());
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
 
         // TODO: this allocation is unnecessary
@@ -274,7 +273,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         AValueForward::assert_does_not_overwrite_extra::<Self>();
         let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
 
-        let (v, r) = tracer.reserve_with_extra::<Self>(mem::size_of::<Value>() * content.len());
+        let (v, r) = tracer.reserve_with_extra::<Self, Value>(content.len());
         let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
 
         debug_assert_eq!(content.len(), x.1.len());
