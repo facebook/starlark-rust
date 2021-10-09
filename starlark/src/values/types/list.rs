@@ -58,7 +58,7 @@ struct ListGen<T>(T);
 #[repr(transparent)]
 pub struct List<'v> {
     /// The data stored by the list.
-    pub content: Vec<Value<'v>>,
+    pub(crate) content: Vec<Value<'v>>,
 }
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
@@ -66,7 +66,7 @@ pub struct List<'v> {
 #[repr(transparent)]
 pub struct FrozenList {
     /// The data stored by the list.
-    pub content: Vec<FrozenValue>,
+    content: Vec<FrozenValue>,
 }
 
 unsafe impl<'v> AnyLifetime<'v> for ListGen<RefCell<List<'v>>> {
@@ -197,6 +197,11 @@ impl<'v> List<'v> {
     /// Obtain the length of the list.
     pub fn len(&self) -> usize {
         self.content.len()
+    }
+
+    /// List content.
+    pub fn content(&self) -> &[Value<'v>] {
+        &self.content
     }
 
     /// Iterate over the elements in the list.
