@@ -44,14 +44,14 @@ use crate::{
 
 #[derive(Default, Clone, Debug)]
 pub(crate) struct ArgsCompiledValue {
-    pos_named: Vec<Spanned<ExprCompiledValue>>,
+    pub(crate) pos_named: Vec<Spanned<ExprCompiledValue>>,
     /// Named arguments compiled.
     ///
     /// Note names are guaranteed to be unique here because names are validated in AST:
     /// named arguments in [`Expr::Call`] are unique.
-    names: Vec<(Symbol, FrozenStringValue)>,
-    args: Option<Spanned<ExprCompiledValue>>,
-    kwargs: Option<Spanned<ExprCompiledValue>>,
+    pub(crate) names: Vec<(Symbol, FrozenStringValue)>,
+    pub(crate) args: Option<Spanned<ExprCompiledValue>>,
+    pub(crate) kwargs: Option<Spanned<ExprCompiledValue>>,
 }
 
 // Helper that creates some specialised argument calls
@@ -194,6 +194,14 @@ enum ArgsCompiledSpec {
 }
 
 impl ArgsCompiledValue {
+    pub(crate) fn pos_only(&self) -> Option<&[Spanned<ExprCompiledValue>]> {
+        if self.names.is_empty() && self.args.is_none() && self.kwargs.is_none() {
+            Some(&self.pos_named)
+        } else {
+            None
+        }
+    }
+
     fn spec(&self) -> ArgsCompiledSpec {
         if self.names.is_empty()
             && self.args.is_none()

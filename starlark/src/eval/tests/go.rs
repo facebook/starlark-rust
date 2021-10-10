@@ -82,7 +82,6 @@ fn test_go() {
                 "unknown binary op: dict \\\\+ dict",   // We support {} + {}
                 "cannot insert into frozen hash table", // We don't actually have freeze
                 "cannot clear frozen hash table",
-                "a, x[0] = x",     // Our bug, see test_self_assign
                 "assert.eq(a, 1)", // End of the test above
                 "assert.eq(x, {1: 2, 2: 4, 0: 2})",
             ],

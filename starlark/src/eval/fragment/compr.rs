@@ -224,10 +224,10 @@ impl ComprCompiled {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ClauseCompiled {
-    var: Spanned<AssignCompiledValue>,
-    over: Spanned<ExprCompiledValue>,
-    over_span: Span,
-    ifs: Vec<Spanned<ExprCompiledValue>>,
+    pub(crate) var: Spanned<AssignCompiledValue>,
+    pub(crate) over: Spanned<ExprCompiledValue>,
+    pub(crate) over_span: Span,
+    pub(crate) ifs: Vec<Spanned<ExprCompiledValue>>,
 }
 
 impl ClauseCompiled {

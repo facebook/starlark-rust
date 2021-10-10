@@ -47,7 +47,7 @@ pub(crate) enum EvalException<'v> {
 
 /// Error of evaluation of an expression.
 #[derive(Debug)]
-pub(crate) struct ExprEvalException(anyhow::Error);
+pub(crate) struct ExprEvalException(pub(crate) anyhow::Error);
 
 impl<'v> From<ExprEvalException> for EvalException<'v> {
     fn from(ExprEvalException(e): ExprEvalException) -> Self {

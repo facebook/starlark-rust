@@ -76,9 +76,17 @@ impl Compiler<'_> {
                 Ok(())
             }
             StmtP::Load(load) => self.eval_load(load, evaluator),
+            StmtP::Return(..) => {
+                let stmt = self.stmt(stmt, true);
+                let bc = stmt.as_bc(&self.compile_context());
+                let value = bc.run(evaluator)?;
+                Err(EvalException::Return(value))
+            }
             _ => {
-                let stmt = self.stmt(stmt, true).as_compiled(&self.compile_context());
-                stmt(evaluator)
+                let stmt = self.stmt(stmt, true);
+                let bc = stmt.as_bc(&self.compile_context());
+                bc.run(evaluator)?;
+                Ok(())
             }
         }
     }

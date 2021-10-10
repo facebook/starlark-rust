@@ -22,7 +22,8 @@
 //! All evaluation function can evaluate the full Starlark language (i.e.
 //! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
-use std::mem;
+
+use std::{mem, slice};
 
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -419,10 +420,20 @@ impl StmtsCompiled {
         }
     }
 
+    pub(crate) fn stmts(&self) -> &[Spanned<StmtCompiledValue>] {
+        match &self.0 {
+            SmallVec1::Empty => &[],
+            SmallVec1::One(s) => slice::from_ref(s),
+            SmallVec1::Many(ss) => ss,
+        }
+    }
+
     pub(crate) fn extend(&mut self, right: StmtsCompiled) {
         self.0.extend(right.0);
     }
 
+    // TODO: remove the code
+    #[allow(dead_code)]
     pub(crate) fn as_compiled(&self, compiler: &StmtCompileContext) -> StmtCompiled {
         match self.0 {
             SmallVec1::Empty => box |_eval| Ok(()),
@@ -464,7 +475,7 @@ impl StmtsCompiled {
 }
 
 #[derive(Debug, Error)]
-enum AssignError {
+pub(crate) enum AssignError {
     // Incorrect number of value to unpack (expected, got)
     #[error("Unpacked {1} values but expected {0}")]
     IncorrectNumberOfValueToUnpack(i32, i32),
@@ -701,7 +712,7 @@ impl Compiler<'_> {
 // The purposes are GC, profiling and debugging.
 //
 // This function is called only if `before_stmt` is set before compilation start.
-fn before_stmt(span: Span, eval: &mut Evaluator) {
+pub(crate) fn before_stmt(span: Span, eval: &mut Evaluator) {
     assert!(
         !eval.before_stmt.is_empty(),
         "this code should not be called if `before_stmt` is set"
@@ -746,7 +757,7 @@ fn before_stmt(span: Span, eval: &mut Evaluator) {
 //
 // We also require that `extra_v` is None, since otherwise the user might have
 // additional values stashed somewhere.
-fn possible_gc(eval: &mut Evaluator) {
+pub(crate) fn possible_gc(eval: &mut Evaluator) {
     if !eval.disable_gc
         && eval.heap().allocated_bytes() >= eval.next_gc_level
         && eval.extra_v.is_none()
@@ -763,7 +774,11 @@ fn possible_gc(eval: &mut Evaluator) {
 
 /// Implement lhs += rhs, which is special in Starlark, because lists are mutated,
 /// while all other types are not.
-fn add_assign<'v>(lhs: Value<'v>, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+pub(crate) fn add_assign<'v>(
+    lhs: Value<'v>,
+    rhs: Value<'v>,
+    heap: &'v Heap,
+) -> anyhow::Result<Value<'v>> {
     // Addition of strings is super common, so have a special case
     if let Some(ls) = lhs.unpack_str() {
         if let Some(rs) = rhs.unpack_str() {

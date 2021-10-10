@@ -94,6 +94,7 @@ impl<'v> LocalSlots<'v> {
     }
 
     /// Gets a local variable. Returns None to indicate the variable is not yet assigned.
+    #[inline(always)]
     pub fn get_slot(&self, slot: LocalSlotId) -> Option<Value<'v>> {
         self.slots[self.base.0 as usize + slot.0 as usize].get()
     }

@@ -33,16 +33,17 @@ use crate::{
     codemap::{CodeMap, Span, Spanned},
     environment::FrozenModuleRef,
     eval::{
+        bc::bytecode::Bc,
         compiler::{
             expr_throw,
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
-            throw_eval_exception, Compiler, EvalException,
+            Compiler, ExprEvalException,
         },
         fragment::{
             expr::{ExprCompiled, ExprCompiledValue, MaybeNot},
-            stmt::{StmtCompileContext, StmtCompiled, StmtCompiledValue, StmtsCompiled},
+            stmt::{StmtCompileContext, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -65,7 +66,7 @@ use crate::{
 /// Store frozen `StmtCompiled`.
 /// This is initialized in `post_freeze`.
 struct StmtCompiledCell {
-    cell: UnsafeCell<StmtCompiled>,
+    cell: UnsafeCell<Bc>,
 }
 
 unsafe impl Sync for StmtCompiledCell {}
@@ -74,29 +75,29 @@ unsafe impl Send for StmtCompiledCell {}
 impl StmtCompiledCell {
     fn new() -> StmtCompiledCell {
         StmtCompiledCell {
-            cell: UnsafeCell::new(box |_| panic!("cell should be filled in optimize_on_freeze")),
+            cell: UnsafeCell::new(Bc::default()),
         }
     }
 
     /// This function is unsafe if other thread is executing the stmt.
-    unsafe fn set(&self, value: StmtCompiled) {
+    unsafe fn set(&self, value: Bc) {
         ptr::drop_in_place(self.cell.get());
         ptr::write(self.cell.get(), value);
     }
 
-    fn get(&self) -> &StmtCompiled {
+    fn get(&self) -> &Bc {
         unsafe { &*self.cell.get() }
     }
 }
 
 #[derive(Clone, Debug)]
-struct ParameterName {
-    name: String,
+pub(crate) struct ParameterName {
+    pub(crate) name: String,
     captured: Captured,
 }
 
 #[derive(Clone, Debug)]
-enum ParameterCompiled<T> {
+pub(crate) enum ParameterCompiled<T> {
     Normal(ParameterName, Option<T>),
     WithDefaultValue(ParameterName, Option<T>, T),
     NoArgs,
@@ -105,13 +106,13 @@ enum ParameterCompiled<T> {
 }
 
 impl<T> ParameterCompiled<T> {
-    fn map_expr<U>(&self, f: impl Fn(&T) -> U) -> ParameterCompiled<U> {
+    pub(crate) fn map_expr<U>(&self, mut f: impl FnMut(&T) -> U) -> ParameterCompiled<U> {
         match self {
             ParameterCompiled::Normal(n, o) => {
                 ParameterCompiled::Normal(n.clone(), o.as_ref().map(f))
             }
             ParameterCompiled::WithDefaultValue(n, o, t) => {
-                ParameterCompiled::WithDefaultValue(n.clone(), o.as_ref().map(&f), f(t))
+                ParameterCompiled::WithDefaultValue(n.clone(), o.as_ref().map(&mut f), f(t))
             }
             ParameterCompiled::NoArgs => ParameterCompiled::NoArgs,
             ParameterCompiled::Args(n, o) => ParameterCompiled::Args(n.clone(), o.as_ref().map(f)),
@@ -139,15 +140,15 @@ impl<T> ParameterCompiled<T> {
         }
     }
 
-    fn name(&self) -> Option<&str> {
+    pub(crate) fn name(&self) -> Option<&str> {
         self.param_name().map(|n| n.name.as_str())
     }
 
-    fn captured(&self) -> Captured {
+    pub(crate) fn captured(&self) -> Captured {
         self.param_name().map_or(Captured::No, |n| n.captured)
     }
 
-    fn ty(&self) -> Option<&T> {
+    pub(crate) fn ty(&self) -> Option<&T> {
         match self {
             Self::Normal(_, t) => t.as_ref(),
             Self::WithDefaultValue(_, t, _) => t.as_ref(),
@@ -170,7 +171,7 @@ pub(crate) struct DefInfo {
     pub(crate) scope_names: ScopeNames,
     /// Statement compiled for non-frozen def.
     #[derivative(Debug = "ignore")]
-    stmt_compiled: StmtCompiled,
+    stmt_compiled: Bc,
     // The compiled expression for the body of this definition, to be run
     // after the parameters are evaluated.
     #[derivative(Debug = "ignore")]
@@ -187,7 +188,7 @@ impl DefInfo {
             codemap: CodeMap::default(),
             docstring: None,
             scope_names: ScopeNames::default(),
-            stmt_compiled: box |_eval| panic!("empty"),
+            stmt_compiled: Bc::default(),
             body_stmts: StmtsCompiled::empty(),
             stmt_compile_context: StmtCompileContext::default(),
             returns_type_is: None,
@@ -200,7 +201,7 @@ impl DefInfo {
             codemap,
             docstring: None,
             scope_names,
-            stmt_compiled: box |_eval| panic!("not to be called"),
+            stmt_compiled: Bc::default(),
             body_stmts: StmtsCompiled::empty(),
             stmt_compile_context: StmtCompileContext::default(),
             returns_type_is: None,
@@ -210,10 +211,10 @@ impl DefInfo {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DefCompiled {
-    function_name: String,
-    params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
-    return_type: Option<Box<Spanned<ExprCompiledValue>>>,
-    info: FrozenRef<DefInfo>,
+    pub(crate) function_name: String,
+    pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
+    pub(crate) return_type: Option<Box<Spanned<ExprCompiledValue>>>,
+    pub(crate) info: FrozenRef<DefInfo>,
 }
 
 impl DefCompiled {
@@ -378,7 +379,7 @@ impl Compiler<'_> {
             codemap: self.codemap.dupe(),
             docstring,
             scope_names,
-            stmt_compiled: body.as_compiled(&self.compile_context()),
+            stmt_compiled: body.as_bc(&self.compile_context()),
             body_stmts: body,
             returns_type_is,
             stmt_compile_context: self.compile_context(),
@@ -430,7 +431,7 @@ pub(crate) type FrozenDef = DefGen<FrozenValue>;
 starlark_complex_values!(Def);
 
 impl<'v> Def<'v> {
-    fn new(
+    pub(crate) fn new(
         parameters: ParametersSpec<Value<'v>>,
         parameter_captures: Vec<u32>,
         parameter_types: Vec<(u32, String, Value<'v>, TypeCompiled)>,
@@ -685,17 +686,16 @@ where
         }
         let res = eval.with_function_context(self.module.load_relaxed(), self.def_info, |eval| {
             if Self::FROZEN {
-                (self.optimized_on_freeze_stmt.get())(eval)
+                self.optimized_on_freeze_stmt.get().run(eval)
             } else {
-                (self.def_info.stmt_compiled)(eval)
+                self.def_info.stmt_compiled.run(eval)
             }
         });
         eval.local_variables.release(old_locals);
 
         let ret = match res {
-            Err(EvalException::Return(ret)) => ret,
-            Err(e) => return throw_eval_exception(e),
-            Ok(_) => Value::new_none(),
+            Err(ExprEvalException(e)) => return Err(e),
+            Ok(v) => v,
         };
 
         if eval.check_types() {
@@ -732,7 +732,7 @@ impl FrozenDef {
             .def_info
             .body_stmts
             .optimize_on_freeze(def_module.as_ref())
-            .as_compiled(&self.def_info.stmt_compile_context);
+            .as_bc(&self.def_info.stmt_compile_context);
 
         // Store the optimized body.
         // This is (relatively) safe because we know that during freeze

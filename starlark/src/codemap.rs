@@ -41,6 +41,10 @@ impl Pos {
     pub fn new(x: u32) -> Self {
         Self(x)
     }
+
+    pub(crate) fn get(self) -> u32 {
+        self.0
+    }
 }
 
 impl Add<u32> for Pos {

@@ -47,13 +47,20 @@ use crate::{
 };
 
 /// `bool` operation.
-#[derive(Copy, Clone, Dupe, Debug)]
+#[derive(Copy, Clone, Dupe, Eq, PartialEq, Debug)]
 pub(crate) enum MaybeNot {
     Id,
     Not,
 }
 
 impl MaybeNot {
+    pub(crate) fn negate(self) -> MaybeNot {
+        match self {
+            MaybeNot::Id => MaybeNot::Not,
+            MaybeNot::Not => MaybeNot::Id,
+        }
+    }
+
     fn as_fn(self) -> fn(bool) -> bool {
         match self {
             MaybeNot::Id => |x| x,

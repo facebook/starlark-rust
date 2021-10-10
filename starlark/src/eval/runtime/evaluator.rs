@@ -376,12 +376,16 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     // Make sure the error-path doesn't get inlined into the normal-path execution
     #[cold]
     #[inline(never)]
-    fn local_var_referenced_before_assignment(&self, slot: LocalSlotId) -> anyhow::Error {
+    pub(crate) fn local_var_referenced_before_assignment(
+        &self,
+        slot: LocalSlotId,
+    ) -> anyhow::Error {
         let names = &self.def_info.scope_names.used;
         let name = names[slot.0 as usize].clone();
         EnvironmentError::LocalVariableReferencedBeforeAssignment(name).into()
     }
 
+    #[inline(always)]
     pub(crate) fn get_slot_local(&self, slot: LocalSlotId) -> anyhow::Result<Value<'v>> {
         self.local_variables
             .get_slot(slot)
@@ -484,11 +488,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
     /// or you call it yourself.
     #[inline(always)]
-    pub(crate) fn alloca_uninit<T, R>(
-        &mut self,
-        len: usize,
-        f: impl FnOnce(&mut [MaybeUninit<T>], &mut Self) -> R,
-    ) -> R {
+    pub(crate) fn alloca_uninit<T, R, F>(&mut self, len: usize, f: F) -> R
+    where
+        F: FnOnce(&mut [MaybeUninit<T>], &mut Self) -> R,
+    {
         // We want to be able to access the evaluator underneath the alloca.
         // We know that the alloca will be used in a stacked way, so that's fine.
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };

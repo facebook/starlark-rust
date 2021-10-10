@@ -43,6 +43,7 @@ use crate::{
     values::{docs::DocString, Value},
 };
 
+pub(crate) mod bc;
 mod compiler;
 mod fragment;
 mod runtime;

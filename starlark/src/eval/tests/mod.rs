@@ -608,10 +608,9 @@ g()",
 
 #[test]
 fn test_self_assign() {
-    // In Go Starlark this works.
-    // Doesn't seem unreasonable.
-    assert::fail("x = [1,2]\na, x[0] = x", "mutate an iterable");
-    assert::fail("x = {0:0,1:1}\na, x[0] = x", "mutate an iterable");
+    // Starlark spec is not clear whether it is allowed or not.
+    assert::pass("x = [1,2]\na, x[0] = x");
+    assert::pass("x = {0:0,1:1}\na, x[0] = x");
 }
 
 #[test]
