@@ -284,6 +284,12 @@ impl<'v> Display for List<'v> {
     }
 }
 
+impl<'v> Display for MutableList<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(&self.0.borrow().content, f)
+    }
+}
+
 impl Display for FrozenList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display_list(coerce_ref(&self.content), f)
@@ -337,9 +343,9 @@ impl<'v> ListLike<'v> for FrozenList {
     }
 }
 
-impl<'v, T: ListLike<'v>> Display for ListGen<T> {
+impl<T: Display> Display for ListGen<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_list(&*self.0.content(), f)
+        Display::fmt(&self.0, f)
     }
 }
 
@@ -356,7 +362,7 @@ fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Result {
 
 impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + Display,
 {
     starlark_type!(List::TYPE);
 
