@@ -42,6 +42,19 @@ use gazebo::prelude::*;
 
 use crate::values::layout::avalue::{AValue, AValueDyn, BlackHole};
 
+/// Min size of allocated object including header.
+/// Should be able to fit `BlackHole` or forward.
+const MIN_ALLOC: usize = {
+    const fn max(a: usize, b: usize) -> usize {
+        if a > b { a } else { b }
+    }
+
+    max(
+        mem::size_of::<AValueForward>(),
+        mem::size_of::<AValueRepr<BlackHole>>(),
+    )
+};
+
 #[derive(Default)]
 pub(crate) struct Arena {
     /// Arena for things which don't need dropping (e.g. strings)
@@ -181,8 +194,7 @@ impl Arena {
         let extra_bytes = extra_len * mem::size_of::<T::ExtraElem>();
 
         // We require at least usize space available for overwrite/blackhole
-        let size = mem::size_of::<AValueHeader>()
-            + cmp::max(mem::size_of::<T>() + extra_bytes, mem::size_of::<usize>());
+        let size = cmp::max(mem::size_of::<AValueRepr<T>>() + extra_bytes, MIN_ALLOC);
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout).as_ptr();
         unsafe {
@@ -286,8 +298,9 @@ impl Arena {
                         forward.object_size
                     }
                 };
-                let n = cmp::max(n, mem::size_of::<usize>());
-                p = p.add(mem::size_of::<AValueHeader>() + n);
+                let n = mem::size_of::<AValueHeader>() + n;
+                let n = cmp::max(n, MIN_ALLOC);
+                p = p.add(n);
                 // We know the alignment requirements will never be greater than AValuePtr
                 // since we check that in allocate_empty
                 p = p.add(p.align_offset(mem::align_of::<AValueHeader>()));
