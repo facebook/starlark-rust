@@ -35,14 +35,13 @@ use crate::{
     eval::{
         bc::bytecode::Bc,
         compiler::{
-            expr_throw,
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
             Compiler, ExprEvalException,
         },
         fragment::{
-            expr::{ExprCompiled, ExprCompiledValue, MaybeNot},
+            expr::{ExprCompiledValue, MaybeNot},
             stmt::{StmtCompileContext, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
@@ -215,78 +214,6 @@ pub(crate) struct DefCompiled {
     pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
     pub(crate) return_type: Option<Box<Spanned<ExprCompiledValue>>>,
     pub(crate) info: FrozenRef<DefInfo>,
-}
-
-impl DefCompiled {
-    pub(crate) fn as_compiled(&self) -> ExprCompiled {
-        let DefCompiled {
-            ref function_name,
-            ref params,
-            ref return_type,
-            info,
-        } = *self;
-        let function_name = function_name.clone();
-        let params = params.map(|p| p.map(|p| p.map_expr(|e| e.as_compiled())));
-        let return_type = return_type.as_ref().map(|t| Spanned {
-            span: t.span,
-            node: t.as_compiled(),
-        });
-        expr!("def", |eval| {
-            let mut parameters =
-                ParametersSpec::with_capacity(function_name.to_owned(), params.len());
-            let mut parameter_types = Vec::new();
-            let mut parameter_captures = Vec::new();
-
-            // count here rather than enumerate because '*' doesn't get a real
-            // index in the parameter mapping, and it messes up the indexes
-            let mut i = 0;
-            for x in params.iter() {
-                if let Some(t) = x.ty() {
-                    let v = t(eval)?;
-                    let name = x.name().unwrap_or("unknown").to_owned();
-                    parameter_types.push((
-                        i,
-                        name,
-                        v,
-                        expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval)?,
-                    ));
-                }
-                match &x.node {
-                    ParameterCompiled::Normal(n, _) => parameters.required(&n.name),
-                    ParameterCompiled::WithDefaultValue(n, _, v) => {
-                        parameters.defaulted(&n.name, v(eval)?)
-                    }
-                    ParameterCompiled::NoArgs => parameters.no_args(),
-                    ParameterCompiled::Args(_, _) => parameters.args(),
-                    ParameterCompiled::KwArgs(_, _) => parameters.kwargs(),
-                };
-                if let Captured::Yes = x.captured() {
-                    parameter_captures.push(i);
-                }
-                if !matches!(x.node, ParameterCompiled::NoArgs) {
-                    i += 1;
-                }
-            }
-            let return_type = match &return_type {
-                None => None,
-                Some(v) => {
-                    let value = (v.node)(eval)?;
-                    Some((
-                        value,
-                        expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)?,
-                    ))
-                }
-            };
-            Def::new(
-                parameters,
-                parameter_captures,
-                parameter_types,
-                return_type,
-                info,
-                eval,
-            )
-        })
-    }
 }
 
 impl Compiler<'_> {

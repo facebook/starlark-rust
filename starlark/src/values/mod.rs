@@ -176,13 +176,6 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value
     fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T>;
 }
 
-impl<'v, V: ValueLike<'v>> Hashed<V> {
-    pub(crate) fn to_hashed_value(&self) -> Hashed<Value<'v>> {
-        // Safe because we know frozen values have the same hash as non-frozen ones
-        Hashed::new_unchecked(self.hash(), self.key().to_value())
-    }
-}
-
 impl<'v> Hashed<Value<'v>> {
     pub(crate) fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Hashed<FrozenValue>> {
         // Safe because we know frozen values have the same hash as non-frozen ones

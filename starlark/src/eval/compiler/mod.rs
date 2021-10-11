@@ -36,10 +36,6 @@ use crate::{
 
 #[derive(Debug)]
 pub(crate) enum EvalException<'v> {
-    // Flow control statement reached, impossible to escape with
-    // since we statically check for them
-    Break,
-    Continue,
     Return(Value<'v>),
     // Error bubbling up
     Error(anyhow::Error),
@@ -115,8 +111,6 @@ pub(crate) fn expr_throw<'v, T>(
 pub(crate) fn throw_eval_exception<T>(x: EvalException<'_>) -> anyhow::Result<T> {
     Err(match x {
         EvalException::Error(e) => e,
-        EvalException::Break => anyhow!("Break statement used outside of a loop"),
-        EvalException::Continue => anyhow!("Continue statement used outside of a loop"),
         EvalException::Return(..) => {
             anyhow!("Return statement used outside of a function call")
         }

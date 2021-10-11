@@ -34,9 +34,8 @@ use crate::{
     environment::{slots::ModuleSlotId, FrozenModuleRef},
     eval::{
         compiler::{
-            expr_throw,
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
-            throw, Compiler, EvalException, ExprEvalException,
+            Compiler,
         },
         fragment::{expr::ExprCompiledValue, known::list_to_tuple},
         runtime::{
@@ -47,9 +46,6 @@ use crate::{
     syntax::ast::{AssignOp, AssignP, StmtP},
     values::{list::List, Heap, Value, ValueError},
 };
-
-pub(crate) type StmtCompiled =
-    Box<dyn for<'v> Fn(&mut Evaluator<'v, '_>) -> Result<(), EvalException<'v>> + Send + Sync>;
 
 #[derive(Clone, Debug)]
 pub(crate) enum AssignModifyLhs {
@@ -83,195 +79,7 @@ pub(crate) struct StmtCompileContext {
     pub(crate) has_before_stmt: bool,
 }
 
-impl StmtCompileContext {
-    fn maybe_wrap_before_stmt(&self, span: Span, stmt: StmtCompiled) -> StmtCompiled {
-        if self.has_before_stmt {
-            box move |eval| {
-                before_stmt(span, eval);
-                stmt(eval)
-            }
-        } else {
-            stmt
-        }
-    }
-}
-
 impl Spanned<StmtCompiledValue> {
-    pub(crate) fn as_compiled(&self, compiler: &StmtCompileContext) -> StmtCompiled {
-        let span = self.span;
-        match self.node {
-            StmtCompiledValue::PossibleGc => box move |eval| {
-                possible_gc(eval);
-                Ok(())
-            },
-            StmtCompiledValue::Return(None) => {
-                stmt!(compiler, "return_none", span, |_eval| {
-                    return Err(EvalException::Return(Value::new_none()));
-                })
-            }
-            StmtCompiledValue::Return(Some(ref e)) => {
-                let e = e.as_compiled();
-                stmt!(compiler, "return", span, |eval| {
-                    return Err(EvalException::Return(e(eval)?));
-                })
-            }
-            StmtCompiledValue::Expr(ref e) => {
-                let e = e.as_compiled();
-                stmt!(compiler, "expr", span, |eval| {
-                    e(eval)?;
-                })
-            }
-            StmtCompiledValue::Assign(ref lhs, ref rhs) => {
-                let lhs = lhs.as_compiled();
-                let rhs = rhs.as_compiled();
-                stmt!(compiler, "assign", span, |eval| {
-                    lhs(rhs(eval)?, eval)?;
-                })
-            }
-            StmtCompiledValue::AssignModify(AssignModifyLhs::Dot(ref e, ref s), op, ref rhs) => {
-                let span_stmt = span;
-                let span_lhs = e.span;
-                let e = e.as_compiled();
-                let s = s.clone();
-                let op = op.as_fn();
-                let rhs = rhs.as_compiled();
-                stmt!(compiler, "assign_dot", span_stmt, |eval| {
-                    let e: Value = e(eval)?;
-                    let (_, v) = throw(e.get_attr_error(&s, eval.heap()), span_lhs, eval)?;
-                    let rhs = rhs(eval)?;
-                    throw(
-                        e.set_attr(&s, throw(op(v, rhs, eval), span_stmt, eval)?),
-                        span_stmt,
-                        eval,
-                    )?;
-                })
-            }
-            StmtCompiledValue::AssignModify(
-                AssignModifyLhs::Array(ref lhs, ref idx),
-                op,
-                ref rhs,
-            ) => {
-                let span_stmt = span;
-                let span_lhs = lhs.span;
-                let e = lhs.as_compiled();
-                let idx = idx.as_compiled();
-                let op = op.as_fn();
-                let rhs = rhs.as_compiled();
-                stmt!(compiler, "assign_array", span_stmt, |eval| {
-                    let e: Value = e(eval)?;
-                    let idx = idx(eval)?;
-                    let v = throw(e.at(idx, eval.heap()), span_lhs, eval)?;
-                    let rhs = rhs(eval)?;
-                    throw(
-                        e.set_at(idx, throw(op(v, rhs, eval), span_stmt, eval)?),
-                        span_stmt,
-                        eval,
-                    )?;
-                })
-            }
-            StmtCompiledValue::AssignModify(AssignModifyLhs::Local(ref lhs), op, ref rhs) => {
-                let span_stmt = span;
-                let span_lhs = lhs.span;
-                let (slot, captured) = lhs.node;
-                let op = op.as_fn();
-                let rhs = rhs.as_compiled();
-                match captured {
-                    Captured::Yes => stmt!(compiler, "assign_local_captured", span_stmt, |eval| {
-                        let v = throw(eval.get_slot_local_captured(slot), span_lhs, eval)?;
-                        let rhs = rhs(eval)?;
-                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                        eval.set_slot_local_captured(slot, v);
-                    }),
-                    Captured::No => stmt!(compiler, "assign_local", span_stmt, |eval| {
-                        let v = throw(eval.get_slot_local(slot), span_lhs, eval)?;
-                        let rhs = rhs(eval)?;
-                        let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                        eval.set_slot_local(slot, v);
-                    }),
-                }
-            }
-            StmtCompiledValue::AssignModify(AssignModifyLhs::Module(lhs), op, ref rhs) => {
-                let span_stmt = span;
-                let span_lhs = lhs.span;
-                let slot = lhs.node;
-                let op = op.as_fn();
-                let rhs = rhs.as_compiled();
-                stmt!(compiler, "assign_module", span_stmt, |eval| {
-                    let v = throw(eval.get_slot_module(slot), span_lhs, eval)?;
-                    let rhs = rhs(eval)?;
-                    let v = throw(op(v, rhs, eval), span_stmt, eval)?;
-                    eval.set_slot_module(slot, v);
-                })
-            }
-            StmtCompiledValue::If(box (ref cond, ref then_block, ref else_block)) => {
-                let cond = cond.as_compiled();
-                if else_block.is_empty() {
-                    let then_block = then_block.as_compiled(compiler);
-                    stmt!(compiler, "if_then", span, |eval| if cond(eval)?.to_bool() {
-                        then_block(eval)?
-                    })
-                } else if then_block.is_empty() {
-                    let else_block = else_block.as_compiled(compiler);
-                    stmt!(
-                        compiler,
-                        "if_not_then",
-                        span,
-                        |eval| if !cond(eval)?.to_bool() {
-                            else_block(eval)?
-                        }
-                    )
-                } else {
-                    let then_block = then_block.as_compiled(compiler);
-                    let else_block = else_block.as_compiled(compiler);
-                    stmt!(
-                        compiler,
-                        "if_then_else",
-                        span,
-                        |eval| if cond(eval)?.to_bool() {
-                            then_block(eval)?
-                        } else {
-                            else_block(eval)?
-                        }
-                    )
-                }
-            }
-            StmtCompiledValue::For(box (ref var, ref over, ref body)) => {
-                let var = var.as_compiled();
-                let over_span = over.span;
-                let over = over.as_compiled();
-                let st = body.as_compiled(compiler);
-                stmt!(compiler, "for", span, |eval| {
-                    let heap = eval.heap();
-                    let iterable = over(eval)?;
-                    throw(
-                        iterable.with_iterator(heap, |it| {
-                            for v in it {
-                                var(v, eval)?;
-                                match st(eval) {
-                                    Err(EvalException::Break) => break,
-                                    Err(EvalException::Continue) => {}
-                                    Err(e) => return Err(e),
-                                    _ => {}
-                                }
-                            }
-                            Ok(())
-                        }),
-                        over_span,
-                        eval,
-                    )??;
-                })
-            }
-            StmtCompiledValue::Break => stmt!(compiler, "break", span, |_eval| return Err(
-                EvalException::Break
-            )),
-            StmtCompiledValue::Continue => {
-                stmt!(compiler, "continue", span, |_eval| return Err(
-                    EvalException::Continue
-                ))
-            }
-        }
-    }
-
     fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
         let span = self.span;
         match self.node {
@@ -432,25 +240,6 @@ impl StmtsCompiled {
         self.0.extend(right.0);
     }
 
-    // TODO: remove the code
-    #[allow(dead_code)]
-    pub(crate) fn as_compiled(&self, compiler: &StmtCompileContext) -> StmtCompiled {
-        match self.0 {
-            SmallVec1::Empty => box |_eval| Ok(()),
-            SmallVec1::One(ref stmt) => stmt.as_compiled(compiler),
-            SmallVec1::Many(ref vec) => {
-                debug_assert!(vec.len() > 1);
-                let vec = vec.map(|s| s.as_compiled(compiler));
-                box move |eval| {
-                    for stmt in &vec {
-                        stmt(eval)?;
-                    }
-                    Ok(())
-                }
-            }
-        }
-    }
-
     pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
         let mut stmts = StmtsCompiled::empty();
         match &self.0 {
@@ -481,11 +270,6 @@ pub(crate) enum AssignError {
     IncorrectNumberOfValueToUnpack(i32, i32),
 }
 
-pub(crate) type AssignCompiled = Box<
-    dyn for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> Result<(), ExprEvalException>
-        + Send
-        + Sync,
->;
 #[derive(Clone, Debug)]
 pub(crate) enum AssignCompiledValue {
     Dot(Spanned<ExprCompiledValue>, String),
@@ -496,45 +280,6 @@ pub(crate) enum AssignCompiledValue {
 }
 
 impl Spanned<AssignCompiledValue> {
-    pub(crate) fn as_compiled(&self) -> AssignCompiled {
-        let span = self.span;
-        match self.node {
-            AssignCompiledValue::Dot(ref e, ref s) => {
-                let e = e.as_compiled();
-                let s = s.clone();
-                box move |value, eval| expr_throw(e(eval)?.set_attr(&s, value), span, eval)
-            }
-            AssignCompiledValue::ArrayIndirection(ref array, ref index) => {
-                let array = array.as_compiled();
-                let index = index.as_compiled();
-                box move |value, eval| {
-                    expr_throw(array(eval)?.set_at(index(eval)?, value), span, eval)
-                }
-            }
-            AssignCompiledValue::Tuple(ref v) => {
-                let v = v.map(|v| v.as_compiled());
-                box move |value, eval| eval_assign_list(&v, span, value, eval)
-            }
-            AssignCompiledValue::Local(slot, Captured::Yes) => box move |value, eval| {
-                eval.set_slot_local_captured(slot, value);
-                Ok(())
-            },
-            AssignCompiledValue::Local(slot, Captured::No) => box move |value, eval| {
-                eval.set_slot_local(slot, value);
-                Ok(())
-            },
-            AssignCompiledValue::Module(slot, ref name) => {
-                let name = name.clone();
-                box move |value, eval| {
-                    // Make sure that `ComplexValue`s get their name as soon as possible
-                    value.export_as(&name, eval);
-                    eval.set_slot_module(slot, value);
-                    Ok(())
-                }
-            }
-        }
-    }
-
     pub(crate) fn optimize_on_freeze(
         &self,
         module: &FrozenModuleRef,
@@ -558,52 +303,6 @@ impl Spanned<AssignCompiledValue> {
             ref e @ (AssignCompiledValue::Local(..) | AssignCompiledValue::Module(..)) => e.clone(),
         };
         Spanned { node: assign, span }
-    }
-}
-
-fn eval_assign_list<'v>(
-    lvalues: &[AssignCompiled],
-    span: Span,
-    value: Value<'v>,
-    eval: &mut Evaluator<'v, '_>,
-) -> Result<(), ExprEvalException> {
-    let l = lvalues.len() as i32;
-    let nvl = expr_throw(value.length(), span, eval)?;
-    if nvl != l {
-        expr_throw(
-            Err(AssignError::IncorrectNumberOfValueToUnpack(l, nvl).into()),
-            span,
-            eval,
-        )
-    } else {
-        let mut it1 = lvalues.iter();
-        // TODO: the span here should probably include the rvalue
-        let mut it2 = expr_throw(value.iterate(eval.heap()), span, eval)?;
-        for _ in 0..l {
-            it1.next().unwrap()(it2.next().unwrap(), eval)?;
-        }
-        Ok(())
-    }
-}
-
-pub(crate) type AssignModifyOpFn =
-    for<'v> fn(Value<'v>, Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>;
-
-impl AssignOp {
-    fn as_fn(self) -> AssignModifyOpFn {
-        match self {
-            AssignOp::Add => |l, r, eval| add_assign(l, r, eval.heap()),
-            AssignOp::Subtract => |l, r, eval| l.sub(r, eval.heap()),
-            AssignOp::Multiply => |l, r, eval| l.mul(r, eval.heap()),
-            AssignOp::Divide => |l, r, eval| l.div(r, eval.heap()),
-            AssignOp::FloorDivide => |l, r, eval| l.floor_div(r, eval.heap()),
-            AssignOp::Percent => |l, r, eval| l.percent(r, eval.heap()),
-            AssignOp::BitAnd => |l, r, _| l.bit_and(r),
-            AssignOp::BitOr => |l, r, _| l.bit_or(r),
-            AssignOp::BitXor => |l, r, _| l.bit_xor(r),
-            AssignOp::LeftShift => |l, r, _| l.left_shift(r),
-            AssignOp::RightShift => |l, r, _| l.right_shift(r),
-        }
     }
 }
 

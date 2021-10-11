@@ -17,29 +17,21 @@
 
 //! Compile function calls.
 
-use std::mem::MaybeUninit;
-
-use gazebo::coerce::coerce_ref;
-
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
     environment::FrozenModuleRef,
     eval::{
         compiler::{
-            expr_throw,
             scope::{CstArgument, CstExpr},
-            Compiler, ExprEvalException,
+            Compiler,
         },
-        fragment::expr::{get_attr_hashed, ExprCompiled, ExprCompiledValue, MaybeNot},
-        Arguments, Evaluator, FrozenDef,
+        fragment::expr::{ExprCompiledValue, MaybeNot},
+        FrozenDef,
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, ExprP},
-    values::{
-        function::NativeFunction, AttrType, FrozenStringValue, FrozenValue, StarlarkValue, Value,
-        ValueLike,
-    },
+    values::{AttrType, FrozenStringValue, FrozenValue, ValueLike},
 };
 
 #[derive(Default, Clone, Debug)]
@@ -54,18 +46,6 @@ pub(crate) struct ArgsCompiledValue {
     pub(crate) kwargs: Option<Spanned<ExprCompiledValue>>,
 }
 
-// Helper that creates some specialised argument calls
-macro_rules! args {
-    ($args:ident, $e:expr) => {
-        match $args.spec() {
-            ArgsCompiledSpec::Args0($args) => $e,
-            ArgsCompiledSpec::Args1($args) => $e,
-            ArgsCompiledSpec::Args2($args) => $e,
-            ArgsCompiledSpec::Args($args) => $e,
-        }
-    };
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum CallCompiled {
     Call(Box<(Spanned<ExprCompiledValue>, ArgsCompiledValue)>),
@@ -74,75 +54,6 @@ pub(crate) enum CallCompiled {
 }
 
 impl Spanned<CallCompiled> {
-    pub(crate) fn as_compiled(&self) -> ExprCompiled {
-        let span = self.span;
-        match self.node {
-            CallCompiled::Call(box (ref fun, ref args)) => {
-                args!(
-                    args,
-                    expr!("call", fun, |eval| {
-                        args.with_params(None, eval, |params, eval| {
-                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
-                        })?
-                    })
-                )
-            }
-            CallCompiled::Frozen(box (this, fun, ref args)) => {
-                if let Some(fun_ref) = fun.downcast_frozen_ref::<FrozenDef>() {
-                    assert!(this.is_none());
-                    args!(
-                        args,
-                        expr!("call_frozen_def", |eval| {
-                            args.with_params(None, eval, |params, eval| {
-                                expr_throw(
-                                    fun_ref.invoke(fun.to_value(), Some(span), params, eval),
-                                    span,
-                                    eval,
-                                )
-                            })?
-                        })
-                    )
-                } else if let Some(fun_ref) = fun.downcast_frozen_ref::<NativeFunction>() {
-                    args!(
-                        args,
-                        expr!("call_native_fun", |eval| {
-                            args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
-                                expr_throw(
-                                    fun_ref.invoke(fun.to_value(), Some(span), params, eval),
-                                    span,
-                                    eval,
-                                )
-                            })?
-                        })
-                    )
-                } else {
-                    args!(
-                        args,
-                        expr!("call_known_fn", |eval| {
-                            args.with_params(this.map(|v| v.to_value()), eval, |params, eval| {
-                                expr_throw(fun.invoke(Some(span), params, eval), span, eval)
-                            })?
-                        })
-                    )
-                }
-            }
-            CallCompiled::Method(box (ref this, ref s, ref args)) => {
-                let s = s.clone();
-                args!(
-                    args,
-                    expr!("call_method", this, |eval| {
-                        // We don't need to worry about whether it's an attribute, method or field
-                        // since those that don't want the `this` just ignore it
-                        let fun = expr_throw(get_attr_hashed(this, &s, eval.heap()), span, eval)?.1;
-                        args.with_params(Some(this), eval, |params, eval| {
-                            expr_throw(fun.invoke(Some(span), params, eval), span, eval)
-                        })?
-                    })
-                )
-            }
-        }
-    }
-
     pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ExprCompiledValue {
         ExprCompiledValue::Call(self.map(|call| match *call {
             CallCompiled::Call(box (ref fun, ref args)) => {
@@ -172,57 +83,12 @@ impl Spanned<CallCompiled> {
     }
 }
 
-struct ArgsCompiled {
-    pos_named: Vec<ExprCompiled>,
-    /// Named arguments compiled.
-    ///
-    /// Note names are guaranteed to be unique here because names are validated in AST:
-    /// named arguments in [`Expr::Call`] are unique.
-    names: Vec<(Symbol, FrozenStringValue)>,
-    args: Option<ExprCompiled>,
-    kwargs: Option<ExprCompiled>,
-}
-
-/// Specialized version of [`ArgsCompiled`] for faster evaluation.
-///
-/// This is meant to be used with [`args!`] macro.
-enum ArgsCompiledSpec {
-    Args0(Args0Compiled),
-    Args1(Args1Compiled),
-    Args2(Args2Compiled),
-    Args(ArgsCompiled),
-}
-
 impl ArgsCompiledValue {
     pub(crate) fn pos_only(&self) -> Option<&[Spanned<ExprCompiledValue>]> {
         if self.names.is_empty() && self.args.is_none() && self.kwargs.is_none() {
             Some(&self.pos_named)
         } else {
             None
-        }
-    }
-
-    fn spec(&self) -> ArgsCompiledSpec {
-        if self.names.is_empty()
-            && self.args.is_none()
-            && self.kwargs.is_none()
-            && self.pos_named.len() <= 2
-        {
-            match self.pos_named.as_slice() {
-                [] => ArgsCompiledSpec::Args0(Args0Compiled),
-                [a0] => ArgsCompiledSpec::Args1(Args1Compiled(a0.as_compiled())),
-                [a0, a1] => {
-                    ArgsCompiledSpec::Args2(Args2Compiled(a0.as_compiled(), a1.as_compiled()))
-                }
-                _ => unreachable!(),
-            }
-        } else {
-            ArgsCompiledSpec::Args(ArgsCompiled {
-                pos_named: self.pos_named.map(|a| a.as_compiled()),
-                names: self.names.clone(),
-                args: self.args.as_ref().map(|a| a.as_compiled()),
-                kwargs: self.kwargs.as_ref().map(|a| a.as_compiled()),
-            })
         }
     }
 
@@ -239,110 +105,6 @@ impl ArgsCompiledValue {
             args: args.as_ref().map(|a| a.optimize_on_freeze(module)),
             kwargs: kwargs.as_ref().map(|a| a.optimize_on_freeze(module)),
         }
-    }
-}
-
-struct Args0Compiled;
-
-struct Args1Compiled(ExprCompiled);
-
-struct Args2Compiled(ExprCompiled, ExprCompiled);
-
-impl Args0Compiled {
-    #[inline(always)]
-    fn with_params<'v, R>(
-        &self,
-        this: Option<Value<'v>>,
-        eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
-    ) -> Result<R, ExprEvalException> {
-        let params = Arguments {
-            this,
-            pos: &[],
-            named: &[],
-            names: &[],
-            args: None,
-            kwargs: None,
-        };
-        f(params, eval)
-    }
-}
-
-impl Args1Compiled {
-    #[inline(always)]
-    fn with_params<'v, R>(
-        &self,
-        this: Option<Value<'v>>,
-        eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
-    ) -> Result<R, ExprEvalException> {
-        let params = Arguments {
-            this,
-            pos: &[self.0(eval)?],
-            named: &[],
-            names: &[],
-            args: None,
-            kwargs: None,
-        };
-        f(params, eval)
-    }
-}
-
-impl Args2Compiled {
-    #[inline(always)]
-    fn with_params<'v, R>(
-        &self,
-        this: Option<Value<'v>>,
-        eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
-    ) -> Result<R, ExprEvalException> {
-        let params = Arguments {
-            this,
-            pos: &[self.0(eval)?, self.1(eval)?],
-            named: &[],
-            names: &[],
-            args: None,
-            kwargs: None,
-        };
-        f(params, eval)
-    }
-}
-
-impl ArgsCompiled {
-    #[inline(always)]
-    fn with_params<'v, R>(
-        &self,
-        this: Option<Value<'v>>,
-        eval: &mut Evaluator<'v, '_>,
-        f: impl FnOnce(Arguments<'v, '_>, &mut Evaluator<'v, '_>) -> Result<R, ExprEvalException>,
-    ) -> Result<R, ExprEvalException> {
-        eval.alloca_uninit(self.pos_named.len(), |xs, eval| {
-            // because Value has no drop, we don't need to worry about failures before assume_init
-            for (x, arg) in xs.iter_mut().zip(&self.pos_named) {
-                x.write(arg(eval)?);
-            }
-            // because we allocated `pos_named` elements and filled them all, we can assume it is now init
-            let xs = unsafe { MaybeUninit::slice_assume_init_ref(xs) };
-
-            let args = match &self.args {
-                None => None,
-                Some(f) => Some(f(eval)?),
-            };
-            let kwargs = match &self.kwargs {
-                None => None,
-                Some(f) => Some(f(eval)?),
-            };
-            let (pos, named) = &xs.split_at(xs.len() - self.names.len());
-            let params = Arguments {
-                this,
-                pos,
-                named,
-                names: coerce_ref(&self.names),
-                args,
-                kwargs,
-            };
-            f(params, eval)
-        })
     }
 }
 

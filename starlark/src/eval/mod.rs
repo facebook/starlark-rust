@@ -35,7 +35,7 @@ use crate::{
     eval::{
         compiler::{
             scope::{CompilerAstMap, Scope, ScopeData},
-            throw_eval_exception, Compiler, Constants, EvalException, ExprEvalException,
+            throw_eval_exception, Compiler, Constants, EvalException,
         },
         fragment::def::DefInfo,
     },
