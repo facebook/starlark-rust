@@ -31,7 +31,7 @@ use std::{
     cmp,
     collections::HashMap,
     marker::PhantomData,
-    mem::{self, MaybeUninit},
+    mem::{self, ManuallyDrop, MaybeUninit},
     ptr::{self, from_raw_parts, metadata, DynMetadata},
     slice,
 };
@@ -76,6 +76,39 @@ pub(crate) struct AValueForward {
     forward_ptr: usize,
     /// Size of `<T>`. Does not include [`AValueHeader`].
     object_size: usize,
+}
+
+impl AValueForward {
+    /// Unpack forward pointer.
+    fn forward_ptr(&self) -> usize {
+        debug_assert!((self.forward_ptr & 1) != 0);
+        self.forward_ptr & !1
+    }
+}
+
+/// Object on the heap, either a real object or a forward.
+#[repr(C)]
+union AValueOrForward {
+    // We intentionally do not implement `Copy` for these types
+    // to avoid accidentally copying them.
+    header: ManuallyDrop<AValueHeader>,
+    forward: ManuallyDrop<AValueForward>,
+    flags: usize,
+}
+
+impl AValueOrForward {
+    /// Is this pointer a value or forward?
+    fn is_forward(&self) -> bool {
+        unsafe { (self.flags & 1) != 0 }
+    }
+
+    fn unpack(&self) -> Either<&AValueHeader, &AValueForward> {
+        if self.is_forward() {
+            Either::Right(unsafe { &self.forward })
+        } else {
+            Either::Left(unsafe { &self.header })
+        }
+    }
 }
 
 impl AValueForward {
@@ -236,22 +269,24 @@ impl Arena {
     }
 
     fn iter_chunk<'a>(chunk: &'a [MaybeUninit<u8>], mut f: impl FnMut(&'a AValueHeader)) {
-        // We only allocate trait ptr then a payload immediately after
-        // so find the first trait ptr, see how big it is, and keep skipping.
-        let mut p = chunk.as_ptr();
-        let end = unsafe { chunk.as_ptr().add(chunk.len()) };
-        while p < end {
-            let val = unsafe { *(p as *const usize) };
-            let n = if val & 1 == 1 {
-                // Overwritten, so the next word will be the size of the memory
-                unsafe { (*(p as *const AValueForward)).object_size }
-            } else {
-                let ptr: &AValueHeader = unsafe { &*(p as *const AValueHeader) };
-                f(ptr);
-                ptr.unpack().memory_size()
-            };
-            let n = cmp::max(n, mem::size_of::<usize>());
-            unsafe {
+        unsafe {
+            // We only allocate trait ptr then a payload immediately after
+            // so find the first trait ptr, see how big it is, and keep skipping.
+            let mut p = chunk.as_ptr();
+            let end = chunk.as_ptr().add(chunk.len());
+            while p < end {
+                let or_forward = &*(p as *const AValueOrForward);
+                let n = match or_forward.unpack() {
+                    Either::Left(ptr) => {
+                        f(&or_forward.header);
+                        ptr.unpack().memory_size()
+                    }
+                    Either::Right(forward) => {
+                        // Overwritten, so the next word will be the size of the memory
+                        forward.object_size
+                    }
+                };
+                let n = cmp::max(n, mem::size_of::<usize>());
                 p = p.add(mem::size_of::<AValueHeader>() + n);
                 // We know the alignment requirements will never be greater than AValuePtr
                 // since we check that in allocate_empty
@@ -362,12 +397,12 @@ impl AValueHeader {
     }
 
     /// Unpack something that might have been overwritten.
+    // TODO(nga): this function does not belong here, it should accept `AValueOrForward`.
     pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValueDyn<'v>> {
-        let x = unsafe { *(self as *const AValueHeader as *const usize) };
-        if x & 1 == 1 {
-            Either::Left(x & !1)
-        } else {
-            Either::Right(self.unpack())
+        let x = unsafe { &*(self as *const AValueHeader as *const AValueOrForward) };
+        match x.unpack() {
+            Either::Left(header) => Either::Right(header.unpack()),
+            Either::Right(forward) => Either::Left(forward.forward_ptr()),
         }
     }
 
