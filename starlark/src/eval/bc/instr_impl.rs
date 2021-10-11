@@ -1536,10 +1536,21 @@ impl InstrNoFlowImpl for InstrDefImpl {
             }
             match &x.node {
                 ParameterCompiled::Normal(n, _) => parameters.required(&n.name),
-                ParameterCompiled::WithDefaultValue(n, _, v) => {
+                ParameterCompiled::WithDefaultValue(n, ty, v) => {
                     assert!(*v == pop_index);
-                    parameters.defaulted(&n.name, pop[pop_index as usize]);
+                    let value = pop[pop_index as usize];
                     pop_index += 1;
+
+                    if ty.is_some() {
+                        // Check the type of the default
+                        let (_, _, ty_value, ty_compiled) = parameter_types.last().unwrap();
+                        expr_throw(
+                            value.check_type_compiled(*ty_value, ty_compiled, Some(&n.name)),
+                            x.span,
+                            eval,
+                        )?;
+                    }
+                    parameters.defaulted(&n.name, value);
                 }
                 ParameterCompiled::NoArgs => parameters.no_args(),
                 ParameterCompiled::Args(_, _) => parameters.args(),

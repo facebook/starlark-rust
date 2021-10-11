@@ -341,5 +341,14 @@ is_type([1,2,"test"], ["_a"])
         a.fail("is_type(None, is_type)", "not a valid type");
         a.fail("is_type(None, [])", "not a valid type");
         a.fail("is_type({}, {1: 'string', 2: 'bool'})", "not a valid type");
+
+        // Should check the type of default parameters that aren't used
+        a.fail(
+            r#"
+def foo(f: int.type = None):
+    pass
+"#,
+            "`None` of type `NoneType` does not match the type annotation `int`",
+        );
     }
 }
