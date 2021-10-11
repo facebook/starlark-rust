@@ -509,9 +509,9 @@ pub(crate) fn add_assign<'v>(
             let mut list = List::from_value_mut(lhs)?
                 .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
             if lhs.ptr_eq(rhs) {
-                list.content.extend_from_within(..);
+                list.extend_from_self();
             } else {
-                rhs.with_iterator(heap, |it| list.content.extend(it))?;
+                rhs.with_iterator(heap, |it| list.extend(it))?;
             }
             Ok(lhs)
         } else {

@@ -25,7 +25,7 @@ use crate::{
     environment::GlobalsBuilder,
     stdlib::util::{convert_index, convert_indices},
     values::{
-        list::List,
+        list::{List, ListRef},
         none::{NoneOr, NoneType},
         Value, ValueError,
     },
@@ -54,7 +54,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// ```
     fn append(this: Value, ref el: Value) -> NoneType {
         let mut this = List::from_value_mut(this)?.unwrap();
-        this.content.push(el);
+        this.push(el);
         Ok(NoneType)
     }
 
@@ -76,7 +76,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// ```
     fn clear(this: Value) -> NoneType {
         let mut this = List::from_value_mut(this)?.unwrap();
-        this.content.clear();
+        this.clear();
         Ok(NoneType)
     }
 
@@ -105,10 +105,10 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         if this.ptr_eq(other) {
             // If the types alias, we can't borrow the `other` for iteration.
             // But we can do something smarter to double the elements
-            res.content.extend_from_within(..);
+            res.extend_from_self();
         } else {
             other.with_iterator(heap, |it| {
-                res.content.extend(it);
+                res.extend(it);
             })?;
         }
         Ok(NoneType)
@@ -144,13 +144,13 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # )"#);
     /// ```
     fn index(
-        this: ARef<List>,
+        this: ARef<ListRef>,
         ref needle: Value,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.content.len() as i32, start, end);
-        for (i, x) in this.content[start..end].iter().enumerate() {
+        let (start, end) = convert_indices(this.len() as i32, start, end);
+        for (i, x) in this[start..end].iter().enumerate() {
             if x.equals(needle)? {
                 return Ok((i + start) as i32);
             }
@@ -184,7 +184,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     fn insert(this: Value, ref index: i32, ref el: Value) -> NoneType {
         let mut this = List::from_value_mut(this)?.unwrap();
         let index = convert_index(this.len() as i32, index);
-        this.content.insert(index, el);
+        this.insert(index, el);
         Ok(NoneType)
     }
 
@@ -222,7 +222,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         if index < 0 || index >= this.len() as i32 {
             return Err(ValueError::IndexOutOfBound(index).into());
         }
-        Ok(this.content.remove(index as usize))
+        Ok(this.remove(index as usize))
     }
 
     /// [list.remove](
@@ -266,7 +266,8 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         // immutable borrow before making the mutable borrow.
         let position = {
             let this = List::from_value(this).unwrap();
-            match this.content.iter().position(|v| *v == needle) {
+            let position = this.iter().position(|v| v == needle);
+            match position {
                 Some(i) => i,
                 None => {
                     return Err(anyhow!("Element '{}' not found in list '{}'", needle, this));
@@ -276,7 +277,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         {
             // now mutate it with no further value calls
             let mut this = List::from_value_mut(this)?.unwrap();
-            this.content.remove(position);
+            this.remove(position);
             Ok(NoneType)
         }
     }

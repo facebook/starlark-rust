@@ -26,13 +26,14 @@ use std::{
     intrinsics::unlikely,
     marker::PhantomData,
     mem,
-    ops::Deref,
+    ops::{Deref, Index},
+    slice::SliceIndex,
 };
 
 use gazebo::{
     any::AnyLifetime,
     cell::ARef,
-    coerce::{coerce_ref, Coerce},
+    coerce::{coerce, coerce_ref, Coerce},
     prelude::*,
 };
 
@@ -44,9 +45,8 @@ use crate::{
         error::ValueError,
         index::{apply_slice, convert_index},
         iter::ARefIterator,
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue, FrozenHeap,
-        FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value,
-        ValueLike,
+        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenStringValue,
+        FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -69,12 +69,34 @@ pub struct FrozenList {
     content: Vec<FrozenValue>,
 }
 
+#[repr(transparent)]
+#[derive(Coerce)]
+pub struct ListRef<'v> {
+    content: [Value<'v>],
+}
+
+impl<'v> ListRef<'v> {
+    fn new<'a>(slice: &'a [Value<'v>]) -> &'a ListRef<'v> {
+        coerce(slice)
+    }
+
+    pub fn content(&self) -> &[Value<'v>] {
+        &self.content
+    }
+
+    /// Iterate over the elements in the list.
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
+    where
+        'v: 'a,
+    {
+        self.content.iter().copied()
+    }
+}
+
 unsafe impl<'v> AnyLifetime<'v> for ListGen<RefCell<List<'v>>> {
     any_lifetime_body!(ListGen<RefCell<List<'static>>>);
 }
 any_lifetime!(ListGen<FrozenList>);
-
-unsafe impl<'v> Coerce<List<'v>> for FrozenList {}
 
 impl<'v> AllocValue<'v> for List<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
@@ -91,13 +113,16 @@ impl AllocFrozenValue for FrozenList {
 impl SimpleValue for ListGen<FrozenList> {}
 
 impl<'v> List<'v> {
-    pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+    pub fn from_value(x: Value<'v>) -> Option<ARef<'v, ListRef<'v>>> {
         if x.unpack_frozen().is_some() {
             x.downcast_ref::<ListGen<FrozenList>>()
-                .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
+                .map(|x| ARef::new_ptr(ListRef::new(coerce(&x.0.content))))
         } else {
             let ptr = x.downcast_ref::<ListGen<RefCell<List>>>()?;
-            Some(ARef::new_ref(ptr.0.borrow()))
+            let borrow: Ref<List> = ptr.0.borrow();
+            Some(ARef::new_ref(Ref::map(borrow, |x: &List| {
+                ListRef::new(&x.content)
+            })))
         }
     }
 
@@ -118,11 +143,47 @@ impl<'v> List<'v> {
     pub(crate) fn is_list_type(x: TypeId) -> bool {
         x == TypeId::of::<ListGen<RefCell<List>>>() || x == TypeId::of::<ListGen<FrozenList>>()
     }
+
+    pub(crate) fn extend_from_self(&mut self) {
+        self.content.extend_from_within(..);
+    }
+
+    #[inline]
+    pub(crate) fn extend<I: IntoIterator<Item = Value<'v>>>(&mut self, iter: I) {
+        self.content.extend(iter)
+    }
+
+    pub(crate) fn push(&mut self, value: Value<'v>) {
+        self.content.push(value);
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.content.clear();
+    }
+
+    pub(crate) fn insert(&mut self, index: usize, value: Value<'v>) {
+        self.content.insert(index, value);
+    }
+
+    pub(crate) fn remove(&mut self, index: usize) -> Value<'v> {
+        self.content.remove(index)
+    }
 }
 
-impl<'v> FromValue<'v> for List<'v> {
-    fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
-        List::from_value(x)
+impl<'v, I: SliceIndex<[Value<'v>]>> Index<I> for List<'v> {
+    type Output = I::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        self.content.index(index)
+    }
+}
+
+impl<'v> Deref for ListRef<'v> {
+    type Target = [Value<'v>];
+
+    fn deref(&self) -> &[Value<'v>] {
+        &self.content
     }
 }
 
@@ -222,6 +283,12 @@ impl<'v> Display for List<'v> {
 impl Display for FrozenList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display_list(coerce_ref(&self.content), f)
+    }
+}
+
+impl<'v> Display for ListRef<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_list(&self.content, f)
     }
 }
 
@@ -436,6 +503,12 @@ impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
             .iter()
             .map(|v| V::unpack_value(v).expect("already validated value"))
             .collect()
+    }
+}
+
+impl<'v> UnpackValue<'v> for ARef<'v, ListRef<'v>> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        List::from_value(value)
     }
 }
 

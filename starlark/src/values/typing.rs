@@ -113,7 +113,7 @@ impl TypeCompiled {
                     0 => Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into()),
                     1 => {
                         // Must be a list with all elements of this type
-                        let t = *t.content.first().unwrap();
+                        let t = *t.first().unwrap();
                         let wildcard = t.unpack_str().map(is_wildcard) == Some(true);
                         if wildcard {
                             // Any type - so avoid the inner iteration
@@ -128,13 +128,13 @@ impl TypeCompiled {
                     }
                     2 => {
                         // A union type, can match either - special case of the arbitrary choice to go slightly faster
-                        let t1 = f(t.content[0], heap)?;
-                        let t2 = f(t.content[1], heap)?;
+                        let t1 = f(t[0], heap)?;
+                        let t2 = f(t[1], heap)?;
                         Ok(box move |v| t1(v) || t2(v))
                     }
                     _ => {
                         // A union type, can match any
-                        let ts = t.content.try_map(|t| f(*t, heap))?;
+                        let ts = t[..].try_map(|t| f(*t, heap))?;
                         Ok(box move |v| ts.iter().any(|t| t(v)))
                     }
                 }
