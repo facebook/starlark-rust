@@ -61,6 +61,9 @@ pub struct List<'v> {
     pub(crate) content: Vec<Value<'v>>,
 }
 
+#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
+struct MutableList<'v>(RefCell<List<'v>>);
+
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
 #[derive(Clone, Default, Debug, AnyLifetime)]
 #[repr(transparent)]
@@ -93,14 +96,14 @@ impl<'v> ListRef<'v> {
     }
 }
 
-unsafe impl<'v> AnyLifetime<'v> for ListGen<RefCell<List<'v>>> {
-    any_lifetime_body!(ListGen<RefCell<List<'static>>>);
+unsafe impl<'v> AnyLifetime<'v> for ListGen<MutableList<'v>> {
+    any_lifetime_body!(ListGen<MutableList<'static>>);
 }
 any_lifetime!(ListGen<FrozenList>);
 
 impl<'v> AllocValue<'v> for List<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(ListGen(RefCell::new(self)))
+        heap.alloc_complex(ListGen(MutableList(RefCell::new(self))))
     }
 }
 
@@ -118,8 +121,8 @@ impl<'v> List<'v> {
             x.downcast_ref::<ListGen<FrozenList>>()
                 .map(|x| ARef::new_ptr(ListRef::new(coerce(&x.0.content))))
         } else {
-            let ptr = x.downcast_ref::<ListGen<RefCell<List>>>()?;
-            let borrow: Ref<List> = ptr.0.borrow();
+            let ptr = x.downcast_ref::<ListGen<MutableList>>()?;
+            let borrow: Ref<List> = ptr.0.0.borrow();
             Some(ARef::new_ref(Ref::map(borrow, |x: &List| {
                 ListRef::new(&x.content)
             })))
@@ -130,10 +133,10 @@ impl<'v> List<'v> {
         if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
-        let ptr = x.downcast_ref::<ListGen<RefCell<List<'v>>>>();
+        let ptr = x.downcast_ref::<ListGen<MutableList<'v>>>();
         match ptr {
             None => Ok(None),
-            Some(ptr) => match ptr.0.try_borrow_mut() {
+            Some(ptr) => match ptr.0.0.try_borrow_mut() {
                 Ok(x) => Ok(Some(x)),
                 Err(_) => Err(ValueError::MutationDuringIteration.into()),
             },
@@ -141,7 +144,7 @@ impl<'v> List<'v> {
     }
 
     pub(crate) fn is_list_type(x: TypeId) -> bool {
-        x == TypeId::of::<ListGen<RefCell<List>>>() || x == TypeId::of::<ListGen<FrozenList>>()
+        x == TypeId::of::<ListGen<MutableList>>() || x == TypeId::of::<ListGen<FrozenList>>()
     }
 
     pub(crate) fn extend_from_self(&mut self) {
@@ -230,11 +233,12 @@ impl FrozenList {
     }
 }
 
-impl<'v> ComplexValue<'v> for ListGen<RefCell<List<'v>>> {
+impl<'v> ComplexValue<'v> for ListGen<MutableList<'v>> {
     type Frozen = ListGen<FrozenList>;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(ListGen(FrozenList {
             content: self
+                .0
                 .0
                 .into_inner()
                 .content
@@ -307,13 +311,13 @@ trait ListLike<'v>: Debug {
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
 }
 
-impl<'v> ListLike<'v> for RefCell<List<'v>> {
+impl<'v> ListLike<'v> for MutableList<'v> {
     fn content(&self) -> ARef<Vec<Value<'v>>> {
-        ARef::new_ref(Ref::map(self.borrow(), |x| &x.content))
+        ARef::new_ref(Ref::map(self.0.borrow(), |x| &x.content))
     }
 
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
-        match self.try_borrow_mut() {
+        match self.0.try_borrow_mut() {
             Ok(mut xs) => {
                 xs.content[i] = v;
                 Ok(())
