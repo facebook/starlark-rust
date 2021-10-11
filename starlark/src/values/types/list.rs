@@ -27,6 +27,7 @@ use std::{
     marker::PhantomData,
     mem,
     ops::{Deref, Index},
+    slice,
     slice::SliceIndex,
 };
 
@@ -45,13 +46,14 @@ use crate::{
         error::ValueError,
         index::{apply_slice, convert_index},
         iter::ARefIterator,
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenStringValue,
-        FrozenValue, Heap, SimpleValue, StarlarkValue, UnpackValue, Value, ValueLike,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenStringValue, FrozenValue, Heap,
+        StarlarkValue, UnpackValue, Value, ValueLike,
     },
 };
 
 #[derive(Clone, Default, Trace, Debug)]
-struct ListGen<T>(T);
+#[repr(transparent)]
+pub(crate) struct ListGen<T>(pub(crate) T);
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
 #[derive(Clone, Default, Trace, Debug, AnyLifetime)]
@@ -62,14 +64,15 @@ pub struct List<'v> {
 }
 
 #[derive(Clone, Default, Trace, Debug, AnyLifetime)]
-struct MutableList<'v>(RefCell<List<'v>>);
+pub(crate) struct MutableList<'v>(RefCell<List<'v>>);
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
 #[derive(Clone, Default, Debug, AnyLifetime)]
-#[repr(transparent)]
+#[repr(C)]
 pub struct FrozenList {
-    /// The data stored by the list.
-    content: Vec<FrozenValue>,
+    len: usize,
+    /// The data stored by the tuple.
+    content: [FrozenValue; 0],
 }
 
 #[repr(transparent)]
@@ -103,23 +106,23 @@ any_lifetime!(ListGen<FrozenList>);
 
 impl<'v> AllocValue<'v> for List<'v> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_complex(ListGen(MutableList(RefCell::new(self))))
+        heap.alloc_list(self.content)
     }
 }
 
 impl AllocFrozenValue for FrozenList {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(ListGen(self))
+        // Empty frozen list can be created by calling `FrozenList::default()`.
+        assert!(self.len() == 0);
+        heap.alloc_list(&[])
     }
 }
-
-impl SimpleValue for ListGen<FrozenList> {}
 
 impl<'v> List<'v> {
     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, ListRef<'v>>> {
         if x.unpack_frozen().is_some() {
             x.downcast_ref::<ListGen<FrozenList>>()
-                .map(|x| ARef::new_ptr(ListRef::new(coerce(&x.0.content))))
+                .map(|x| ARef::new_ptr(ListRef::new(coerce(x.0.content()))))
         } else {
             let ptr = x.downcast_ref::<ListGen<MutableList>>()?;
             let borrow: Ref<List> = ptr.0.0.borrow();
@@ -198,9 +201,7 @@ impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
 
 impl<'v, V: AllocFrozenValue> AllocFrozenValue for Vec<V> {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc(FrozenList {
-            content: self.into_map(|x| x.alloc_frozen_value(heap)),
-        })
+        heap.alloc_list(&self.into_map(|x| x.alloc_frozen_value(heap)))
     }
 }
 
@@ -218,32 +219,28 @@ where
     &'a V: AllocFrozenValue,
 {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc(FrozenList {
-            content: self.map(|x| x.alloc_frozen_value(heap)),
-        })
+        heap.alloc_list(&self.map(|x| x.alloc_frozen_value(heap)))
     }
 }
 
 impl FrozenList {
+    pub(crate) const unsafe fn new(len: usize) -> FrozenList {
+        FrozenList { len, content: [] }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    pub(crate) fn content(&self) -> &[FrozenValue] {
+        unsafe { slice::from_raw_parts(self.content.as_ptr(), self.len) }
+    }
+
     /// Obtain the [`FrozenList`] pointed at by a [`FrozenValue`].
     #[allow(clippy::trivially_copy_pass_by_ref)]
     // We need a lifetime because FrozenValue doesn't contain the right lifetime
     pub fn from_frozen_value(x: &FrozenValue) -> Option<&FrozenList> {
         x.downcast_ref::<ListGen<FrozenList>>().map(|x| &x.0)
-    }
-}
-
-impl<'v> ComplexValue<'v> for ListGen<MutableList<'v>> {
-    type Frozen = ListGen<FrozenList>;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(ListGen(FrozenList {
-            content: self
-                .0
-                .0
-                .into_inner()
-                .content
-                .into_try_map(|v| v.freeze(freezer))?,
-        }))
     }
 }
 
@@ -257,6 +254,10 @@ impl<'v> List<'v> {
 
     pub fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
+    }
+
+    pub(crate) fn new_starlark_value(content: Vec<Value<'v>>) -> ListGen<MutableList<'v>> {
+        ListGen(MutableList(RefCell::new(List::new(content))))
     }
 
     /// Obtain the length of the list.
@@ -278,6 +279,12 @@ impl<'v> List<'v> {
     }
 }
 
+impl<'v> MutableList<'v> {
+    pub(crate) fn take_content(&self) -> Vec<Value<'v>> {
+        mem::take(&mut self.0.borrow_mut().content)
+    }
+}
+
 impl<'v> Display for List<'v> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display_list(&self.content, f)
@@ -292,7 +299,7 @@ impl<'v> Display for MutableList<'v> {
 
 impl Display for FrozenList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_list(coerce_ref(&self.content), f)
+        display_list(coerce_ref(&self.content()), f)
     }
 }
 
@@ -308,18 +315,20 @@ impl FrozenList {
     where
         'v: 'a,
     {
-        self.content.iter().map(|e| e.to_value())
+        self.content().iter().map(|e| e.to_value())
     }
 }
 
-trait ListLike<'v>: Debug {
-    fn content(&self) -> ARef<Vec<Value<'v>>>;
+// This trait need to be `pub(crate)` because `ListGen<T>` is.
+pub(crate) trait ListLike<'v>: Debug {
+    fn content(&self) -> ARef<[Value<'v>]>;
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
+    fn extra_memory(&self) -> usize;
 }
 
 impl<'v> ListLike<'v> for MutableList<'v> {
-    fn content(&self) -> ARef<Vec<Value<'v>>> {
-        ARef::new_ref(Ref::map(self.0.borrow(), |x| &x.content))
+    fn content(&self) -> ARef<[Value<'v>]> {
+        ARef::new_ref(Ref::map(self.0.borrow(), |x| &x.content[..]))
     }
 
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
@@ -331,15 +340,23 @@ impl<'v> ListLike<'v> for MutableList<'v> {
             Err(_) => Err(ValueError::MutationDuringIteration.into()),
         }
     }
+
+    fn extra_memory(&self) -> usize {
+        self.0.borrow().content.capacity() * mem::size_of::<Value>()
+    }
 }
 
 impl<'v> ListLike<'v> for FrozenList {
-    fn content(&self) -> ARef<Vec<Value<'v>>> {
-        ARef::new_ptr(coerce_ref(&self.content))
+    fn content(&self) -> ARef<[Value<'v>]> {
+        ARef::new_ptr(coerce(self.content()))
     }
 
     fn set_at(&self, _i: usize, _v: Value<'v>) -> anyhow::Result<()> {
         Err(ValueError::CannotMutateImmutableValue.into())
+    }
+
+    fn extra_memory(&self) -> usize {
+        0
     }
 }
 
@@ -420,7 +437,7 @@ where
     }
 
     fn extra_memory(&self) -> usize {
-        self.0.content().capacity() * mem::size_of::<Value>()
+        self.0.extra_memory()
     }
 
     fn length(&self) -> anyhow::Result<i32> {

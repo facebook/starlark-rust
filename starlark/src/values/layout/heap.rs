@@ -43,8 +43,8 @@ use crate::{
         layout::{
             arena::{AValueHeader, Arena, HeapSummary, Reservation, WhichBump},
             avalue::{
-                complex, frozen_tuple_avalue, simple, starlark_str, tuple_avalue, AValue,
-                VALUE_EMPTY_TUPLE,
+                complex, frozen_list_avalue, frozen_tuple_avalue, list_avalue, simple,
+                starlark_str, tuple_avalue, AValue, VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
             constant::constant_string,
             value::{FrozenValue, Value},
@@ -217,6 +217,20 @@ impl FrozenHeap {
                 .arena
                 .alloc_extra_non_drop::<_>(frozen_tuple_avalue(elems.len()));
             MaybeUninit::write_slice(extra, elems);
+            FrozenValue::new_repr(&*avalue)
+        }
+    }
+
+    pub fn alloc_list(&self, elems: &[FrozenValue]) -> FrozenValue {
+        if elems.is_empty() {
+            return FrozenValue::new_ptr(VALUE_EMPTY_FROZEN_LIST);
+        }
+
+        unsafe {
+            let (avalue, elem_places) = self
+                .arena
+                .alloc_extra_non_drop(frozen_list_avalue(elems.len()));
+            MaybeUninit::write_slice(elem_places, elems);
             FrozenValue::new_repr(&*avalue)
         }
     }
@@ -423,6 +437,10 @@ impl Heap {
             MaybeUninit::write_slice(extra, elems);
             Value::new_repr(&*avalue)
         }
+    }
+
+    pub fn alloc_list<'v>(&'v self, elems: Vec<Value<'v>>) -> Value<'v> {
+        self.alloc_raw(WhichBump::Drop, list_avalue(elems))
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
