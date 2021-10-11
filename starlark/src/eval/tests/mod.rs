@@ -807,6 +807,27 @@ len(xs) == 0
 }
 
 #[test]
+fn test_dict_with_frozen_list_key_inlined() {
+    let mut a = Assert::new();
+    a.module(
+        "m.star",
+        "\
+li = []
+def f():
+    # This should fail at runtime.
+    return {li: 1}
+    ",
+    );
+    a.fail(
+        "\
+load('m.star', 'f')
+f()
+    ",
+        "Value of type `list` is not hashable",
+    );
+}
+
+#[test]
 fn test_joe() {
     // Based on discussions at https://github.com/facebookexperimental/starlark-rust/issues/22
     let code = r#"

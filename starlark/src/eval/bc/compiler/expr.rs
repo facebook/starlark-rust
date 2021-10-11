@@ -17,7 +17,7 @@
 
 //! Compile expressions.
 
-use std::{collections::HashSet, iter::FromIterator};
+use std::collections::HashSet;
 
 use gazebo::prelude::*;
 
@@ -54,6 +54,41 @@ pub(crate) fn write_exprs<'a>(
 }
 
 impl Spanned<ExprCompiledValue> {
+    fn try_dict_of_consts(
+        xs: &[(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)],
+    ) -> Option<SmallMap<FrozenValue, FrozenValue>> {
+        let mut res = SmallMap::new();
+        for (k, v) in xs {
+            let k = k.as_value()?.get_hashed().ok()?;
+            let v = v.as_value()?;
+            let prev = res.insert_hashed(k, v);
+            if prev.is_some() {
+                // If there are duplicates, so don't take the fast-literal
+                // path and go down the slow runtime path (which will raise the error).
+                // We have a lint that will likely fire on this issue (and others).
+                return None;
+            }
+        }
+        Some(res)
+    }
+
+    fn try_dict_const_keys(
+        xs: &[(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)],
+    ) -> Option<Box<[Hashed<FrozenValue>]>> {
+        let mut keys = Vec::new();
+        let mut keys_unique = HashSet::new();
+        for (k, _) in xs {
+            let k = k.as_value()?.get_hashed().ok()?;
+            keys.push(k);
+            let inserted = keys_unique.insert(k);
+            if !inserted {
+                // Otherwise fail at runtime
+                return None;
+            }
+        }
+        Some(keys.into_boxed_slice())
+    }
+
     fn write_dict(
         span: Span,
         xs: &[(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)],
@@ -61,46 +96,13 @@ impl Spanned<ExprCompiledValue> {
     ) {
         if xs.is_empty() {
             bc.write_instr::<InstrDictNew>(span, ());
+        } else if let Some(d) = Self::try_dict_of_consts(xs) {
+            bc.write_instr::<InstrDictOfConsts>(span, d);
+        } else if let Some(keys) = Self::try_dict_const_keys(xs) {
+            assert_eq!(keys.len(), xs.len());
+            write_exprs(xs.iter().map(|(_, v)| v), bc);
+            bc.write_instr::<InstrDictConstKeys>(span, (ArgPopsStack(xs.len() as u32), keys));
         } else {
-            if xs.iter().all(|(k, _)| k.as_value().is_some()) {
-                if xs.iter().all(|(_, v)| v.as_value().is_some()) {
-                    let mut res = SmallMap::new();
-                    for (k, v) in xs.iter() {
-                        res.insert_hashed(
-                            k.as_value()
-                                .unwrap()
-                                .get_hashed()
-                                .expect("Dictionary literals are hashable"),
-                            v.as_value().unwrap(),
-                        );
-                    }
-
-                    // If we lost some elements, then there are duplicates, so don't take the fast-literal
-                    // path and go down the slow runtime path (which will raise the error).
-                    // We have a lint that will likely fire on this issue (and others).
-                    if res.len() == xs.len() {
-                        bc.write_instr::<InstrDictOfConsts>(span, res);
-                        return;
-                    }
-                }
-
-                let keys: Vec<Hashed<FrozenValue>> = xs.map(|(k, _)| {
-                    k.as_value()
-                        .unwrap()
-                        .get_hashed()
-                        .expect("Dictionary literals are hashable")
-                });
-                let keys_unique: HashSet<&Hashed<FrozenValue>> = HashSet::from_iter(&keys);
-                // Otherwise fail at runtime
-                if keys.len() == keys_unique.len() {
-                    write_exprs(xs.iter().map(|(_, v)| v), bc);
-                    bc.write_instr::<InstrDictConstKeys>(
-                        span,
-                        (ArgPopsStack(xs.len() as u32), keys.into_boxed_slice()),
-                    );
-                    return;
-                }
-            }
             let key_spans = xs.map(|(k, _v)| k.span);
             let key_spans = bc.alloc_any(key_spans);
             write_exprs(xs.iter().flat_map(|(k, v)| [k, v]), bc);
