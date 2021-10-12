@@ -126,7 +126,9 @@ impl<'v> List<'v> {
         }
     }
 
-    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
+    pub(crate) fn from_value_mut(
+        x: Value<'v>,
+    ) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
         if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
