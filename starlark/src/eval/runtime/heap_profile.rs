@@ -519,7 +519,10 @@ mod test {
     use super::*;
     use crate::{
         environment::{Globals, Module},
-        eval::Evaluator,
+        eval::{
+            runtime::heap_profile::summary::{FuncInfo, Info},
+            Evaluator,
+        },
         syntax::{AstModule, Dialect},
         values::Value,
     };
@@ -566,5 +569,44 @@ f
         HeapProfile::write_flame_heap_profile_to(&mut Vec::new(), module.heap())?;
 
         Ok(())
+    }
+
+    // Test data is collected from both drop and non-drop heaps.
+    #[test]
+    fn drop_non_drop() {
+        let ast = AstModule::parse(
+            "x.star",
+            "\
+_ignore = {1: 2}       # allocate a dict in drop
+_ignore = str([1])     # allocate a string in non_drop
+        "
+            .to_owned(),
+            &Dialect::Extended,
+        )
+        .unwrap();
+
+        let globals = Globals::standard();
+        let module = Module::new();
+        let mut eval = Evaluator::new(&module, &globals);
+        eval.enable_heap_profile();
+
+        eval.eval_module(ast).unwrap();
+
+        let mut ids = FunctionIds::default();
+        let root = ids.get_string("(root)".to_owned());
+        let mut info = Info {
+            ids,
+            info: Vec::new(),
+            last_changed: Instant::now(),
+            call_stack: vec![(root, Duration::ZERO, Instant::now())],
+        };
+
+        eval.heap().for_each_ordered(|v| info.process(v));
+
+        let total = FuncInfo::merge(info.info.iter());
+        // from non-drop heap
+        assert_eq!(*total.allocs.get("string").unwrap(), 1);
+        // from drop heap
+        assert_eq!(*total.allocs.get("dict").unwrap(), 1);
     }
 }
