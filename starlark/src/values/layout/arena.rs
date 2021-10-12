@@ -205,12 +205,20 @@ impl Arena {
         }
     }
 
+    fn bump_for_type<'v, T: AValue<'v>>(&self) -> &Bump {
+        if mem::needs_drop::<T>() {
+            &self.drop
+        } else {
+            &self.non_drop
+        }
+    }
+
     // Reservation should really be an incremental type
     pub(crate) fn reserve_with_extra<'v, 'v2: 'v, T: AValue<'v2>>(
         &'v self,
         extra_len: usize,
     ) -> (Reservation<'v, 'v2, T>, &'v mut [MaybeUninit<T::ExtraElem>]) {
-        let (p, extra) = Self::alloc_uninit::<T>(&self.drop, extra_len);
+        let (p, extra) = Self::alloc_uninit::<T>(self.bump_for_type::<T>(), extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
