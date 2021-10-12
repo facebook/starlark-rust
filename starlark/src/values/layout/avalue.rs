@@ -98,6 +98,9 @@ pub(crate) static VALUE_EMPTY_FROZEN_LIST: &AValueHeader = {
 
 /// Sized counterpart of [`AValueDyn`].
 pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
+    /// Unwrapped type.
+    type StarlarkValue: StarlarkValue<'v>;
+
     /// Certain types like `Tuple` or `StarlarkStr` have payload array
     /// placed in a heap after `Self`. This is the type of an element of that array.
     type ExtraElem: 'v;
@@ -258,6 +261,8 @@ fn clear_lsb(x: usize) -> usize {
 }
 
 impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
+    type StarlarkValue = T;
+
     type ExtraElem = ();
 
     fn extra_len(&self) -> usize {
@@ -281,6 +286,8 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
+    type StarlarkValue = StarlarkStr;
+
     type ExtraElem = u8;
 
     fn extra_len(&self) -> usize {
@@ -316,6 +323,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
+    type StarlarkValue = Tuple<'v>;
+
     type ExtraElem = Value<'v>;
 
     fn extra_len(&self) -> usize {
@@ -369,6 +378,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
+    type StarlarkValue = FrozenTuple;
+
     type ExtraElem = FrozenValue;
 
     fn extra_len(&self) -> usize {
@@ -393,6 +404,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, ListGen<MutableList<'v>>> {
+    type StarlarkValue = ListGen<MutableList<'v>>;
+
     type ExtraElem = ();
 
     fn extra_len(&self) -> usize {
@@ -426,6 +439,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<MutableList<'v>>> {
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
+    type StarlarkValue = ListGen<FrozenList>;
+
     type ExtraElem = FrozenValue;
 
     fn extra_len(&self) -> usize {
@@ -453,6 +468,8 @@ impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
 where
     'v: 'static,
 {
+    type StarlarkValue = T;
+
     type ExtraElem = ();
 
     fn extra_len(&self) -> usize {
@@ -503,6 +520,8 @@ where
 }
 
 impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
+    type StarlarkValue = T;
+
     type ExtraElem = ();
 
     fn extra_len(&self) -> usize {
