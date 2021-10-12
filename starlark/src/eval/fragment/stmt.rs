@@ -506,12 +506,13 @@ pub(crate) fn add_assign<'v>(
 
         if List::is_list_type(lhs_ty) {
             // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
-            let mut list = List::from_value_mut(lhs)?
+            let list = List::from_value_mut(lhs)?
                 .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
             if lhs.ptr_eq(rhs) {
-                list.extend_from_self();
+                list.double(heap);
             } else {
-                rhs.with_iterator(heap, |it| list.extend(it))?;
+                // TODO: if RHS is list, consider calling `List::extend_from_slice`.
+                rhs.with_iterator(heap, |it| list.extend(it, heap))?;
             }
             Ok(lhs)
         } else {

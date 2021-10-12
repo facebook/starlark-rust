@@ -41,11 +41,10 @@ use crate::{
         string::StarlarkStr,
         types::{
             array::Array,
-            list::MutableList,
             tuple::{FrozenTuple, Tuple},
         },
         ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
-        StarlarkValueDyn, Trace, Tracer, Value,
+        StarlarkValueDyn, Trace, Tracer, Value, ValueTyped,
     },
 };
 
@@ -237,8 +236,10 @@ pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValue<'static, ExtraElem 
     Wrapper(Direct, unsafe { FrozenTuple::new(len) })
 }
 
-pub(crate) fn list_avalue<'v>(content: Vec<Value<'v>>) -> impl AValue<'v, ExtraElem = ()> {
-    Wrapper(Direct, List::new_starlark_value(content))
+pub(crate) fn list_avalue<'v>(
+    content: ValueTyped<'v, Array<'v>>,
+) -> impl AValue<'v, StarlarkValue = ListGen<List<'v>>, ExtraElem = ()> {
+    Wrapper(Direct, ListGen(List::new(content)))
 }
 
 pub(crate) fn frozen_list_avalue(len: usize) -> impl AValue<'static, ExtraElem = FrozenValue> {
@@ -440,8 +441,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, ListGen<MutableList<'v>>> {
-    type StarlarkValue = ListGen<MutableList<'v>>;
+impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
+    type StarlarkValue = ListGen<List<'v>>;
 
     type ExtraElem = ();
 
@@ -454,13 +455,14 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<MutableList<'v>>> {
         me: *mut AValueHeader,
         freezer: &Freezer,
     ) -> anyhow::Result<FrozenValue> {
-        let content = self.1.0.take_content();
+        let content = self.1.0.content();
         let (fv, r, extra) =
             freezer.reserve_with_extra::<Wrapper<Direct, ListGen<FrozenList>>>(content.len());
+        AValueForward::assert_does_not_overwrite_extra::<Self>();
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
         r.fill(Wrapper(Direct, ListGen(FrozenList::new(content.len()))));
         assert_eq!(extra.len(), content.len());
-        for (elem_place, elem) in extra.iter_mut().zip(&content) {
+        for (elem_place, elem) in extra.iter_mut().zip(content) {
             elem_place.write(freezer.freeze(*elem)?);
         }
         Ok(fv)
@@ -1016,8 +1018,7 @@ mod test {
         List::from_value_mut(list)
             .unwrap()
             .unwrap()
-            .content
-            .push(tuple);
+            .push(tuple, module.heap());
         module.set("t", tuple);
         module.freeze().unwrap();
     }

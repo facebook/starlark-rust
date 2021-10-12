@@ -18,7 +18,6 @@
 //! Methods for the `list` type.
 
 use anyhow::anyhow;
-use gazebo::cell::ARef;
 
 use crate::{
     self as starlark,
@@ -53,8 +52,8 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn append(this: Value, ref el: Value) -> NoneType {
-        let mut this = List::from_value_mut(this)?.unwrap();
-        this.push(el);
+        let this = List::from_value_mut(this)?.unwrap();
+        this.push(el, heap);
         Ok(NoneType)
     }
 
@@ -75,7 +74,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn clear(this: Value) -> NoneType {
-        let mut this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?.unwrap();
         this.clear();
         Ok(NoneType)
     }
@@ -101,14 +100,14 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn extend(this: Value, ref other: Value) -> NoneType {
-        let mut res = List::from_value_mut(this)?.unwrap();
+        let res = List::from_value_mut(this)?.unwrap();
         if this.ptr_eq(other) {
             // If the types alias, we can't borrow the `other` for iteration.
             // But we can do something smarter to double the elements
-            res.extend_from_self();
+            res.double(heap);
         } else {
             other.with_iterator(heap, |it| {
-                res.extend(it);
+                res.extend(it, heap);
             })?;
         }
         Ok(NoneType)
@@ -144,7 +143,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # )"#);
     /// ```
     fn index(
-        this: ARef<ListRef>,
+        this: &ListRef,
         ref needle: Value,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
@@ -182,9 +181,9 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn insert(this: Value, ref index: i32, ref el: Value) -> NoneType {
-        let mut this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?.unwrap();
         let index = convert_index(this.len() as i32, index);
-        this.insert(index, el);
+        this.insert(index, el, heap);
         Ok(NoneType)
     }
 
@@ -217,7 +216,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
             None => None,
         };
 
-        let mut this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?.unwrap();
         let index = index.unwrap_or_else(|| (this.len() as i32) - 1);
         if index < 0 || index >= this.len() as i32 {
             return Err(ValueError::IndexOutOfBound(index).into());
@@ -276,7 +275,7 @@ pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
         };
         {
             // now mutate it with no further value calls
-            let mut this = List::from_value_mut(this)?.unwrap();
+            let this = List::from_value_mut(this)?.unwrap();
             this.remove(position);
             Ok(NoneType)
         }

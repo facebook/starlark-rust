@@ -69,7 +69,6 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
         ValueTyped(value, marker::PhantomData)
     }
 
-    #[allow(dead_code)] // TODO: remove when used
     pub(crate) fn new_repr<A: AValue<'v, StarlarkValue = T>>(
         repr: &'v AValueRepr<A>,
     ) -> ValueTyped<'v, T> {
@@ -102,7 +101,6 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
         Some(FrozenValueTyped(value, marker::PhantomData))
     }
 
-    #[allow(dead_code)] // TODO: remove when used
     pub(crate) fn new_repr<A: AValue<'v, StarlarkValue = T>>(
         repr: &'v AValueRepr<A>,
     ) -> FrozenValueTyped<'v, T> {

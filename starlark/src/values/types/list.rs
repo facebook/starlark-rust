@@ -19,20 +19,18 @@
 
 use std::{
     any::TypeId,
-    cell::{Ref, RefCell},
+    cell::Cell,
     cmp,
     cmp::Ordering,
     fmt::{self, Debug, Display},
-    intrinsics::unlikely,
+    intrinsics::{likely, unlikely},
     marker::PhantomData,
-    mem,
     ops::Deref,
     slice,
 };
 
 use gazebo::{
     any::AnyLifetime,
-    cell::ARef,
     coerce::{coerce, coerce_ref, Coerce},
     prelude::*,
 };
@@ -41,12 +39,12 @@ use crate as starlark;
 use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
+        array::Array,
         comparison::{compare_slice, equals_slice},
         error::ValueError,
         index::{apply_slice, convert_index},
-        iter::ARefIterator,
         AllocFrozenValue, AllocValue, FrozenHeap, FrozenStringValue, FrozenValue, Heap,
-        StarlarkValue, UnpackValue, Value, ValueLike,
+        StarlarkValue, UnpackValue, Value, ValueLike, ValueTyped,
     },
 };
 
@@ -55,15 +53,11 @@ use crate::{
 pub(crate) struct ListGen<T>(pub(crate) T);
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(Clone, Trace, Debug, AnyLifetime)]
-#[repr(transparent)]
+#[derive(Trace, Debug, AnyLifetime)]
 pub struct List<'v> {
     /// The data stored by the list.
-    pub(crate) content: Vec<Value<'v>>,
+    pub(crate) content: Cell<ValueTyped<'v, Array<'v>>>,
 }
-
-#[derive(Clone, Trace, Debug, AnyLifetime)]
-pub(crate) struct MutableList<'v>(RefCell<List<'v>>);
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
 #[derive(Clone, Default, Debug, AnyLifetime)]
@@ -98,8 +92,8 @@ impl<'v> ListRef<'v> {
     }
 }
 
-unsafe impl<'v> AnyLifetime<'v> for ListGen<MutableList<'v>> {
-    any_lifetime_body!(ListGen<MutableList<'static>>);
+unsafe impl<'v> AnyLifetime<'v> for ListGen<List<'v>> {
+    any_lifetime_body!(ListGen<List<'static>>);
 }
 any_lifetime!(ListGen<FrozenList>);
 
@@ -112,62 +106,113 @@ impl AllocFrozenValue for FrozenList {
 }
 
 impl<'v> List<'v> {
-    pub fn from_value(x: Value<'v>) -> Option<ARef<'v, ListRef<'v>>> {
+    pub fn from_value(x: Value<'v>) -> Option<&'v ListRef<'v>> {
         if x.unpack_frozen().is_some() {
             x.downcast_ref::<ListGen<FrozenList>>()
-                .map(|x| ARef::new_ptr(ListRef::new(coerce(x.0.content()))))
+                .map(|x| ListRef::new(coerce(x.0.content())))
         } else {
-            let ptr = x.downcast_ref::<ListGen<MutableList>>()?;
-            let borrow: Ref<List> = ptr.0.0.borrow();
-            Some(ARef::new_ref(Ref::map(borrow, |x: &List| {
-                ListRef::new(&x.content)
-            })))
+            let ptr = x.downcast_ref::<ListGen<List>>()?;
+            Some(ListRef::new(ptr.0.content()))
         }
     }
 
-    pub(crate) fn from_value_mut(
-        x: Value<'v>,
-    ) -> anyhow::Result<Option<std::cell::RefMut<'v, Self>>> {
+    pub(crate) fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<&'v Self>> {
         if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
-        let ptr = x.downcast_ref::<ListGen<MutableList<'v>>>();
+        let ptr = x.downcast_ref::<ListGen<List<'v>>>();
         match ptr {
             None => Ok(None),
-            Some(ptr) => match ptr.0.0.try_borrow_mut() {
-                Ok(x) => Ok(Some(x)),
-                Err(_) => Err(ValueError::MutationDuringIteration.into()),
-            },
+            Some(ptr) => {
+                ptr.0.check_can_mutate()?;
+                Ok(Some(&ptr.0))
+            }
         }
     }
 
     pub(crate) fn is_list_type(x: TypeId) -> bool {
-        x == TypeId::of::<ListGen<MutableList>>() || x == TypeId::of::<ListGen<FrozenList>>()
+        x == TypeId::of::<ListGen<List>>() || x == TypeId::of::<ListGen<FrozenList>>()
     }
 
-    pub(crate) fn extend_from_self(&mut self) {
-        self.content.extend_from_within(..);
+    /// Return an error if there's at least one iterator over the list.
+    fn check_can_mutate(&self) -> anyhow::Result<()> {
+        if unlikely(self.content.get().as_ref().iter_count_is_non_zero()) {
+            return Err(ValueError::MutationDuringIteration.into());
+        }
+        Ok(())
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn reserve_additional_slow(&self, additional: usize, heap: &'v Heap) {
+        let new_cap = cmp::max(self.len() + additional, self.len() * 2);
+        // Size of `Array` is 2 words and size of `List` is one word,
+        // so allocating at least 4 words would not be too large waste.
+        // Note `Vec` allocates 4 by default.
+        // Also note `Array` removes extra capacity on GC.
+        let new_cap = cmp::max(new_cap, 4);
+
+        let new_array = heap.alloc_array(new_cap);
+        new_array.extend_from_slice(self.content());
+        self.content.set(new_array);
+    }
+
+    #[inline(always)]
+    fn reserve_additional(&self, additional: usize, heap: &'v Heap) {
+        if likely(self.content.get().as_ref().remaining_capacity() >= additional) {
+            return;
+        }
+
+        self.reserve_additional_slow(additional, heap);
+    }
+
+    pub(crate) fn double(&self, heap: &'v Heap) {
+        self.reserve_additional(self.len(), heap);
+        self.content.get().double();
     }
 
     #[inline]
-    pub(crate) fn extend<I: IntoIterator<Item = Value<'v>>>(&mut self, iter: I) {
-        self.content.extend(iter)
+    pub(crate) fn extend<I: IntoIterator<Item = Value<'v>>>(&self, iter: I, heap: &'v Heap) {
+        let iter = iter.into_iter();
+        let (lo, hi) = iter.size_hint();
+        match hi {
+            Some(hi) if lo == hi => {
+                // Exact size iterator.
+                self.reserve_additional(lo, heap);
+                // Extend will panic if upper bound is provided incorrectly.
+                self.content.get().extend(iter);
+            }
+            Some(hi) if self.content.get().remaining_capacity() >= hi => {
+                // Enough capacity for upper bound.
+                // Extend will panic if upper bound is provided incorrectly.
+                self.content.get().extend(iter);
+            }
+            _ => {
+                // Default slow version.
+                self.reserve_additional(iter.size_hint().0, heap);
+                for item in iter {
+                    self.push(item, heap);
+                }
+            }
+        }
     }
 
-    pub(crate) fn push(&mut self, value: Value<'v>) {
-        self.content.push(value);
+    pub(crate) fn push(&self, value: Value<'v>, heap: &'v Heap) {
+        self.reserve_additional(1, heap);
+        self.content.get().push(value);
     }
 
-    pub(crate) fn clear(&mut self) {
-        self.content.clear();
+    pub(crate) fn clear(&self) {
+        self.content.get().clear();
     }
 
-    pub(crate) fn insert(&mut self, index: usize, value: Value<'v>) {
-        self.content.insert(index, value);
+    pub(crate) fn insert(&self, index: usize, value: Value<'v>, heap: &'v Heap) {
+        self.reserve_additional(1, heap);
+        self.content.get().insert(index, value);
     }
 
-    pub(crate) fn remove(&mut self, index: usize) -> Value<'v> {
-        self.content.remove(index)
+    pub(crate) fn remove(&self, index: usize) -> Value<'v> {
+        self.content.get().remove(index)
     }
 }
 
@@ -238,22 +283,23 @@ impl<'v> List<'v> {
         ListGen::<FrozenList>::get_type_value_static()
     }
 
-    pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
-        Self { content }
-    }
-
-    pub(crate) fn new_starlark_value(content: Vec<Value<'v>>) -> ListGen<MutableList<'v>> {
-        ListGen(MutableList(RefCell::new(List::new(content))))
+    pub(crate) fn new(content: ValueTyped<'v, Array<'v>>) -> Self {
+        List {
+            content: Cell::new(content),
+        }
     }
 
     /// Obtain the length of the list.
     pub fn len(&self) -> usize {
-        self.content.len()
+        self.content.get().len()
     }
 
     /// List content.
+    ///
+    /// Note this operation does not prevent mutation of this list while
+    /// holding the slice. But such mutation does not violate memory-safety.
     pub fn content(&self) -> &[Value<'v>] {
-        &self.content
+        self.content.get().as_ref().content()
     }
 
     /// Iterate over the elements in the list.
@@ -261,25 +307,13 @@ impl<'v> List<'v> {
     where
         'v: 'a,
     {
-        self.content.iter().copied()
-    }
-}
-
-impl<'v> MutableList<'v> {
-    pub(crate) fn take_content(&self) -> Vec<Value<'v>> {
-        mem::take(&mut self.0.borrow_mut().content)
+        self.content.get().as_ref().iter()
     }
 }
 
 impl<'v> Display for List<'v> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_list(&self.content, f)
-    }
-}
-
-impl<'v> Display for MutableList<'v> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_list(&self.0.borrow().content, f)
+        display_list(self.content.get().content(), f)
     }
 }
 
@@ -307,42 +341,64 @@ impl FrozenList {
 
 // This trait need to be `pub(crate)` because `ListGen<T>` is.
 pub(crate) trait ListLike<'v>: Debug {
-    fn content(&self) -> ARef<[Value<'v>]>;
+    fn content(&self) -> &[Value<'v>];
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
-    fn extra_memory(&self) -> usize;
+    fn iterate<'a>(&'a self) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
+    where
+        'v: 'a;
+    fn with_iterator(
+        &self,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()>;
 }
 
-impl<'v> ListLike<'v> for MutableList<'v> {
-    fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ref(Ref::map(self.0.borrow(), |x| &x.content[..]))
+impl<'v> ListLike<'v> for List<'v> {
+    fn content(&self) -> &[Value<'v>] {
+        self.content.get().as_ref().content()
     }
 
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()> {
-        match self.0.try_borrow_mut() {
-            Ok(mut xs) => {
-                xs.content[i] = v;
-                Ok(())
-            }
-            Err(_) => Err(ValueError::MutationDuringIteration.into()),
-        }
+        self.check_can_mutate()?;
+        self.content.get().set_at(i, v);
+        Ok(())
     }
 
-    fn extra_memory(&self) -> usize {
-        self.0.borrow().content.capacity() * mem::size_of::<Value>()
+    fn iterate<'a>(&'a self) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
+    where
+        'v: 'a,
+    {
+        box self.content.get().as_ref().iter()
+    }
+
+    fn with_iterator(
+        &self,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        f(&mut self.content.get().iter())
     }
 }
 
 impl<'v> ListLike<'v> for FrozenList {
-    fn content(&self) -> ARef<[Value<'v>]> {
-        ARef::new_ptr(coerce(self.content()))
+    fn content(&self) -> &[Value<'v>] {
+        coerce(self.content())
     }
 
     fn set_at(&self, _i: usize, _v: Value<'v>) -> anyhow::Result<()> {
         Err(ValueError::CannotMutateImmutableValue.into())
     }
 
-    fn extra_memory(&self) -> usize {
-        0
+    fn iterate<'a>(&'a self) -> Box<dyn Iterator<Item = Value<'v>> + 'a>
+    where
+        'v: 'a,
+    {
+        box coerce(self.content()).iter().copied()
+    }
+
+    fn with_iterator(
+        &self,
+        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        f(&mut coerce(self.content()).iter().copied())
     }
 }
 
@@ -423,7 +479,7 @@ where
     }
 
     fn extra_memory(&self) -> usize {
-        self.0.extra_memory()
+        0
     }
 
     fn length(&self) -> anyhow::Result<i32> {
@@ -458,9 +514,7 @@ where
     where
         'v: 'a,
     {
-        Ok(box ARefIterator::new(self.0.content(), |x| {
-            x.iter().copied()
-        }))
+        Ok(self.0.iterate())
     }
 
     fn with_iterator(
@@ -468,12 +522,12 @@ where
         _heap: &'v Heap,
         f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
-        f(&mut self.0.content().iter().copied())
+        self.0.with_iterator(f)
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
-            Ok(heap.alloc_list_concat(&self.0.content(), other.content()))
+            Ok(heap.alloc_list_concat(self.0.content(), other.content()))
         } else {
             ValueError::unsupported_with(self, "+", other)
         }
@@ -516,7 +570,7 @@ impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
     }
 }
 
-impl<'v> UnpackValue<'v> for ARef<'v, ListRef<'v>> {
+impl<'v> UnpackValue<'v> for &'v ListRef<'v> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         List::from_value(value)
     }

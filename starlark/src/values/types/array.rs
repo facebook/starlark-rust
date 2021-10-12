@@ -15,9 +15,6 @@
  * limitations under the License.
  */
 
-// TODO: remove when used
-#![allow(dead_code)]
-
 //! Array type used in implementation of `List`.
 //!
 //! This object is used internally, and not visible outside of `starlark` crate.

@@ -1256,7 +1256,7 @@ impl InstrNoFlowImpl for InstrComprListAppendImpl {
 
     #[inline(always)]
     fn run_with_args<'v>(
-        _eval: &mut Evaluator<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
         _: BcPtrAddr,
         (): &(),
@@ -1265,8 +1265,7 @@ impl InstrNoFlowImpl for InstrComprListAppendImpl {
         List::from_value_mut(list)
             .unwrap()
             .unwrap()
-            .content
-            .push(item);
+            .push(item, eval.heap());
         Ok(list)
     }
 }

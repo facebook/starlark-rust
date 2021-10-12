@@ -383,6 +383,14 @@ impl Heap {
         Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
+    fn alloc_raw_typed<'v, A: AValue<'v, ExtraElem = ()>>(
+        &'v self,
+        which_bump: WhichBump,
+        x: A,
+    ) -> ValueTyped<'v, A::StarlarkValue> {
+        unsafe { ValueTyped::new_unchecked(self.alloc_raw(which_bump, x)) }
+    }
+
     pub(crate) fn alloc_str_init<'v>(
         &'v self,
         len: usize,
@@ -441,8 +449,6 @@ impl Heap {
         }
     }
 
-    // TODO: remove when used
-    #[allow(dead_code)]
     pub(crate) fn alloc_array<'v>(&'v self, cap: usize) -> ValueTyped<'v, Array<'v>> {
         if cap == 0 {
             return FrozenValueTyped::new_repr(VALUE_EMPTY_ARRAY.repr()).to_value_typed();
@@ -458,17 +464,25 @@ impl Heap {
     }
 
     pub fn alloc_list<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
-        self.alloc_raw(WhichBump::Drop, list_avalue(elems.to_vec()))
+        let array = self.alloc_array(elems.len());
+        array.extend_from_slice(elems);
+        self.alloc_raw(WhichBump::NonDrop, list_avalue(array))
     }
 
     pub fn alloc_list_iter<'v>(&'v self, elems: impl IntoIterator<Item = Value<'v>>) -> Value<'v> {
-        self.alloc_list(&elems.into_iter().collect::<Vec<_>>())
+        let elems = elems.into_iter();
+        let array = self.alloc_array(0);
+        let list = self.alloc_raw_typed(WhichBump::NonDrop, list_avalue(array));
+        list.0.extend(elems, self);
+        list.to_value()
     }
 
     /// Allocate a list by concatenating two slices.
     pub(crate) fn alloc_list_concat<'v>(&'v self, a: &[Value<'v>], b: &[Value<'v>]) -> Value<'v> {
-        // TODO: this is inefficient, but replaced with proper version in D31530839
-        self.alloc_list_iter(a.iter().copied().chain(b.iter().copied()))
+        let array = self.alloc_array(a.len() + b.len());
+        array.extend_from_slice(a);
+        array.extend_from_slice(b);
+        self.alloc_raw(WhichBump::NonDrop, list_avalue(array))
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
