@@ -164,7 +164,6 @@ impl Display for BcInstrs {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut ptr = self.start_ptr();
         loop {
-            println!("{:?}", ptr);
             assert!(ptr < self.end_ptr());
             let ip = ptr.offset_from(self.start_ptr());
             let opcopde = ptr.get_opcode();
