@@ -60,7 +60,7 @@ pub struct List<'v> {
 }
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(Clone, Debug, AnyLifetime)]
+#[derive(Debug, AnyLifetime)]
 #[repr(C)]
 pub struct FrozenList {
     len: usize,

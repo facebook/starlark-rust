@@ -29,7 +29,6 @@ use std::{
 use gazebo::{
     any::AnyLifetime,
     coerce::{coerce, coerce_ref, Coerce},
-    prelude::*,
 };
 
 use crate::values::{
@@ -40,7 +39,6 @@ use crate::values::{
 };
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
-#[derive(Clone, Default_)]
 #[repr(C)]
 pub struct TupleGen<V> {
     len: usize,
