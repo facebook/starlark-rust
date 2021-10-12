@@ -21,7 +21,6 @@
 use std::{cmp::Ordering, num::NonZeroI32};
 
 use anyhow::anyhow;
-use gazebo::prelude::*;
 
 use crate::{
     self as starlark,
@@ -315,13 +314,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// enumerate(["one", "two"], 1) == [(1, "one"), (2, "two")]
     /// # "#);
     /// ```
-    fn enumerate(ref it: Value, start @ 0: i32) -> List<'v> {
+    fn enumerate(ref it: Value, start @ 0: i32) -> Value<'v> {
         let v = it
             .iterate(heap)?
             .enumerate()
-            .map(|(k, v)| heap.alloc((k as i32 + start, v)))
-            .collect();
-        Ok(List::new(v))
+            .map(|(k, v)| heap.alloc((k as i32 + start, v)));
+        Ok(heap.alloc_list_iter(v))
     }
 
     /// [float](
@@ -646,16 +644,16 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#, "not supported");
     /// ```
     #[starlark_type(List::TYPE)]
-    fn list(ref a: Option<Value>) -> List<'v> {
-        let mut l = Vec::new();
-        if let Some(a) = a {
+    fn list(ref a: Option<Value>) -> Value<'v> {
+        Ok(if let Some(a) = a {
             if let Some(xs) = List::from_value(a) {
-                l.extend(xs.iter());
+                heap.alloc_list(xs.content())
             } else {
-                a.with_iterator(heap, |it| l.extend(it))?;
+                a.with_iterator(heap, |it| heap.alloc_list_iter(it))?
             }
-        }
-        Ok(List::new(l))
+        } else {
+            heap.alloc_list(&[])
+        })
     }
 
     /// [max](
@@ -882,10 +880,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// reversed({"one": 1, "two": 2}.keys())  == ["two", "one"]
     /// # "#);
     /// ```
-    fn reversed(ref a: Value) -> List<'v> {
+    fn reversed(ref a: Value) -> Value<'v> {
         let mut v: Vec<Value> = a.iterate(heap)?.collect();
         v.reverse();
-        Ok(List::new(v))
+        Ok(heap.alloc_list(&v))
     }
 
     /// [sorted](
@@ -910,7 +908,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// sorted(["two", "three", "four"], key=len, reverse=True)  == ["three", "four", "two"] # longest to shortest
     /// # "#);
     /// ```
-    fn sorted(ref x: Value, key: Option<Value>, reverse: Option<Value>) -> List<'v> {
+    fn sorted(ref x: Value, key: Option<Value>, reverse: Option<Value>) -> Value<'v> {
         let it = x.iterate(heap)?;
         let mut it = match key {
             None => it.map(|x| (x, x)).collect(),
@@ -943,8 +941,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
 
         compare_ok?;
 
-        let result: Vec<Value> = it.into_map(|x| x.0);
-        Ok(List::new(result))
+        Ok(heap.alloc_list_iter(it.into_iter().map(|x| x.0)))
     }
 
     /// [str](
@@ -1029,7 +1026,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// zip(range(5), "abc".elems())    == [(0, "a"), (1, "b"), (2, "c")]
     /// # "#);
     /// ```
-    fn zip(args: Vec<Value>) -> List<'v> {
+    fn zip(args: Vec<Value>) -> Value<'v> {
         let mut v = Vec::new();
         let mut first = true;
         for arg in args {
@@ -1046,7 +1043,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             v.truncate(idx);
             first = false;
         }
-        Ok(List::new(v))
+        Ok(heap.alloc_list(&v))
     }
 }
 

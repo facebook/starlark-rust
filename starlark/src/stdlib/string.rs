@@ -28,8 +28,8 @@ use crate::{
     eval::Arguments,
     stdlib::util::convert_indices,
     values::{
-        fast_string, interpolation, list::List, none::NoneOr, string, tuple::Tuple, UnpackValue,
-        Value, ValueError, ValueOf,
+        fast_string, interpolation, none::NoneOr, string, tuple::Tuple, UnpackValue, Value,
+        ValueError, ValueOf,
     },
 };
 
@@ -888,7 +888,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
-    ) -> List<'v> {
+    ) -> Value<'v> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
             Some(v) => {
@@ -899,7 +899,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                 }
             }
         };
-        Ok(List::new(match sep.into_option() {
+        Ok(heap.alloc_list(&match sep.into_option() {
             None => match maxsplit {
                 None => this.split_whitespace().map(|x| heap.alloc(x)).collect(),
                 Some(maxsplit) => rsplitn_whitespace(this, maxsplit).map(|x| heap.alloc(x)),
@@ -975,7 +975,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
-    ) -> List<'v> {
+    ) -> Value<'v> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
             Some(v) => {
@@ -986,7 +986,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                 }
             }
         };
-        Ok(List::new(match (sep.into_option(), maxsplit) {
+        Ok(heap.alloc_list(&match (sep.into_option(), maxsplit) {
             (None, None) => this.split_whitespace().map(|x| heap.alloc(x)).collect(),
             (None, Some(maxsplit)) => splitn_whitespace(this, maxsplit).map(|x| heap.alloc(x)),
             (Some(sep), None) => {
@@ -1034,7 +1034,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "a\nb".splitlines() == ["a", "b"]
     /// # "#);
     /// ```
-    fn splitlines(this: &str, ref keepends @ false: bool) -> List<'v> {
+    fn splitlines(this: &str, ref keepends @ false: bool) -> Value<'v> {
         let mut s = this;
         let mut lines = Vec::new();
         loop {
@@ -1050,14 +1050,14 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
                     lines.push(heap.alloc(s.get(..y).unwrap()))
                 }
                 if x == s.len() {
-                    return Ok(List::new(lines));
+                    return Ok(heap.alloc_list(&lines));
                 }
                 s = s.get(x..).unwrap();
             } else {
                 if !s.is_empty() {
                     lines.push(heap.alloc(s));
                 }
-                return Ok(List::new(lines));
+                return Ok(heap.alloc_list(&lines));
             }
         }
     }

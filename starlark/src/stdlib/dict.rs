@@ -25,7 +25,7 @@ use gazebo::cell::ARef;
 use crate as starlark;
 use crate::{
     environment::GlobalsBuilder,
-    values::{dict::Dict, list::List, none::NoneType, Value},
+    values::{dict::Dict, none::NoneType, Value},
 };
 
 #[starlark_module]
@@ -102,14 +102,9 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// x.items() == [("one", 1), ("two", 2)]
     /// # "#);
     /// ```
-    fn items(this: ARef<Dict>) -> List<'v> {
+    fn items(this: ARef<Dict>) -> Value<'v> {
         // We go straight to a List, not a Vec, so we can avoid one allocation
-        Ok(List::new(
-            this.content
-                .iter()
-                .map(|(k, v)| heap.alloc((*k, *v)))
-                .collect(),
-        ))
+        Ok(heap.alloc_list_iter(this.content.iter().map(|(k, v)| heap.alloc((*k, *v)))))
     }
 
     /// [dict.keys](
@@ -127,8 +122,8 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// x.keys() == ["one", "two"]
     /// # "#);
     /// ```
-    fn keys(this: ARef<Dict>) -> List<'v> {
-        Ok(List::new(this.content.keys().copied().collect()))
+    fn keys(this: ARef<Dict>) -> Value<'v> {
+        Ok(heap.alloc_list_iter(this.content.keys().copied()))
     }
 
     /// [dict.pop](
@@ -356,8 +351,8 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// x.values() == [1, 2]
     /// # "#);
     /// ```
-    fn values(this: ARef<Dict>) -> List<'v> {
-        Ok(List::new(this.content.values().copied().collect()))
+    fn values(this: ARef<Dict>) -> Value<'v> {
+        Ok(heap.alloc_list_iter(this.content.values().copied()))
     }
 }
 

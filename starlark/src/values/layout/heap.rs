@@ -439,8 +439,18 @@ impl Heap {
         }
     }
 
-    pub fn alloc_list<'v>(&'v self, elems: Vec<Value<'v>>) -> Value<'v> {
-        self.alloc_raw(WhichBump::Drop, list_avalue(elems))
+    pub fn alloc_list<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
+        self.alloc_raw(WhichBump::Drop, list_avalue(elems.to_vec()))
+    }
+
+    pub fn alloc_list_iter<'v>(&'v self, elems: impl IntoIterator<Item = Value<'v>>) -> Value<'v> {
+        self.alloc_list(&elems.into_iter().collect::<Vec<_>>())
+    }
+
+    /// Allocate a list by concatenating two slices.
+    pub(crate) fn alloc_list_concat<'v>(&'v self, a: &[Value<'v>], b: &[Value<'v>]) -> Value<'v> {
+        // TODO: this is inefficient, but replaced with proper version in D31530839
+        self.alloc_list_iter(a.iter().copied().chain(b.iter().copied()))
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {

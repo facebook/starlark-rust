@@ -56,14 +56,14 @@ use crate::{
 pub(crate) struct ListGen<T>(pub(crate) T);
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
+#[derive(Clone, Trace, Debug, AnyLifetime)]
 #[repr(transparent)]
 pub struct List<'v> {
     /// The data stored by the list.
     pub(crate) content: Vec<Value<'v>>,
 }
 
-#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
+#[derive(Clone, Trace, Debug, AnyLifetime)]
 pub(crate) struct MutableList<'v>(RefCell<List<'v>>);
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
@@ -103,12 +103,6 @@ unsafe impl<'v> AnyLifetime<'v> for ListGen<MutableList<'v>> {
     any_lifetime_body!(ListGen<MutableList<'static>>);
 }
 any_lifetime!(ListGen<FrozenList>);
-
-impl<'v> AllocValue<'v> for List<'v> {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_list(self.content)
-    }
-}
 
 impl AllocFrozenValue for FrozenList {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
@@ -195,7 +189,7 @@ impl<'v> Deref for ListRef<'v> {
 
 impl<'v, V: AllocValue<'v>> AllocValue<'v> for Vec<V> {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(List::new(self.into_map(|x| x.alloc_value(heap))))
+        heap.alloc_list_iter(self.into_map(|x| x.alloc_value(heap)))
     }
 }
 
@@ -210,7 +204,7 @@ where
     &'a V: AllocValue<'v>,
 {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc(List::new(self.map(|x| x.alloc_value(heap))))
+        heap.alloc_list_iter(self.iter().map(|x| x.alloc_value(heap)))
     }
 }
 
@@ -252,7 +246,7 @@ impl<'v> List<'v> {
         ListGen::<FrozenList>::get_type_value_static()
     }
 
-    pub fn new(content: Vec<Value<'v>>) -> Self {
+    pub(crate) fn new(content: Vec<Value<'v>>) -> Self {
         Self { content }
     }
 
@@ -462,7 +456,7 @@ where
     ) -> anyhow::Result<Value<'v>> {
         let xs = self.0.content();
         let res = apply_slice(&*xs, start, stop, stride)?;
-        Ok(heap.alloc(List::new(res)))
+        Ok(heap.alloc_list(&res))
     }
 
     fn iterate<'a>(
@@ -487,10 +481,7 @@ where
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = List::from_value(other) {
-            let mut result = Vec::with_capacity(self.0.content().len() + other.len());
-            result.extend(self.0.content().iter());
-            result.extend(other.iter());
-            Ok(heap.alloc(List::new(result)))
+            Ok(heap.alloc_list_concat(&self.0.content(), other.content()))
         } else {
             ValueError::unsupported_with(self, "+", other)
         }
@@ -504,7 +495,7 @@ where
                 for _ in 0..l {
                     result.extend(self.0.content().iter());
                 }
-                Ok(heap.alloc(List::new(result)))
+                Ok(heap.alloc_list(&result))
             }
             None => Err(ValueError::IncorrectParameterType.into()),
         }

@@ -902,7 +902,7 @@ mod test {
     #[test]
     fn tuple_cycle_freeze() {
         let module = Module::new();
-        let list = module.heap().alloc(List::new(Vec::new()));
+        let list = module.heap().alloc_list(&[]);
         let tuple = module.heap().alloc_tuple(&[list]);
         List::from_value_mut(list)
             .unwrap()

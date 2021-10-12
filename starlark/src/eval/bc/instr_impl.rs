@@ -1114,7 +1114,7 @@ impl InstrNoFlowImpl for InstrListNPopImpl {
         _pops: (),
     ) -> Result<Value<'v>, ExprEvalException> {
         let items = stack.pop_slice(*npops);
-        Ok(eval.heap().alloc(List::new(items.to_owned())))
+        Ok(eval.heap().alloc_list(items))
     }
 }
 
@@ -1132,7 +1132,7 @@ impl InstrNoFlowImpl for InstrListOfConstsImpl {
         values: &Self::Arg,
         (): (),
     ) -> Result<Value<'v>, ExprEvalException> {
-        Ok(eval.heap().alloc(List::new(coerce(&values).to_vec())))
+        Ok(eval.heap().alloc_list(coerce(&values)))
     }
 }
 
@@ -1226,7 +1226,7 @@ impl InstrNoFlowImpl for InstrListNewImpl {
         (): &(),
         (): (),
     ) -> Result<Value<'v>, ExprEvalException> {
-        Ok(eval.heap().alloc(List::new(Vec::new())))
+        Ok(eval.heap().alloc_list(&[]))
     }
 }
 
