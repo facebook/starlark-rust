@@ -19,22 +19,41 @@ use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
     marker,
+    ops::Deref,
 };
 
-use gazebo::prelude::*;
+use gazebo::{cast, prelude::*};
 
 use crate::{
     gazebo::any::AnyLifetime,
-    values::{FrozenValue, PointerI32, StarlarkValue, Value, ValueLike},
+    values::{
+        layout::{arena::AValueRepr, avalue::AValue},
+        FrozenValue, PointerI32, StarlarkValue, Trace, Tracer, Value, ValueLike,
+    },
 };
 
+/// [`Value`] wrapper which asserts contained value is of type `<T>`.
+#[derive(Copy_, Clone_, Dupe_)]
+pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<&'v T>);
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.
 #[derive(Copy_, Clone_, Dupe_)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
 
+impl<'v, T: StarlarkValue<'v>> Debug for ValueTyped<'v, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ValueType").field(&self.0).finish()
+    }
+}
+
 impl<'v, T: StarlarkValue<'v>> Debug for FrozenValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_tuple("FrozenValueType").field(&self.0).finish()
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> Display for ValueTyped<'v, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
     }
 }
 
@@ -44,19 +63,21 @@ impl<'v, T: StarlarkValue<'v>> Display for FrozenValueTyped<'v, T> {
     }
 }
 
-impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
-    /// Downcast.
-    pub fn new(value: FrozenValue) -> Option<FrozenValueTyped<'v, T>> {
-        value.downcast_ref::<T>()?;
-        Some(FrozenValueTyped(value, marker::PhantomData))
+impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
+    pub unsafe fn new_unchecked(value: Value<'v>) -> ValueTyped<'v, T> {
+        debug_assert!(value.downcast_ref::<T>().is_some());
+        ValueTyped(value, marker::PhantomData)
     }
 
-    pub fn to_frozen_value(self) -> FrozenValue {
-        self.0
+    #[allow(dead_code)] // TODO: remove when used
+    pub(crate) fn new_repr<A: AValue<'v, StarlarkValue = T>>(
+        repr: &'v AValueRepr<A>,
+    ) -> ValueTyped<'v, T> {
+        ValueTyped(Value::new_repr(repr), marker::PhantomData)
     }
 
     pub fn to_value(self) -> Value<'v> {
-        self.0.to_value()
+        self.0
     }
 
     pub fn as_ref(self) -> &'v T {
@@ -71,6 +92,63 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
         } else {
             unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
         }
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
+    /// Downcast.
+    pub fn new(value: FrozenValue) -> Option<FrozenValueTyped<'v, T>> {
+        value.downcast_ref::<T>()?;
+        Some(FrozenValueTyped(value, marker::PhantomData))
+    }
+
+    #[allow(dead_code)] // TODO: remove when used
+    pub(crate) fn new_repr<A: AValue<'v, StarlarkValue = T>>(
+        repr: &'v AValueRepr<A>,
+    ) -> FrozenValueTyped<'v, T> {
+        // drop lifetime: `FrozenValue` is not (yet) parameterized with lifetime.
+        let header = unsafe { cast::ptr_lifetime(&repr.header) };
+        FrozenValueTyped(FrozenValue::new_ptr(header), marker::PhantomData)
+    }
+
+    pub fn to_frozen_value(self) -> FrozenValue {
+        self.0
+    }
+
+    pub fn to_value(self) -> Value<'v> {
+        self.0.to_value()
+    }
+
+    pub fn to_value_typed(self) -> ValueTyped<'v, T> {
+        unsafe { ValueTyped::new_unchecked(self.0.to_value()) }
+    }
+
+    pub fn as_ref(self) -> &'v T {
+        self.to_value_typed().as_ref()
+    }
+}
+
+unsafe impl<'v, T: StarlarkValue<'v>> Trace<'v> for ValueTyped<'v, T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        tracer.trace(&mut self.0);
+        // If type of value changed, dereference will produce the wrong object type.
+        debug_assert!(self.0.downcast_ref::<T>().is_some());
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> Deref for FrozenValueTyped<'v, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> Deref for ValueTyped<'v, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.as_ref()
     }
 }
 
