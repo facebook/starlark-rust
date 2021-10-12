@@ -60,7 +60,7 @@ pub struct List<'v> {
 }
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(Clone, Default, Debug, AnyLifetime)]
+#[derive(Clone, Debug, AnyLifetime)]
 #[repr(C)]
 pub struct FrozenList {
     len: usize,
@@ -96,14 +96,6 @@ unsafe impl<'v> AnyLifetime<'v> for ListGen<List<'v>> {
     any_lifetime_body!(ListGen<List<'static>>);
 }
 any_lifetime!(ListGen<FrozenList>);
-
-impl AllocFrozenValue for FrozenList {
-    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        // Empty frozen list can be created by calling `FrozenList::default()`.
-        assert!(self.len() == 0);
-        heap.alloc_list(&[])
-    }
-}
 
 impl<'v> List<'v> {
     pub fn from_value(x: Value<'v>) -> Option<&'v ListRef<'v>> {
@@ -255,6 +247,19 @@ where
 }
 
 impl FrozenList {
+    /// Utility to allocate an empty frozen list.
+    pub fn empty() -> impl AllocFrozenValue {
+        struct EmptyFrozenList;
+
+        impl AllocFrozenValue for EmptyFrozenList {
+            fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
+                heap.alloc_list(&[])
+            }
+        }
+
+        EmptyFrozenList
+    }
+
     pub(crate) const unsafe fn new(len: usize) -> FrozenList {
         FrozenList { len, content: [] }
     }
