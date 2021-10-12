@@ -21,8 +21,10 @@ use std::{
     convert::TryInto,
     fmt,
     fmt::{Display, Formatter},
-    mem, ptr,
+    mem, ptr, slice,
 };
+
+use either::Either;
 
 use crate::{
     codemap::Span,
@@ -31,7 +33,7 @@ use crate::{
         instr::BcInstr,
         instr_impl::InstrEndOfBc,
         opcode::{BcOpcode, BcOpcodeHandler},
-        repr::{BcInstrHeader, BcInstrRepr, BC_INSTR_ALIGN},
+        repr::{BcInstrRepr, BC_INSTR_ALIGN},
     },
 };
 
@@ -68,11 +70,34 @@ unsafe fn drop_instrs(instrs: &[usize]) {
     }
 }
 
-#[derive(Default)]
+/// Statically allocate a valid instruction buffer micro-optimization.
+///
+/// Valid bytecode must end with `EndOfBc` instruction, otherwise evaluation overruns
+/// the instruction buffer.
+///
+/// `BcInstrs` type need to have `Default` (it is convenient).
+///
+/// Allocating a vec in `BcInstrs::default` is non-free.
+///
+/// Assertion that `BcInstrs::instrs` is not empty is cheap but not free.
+///
+/// But if `BcInstrs::instrs` is `Either` allocated instructions or a pointer to statically
+/// allocated instructions, then both `BcInstrs::default` is free
+/// and evaluation start [is free](https://rust.godbolt.org/z/3nEhWGo4Y).
+fn empty_instrs() -> &'static [usize] {
+    static END_OF_BC: BcInstrRepr<InstrEndOfBc> = BcInstrRepr::new((BcAddr(0), Vec::new()));
+    unsafe {
+        slice::from_raw_parts(
+            &END_OF_BC as *const BcInstrRepr<_> as *const usize,
+            mem::size_of_val(&END_OF_BC) / mem::size_of::<usize>(),
+        )
+    }
+}
+
 pub(crate) struct BcInstrs {
     // We use `usize` here to guarantee the buffer is properly aligned
     // to store `BcInstrLayout`.
-    instrs: Box<[usize]>,
+    instrs: Either<Box<[usize]>, &'static [usize]>,
 }
 
 /// Raw instructions writer.
@@ -82,10 +107,21 @@ pub(crate) struct BcInstrsWriter {
     pub(crate) instrs: Vec<usize>,
 }
 
+impl Default for BcInstrs {
+    fn default() -> Self {
+        BcInstrs {
+            instrs: Either::Right(empty_instrs()),
+        }
+    }
+}
+
 impl Drop for BcInstrs {
     fn drop(&mut self) {
-        unsafe {
-            drop_instrs(&self.instrs);
+        match &self.instrs {
+            Either::Left(heap_allocated) => unsafe {
+                drop_instrs(heap_allocated);
+            },
+            Either::Right(_statically_allocated) => {}
         }
     }
 }
@@ -163,11 +199,7 @@ impl BcInstrsWriter {
     }
 
     pub(crate) fn write<I: BcInstr>(&mut self, arg: I::Arg) -> (BcAddr, *const I::Arg) {
-        let repr = BcInstrRepr {
-            header: BcInstrHeader { opcode: I::OPCODE },
-            arg,
-            _align: [],
-        };
+        let repr = BcInstrRepr::<I>::new(arg);
         assert!(mem::size_of_val(&repr) % mem::size_of::<usize>() == 0);
 
         let ip = self.ip();
@@ -218,7 +250,9 @@ impl BcInstrsWriter {
         let instrs = mem::take(&mut self.instrs);
         let instrs = instrs.into_boxed_slice();
         assert!((instrs.as_ptr() as usize) % BC_INSTR_ALIGN == 0);
-        BcInstrs { instrs }
+        BcInstrs {
+            instrs: Either::Left(instrs),
+        }
     }
 }
 
@@ -229,7 +263,7 @@ mod test {
     use crate::{
         eval::bc::{
             instr_impl::{InstrConst, InstrPossibleGc, InstrReturn, InstrReturnNone},
-            instrs::BcInstrsWriter,
+            instrs::{BcInstrs, BcInstrsWriter},
         },
         values::FrozenValue,
     };
@@ -241,6 +275,12 @@ mod test {
         assert_eq!(1, bc.instrs.len());
         bc.write::<InstrPossibleGc>(());
         assert_eq!(2, bc.instrs.len());
+    }
+
+    /// Test `BcInstrs::default()` produces something valid.
+    #[test]
+    fn default() {
+        assert_eq!("0: END", BcInstrs::default().to_string());
     }
 
     #[test]

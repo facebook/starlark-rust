@@ -42,17 +42,26 @@ pub(crate) struct BcInstrRepr<I: BcInstr> {
     pub(crate) header: BcInstrHeader,
     pub(crate) arg: I::Arg,
     // Align all instructions to make IP increment simple.
-    pub(crate) _align: [FrozenValue; 0],
+    _align: [FrozenValue; 0],
 }
 
 impl<I: BcInstr> BcInstrRepr<I> {
-    pub(crate) fn assert_align() {
+    pub(crate) const fn new(arg: I::Arg) -> BcInstrRepr<I> {
+        BcInstrRepr::<I>::assert_align();
+        BcInstrRepr {
+            header: BcInstrHeader { opcode: I::OPCODE },
+            arg,
+            _align: [],
+        }
+    }
+
+    pub(crate) const fn assert_align() {
         // If alignment is different, we do not compute addresses properly.
         // Practically everything has `usize` alignment.
         // This would break if we had some types like `__m128` in instruction arguments,
         // but we don't.
-        assert_eq!(mem::align_of::<BcInstrRepr<I>>(), BC_INSTR_ALIGN);
-        assert_eq!(mem::size_of::<BcInstrRepr<I>>() % BC_INSTR_ALIGN, 0);
+        assert!(mem::align_of::<BcInstrRepr<I>>() == BC_INSTR_ALIGN);
+        assert!(mem::size_of::<BcInstrRepr<I>>() % BC_INSTR_ALIGN == 0);
     }
 }
 
