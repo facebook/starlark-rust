@@ -213,42 +213,6 @@ fn test_display_debug() {
         format!("{:?}", val),
         "Value(TupleGen { content: [Value(ListGen(MutableList(RefCell { value: List { content: [Value(1), Value(2)] } }))), Value(\"test\"), Value(StarlarkBool(true))] })"
     );
-    assert_eq!(
-        format!("{:#?}", val),
-        r#"Value(
-    TupleGen {
-        content: [
-            Value(
-                ListGen(
-                    MutableList(
-                        RefCell {
-                            value: List {
-                                content: [
-                                    Value(
-                                        1,
-                                    ),
-                                    Value(
-                                        2,
-                                    ),
-                                ],
-                            },
-                        },
-                    ),
-                ),
-            ),
-            Value(
-                "test",
-            ),
-            Value(
-                StarlarkBool(
-                    true,
-                ),
-            ),
-        ],
-    },
-)"#
-    );
-
     let v = heap.alloc("test");
     assert_eq!(format!("{}", v), "\"test\"");
     assert_eq!(v.to_repr(), "\"test\"");
