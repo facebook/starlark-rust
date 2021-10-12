@@ -26,9 +26,8 @@ use std::{
     intrinsics::unlikely,
     marker::PhantomData,
     mem,
-    ops::{Deref, Index},
+    ops::Deref,
     slice,
-    slice::SliceIndex,
 };
 
 use gazebo::{
@@ -169,15 +168,6 @@ impl<'v> List<'v> {
 
     pub(crate) fn remove(&mut self, index: usize) -> Value<'v> {
         self.content.remove(index)
-    }
-}
-
-impl<'v, I: SliceIndex<[Value<'v>]>> Index<I> for List<'v> {
-    type Output = I::Output;
-
-    #[inline]
-    fn index(&self, index: I) -> &Self::Output {
-        self.content.index(index)
     }
 }
 
