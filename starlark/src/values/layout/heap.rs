@@ -40,17 +40,19 @@ use crate::{
     eval::FrozenDef,
     values::{
         any::StarlarkAny,
+        array::Array,
         layout::{
             arena::{AValueHeader, Arena, HeapSummary, Reservation, WhichBump},
             avalue::{
-                complex, frozen_list_avalue, frozen_tuple_avalue, list_avalue, simple,
-                starlark_str, tuple_avalue, AValue, VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
+                array_avalue, complex, frozen_list_avalue, frozen_tuple_avalue, list_avalue,
+                simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
+                VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
             constant::constant_string,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
-        AllocFrozenValue, ComplexValue, FrozenRef, SimpleValue,
+        AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, SimpleValue, ValueTyped,
     },
 };
 
@@ -436,6 +438,22 @@ impl Heap {
             let (avalue, extra) = arena.alloc_extra_non_drop(tuple_avalue(elems.len()));
             MaybeUninit::write_slice(extra, elems);
             Value::new_repr(&*avalue)
+        }
+    }
+
+    // TODO: remove when used
+    #[allow(dead_code)]
+    pub(crate) fn alloc_array<'v>(&'v self, cap: usize) -> ValueTyped<'v, Array<'v>> {
+        if cap == 0 {
+            return FrozenValueTyped::new_repr(VALUE_EMPTY_ARRAY.repr()).to_value_typed();
+        }
+
+        unsafe {
+            let (avalue, _) = self
+                .arena
+                .borrow()
+                .alloc_extra_non_drop(array_avalue(cap as u32));
+            ValueTyped::new_repr(&*avalue)
         }
     }
 

@@ -16,6 +16,7 @@
  */
 
 pub mod any;
+pub mod array;
 pub mod bool;
 pub mod dict;
 pub mod enumeration;

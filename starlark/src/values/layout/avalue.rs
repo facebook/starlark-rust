@@ -21,6 +21,7 @@ use std::{
     fmt::{Debug, Display},
     mem,
     mem::MaybeUninit,
+    ptr,
     ptr::metadata,
 };
 
@@ -39,6 +40,7 @@ use crate::{
         none::NoneType,
         string::StarlarkStr,
         types::{
+            array::Array,
             list::MutableList,
             tuple::{FrozenTuple, Tuple},
         },
@@ -95,6 +97,35 @@ pub(crate) static VALUE_EMPTY_FROZEN_LIST: &AValueHeader = {
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
+
+/// `Array` is not `Sync`, so wrap it into this struct to store it in static variable.
+/// Empty `Array` is logically `Sync`.
+pub(crate) struct ValueEmptyArray(AValueRepr<Wrapper<Direct, Array<'static>>>);
+unsafe impl Sync for ValueEmptyArray {}
+
+pub(crate) static VALUE_EMPTY_ARRAY: ValueEmptyArray = {
+    const DYN: *const dyn AValueDyn<'static> = ptr::null::<Wrapper<Direct, Array>>();
+    ValueEmptyArray(AValueRepr::with_metadata(
+        metadata(DYN),
+        Wrapper(Direct, unsafe { Array::new(0, 0) }),
+    ))
+};
+
+impl ValueEmptyArray {
+    pub(crate) fn repr<'v>(
+        &'static self,
+    ) -> &'v AValueRepr<impl AValue<'v, StarlarkValue = Array<'v>>> {
+        // Cast lifetimes. Cannot use `gazebo::cast::ptr_lifetime` here
+        // because type parameter of `AValue` also need to be casted.
+        unsafe {
+            transmute!(
+                &AValueRepr<Wrapper<Direct, Array>>,
+                &AValueRepr<Wrapper<Direct, Array>>,
+                &self.0
+            )
+        }
+    }
+}
 
 /// Sized counterpart of [`AValueDyn`].
 pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
@@ -212,6 +243,12 @@ pub(crate) fn list_avalue<'v>(content: Vec<Value<'v>>) -> impl AValue<'v, ExtraE
 
 pub(crate) fn frozen_list_avalue(len: usize) -> impl AValue<'static, ExtraElem = FrozenValue> {
     Wrapper(Direct, unsafe { ListGen(FrozenList::new(len)) })
+}
+
+pub(crate) fn array_avalue<'v>(
+    cap: u32,
+) -> impl AValue<'v, StarlarkValue = Array<'v>, ExtraElem = Value<'v>> {
+    Wrapper(Direct, unsafe { Array::new(0, cap) })
 }
 
 pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValueDyn<'v> {
@@ -457,6 +494,59 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
 
     unsafe fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         panic!("shouldn't be copying frozen values");
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        None
+    }
+}
+
+impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
+    type StarlarkValue = Array<'v>;
+
+    type ExtraElem = Value<'v>;
+
+    fn extra_len(&self) -> usize {
+        // Note we return capacity, not length here.
+        self.1.capacity()
+    }
+
+    unsafe fn heap_freeze(
+        &self,
+        _me: *mut AValueHeader,
+        _freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue> {
+        panic!("arrays should not be frozen")
+    }
+
+    unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+        debug_assert!(
+            self.1.capacity() != 0,
+            "empty array is allocated statically"
+        );
+
+        if self.1.len() == 0 {
+            return FrozenValue::new_repr(&VALUE_EMPTY_ARRAY.0).to_value();
+        }
+
+        AValueForward::assert_does_not_overwrite_extra::<Self>();
+        let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
+
+        let (v, r, extra) = tracer.reserve_with_extra::<Self>(content.len());
+        let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
+
+        debug_assert_eq!(content.len(), x.1.len());
+
+        for elem in content.iter_mut() {
+            tracer.trace(elem);
+        }
+        // Note when copying we are dropping extra capacity.
+        r.fill(Wrapper(
+            Direct,
+            Array::new(content.len() as u32, content.len() as u32),
+        ));
+        MaybeUninit::write_slice(extra, content);
+        v
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {

@@ -362,7 +362,7 @@ impl<T: Display> Display for ListGen<T> {
     }
 }
 
-fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Result {
+pub(crate) fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "[")?;
     for (i, v) in xs.iter().enumerate() {
         if i != 0 {
