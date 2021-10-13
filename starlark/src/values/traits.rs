@@ -33,6 +33,7 @@ use std::{
     cell::{Cell, RefCell},
     cmp::Ordering,
     fmt::{Debug, Display, Write},
+    marker,
 };
 
 use derive_more::Display;
@@ -136,6 +137,10 @@ unsafe impl<'v> Trace<'v> for bool {
 }
 
 unsafe impl<'v> Trace<'v> for std::time::Instant {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+unsafe impl<'v, T> Trace<'v> for marker::PhantomData<T> {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 
