@@ -267,12 +267,12 @@ impl GlobalsStatic {
     /// value. If populated via a `#[starlark_module]`, that means a single function in it.
     pub fn function(&'static self, x: impl FnOnce(&mut GlobalsBuilder)) -> FrozenValue {
         let globals = self.globals(x);
-        if globals.0.variables.len() != 1 {
-            panic!(
-                "GlobalsBuilder.function must have exactly 1 member, you had {:?}",
-                globals.names()
-            );
-        }
+        assert!(
+            globals.0.variables.len() == 1,
+            "GlobalsBuilder.function must have exactly 1 member, you had {:?}",
+            globals.names()
+        );
+
         *globals.0.variables.values().next().unwrap()
     }
 
