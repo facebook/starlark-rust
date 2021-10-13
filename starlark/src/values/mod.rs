@@ -139,6 +139,9 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// For details about each function, see the documentation for [`Value`],
 /// which provides the same functions (and more).
 pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> {
+    // `StringValue` or `FrozenStringValue`.
+    type String: StringValueLike<'v>;
+
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
@@ -186,6 +189,17 @@ impl<'v> Hashed<Value<'v>> {
     }
 }
 
+impl<'v> Hashed<StringValue<'v>> {
+    #[allow(dead_code)] // TODO: remove when used
+    pub(crate) fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Hashed<FrozenStringValue>> {
+        // Safe because we know frozen values have the same hash as non-frozen ones
+        let key = self.key().freeze(freezer)?;
+        // But it's an easy mistake to make, so actually check it in debug
+        debug_assert_eq!(self.hash(), Hashed::new(key).hash());
+        Ok(Hashed::new_unchecked(self.hash(), key))
+    }
+}
+
 impl Default for Value<'_> {
     fn default() -> Self {
         Self::new_none()
@@ -199,6 +213,8 @@ impl Default for FrozenValue {
 }
 
 impl<'v> ValueLike<'v> for Value<'v> {
+    type String = StringValue<'v>;
+
     fn to_value(self) -> Value<'v> {
         self
     }
@@ -239,6 +255,8 @@ impl<'v> ValueLike<'v> for Value<'v> {
 }
 
 impl<'v> ValueLike<'v> for FrozenValue {
+    type String = FrozenStringValue;
+
     fn to_value(self) -> Value<'v> {
         Value::new_frozen(self)
     }
