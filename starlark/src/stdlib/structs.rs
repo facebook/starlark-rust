@@ -28,9 +28,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
     #[starlark_type(Struct::TYPE)]
     fn r#struct(args: Arguments<'v, '_>) -> Struct<'v> {
         args.no_positional_args(heap)?;
-        Ok(Struct {
-            fields: args.names()?.content,
-        })
+        Ok(Struct::new(args.names_map()?))
     }
 }
 

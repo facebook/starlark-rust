@@ -30,7 +30,7 @@ use crate::{
     stdlib,
     values::{
         function::NativeAttribute, structs::FrozenStruct, AllocFrozenValue, FrozenHeap,
-        FrozenHeapRef, FrozenValue, Value,
+        FrozenHeapRef, FrozenStringValue, FrozenValue, Value,
     },
 };
 
@@ -52,7 +52,7 @@ pub struct GlobalsBuilder {
     // Normal top-level variables, e.g. True/hash
     variables: SymbolMap<FrozenValue>,
     // Set to Some when we are in a struct builder, otherwise None
-    struct_fields: Option<SmallMap<FrozenValue, FrozenValue>>,
+    struct_fields: Option<SmallMap<FrozenStringValue, FrozenValue>>,
 }
 
 impl Globals {
@@ -164,7 +164,7 @@ impl GlobalsBuilder {
         self.struct_fields = Some(SmallMap::new());
         f(self);
         let fields = mem::take(&mut self.struct_fields).unwrap();
-        self.set(name, FrozenStruct { fields });
+        self.set(name, FrozenStruct::new(fields));
     }
 
     /// A fluent API for modifying [`GlobalsBuilder`] and returning the result.
@@ -193,8 +193,8 @@ impl GlobalsBuilder {
         match &mut self.struct_fields {
             None => self.variables.insert(name, value),
             Some(fields) => {
-                let name = self.heap.alloc_str_hashed(name);
-                fields.insert_hashed(name, value)
+                let name = self.heap.alloc_string_value(name);
+                fields.insert(name, value)
             }
         };
     }
@@ -210,8 +210,8 @@ impl GlobalsBuilder {
         match &mut self.struct_fields {
             None => self.variables.insert(name, func),
             Some(fields) => {
-                let name = self.heap.alloc_str_hashed(name);
-                fields.insert_hashed(name, func)
+                let name = self.heap.alloc_string_value(name);
+                fields.insert(name, func)
             }
         };
     }

@@ -70,7 +70,7 @@ impl FrozenHeap {
         val.alloc_frozen_value(self)
     }
 
-    pub(crate) fn alloc_string_value(&self, s: &str) -> FrozenStringValue {
+    pub fn alloc_string_value(&self, s: &str) -> FrozenStringValue {
         unsafe { FrozenStringValue::new_unchecked(self.alloc_str(s)) }
     }
 }
@@ -81,7 +81,7 @@ impl Heap {
         x.alloc_value(self)
     }
 
-    pub(crate) fn alloc_string_value<'v>(&'v self, s: &str) -> StringValue<'v> {
+    pub fn alloc_string_value<'v>(&'v self, s: &str) -> StringValue<'v> {
         unsafe { StringValue::new_unchecked(self.alloc_str(s)) }
     }
 }

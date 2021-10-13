@@ -39,6 +39,7 @@ use std::{
     collections::hash_map::DefaultHasher,
     fmt::{self, Display},
     hash::{Hash, Hasher},
+    marker,
 };
 
 use gazebo::{
@@ -52,41 +53,46 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::{compare_small_map, equals_small_map},
-        dict::ValueStr,
         error::ValueError,
-        AllocValue, ComplexValue, Freezer, Heap, StarlarkValue, Trace, Value, ValueLike,
+        AllocValue, ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, StringValue,
+        StringValueLike, Trace, Value, ValueLike,
     },
 };
 
-impl<V> StructGen<V> {
+impl<'v, V: ValueLike<'v>> StructGen<'v, V> {
     /// The result of calling `type()` on a struct.
     pub const TYPE: &'static str = "struct";
 
     /// Create a new [`Struct`].
-    pub fn new(fields: SmallMap<V, V>) -> Self {
-        Self { fields }
+    pub fn new(fields: SmallMap<V::String, V>) -> Self {
+        Self {
+            fields,
+            _marker: marker::PhantomData,
+        }
     }
 }
 
-starlark_complex_value!(pub Struct);
+starlark_complex_value!(pub Struct<'v>);
 
 /// The result of calling `struct()`.
-#[derive(Clone, Default, Debug, Trace, Coerce)]
-#[repr(transparent)]
-pub struct StructGen<V> {
+#[derive(Clone, Default, Debug, Trace)]
+#[repr(C)]
+pub struct StructGen<'v, V: ValueLike<'v>> {
     /// The fields in a struct.
-    /// All keys _must_ be strings.
-    pub fields: SmallMap<V, V>,
+    pub fields: SmallMap<V::String, V>,
+    _marker: marker::PhantomData<&'v String>,
 }
 
-impl<'v, V: ValueLike<'v>> Display for StructGen<V> {
+unsafe impl<'v> Coerce<StructGen<'v, Value<'v>>> for StructGen<'static, FrozenValue> {}
+
+impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "struct(")?;
         for (i, (name, value)) in self.fields.iter().enumerate() {
             if i != 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}=", name.to_value().unpack_str().unwrap())?;
+            write!(f, "{}=", name.to_string_value().as_str())?;
             Display::fmt(value, f)?;
         }
         write!(f, ")")
@@ -94,7 +100,7 @@ impl<'v, V: ValueLike<'v>> Display for StructGen<V> {
 }
 
 /// A builder to create a `Struct` easily.
-pub struct StructBuilder<'v>(&'v Heap, SmallMap<Value<'v>, Value<'v>>);
+pub struct StructBuilder<'v>(&'v Heap, SmallMap<StringValue<'v>, Value<'v>>);
 
 impl<'v> StructBuilder<'v> {
     /// Create a new [`StructBuilder`] with a given capacity.
@@ -110,12 +116,15 @@ impl<'v> StructBuilder<'v> {
     /// Add an element to the underlying [`Struct`].
     pub fn add(&mut self, key: &str, val: impl AllocValue<'v>) {
         self.1
-            .insert_hashed(self.0.alloc_str_hashed(key), self.0.alloc(val));
+            .insert(self.0.alloc_string_value(key), self.0.alloc(val));
     }
 
     /// Finish building and produce a [`Struct`].
     pub fn build(self) -> Struct<'v> {
-        Struct { fields: self.1 }
+        Struct {
+            fields: self.1,
+            _marker: marker::PhantomData,
+        }
     }
 }
 
@@ -126,11 +135,14 @@ impl<'v> ComplexValue<'v> for Struct<'v> {
         for (k, v) in self.fields.into_iter_hashed() {
             frozen.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
         }
-        Ok(FrozenStruct { fields: frozen })
+        Ok(FrozenStruct {
+            fields: frozen,
+            _marker: marker::PhantomData,
+        })
     }
 }
 
-impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for StructGen<V>
+impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for StructGen<'v, V>
 where
     Self: AnyLifetime<'v>,
 {
@@ -153,7 +165,7 @@ where
             .map(|(k, v)| {
                 Ok(format!(
                     "\"{}\":{}",
-                    k.to_value().unpack_str().unwrap(),
+                    k.to_string_value().as_str(),
                     v.to_json()?
                 ))
             })
@@ -178,14 +190,14 @@ where
             Some(other) => compare_small_map(
                 coerce_ref(&self.fields),
                 &other.fields,
-                |k| k.unpack_str(),
+                |k| k.to_string_value().as_str(),
                 |x, y| x.compare(*y),
             ),
         }
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
-        coerce_ref(&self.fields).get(&ValueStr(attribute)).copied()
+        coerce_ref(&self.fields).get(attribute).copied()
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
@@ -198,13 +210,13 @@ where
     }
 
     fn has_attr(&self, attribute: &str) -> bool {
-        coerce_ref(&self.fields).contains_key(&ValueStr(attribute))
+        coerce_ref(&self.fields).contains_key(attribute)
     }
 
     fn dir_attr(&self) -> Vec<String> {
         self.fields
             .keys()
-            .map(|x| x.to_value().unpack_str().unwrap().to_owned())
+            .map(|x| x.to_string_value().as_str().to_owned())
             .collect()
     }
 }

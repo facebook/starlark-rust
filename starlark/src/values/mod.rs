@@ -190,7 +190,6 @@ impl<'v> Hashed<Value<'v>> {
 }
 
 impl<'v> Hashed<StringValue<'v>> {
-    #[allow(dead_code)] // TODO: remove when used
     pub(crate) fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Hashed<FrozenStringValue>> {
         // Safe because we know frozen values have the same hash as non-frozen ones
         let key = self.key().freeze(freezer)?;

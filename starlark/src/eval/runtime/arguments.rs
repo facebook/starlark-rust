@@ -657,48 +657,60 @@ pub struct Arguments<'v, 'a> {
 }
 
 impl<'v, 'a> Arguments<'v, 'a> {
-    /// Unwrap all named arguments (both explicit and in `**kwargs`) into a dictionary.
-    ///
-    /// This operation fails if named argument names are not unique.
-    pub fn names(&self) -> anyhow::Result<Dict<'v>> {
+    pub(crate) fn names_map(&self) -> anyhow::Result<SmallMap<StringValue<'v>, Value<'v>>> {
         match self.unpack_kwargs()? {
             None => {
                 let mut result = SmallMap::with_capacity(self.names.len());
                 for (k, v) in self.names.iter().zip(self.named) {
-                    result
-                        .insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1.to_value()), *v);
+                    result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
                 }
-                Ok(Dict::new(result))
+                Ok(result)
             }
             Some(kwargs) => {
                 if self.names.is_empty() {
                     for k in kwargs.content.keys() {
                         Arguments::unpack_kwargs_key(*k)?;
                     }
+                    let kwargs = unsafe {
+                        // Scary part: `SmallMap` has the same repr for `Value` and `StringValue`,
+                        // and we just checked above that all keys are strings.
+                        fn _assert_coerce<'v>(
+                            s: SmallMap<StringValue<'v>, Value<'v>>,
+                        ) -> SmallMap<Value<'v>, Value<'v>> {
+                            coerce(s)
+                        }
+                        transmute!(&SmallMap<Value, Value>, &SmallMap<StringValue, Value>, &kwargs.content)
+                    };
                     Ok(kwargs.clone())
                 } else {
                     // We have to insert the names before the kwargs since the iteration order is observable
                     let mut result =
                         SmallMap::with_capacity(self.names.len() + kwargs.content.len());
                     for (k, v) in self.names.iter().zip(self.named) {
-                        result.insert_hashed(
-                            Hashed::new_unchecked(k.0.small_hash(), k.1.to_value()),
-                            *v,
-                        );
+                        result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
                     }
                     for (k, v) in kwargs.iter_hashed() {
-                        let s = Arguments::unpack_kwargs_key(*k.key())?;
+                        let s = Arguments::unpack_kwargs_key_as_value(*k.key())?;
+                        let k = Hashed::new_unchecked(k.hash(), s);
                         let old = result.insert_hashed(k, v);
                         if unlikely(old.is_some()) {
-                            return Err(
-                                FunctionError::RepeatedParameter { name: s.to_owned() }.into()
-                            );
+                            return Err(FunctionError::RepeatedParameter {
+                                name: s.as_str().to_owned(),
+                            }
+                            .into());
                         }
                     }
-                    Ok(Dict::new(result))
+                    Ok(result)
                 }
             }
         }
+    }
+
+    /// Unwrap all named arguments (both explicit and in `**kwargs`) into a dictionary.
+    ///
+    /// This operation fails if named argument names are not unique.
+    pub fn names(&self) -> anyhow::Result<Dict<'v>> {
+        Ok(Dict::new(coerce(self.names_map()?)))
     }
 
     /// Unpack all positional parameters into an iterator.
@@ -730,11 +742,17 @@ impl<'v, 'a> Arguments<'v, 'a> {
 
     /// Confirm that a key in the `kwargs` field is indeed a string, or [`Err`].
     #[inline(always)]
-    pub fn unpack_kwargs_key(k: Value<'v>) -> anyhow::Result<&'v str> {
-        match k.unpack_str() {
+    pub(crate) fn unpack_kwargs_key_as_value(k: Value<'v>) -> anyhow::Result<StringValue<'v>> {
+        match StringValue::new(k) {
             None => Err(FunctionError::ArgsValueIsNotString.into()),
             Some(k) => Ok(k),
         }
+    }
+
+    /// Confirm that a key in the `kwargs` field is indeed a string, or [`Err`].
+    #[inline(always)]
+    pub fn unpack_kwargs_key(k: Value<'v>) -> anyhow::Result<&'v str> {
+        Arguments::unpack_kwargs_key_as_value(k).map(|k| k.as_str())
     }
 
     /// Produce [`Err`] if there are any positional arguments.
