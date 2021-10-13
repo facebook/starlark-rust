@@ -36,10 +36,9 @@ macro_rules! starlark_type {
 /// - see the [`ComplexValue`](crate::values::ComplexValue) docs for an example.
 #[macro_export]
 macro_rules! starlark_complex_value {
-    ($v:vis $x:ident) => {
+    // Common part of macro variants.
+    (impl $x:ident) => {
         $crate::__macro_refs::item! {
-            $v type $x<'v> = [< $x Gen >]<$crate::values::Value<'v>>;
-            $v type [< Frozen $x >] = [< $x Gen >]<$crate::values::FrozenValue>;
             $crate::__macro_refs::any_lifetime!($x<'v>);
             $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
 
@@ -59,7 +58,7 @@ macro_rules! starlark_complex_value {
 
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<&'v Self> {
-                    if x.unpack_frozen().is_some() {
+                    if let Some(x) = x.unpack_frozen() {
                         $crate::values::ValueLike::downcast_ref::< [< Frozen $x >] >(x).map($crate::__macro_refs::coerce_ref)
                     } else {
                         $crate::values::ValueLike::downcast_ref::< $x<'v> >(x)
@@ -72,6 +71,22 @@ macro_rules! starlark_complex_value {
                     $x::from_value(x).map(|x| $crate::values::ARef::new_ptr(x))
                 }
             }
+        }
+    };
+    ($v:vis $x:ident) => {
+        $crate::__macro_refs::item! {
+            $v type $x<'v> = [< $x Gen >]<$crate::values::Value<'v>>;
+            $v type [< Frozen $x >] = [< $x Gen >]<$crate::values::FrozenValue>;
+
+            starlark_complex_value!(impl $x);
+        }
+    };
+    ($v:vis $x:ident <'v>) => {
+        $crate::__macro_refs::item! {
+            $v type $x<'v> = [< $x Gen >]<'v, $crate::values::Value<'v>>;
+            $v type [< Frozen $x >] = [< $x Gen >]<'static, $crate::values::FrozenValue>;
+
+            starlark_complex_value!(impl $x);
         }
     };
 }
@@ -104,7 +119,7 @@ macro_rules! starlark_complex_values {
                 fn from_value(
                     x: $crate::values::Value<'v>,
                 ) -> Option<$crate::__macro_refs::Either<&'v Self, &'v [< Frozen $x >]>> {
-                    if x.unpack_frozen().is_some() {
+                    if let Some(x) = x.unpack_frozen() {
                         $crate::values::ValueLike::downcast_ref(x).map($crate::__macro_refs::Either::Right)
                     } else {
                         $crate::values::ValueLike::downcast_ref(x).map($crate::__macro_refs::Either::Left)
