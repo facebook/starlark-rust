@@ -540,10 +540,9 @@ mod flame {
                 // New frame, enter it.
                 let id = self.ids.get_value(*function);
                 self.current = Some(frame.push(id));
-            } else if let Some(..) = x.downcast_ref::<CallExit<NeedsDrop>>() {
-                // End of frame, exit!
-                self.current = frame.pop();
-            } else if let Some(..) = x.downcast_ref::<CallExit<NoDrop>>() {
+            } else if x.downcast_ref::<CallExit<NeedsDrop>>().is_some()
+                || x.downcast_ref::<CallExit<NoDrop>>().is_some()
+            {
                 // End of frame, exit!
                 self.current = frame.pop();
             } else {
