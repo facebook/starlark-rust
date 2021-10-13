@@ -63,11 +63,6 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
-pub(crate) enum WhichBump {
-    NonDrop,
-    Drop,
-}
-
 #[derive(Hash, PartialEq, Eq, Clone)]
 #[repr(transparent)]
 pub(crate) struct AValueHeader(DynMetadata<dyn AValueDyn<'static>>);
@@ -251,17 +246,10 @@ impl Arena {
     /// Allocate a type `T`.
     pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2, ExtraElem = ()>>(
         &'v self,
-        which_bump: WhichBump,
         x: T,
     ) -> &'v AValueHeader {
         debug_assert!(x.extra_len() == 0);
-        let bump = match which_bump {
-            WhichBump::NonDrop => {
-                assert!(!mem::needs_drop::<T>());
-                &self.non_drop
-            }
-            WhichBump::Drop => &self.drop,
-        };
+        let bump = self.bump_for_type::<T>();
         let (p, extra) = Self::alloc_uninit::<T>(bump, 0);
         debug_assert!(extra.is_empty());
         let p = p.write(AValueRepr {
@@ -512,7 +500,7 @@ mod test {
                 let r = reserve_str(&arena, &mk_str(""));
                 reserved.push((r, i));
             } else {
-                arena.alloc(WhichBump::Drop, mk_str(&i.to_string()));
+                arena.alloc(mk_str(&i.to_string()));
             }
         }
         assert!(!reserved.is_empty());
@@ -541,10 +529,10 @@ mod test {
     // Make sure that even if there are some blackholes when we drop, we can still walk to heap
     fn drop_with_blackhole() {
         let mut arena = Arena::default();
-        arena.alloc(WhichBump::Drop, mk_str("test"));
+        arena.alloc(mk_str("test"));
         // reserve but do not fill!
         reserve_str(&arena, &mk_str(""));
-        arena.alloc(WhichBump::Drop, mk_str("hello"));
+        arena.alloc(mk_str("hello"));
         let mut res = Vec::new();
         arena.for_each_ordered(|x| res.push(x));
         assert_eq!(res.len(), 3);
@@ -555,8 +543,8 @@ mod test {
     #[test]
     fn test_allocated_summary() {
         let arena = Arena::default();
-        arena.alloc(WhichBump::Drop, mk_str("test"));
-        arena.alloc(WhichBump::Drop, mk_str("test"));
+        arena.alloc(mk_str("test"));
+        arena.alloc(mk_str("test"));
         let res = arena.allocated_summary().summary;
         assert_eq!(res.len(), 1);
         let entry = res.values().next().unwrap();

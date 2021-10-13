@@ -24,7 +24,6 @@ use std::{
     hash::{Hash, Hasher},
     intrinsics::copy_nonoverlapping,
     marker::PhantomData,
-    mem,
     mem::MaybeUninit,
     ops::Deref,
     ptr,
@@ -42,7 +41,7 @@ use crate::{
         any::StarlarkAny,
         array::Array,
         layout::{
-            arena::{AValueHeader, Arena, HeapSummary, Reservation, WhichBump},
+            arena::{AValueHeader, Arena, HeapSummary, Reservation},
             avalue::{
                 array_avalue, complex, frozen_list_avalue, frozen_tuple_avalue, list_avalue,
                 simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
@@ -181,12 +180,8 @@ impl FrozenHeap {
         self.refs.borrow_mut().get_or_insert_owned(heap);
     }
 
-    fn alloc_raw(
-        &self,
-        which_bump: WhichBump,
-        x: impl AValue<'static, ExtraElem = ()>,
-    ) -> FrozenValue {
-        let v: &AValueHeader = self.arena.alloc(which_bump, x);
+    fn alloc_raw(&self, x: impl AValue<'static, ExtraElem = ()>) -> FrozenValue {
+        let v: &AValueHeader = self.arena.alloc(x);
         FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
     }
 
@@ -240,12 +235,7 @@ impl FrozenHeap {
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
     pub fn alloc_simple<T: SimpleValue>(&self, val: T) -> FrozenValue {
-        let which_bump = if mem::needs_drop::<T>() {
-            WhichBump::Drop
-        } else {
-            WhichBump::NonDrop
-        };
-        self.alloc_raw(which_bump, simple(val))
+        self.alloc_raw(simple(val))
     }
 
     /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
@@ -368,14 +358,10 @@ impl Heap {
         self.arena.borrow().available_bytes()
     }
 
-    fn alloc_raw<'v, 'v2: 'v2>(
-        &'v self,
-        which_bump: WhichBump,
-        x: impl AValue<'v2, ExtraElem = ()>,
-    ) -> Value<'v> {
+    fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2, ExtraElem = ()>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValueHeader = arena.alloc(which_bump, x);
+        let v: &AValueHeader = arena.alloc(x);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
@@ -385,10 +371,9 @@ impl Heap {
 
     fn alloc_raw_typed<'v, A: AValue<'v, ExtraElem = ()>>(
         &'v self,
-        which_bump: WhichBump,
         x: A,
     ) -> ValueTyped<'v, A::StarlarkValue> {
-        unsafe { ValueTyped::new_unchecked(self.alloc_raw(which_bump, x)) }
+        unsafe { ValueTyped::new_unchecked(self.alloc_raw(x)) }
     }
 
     pub(crate) fn alloc_str_init<'v>(
@@ -466,13 +451,13 @@ impl Heap {
     pub fn alloc_list<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
         let array = self.alloc_array(elems.len());
         array.extend_from_slice(elems);
-        self.alloc_raw(WhichBump::NonDrop, list_avalue(array))
+        self.alloc_raw(list_avalue(array))
     }
 
     pub fn alloc_list_iter<'v>(&'v self, elems: impl IntoIterator<Item = Value<'v>>) -> Value<'v> {
         let elems = elems.into_iter();
         let array = self.alloc_array(0);
-        let list = self.alloc_raw_typed(WhichBump::NonDrop, list_avalue(array));
+        let list = self.alloc_raw_typed(list_avalue(array));
         list.0.extend(elems, self);
         list.to_value()
     }
@@ -482,7 +467,7 @@ impl Heap {
         let array = self.alloc_array(a.len() + b.len());
         array.extend_from_slice(a);
         array.extend_from_slice(b);
-        self.alloc_raw(WhichBump::NonDrop, list_avalue(array))
+        self.alloc_raw(list_avalue(array))
     }
 
     pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
@@ -493,38 +478,12 @@ impl Heap {
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].
     pub fn alloc_simple<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
-        if mem::needs_drop::<T>() {
-            self.alloc_simple_in_drop(x)
-        } else {
-            self.alloc_simple_in_non_drop(x)
-        }
-    }
-
-    pub(crate) fn alloc_simple_in_drop<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
-        self.alloc_raw(WhichBump::Drop, simple(x))
-    }
-
-    pub(crate) fn alloc_simple_in_non_drop<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
-        assert!(!mem::needs_drop::<T>());
-        self.alloc_raw(WhichBump::NonDrop, simple(x))
+        self.alloc_raw(simple(x))
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
     pub fn alloc_complex<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
-        if mem::needs_drop::<T>() {
-            self.alloc_complex_in_drop(x)
-        } else {
-            self.alloc_complex_in_non_drop(x)
-        }
-    }
-
-    pub(crate) fn alloc_complex_in_drop<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
-        self.alloc_raw(WhichBump::Drop, complex(x))
-    }
-
-    pub(crate) fn alloc_complex_in_non_drop<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
-        assert!(!mem::needs_drop::<T>());
-        self.alloc_raw(WhichBump::NonDrop, complex(x))
+        self.alloc_raw(complex(x))
     }
 
     pub(crate) fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {

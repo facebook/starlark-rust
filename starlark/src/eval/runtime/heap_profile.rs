@@ -18,8 +18,10 @@
 use std::{
     cell::RefCell,
     collections::{hash_map::Entry, HashMap},
+    fmt::Debug,
     fs::File,
     io::Write,
+    mem,
     path::Path,
     rc::Rc,
     time::{Duration, Instant},
@@ -44,33 +46,64 @@ pub(crate) struct HeapProfile {
     enabled: bool,
 }
 
-#[derive(AnyLifetime, Trace, Debug, Display)]
-#[display(fmt = "CallEnter")]
-struct CallEnter<'v> {
-    function: Value<'v>,
-    time: Instant,
+/// A type which is either drop or non-drop.
+trait MaybeDrop: Debug + Sync + Send + 'static {}
+
+/// Type which has `Drop`.
+#[derive(AnyLifetime, Debug, Trace)]
+struct NeedsDrop;
+impl Drop for NeedsDrop {
+    fn drop(&mut self) {
+        // Just make this type `Drop`.
+        // Note `mem::needs_drop()` would return `true` for this type,
+        // even if `drop` is optimized away: https://rust.godbolt.org/z/1cxKoMzdM
+    }
 }
 
-impl<'v> ComplexValue<'v> for CallEnter<'v> {
+/// Type which doesn't have `Drop`.
+#[derive(AnyLifetime, Debug, Trace)]
+struct NoDrop;
+
+impl MaybeDrop for NeedsDrop {}
+impl MaybeDrop for NoDrop {}
+
+#[derive(Trace, Debug, Display)]
+#[display(fmt = "CallEnter")]
+struct CallEnter<'v, D: MaybeDrop> {
+    function: Value<'v>,
+    time: Instant,
+    maybe_drop: D,
+}
+
+unsafe impl<'v, D: MaybeDrop + AnyLifetime<'v>> AnyLifetime<'v> for CallEnter<'v, D> {
+    any_lifetime_body!(CallEnter<'static, D>);
+}
+
+impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> ComplexValue<'v> for CallEnter<'v, D> {
     type Frozen = NoSimpleValue;
     fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         unreachable!("Should never end up freezing a CallEnter")
     }
 }
 
-impl<'v> StarlarkValue<'v> for CallEnter<'v> {
+impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> StarlarkValue<'v> for CallEnter<'v, D> {
     starlark_type!("call_enter");
 }
 
-#[derive(AnyLifetime, Debug, Display)]
+#[derive(Debug, Display)]
 #[display(fmt = "CallExit")]
-struct CallExit {
+struct CallExit<D: MaybeDrop> {
     time: Instant,
+    maybe_drop: D,
 }
 
-impl SimpleValue for CallExit {}
+impl<D: MaybeDrop + AnyLifetime<'static>> SimpleValue for CallExit<D> {}
 
-impl<'v> StarlarkValue<'v> for CallExit {
+unsafe impl<'v, D: MaybeDrop> AnyLifetime<'v> for CallExit<D> {
+    any_lifetime_body!(CallExit<D>);
+}
+
+impl<'v, D: MaybeDrop + AnyLifetime<'static>> StarlarkValue<'v> for CallExit<D> {
     starlark_type!("call_exit");
 }
 
@@ -140,16 +173,34 @@ impl HeapProfile {
     pub(crate) fn record_call_enter<'v>(&self, function: Value<'v>, heap: &'v Heap) {
         if self.enabled {
             let time = Instant::now();
-            heap.alloc_complex_in_drop(CallEnter { function, time });
-            heap.alloc_complex_in_non_drop(CallEnter { function, time });
+            assert!(mem::needs_drop::<CallEnter<NeedsDrop>>());
+            assert!(!mem::needs_drop::<CallEnter<NoDrop>>());
+            heap.alloc_complex(CallEnter {
+                function,
+                time,
+                maybe_drop: NeedsDrop,
+            });
+            heap.alloc_complex(CallEnter {
+                function,
+                time,
+                maybe_drop: NoDrop,
+            });
         }
     }
 
     pub(crate) fn record_call_exit<'v>(&self, heap: &'v Heap) {
         if self.enabled {
             let time = Instant::now();
-            heap.alloc_simple_in_drop(CallExit { time });
-            heap.alloc_simple_in_non_drop(CallExit { time });
+            assert!(mem::needs_drop::<CallExit<NeedsDrop>>());
+            assert!(!mem::needs_drop::<CallExit<NoDrop>>());
+            heap.alloc_simple(CallExit {
+                time,
+                maybe_drop: NeedsDrop,
+            });
+            heap.alloc_simple(CallExit {
+                time,
+                maybe_drop: NoDrop,
+            });
         }
     }
 
@@ -347,23 +398,37 @@ mod summary {
             self.last_changed = time;
         }
 
+        fn process_call_enter<D: MaybeDrop>(&mut self, call_enter: &CallEnter<D>) {
+            let CallEnter { function, time, .. } = call_enter;
+            let id = self.ids.get_value(*function);
+            self.ensure(id);
+            self.change(*time);
+
+            let top = self.top_id();
+            let mut me = &mut self.info[id.0];
+            me.calls += 1;
+            *me.callers.entry(top).or_insert(0) += 1;
+            self.call_stack.push((id, me.time_rec, *time));
+        }
+
+        fn process_call_exit<D: MaybeDrop>(&mut self, call_exit: &CallExit<D>) {
+            let CallExit { time, .. } = call_exit;
+            self.change(*time);
+            let (name, time_rec, start) = self.call_stack.pop().unwrap();
+            self.info[name.0].time_rec =
+                time_rec + time.checked_duration_since(start).unwrap_or_default();
+        }
+
         /// Process each ValueMem in their chronological order
         pub fn process<'v>(&mut self, x: Value<'v>) {
-            if let Some(CallEnter { function, time }) = x.downcast_ref() {
-                let id = self.ids.get_value(*function);
-                self.ensure(id);
-                self.change(*time);
-
-                let top = self.top_id();
-                let mut me = &mut self.info[id.0];
-                me.calls += 1;
-                *me.callers.entry(top).or_insert(0) += 1;
-                self.call_stack.push((id, me.time_rec, *time));
-            } else if let Some(CallExit { time }) = x.downcast_ref() {
-                self.change(*time);
-                let (name, time_rec, start) = self.call_stack.pop().unwrap();
-                self.info[name.0].time_rec =
-                    time_rec + time.checked_duration_since(start).unwrap_or_default();
+            if let Some(call_enter) = x.downcast_ref::<CallEnter<NeedsDrop>>() {
+                self.process_call_enter(call_enter);
+            } else if let Some(call_enter) = x.downcast_ref::<CallEnter<NoDrop>>() {
+                self.process_call_enter(call_enter);
+            } else if let Some(call_exit) = x.downcast_ref::<CallExit<NeedsDrop>>() {
+                self.process_call_exit(call_exit)
+            } else if let Some(call_exit) = x.downcast_ref::<CallExit<NoDrop>>() {
+                self.process_call_exit(call_exit)
             } else {
                 let typ = x.get_ref().get_type();
                 *self.top_info().allocs.entry(typ).or_insert(0) += 1;
@@ -467,11 +532,18 @@ mod flame {
                 None => return,
             };
 
-            if let Some(CallEnter { function, .. }) = x.downcast_ref() {
+            if let Some(CallEnter { function, .. }) = x.downcast_ref::<CallEnter<NeedsDrop>>() {
                 // New frame, enter it.
                 let id = self.ids.get_value(*function);
                 self.current = Some(frame.push(id));
-            } else if let Some(CallExit { .. }) = x.downcast_ref() {
+            } else if let Some(CallEnter { function, .. }) = x.downcast_ref::<CallEnter<NoDrop>>() {
+                // New frame, enter it.
+                let id = self.ids.get_value(*function);
+                self.current = Some(frame.push(id));
+            } else if let Some(..) = x.downcast_ref::<CallExit<NeedsDrop>>() {
+                // End of frame, exit!
+                self.current = frame.pop();
+            } else if let Some(..) = x.downcast_ref::<CallExit<NoDrop>>() {
                 // End of frame, exit!
                 self.current = frame.pop();
             } else {
