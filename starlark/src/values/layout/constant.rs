@@ -16,9 +16,12 @@
  */
 
 use std::{
+    borrow::Borrow,
     fmt,
     fmt::{Debug, Formatter},
+    hash::{Hash, Hasher},
     intrinsics::copy_nonoverlapping,
+    ops::Deref,
     ptr,
 };
 
@@ -105,6 +108,34 @@ unsafe impl<'v> CoerceKey<StringValue<'v>> for StringValue<'v> {}
 unsafe impl<'v> Coerce<Value<'v>> for StringValue<'v> {}
 unsafe impl<'v> CoerceKey<Value<'v>> for StringValue<'v> {}
 
+impl Borrow<str> for FrozenStringValue {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<'v> Borrow<str> for StringValue<'v> {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for FrozenStringValue {
+    type Target = StarlarkStr;
+
+    fn deref(&self) -> &StarlarkStr {
+        &self.0.payload
+    }
+}
+
+impl<'v> Deref for StringValue<'v> {
+    type Target = StarlarkStr;
+
+    fn deref(&self) -> &StarlarkStr {
+        self.unpack_starlark_str()
+    }
+}
+
 impl PartialEq for FrozenStringValue {
     fn eq(&self, other: &Self) -> bool {
         ptr::eq(self, other) || self.as_str() == other.as_str()
@@ -112,6 +143,12 @@ impl PartialEq for FrozenStringValue {
 }
 
 impl Eq for FrozenStringValue {}
+
+impl Hash for FrozenStringValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
+    }
+}
 
 impl FrozenStringValue {
     /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
@@ -150,6 +187,12 @@ impl<'v> PartialEq for StringValue<'v> {
 
 impl<'v> Eq for StringValue<'v> {}
 
+impl<'v> Hash for StringValue<'v> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state)
+    }
+}
+
 impl<'v> StringValue<'v> {
     /// Construct without a check that the value contains a string.
     ///
@@ -177,7 +220,7 @@ impl<'v> StringValue<'v> {
         self.unpack_starlark_str().unpack()
     }
 
-    pub(crate) fn to_value(self) -> Value<'v> {
+    pub fn to_value(self) -> Value<'v> {
         self.0
     }
 
@@ -188,11 +231,27 @@ impl<'v> StringValue<'v> {
 }
 
 /// Common type for [`StringValue`] and [`FrozenStringValue`].
-pub(crate) trait StringValueLike<'v>: Debug + Coerce<StringValue<'v>> {}
+pub trait StringValueLike<'v>:
+    Trace<'v> + CoerceKey<StringValue<'v>> + Debug + Copy + Clone + Dupe
+{
+    fn to_string_value(self) -> StringValue<'v>;
+}
 
-impl<'v> StringValueLike<'v> for StringValue<'v> {}
+impl<'v> StringValueLike<'v> for StringValue<'v> {
+    fn to_string_value(self) -> StringValue<'v> {
+        self
+    }
+}
 
-impl<'v> StringValueLike<'v> for FrozenStringValue {}
+impl<'v> StringValueLike<'v> for FrozenStringValue {
+    fn to_string_value(self) -> StringValue<'v> {
+        StringValue(self.unpack().to_value())
+    }
+}
+
+unsafe impl<'v> Trace<'v> for FrozenStringValue {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
 
 unsafe impl<'v> Trace<'v> for StringValue<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
