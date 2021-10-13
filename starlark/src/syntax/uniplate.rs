@@ -17,6 +17,9 @@
 
 // These are more readable for formulaic code like Uniplate
 #![allow(clippy::many_single_char_names)]
+// Sometimes we need |x| f(x) to do type/lifetime conversion, sometimes we don't.
+// Most consistent to use the closure everywhere.
+#![allow(clippy::redundant_closure)]
 
 use crate::syntax::ast::{
     AssignP, AstAssignIdentP, AstExprP, AstPayload, AstStmtP, ClauseP, ExprP, ForClauseP,

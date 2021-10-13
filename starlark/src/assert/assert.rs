@@ -16,6 +16,12 @@
  */
 
 //! Utilities to test Starlark code execution.
+
+// `if_then_panic` is only in newer clippy, delete this in future.
+#![allow(unknown_lints)]
+// We want to carefully control the panic message.
+#![allow(clippy::if_then_panic)]
+
 use std::collections::HashMap;
 
 use anyhow::anyhow;
