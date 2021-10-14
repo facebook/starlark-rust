@@ -30,10 +30,8 @@
 //! hold several values.
 use std::{
     any::TypeId,
-    cell::{Cell, RefCell},
     cmp::Ordering,
     fmt::{Debug, Display, Write},
-    marker,
 };
 
 use derive_more::Display;
@@ -41,108 +39,13 @@ use gazebo::any::AnyLifetime;
 
 use crate::{
     codemap::Span,
-    collections::SmallMap,
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
         docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenStringValue, Heap,
-        Tracer, Value, ValueError,
+        Trace, Value, ValueError,
     },
 };
-
-/// Called by the garbage collection, and must walk over every contained `Value` in the type.
-/// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
-pub unsafe trait Trace<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>);
-}
-
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for Vec<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.iter_mut().for_each(|x| x.trace(tracer));
-    }
-}
-
-unsafe impl<'v, K: Trace<'v>, V: Trace<'v>> Trace<'v> for SmallMap<K, V> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.iter_mut().for_each(|(k, v)| {
-            // We are going to replace it, but promise morally it's the same Value
-            // so things like Hash/Ord/Eq will work the same
-            #[allow(clippy::cast_ref_to_mut)]
-            let k_mut = unsafe { &mut *(k as *const K as *mut K) };
-            k_mut.trace(tracer);
-            v.trace(tracer);
-        })
-    }
-}
-
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for Option<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        if let Some(x) = self {
-            x.trace(tracer)
-        }
-    }
-}
-
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for RefCell<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.get_mut().trace(tracer)
-    }
-}
-
-unsafe impl<'v, T: Trace<'v> + Copy> Trace<'v> for Cell<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        let mut v = self.get();
-        v.trace(tracer);
-        self.set(v)
-    }
-}
-
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for Box<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        Box::as_mut(self).trace(tracer)
-    }
-}
-
-unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>> Trace<'v> for (T1, T2) {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.0.trace(tracer);
-        self.1.trace(tracer);
-    }
-}
-
-unsafe impl<'v> Trace<'v> for Value<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        tracer.trace(self)
-    }
-}
-
-unsafe impl<'v> Trace<'v> for String {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v> Trace<'v> for usize {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v> Trace<'v> for i32 {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v> Trace<'v> for u32 {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v> Trace<'v> for bool {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v> Trace<'v> for std::time::Instant {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v, T> Trace<'v> for marker::PhantomData<T> {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
 
 /// A trait for values which are more complex - because they are either mutable,
 /// or contain references to other values.

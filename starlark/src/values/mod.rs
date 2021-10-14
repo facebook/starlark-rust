@@ -40,8 +40,8 @@ use indexmap::Equivalent;
 pub use starlark_derive::{starlark_attrs, StarlarkAttrs, Trace};
 
 pub use crate::values::{
-    alloc_value::*, error::*, frozen_ref::*, layout::*, owned::*, traits::*, typed::*, types::*,
-    unpack::*,
+    alloc_value::*, error::*, frozen_ref::*, layout::*, owned::*, trace::*, traits::*, typed::*,
+    types::*, unpack::*,
 };
 use crate::{
     codemap::Span,
@@ -66,6 +66,7 @@ mod layout;
 pub(crate) mod num;
 mod owned;
 mod stack_guard;
+mod trace;
 mod traits;
 mod types;
 pub(crate) mod typing;
