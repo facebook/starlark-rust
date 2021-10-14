@@ -48,7 +48,7 @@ pub fn write_decimal<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
     }
 }
 
-pub fn write_scientific<W: fmt::Write>(output: &mut W, f: f64, exponent_char: char, strip_trailing_0s: bool) -> fmt::Result {
+pub fn write_scientific<W: fmt::Write>(output: &mut W, f: f64, exponent_char: char, strip_trailing_zeros: bool) -> fmt::Result {
     if !f.is_finite() {
         write_non_finite(output, f)
     } else {
@@ -66,23 +66,23 @@ pub fn write_scientific<W: fmt::Write>(output: &mut W, f: f64, exponent_char: ch
 
         // calculate the fractional tail for given precision
         let mut tail = (normal.fract() * 10f64.powf(WRITE_PRECISION as f64)).round() as u64;
-        let mut rev_tail_str = String::new();
-        let mut removing_trailing_0s = strip_trailing_0s;
+        let mut rev_tail = Vec::with_capacity(WRITE_PRECISION);
+        let mut removing_trailing_zeros = strip_trailing_zeros;
         for _ in 0..WRITE_PRECISION {
             let tail_digit = tail % 10;
-            if tail_digit != 0 || !removing_trailing_0s {
-                removing_trailing_0s = false;
-                rev_tail_str.push((b'0' + tail_digit as u8) as char);
+            if tail_digit != 0 || !removing_trailing_zeros {
+                removing_trailing_zeros = false;
+                rev_tail.push(tail_digit as u8);
             }
             tail /= 10;
         }
 
         // write fractional part
-        if !rev_tail_str.is_empty() {
+        if !rev_tail.is_empty() {
             output.write_char('.')?;
         }
-        for c in rev_tail_str.chars().rev() {
-            output.write_char(c)?;
+        for digit in rev_tail.into_iter().rev() {
+            output.write_char((b'0' + digit) as char)?;
         }
 
         // add exponent part
@@ -98,7 +98,7 @@ pub fn write_compact<W: fmt::Write>(output: &mut W, f: f64, exponent_char: char)
         let abs = f.abs();
         let exponent = if f == 0.0 { 0 } else {abs.log10().floor() as i32 };
 
-        if exponent < -(WRITE_PRECISION as i32) || exponent >= WRITE_PRECISION as i32 {
+        if exponent.abs() >= WRITE_PRECISION as i32 {
             // use scientific notation if exponent is outside of our precision (but strip 0s)
             write_scientific(output, f, exponent_char, true)
         } else if f.fract() == 0.0 {
