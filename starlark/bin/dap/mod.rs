@@ -37,15 +37,13 @@ use starlark::{
     syntax::{AstModule, Dialect},
 };
 
-use crate::eval::{dialect, globals, Context};
+use crate::eval::{dialect, globals};
 
 mod library;
 
 #[derive(Debug)]
 struct Backend {
     client: Client,
-    starlark: Context,
-
     file: Mutex<Option<String>>,
 
     // These breakpoints must all match statements as per before_stmt.
@@ -380,11 +378,10 @@ impl DebugServer for Backend {
     }
 }
 
-pub fn server(starlark: Context) {
+pub fn server() {
     let (sender, receiver) = channel();
     DapService::run(|client| Backend {
         client,
-        starlark,
         breakpoints: Default::default(),
         disable_breakpoints: Default::default(),
         file: Default::default(),

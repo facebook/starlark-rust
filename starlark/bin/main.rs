@@ -239,7 +239,7 @@ fn main() -> anyhow::Result<()> {
         ctx.run = false;
         lsp::server(ctx)?;
     } else if args.dap {
-        dap::server(ctx)
+        dap::server()
     }
 
     if !args.json {
