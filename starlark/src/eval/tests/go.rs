@@ -107,15 +107,6 @@ fn test_go() {
             "int(1e100)",
             "1000000 * 1000000 * 1000000",
             "int overflow in starlark-rust",
-            // str for floats doesn't conform to the spec
-            "assert.eq(str(1.23e45),",
-            "assert.eq(str(-1.23e-45),",
-            "assert.eq(str(sorted([inf, neginf, nan, 1e300, -1e300,",
-            // string interpolation for floats not implemented
-            "%d",
-            "%e",
-            "%f",
-            "%g",
         ],
     ));
     assert.conformance(&ignore_bad_lines(

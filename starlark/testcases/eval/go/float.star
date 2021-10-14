@@ -237,7 +237,9 @@ assert.true(not (nan < nan))
 assert.true(not (nan != nan)) # unlike Python
 # Sort is stable: 0.0 and -0.0 are equal, but they are not permuted.
 # Similarly 1 and 1.0.
-assert.eq(str(sorted([inf, neginf, nan, 1e300, -1e300, 1.0, -1.0, 1, -1, 1e-300, -1e-300, 0, 0.0, negzero, 1e-300, -1e-300])), "[-inf, -1e+300, -1.0, -1, -1e-300, -1e-300, 0, 0.0, -0.0, 1e-300, 1e-300, 1.0, 1, 1e+300, +inf, nan]")
+assert.eq(
+    str(sorted([inf, neginf, nan, 1e300, -1e300, 1.0, -1.0, 1, -1, 1e-300, -1e-300, 0, 0.0, negzero, 1e-300, -1e-300])),
+    "[-inf, -1e+300, -1.0, -1, -1e-300, -1e-300, 0, 0.0, -0.0, 1e-300, 1e-300, 1.0, 1, 1e+300, +inf, nan]")
 
 # Sort is stable, and its result contains no adjacent x, y such that y > x.
 # Note: Python's reverse sort is unstable; see https://bugs.python.org/issue36095.

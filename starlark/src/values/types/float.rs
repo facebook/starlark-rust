@@ -29,6 +29,111 @@ use crate::values::{
     StarlarkValue, Value, ValueError,
 };
 
+const WRITE_PRECISION: usize = 6;
+
+fn write_non_finite<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
+    debug_assert!(f.is_nan() || f.is_infinite());
+    if f.is_nan() {
+        write!(output, "nan")
+    } else {
+        write!(
+            output,
+            "{}inf",
+            if f.is_sign_positive() { "+" } else { "-" }
+        )
+    }
+}
+
+pub fn write_decimal<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
+    if !f.is_finite() {
+        write_non_finite(output, f)
+    } else {
+        write!(output, "{:.prec$}", f, prec = WRITE_PRECISION)
+    }
+}
+
+pub fn write_scientific<W: fmt::Write>(
+    output: &mut W,
+    f: f64,
+    exponent_char: char,
+    strip_trailing_zeros: bool,
+) -> fmt::Result {
+    if !f.is_finite() {
+        write_non_finite(output, f)
+    } else {
+        let abs = f.abs();
+        let exponent = if f == 0.0 {
+            0
+        } else {
+            abs.log10().floor() as i32
+        };
+        let normal = if f == 0.0 {
+            0.0
+        } else {
+            abs / 10f64.powf(exponent as f64)
+        };
+
+        // start with "-" for a negative number
+        if f.is_sign_negative() {
+            output.write_char('-')?
+        }
+
+        // use the whole integral part of normal (a single digit)
+        output.write_fmt(format_args!("{}", normal.trunc()))?;
+
+        // calculate the fractional tail for given precision
+        let mut tail = (normal.fract() * 10f64.powf(WRITE_PRECISION as f64)).round() as u64;
+        let mut rev_tail = [0u8; WRITE_PRECISION];
+        let mut rev_tail_len = 0;
+        let mut removing_trailing_zeros = strip_trailing_zeros;
+        for _ in 0..WRITE_PRECISION {
+            let tail_digit = tail % 10;
+            if tail_digit != 0 || !removing_trailing_zeros {
+                removing_trailing_zeros = false;
+                rev_tail[rev_tail_len] = tail_digit as u8;
+                rev_tail_len += 1;
+            }
+            tail /= 10;
+        }
+
+        // write fractional part
+        if rev_tail_len != 0 {
+            output.write_char('.')?;
+        }
+        for digit in rev_tail[0..rev_tail_len].iter().rev() {
+            output.write_char((b'0' + digit) as char)?;
+        }
+
+        // add exponent part
+        output.write_char(exponent_char)?;
+        output.write_fmt(format_args!("{:+03}", exponent))
+    }
+}
+
+pub fn write_compact<W: fmt::Write>(output: &mut W, f: f64, exponent_char: char) -> fmt::Result {
+    if !f.is_finite() {
+        write_non_finite(output, f)
+    } else {
+        let abs = f.abs();
+        let exponent = if f == 0.0 {
+            0
+        } else {
+            abs.log10().floor() as i32
+        };
+
+        if exponent.abs() >= WRITE_PRECISION as i32 {
+            // use scientific notation if exponent is outside of our precision (but strip 0s)
+            write_scientific(output, f, exponent_char, true)
+        } else if f.fract() == 0.0 {
+            // make sure there's a fractional part even if the number doesn't have it
+            output.write_fmt(format_args!("{:.1}", f))
+        } else {
+            // rely on the built-in formatting otherwise
+            output.write_fmt(format_args!("{}", f))
+        }
+    }
+}
+
 #[derive(Clone, Dupe, Copy, Debug, AnyLifetime)]
 pub struct StarlarkFloat(pub f64);
 
@@ -70,19 +175,7 @@ where
 
 impl Display for StarlarkFloat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.is_nan() {
-            write!(f, "nan")
-        } else if self.0.is_infinite() {
-            if self.0.is_sign_positive() {
-                write!(f, "+inf")
-            } else {
-                write!(f, "-inf")
-            }
-        } else if self.0.fract() == 0.0 {
-            write!(f, "{:.1}", self.0)
-        } else {
-            write!(f, "{}", self.0)
-        }
+        write_compact(f, self.0, 'e')
     }
 }
 
@@ -208,7 +301,85 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::assert;
+
+    fn non_finite(f: f64) -> String {
+        let mut buf = String::new();
+        write_non_finite(&mut buf, f).unwrap();
+        buf
+    }
+
+    #[test]
+    fn test_write_non_finite() {
+        assert_eq!(non_finite(f64::NAN), "nan");
+        assert_eq!(non_finite(f64::INFINITY), "+inf");
+        assert_eq!(non_finite(f64::NEG_INFINITY), "-inf");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_write_non_finite_only_for_non_finite() {
+        non_finite(0f64);
+    }
+
+    fn decimal(f: f64) -> String {
+        let mut buf = String::new();
+        write_decimal(&mut buf, f).unwrap();
+        buf
+    }
+
+    #[test]
+    fn test_write_decimal() {
+        assert_eq!(decimal(f64::NAN), "nan");
+        assert_eq!(decimal(f64::INFINITY), "+inf");
+        assert_eq!(decimal(f64::NEG_INFINITY), "-inf");
+
+        assert_eq!(decimal(0f64), "0.000000");
+        assert_eq!(decimal(std::f64::consts::PI), "3.141593");
+        assert_eq!(decimal(-std::f64::consts::E), "-2.718282");
+        assert_eq!(decimal(1e10), "10000000000.000000");
+    }
+
+    fn scientific(f: f64) -> String {
+        let mut buf = String::new();
+        write_scientific(&mut buf, f, 'e', false).unwrap();
+        buf
+    }
+
+    #[test]
+    fn test_write_scientific() {
+        assert_eq!(scientific(f64::NAN), "nan");
+        assert_eq!(scientific(f64::INFINITY), "+inf");
+        assert_eq!(scientific(f64::NEG_INFINITY), "-inf");
+
+        assert_eq!(scientific(0f64), "0.000000e+00");
+        assert_eq!(scientific(-0f64), "-0.000000e+00");
+        assert_eq!(scientific(1.23e45), "1.230000e+45");
+        assert_eq!(scientific(-3.14e-145), "-3.140000e-145");
+        assert_eq!(scientific(1e300), "1.000000e+300");
+    }
+
+    fn compact(f: f64) -> String {
+        let mut buf = String::new();
+        write_compact(&mut buf, f, 'e').unwrap();
+        buf
+    }
+
+    #[test]
+    fn test_write_compact() {
+        assert_eq!(compact(f64::NAN), "nan");
+        assert_eq!(compact(f64::INFINITY), "+inf");
+        assert_eq!(compact(f64::NEG_INFINITY), "-inf");
+
+        assert_eq!(compact(0f64), "0.0");
+        assert_eq!(compact(std::f64::consts::PI), "3.141592653589793");
+        assert_eq!(compact(-std::f64::consts::E), "-2.718281828459045");
+        assert_eq!(compact(1e10), "1e+10");
+        assert_eq!(compact(1.23e45), "1.23e+45");
+        assert_eq!(compact(-3.14e-145), "-3.14e-145");
+        assert_eq!(compact(1e300), "1e+300");
+    }
 
     #[test]
     fn test_arithmetic_operators() {

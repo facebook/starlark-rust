@@ -24,7 +24,7 @@ use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
 use thiserror::Error;
 
-use crate::values::{dict::Dict, tuple::Tuple, Value, ValueError, ValueLike};
+use crate::values::{dict::Dict, float, num, tuple::Tuple, Value, ValueError, ValueLike};
 
 /// Operator `%` format or evaluation errors
 #[derive(Clone, Dupe, Debug, Error)]
@@ -75,7 +75,19 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
                         }
                     }
                     b'r' => next_value()?.collect_repr(out),
-                    b'd' => write!(out, "{}", next_value()?.to_int()?).unwrap(),
+                    b'd' => {
+                        let value = next_value()?;
+                        if let Some(num::Num::Float(v)) = value.unpack_num() {
+                            match num::Num::Float(v.trunc()).as_int() {
+                                None => {
+                                    return ValueError::unsupported(&float::StarlarkFloat(v), "%d");
+                                }
+                                Some(v) => write!(out, "{}", v).unwrap(),
+                            }
+                        } else {
+                            write!(out, "{}", value.to_int()?).unwrap()
+                        }
+                    }
                     b'o' => {
                         let v = next_value()?.to_int()?;
                         write!(
@@ -105,6 +117,41 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
                             v.wrapping_abs() as u64
                         )
                         .unwrap()
+                    }
+                    b'e' => {
+                        let v = next_value()?
+                            .unpack_num()
+                            .ok_or(ValueError::IncorrectParameterType)?
+                            .as_float();
+                        float::write_scientific(out, v, 'e', false).unwrap()
+                    }
+                    b'E' => {
+                        let v = next_value()?
+                            .unpack_num()
+                            .ok_or(ValueError::IncorrectParameterType)?
+                            .as_float();
+                        float::write_scientific(out, v, 'E', false).unwrap()
+                    }
+                    b'f' | b'F' => {
+                        let v = next_value()?
+                            .unpack_num()
+                            .ok_or(ValueError::IncorrectParameterType)?
+                            .as_float();
+                        float::write_decimal(out, v).unwrap()
+                    }
+                    b'g' => {
+                        let v = next_value()?
+                            .unpack_num()
+                            .ok_or(ValueError::IncorrectParameterType)?
+                            .as_float();
+                        float::write_compact(out, v, 'e').unwrap()
+                    }
+                    b'G' => {
+                        let v = next_value()?
+                            .unpack_num()
+                            .ok_or(ValueError::IncorrectParameterType)?
+                            .as_float();
+                        float::write_compact(out, v, 'E').unwrap()
                     }
                     c => {
                         res.push(b'%');
