@@ -17,6 +17,12 @@
 
 //! Run conformance tests, which are used by the Go starlark.
 //! e.g. <https://github.com/google/skylark/tree/master/testdata>
+
+// `if_then_panic` is only in newer clippy, delete this in future.
+#![allow(unknown_lints)]
+// We want to carefully control the panic message.
+#![allow(clippy::if_then_panic)]
+
 use gazebo::prelude::*;
 use itertools::Itertools;
 
