@@ -33,7 +33,7 @@ use gazebo::{
 use crate::values::{
     layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
-    Freezer, Trace, Tracer, Value,
+    Freezer, Trace, Tracer, UnpackValue, Value,
 };
 
 /// A constant string that can be converted to a [`FrozenValue`].
@@ -257,6 +257,12 @@ unsafe impl<'v> Trace<'v> for StringValue<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.0.trace(tracer);
         debug_assert!(self.0.unpack_str().is_some());
+    }
+}
+
+impl<'v> UnpackValue<'v> for StringValue<'v> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        StringValue::new(value)
     }
 }
 
