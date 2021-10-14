@@ -159,13 +159,13 @@ impl FrozenStringValue {
     /// Construct without a check that the value contains a string.
     ///
     /// If passed value does not contain a string, it may lead to memory corruption.
-    pub(crate) unsafe fn new_unchecked(value: FrozenValue) -> FrozenStringValue {
+    pub unsafe fn new_unchecked(value: FrozenValue) -> FrozenStringValue {
         debug_assert!(value.unpack_str().is_some());
         FrozenStringValue(&*(value.0.ptr_value() as *const AValueRepr<StarlarkStr>))
     }
 
     /// Construct from a value. Returns [`None`] if a value does not contain a string.
-    pub(crate) fn new(value: FrozenValue) -> Option<FrozenStringValue> {
+    pub fn new(value: FrozenValue) -> Option<FrozenStringValue> {
         if value.unpack_str().is_some() {
             Some(unsafe { Self::new_unchecked(value) })
         } else {
@@ -174,7 +174,7 @@ impl FrozenStringValue {
     }
 
     /// Get a string.
-    pub(crate) fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         self.0.payload.unpack()
     }
 }
@@ -197,13 +197,13 @@ impl<'v> StringValue<'v> {
     /// Construct without a check that the value contains a string.
     ///
     /// If passed value does not contain a string, it may lead to memory corruption.
-    pub(crate) unsafe fn new_unchecked(value: Value<'v>) -> StringValue<'v> {
+    pub unsafe fn new_unchecked(value: Value<'v>) -> StringValue<'v> {
         debug_assert!(value.unpack_str().is_some());
         StringValue(value)
     }
 
     /// Construct from a value. Returns [`None`] if a value does not contain a string.
-    pub(crate) fn new(value: Value<'v>) -> Option<StringValue<'v>> {
+    pub fn new(value: Value<'v>) -> Option<StringValue<'v>> {
         if value.unpack_str().is_some() {
             Some(StringValue(value))
         } else {
@@ -216,7 +216,7 @@ impl<'v> StringValue<'v> {
         unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
     }
 
-    pub(crate) fn as_str(self) -> &'v str {
+    pub fn as_str(self) -> &'v str {
         self.unpack_starlark_str().unpack()
     }
 
@@ -225,7 +225,7 @@ impl<'v> StringValue<'v> {
     }
 
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
-    pub(crate) fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
+    pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
         Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.0)?) })
     }
 }
