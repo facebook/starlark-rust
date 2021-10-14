@@ -23,6 +23,7 @@ use std::{
     intrinsics::copy_nonoverlapping,
     ops::Deref,
     ptr,
+    sync::atomic::AtomicU64,
 };
 
 use gazebo::{
@@ -33,14 +34,14 @@ use gazebo::{
 use crate::values::{
     layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
+    types::string::StarlarkStrN,
     Freezer, Trace, Tracer, UnpackValue, Value,
 };
 
 /// A constant string that can be converted to a [`FrozenValue`].
 #[repr(C)] // Must match this layout on the heap
 pub struct StarlarkStrNRepr<const N: usize> {
-    repr: AValueRepr<StarlarkStr>,
-    payload: [u8; N],
+    repr: AValueRepr<StarlarkStrN<N>>,
 }
 
 impl<const N: usize> StarlarkStrNRepr<N> {
@@ -55,9 +56,12 @@ impl<const N: usize> StarlarkStrNRepr<N> {
         Self {
             repr: AValueRepr {
                 header: VALUE_STR_A_VALUE_PTR,
-                payload: unsafe { StarlarkStr::new(N) },
+                payload: StarlarkStrN {
+                    len: N,
+                    hash: AtomicU64::new(0),
+                    body: payload,
+                },
             },
-            payload,
         }
     }
 
@@ -68,7 +72,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
 
     /// Erase the type parameter, giving a slightly nicer user experience.
     pub const fn erase(&'static self) -> FrozenStringValue {
-        FrozenStringValue(&self.repr)
+        unsafe { FrozenStringValue(&*(&self.repr as *const AValueRepr<_> as *const AValueRepr<_>)) }
     }
 }
 

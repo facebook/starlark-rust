@@ -45,21 +45,30 @@ use crate::{
 /// The result of calling `type()` on strings.
 pub const STRING_TYPE: &str = "string";
 
-/// A pointer to this type represents a Starlark string.
-/// Use of this type is discouraged and not considered stable.
-#[derive(AnyLifetime)]
 #[repr(C)] // We want the body to come after len
-pub struct StarlarkStr {
-    len: usize,
+pub(crate) struct StarlarkStrN<const N: usize> {
+    pub(crate) len: usize,
     // Lazily-initialized cached hash code.
     // TODO(nga): when this field added, Starlark memory consumption
     //   increased by approximately 0.7%. So if we could change
     //   both `hash` and `len` fields to 32-bit, we would save 0.7% memory.
-    hash: atomic::AtomicU64,
+    pub(crate) hash: atomic::AtomicU64,
     // Followed by an unsized block, meaning this type is unsized.
     // But we can't mark it as such since we really want &StarlarkStr to
     // take up only one word.
-    body: [u8; 0],
+    pub(crate) body: [u8; N],
+}
+
+unsafe impl<'a, const N: usize> AnyLifetime<'a> for StarlarkStrN<N> {
+    any_lifetime_body!(StarlarkStrN<N>);
+}
+
+/// A pointer to this type represents a Starlark string.
+/// Use of this type is discouraged and not considered stable.
+#[derive(AnyLifetime)]
+#[repr(C)]
+pub struct StarlarkStr {
+    str: StarlarkStrN<0>,
 }
 
 impl Debug for StarlarkStr {
@@ -71,23 +80,25 @@ impl Debug for StarlarkStr {
 impl StarlarkStr {
     /// Unsafe because if you do `unpack` on this it will blow up
     pub(crate) const unsafe fn new(len: usize) -> Self {
-        Self {
-            len,
-            hash: atomic::AtomicU64::new(0),
-            body: [],
+        StarlarkStr {
+            str: StarlarkStrN {
+                len,
+                hash: atomic::AtomicU64::new(0),
+                body: [],
+            },
         }
     }
 
     pub fn unpack(&self) -> &str {
         unsafe {
-            let slice = slice::from_raw_parts(self.body.as_ptr(), self.len);
+            let slice = slice::from_raw_parts(self.str.body.as_ptr(), self.str.len);
             str::from_utf8_unchecked(slice)
         }
     }
 
     fn get_hash_64(&self) -> u64 {
         // Note relaxed load and store are practically non-locking memory operations.
-        let hash = self.hash.load(atomic::Ordering::Relaxed);
+        let hash = self.str.hash.load(atomic::Ordering::Relaxed);
         if hash != 0 {
             hash
         } else {
@@ -95,7 +106,7 @@ impl StarlarkStr {
             hash_string_value(self.unpack(), &mut s);
             let hash = s.finish();
             // If hash is zero, we are unlucky, but it is highly improbable.
-            self.hash.store(hash, atomic::Ordering::Relaxed);
+            self.str.hash.store(hash, atomic::Ordering::Relaxed);
             hash
         }
     }
@@ -108,11 +119,11 @@ impl StarlarkStr {
     }
 
     pub fn len(&self) -> usize {
-        self.len
+        self.str.len
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len == 0
+        self.str.len == 0
     }
 }
 
