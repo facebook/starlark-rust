@@ -34,8 +34,8 @@ use gazebo::{
 use crate::values::{
     comparison::{compare_slice, equals_slice},
     index::{apply_slice, convert_index},
-    ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, Trace, Tracer, UnpackValue,
-    Value, ValueError, ValueLike,
+    ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError,
+    ValueLike,
 };
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
@@ -94,14 +94,6 @@ unsafe impl<'v> AnyLifetime<'v> for TupleGen<Value<'v>> {
 
 unsafe impl<'v> AnyLifetime<'v> for TupleGen<FrozenValue> {
     any_lifetime_body!(TupleGen<FrozenValue>);
-}
-
-unsafe impl<'v> Trace<'v> for Tuple<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        for v in self.content_mut() {
-            tracer.trace(v);
-        }
-    }
 }
 
 impl<'v> Tuple<'v> {
