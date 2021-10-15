@@ -22,13 +22,15 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+use crate as starlark;
 use crate::{
     codemap::Spanned,
     syntax::ast::{AstLiteral, AstPayload, AstStmtP, ExprP, StmtP},
+    values::Trace,
 };
 
 /// The documentation provided by a user for a specific module, object, function, etc.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Trace)]
 pub struct DocString {
     /// The first line of a doc string. This has whitespace trimmed from it.
     pub summary: String,
