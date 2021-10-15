@@ -317,12 +317,6 @@ mod tests {
         assert_eq!(non_finite(f64::NEG_INFINITY), "-inf");
     }
 
-    #[test]
-    #[should_panic]
-    fn test_write_non_finite_only_for_non_finite() {
-        non_finite(0f64);
-    }
-
     fn decimal(f: f64) -> String {
         let mut buf = String::new();
         write_decimal(&mut buf, f).unwrap();
