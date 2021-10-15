@@ -68,6 +68,12 @@ pub struct FrozenList {
     content: [FrozenValue; 0],
 }
 
+impl ListGen<FrozenList> {
+    pub fn offset_of_content() -> usize {
+        memoffset::offset_of!(FrozenList, content)
+    }
+}
+
 #[repr(transparent)]
 #[derive(Coerce)]
 pub struct ListRef<'v> {

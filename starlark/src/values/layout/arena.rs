@@ -120,8 +120,8 @@ impl AValueOrForward {
 }
 
 impl AValueForward {
-    pub(crate) fn assert_does_not_overwrite_extra<'v, T: AValueDyn<'v>>() {
-        assert!(mem::size_of::<AValueForward>() <= mem::size_of::<AValueRepr<T>>());
+    pub(crate) fn assert_does_not_overwrite_extra<'v, T: AValue<'v>>() {
+        assert!(mem::size_of::<AValueForward>() <= AValueRepr::<T>::offset_of_extra());
     }
 }
 
@@ -186,16 +186,19 @@ impl Arena {
             mem::align_of::<AValueHeader>()
         );
 
-        let extra_bytes = extra_len * mem::size_of::<T::ExtraElem>();
-
         // We require at least usize space available for overwrite/blackhole
-        let size = cmp::max(mem::size_of::<AValueRepr<T>>() + extra_bytes, MIN_ALLOC);
+        let size = cmp::max(
+            mem::size_of::<AValueHeader>() + T::memory_size_for_extra_len(extra_len),
+            MIN_ALLOC,
+        );
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout).as_ptr();
         unsafe {
             let repr = &mut *(p as *mut MaybeUninit<AValueRepr<T>>);
-            let extra =
-                slice::from_raw_parts_mut((p as *mut AValueRepr<T>).add(1) as *mut _, extra_len);
+            let extra = slice::from_raw_parts_mut(
+                (p as *mut u8).add(AValueRepr::<T>::offset_of_extra()) as *mut _,
+                extra_len,
+            );
             (repr, extra)
         }
     }
@@ -218,9 +221,7 @@ impl Arena {
         // so very important to put in a current vtable
         // We always alloc at least one pointer worth of space, so can write in a one-ST blackhole
 
-        let extra_bytes = extra_len * mem::size_of::<T::ExtraElem>();
-
-        let x = BlackHole(mem::size_of::<T>() + extra_bytes);
+        let x = BlackHole(T::memory_size_for_extra_len(extra_len));
         let p = unsafe {
             transmute!(
                 &mut MaybeUninit<AValueRepr<T>>,
@@ -452,6 +453,22 @@ impl<T> AValueRepr<T> {
             header: AValueHeader::with_metadata(metadata),
             payload,
         }
+    }
+
+    fn assert_no_padding_between_header_and_payload() {
+        // We can make it work when there's padding, but we don't need to,
+        // and for now just make an assertion.
+        assert!(memoffset::offset_of!(Self, payload) == mem::size_of::<AValueHeader>());
+    }
+
+    /// Offset of value extra content relative to `AValueRepr` start.
+    pub(crate) fn offset_of_extra<'v>() -> usize
+    where
+        T: AValue<'v>,
+    {
+        Self::assert_no_padding_between_header_and_payload();
+
+        mem::size_of::<AValueHeader>() + T::offset_of_extra()
     }
 }
 

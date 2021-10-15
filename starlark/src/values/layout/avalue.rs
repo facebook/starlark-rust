@@ -17,6 +17,7 @@
 
 use std::{
     any::TypeId,
+    cmp,
     cmp::Ordering,
     fmt::{Debug, Display},
     mem,
@@ -138,6 +139,23 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
     /// Payload array length.
     fn extra_len(&self) -> usize;
 
+    /// Offset of field holding content, in bytes.
+    ///
+    /// Return `mem::size_of::<Self>()` if there's no extra content.
+    fn offset_of_extra() -> usize;
+
+    fn memory_size_for_extra_len(extra_len: usize) -> usize {
+        assert!(
+            Self::offset_of_extra() % mem::align_of::<Self::ExtraElem>() == 0,
+            "extra must be aligned"
+        );
+        cmp::max(
+            mem::size_of::<Self::StarlarkValue>(),
+            // Content is not necessarily aligned to end of `A`.
+            Self::offset_of_extra() + (mem::size_of::<Self::ExtraElem>() * extra_len),
+        )
+    }
+
     unsafe fn heap_freeze(
         &self,
         me: *mut AValueHeader,
@@ -179,7 +197,7 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
 
 impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
     fn memory_size(&self) -> usize {
-        mem::size_of::<A>() + (mem::size_of::<A::ExtraElem>() * self.extra_len())
+        Self::memory_size_for_extra_len(self.extra_len())
     }
 
     unsafe fn heap_freeze(
@@ -307,6 +325,10 @@ impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
         0
     }
 
+    fn offset_of_extra() -> usize {
+        mem::size_of::<Self>()
+    }
+
     unsafe fn heap_freeze(
         &self,
         _me: *mut AValueHeader,
@@ -330,6 +352,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 
     fn extra_len(&self) -> usize {
         self.1.len()
+    }
+
+    fn offset_of_extra() -> usize {
+        StarlarkStr::offset_of_content()
     }
 
 
@@ -367,6 +393,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
 
     fn extra_len(&self) -> usize {
         self.1.len()
+    }
+
+    fn offset_of_extra() -> usize {
+        Tuple::offset_of_content()
     }
 
     unsafe fn heap_freeze(
@@ -424,6 +454,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
         self.1.len()
     }
 
+    fn offset_of_extra() -> usize {
+        FrozenTuple::offset_of_content()
+    }
+
     unsafe fn heap_freeze(
         &self,
         _me: *mut AValueHeader,
@@ -450,6 +484,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
         0
     }
 
+    fn offset_of_extra() -> usize {
+        mem::size_of::<Self>()
+    }
+
     unsafe fn heap_freeze(
         &self,
         me: *mut AValueHeader,
@@ -458,7 +496,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
         let content = self.1.0.content();
         let (fv, r, extra) =
             freezer.reserve_with_extra::<Wrapper<Direct, ListGen<FrozenList>>>(content.len());
-        AValueForward::assert_does_not_overwrite_extra::<Self>();
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
         r.fill(Wrapper(Direct, ListGen(FrozenList::new(content.len()))));
         assert_eq!(extra.len(), content.len());
@@ -486,6 +523,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
         self.1.0.len()
     }
 
+    fn offset_of_extra() -> usize {
+        ListGen::<FrozenList>::offset_of_content()
+    }
+
     unsafe fn heap_freeze(
         &self,
         _me: *mut AValueHeader,
@@ -511,6 +552,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
     fn extra_len(&self) -> usize {
         // Note we return capacity, not length here.
         self.1.capacity()
+    }
+
+    fn offset_of_extra() -> usize {
+        Array::offset_of_content()
     }
 
     unsafe fn heap_freeze(
@@ -568,6 +613,10 @@ where
         0
     }
 
+    fn offset_of_extra() -> usize {
+        mem::size_of::<Self>()
+    }
+
     unsafe fn heap_freeze(
         &self,
         me: *mut AValueHeader,
@@ -618,6 +667,10 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
 
     fn extra_len(&self) -> usize {
         0
+    }
+
+    fn offset_of_extra() -> usize {
+        mem::size_of::<Self>()
     }
 
     unsafe fn heap_freeze(

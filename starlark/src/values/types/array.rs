@@ -66,6 +66,10 @@ impl<'v> Debug for Array<'v> {
 }
 
 impl<'v> Array<'v> {
+    pub(crate) fn offset_of_content() -> usize {
+        memoffset::offset_of!(Self, content)
+    }
+
     /// Create an array with specified length and capacity.
     /// This function is `unsafe` because it does not populate array content.
     pub(crate) const unsafe fn new(len: u32, capacity: u32) -> Array<'v> {

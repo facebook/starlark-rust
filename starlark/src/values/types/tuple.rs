@@ -77,6 +77,10 @@ impl<V> TupleGen<V> {
     pub(crate) const unsafe fn new(len: usize) -> TupleGen<V> {
         TupleGen { len, content: [] }
     }
+
+    pub(crate) fn offset_of_content() -> usize {
+        memoffset::offset_of!(Self, content)
+    }
 }
 
 pub type Tuple<'v> = TupleGen<Value<'v>>;

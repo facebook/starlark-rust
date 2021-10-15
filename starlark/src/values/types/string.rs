@@ -134,6 +134,10 @@ impl StarlarkStr {
     pub fn is_empty(&self) -> bool {
         self.str.len == 0
     }
+
+    pub fn offset_of_content() -> usize {
+        memoffset::offset_of!(StarlarkStrN<0>, body)
+    }
 }
 
 impl<'v> AllocValue<'v> for String {
