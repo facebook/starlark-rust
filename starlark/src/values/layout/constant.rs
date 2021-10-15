@@ -50,6 +50,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
     /// If the string has a different size it will fail.
     pub const fn new(s: &str) -> Self {
         assert!(N == s.len());
+        assert!(N as u32 as usize == N);
         let mut payload = [0u8; N];
         unsafe {
             copy_nonoverlapping(s.as_ptr(), payload.as_mut_ptr(), N)
@@ -58,7 +59,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
             repr: AValueRepr {
                 header: VALUE_STR_A_VALUE_PTR,
                 payload: StarlarkStrN {
-                    len: N,
+                    len: N as u32,
                     hash: AtomicU64::new(0),
                     body: payload,
                 },

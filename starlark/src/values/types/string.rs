@@ -48,12 +48,11 @@ pub const STRING_TYPE: &str = "string";
 
 #[repr(C)] // We want the body to come after len
 pub(crate) struct StarlarkStrN<const N: usize> {
-    pub(crate) len: usize,
     // Lazily-initialized cached hash code.
-    // TODO(nga): when this field added, Starlark memory consumption
-    //   increased by approximately 0.7%. So if we could change
-    //   both `hash` and `len` fields to 32-bit, we would save 0.7% memory.
+    // TODO(nga): if we could change `hash` field to 32-bit, we would save 0.3% memory.
     pub(crate) hash: atomic::AtomicU64,
+    // Len must come after hash for alignment.
+    pub(crate) len: u32,
     // Followed by an unsized block, meaning this type is unsized.
     // But we can't mark it as such since we really want &StarlarkStr to
     // take up only one word.
@@ -89,10 +88,11 @@ impl Debug for StarlarkStr {
 impl StarlarkStr {
     /// Unsafe because if you do `unpack` on this it will blow up
     pub(crate) const unsafe fn new(len: usize) -> Self {
+        assert!(len as u32 as usize == len, "len overflow");
         StarlarkStr {
             str: StarlarkStrN {
-                len,
                 hash: atomic::AtomicU64::new(0),
+                len: len as u32,
                 body: [],
             },
         }
@@ -100,7 +100,7 @@ impl StarlarkStr {
 
     pub fn unpack(&self) -> &str {
         unsafe {
-            let slice = slice::from_raw_parts(self.str.body.as_ptr(), self.str.len);
+            let slice = slice::from_raw_parts(self.str.body.as_ptr(), self.str.len as usize);
             str::from_utf8_unchecked(slice)
         }
     }
@@ -128,7 +128,7 @@ impl StarlarkStr {
     }
 
     pub fn len(&self) -> usize {
-        self.str.len
+        self.str.len as usize
     }
 
     pub fn is_empty(&self) -> bool {
