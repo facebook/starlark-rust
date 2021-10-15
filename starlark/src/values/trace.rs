@@ -37,6 +37,12 @@ unsafe impl<'v, T: Trace<'v>> Trace<'v> for Vec<T> {
     }
 }
 
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for [T] {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.iter_mut().for_each(|x| x.trace(tracer));
+    }
+}
+
 unsafe impl<'v, K: Trace<'v>, V: Trace<'v>> Trace<'v> for SmallMap<K, V> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.iter_mut().for_each(|(k, v)| {
@@ -102,6 +108,10 @@ unsafe impl<'v> Trace<'v> for i32 {
 }
 
 unsafe impl<'v> Trace<'v> for u32 {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+unsafe impl<'v> Trace<'v> for u64 {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 

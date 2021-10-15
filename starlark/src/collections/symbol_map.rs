@@ -41,9 +41,10 @@ use std::{
 use gazebo::coerce::Coerce;
 use hashbrown::raw::RawTable;
 
+use crate as starlark;
 use crate::{
     collections::{idhasher::mix_u32, BorrowHashed, SmallHashResult},
-    values::{Trace, Tracer},
+    values::Trace,
 };
 
 // We use a RawTable (the thing that underlies HashMap) so we can look up efficiently
@@ -64,18 +65,12 @@ fn promote_hash(x: SmallHashResult) -> u64 {
 }
 
 /// A pre-hashed string used for efficient dictionary lookup.
-#[derive(Clone)]
+#[derive(Clone, Trace)]
 pub struct Symbol {
     hash: u64,
     len: usize,
     payload: Box<[u64]>,
     small_hash: SmallHashResult,
-}
-
-unsafe impl<'v> Trace<'v> for Symbol {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {
-        // No tracable elements
-    }
 }
 
 unsafe impl Coerce<Symbol> for Symbol {}
