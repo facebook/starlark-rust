@@ -28,7 +28,7 @@ use crate::{
     gazebo::any::AnyLifetime,
     values::{
         layout::{arena::AValueRepr, avalue::AValue},
-        FrozenValue, PointerI32, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        FrozenValue, PointerI32, StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -64,6 +64,12 @@ impl<'v, T: StarlarkValue<'v>> Display for FrozenValueTyped<'v, T> {
 }
 
 impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
+    /// Downcast.
+    pub fn new(value: Value<'v>) -> Option<ValueTyped<'v, T>> {
+        value.downcast_ref::<T>()?;
+        Some(ValueTyped(value, marker::PhantomData))
+    }
+
     pub unsafe fn new_unchecked(value: Value<'v>) -> ValueTyped<'v, T> {
         debug_assert!(value.downcast_ref::<T>().is_some());
         ValueTyped(value, marker::PhantomData)
@@ -147,6 +153,12 @@ impl<'v, T: StarlarkValue<'v>> Deref for ValueTyped<'v, T> {
 
     fn deref(&self) -> &T {
         self.as_ref()
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> UnpackValue<'v> for ValueTyped<'v, T> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        ValueTyped::new(value)
     }
 }
 
