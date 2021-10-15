@@ -30,7 +30,7 @@ use std::{
 use gazebo::{
     any::AnyLifetime,
     cell::ARef,
-    coerce::{coerce_ref, Coerce},
+    coerce::{coerce, coerce_ref, Coerce},
 };
 use indexmap::Equivalent;
 
@@ -41,8 +41,8 @@ use crate::{
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
         string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
-        FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
-        UnpackValue, Value, ValueLike,
+        FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, StringValue,
+        Trace, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -205,6 +205,28 @@ impl<'v> Dict<'v> {
     /// string on the heap, turning it into a value, and looking up using that.
     pub fn get_str(&self, key: &str) -> Option<Value<'v>> {
         self.content.get(&ValueStr(key)).copied()
+    }
+
+    /// Try to coerce all keys to strings.
+    pub(crate) fn downcast_ref_key_string(&self) -> Option<&SmallMap<StringValue<'v>, Value<'v>>> {
+        for &key in self.content.keys() {
+            if unlikely(StringValue::new(key).is_none()) {
+                return None;
+            }
+        }
+
+        // Scary part: `SmallMap` has the same repr for `Value` and `StringValue`,
+        // and we just checked above that all keys are strings.
+
+        fn _assert_coerce<'v>(
+            s: SmallMap<StringValue<'v>, Value<'v>>,
+        ) -> SmallMap<Value<'v>, Value<'v>> {
+            coerce(s)
+        }
+
+        Some(unsafe {
+            transmute!(&SmallMap<Value, Value>, &SmallMap<StringValue, Value>, &self.content)
+        })
     }
 }
 

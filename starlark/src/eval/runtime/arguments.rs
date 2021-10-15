@@ -668,20 +668,10 @@ impl<'v, 'a> Arguments<'v, 'a> {
             }
             Some(kwargs) => {
                 if self.names.is_empty() {
-                    for k in kwargs.content.keys() {
-                        Arguments::unpack_kwargs_key(*k)?;
+                    match kwargs.downcast_ref_key_string() {
+                        Some(kwargs) => Ok(kwargs.clone()),
+                        None => Err(FunctionError::ArgsValueIsNotString.into()),
                     }
-                    let kwargs = unsafe {
-                        // Scary part: `SmallMap` has the same repr for `Value` and `StringValue`,
-                        // and we just checked above that all keys are strings.
-                        fn _assert_coerce<'v>(
-                            s: SmallMap<StringValue<'v>, Value<'v>>,
-                        ) -> SmallMap<Value<'v>, Value<'v>> {
-                            coerce(s)
-                        }
-                        transmute!(&SmallMap<Value, Value>, &SmallMap<StringValue, Value>, &kwargs.content)
-                    };
-                    Ok(kwargs.clone())
                 } else {
                     // We have to insert the names before the kwargs since the iteration order is observable
                     let mut result =
