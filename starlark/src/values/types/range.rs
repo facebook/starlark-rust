@@ -210,7 +210,7 @@ impl<'v> StarlarkValue<'v> for Range {
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
-        let other = match other.unpack_num().map(|n| n.as_int()).flatten() {
+        let other = match other.unpack_num().and_then(|n| n.as_int()) {
             Some(other) => other,
             None => {
                 // Consider `"a" in range(3)`

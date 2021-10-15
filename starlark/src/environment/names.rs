@@ -124,7 +124,7 @@ impl FrozenNames {
 
     /// Exported symbols.
     pub fn symbols(&self) -> impl Iterator<Item = (&String, ModuleSlotId)> {
-        self.0.iter().flat_map(|(name, (slot, vis))| match vis {
+        self.0.iter().filter_map(|(name, (slot, vis))| match vis {
             Visibility::Private => None,
             Visibility::Public => Some((name, *slot)),
         })

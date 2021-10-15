@@ -226,7 +226,7 @@ impl<'a> Scope<'a> {
         params: &mut [CstParameter],
         body: Option<&mut CstStmt>,
     ) {
-        let params = params.iter_mut().flat_map(|p| match &mut p.node {
+        let params = params.iter_mut().filter_map(|p| match &mut p.node {
             ParameterP::Normal(n, ..) => Some(n),
             ParameterP::WithDefaultValue(n, ..) => Some(n),
             ParameterP::NoArgs => None,
@@ -396,7 +396,7 @@ impl<'a> Scope<'a> {
         // Add identifiers to compr scope
 
         self.add_compr(
-            iter::once(&mut first_for.var).chain(clauses.iter_mut().flat_map(
+            iter::once(&mut first_for.var).chain(clauses.iter_mut().filter_map(
                 |clause| match clause {
                     ClauseP::For(for_clause) => Some(&mut for_clause.var),
                     ClauseP::If(..) => None,
