@@ -86,7 +86,7 @@ pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 /// Derive the `Trace` trait.
-#[proc_macro_derive(Trace)]
+#[proc_macro_derive(Trace, attributes(trace))]
 pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     trace::derive_trace(input)
 }

@@ -18,8 +18,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{
-    parse_macro_input, parse_quote, spanned::Spanned, Data, DataStruct, DeriveInput, Fields,
-    GenericParam, Lifetime, LifetimeDef, TypeParamBound,
+    parse::ParseStream, parse_macro_input, parse_quote, spanned::Spanned, Attribute, Data,
+    DataEnum, DataStruct, DeriveInput, Fields, GenericParam, Lifetime, LifetimeDef, TypeParamBound,
 };
 
 pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -58,16 +58,36 @@ pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     gen.into()
 }
 
+/// Parse attribute `#[trace(unsafe_ignore)]`.
+///
+/// Currently it fails on any attribute argument other than `unsafe_ignore`.
+fn is_ignore(attrs: &[Attribute]) -> bool {
+    syn::custom_keyword!(unsafe_ignore);
+
+    attrs.iter().any(|a| {
+        a.path.is_ident("trace")
+            && a.parse_args_with(|input: ParseStream| {
+                let ignore = input.parse::<Option<unsafe_ignore>>()?.is_some();
+                Ok(ignore)
+            })
+            .unwrap()
+    })
+}
+
 fn trace_struct(data: &DataStruct) -> TokenStream {
     match data.fields {
         Fields::Named(ref fields) => {
             let xs: Vec<_> = fields
                 .named
                 .iter()
-                .map(|f| {
-                    let name = &f.ident;
-                    quote_spanned! {f.span() =>
-                        self.#name.trace(tracer);
+                .filter_map(|f| {
+                    if !is_ignore(&f.attrs) {
+                        let name = &f.ident;
+                        Some(quote_spanned! {f.span() =>
+                            self.#name.trace(tracer);
+                        })
+                    } else {
+                        None
                     }
                 })
                 .collect();
@@ -80,9 +100,13 @@ fn trace_struct(data: &DataStruct) -> TokenStream {
                 .unnamed
                 .iter()
                 .enumerate()
-                .map(|(i, f)| {
-                    let i = syn::Index::from(i);
-                    quote_spanned! {f.span() => self.#i.trace(tracer);}
+                .filter_map(|(i, f)| {
+                    if !is_ignore(&f.attrs) {
+                        let i = syn::Index::from(i);
+                        Some(quote_spanned! {f.span() => self.#i.trace(tracer);})
+                    } else {
+                        None
+                    }
                 })
                 .collect();
             quote! {
@@ -95,10 +119,43 @@ fn trace_struct(data: &DataStruct) -> TokenStream {
     }
 }
 
+fn trace_enum(data: &DataEnum) -> TokenStream {
+    for variant in &data.variants {
+        if let Fields::Unit = variant.fields {
+            continue;
+        }
+        if is_ignore(&variant.attrs) {
+            continue;
+        }
+        match &variant.fields {
+            Fields::Named(fields) => {
+                for field in &fields.named {
+                    if is_ignore(&field.attrs) {
+                        continue;
+                    }
+                    // TODO: implement
+                    unimplemented!("Can't derive Trace for enums");
+                }
+            }
+            Fields::Unnamed(fields) => {
+                for field in &fields.unnamed {
+                    if is_ignore(&field.attrs) {
+                        continue;
+                    }
+                    // TODO: implement
+                    unimplemented!("Can't derive Trace for enums");
+                }
+            }
+            Fields::Unit => {}
+        }
+    }
+    quote!()
+}
+
 fn trace_impl(data: &Data) -> TokenStream {
     match data {
         Data::Struct(data) => trace_struct(data),
-        Data::Enum(_) => unimplemented!("Can't derive Trace for enums"),
+        Data::Enum(data) => trace_enum(data),
         Data::Union(_) => unimplemented!("Can't derive Trace for unions"),
     }
 }

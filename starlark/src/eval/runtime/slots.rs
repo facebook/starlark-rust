@@ -19,7 +19,8 @@ use std::{cell::Cell, convert::TryInto, mem};
 
 use gazebo::prelude::*;
 
-use crate::values::{Trace, Tracer, Value};
+use crate as starlark;
+use crate::values::{Trace, Value};
 
 #[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq)]
 pub(crate) struct LocalSlotId(pub(crate) u32);
@@ -45,17 +46,13 @@ pub(crate) struct LocalSlotBase(u32);
 /// 3. `utilise` these slots by moving the register index to these slots.
 /// 4. Execute the function.
 /// 5. `release` these slots by moving the register index back.
+#[derive(Trace)]
 pub(crate) struct LocalSlots<'v> {
     // All the slots are stored continguously
     slots: Vec<Cell<Option<Value<'v>>>>,
     // The current index at which LocalSlotId is relative to
+    #[trace(unsafe_ignore)]
     base: LocalSlotBase,
-}
-
-unsafe impl<'v> Trace<'v> for LocalSlots<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.slots.trace(tracer);
-    }
 }
 
 impl<'v> LocalSlots<'v> {
