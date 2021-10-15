@@ -24,6 +24,7 @@ use std::{
     fmt,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
+    ops::Deref,
     slice, str,
     sync::atomic,
 };
@@ -69,6 +70,14 @@ unsafe impl<'a, const N: usize> AnyLifetime<'a> for StarlarkStrN<N> {
 #[repr(C)]
 pub struct StarlarkStr {
     str: StarlarkStrN<0>,
+}
+
+impl Deref for StarlarkStr {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.unpack()
+    }
 }
 
 impl Debug for StarlarkStr {

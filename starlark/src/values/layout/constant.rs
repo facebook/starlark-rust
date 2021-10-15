@@ -30,6 +30,7 @@ use gazebo::{
     coerce::{Coerce, CoerceKey},
     prelude::*,
 };
+use indexmap::Equivalent;
 
 use crate::values::{
     layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
@@ -151,6 +152,18 @@ impl Eq for FrozenStringValue {}
 impl Hash for FrozenStringValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_str().hash(state)
+    }
+}
+
+impl<'v> Equivalent<FrozenStringValue> for StringValue<'v> {
+    fn equivalent(&self, key: &FrozenStringValue) -> bool {
+        *self == key.to_string_value()
+    }
+}
+
+impl<'v> Equivalent<StringValue<'v>> for FrozenStringValue {
+    fn equivalent(&self, key: &StringValue<'v>) -> bool {
+        self.to_string_value() == *key
     }
 }
 

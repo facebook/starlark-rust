@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use std::{fmt, fmt::Display};
+use std::{fmt, fmt::Display, ops::Deref};
 
 use gazebo::prelude::*;
 
@@ -159,6 +159,14 @@ impl OwnedFrozenValue {
 pub struct OwnedFrozenValueTyped<T: StarlarkValue<'static>> {
     owner: FrozenHeapRef,
     value: FrozenValueTyped<'static, T>,
+}
+
+impl<T: StarlarkValue<'static>> Deref for OwnedFrozenValueTyped<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.value.as_ref()
+    }
 }
 
 impl<T: StarlarkValue<'static>> OwnedFrozenValueTyped<T> {
