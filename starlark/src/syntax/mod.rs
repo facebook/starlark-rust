@@ -39,6 +39,7 @@ pub(crate) mod validate;
 #[allow(clippy::inefficient_to_string)]
 #[allow(clippy::trivially_copy_pass_by_ref)]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::cloned_instead_of_copied)]
 #[allow(unused_extern_crates)]
 #[cfg_attr(feature = "custom_linter", allow(gazebo_use_dupe))]
 mod grammar {

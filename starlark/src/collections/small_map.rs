@@ -1009,10 +1009,10 @@ mod tests {
     #[test]
     fn few_entries() {
         let entries1 = vec![(0, 'a'), (1, 'b')];
-        let m1 = entries1.iter().cloned().collect::<SmallMap<_, _>>();
+        let m1 = entries1.iter().copied().collect::<SmallMap<_, _>>();
 
         let entries2 = vec![(1, 'b'), (0, 'a')];
-        let m2 = entries2.iter().cloned().collect::<SmallMap<_, _>>();
+        let m2 = entries2.iter().copied().collect::<SmallMap<_, _>>();
         assert_eq!(m1.is_empty(), false);
         assert_eq!(m1.len(), 2);
         assert_eq!(m2.is_empty(), false);
