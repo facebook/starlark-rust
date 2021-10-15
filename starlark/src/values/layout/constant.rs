@@ -439,3 +439,26 @@ pub(crate) static VALUE_BYTE_STRINGS: [StarlarkStrNRepr<1>; 128] = [
     StarlarkStrNRepr::new("\x7E"),
     StarlarkStrNRepr::new("\x7F"),
 ];
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        collections::Hashed,
+        values::{FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue, Value, ValueLike},
+    };
+
+    #[test]
+    fn test_string_hashes() {
+        let heap = Heap::new();
+        let s: StringValue = heap.alloc_string_value("xyz");
+        let v: Value = heap.alloc_string_value("xyz").to_value();
+        assert_eq!(Hashed::new(s).hash(), v.get_hashed().unwrap().hash());
+
+        let heap = FrozenHeap::new();
+        let fs: FrozenStringValue = heap.alloc_string_value("xyz");
+        let fv: FrozenValue = heap.alloc_string_value("xyz").unpack();
+        assert_eq!(Hashed::new(fs).hash(), fv.get_hashed().unwrap().hash());
+
+        assert_eq!(Hashed::new(s).hash(), Hashed::new(fs).hash());
+    }
+}
