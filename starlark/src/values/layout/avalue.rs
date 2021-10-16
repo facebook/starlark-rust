@@ -31,6 +31,7 @@ use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 
 use crate::{
     codemap::Span,
+    collections::StarlarkHasher,
     environment::Globals,
     eval::{Arguments, Evaluator, FrozenDef},
     values::{
@@ -779,6 +780,9 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn get_hash(&self) -> anyhow::Result<u64> {
         panic!()
     }
+    fn write_hash(&self, _hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        panic!()
+    }
     fn extra_memory(&self) -> usize {
         panic!()
     }
@@ -944,6 +948,9 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<M
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
         self.1.get_hash()
+    }
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        self.1.write_hash(hasher)
     }
     fn extra_memory(&self) -> usize {
         self.1.extra_memory()

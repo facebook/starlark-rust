@@ -32,6 +32,7 @@ use std::{
     any::TypeId,
     cmp::Ordering,
     fmt::{Debug, Display, Write},
+    hash::Hasher,
 };
 
 use derive_more::Display;
@@ -39,6 +40,7 @@ use gazebo::any::AnyLifetime;
 
 use crate::{
     codemap::Span,
+    collections::StarlarkHasher,
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
@@ -338,6 +340,18 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         } else {
             Err(ControlError::NotHashableValue(self.get_type().to_owned()).into())
         }
+    }
+
+    /// Hash the value content.
+    ///
+    /// Default implementation delegates to [`get_hash`](Self::get_hash),
+    /// but there's no requirement about `write_hash` and `get_hash` relation.
+    ///
+    /// However, if either function is successful,
+    /// the other should be successful too.
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        hasher.write_u64(self.get_hash()?);
+        Ok(())
     }
 
     /// Return how much extra memory is consumed by this data type, in bytes, in addition to the
@@ -713,6 +727,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn to_bool(&self) -> bool;
     fn to_int(&self) -> anyhow::Result<i32>;
     fn get_hash(&self) -> anyhow::Result<u64>;
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
     fn extra_memory(&self) -> usize;
     fn equals(&self, _other: Value<'v>) -> anyhow::Result<bool>;
     fn compare(&self, _other: Value<'v>) -> anyhow::Result<Ordering>;
