@@ -37,7 +37,7 @@
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
-    hash::{Hash, Hasher},
+    hash::Hash,
     marker,
 };
 
@@ -201,11 +201,16 @@ where
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = StarlarkHasher::new();
+        self.write_hash(&mut s)?;
+        Ok(s.finish_get_hash())
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         for (k, v) in self.fields.iter_hashed() {
-            Hash::hash(&k, &mut s);
-            s.write_u64(v.get_hash()?);
+            Hash::hash(&k, hasher);
+            v.write_hash(hasher)?;
         }
-        Ok(s.finish())
+        Ok(())
     }
 
     fn has_attr(&self, attribute: &str) -> bool {

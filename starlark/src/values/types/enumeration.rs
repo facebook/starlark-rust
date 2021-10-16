@@ -51,7 +51,7 @@ use thiserror::Error;
 use crate as starlark;
 use crate::{
     codemap::Span,
-    collections::SmallMap,
+    collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator},
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
@@ -346,6 +346,10 @@ where
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         self.value.get_hash()
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        self.value.write_hash(hasher)
     }
 
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {

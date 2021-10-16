@@ -45,7 +45,7 @@ use std::{
     cell::RefCell,
     fmt,
     fmt::{Debug, Display},
-    hash::{Hash, Hasher},
+    hash::Hash,
 };
 
 use either::Either;
@@ -257,12 +257,17 @@ where
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = StarlarkHasher::new();
-        s.write_u64(self.typ.get_hash()?);
-        self.default.is_some().hash(&mut s);
+        self.write_hash(&mut s)?;
+        Ok(s.finish_get_hash())
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        self.typ.write_hash(hasher)?;
+        self.default.is_some().hash(hasher);
         if let Some(d) = self.default {
-            s.write_u64(d.get_hash()?);
+            d.write_hash(hasher)?;
         }
-        Ok(s.finish())
+        Ok(())
     }
 }
 
@@ -294,9 +299,9 @@ where
         for (name, typ) in &self.fields {
             name.hash(&mut s);
             // No need to hash typ.1, since it was computed from typ.0
-            s.write_u64(typ.0.get_hash()?);
+            typ.0.write_hash(&mut s)?;
         }
-        Ok(s.finish())
+        Ok(s.finish_get_hash())
     }
 
     fn invoke(
@@ -429,11 +434,16 @@ where
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         let mut s = StarlarkHasher::new();
-        s.write_u64(self.typ.get_hash()?);
+        self.write_hash(&mut s)?;
+        Ok(s.finish_get_hash())
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        self.typ.write_hash(hasher)?;
         for v in &self.values {
-            s.write_u64(v.get_hash()?);
+            v.write_hash(hasher)?;
         }
-        Ok(s.finish())
+        Ok(())
     }
 
     fn has_attr(&self, attribute: &str) -> bool {
