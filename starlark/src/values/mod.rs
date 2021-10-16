@@ -55,6 +55,7 @@ mod comparison;
 
 // Submodules
 mod alloc_value;
+pub(crate) mod basic;
 pub mod docs;
 mod error;
 pub(crate) mod fast_string;

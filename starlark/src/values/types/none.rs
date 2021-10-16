@@ -25,8 +25,8 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use crate::{
     collections::StarlarkHasher,
     values::{
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
-        Value,
+        basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
+        StarlarkValue, UnpackValue, Value,
     },
 };
 
@@ -64,6 +64,8 @@ impl<'v> StarlarkValue<'v> for NoneType {
         Ok(())
     }
 }
+
+impl<'v> StarlarkValueBasic<'v> for NoneType {}
 
 impl<'v> AllocValue<'v> for NoneType {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {

@@ -31,8 +31,8 @@ use gazebo::any::AnyLifetime;
 use crate::{
     collections::StarlarkHasher,
     values::{
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
-        Value, ValueError,
+        basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
+        StarlarkValue, UnpackValue, Value, ValueError,
     },
 };
 
@@ -122,3 +122,5 @@ impl StarlarkValue<'_> for StarlarkBool {
         }
     }
 }
+
+impl<'v> StarlarkValueBasic<'v> for StarlarkBool {}

@@ -35,6 +35,7 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator, FrozenDef},
     values::{
+        basic::StarlarkValueBasic,
         bool::StarlarkBool,
         docs::DocItem,
         layout::arena::{AValueForward, AValueHeader, AValueRepr},
@@ -271,7 +272,7 @@ pub(crate) fn array_avalue<'v>(
     Wrapper(Direct, unsafe { Array::new(0, cap) })
 }
 
-pub(crate) fn basic_ref<'v, T: StarlarkValue<'v>>(x: &T) -> &dyn AValueDyn<'v> {
+pub(crate) fn basic_ref<'v, T: StarlarkValueBasic<'v>>(x: &T) -> &dyn AValueDyn<'v> {
     // These are the same representation, so safe to convert
     let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
     x
@@ -317,7 +318,7 @@ fn clear_lsb(x: usize) -> usize {
     x & !1
 }
 
-impl<'v, T: StarlarkValue<'v>> AValue<'v> for Wrapper<Basic, T> {
+impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for Wrapper<Basic, T> {
     type StarlarkValue = T;
 
     type ExtraElem = ();

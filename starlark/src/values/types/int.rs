@@ -32,8 +32,9 @@ use std::{
 use crate::{
     collections::StarlarkHasher,
     values::{
-        error::ValueError, float::StarlarkFloat, layout::PointerI32, num::Num, AllocFrozenValue,
-        AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+        basic::StarlarkValueBasic, error::ValueError, float::StarlarkFloat, layout::PointerI32,
+        num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
+        UnpackValue, Value,
     },
 };
 
@@ -251,6 +252,8 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 }
+
+impl<'v> StarlarkValueBasic<'v> for PointerI32 {}
 
 #[cfg(test)]
 mod tests {
