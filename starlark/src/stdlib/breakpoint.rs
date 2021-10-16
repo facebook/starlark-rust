@@ -34,6 +34,44 @@ use crate::{
 // Have a global mutex to ensure one at a time.
 static BREAKPOINT_MUTEX: Lazy<Mutex<State>> = Lazy::new(|| Mutex::new(State::Allow));
 
+/// `breakpoint` function uses this trait to perform console IO.
+pub(crate) trait BreakpointConsole {
+    /// Return `None` on EOF.
+    fn read_line(&mut self) -> anyhow::Result<Option<String>>;
+    fn println(&mut self, line: &str);
+}
+
+/// Breakpoint handler implemented with `rustyline`.
+pub(crate) struct RealBreakpointConsole {
+    editor: Editor<()>,
+}
+
+impl BreakpointConsole for RealBreakpointConsole {
+    fn read_line(&mut self) -> anyhow::Result<Option<String>> {
+        match self.editor.readline("$> ") {
+            Ok(line) => {
+                self.editor.add_history_entry(line.as_str());
+                Ok(Some(line))
+            }
+            // User pressed EOF - disconnected terminal, or similar
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    fn println(&mut self, line: &str) {
+        eprintln!("{}", line);
+    }
+}
+
+impl RealBreakpointConsole {
+    pub(crate) fn factory() -> Box<dyn Fn() -> Box<dyn BreakpointConsole>> {
+        box || box RealBreakpointConsole {
+            editor: Editor::new(),
+        }
+    }
+}
+
 /// Is debugging allowed or not? After the user hits Ctrl-C they probably
 /// just want to stop hard, so don't keep dropping them into breakpoints.
 #[derive(PartialEq, Eq)]
@@ -49,14 +87,14 @@ enum Next {
     Fail,   // Stop running
 }
 
-fn cmd_help(_eval: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_help(_eval: &mut Evaluator, rl: &mut dyn BreakpointConsole) -> anyhow::Result<Next> {
     for (name, msg, _) in COMMANDS {
-        eprintln!("* :{}, {}", name[0], msg)
+        rl.println(&format!("* :{}, {}", name[0], msg))
     }
     Ok(Next::Again)
 }
 
-fn cmd_variables(eval: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_variables(eval: &mut Evaluator, rl: &mut dyn BreakpointConsole) -> anyhow::Result<Next> {
     fn truncate(mut s: String, n: usize) -> String {
         if s.len() > n {
             s.truncate(n);
@@ -66,30 +104,30 @@ fn cmd_variables(eval: &mut Evaluator) -> anyhow::Result<Next> {
     }
 
     for (name, value) in eval.local_variables() {
-        eprintln!("* {} = {}", name, truncate(value.to_string(), 80))
+        rl.println(&format!("* {} = {}", name, truncate(value.to_string(), 80)))
     }
     Ok(Next::Again)
 }
 
-fn cmd_stack(eval: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_stack(eval: &mut Evaluator, rl: &mut dyn BreakpointConsole) -> anyhow::Result<Next> {
     for x in eval.call_stack() {
-        eprintln!("* {}", x)
+        rl.println(&format!("* {}", x))
     }
     Ok(Next::Again)
 }
 
-fn cmd_resume(_eval: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_resume(_eval: &mut Evaluator, _rl: &mut dyn BreakpointConsole) -> anyhow::Result<Next> {
     Ok(Next::Resume)
 }
 
-fn cmd_fail(_eval: &mut Evaluator) -> anyhow::Result<Next> {
+fn cmd_fail(_eval: &mut Evaluator, _rl: &mut dyn BreakpointConsole) -> anyhow::Result<Next> {
     Ok(Next::Fail)
 }
 
 const COMMANDS: &[(
     &[&str], // Possible names
     &str,    // Help text
-    fn(eval: &mut Evaluator) -> anyhow::Result<Next>,
+    fn(eval: &mut Evaluator, &mut dyn BreakpointConsole) -> anyhow::Result<Next>,
 )] = &[
     (&["help", "?"], "Show this help message", cmd_help),
     (&["vars"], "Show all local variables", cmd_variables),
@@ -98,7 +136,10 @@ const COMMANDS: &[(
     (&["fail"], "Abort with a failure message", cmd_fail),
 ];
 
-fn pick_command(x: &str) -> Option<fn(eval: &mut Evaluator) -> anyhow::Result<Next>> {
+fn pick_command(
+    x: &str,
+    rl: &mut dyn BreakpointConsole,
+) -> Option<fn(eval: &mut Evaluator, &mut dyn BreakpointConsole) -> anyhow::Result<Next>> {
     // If we can find a command that matches perfectly, do that
     // Otherwise return the longest match, but if they are multiple, show a warning
     let mut poss = Vec::new();
@@ -114,26 +155,27 @@ fn pick_command(x: &str) -> Option<fn(eval: &mut Evaluator) -> anyhow::Result<Ne
         }
     }
     match poss.as_slice() {
-        [] => eprintln!("Unrecognised command, type :help for all commands"),
+        [] => rl.println("Unrecognised command, type :help for all commands"),
         [x] => return Some(*x.1),
-        xs => eprintln!(
+        xs => rl.println(&format!(
             "Ambiguous command, could have been any of: {}",
             xs.iter().map(|x| x.0).join(" ")
-        ),
+        )),
     }
     None
 }
 
-fn breakpoint_loop(eval: &mut Evaluator) -> anyhow::Result<State> {
-    let mut rl = Editor::<()>::new();
+fn breakpoint_loop(
+    eval: &mut Evaluator,
+    mut rl: Box<dyn BreakpointConsole>,
+) -> anyhow::Result<State> {
     loop {
-        let readline = rl.readline("$> ");
+        let readline = rl.read_line()?;
         match readline {
-            Ok(line) => {
-                rl.add_history_entry(line.as_str());
+            Some(line) => {
                 if let Some(line) = line.strip_prefix(':') {
-                    if let Some(cmd) = pick_command(line.trim_end()) {
-                        match cmd(eval)? {
+                    if let Some(cmd) = pick_command(line.trim_end(), &mut *rl) {
+                        match cmd(eval, &mut *rl)? {
                             Next::Again => {}
                             Next::Resume => return Ok(State::Allow),
                             Next::Fail => return Err(anyhow!("Selected :fail at breakpoint()")),
@@ -143,21 +185,23 @@ fn breakpoint_loop(eval: &mut Evaluator) -> anyhow::Result<State> {
                     let ast = AstModule::parse("interactive", line, &Dialect::Extended);
                     let res = ast.and_then(|ast| eval.eval_statements(ast));
                     match res {
-                        Err(e) => eprintln!("{:#}", e),
+                        Err(e) => {
+                            rl.println(&format!("{:#}", e));
+                        }
                         Ok(v) => {
                             if !v.is_none() {
-                                eprintln!("{}", v)
+                                rl.println(&format!("{}", v))
                             }
                         }
                     }
                 }
             }
-            // User pressed EOF - disconnected terminal, or similar
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => return Ok(State::Stop),
-            Err(err) => return Err(err.into()),
+            None => return Ok(State::Stop),
         }
     }
 }
+
+const BREAKPOINT_HIT_MESSAGE: &str = "BREAKPOINT HIT! :resume to continue, :help for all options";
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
@@ -165,8 +209,9 @@ pub fn global(builder: &mut GlobalsBuilder) {
         {
             let mut guard = BREAKPOINT_MUTEX.lock().unwrap();
             if *guard == State::Allow {
-                eprintln!("BREAKPOINT HIT! :resume to continue, :help for all options");
-                *guard = breakpoint_loop(eval)?;
+                let mut rl = (eval.breakpoint_handler)();
+                rl.println(BREAKPOINT_HIT_MESSAGE);
+                *guard = breakpoint_loop(eval, rl)?;
             }
         }
         Ok(NoneType)
@@ -175,14 +220,19 @@ pub fn global(builder: &mut GlobalsBuilder) {
 
 #[cfg(test)]
 mod test {
-    use std::env;
+    use std::{cell::RefCell, env, rc::Rc};
+
+    use gazebo::dupe::Dupe;
 
     use super::*;
-    use crate::assert::Assert;
+    use crate::{
+        assert::Assert,
+        environment::{Globals, Module},
+    };
 
     #[test]
     // Test with: BREAKPOINT=1 cargo test -p starlark breakpoint -- --nocapture
-    fn test_breakpoint() {
+    fn test_breakpoint_real() {
         if env::var("BREAKPOINT") != Ok("1".to_owned()) {
             return;
         }
@@ -190,5 +240,55 @@ mod test {
         let mut a = Assert::new();
         a.globals_add(global);
         a.pass("x = [1,2,3]; breakpoint(); print(x)");
+    }
+
+    #[test]
+    fn test_breakpoint_mock() {
+        let module = Module::new();
+        let globals = Globals::extended();
+        let mut eval = Evaluator::new(&module, &globals);
+        let printed_lines = Rc::new(RefCell::new(Vec::new()));
+        let printed_lines_copy = printed_lines.dupe();
+        eval.breakpoint_handler = box move || {
+            struct Handler {
+                printed_lines: Rc<RefCell<Vec<String>>>,
+                called: bool,
+            }
+
+            impl BreakpointConsole for Handler {
+                fn read_line(&mut self) -> anyhow::Result<Option<String>> {
+                    let called = self.called;
+                    self.called = true;
+                    if !called {
+                        Ok(Some("x".to_owned()))
+                    } else {
+                        Ok(None)
+                    }
+                }
+
+                fn println(&mut self, line: &str) {
+                    self.printed_lines.borrow_mut().push(line.to_owned());
+                }
+            }
+
+            box Handler {
+                printed_lines: printed_lines.dupe(),
+                called: false,
+            }
+        };
+        eval.eval_module(
+            AstModule::parse(
+                "x.star",
+                "x = [1,2,3]; breakpoint()".to_owned(),
+                &Dialect::Extended,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            vec![BREAKPOINT_HIT_MESSAGE, "[1, 2, 3]"],
+            *printed_lines_copy.borrow()
+        );
     }
 }

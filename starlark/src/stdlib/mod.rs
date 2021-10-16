@@ -20,7 +20,7 @@
 
 use crate::environment::GlobalsBuilder;
 
-mod breakpoint;
+pub(crate) mod breakpoint;
 pub(crate) mod dict;
 pub(crate) mod enumeration;
 mod extra;

@@ -43,6 +43,7 @@ use crate::{
         },
         FileLoader,
     },
+    stdlib::breakpoint::{BreakpointConsole, RealBreakpointConsole},
     values::{
         value_captured_get, FrozenHeap, FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured,
         ValueLike,
@@ -101,6 +102,8 @@ pub struct Evaluator<'v, 'a> {
     /// Field that can be used for any purpose you want (can store heap-resident [`Value<'v>`]).
     /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
+    /// Called to perform console IO each time `breakpoint` function is called.
+    pub(crate) breakpoint_handler: Box<dyn Fn() -> Box<dyn BreakpointConsole>>,
     // The Starlark-level call-stack of functions.
     // Must go last because it's quite a big structure
     pub(crate) call_stack: CallStack<'v>,
@@ -142,6 +145,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             heap_or_flame_profile: false,
             before_stmt: Vec::new(),
             def_info: DefInfo::empty(), // Will be replaced before it is used
+            breakpoint_handler: RealBreakpointConsole::factory(),
         }
     }
 
