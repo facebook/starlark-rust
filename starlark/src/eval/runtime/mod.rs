@@ -17,6 +17,7 @@
 
 pub(crate) mod arguments;
 pub(crate) mod call_stack;
+pub(crate) mod csv;
 pub(crate) mod evaluator;
 pub(crate) mod file_loader;
 pub(crate) mod flame_profile;

@@ -28,7 +28,10 @@ use std::{
 use anyhow::Context;
 use gazebo::prelude::*;
 
-use crate::codemap::{CodeMap, FileSpan, Span};
+use crate::{
+    codemap::{CodeMap, FileSpan, Span},
+    eval::runtime::csv::CsvWriter,
+};
 
 // When line profiling is not enabled, we want this to be small and cheap
 pub(crate) struct StmtProfile(Option<Box<StmtProfileData>>);
@@ -152,24 +155,22 @@ impl StmtProfileData {
         }
         items.sort_by_key(|x| -(x.time.as_nanos() as i128));
 
-        writeln!(file, "File,Span,Duration(s),Count")?;
-        writeln!(
-            file,
-            "TOTAL,,{:.3},{}",
-            total_time.as_secs_f64(),
-            total_count
-        )?;
+        let mut csv = CsvWriter::new(["File", "Span", "Duration(s)", "Count"]);
+        csv.write_value("TOTAL");
+        csv.write_value("");
+        csv.write_value(total_time);
+        csv.write_value(total_count);
+        csv.finish_row();
 
         for x in items {
-            writeln!(
-                file,
-                "\"{}\",\"{}\",{:.3},{}",
-                x.span.file.filename(),
-                x.span.file.resolve_span(x.span.span),
-                x.time.as_secs_f64(),
-                x.count
-            )?;
+            csv.write_value(x.span.file.filename());
+            csv.write_display(x.span.file.resolve_span(x.span.span));
+            csv.write_value(x.time);
+            csv.write_value(x.count);
+            csv.finish_row();
         }
+
+        file.write_all(csv.finish().as_bytes())?;
 
         Ok(())
     }

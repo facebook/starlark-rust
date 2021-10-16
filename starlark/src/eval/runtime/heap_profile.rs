@@ -32,8 +32,12 @@ use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate as starlark;
-use crate::values::{
-    ComplexValue, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
+use crate::{
+    eval::runtime::csv::CsvWriter,
+    values::{
+        ComplexValue, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value,
+        ValueLike,
+    },
 };
 
 #[derive(Copy, Clone, Dupe, Debug)]
@@ -278,14 +282,21 @@ impl HeapProfile {
         columns.sort_by_key(|x| -(x.1 as isize));
         info.sort_by_key(|x| -(x.1.time.as_nanos() as i128));
 
-        write!(
-            file,
-            "Function,Time(s),TimeRec(s),Calls,Callers,TopCaller,TopCallerCount,Allocs"
-        )?;
-        for x in &columns {
-            write!(file, ",\"{}\"", &x.0)?;
-        }
-        writeln!(file)?;
+        let mut csv = CsvWriter::new(
+            [
+                "Function",
+                "Time(s)",
+                "TimeRec(s)",
+                "Calls",
+                "Callers",
+                "TopCaller",
+                "TopCallerCount",
+                "Allocs",
+            ]
+            .iter()
+            .copied()
+            .chain(columns.iter().map(|c| c.0)),
+        );
         let blank = ids.get_string("".to_owned());
         let un_ids = ids.invert();
         for (rowname, info) in info {
@@ -301,23 +312,20 @@ impl HeapProfile {
             );
             // We divide calls and time by two
             // because we could calls twice: for drop and non-drop bumps.
-            write!(
-                file,
-                "\"{}\",{:.3},{:.3},{},{},\"{}\",{},{}",
-                un_ids[rowname],
-                info.time.as_secs_f64() / 2.0,
-                info.time_rec.as_secs_f64() / 2.0,
-                info.calls / 2,
-                info.callers.len(),
-                un_ids[callers.0.0],
-                callers.1,
-                allocs
-            )?;
-            for x in &columns {
-                write!(file, ",{}", info.allocs.get(x.0).unwrap_or(&0))?;
+            csv.write_value(un_ids[rowname]);
+            csv.write_value(info.time / 2);
+            csv.write_value(info.time_rec / 2);
+            csv.write_value(info.calls / 2);
+            csv.write_value(info.callers.len());
+            csv.write_value(un_ids[callers.0.0]);
+            csv.write_value(callers.1);
+            csv.write_value(allocs);
+            for c in &columns {
+                csv.write_value(info.allocs.get(c.0).unwrap_or(&0));
             }
-            writeln!(file)?;
+            csv.finish_row();
         }
+        file.write_all(csv.finish().as_bytes())?;
         Ok(())
     }
 }
