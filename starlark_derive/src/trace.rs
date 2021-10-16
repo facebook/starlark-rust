@@ -124,9 +124,6 @@ fn trace_enum(data: &DataEnum) -> TokenStream {
         if let Fields::Unit = variant.fields {
             continue;
         }
-        if is_ignore(&variant.attrs) {
-            continue;
-        }
         match &variant.fields {
             Fields::Named(fields) => {
                 for field in &fields.named {
