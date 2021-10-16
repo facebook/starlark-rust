@@ -20,12 +20,12 @@ use std::sync::Mutex;
 use anyhow::anyhow;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
-use rustyline::{error::ReadlineError, Editor};
 
 use crate::{
     self as starlark,
     environment::GlobalsBuilder,
     eval::Evaluator,
+    read_line::ReadLine,
     syntax::{AstModule, Dialect},
     values::none::NoneType,
 };
@@ -43,20 +43,12 @@ pub(crate) trait BreakpointConsole {
 
 /// Breakpoint handler implemented with `rustyline`.
 pub(crate) struct RealBreakpointConsole {
-    editor: Editor<()>,
+    read_line: ReadLine,
 }
 
 impl BreakpointConsole for RealBreakpointConsole {
     fn read_line(&mut self) -> anyhow::Result<Option<String>> {
-        match self.editor.readline("$> ") {
-            Ok(line) => {
-                self.editor.add_history_entry(line.as_str());
-                Ok(Some(line))
-            }
-            // User pressed EOF - disconnected terminal, or similar
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
+        self.read_line.read_line("$> ")
     }
 
     fn println(&mut self, line: &str) {
@@ -67,7 +59,7 @@ impl BreakpointConsole for RealBreakpointConsole {
 impl RealBreakpointConsole {
     pub(crate) fn factory() -> Box<dyn Fn() -> Box<dyn BreakpointConsole>> {
         box || box RealBreakpointConsole {
-            editor: Editor::new(),
+            read_line: ReadLine::new(),
         }
     }
 }

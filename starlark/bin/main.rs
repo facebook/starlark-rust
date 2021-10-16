@@ -31,7 +31,7 @@ use anyhow::anyhow;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
-use rustyline::{error::ReadlineError, Editor};
+use starlark::read_line::ReadLine;
 use structopt::{clap::AppSettings, StructOpt};
 use walkdir::WalkDir;
 
@@ -186,18 +186,15 @@ fn drain(xs: impl Iterator<Item = Message>, json: bool, stats: &mut Stats) {
 }
 
 fn interactive(ctx: &Context) -> anyhow::Result<()> {
-    let mut rl = Editor::<()>::new();
+    let mut rl = ReadLine::new();
     loop {
-        let readline = rl.readline("$> ");
-        match readline {
-            Ok(line) => {
-                rl.add_history_entry(line.as_str());
+        match rl.read_line("$> ")? {
+            Some(line) => {
                 let mut stats = Stats::default();
                 drain(ctx.expression(line), false, &mut stats);
             }
             // User pressed EOF - disconnected terminal, or similar
-            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => return Ok(()),
-            Err(err) => return Err(err.into()),
+            None => return Ok(()),
         }
     }
 }
