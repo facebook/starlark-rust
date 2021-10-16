@@ -99,7 +99,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     fn to_bool(&self) -> bool {
         self.get() != 0
     }
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         Ok(Num::from(self.get()).get_hash())
     }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {

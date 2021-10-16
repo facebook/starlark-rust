@@ -55,7 +55,7 @@ impl<'v> StarlarkValue<'v> for NoneType {
         false
     }
     // just took the result of hash(None) in macos python 2.7.10 interpreter.
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         Ok(9_223_380_832_852_120_682)
     }
 

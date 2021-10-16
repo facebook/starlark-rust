@@ -327,7 +327,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// This function is deprecated and will be removed soon.
     ///
     /// It delegates to `write_hash`.
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         let mut hasher = StarlarkHasher::new();
         self.write_hash(&mut hasher)?;
         Ok(hasher.finish_get_hash())

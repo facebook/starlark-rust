@@ -947,7 +947,7 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<M
         self.1.to_int()
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
-        self.1.get_hash()
+        self.1.get_hash_internal()
     }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         self.1.write_hash(hasher)

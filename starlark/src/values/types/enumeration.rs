@@ -344,7 +344,7 @@ where
         }
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         self.value.get_hash()
     }
 

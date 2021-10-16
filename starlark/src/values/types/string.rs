@@ -287,7 +287,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         !self.is_empty()
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         Ok(self.get_hash_64())
     }
 

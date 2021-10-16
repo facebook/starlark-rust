@@ -221,7 +221,7 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
         self.0 != 0.0
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         Ok(Num::from(self.0).get_hash())
     }
 

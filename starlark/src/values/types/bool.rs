@@ -97,7 +97,7 @@ impl StarlarkValue<'_> for StarlarkBool {
     fn to_bool(&self) -> bool {
         self.0
     }
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash_internal(&self) -> anyhow::Result<u64> {
         Ok(self.to_int().unwrap() as u64)
     }
 
