@@ -19,7 +19,6 @@
 
 use std::{
     cmp::Ordering,
-    collections::hash_map::DefaultHasher,
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::Hasher,
@@ -31,11 +30,14 @@ use gazebo::{
     coerce::{coerce, coerce_ref, Coerce},
 };
 
-use crate::values::{
-    comparison::{compare_slice, equals_slice},
-    index::{apply_slice, convert_index},
-    ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError,
-    ValueLike,
+use crate::{
+    collections::StarlarkHasher,
+    values::{
+        comparison::{compare_slice, equals_slice},
+        index::{apply_slice, convert_index},
+        ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+        ValueError, ValueLike,
+    },
 };
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
@@ -146,7 +148,7 @@ where
         self.len() != 0
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = DefaultHasher::new();
+        let mut s = StarlarkHasher::new();
         for v in self.content() {
             s.write_u64(v.get_hash()?)
         }

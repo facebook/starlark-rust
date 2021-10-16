@@ -22,7 +22,6 @@
 
 use std::{
     cmp::Ordering,
-    collections::hash_map::DefaultHasher,
     fmt::{self, Debug},
     hash::{Hash, Hasher},
     iter::FromIterator,
@@ -43,6 +42,7 @@ use crate::collections::{
         VMIntoIter, VMIntoIterHash, VMIter, VMIterHash, VMIterMut, VMKeys, VMValues, VMValuesMut,
         VecMap,
     },
+    StarlarkHasher,
 };
 
 #[derive(Debug, Clone)]
@@ -938,7 +938,7 @@ impl<K: Hash, V: Hash> Hash for SmallMap<K, V> {
         // keys itself, which is a little less correct and flexible.
         self.iter()
             .map(|e| {
-                let mut s = DefaultHasher::new();
+                let mut s = StarlarkHasher::new();
                 e.hash(&mut s);
                 std::num::Wrapping(s.finish())
             })

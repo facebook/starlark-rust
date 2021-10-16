@@ -43,7 +43,6 @@
 
 use std::{
     cell::RefCell,
-    collections::hash_map::DefaultHasher,
     fmt,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
@@ -60,7 +59,7 @@ use gazebo::{
 use crate as starlark;
 use crate::{
     codemap::Span,
-    collections::SmallMap,
+    collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
         comparison::equals_slice,
@@ -257,7 +256,7 @@ where
     starlark_type!("field");
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = DefaultHasher::new();
+        let mut s = StarlarkHasher::new();
         s.write_u64(self.typ.get_hash()?);
         self.default.is_some().hash(&mut s);
         if let Some(d) = self.default {
@@ -291,7 +290,7 @@ where
     starlark_type!(FUNCTION_TYPE);
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = DefaultHasher::new();
+        let mut s = StarlarkHasher::new();
         for (name, typ) in &self.fields {
             name.hash(&mut s);
             // No need to hash typ.1, since it was computed from typ.0
@@ -429,7 +428,7 @@ where
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = DefaultHasher::new();
+        let mut s = StarlarkHasher::new();
         s.write_u64(self.typ.get_hash()?);
         for v in &self.values {
             s.write_u64(v.get_hash()?);

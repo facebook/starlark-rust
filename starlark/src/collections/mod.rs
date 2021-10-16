@@ -22,12 +22,14 @@
 
 pub use crate::collections::{
     hash::{BorrowHashed, Hashed, SmallHashResult},
+    hasher::*,
     small_map::{MHIntoIter, MHIter, MHIterMut, SmallMap},
     small_set::SmallSet,
 };
 
 pub(crate) mod alloca;
 mod hash;
+pub(crate) mod hasher;
 mod idhasher;
 pub mod small_map;
 mod small_set;

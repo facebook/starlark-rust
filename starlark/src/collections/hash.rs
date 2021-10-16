@@ -15,15 +15,13 @@
  * limitations under the License.
  */
 
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use gazebo::{coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 
 use crate as starlark;
+use crate::collections::StarlarkHasher;
 
 /// A hash result.
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default, Trace)]
@@ -48,9 +46,9 @@ impl SmallHashResult {
     /// Create a new [`SmallHashResult`] using the [`Hash`] trait
     /// for given key.
     pub fn new<K: Hash + ?Sized>(key: &K) -> Self {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = StarlarkHasher::new();
         key.hash(&mut hasher);
-        Self::new_unchecked(hasher.finish())
+        hasher.finish_small()
     }
 
     /// Directly create a new [`SmallHashResult`] using a hash.

@@ -36,7 +36,6 @@
 
 use std::{
     cmp::Ordering,
-    collections::hash_map::DefaultHasher,
     fmt::{self, Display},
     hash::{Hash, Hasher},
     marker,
@@ -49,7 +48,7 @@ use gazebo::{
 
 use crate as starlark;
 use crate::{
-    collections::SmallMap,
+    collections::{SmallMap, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::{compare_small_map, equals_small_map},
@@ -201,7 +200,7 @@ where
     }
 
     fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = DefaultHasher::new();
+        let mut s = StarlarkHasher::new();
         for (k, v) in self.fields.iter_hashed() {
             Hash::hash(&k, &mut s);
             s.write_u64(v.get_hash()?);

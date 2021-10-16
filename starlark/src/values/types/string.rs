@@ -20,7 +20,6 @@
 use std::{
     cmp,
     cmp::Ordering,
-    collections::hash_map::DefaultHasher,
     fmt,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
@@ -34,7 +33,7 @@ use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
 
 use crate as starlark;
 use crate::{
-    collections::{BorrowHashed, SmallHashResult},
+    collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
         fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
@@ -111,7 +110,7 @@ impl StarlarkStr {
         if hash != 0 {
             hash
         } else {
-            let mut s = DefaultHasher::new();
+            let mut s = StarlarkHasher::new();
             hash_string_value(self.unpack(), &mut s);
             let hash = s.finish();
             // If hash is zero, we are unlucky, but it is highly improbable.
