@@ -23,13 +23,17 @@
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
+    hash::Hasher,
 };
 
 use gazebo::any::AnyLifetime;
 
-use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
-    ValueError,
+use crate::{
+    collections::StarlarkHasher,
+    values::{
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
+        Value, ValueError,
+    },
 };
 
 /// The result of calling `type()` on booleans.
@@ -95,6 +99,11 @@ impl StarlarkValue<'_> for StarlarkBool {
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
         Ok(self.to_int().unwrap() as u64)
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        hasher.write_u8(if self.0 { 1 } else { 0 });
+        Ok(())
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {

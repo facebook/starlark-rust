@@ -291,6 +291,11 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         Ok(self.get_hash_64())
     }
 
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        hasher.write_u64(self.get_hash_64());
+        Ok(())
+    }
+
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if let Some(other) = other.unpack_str() {
             Ok(*self.unpack() == *other)

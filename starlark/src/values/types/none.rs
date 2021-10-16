@@ -17,11 +17,17 @@
 
 //! The `None` type.
 
+use std::hash::Hasher;
+
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 
-use crate::values::{
-    AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+use crate::{
+    collections::StarlarkHasher,
+    values::{
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
+        Value,
+    },
 };
 
 /// Define the None type, use [`NoneType`] in Rust.
@@ -51,6 +57,11 @@ impl<'v> StarlarkValue<'v> for NoneType {
     // just took the result of hash(None) in macos python 2.7.10 interpreter.
     fn get_hash(&self) -> anyhow::Result<u64> {
         Ok(9_223_380_832_852_120_682)
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        hasher.write_u64(9_223_380_832_852_120_682);
+        Ok(())
     }
 }
 

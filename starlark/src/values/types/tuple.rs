@@ -146,11 +146,6 @@ where
     fn to_bool(&self) -> bool {
         self.len() != 0
     }
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = StarlarkHasher::new();
-        self.write_hash(&mut s)?;
-        Ok(s.finish_get_hash())
-    }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         for v in self.content() {

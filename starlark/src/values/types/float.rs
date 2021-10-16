@@ -20,13 +20,17 @@
 use std::{
     cmp::Ordering,
     fmt::{self, Display, Write},
+    hash::Hasher,
 };
 
 use gazebo::{any::AnyLifetime, prelude::*};
 
-use crate::values::{
-    num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
-    StarlarkValue, Value, ValueError,
+use crate::{
+    collections::StarlarkHasher,
+    values::{
+        num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
+        StarlarkValue, Value, ValueError,
+    },
 };
 
 const WRITE_PRECISION: usize = 6;
@@ -219,6 +223,11 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
 
     fn get_hash(&self) -> anyhow::Result<u64> {
         Ok(Num::from(self.0).get_hash())
+    }
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        hasher.write_u64(Num::from(self.0).get_hash());
+        Ok(())
     }
 
     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

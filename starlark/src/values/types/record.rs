@@ -255,12 +255,6 @@ where
 {
     starlark_type!("field");
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = StarlarkHasher::new();
-        self.write_hash(&mut s)?;
-        Ok(s.finish_get_hash())
-    }
-
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         self.typ.write_hash(hasher)?;
         self.default.is_some().hash(hasher);
@@ -294,14 +288,13 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = StarlarkHasher::new();
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         for (name, typ) in &self.fields {
-            name.hash(&mut s);
+            name.hash(hasher);
             // No need to hash typ.1, since it was computed from typ.0
-            typ.0.write_hash(&mut s)?;
+            typ.0.write_hash(hasher)?;
         }
-        Ok(s.finish_get_hash())
+        Ok(())
     }
 
     fn invoke(
@@ -430,12 +423,6 @@ where
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         let i = self.get_record_fields().get_index_of(attribute)?;
         Some(self.values[i].to_value())
-    }
-
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = StarlarkHasher::new();
-        self.write_hash(&mut s)?;
-        Ok(s.finish_get_hash())
     }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {

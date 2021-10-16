@@ -26,11 +26,15 @@
 use std::{
     cmp::Ordering,
     fmt::{self, Display},
+    hash::Hasher,
 };
 
-use crate::values::{
-    error::ValueError, float::StarlarkFloat, layout::PointerI32, num::Num, AllocFrozenValue,
-    AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+use crate::{
+    collections::StarlarkHasher,
+    values::{
+        error::ValueError, float::StarlarkFloat, layout::PointerI32, num::Num, AllocFrozenValue,
+        AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
+    },
 };
 
 /// The result of calling `type()` on integers.
@@ -97,6 +101,10 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
     fn get_hash(&self) -> anyhow::Result<u64> {
         Ok(Num::from(self.get()).get_hash())
+    }
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        hasher.write_u64(Num::from(self.get()).get_hash());
+        Ok(())
     }
     fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_int(self.get()))

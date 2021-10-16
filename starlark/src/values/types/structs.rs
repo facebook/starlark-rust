@@ -199,12 +199,6 @@ where
         coerce_ref(&self.fields).get(attribute).copied()
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        let mut s = StarlarkHasher::new();
-        self.write_hash(&mut s)?;
-        Ok(s.finish_get_hash())
-    }
-
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         for (k, v) in self.fields.iter_hashed() {
             Hash::hash(&k, hasher);

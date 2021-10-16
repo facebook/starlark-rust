@@ -32,7 +32,6 @@ use std::{
     any::TypeId,
     cmp::Ordering,
     fmt::{Debug, Display, Write},
-    hash::Hasher,
 };
 
 use derive_more::Display;
@@ -325,10 +324,19 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         ValueError::unsupported(self, "int()")
     }
 
-    /// Return a hash code for self to be used when self is placed as a key in a Dict.
+    /// This function is deprecated and will be removed soon.
+    ///
+    /// It delegates to `write_hash`.
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        let mut hasher = StarlarkHasher::new();
+        self.write_hash(&mut hasher)?;
+        Ok(hasher.finish_get_hash())
+    }
+
+    /// Return a hash data for self to be used when self is placed as a key in a `Dict`.
     /// Return an [`Err`] if there is no hash for this value (e.g. list).
     /// Must be stable between frozen and non-frozen values.
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         if self.get_type() == FUNCTION_TYPE {
             // The Starlark spec says values of type "function" must be hashable.
             // We could return the address of the function, but that changes
@@ -336,22 +344,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
             // We could create an atomic counter and use that, but it takes memory,
             // effort, complexity etc, and we don't expect many Dict's keyed by
             // function. Returning 0 as the hash is valid, as Eq will sort it out.
-            Ok(0)
+            let _ = hasher;
+            Ok(())
         } else {
             Err(ControlError::NotHashableValue(self.get_type().to_owned()).into())
         }
-    }
-
-    /// Hash the value content.
-    ///
-    /// Default implementation delegates to [`get_hash`](Self::get_hash),
-    /// but there's no requirement about `write_hash` and `get_hash` relation.
-    ///
-    /// However, if either function is successful,
-    /// the other should be successful too.
-    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u64(self.get_hash()?);
-        Ok(())
     }
 
     /// Return how much extra memory is consumed by this data type, in bytes, in addition to the
