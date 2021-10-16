@@ -571,6 +571,14 @@ impl<'v, V: ValueLike<'v>> DefGen<V>
 where
     Self: DefLike<'v>,
 {
+    pub(crate) fn bc(&self) -> &Bc {
+        if Self::FROZEN {
+            self.optimized_on_freeze_stmt.get()
+        } else {
+            &self.def_info.stmt_compiled
+        }
+    }
+
     fn invoke_raw(
         &self,
         locals: LocalSlotBase,
@@ -612,11 +620,7 @@ where
             debug_assert!(self.module.load_relaxed().is_some());
         }
         let res = eval.with_function_context(self.module.load_relaxed(), self.def_info, |eval| {
-            if Self::FROZEN {
-                self.optimized_on_freeze_stmt.get().run(eval)
-            } else {
-                self.def_info.stmt_compiled.run(eval)
-            }
+            self.bc().run(eval)
         });
         eval.local_variables.release(old_locals);
 

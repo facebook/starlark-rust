@@ -158,6 +158,20 @@ impl BcInstrs {
     pub(crate) fn end_ptr(&self) -> BcPtrAddr {
         self.start_ptr().offset(self.end())
     }
+
+    #[cfg(test)]
+    pub(crate) fn opcodes(&self) -> Vec<BcOpcode> {
+        let mut opcodes = Vec::new();
+        let end = BcPtrAddr::for_slice_end(&self.instrs);
+        let mut ptr = BcPtrAddr::for_slice_start(&self.instrs);
+        while ptr != end {
+            assert!(ptr < end);
+            let opcode = ptr.get_opcode();
+            opcodes.push(opcode);
+            ptr = ptr.add(opcode.size_of_repr());
+        }
+        opcodes
+    }
 }
 
 impl Display for BcInstrs {
