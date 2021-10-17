@@ -38,7 +38,8 @@ use crate::{
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
-        AttrType, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
+        interpolation::parse_percent_s_one, AttrType, FrozenHeap, FrozenStringValue, FrozenValue,
+        Heap, Value, ValueError, ValueLike,
     },
 };
 
@@ -158,6 +159,14 @@ pub(crate) enum ExprCompiledValue {
         ExprBinOp,
         Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
     ),
+    /// `"aaa%sbbb" % arg`
+    PercentSOne(
+        Box<(
+            FrozenStringValue,
+            Spanned<ExprCompiledValue>,
+            FrozenStringValue,
+        )>,
+    ),
     Call(Spanned<CallCompiled>),
     Def(DefCompiled),
 }
@@ -268,6 +277,10 @@ impl Spanned<ExprCompiledValue> {
                 let l = l.optimize_on_freeze(module);
                 let r = r.optimize_on_freeze(module);
                 ExprCompiledValue::Op(op, box (l, r))
+            }
+            ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
+                let arg = arg.optimize_on_freeze(module);
+                ExprCompiledValue::PercentSOne(box (before, arg, after))
             }
             ref d @ ExprCompiledValue::Def(..) => d.clone(),
             ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(module),
@@ -607,6 +620,23 @@ impl Compiler<'_> {
         }
     }
 
+    fn percent(
+        &mut self,
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+    ) -> ExprCompiledValue {
+        if let ExprCompiledValue::Value(v) = l.node {
+            if let Some(v) = FrozenStringValue::new(v) {
+                if let Some((before, after)) = parse_percent_s_one(&v) {
+                    let before = self.module_env.frozen_heap().alloc_string_value(&before);
+                    let after = self.module_env.frozen_heap().alloc_string_value(&after);
+                    return ExprCompiledValue::PercentSOne(box (before, r, after));
+                }
+            }
+        }
+        ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
+    }
+
     pub(crate) fn expr(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
         // println!("compile {}", expr.node);
         let span = expr.span;
@@ -723,7 +753,7 @@ impl Compiler<'_> {
                         BinOp::Subtract => ExprCompiledValue::Op(ExprBinOp::Sub, box (l, r)),
                         BinOp::Add => ExprCompiledValue::Op(ExprBinOp::Add, box (l, r)),
                         BinOp::Multiply => ExprCompiledValue::Op(ExprBinOp::Multiply, box (l, r)),
-                        BinOp::Percent => ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r)),
+                        BinOp::Percent => self.percent(l, r),
                         BinOp::Divide => ExprCompiledValue::Op(ExprBinOp::Divide, box (l, r)),
                         BinOp::FloorDivide => {
                             ExprCompiledValue::Op(ExprBinOp::FloorDivide, box (l, r))

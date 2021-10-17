@@ -47,3 +47,16 @@ fn test_type() {
         "def test(x): return type(x)",
     );
 }
+
+#[test]
+fn test_percent_s_one() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocal,
+            BcOpcode::PercentSOne,
+            BcOpcode::Return,
+            BcOpcode::ReturnNone,
+        ],
+        "def test(x): return '((%s))' % x",
+    )
+}

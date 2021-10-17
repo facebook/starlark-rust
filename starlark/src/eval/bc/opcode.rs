@@ -19,27 +19,7 @@
 
 use gazebo::dupe::Dupe;
 
-use crate::eval::bc::{
-    instr::BcInstr,
-    instr_impl::{
-        InstrAdd, InstrAddAssign, InstrArrayIndex, InstrArrayIndexNoPop, InstrArrayIndexSet,
-        InstrBeforeStmt, InstrBitAnd, InstrBitNot, InstrBitOr, InstrBitXor, InstrBr, InstrBreak,
-        InstrCall, InstrCallFrozen, InstrCallFrozenDef, InstrCallFrozenDefPos,
-        InstrCallFrozenNative, InstrCallFrozenNativePos, InstrCallFrozenPos, InstrCallMethod,
-        InstrCallMethodPos, InstrCallPos, InstrComprDictInsert, InstrComprListAppend, InstrConst,
-        InstrConst2, InstrConst3, InstrConst4, InstrContinue, InstrDef, InstrDictConstKeys,
-        InstrDictNPop, InstrDictNew, InstrDictOfConsts, InstrDivide, InstrDup, InstrEndOfBc,
-        InstrEq, InstrFloorDivide, InstrForLoop, InstrGreater, InstrGreaterOrEqual, InstrIfBr,
-        InstrIfNotBr, InstrIn, InstrLeftShift, InstrLen, InstrLess, InstrLessOrEqual,
-        InstrListNPop, InstrListNew, InstrListOfConsts, InstrLoadLocal, InstrLoadLocal2,
-        InstrLoadLocal3, InstrLoadLocal4, InstrLoadLocalAndConst, InstrLoadLocalCaptured,
-        InstrLoadModule, InstrMinus, InstrMultiply, InstrNot, InstrNotEq, InstrNotIn,
-        InstrObjectField, InstrObjectSetField, InstrPercent, InstrPlus, InstrPop, InstrPossibleGc,
-        InstrReturn, InstrReturnNone, InstrRightShift, InstrSetArrayIndex, InstrSetObjectField,
-        InstrSlice, InstrStoreLocal, InstrStoreLocalCaptured, InstrStoreModule,
-        InstrStoreModuleAndExport, InstrSub, InstrTupleNPop, InstrType, InstrTypeIs, InstrUnpack,
-    },
-};
+use crate::eval::bc::{instr::BcInstr, instr_impl::*};
 
 /// Bytecode instruction opcode.
 #[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq)]
@@ -88,6 +68,7 @@ pub(crate) enum BcOpcode {
     Sub,
     Multiply,
     Percent,
+    PercentSOne,
     Divide,
     FloorDivide,
     BitAnd,
@@ -165,6 +146,7 @@ impl BcOpcode {
             BcOpcode::Sub => handler.handle::<InstrSub>(),
             BcOpcode::Multiply => handler.handle::<InstrMultiply>(),
             BcOpcode::Percent => handler.handle::<InstrPercent>(),
+            BcOpcode::PercentSOne => handler.handle::<InstrPercentSOne>(),
             BcOpcode::Divide => handler.handle::<InstrDivide>(),
             BcOpcode::FloorDivide => handler.handle::<InstrFloorDivide>(),
             BcOpcode::BitAnd => handler.handle::<InstrBitAnd>(),

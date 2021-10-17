@@ -34,8 +34,8 @@ use crate::{
                 InstrLeftShift, InstrLen, InstrLess, InstrLessOrEqual, InstrListNPop, InstrListNew,
                 InstrListOfConsts, InstrLoadLocalCaptured, InstrLoadModule, InstrMinus,
                 InstrMultiply, InstrNot, InstrNotEq, InstrNotIn, InstrObjectField, InstrPercent,
-                InstrPlus, InstrPop, InstrRightShift, InstrSlice, InstrSub, InstrTupleNPop,
-                InstrType, InstrTypeIs,
+                InstrPercentSOne, InstrPlus, InstrPop, InstrRightShift, InstrSlice, InstrSub,
+                InstrTupleNPop, InstrType, InstrTypeIs,
             },
             writer::BcWriter,
         },
@@ -264,6 +264,10 @@ impl Spanned<ExprCompiledValue> {
                     ExprBinOp::LeftShift => bc.write_instr::<InstrLeftShift>(span, ()),
                     ExprBinOp::RightShift => bc.write_instr::<InstrRightShift>(span, ()),
                 }
+            }
+            ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
+                arg.write_bc(bc);
+                bc.write_instr::<InstrPercentSOne>(span, (before, after));
             }
             ExprCompiledValue::Call(ref call) => call.write_bc(bc),
             ExprCompiledValue::Def(ref def) => def.write_bc(bc),

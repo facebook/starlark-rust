@@ -24,7 +24,9 @@ use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
 use thiserror::Error;
 
-use crate::values::{dict::Dict, float, num, tuple::Tuple, Value, ValueError, ValueLike};
+use crate::values::{
+    dict::Dict, float, num, tuple::Tuple, Heap, StringValue, Value, ValueError, ValueLike,
+};
 
 /// Operator `%` format or evaluation errors
 #[derive(Clone, Dupe, Debug, Error)]
@@ -170,6 +172,66 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
     } else {
         Ok(unsafe { String::from_utf8_unchecked(res) })
     }
+}
+
+/// Try parse `"aaa%sbbb"` and return `("aaa", "bbb")`.
+pub(crate) fn parse_percent_s_one(format: &str) -> Option<(String, String)> {
+    let mut before = String::with_capacity(format.len());
+    let mut chars = format.chars();
+    loop {
+        match chars.next()? {
+            '%' => match chars.next()? {
+                '%' => before.push('%'),
+                's' => break,
+                _ => return None,
+            },
+            c => before.push(c),
+        }
+    }
+    let mut after = String::with_capacity(format.len() - before.len());
+    loop {
+        match chars.next() {
+            Some('%') => match chars.next()? {
+                '%' => after.push('%'),
+                _ => return None,
+            },
+            Some(c) => after.push(c),
+            None => break,
+        }
+    }
+    Some((before, after))
+}
+
+/// Evaluate `"<before>%s<after>" % arg`.
+pub(crate) fn percent_s_one<'v>(
+    before: &str,
+    arg: Value<'v>,
+    after: &str,
+    heap: &'v Heap,
+) -> anyhow::Result<Value<'v>> {
+    Ok(match StringValue::new(arg) {
+        Some(arg) => heap.alloc_str_concat3(before, &arg, after),
+        None => {
+            let one = match Tuple::from_value(arg) {
+                Some(tuple) => match tuple.content() {
+                    [] => return Err(StringInterpolationError::NotEnoughParameters.into()),
+                    [value] => *value,
+                    [_, _, ..] => return Err(StringInterpolationError::TooManyParameters.into()),
+                },
+                None => arg,
+            };
+            match StringValue::new(one) {
+                Some(arg) => heap.alloc_str_concat3(before, &arg, after),
+                None => {
+                    let mut result = String::with_capacity(before.len() + after.len() + 10);
+                    result.push_str(before);
+                    one.collect_repr(&mut result);
+                    result.push_str(after);
+                    heap.alloc_str(&result)
+                }
+            }
+        }
+    })
 }
 
 /// The format string can either have explicit indices,
@@ -340,5 +402,21 @@ mod tests {
         let mut args = FormatArgs::new(original_args.iter().copied());
         assert_eq!(format_capture("{1", &mut args, &kwargs,).unwrap(), "2");
         assert!(format_capture("{", &mut args, &kwargs,).is_err());
+    }
+
+    #[test]
+    fn test_parse_percent_s_one() {
+        assert_eq!(
+            Some(("abc".to_owned(), "def".to_owned())),
+            parse_percent_s_one("abc%sdef")
+        );
+        assert_eq!(
+            Some(("a%b".to_owned(), "c%d%".to_owned())),
+            parse_percent_s_one("a%%b%sc%%d%%")
+        );
+        assert_eq!(None, parse_percent_s_one("a%"));
+        assert_eq!(None, parse_percent_s_one("a%s%"));
+        assert_eq!(None, parse_percent_s_one("a%s%s"));
+        assert_eq!(None, parse_percent_s_one("%d"));
     }
 }

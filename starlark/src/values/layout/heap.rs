@@ -410,15 +410,34 @@ impl Heap {
     }
 
     pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {
-        // If either strings is empty, we should not be calling this function
-        // but reuse non-empty string object instead.
-        debug_assert!(!x.is_empty());
-        debug_assert!(!y.is_empty());
+        if x.is_empty() {
+            self.alloc_str(y)
+        } else if y.is_empty() {
+            self.alloc_str(x)
+        } else {
+            self.alloc_str_init(x.len() + y.len(), |dest| unsafe {
+                copy_nonoverlapping(x.as_ptr(), dest, x.len());
+                copy_nonoverlapping(y.as_ptr(), dest.add(x.len()), y.len())
+            })
+        }
+    }
 
-        self.alloc_str_init(x.len() + y.len(), |dest| unsafe {
-            copy_nonoverlapping(x.as_ptr(), dest, x.len());
-            copy_nonoverlapping(y.as_ptr(), dest.add(x.len()), y.len())
-        })
+    pub(crate) fn alloc_str_concat3<'v>(&'v self, x: &str, y: &str, z: &str) -> Value<'v> {
+        if x.is_empty() {
+            self.alloc_str_concat(y, z)
+        } else if y.is_empty() {
+            self.alloc_str_concat(x, z)
+        } else if z.is_empty() {
+            self.alloc_str_concat(x, y)
+        } else {
+            self.alloc_str_init(x.len() + y.len() + z.len(), |dest| unsafe {
+                copy_nonoverlapping(x.as_ptr(), dest, x.len());
+                let dest = dest.add(x.len());
+                copy_nonoverlapping(y.as_ptr(), dest, y.len());
+                let dest = dest.add(y.len());
+                copy_nonoverlapping(z.as_ptr(), dest, z.len());
+            })
+        }
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
