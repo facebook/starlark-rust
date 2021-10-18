@@ -28,8 +28,8 @@ use crate::{
     eval::Arguments,
     stdlib::util::convert_indices,
     values::{
-        fast_string, interpolation, none::NoneOr, string, tuple::Tuple, UnpackValue, Value,
-        ValueError, ValueOf,
+        fast_string, interpolation, none::NoneOr, string, tuple::Tuple, StringValue, UnpackValue,
+        Value, ValueError, ValueOf,
     },
 };
 
@@ -345,12 +345,14 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "Is {0!r} {0!s}?".format("heterological") == "Is \"heterological\" heterological?"
     /// # "#);
     /// ```
-    fn format(args: Arguments<'v, '_>) -> String {
+    fn format(args: Arguments<'v, '_>) -> StringValue<'v> {
         let iter = args.positions(heap)?;
         interpolation::format(
             args.this.unwrap().unpack_str().unwrap(),
             iter,
             args.names()?,
+            &mut eval.string_pool,
+            eval.module_env.heap(),
         )
     }
 

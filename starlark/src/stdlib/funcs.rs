@@ -860,8 +860,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// repr("x\"y😿 \\'")      == "\"x\\\"y😿 \\\\\\'\""
     /// "#);
     /// ```
-    fn repr(ref a: Value) -> String {
-        Ok(a.to_repr())
+    fn repr(ref a: Value) -> Value<'v> {
+        let mut s = eval.string_pool.alloc();
+        a.collect_repr(&mut s);
+        let r = eval.heap().alloc_str(&s);
+        eval.string_pool.release(s);
+        Ok(r)
     }
 
     /// [reversed](
@@ -964,7 +968,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             // Special case that can avoid reallocating, but is equivalent.
             Ok(a)
         } else {
-            Ok(heap.alloc(a.to_repr()))
+            let mut s = eval.string_pool.alloc();
+            a.collect_repr(&mut s);
+            let r = eval.heap().alloc_str(&s);
+            eval.string_pool.release(s);
+            Ok(r)
         }
     }
 

@@ -27,7 +27,7 @@ use thiserror::Error;
 
 use crate::{
     codemap::{FileSpan, Span},
-    collections::alloca::Alloca,
+    collections::{alloca::Alloca, string_pool::StringPool},
     environment::{
         slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleRef, Globals, Module,
     },
@@ -101,6 +101,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) bc_profile: BcProfile,
     // Used for stack-like allocation
     alloca: Alloca,
+    // Another stack-like allocation
+    pub(crate) string_pool: StringPool,
     /// Field that can be used for any purpose you want (can store types you define).
     /// Typically accessed via native functions you also define.
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
@@ -152,6 +154,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             before_stmt: Vec::new(),
             def_info: DefInfo::empty(), // Will be replaced before it is used
             breakpoint_handler: RealBreakpointConsole::factory(),
+            string_pool: StringPool::default(),
         }
     }
 

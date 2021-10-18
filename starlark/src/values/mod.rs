@@ -172,6 +172,14 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value
 
     fn collect_repr(self, collector: &mut String);
 
+    fn collect_str(self, collector: &mut String) {
+        if let Some(s) = self.to_value().unpack_str() {
+            collector.push_str(s);
+        } else {
+            self.collect_repr(collector);
+        }
+    }
+
     fn to_json(self) -> anyhow::Result<String>;
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool>;

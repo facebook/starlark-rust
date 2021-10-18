@@ -36,7 +36,7 @@ use crate::values::{
     layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
     types::string::StarlarkStrN,
-    Freezer, Trace, Tracer, UnpackValue, Value,
+    AllocValue, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
 };
 
 /// A constant string that can be converted to a [`FrozenValue`].
@@ -281,6 +281,12 @@ unsafe impl<'v> Trace<'v> for StringValue<'v> {
 impl<'v> UnpackValue<'v> for StringValue<'v> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         StringValue::new(value)
+    }
+}
+
+impl<'v> AllocValue<'v> for StringValue<'v> {
+    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+        self.to_value()
     }
 }
 

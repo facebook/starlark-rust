@@ -24,8 +24,11 @@ use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
 use thiserror::Error;
 
-use crate::values::{
-    dict::Dict, float, num, tuple::Tuple, Heap, StringValue, Value, ValueError, ValueLike,
+use crate::{
+    collections::string_pool::StringPool,
+    values::{
+        dict::Dict, float, num, tuple::Tuple, Heap, StringValue, Value, ValueError, ValueLike,
+    },
 };
 
 /// Operator `%` format or evaluation errors
@@ -44,6 +47,10 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
     // (which is fine, the only thing we care about are '%' and ASCII digits).
     // As a result, we accumulate into a Vec<u8>, which we know at any point
     // we are at the end or at a '%' must be a valid UTF8 buffer.
+
+    // NOTE(nga): use could reuse `Evaluator::string_pool` here, but
+    //   * we don't have access to `Evaluator` in `StarlarkValue::percent`
+    //   * after single %s made intrinsic, this code is not that hot now
 
     // random guess as a baseline capacity
     let mut res: Vec<u8> = Vec::with_capacity(format.len() + 20);
@@ -292,10 +299,12 @@ pub(crate) fn format<'v>(
     this: &str,
     args: impl Iterator<Item = Value<'v>>,
     kwargs: Dict<'v>,
-) -> anyhow::Result<String> {
+    string_pool: &mut StringPool,
+    heap: &'v Heap,
+) -> anyhow::Result<StringValue<'v>> {
     let mut args = FormatArgs::new(args);
-    let mut result = String::new();
-    let mut capture = String::new();
+    let mut result = string_pool.alloc();
+    let mut capture = string_pool.alloc();
     for c in this.chars() {
         match (c, capture.as_str()) {
             ('{', "") | ('}', "") => capture.push(c),
@@ -311,7 +320,7 @@ pub(crate) fn format<'v>(
                 capture.clear();
             }
             ('}', ..) => {
-                result += &format_capture(&capture, &mut args, &kwargs)?;
+                format_capture(&capture, &mut args, &kwargs, &mut result)?;
                 capture.clear();
             }
             (.., "}") => return Err(anyhow!("Standalone '}}' in format string `{}`", this)),
@@ -320,7 +329,12 @@ pub(crate) fn format<'v>(
     }
     match capture.as_str() {
         "}" => Err(anyhow!("Standalone '}}' in format string `{}`", this)),
-        "" => Ok(result),
+        "" => {
+            let r = heap.alloc_string_value(&result);
+            string_pool.release(result);
+            string_pool.release(capture);
+            Ok(r)
+        }
         _ => Err(anyhow!("Unmatched '{' in format string")),
     }
 }
@@ -329,7 +343,8 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
     capture: &str,
     args: &mut FormatArgs<'v, T>,
     kwargs: &Dict,
-) -> anyhow::Result<String> {
+    result: &mut String,
+) -> anyhow::Result<()> {
     let (n, conv) = {
         if let Some(x) = capture.find('!') {
             (capture.get(1..x).unwrap(), capture.get(x + 1..).unwrap())
@@ -337,9 +352,9 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
             (capture.get(1..).unwrap(), "s")
         }
     };
-    let conv_s = |x: Value| x.to_str();
-    let conv_r = |x: Value| x.to_repr();
-    let conv: &dyn Fn(Value) -> String = match conv {
+    let conv_s = |x: Value, result: &mut String| x.collect_str(result);
+    let conv_r = |x: Value, result: &mut String| x.collect_repr(result);
+    let conv: &dyn Fn(Value, &mut String) = match conv {
         "s" => &conv_s,
         "r" => &conv_r,
         c => {
@@ -353,10 +368,12 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
         }
     };
     if n.is_empty() {
-        Ok(conv(args.next_ordered()?))
+        conv(args.next_ordered()?, result);
+        Ok(())
     } else if n.chars().all(|c| c.is_ascii_digit()) {
         let i = usize::from_str(n).unwrap();
-        Ok(conv(args.by_index(i)?))
+        conv(args.by_index(i)?, result);
+        Ok(())
     } else {
         if let Some(x) = n.chars().find(|c| match c {
             '.' | ',' | '[' | ']' => true,
@@ -369,7 +386,10 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
         }
         match kwargs.get_str(n) {
             None => Err(ValueError::KeyNotFound(n.to_owned()).into()),
-            Some(v) => Ok(conv(v)),
+            Some(v) => {
+                conv(v, result);
+                Ok(())
+            }
         }
     }
 }
@@ -378,6 +398,16 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
 mod tests {
     use super::*;
     use crate::{collections::SmallMap, values::Heap};
+
+    fn format_capture_for_test<'v, T: Iterator<Item = Value<'v>>>(
+        capture: &str,
+        args: &mut FormatArgs<'v, T>,
+        kwargs: &Dict,
+    ) -> anyhow::Result<String> {
+        let mut result = String::new();
+        super::format_capture(capture, args, kwargs, &mut result)?;
+        Ok(result)
+    }
 
     #[test]
     fn test_format_capture() {
@@ -390,18 +420,33 @@ mod tests {
         kwargs.insert_hashed(heap.alloc_str_hashed("b"), heap.alloc("y"));
         kwargs.insert_hashed(heap.alloc_str_hashed("c"), heap.alloc("z"));
         let kwargs = Dict::new(kwargs);
-        assert_eq!(format_capture("{", &mut args, &kwargs,).unwrap(), "1");
-        assert_eq!(format_capture("{!s", &mut args, &kwargs,).unwrap(), "2");
-        assert_eq!(format_capture("{!r", &mut args, &kwargs,).unwrap(), "\"3\"");
         assert_eq!(
-            format_capture("{a!r", &mut args, &kwargs,).unwrap(),
+            format_capture_for_test("{", &mut args, &kwargs).unwrap(),
+            "1"
+        );
+        assert_eq!(
+            format_capture_for_test("{!s", &mut args, &kwargs).unwrap(),
+            "2"
+        );
+        assert_eq!(
+            format_capture_for_test("{!r", &mut args, &kwargs).unwrap(),
+            "\"3\""
+        );
+        assert_eq!(
+            format_capture_for_test("{a!r", &mut args, &kwargs).unwrap(),
             "\"x\""
         );
-        assert_eq!(format_capture("{a!s", &mut args, &kwargs,).unwrap(), "x");
-        assert!(format_capture("{1", &mut args, &kwargs,).is_err());
+        assert_eq!(
+            format_capture_for_test("{a!s", &mut args, &kwargs).unwrap(),
+            "x"
+        );
+        assert!(format_capture_for_test("{1", &mut args, &kwargs).is_err());
         let mut args = FormatArgs::new(original_args.iter().copied());
-        assert_eq!(format_capture("{1", &mut args, &kwargs,).unwrap(), "2");
-        assert!(format_capture("{", &mut args, &kwargs,).is_err());
+        assert_eq!(
+            format_capture_for_test("{1", &mut args, &kwargs).unwrap(),
+            "2"
+        );
+        assert!(format_capture_for_test("{", &mut args, &kwargs).is_err());
     }
 
     #[test]
