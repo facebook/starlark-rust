@@ -622,16 +622,16 @@ f
         )?;
         let globals = Globals::standard();
         let module = Module::new();
-        let mut eval = Evaluator::new(&module, &globals);
+        let mut eval = Evaluator::new(&module);
         eval.enable_heap_profile();
-        let f = eval.eval_module(ast)?;
+        let f = eval.eval_module(ast, &globals)?;
         // first check module profiling works
         HeapProfile::write_summarized_heap_profile_to(&mut Vec::new(), module.heap())?;
         HeapProfile::write_flame_heap_profile_to(&mut Vec::new(), module.heap())?;
 
         // second check function profiling works
         let module = Module::new();
-        let mut eval = Evaluator::new(&module, &globals);
+        let mut eval = Evaluator::new(&module);
         eval.enable_heap_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         HeapProfile::write_summarized_heap_profile_to(&mut Vec::new(), module.heap())?;
@@ -639,7 +639,7 @@ f
 
         // finally, check a user can add values into the heap before/after
         let module = Module::new();
-        let mut eval = Evaluator::new(&module, &globals);
+        let mut eval = Evaluator::new(&module);
         module.heap().alloc("Thing that goes before");
         eval.enable_heap_profile();
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
@@ -666,10 +666,10 @@ _ignore = str([1])     # allocate a string in non_drop
 
         let globals = Globals::standard();
         let module = Module::new();
-        let mut eval = Evaluator::new(&module, &globals);
+        let mut eval = Evaluator::new(&module);
         eval.enable_heap_profile();
 
-        eval.eval_module(ast).unwrap();
+        eval.eval_module(ast, &globals).unwrap();
 
         let mut ids = FunctionIds::default();
         let root = ids.get_string("(root)".to_owned());

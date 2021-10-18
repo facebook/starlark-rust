@@ -30,7 +30,7 @@ use crate as starlark;
 use crate::{
     assert,
     assert::Assert,
-    environment::{Globals, GlobalsBuilder, Module},
+    environment::{GlobalsBuilder, Module},
     eval::Evaluator,
     syntax::{AstModule, Dialect},
     values::{any::StarlarkAny, none::NoneType, StarlarkValue, Value},
@@ -171,14 +171,13 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
 
     let modu = Module::new();
     let globals = GlobalsBuilder::extended().with(module).build();
-    let mut eval = Evaluator::new(&modu, &globals);
+    let mut eval = Evaluator::new(&modu);
     let extra = Extra::default();
     eval.extra_v = Some(&extra);
-    eval.eval_module(AstModule::parse(
-        "a",
-        "load_symbol('x', 6*7)".to_owned(),
-        &Dialect::Extended,
-    )?)?;
+    eval.eval_module(
+        AstModule::parse("a", "load_symbol('x', 6*7)".to_owned(), &Dialect::Extended)?,
+        &globals,
+    )?;
 
     for (name, value) in extra.0.lock().unwrap().iter() {
         modu.set(name, *value);
@@ -430,8 +429,7 @@ fun
 "#,
     );
     let env = Module::new();
-    let globals = Globals::standard();
-    let mut eval = Evaluator::new(&env, &globals);
+    let mut eval = Evaluator::new(&env);
     let hello = env.heap().alloc("hello");
     let v = eval
         .eval_function(fun.value(), &[Value::new_int(8)], &[("y", hello)])

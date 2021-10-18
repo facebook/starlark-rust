@@ -34,7 +34,7 @@ use crate::{
         payload_map::AstPayloadFunction,
         uniplate::VisitMut,
     },
-    values::FrozenValue,
+    values::{FrozenRef, FrozenValue},
 };
 
 pub(crate) struct Scope<'a> {
@@ -46,7 +46,7 @@ pub(crate) struct Scope<'a> {
     locals: Vec<ScopeId>,
     unscopes: Vec<Unscope>,
     codemap: CodeMap,
-    globals: &'a Globals,
+    globals: FrozenRef<Globals>,
     pub(crate) errors: Vec<anyhow::Error>,
 }
 
@@ -167,7 +167,7 @@ impl<'a> Scope<'a> {
         scope_id: ScopeId,
         mut scope_data: ScopeData,
         code: &mut CstStmt,
-        globals: &'a Globals,
+        globals: FrozenRef<Globals>,
         codemap: CodeMap,
     ) -> Self {
         // Not really important, sanity check
@@ -800,6 +800,7 @@ mod test {
             uniplate::Visit,
             AstModule, Dialect,
         },
+        values::FrozenRef,
     };
 
     fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
@@ -809,13 +810,12 @@ mod test {
         let mut cst = ast
             .statement
             .into_map_payload(&mut CompilerAstMap(&mut scope_data));
-        let globals = Globals::new();
         let scope = Scope::enter_module(
             module,
             root_scope_id,
             scope_data,
             &mut cst,
-            &globals,
+            FrozenRef::new(Globals::empty()),
             ast.codemap,
         );
         assert!(scope.errors.is_empty());

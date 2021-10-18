@@ -46,10 +46,10 @@
 //! let module: Module = Module::new();
 //!
 //! // We create an evaluator, which controls how evaluation occurs.
-//! let mut eval: Evaluator = Evaluator::new(&module, &globals);
+//! let mut eval: Evaluator = Evaluator::new(&module);
 //!
 //! // And finally we evaluate the code using the evaluator.
-//! let res: Value = eval.eval_module(ast)?;
+//! let res: Value = eval.eval_module(ast, &globals)?;
 //! assert_eq!(res.unpack_str(), Some("hello world!"));
 //! # Ok(())
 //! # }
@@ -84,7 +84,7 @@
 //! // We build our globals to make the function available in Starlark
 //! let globals = GlobalsBuilder::new().with(starlark_quadratic).build();
 //! let module = Module::new();
-//! let mut eval = Evaluator::new(&module, &globals);
+//! let mut eval = Evaluator::new(&module);
 //!
 //! // Let's test calling the function from Starlark code
 //! let starlark_code = r#"
@@ -92,7 +92,7 @@
 //! "#;
 //!
 //! let ast = AstModule::parse("quadratic.star", starlark_code.to_owned(), &Dialect::Standard)?;
-//! let res = eval.eval_module(ast)?;
+//! let res = eval.eval_module(ast, &globals)?;
 //! assert_eq!(res.unpack_int(), Some(273)); // Verify that we got an `int` return value of 4 * 8^2 + 2 * 8 + 1 = 273
 //! # Ok(())
 //! # }
@@ -149,11 +149,11 @@
 //! // We build our globals adding some functions we wrote
 //! let globals = GlobalsBuilder::new().with(starlark_emit).build();
 //! let module = Module::new();
-//! let mut eval = Evaluator::new(&module, &globals);
+//! let mut eval = Evaluator::new(&module);
 //! // We add a reference to our store
 //! let store = Store::default();
 //! eval.extra = Some(&store);
-//! eval.eval_module(ast)?;
+//! eval.eval_module(ast, &globals)?;
 //! assert_eq!(&*store.0.borrow(), &["1", "[\"test\"]", "{\"x\": \"y\"}"]);
 //! # Ok(())
 //! # }
@@ -183,8 +183,8 @@
 //! let ast = AstModule::parse("json.star", content.to_owned(), &dialect)?;
 //! let globals = Globals::standard();
 //! let module = Module::new();
-//! let mut eval = Evaluator::new(&module, &globals);
-//! let res = eval.eval_module(ast);
+//! let mut eval = Evaluator::new(&module);
+//! let res = eval.eval_module(ast, &globals);
 //! // We expect this to fail, since it is a type violation
 //! assert!(res.unwrap_err().to_string().contains("Value `test` of type `string` does not match the type annotation `int`"));
 //! # Ok(())
@@ -232,9 +232,9 @@
 //!
 //!    let globals = Globals::standard();
 //!    let module = Module::new();
-//!    let mut eval = Evaluator::new(&module, &globals);
+//!    let mut eval = Evaluator::new(&module);
 //!    eval.set_loader(&mut loader);
-//!    eval.eval_module(ast)?;
+//!    eval.eval_module(ast, &globals)?;
 //!    // After creating a module we freeze it, preventing further mutation.
 //!    // It can now be used as the input for other Starlark modules.
 //!    Ok(module.freeze()?)
@@ -267,8 +267,8 @@
 //! let ast = AstModule::parse("quadratic.star", content.to_owned(), &Dialect::Extended)?;
 //! let globals = Globals::standard();
 //! let module = Module::new();
-//! let mut eval = Evaluator::new(&module, &globals);
-//! let quad = eval.eval_module(ast)?;
+//! let mut eval = Evaluator::new(&module);
+//! let quad = eval.eval_module(ast, &globals)?;
 //! let res = eval.eval_function(
 //!     quad,
 //!     &[Value::new_int(4), Value::new_int(2), Value::new_int(1)],
@@ -335,8 +335,8 @@
 //! module.set("a", a);
 //! let b = module.heap().alloc(Complex {real: 4, imaginary: 2});
 //! module.set("b", b);
-//! let mut eval = Evaluator::new(&module, &globals);
-//! let res = eval.eval_module(ast)?;
+//! let mut eval = Evaluator::new(&module);
+//! let res = eval.eval_module(ast, &globals)?;
 //! assert_eq!(res.unpack_str(), Some("5 + 10i"));
 //! # Ok(())
 //! # }

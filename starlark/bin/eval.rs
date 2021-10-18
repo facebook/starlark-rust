@@ -51,9 +51,9 @@ impl Context {
         let prelude = prelude.try_map(|x| {
             let env = Module::new();
 
-            let mut eval = Evaluator::new(&env, &globals);
+            let mut eval = Evaluator::new(&env);
             let module = AstModule::parse_file(x, &dialect())?;
-            eval.eval_module(module)?;
+            eval.eval_module(module, &globals)?;
             env.freeze()
         })?;
 
@@ -144,9 +144,9 @@ impl Context {
                 &new_module
             }
         };
+        let mut eval = Evaluator::new(module);
         let globals = globals();
-        let mut eval = Evaluator::new(module, &globals);
-        Self::err(file, eval.eval_module(ast).map(|_| iter::empty()))
+        Self::err(file, eval.eval_module(ast, &globals).map(|_| iter::empty()))
     }
 
     fn info(&self, module: &AstModule) {

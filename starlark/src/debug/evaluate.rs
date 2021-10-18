@@ -72,7 +72,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
 
         let orig_module_variables = mem::replace(&mut self.module_variables, None);
-        let res = self.eval_module(statements);
+        let globals = self.def_info.globals;
+        let res = self.eval_module(statements, &globals);
         self.module_variables = orig_module_variables;
 
         // Now put the Module back how it was before we started, as best we can

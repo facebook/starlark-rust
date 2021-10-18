@@ -17,12 +17,7 @@
 
 //! Test for `def` and `lambda`.
 
-use crate::{
-    assert,
-    assert::Assert,
-    environment::{Globals, Module},
-    eval::Evaluator,
-};
+use crate::{assert, assert::Assert, environment::Module, eval::Evaluator};
 
 #[test]
 fn test_lambda() {
@@ -174,8 +169,7 @@ value = {"test": "hello"}
     let f = m.get("function").unwrap();
     let x = m.get("value").unwrap();
     let module = Module::new();
-    let globals = Globals::extended();
-    let mut eval = Evaluator::new(&module, &globals);
+    let mut eval = Evaluator::new(&module);
     let res = eval.eval_function(f.value(), &[x.value()], &[]).unwrap();
     assert_eq!(res.to_str(), "hello");
 }

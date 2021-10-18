@@ -29,7 +29,7 @@ use crate::{
     codemap::{FileSpan, Span},
     collections::{alloca::Alloca, string_pool::StringPool},
     environment::{
-        slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleRef, Globals, Module,
+        slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleRef, Module,
     },
     errors::{Diagnostic, Frame},
     eval::{
@@ -77,8 +77,6 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) module_variables: Option<(&'static FrozenModuleData, FrozenRef<FrozenModuleRef>)>,
     // Local variables for this function, and older stack frames too.
     pub(crate) local_variables: LocalSlots<'v>,
-    // Globals used to resolve global variables.
-    pub(crate) globals: &'a Globals,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // `DefInfo` of currently executed function or module.
@@ -127,19 +125,16 @@ unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {
-    /// Crate a new [`Evaluator`] specifying the [`Module`] used for module variables,
-    /// and the [`Globals`] used to resolve global variables.
+    /// Crate a new [`Evaluator`] specifying the [`Module`] used for module variables.
     ///
     /// If your program contains `load()` statements, you also need to call
     /// [`set_loader`](Evaluator::set_loader).
-    pub fn new(module: &'v Module, globals: &'a Globals) -> Self {
-        module.frozen_heap().add_reference(globals.heap());
+    pub fn new(module: &'v Module) -> Self {
         Evaluator {
             call_stack: CallStack::default(),
             module_env: module,
             module_variables: None,
             local_variables: LocalSlots::new(),
-            globals,
             loader: None,
             extra: None,
             extra_v: None,

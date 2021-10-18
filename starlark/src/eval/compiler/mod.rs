@@ -31,7 +31,7 @@ use crate::{
         compiler::scope::{ScopeData, ScopeId},
         Evaluator, ScopeNames,
     },
-    values::{FrozenValue, Value},
+    values::{FrozenRef, FrozenValue, Value},
 };
 
 #[derive(Debug)]
@@ -121,6 +121,7 @@ pub(crate) struct Compiler<'a> {
     pub(crate) scope_data: ScopeData,
     pub(crate) locals: Vec<ScopeId>,
     pub(crate) module_env: &'a Module,
+    pub(crate) globals: FrozenRef<Globals>,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
     pub(crate) has_before_stmt: bool,

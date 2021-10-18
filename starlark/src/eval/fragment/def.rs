@@ -31,7 +31,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     codemap::{CodeMap, Span, Spanned},
-    environment::FrozenModuleRef,
+    environment::{FrozenModuleRef, Globals},
     eval::{
         bc::bytecode::Bc,
         compiler::{
@@ -179,6 +179,9 @@ pub(crate) struct DefInfo {
     stmt_compile_context: StmtCompileContext,
     /// Function body is `type(x) == "y"`
     pub(crate) returns_type_is: Option<FrozenStringValue>,
+    /// Globals captured during function or module creation.
+    /// Only needed for debugger evaluation.
+    pub(crate) globals: FrozenRef<Globals>,
 }
 
 impl DefInfo {
@@ -191,11 +194,16 @@ impl DefInfo {
             body_stmts: StmtsCompiled::empty(),
             stmt_compile_context: StmtCompileContext::default(),
             returns_type_is: None,
+            globals: FrozenRef::new(Globals::empty()),
         });
         FrozenRef::new(&EMPTY)
     }
 
-    pub(crate) fn for_module(codemap: CodeMap, scope_names: ScopeNames) -> DefInfo {
+    pub(crate) fn for_module(
+        codemap: CodeMap,
+        scope_names: ScopeNames,
+        globals: FrozenRef<Globals>,
+    ) -> DefInfo {
         DefInfo {
             codemap,
             docstring: None,
@@ -204,6 +212,7 @@ impl DefInfo {
             body_stmts: StmtsCompiled::empty(),
             stmt_compile_context: StmtCompileContext::default(),
             returns_type_is: None,
+            globals,
         }
     }
 }
@@ -310,6 +319,7 @@ impl Compiler<'_> {
             body_stmts: body,
             returns_type_is,
             stmt_compile_context: self.compile_context(),
+            globals: self.globals,
         });
 
         ExprCompiledValue::Def(DefCompiled {

@@ -98,7 +98,7 @@ impl Backend {
             let ast = AstModule::parse_file(&path, &dialect())?;
             let module = Module::new();
             let globals = globals();
-            let mut eval = Evaluator::new(&module, &globals);
+            let mut eval = Evaluator::new(&module);
             let fun = |span, eval: &mut Evaluator| {
                 let stop = if disable_breakpoints.load(Ordering::SeqCst) > 0 {
                     false
@@ -131,7 +131,7 @@ impl Backend {
             eval.before_stmt(&fun);
             // No way to pass back success/failure to the caller
             client.log(&format!("EVALUATION START: {}", path.display()));
-            let v = eval.eval_module(ast)?;
+            let v = eval.eval_module(ast, &globals)?;
             let s = v.to_string();
             client.log(&format!("EVALUATION FINISHED: {}", path.display()));
             Ok(s)

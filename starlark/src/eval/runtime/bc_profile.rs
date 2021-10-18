@@ -140,10 +140,11 @@ mod test {
     fn test_smoke() {
         let module = Module::new();
         let globals = Globals::standard();
-        let mut eval = Evaluator::new(&module, &globals);
+        let mut eval = Evaluator::new(&module);
         eval.enable_bc_profile();
         eval.eval_module(
             AstModule::parse("bc.star", "repr([1, 2])".to_owned(), &Dialect::Standard).unwrap(),
+            &globals,
         )
         .unwrap();
         let csv = eval.bc_profile.data.as_mut().unwrap().gen_csv();

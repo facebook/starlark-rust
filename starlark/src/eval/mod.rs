@@ -32,6 +32,7 @@ pub use runtime::{
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
+    environment::Globals,
     eval::{
         compiler::{
             scope::{CompilerAstMap, Scope, ScopeData},
@@ -79,12 +80,14 @@ fn inject_return(x: &mut AstStmt) {
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
     /// [`Module`](crate::environment::Module) as appropriate.
-    pub fn eval_module(&mut self, ast: AstModule) -> anyhow::Result<Value<'v>> {
+    pub fn eval_module(&mut self, ast: AstModule, globals: &Globals) -> anyhow::Result<Value<'v>> {
         let AstModule {
             codemap,
             mut statement,
         } = ast;
         inject_return(&mut statement);
+
+        let globals = self.module_env.frozen_heap().alloc_any(globals.dupe());
 
         let mut scope_data = ScopeData::new();
 
@@ -101,7 +104,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             root_scope_id,
             scope_data,
             &mut statement,
-            self.globals,
+            globals,
             codemap.dupe(),
         );
 
@@ -123,9 +126,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let old_locals = self.local_variables.utilise(new_locals);
         let old_def_info = mem::replace(
             &mut self.def_info,
-            self.module_env
-                .frozen_heap()
-                .alloc_any(DefInfo::for_module(codemap.dupe(), scope_names)),
+            self.module_env.frozen_heap().alloc_any(DefInfo::for_module(
+                codemap.dupe(),
+                scope_names,
+                globals,
+            )),
         );
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
@@ -148,6 +153,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             scope_data,
             locals: Vec::new(),
             module_env: self.module_env,
+            globals,
             codemap: codemap.dupe(),
             constants: Constants::new(),
             has_before_stmt: !self.before_stmt.is_empty(),

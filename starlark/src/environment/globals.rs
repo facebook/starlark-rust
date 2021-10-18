@@ -17,9 +17,10 @@
 
 use std::{mem, sync::Arc};
 
+use derive_more::Display;
 use gazebo::prelude::*;
 use itertools::Itertools;
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 
 pub use crate::stdlib::LibraryExtension;
 use crate::{
@@ -35,7 +36,8 @@ use crate::{
 };
 
 /// The global values available during execution.
-#[derive(Clone, Dupe, Debug)]
+#[derive(Clone, Dupe, Debug, Display)]
+#[display(fmt = "globals")]
 pub struct Globals(Arc<GlobalsData>);
 
 #[derive(Debug)]
@@ -71,6 +73,12 @@ impl Globals {
     /// all those defined in [`LibraryExtension`].
     pub fn extended() -> Self {
         GlobalsBuilder::extended().build()
+    }
+
+    /// Empty globals.
+    pub(crate) fn empty() -> &'static Globals {
+        static EMPTY: Lazy<Globals> = Lazy::new(|| GlobalsBuilder::new().build());
+        &EMPTY
     }
 
     /// Create a [`Globals`] combining those functions in the Starlark standard plus

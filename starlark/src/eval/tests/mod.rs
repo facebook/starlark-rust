@@ -485,24 +485,24 @@ fn test_module_visibility_preserved_by_evaluator() -> anyhow::Result<()> {
     import.set("a", Value::new_int(1));
     import.set_private("b", Value::new_int(2));
 
-    let mut eval = Evaluator::new(&import, &globals);
+    let mut eval = Evaluator::new(&import);
     let ast = AstModule::parse("prelude.bzl", "c = 3".to_owned(), &Dialect::Standard).unwrap();
     // This mutates the original module named `import`
-    let _: Value = eval.eval_module(ast)?;
+    let _: Value = eval.eval_module(ast, &globals)?;
     let frozen_import = import.freeze()?;
 
     let m_uses_public = Module::new();
     m_uses_public.import_public_symbols(&frozen_import);
-    let mut eval = Evaluator::new(&m_uses_public, &globals);
+    let mut eval = Evaluator::new(&m_uses_public);
     let ast = AstModule::parse("code.bzl", "d = a".to_owned(), &Dialect::Standard).unwrap();
-    let _: Value = eval.eval_module(ast)?;
+    let _: Value = eval.eval_module(ast, &globals)?;
 
     let m_uses_private = Module::new();
     m_uses_private.import_public_symbols(&frozen_import);
-    let mut eval = Evaluator::new(&m_uses_private, &globals);
+    let mut eval = Evaluator::new(&m_uses_private);
     let ast = AstModule::parse("code.bzl", "d = b".to_owned(), &Dialect::Standard).unwrap();
     let err = eval
-        .eval_module(ast)
+        .eval_module(ast, &globals)
         .expect_err("Evaluation should have failed using a private symbol");
 
     let msg = err.to_string();
@@ -851,9 +851,9 @@ animal("Joe")
 "#;
     let m = Module::new();
     let globals = Globals::standard();
-    let mut eval = Evaluator::new(&m, &globals);
+    let mut eval = Evaluator::new(&m);
     let ast = AstModule::parse("code.bzl", code.to_owned(), &Dialect::Standard).unwrap();
-    let res: Value = eval.eval_module(ast).unwrap();
+    let res: Value = eval.eval_module(ast, &globals).unwrap();
     let animal = SmallMap::<String, Value>::unpack_value(res).unwrap();
     println!("animal = {:?}", animal);
 }

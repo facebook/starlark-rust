@@ -27,7 +27,7 @@ use crate::{
 fn before_stmt() {
     let module = Module::new();
     let globals = Globals::new();
-    let mut evaluator = Evaluator::new(&module, &globals);
+    let mut evaluator = Evaluator::new(&module);
     let counter = Cell::new(0);
     let before_stmt = |_span, _eval: &mut Evaluator<'_, '_>| {
         counter.set(counter.get() + 1);
@@ -41,6 +41,6 @@ def f():       # 1
 f()            # 2
 ";
     let ast = AstModule::parse("a.star", program.to_owned(), &Dialect::Extended).unwrap();
-    evaluator.eval_module(ast).unwrap();
+    evaluator.eval_module(ast, &globals).unwrap();
     assert_eq!(4, counter.get());
 }

@@ -238,7 +238,7 @@ mod test {
     fn test_breakpoint_mock() {
         let module = Module::new();
         let globals = Globals::extended();
-        let mut eval = Evaluator::new(&module, &globals);
+        let mut eval = Evaluator::new(&module);
         let printed_lines = Rc::new(RefCell::new(Vec::new()));
         let printed_lines_copy = printed_lines.dupe();
         eval.breakpoint_handler = box move || {
@@ -275,6 +275,7 @@ mod test {
                 &Dialect::Extended,
             )
             .unwrap(),
+            &globals,
         )
         .unwrap();
 

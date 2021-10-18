@@ -249,7 +249,7 @@ impl Assert {
         }
         let loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
-        let mut eval = Evaluator::new(module, &self.globals);
+        let mut eval = Evaluator::new(module);
 
         let gc_always = |_, eval: &mut Evaluator| {
             eval.trigger_gc();
@@ -261,7 +261,7 @@ impl Assert {
             GcStrategy::Always => eval.before_stmt(&gc_always),
         }
         eval.set_loader(&loader);
-        eval.eval_module(ast)
+        eval.eval_module(ast, &self.globals)
     }
 
     fn execute_fail<'a>(
