@@ -50,7 +50,7 @@ use crate::{
     values::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute, NativeFunction},
-        interpolation::percent_s_one,
+        interpolation::{format_one, percent_s_one},
         list::List,
         typed::FrozenValueTyped,
         typing::TypeCompiled,
@@ -954,6 +954,8 @@ impl InstrBinOpImpl for InstrNotInImpl {
 
 pub(crate) struct InstrPercentSOneImpl;
 pub(crate) type InstrPercentSOne = InstrNoFlowAddSpan<InstrPercentSOneImpl>;
+pub(crate) struct InstrFormatOneImpl;
+pub(crate) type InstrFormatOne = InstrNoFlowAddSpan<InstrFormatOneImpl>;
 
 impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
     const OPCODE: BcOpcode = BcOpcode::PercentSOne;
@@ -969,6 +971,23 @@ impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
         arg: Value<'v>,
     ) -> Result<Value<'v>, anyhow::Error> {
         percent_s_one(before.as_str(), arg, after.as_str(), eval.heap())
+    }
+}
+
+impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
+    const OPCODE: BcOpcode = BcOpcode::FormatOne;
+    type Pop<'v> = Value<'v>;
+    type Push<'v> = Value<'v>;
+    type Arg = (FrozenStringValue, FrozenStringValue);
+
+    #[inline(always)]
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        _stack: &mut BcStackPtr<'v, '_>,
+        (before, after): &Self::Arg,
+        arg: Value<'v>,
+    ) -> Result<Value<'v>, anyhow::Error> {
+        format_one(before.as_str(), arg, after.as_str(), eval.heap())
     }
 }
 

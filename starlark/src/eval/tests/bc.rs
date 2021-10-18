@@ -18,6 +18,7 @@
 //! Bytecode generation tests.
 
 use crate::{
+    assert,
     assert::Assert,
     eval::{bc::opcode::BcOpcode, FrozenDef},
 };
@@ -59,4 +60,33 @@ fn test_percent_s_one() {
         ],
         "def test(x): return '((%s))' % x",
     )
+}
+
+#[test]
+fn test_format_one() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocal,
+            BcOpcode::FormatOne,
+            BcOpcode::Return,
+            BcOpcode::ReturnNone,
+        ],
+        "def test(x): return '(({}))'.format(x)",
+    )
+}
+
+#[test]
+fn test_percent_s_one_format_one_eval() {
+    assert::pass(
+        r#"
+load("assert.star", "assert")
+
+def test(x):
+    return ("<{}>".format(x), "<%s>" % x)
+
+assert.eq(("<1>", "<1>"), test(1))
+# Test format does not accidentally call `PercentSOne`.
+assert.eq(("<(1,)>", "<1>"), test((1,)))
+"#,
+    );
 }

@@ -181,6 +181,42 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
     }
 }
 
+/// Try parse `"aaa{}bbb"` and return `("aaa", "bbb")`.
+pub(crate) fn parse_format_one(s: &str) -> Option<(String, String)> {
+    let mut before = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    loop {
+        match chars.next()? {
+            '{' => match chars.next()? {
+                '{' => before.push('{'),
+                '}' => break,
+                _ => return None,
+            },
+            '}' => match chars.next()? {
+                '}' => before.push('}'),
+                _ => return None,
+            },
+            c => before.push(c),
+        }
+    }
+    let mut after = String::with_capacity(s.len() - before.len());
+    loop {
+        match chars.next() {
+            Some('{') => match chars.next()? {
+                '{' => after.push('{'),
+                _ => return None,
+            },
+            Some('}') => match chars.next()? {
+                '}' => after.push('}'),
+                _ => return None,
+            },
+            Some(c) => after.push(c),
+            None => break,
+        }
+    }
+    Some((before, after))
+}
+
 /// Try parse `"aaa%sbbb"` and return `("aaa", "bbb")`.
 pub(crate) fn parse_percent_s_one(format: &str) -> Option<(String, String)> {
     let mut before = String::with_capacity(format.len());
@@ -209,6 +245,25 @@ pub(crate) fn parse_percent_s_one(format: &str) -> Option<(String, String)> {
     Some((before, after))
 }
 
+/// Evaluate `"<before>{}<after>".format(arg)`.
+pub(crate) fn format_one<'v>(
+    before: &str,
+    arg: Value<'v>,
+    after: &str,
+    heap: &'v Heap,
+) -> anyhow::Result<Value<'v>> {
+    Ok(match StringValue::new(arg) {
+        Some(arg) => heap.alloc_str_concat3(before, &arg, after),
+        None => {
+            let mut result = String::with_capacity(before.len() + after.len() + 10);
+            result.push_str(before);
+            arg.collect_repr(&mut result);
+            result.push_str(after);
+            heap.alloc_str(&result)
+        }
+    })
+}
+
 /// Evaluate `"<before>%s<after>" % arg`.
 pub(crate) fn percent_s_one<'v>(
     before: &str,
@@ -227,16 +282,7 @@ pub(crate) fn percent_s_one<'v>(
                 },
                 None => arg,
             };
-            match StringValue::new(one) {
-                Some(arg) => heap.alloc_str_concat3(before, &arg, after),
-                None => {
-                    let mut result = String::with_capacity(before.len() + after.len() + 10);
-                    result.push_str(before);
-                    one.collect_repr(&mut result);
-                    result.push_str(after);
-                    heap.alloc_str(&result)
-                }
-            }
+            format_one(before, one, after, heap)?
         }
     })
 }
@@ -447,6 +493,21 @@ mod tests {
             "2"
         );
         assert!(format_capture_for_test("{", &mut args, &kwargs).is_err());
+    }
+
+    #[test]
+    fn test_parse_format_one() {
+        assert_eq!(
+            Some(("abc".to_owned(), "def".to_owned())),
+            parse_format_one("abc{}def")
+        );
+        assert_eq!(
+            Some(("a{b".to_owned(), "c}d{".to_owned())),
+            parse_format_one("a{{b{}c}}d{{")
+        );
+        assert_eq!(None, parse_format_one("a{"));
+        assert_eq!(None, parse_format_one("a{}{}"));
+        assert_eq!(None, parse_format_one("{x}"));
     }
 
     #[test]

@@ -167,6 +167,14 @@ pub(crate) enum ExprCompiledValue {
             FrozenStringValue,
         )>,
     ),
+    /// `"aaa%sbbb".format(arg)`
+    FormatOne(
+        Box<(
+            FrozenStringValue,
+            Spanned<ExprCompiledValue>,
+            FrozenStringValue,
+        )>,
+    ),
     Call(Spanned<CallCompiled>),
     Def(DefCompiled),
 }
@@ -177,6 +185,11 @@ impl ExprCompiledValue {
             Self::Value(x) => Some(*x),
             _ => None,
         }
+    }
+
+    /// Is expression a constant string?
+    pub(crate) fn as_string(&self) -> Option<FrozenStringValue> {
+        FrozenStringValue::new(self.as_value()?)
     }
 }
 
@@ -281,6 +294,10 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(module);
                 ExprCompiledValue::PercentSOne(box (before, arg, after))
+            }
+            ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
+                let arg = arg.optimize_on_freeze(module);
+                ExprCompiledValue::FormatOne(box (before, arg, after))
             }
             ref d @ ExprCompiledValue::Def(..) => d.clone(),
             ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(module),
@@ -625,13 +642,11 @@ impl Compiler<'_> {
         l: Spanned<ExprCompiledValue>,
         r: Spanned<ExprCompiledValue>,
     ) -> ExprCompiledValue {
-        if let ExprCompiledValue::Value(v) = l.node {
-            if let Some(v) = FrozenStringValue::new(v) {
-                if let Some((before, after)) = parse_percent_s_one(&v) {
-                    let before = self.module_env.frozen_heap().alloc_string_value(&before);
-                    let after = self.module_env.frozen_heap().alloc_string_value(&after);
-                    return ExprCompiledValue::PercentSOne(box (before, r, after));
-                }
+        if let Some(v) = l.as_string() {
+            if let Some((before, after)) = parse_percent_s_one(&v) {
+                let before = self.module_env.frozen_heap().alloc_string_value(&before);
+                let after = self.module_env.frozen_heap().alloc_string_value(&after);
+                return ExprCompiledValue::PercentSOne(box (before, r, after));
             }
         }
         ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))

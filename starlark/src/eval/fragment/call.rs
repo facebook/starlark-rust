@@ -30,8 +30,10 @@ use crate::{
         FrozenDef,
     },
     gazebo::prelude::SliceExt,
-    syntax::ast::{ArgumentP, ExprP},
-    values::{AttrType, FrozenStringValue, FrozenValue, ValueLike},
+    syntax::ast::{ArgumentP, AstString, ExprP},
+    values::{
+        interpolation::parse_format_one, AttrType, FrozenStringValue, FrozenValue, ValueLike,
+    },
 };
 
 #[derive(Default, Clone, Debug)]
@@ -192,6 +194,51 @@ impl Compiler<'_> {
         }
     }
 
+    fn expr_call_method(
+        &mut self,
+        span: Span,
+        e: CstExpr,
+        s: AstString,
+        mut args: Vec<CstArgument>,
+    ) -> ExprCompiledValue {
+        let e = self.expr(e);
+
+        // Optimize `"aaa{}bbb".format(arg)`.
+        if let Some(e) = e.as_string() {
+            if s.node == "format" && args.len() == 1 {
+                if let ArgumentP::Positional(..) = args[0].node {
+                    if let Some((before, after)) = parse_format_one(&e) {
+                        let before = self.module_env.frozen_heap().alloc_string_value(&before);
+                        let after = self.module_env.frozen_heap().alloc_string_value(&after);
+                        let arg = match args.pop().unwrap().node {
+                            ArgumentP::Positional(arg) => arg,
+                            _ => unreachable!(),
+                        };
+                        assert!(args.is_empty());
+                        let arg = self.expr(arg);
+                        return ExprCompiledValue::FormatOne(box (before, arg, after));
+                    }
+                }
+            }
+        }
+
+        let s = Symbol::new(&s.node);
+        if let Some(e) = e.as_value() {
+            if let Some((at, fun)) = self.compile_time_getattr(e, &s) {
+                let this = match at {
+                    AttrType::Field => None,
+                    AttrType::Method => Some(e),
+                };
+                return self.expr_call_fun_frozen_no_special(span, this, fun, args);
+            }
+        }
+        let args = self.args(args);
+        ExprCompiledValue::Call(Spanned {
+            span,
+            node: CallCompiled::Method(box (e, s, args)),
+        })
+    }
+
     pub(crate) fn expr_call(
         &mut self,
         span: Span,
@@ -199,24 +246,7 @@ impl Compiler<'_> {
         args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         match left.node {
-            ExprP::Dot(box e, s) => {
-                let e = self.expr(e);
-                let s = Symbol::new(&s.node);
-                if let Some(e) = e.as_value() {
-                    if let Some((at, fun)) = self.compile_time_getattr(e, &s) {
-                        let this = match at {
-                            AttrType::Field => None,
-                            AttrType::Method => Some(e),
-                        };
-                        return self.expr_call_fun_frozen_no_special(span, this, fun, args);
-                    }
-                }
-                let args = self.args(args);
-                ExprCompiledValue::Call(Spanned {
-                    span,
-                    node: CallCompiled::Method(box (e, s, args)),
-                })
-            }
+            ExprP::Dot(box e, s) => self.expr_call_method(span, e, s, args),
             _ => {
                 let expr = self.expr(left);
                 self.expr_call_fun_compiled(span, expr, args)

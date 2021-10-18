@@ -27,16 +27,7 @@ use crate::{
     eval::{
         bc::{
             instr_arg::{ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1},
-            instr_impl::{
-                InstrAdd, InstrArrayIndex, InstrBitAnd, InstrBitNot, InstrBitOr, InstrBitXor,
-                InstrDictConstKeys, InstrDictNPop, InstrDictNew, InstrDictOfConsts, InstrDivide,
-                InstrDup, InstrEq, InstrFloorDivide, InstrGreater, InstrGreaterOrEqual, InstrIn,
-                InstrLeftShift, InstrLen, InstrLess, InstrLessOrEqual, InstrListNPop, InstrListNew,
-                InstrListOfConsts, InstrLoadLocalCaptured, InstrLoadModule, InstrMinus,
-                InstrMultiply, InstrNot, InstrNotEq, InstrNotIn, InstrObjectField, InstrPercent,
-                InstrPercentSOne, InstrPlus, InstrPop, InstrRightShift, InstrSlice, InstrSub,
-                InstrTupleNPop, InstrType, InstrTypeIs,
-            },
+            instr_impl::*,
             writer::BcWriter,
         },
         fragment::expr::{CompareOp, ExprBinOp, ExprCompiledValue, MaybeNot},
@@ -268,6 +259,10 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
                 arg.write_bc(bc);
                 bc.write_instr::<InstrPercentSOne>(span, (before, after));
+            }
+            ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
+                arg.write_bc(bc);
+                bc.write_instr::<InstrFormatOne>(span, (before, after));
             }
             ExprCompiledValue::Call(ref call) => call.write_bc(bc),
             ExprCompiledValue::Def(ref def) => def.write_bc(bc),
