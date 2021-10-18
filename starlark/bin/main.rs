@@ -211,6 +211,7 @@ fn main() -> anyhow::Result<()> {
         args.info,
         !args.check && !args.info,
         &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
+        args.interactive,
     )?;
 
     let mut stats = Stats::default();

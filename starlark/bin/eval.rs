@@ -36,10 +36,17 @@ pub struct Context {
     pub info: bool,
     pub run: bool,
     pub prelude: Vec<FrozenModule>,
+    pub module: Option<Module>,
 }
 
 impl Context {
-    pub fn new(check: bool, info: bool, run: bool, prelude: &[PathBuf]) -> anyhow::Result<Self> {
+    pub fn new(
+        check: bool,
+        info: bool,
+        run: bool,
+        prelude: &[PathBuf],
+        module: bool,
+    ) -> anyhow::Result<Self> {
         let globals = globals();
         let prelude = prelude.try_map(|x| {
             let env = Module::new();
@@ -50,12 +57,27 @@ impl Context {
             env.freeze()
         })?;
 
+        let module = if module {
+            Some(Self::new_module(&prelude))
+        } else {
+            None
+        };
+
         Ok(Self {
             check,
             info,
             run,
             prelude,
+            module,
         })
+    }
+
+    fn new_module(prelude: &[FrozenModule]) -> Module {
+        let module = Module::new();
+        for p in prelude {
+            module.import_public_symbols(p);
+        }
+        module
     }
 
     fn go(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
@@ -114,12 +136,16 @@ impl Context {
     }
 
     fn run(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
-        let env = Module::new();
-        for p in &self.prelude {
-            env.import_public_symbols(p)
-        }
+        let new_module;
+        let module = match self.module.as_ref() {
+            Some(module) => module,
+            None => {
+                new_module = Self::new_module(&self.prelude);
+                &new_module
+            }
+        };
         let globals = globals();
-        let mut eval = Evaluator::new(&env, &globals);
+        let mut eval = Evaluator::new(module, &globals);
         Self::err(file, eval.eval_module(ast).map(|_| iter::empty()))
     }
 
