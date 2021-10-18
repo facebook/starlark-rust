@@ -69,7 +69,7 @@ impl<'v, T: DictLike<'v>> Display for DictGen<T> {
 #[repr(transparent)]
 pub struct Dict<'v> {
     /// The data stored by the dictionary. The keys must all be hashable values.
-    pub content: SmallMap<Value<'v>, Value<'v>>,
+    pub(crate) content: SmallMap<Value<'v>, Value<'v>>,
 }
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
@@ -77,7 +77,7 @@ pub struct Dict<'v> {
 #[repr(transparent)]
 pub struct FrozenDict {
     /// The data stored by the dictionary. The keys must all be hashable values.
-    pub content: SmallMap<FrozenValue, FrozenValue>,
+    pub(crate) content: SmallMap<FrozenValue, FrozenValue>,
 }
 
 unsafe impl<'v> AnyLifetime<'v> for DictGen<RefCell<Dict<'v>>> {
@@ -177,6 +177,10 @@ impl<'v> Dict<'v> {
         Self { content }
     }
 
+    pub fn len(&self) -> usize {
+        self.content.len()
+    }
+
     /// Iterate through the key/value pairs in the dictionary.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
     where
@@ -193,6 +197,16 @@ impl<'v> Dict<'v> {
         self.content
             .iter_hashed()
             .map(|(l, r)| (l.unborrow_copy(), *r))
+    }
+
+    /// Iterator over keys.
+    pub fn keys<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a {
+        self.content.keys().copied()
+    }
+
+    /// Iterator over keys.
+    pub fn values<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a {
+        self.content.values().copied()
     }
 
     /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
@@ -243,6 +257,16 @@ impl FrozenDict {
         self.content
             .iter_hashed()
             .map(|(l, r)| (l.unborrow_copy(), *r))
+    }
+
+    /// Iterator over keys.
+    pub fn keys<'a>(&'a self) -> impl Iterator<Item = FrozenValue> + 'a {
+        self.content.keys().copied()
+    }
+
+    /// Iterator over keys.
+    pub fn values<'a>(&'a self) -> impl Iterator<Item = FrozenValue> + 'a {
+        self.content.values().copied()
     }
 
     /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
