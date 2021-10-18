@@ -1308,7 +1308,6 @@ impl InstrNoFlowAddSpanImpl for InstrComprDictInsertImpl {
         Dict::from_value_mut(dict)
             .unwrap()
             .unwrap()
-            .content
             .insert_hashed(key, value);
         Ok(dict)
     }

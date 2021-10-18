@@ -254,12 +254,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 let mut result = match Dict::from_value(pos) {
                     Some(pos) => {
                         let mut result = pos.clone();
-                        result.content.reserve(kwargs.content.len());
+                        result.reserve(kwargs.len());
                         result
                     }
                     None => pos.with_iterator(heap, |it| -> anyhow::Result<_> {
-                        let mut result =
-                            SmallMap::with_capacity(it.size_hint().0 + kwargs.content.len());
+                        let mut result = SmallMap::with_capacity(it.size_hint().0 + kwargs.len());
                         for el in it {
                             let (k, v) = unpack_pair(el, heap)?;
                             let k = k.get_hashed()?;
@@ -269,7 +268,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     })??,
                 };
                 for (k, v) in kwargs.iter_hashed() {
-                    result.content.insert_hashed(k, v);
+                    result.insert_hashed(k, v);
                 }
                 Ok(result)
             }

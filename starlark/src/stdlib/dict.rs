@@ -51,7 +51,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// ```
     fn clear(this: Value) -> NoneType {
         let mut this = Dict::from_value_mut(this)?.unwrap();
-        this.content.clear();
+        this.clear();
         Ok(NoneType)
     }
 
@@ -104,7 +104,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// ```
     fn items(this: ARef<Dict>) -> Value<'v> {
         // We go straight to a List, not a Vec, so we can avoid one allocation
-        Ok(heap.alloc_list_iter(this.content.iter().map(|(k, v)| heap.alloc((*k, *v)))))
+        Ok(heap.alloc_list_iter(this.iter().map(|(k, v)| heap.alloc((k, v)))))
     }
 
     /// [dict.keys](
@@ -123,7 +123,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn keys(this: ARef<Dict>) -> Value<'v> {
-        Ok(heap.alloc_list_iter(this.content.keys().copied()))
+        Ok(heap.alloc_list_iter(this.keys()))
     }
 
     /// [dict.pop](
@@ -163,7 +163,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// ```
     fn pop(this: Value, ref key: Value, ref default: Option<Value>) -> Value<'v> {
         let mut me = Dict::from_value_mut(this)?.unwrap();
-        match me.content.remove_hashed(key.get_hashed()?.borrow()) {
+        match me.remove_hashed(key.get_hashed()?) {
             Some(x) => Ok(x),
             None => match default {
                 Some(v) => Ok(v),
@@ -213,13 +213,9 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     fn popitem(this: Value) -> (Value<'v>, Value<'v>) {
         let mut this = Dict::from_value_mut(this)?.unwrap();
 
-        let key = this
-            .content
-            .iter_hashed()
-            .next()
-            .map(|(k, _)| k.unborrow_copy());
+        let key = this.iter_hashed().next().map(|(k, _)| k);
         match key {
-            Some(k) => Ok((*k.key(), this.content.remove_hashed(k.borrow()).unwrap())),
+            Some(k) => Ok((*k.key(), this.remove_hashed(k).unwrap())),
             None => Err(anyhow!("Cannot .popitem() on an empty dictionary")),
         }
     }
@@ -258,11 +254,11 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     fn setdefault(this: Value, ref key: Value, ref default: Option<Value>) -> Value<'v> {
         let mut this = Dict::from_value_mut(this)?.unwrap();
         let key = key.get_hashed()?;
-        if let Some(r) = this.content.get_hashed(key.borrow()) {
-            return Ok(*r);
+        if let Some(r) = this.get_hashed(key) {
+            return Ok(r);
         }
         let def = default.unwrap_or_else(Value::new_none);
-        this.content.insert_hashed(key, def);
+        this.insert_hashed(key, def);
         Ok(def)
     }
 
@@ -311,7 +307,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
         if let Some(pairs) = pairs {
             if let Some(dict) = Dict::from_value(pairs) {
                 for (k, v) in dict.iter_hashed() {
-                    this.content.insert_hashed(k, v);
+                    this.insert_hashed(k, v);
                 }
             } else {
                 for v in pairs.iterate(heap)? {
@@ -323,14 +319,13 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
                             "dict.update expect a list of pairs or a dictionary as first argument, got a list of non-pairs.",
                         ));
                     };
-                    this.content
-                        .insert_hashed(k.unwrap().get_hashed()?, v.unwrap());
+                    this.insert_hashed(k.unwrap().get_hashed()?, v.unwrap());
                 }
             }
         }
 
-        for (k, v) in kwargs.content.iter_hashed() {
-            this.content.insert_hashed(k.unborrow_copy(), *v);
+        for (k, v) in kwargs.iter_hashed() {
+            this.insert_hashed(k, v);
         }
         Ok(NoneType)
     }
@@ -352,7 +347,7 @@ pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     fn values(this: ARef<Dict>) -> Value<'v> {
-        Ok(heap.alloc_list_iter(this.content.values().copied()))
+        Ok(heap.alloc_list_iter(this.values()))
     }
 }
 

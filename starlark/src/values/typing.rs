@@ -21,13 +21,8 @@ use gazebo::{coerce::Coerce, prelude::*};
 use thiserror::Error;
 
 use crate::{
-    collections::{BorrowHashed, Hashed},
-    values::{
-        dict::{Dict, ValueStr},
-        list::List,
-        tuple::Tuple,
-        Heap, Trace, Tracer, Value,
-    },
+    collections::Hashed,
+    values::{dict::Dict, list::List, tuple::Tuple, Heap, Trace, Tracer, Value},
 };
 
 #[derive(Debug, Error)]
@@ -69,11 +64,7 @@ impl TypeCompiled {
 
         // Dictionary with a single element
         fn unpack_singleton_dictionary<'v>(x: &Dict<'v>) -> Option<(Value<'v>, Value<'v>)> {
-            if x.content.len() == 1 {
-                x.iter().next()
-            } else {
-                None
-            }
+            if x.len() == 1 { x.iter().next() } else { None }
         }
 
         fn f<'h>(
@@ -139,7 +130,7 @@ impl TypeCompiled {
                     }
                 }
             } else if let Some(t) = Dict::from_value(ty) {
-                if t.content.is_empty() {
+                if t.is_empty() {
                     Ok(box |v| Dict::from_value(v).is_some())
                 } else if let Some((tk, tv)) = unpack_singleton_dictionary(&t) {
                     // Dict of the form {k: v} must all match the k/v types
@@ -147,7 +138,7 @@ impl TypeCompiled {
                     let tv = f(tv, heap)?;
                     Ok(box move |v| match Dict::from_value(v) {
                         None => false,
-                        Some(v) => v.content.iter().all(|(k, v)| tk(*k) && tv(*v)),
+                        Some(v) => v.iter().all(|(k, v)| tk(k) && tv(v)),
                     })
                 } else {
                     // Dict type, allowed to have more keys that aren't used.
@@ -172,12 +163,12 @@ impl TypeCompiled {
                         None => false,
                         Some(v) => {
                             for (k, kt) in &ts {
-                                let ks = ValueStr(k.key().as_str());
-                                let kv = BorrowHashed::new_unchecked(k.hash(), &ks);
-                                match v.content.get_hashed(kv) {
+                                let ks = k.key().as_str();
+                                let ks = Hashed::new_unchecked(k.hash(), ks);
+                                match v.get_str_hashed(ks) {
                                     None => return false,
                                     Some(kv) => {
-                                        if !kt(*kv) {
+                                        if !kt(kv) {
                                             return false;
                                         }
                                     }

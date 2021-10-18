@@ -36,7 +36,7 @@ use indexmap::Equivalent;
 
 use crate as starlark;
 use crate::{
-    collections::{Hashed, SmallMap},
+    collections::{BorrowHashed, Hashed, SmallMap},
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
@@ -69,7 +69,7 @@ impl<'v, T: DictLike<'v>> Display for DictGen<T> {
 #[repr(transparent)]
 pub struct Dict<'v> {
     /// The data stored by the dictionary. The keys must all be hashable values.
-    pub(crate) content: SmallMap<Value<'v>, Value<'v>>,
+    content: SmallMap<Value<'v>, Value<'v>>,
 }
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
@@ -77,7 +77,7 @@ pub struct Dict<'v> {
 #[repr(transparent)]
 pub struct FrozenDict {
     /// The data stored by the dictionary. The keys must all be hashable values.
-    pub(crate) content: SmallMap<FrozenValue, FrozenValue>,
+    content: SmallMap<FrozenValue, FrozenValue>,
 }
 
 unsafe impl<'v> AnyLifetime<'v> for DictGen<RefCell<Dict<'v>>> {
@@ -181,6 +181,10 @@ impl<'v> Dict<'v> {
         self.content.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.content.is_empty()
+    }
+
     /// Iterate through the key/value pairs in the dictionary.
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
     where
@@ -212,13 +216,26 @@ impl<'v> Dict<'v> {
     /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
     /// and otherwise [`Some`] if the key exists in the dictionary and [`None`] otherwise.
     pub fn get(&self, key: Value<'v>) -> anyhow::Result<Option<Value<'v>>> {
-        Ok(self.content.get_hashed(key.get_hashed()?.borrow()).copied())
+        Ok(self.get_hashed(key.get_hashed()?))
+    }
+
+    pub fn get_hashed(&self, key: Hashed<Value<'v>>) -> Option<Value<'v>> {
+        self.content.get_hashed(key.borrow()).copied()
     }
 
     /// Get the value associated with a particular string. Equivalent to allocating the
     /// string on the heap, turning it into a value, and looking up using that.
     pub fn get_str(&self, key: &str) -> Option<Value<'v>> {
         self.content.get(&ValueStr(key)).copied()
+    }
+
+    pub(crate) fn get_str_hashed(&self, key: Hashed<&str>) -> Option<Value<'v>> {
+        self.content
+            .get_hashed(BorrowHashed::new_unchecked(
+                key.hash(),
+                &ValueStr(key.key()),
+            ))
+            .copied()
     }
 
     /// Try to coerce all keys to strings.
@@ -241,6 +258,22 @@ impl<'v> Dict<'v> {
         Some(unsafe {
             transmute!(&SmallMap<Value, Value>, &SmallMap<StringValue, Value>, &self.content)
         })
+    }
+
+    pub fn reserve(&mut self, additional: usize) {
+        self.content.reserve(additional);
+    }
+
+    pub fn insert_hashed(&mut self, key: Hashed<Value<'v>>, value: Value<'v>) {
+        self.content.insert_hashed(key, value);
+    }
+
+    pub fn remove_hashed(&mut self, key: Hashed<Value<'v>>) -> Option<Value<'v>> {
+        self.content.remove_hashed(key.borrow())
+    }
+
+    pub fn clear(&mut self) {
+        self.content.clear();
     }
 }
 

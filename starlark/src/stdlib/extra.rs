@@ -76,10 +76,9 @@ pub fn partial(builder: &mut GlobalsBuilder) {
     fn partial(ref func: Value, args: Value<'v>, kwargs: ARef<Dict>) -> Partial<'v> {
         debug_assert!(Tuple::from_value(args).is_some());
         let names = kwargs
-            .content
             .keys()
             .map(|x| {
-                let x = StringValue::new(*x).unwrap();
+                let x = StringValue::new(x).unwrap();
                 (
                     // We duplicate string here.
                     // If this becomes hot, we should do better.
@@ -91,7 +90,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
         Ok(Partial {
             func,
             pos: args,
-            named: kwargs.content.values().copied().collect(),
+            named: kwargs.values().collect(),
             names,
         })
     }

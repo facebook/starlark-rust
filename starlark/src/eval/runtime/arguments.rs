@@ -674,8 +674,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
                     }
                 } else {
                     // We have to insert the names before the kwargs since the iteration order is observable
-                    let mut result =
-                        SmallMap::with_capacity(self.names.len() + kwargs.content.len());
+                    let mut result = SmallMap::with_capacity(self.names.len() + kwargs.len());
                     for (k, v) in self.names.iter().zip(self.named) {
                         result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
                     }
@@ -762,8 +761,8 @@ impl<'v, 'a> Arguments<'v, 'a> {
             let mut extra = Vec::new();
             extra.extend(x.names.iter().map(|x| x.0.as_str().to_owned()));
             if let Some(kwargs) = x.unpack_kwargs()? {
-                for k in kwargs.content.keys() {
-                    extra.push(Arguments::unpack_kwargs_key(*k)?.to_owned());
+                for k in kwargs.keys() {
+                    extra.push(Arguments::unpack_kwargs_key(k)?.to_owned());
                 }
             }
             if extra.is_empty() {
