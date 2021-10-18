@@ -48,8 +48,6 @@ use crate::collections::{
 #[derive(Debug, Clone)]
 #[repr(C)]
 enum MapHolder<K, V> {
-    // As of indexmap-1.6 and THRESHOLD=12 both VecMap and IndexMap take 9 words
-
     // TODO: benchmark
     // We could use Vec(VecMap) for empty values, but then creating an empty
     // value would require initialising a full VecMap.
