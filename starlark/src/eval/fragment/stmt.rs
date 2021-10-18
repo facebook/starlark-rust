@@ -262,6 +262,14 @@ impl StmtsCompiled {
             SmallVec1::Many(ss) => ss.first(),
         }
     }
+
+    pub(crate) fn last(&self) -> Option<&Spanned<StmtCompiledValue>> {
+        match &self.0 {
+            SmallVec1::Empty => None,
+            SmallVec1::One(s) => Some(s),
+            SmallVec1::Many(ss) => ss.last(),
+        }
+    }
 }
 
 #[derive(Debug, Error)]

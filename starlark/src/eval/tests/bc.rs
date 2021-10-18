@@ -39,12 +39,7 @@ fn test_instrs(expected: &[BcOpcode], def_program: &str) {
 #[test]
 fn test_type() {
     test_instrs(
-        &[
-            BcOpcode::LoadLocal,
-            BcOpcode::Type,
-            BcOpcode::Return,
-            BcOpcode::ReturnNone,
-        ],
+        &[BcOpcode::LoadLocal, BcOpcode::Type, BcOpcode::Return],
         "def test(x): return type(x)",
     );
 }
@@ -52,12 +47,7 @@ fn test_type() {
 #[test]
 fn test_percent_s_one() {
     test_instrs(
-        &[
-            BcOpcode::LoadLocal,
-            BcOpcode::PercentSOne,
-            BcOpcode::Return,
-            BcOpcode::ReturnNone,
-        ],
+        &[BcOpcode::LoadLocal, BcOpcode::PercentSOne, BcOpcode::Return],
         "def test(x): return '((%s))' % x",
     )
 }
@@ -65,12 +55,7 @@ fn test_percent_s_one() {
 #[test]
 fn test_format_one() {
     test_instrs(
-        &[
-            BcOpcode::LoadLocal,
-            BcOpcode::FormatOne,
-            BcOpcode::Return,
-            BcOpcode::ReturnNone,
-        ],
+        &[BcOpcode::LoadLocal, BcOpcode::FormatOne, BcOpcode::Return],
         "def test(x): return '(({}))'.format(x)",
     )
 }
