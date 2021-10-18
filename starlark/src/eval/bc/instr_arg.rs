@@ -316,6 +316,21 @@ impl BcInstrArg for Span {
     }
 }
 
+/// Opcode as instruction argument.
+impl BcInstrArg for BcOpcode {
+    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, " {:?}", param)
+    }
+
+    fn pops_stack(_: &Self) -> u32 {
+        0
+    }
+
+    fn pushes_stack(_: &Self) -> u32 {
+        0
+    }
+}
+
 /// Instruction argument encodes how many values are popped
 /// off the stack manually in the instruction impl.
 #[derive(Copy, Clone, Dupe)]

@@ -178,7 +178,7 @@ impl Spanned<StmtCompiledValue> {
 
 impl StmtsCompiled {
     pub(crate) fn as_bc(&self, compiler: &StmtCompileContext) -> Bc {
-        let mut bc = BcWriter::new();
+        let mut bc = BcWriter::new(compiler.bc_profile);
         self.write_bc(compiler, &mut bc);
         bc.write_instr::<InstrReturnNone>(Span::default(), ());
         bc.finish()

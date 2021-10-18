@@ -31,7 +31,7 @@ use crate::{
             instr_impl::{
                 InstrBr, InstrConst, InstrConst2, InstrConst3, InstrConst4, InstrContinue,
                 InstrForLoop, InstrIfBr, InstrIfNotBr, InstrLoadLocal, InstrLoadLocal2,
-                InstrLoadLocal3, InstrLoadLocal4, InstrLoadLocalAndConst,
+                InstrLoadLocal3, InstrLoadLocal4, InstrLoadLocalAndConst, InstrProfileBc,
             },
             instrs::{BcInstrsWriter, PatchAddr},
             opcode::BcOpcode,
@@ -43,6 +43,9 @@ use crate::{
 
 /// Write bytecode here.
 pub(crate) struct BcWriter {
+    /// Insert bytecode profiling instructions.
+    profile: bool,
+
     /// Serialized instructions.
     instrs: BcInstrsWriter,
     /// Instruction spans, used for errors.
@@ -62,8 +65,9 @@ pub(crate) struct BcWriter {
 
 impl BcWriter {
     /// Empty.
-    pub(crate) fn new() -> BcWriter {
+    pub(crate) fn new(profile: bool) -> BcWriter {
         BcWriter {
+            profile,
             instrs: BcInstrsWriter::new(),
             spans: Vec::new(),
             stack_size: 0,
@@ -77,6 +81,7 @@ impl BcWriter {
     /// Finish writing the bytecode.
     pub(crate) fn finish(self) -> Bc {
         let BcWriter {
+            profile: has_before_instr,
             instrs,
             spans,
             stack_size,
@@ -85,6 +90,7 @@ impl BcWriter {
             queued_locals,
             heap,
         } = self;
+        let _ = has_before_instr;
         assert!(queued_locals.is_empty());
         assert!(queued_consts.is_empty());
         assert_eq!(stack_size, 0);
@@ -180,6 +186,10 @@ impl BcWriter {
 
     /// Actually write the instruction.
     fn do_write_generic<I: BcInstr>(&mut self, span: Span, arg: I::Arg) -> (BcAddr, *const I::Arg) {
+        if self.profile {
+            // This instruction does not fail, so do not write span for it.
+            self.instrs.write::<InstrProfileBc>(I::OPCODE);
+        }
         self.spans.push((self.ip(), span));
         self.instrs.write::<I>(arg)
     }

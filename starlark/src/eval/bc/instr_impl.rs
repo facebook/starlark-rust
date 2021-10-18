@@ -1837,9 +1837,11 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
 
 pub(crate) struct InstrPossibleGcImpl;
 pub(crate) struct InstrBeforeStmtImpl;
+pub(crate) struct InstrProfileBcImpl;
 
 pub(crate) type InstrPossibleGc = InstrNoFlow<InstrPossibleGcImpl>;
 pub(crate) type InstrBeforeStmt = InstrNoFlow<InstrBeforeStmtImpl>;
+pub(crate) type InstrProfileBc = InstrNoFlow<InstrProfileBcImpl>;
 
 impl InstrNoFlowImpl for InstrPossibleGcImpl {
     const OPCODE: BcOpcode = BcOpcode::PossibleGc;
@@ -1873,6 +1875,24 @@ impl InstrNoFlowImpl for InstrBeforeStmtImpl {
         (): (),
     ) -> Result<(), ExprEvalException> {
         before_stmt(*span, eval);
+        Ok(())
+    }
+}
+
+impl InstrNoFlowImpl for InstrProfileBcImpl {
+    const OPCODE: BcOpcode = BcOpcode::ProfileBc;
+    type Pop<'v> = ();
+    type Push<'v> = ();
+    type Arg = BcOpcode;
+
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
+        opcode: &BcOpcode,
+        (): (),
+    ) -> Result<(), ExprEvalException> {
+        eval.bc_profile.before_instr(*opcode);
         Ok(())
     }
 }

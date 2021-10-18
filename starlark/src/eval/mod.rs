@@ -151,6 +151,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             codemap: codemap.dupe(),
             constants: Constants::new(),
             has_before_stmt: !self.before_stmt.is_empty(),
+            bc_profile: self.bc_profile.enabled(),
         };
 
         let res = compiler.eval_module(statement, self);

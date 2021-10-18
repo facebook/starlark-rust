@@ -124,6 +124,7 @@ pub(crate) struct Compiler<'a> {
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
     pub(crate) has_before_stmt: bool,
+    pub(crate) bc_profile: bool,
 }
 
 impl Compiler<'_> {

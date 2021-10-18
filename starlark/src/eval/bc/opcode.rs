@@ -18,11 +18,13 @@
 //! Instruction opcode.
 
 use gazebo::dupe::Dupe;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 use crate::eval::bc::{instr::BcInstr, instr_impl::*};
 
 /// Bytecode instruction opcode.
-#[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq, FromPrimitive)]
 #[repr(u32)]
 pub(crate) enum BcOpcode {
     Dup,
@@ -110,6 +112,7 @@ pub(crate) enum BcOpcode {
     Def,
     PossibleGc,
     BeforeStmt,
+    ProfileBc,
     EndOfBc,
 }
 
@@ -119,6 +122,14 @@ pub(crate) trait BcOpcodeHandler<R> {
 }
 
 impl BcOpcode {
+    /// Opcode count.
+    pub(crate) const COUNT: usize = (BcOpcode::EndOfBc as usize) + 1;
+
+    /// Get opcode by opcode number.
+    pub(crate) fn by_number(n: u32) -> Option<BcOpcode> {
+        FromPrimitive::from_u32(n)
+    }
+
     /// Invoke a callback parameterized by instruction type depending on
     /// this opcode.
     #[cfg_attr(not(debug_assertions), inline(always))]
@@ -209,7 +220,24 @@ impl BcOpcode {
             BcOpcode::ReturnNone => handler.handle::<InstrReturnNone>(),
             BcOpcode::PossibleGc => handler.handle::<InstrPossibleGc>(),
             BcOpcode::BeforeStmt => handler.handle::<InstrBeforeStmt>(),
+            BcOpcode::ProfileBc => handler.handle::<InstrProfileBc>(),
             BcOpcode::EndOfBc => handler.handle::<InstrEndOfBc>(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::eval::bc::opcode::BcOpcode;
+
+    #[test]
+    fn opcode_count() {
+        for i in 0..10000 {
+            if i < (BcOpcode::COUNT as u32) {
+                assert!(BcOpcode::by_number(i).is_some());
+            } else {
+                assert!(BcOpcode::by_number(i).is_none());
+            }
         }
     }
 }

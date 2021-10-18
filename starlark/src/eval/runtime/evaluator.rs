@@ -35,6 +35,7 @@ use crate::{
     eval::{
         fragment::def::DefInfo,
         runtime::{
+            bc_profile::BcProfile,
             call_stack::CallStack,
             flame_profile::FlameProfile,
             heap_profile::{HeapProfile, HeapProfileFormat},
@@ -52,13 +53,15 @@ use crate::{
 
 #[derive(Error, Debug)]
 #[allow(clippy::enum_variant_names)]
-enum EvaluatorError {
+pub(crate) enum EvaluatorError {
     #[error("Can't call `write_heap_profile` unless you first call `enable_heap_profile`.")]
     HeapProfilingNotEnabled,
     #[error("Can't call `write_stmt_profile` unless you first call `enable_stmt_profile`.")]
     StmtProfilingNotEnabled,
     #[error("Can't call `write_flame_profile` unless you first call `enable_flame_profile`.")]
     FlameProfilingNotEnabled,
+    #[error("Can't call `write_bc_profile` unless you first call `enable_bc_profile`.")]
+    BcProfilingNotEnabled,
 }
 
 /// Number of bytes to allocate between GC's.
@@ -94,6 +97,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
     stmt_profile: StmtProfile,
+    // Bytecode profile.
+    pub(crate) bc_profile: BcProfile,
     // Used for stack-like allocation
     alloca: Alloca,
     /// Field that can be used for any purpose you want (can store types you define).
@@ -141,6 +146,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             alloca: Alloca::new(),
             heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
+            bc_profile: BcProfile::new(),
             flame_profile: FlameProfile::new(),
             heap_or_flame_profile: false,
             before_stmt: Vec::new(),
@@ -180,6 +186,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ///   performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     ///   This profiling mode is the recommended one.
     /// * The `stmt_profile` mode provides information about time spent in each statement.
+    /// * The `bc_profile` mode provides information about bytecode instructions.
     /// * The `flame_profile` and the `heap_profile` mode provide input compatible with
     ///   [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     pub fn enable_heap_profile(&mut self) {
@@ -195,6 +202,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
         self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, &eval.def_info.codemap));
+    }
+
+    /// Enable bytecode profiling, allowing [`Evaluator::write_bc_profile`] to be used.
+    pub fn enable_bc_profile(&mut self) {
+        self.bc_profile.enable();
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.
@@ -234,6 +246,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.stmt_profile
             .write(filename.as_ref())
             .unwrap_or_else(|| Err(EvaluatorError::StmtProfilingNotEnabled.into()))
+    }
+
+    /// Write a profile (as a `.csv` file) to a file.
+    /// Only valid if [`enable_bc_profile`](Self::enable_bc_profile) was called
+    /// before execution began.
+    pub fn write_bc_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+        self.bc_profile.write_csv(filename.as_ref())
     }
 
     /// Write a profile to a file, suitable as input to

@@ -77,6 +77,7 @@ pub(crate) enum StmtCompiledValue {
 #[derive(Debug, Default)]
 pub(crate) struct StmtCompileContext {
     pub(crate) has_before_stmt: bool,
+    pub(crate) bc_profile: bool,
 }
 
 impl Spanned<StmtCompiledValue> {
@@ -525,6 +526,7 @@ impl Compiler<'_> {
     pub(crate) fn compile_context(&self) -> StmtCompileContext {
         StmtCompileContext {
             has_before_stmt: self.has_before_stmt,
+            bc_profile: self.bc_profile,
         }
     }
 

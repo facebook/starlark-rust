@@ -17,7 +17,10 @@
 
 //! Write CSV files.
 
-use std::{fmt::Display, time::Duration};
+use std::{
+    fmt::{Debug, Display},
+    time::Duration,
+};
 
 /// Writer for CSV files.
 pub(crate) struct CsvWriter {
@@ -62,7 +65,21 @@ impl CsvWriter {
 
         impl<V: Display> CsvValue for Impl<V> {
             fn format_for_csv(&self) -> String {
+                // TODO(nga): escape
                 format!("{}", &self.0)
+            }
+        }
+
+        self.write_value(Impl(value))
+    }
+
+    pub(crate) fn write_debug(&mut self, value: impl Debug) {
+        struct Impl<V: Debug>(V);
+
+        impl<V: Debug> CsvValue for Impl<V> {
+            fn format_for_csv(&self) -> String {
+                // TODO(nga): escape
+                format!("{:?}", &self.0)
             }
         }
 
@@ -105,6 +122,24 @@ impl CsvValue for str {
 }
 
 impl CsvValue for usize {
+    fn format_for_csv(&self) -> String {
+        format!("{}", self)
+    }
+}
+
+impl CsvValue for u64 {
+    fn format_for_csv(&self) -> String {
+        format!("{}", self)
+    }
+}
+
+impl CsvValue for i32 {
+    fn format_for_csv(&self) -> String {
+        format!("{}", self)
+    }
+}
+
+impl CsvValue for u128 {
     fn format_for_csv(&self) -> String {
         format!("{}", self)
     }
