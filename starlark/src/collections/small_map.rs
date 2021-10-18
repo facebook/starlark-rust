@@ -51,7 +51,7 @@ enum MapHolder<K, V> {
     Vec(VecMap<K, V>),
     // We use a custom hasher since we are only ever hashing a 32bit
     // hash, so can use something faster than the default hasher.
-    Map(IndexMap<Hashed<K>, V, BuildIdHasher>),
+    Map(Box<IndexMap<Hashed<K>, V, BuildIdHasher>>),
 }
 
 // We define a lot of iterators on top of three other iterators
@@ -291,7 +291,10 @@ impl<K, V> MapHolder<K, V> {
     fn with_capacity(n: usize) -> Self {
         match VecMap::try_with_capacity(n) {
             Some(vec) => MapHolder::Vec(vec),
-            None => MapHolder::Map(IndexMap::with_capacity_and_hasher(n, Default::default())),
+            None => MapHolder::Map(box IndexMap::with_capacity_and_hasher(
+                n,
+                Default::default(),
+            )),
         }
     }
 
@@ -566,7 +569,7 @@ impl<K, V> SmallMap<K, V> {
     where
         K: Eq,
     {
-        let mut holder = MapHolder::Map(IndexMap::with_capacity_and_hasher(
+        let mut holder = MapHolder::Map(box IndexMap::with_capacity_and_hasher(
             capacity,
             Default::default(),
         ));
