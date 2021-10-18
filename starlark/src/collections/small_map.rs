@@ -48,11 +48,6 @@ use crate::collections::{
 #[derive(Debug, Clone)]
 #[repr(C)]
 enum MapHolder<K, V> {
-    // TODO: benchmark
-    // We could use Vec(VecMap) for empty values, but then creating an empty
-    // value would require initialising a full VecMap.
-    // On the flip side, we'd simplify the branches and iterators.
-    Empty,
     Vec(VecMap<K, V>),
     // We use a custom hasher since we are only ever hashing a 32bit
     // hash, so can use something faster than the default hasher.
@@ -65,7 +60,6 @@ macro_rules! def_iter {
     () => {
         fn next(&mut self) -> Option<Self::Item> {
             match self {
-                Self::Empty => None,
                 Self::Vec(iter) => iter.next(),
                 Self::Map(iter) => iter.next().map(Self::map),
             }
@@ -73,7 +67,6 @@ macro_rules! def_iter {
 
         fn nth(&mut self, n: usize) -> Option<Self::Item> {
             match self {
-                Self::Empty => None,
                 Self::Vec(iter) => iter.nth(n),
                 Self::Map(iter) => iter.nth(n).map(Self::map),
             }
@@ -81,7 +74,6 @@ macro_rules! def_iter {
 
         fn last(self) -> Option<Self::Item> {
             match self {
-                Self::Empty => None,
                 Self::Vec(iter) => iter.last(),
                 Self::Map(iter) => iter.last().map(Self::map),
             }
@@ -89,7 +81,6 @@ macro_rules! def_iter {
 
         fn size_hint(&self) -> (usize, Option<usize>) {
             match self {
-                Self::Empty => (0, Some(0)),
                 Self::Vec(iter) => iter.size_hint(),
                 Self::Map(iter) => iter.size_hint(),
             }
@@ -97,7 +88,6 @@ macro_rules! def_iter {
 
         fn count(self) -> usize {
             match self {
-                Self::Empty => 0,
                 Self::Vec(iter) => iter.count(),
                 Self::Map(iter) => iter.count(),
             }
@@ -108,7 +98,6 @@ macro_rules! def_iter {
             C: std::iter::FromIterator<Self::Item>,
         {
             match self {
-                Self::Empty => C::from_iter(None),
                 Self::Vec(iter) => iter.collect(),
                 Self::Map(iter) => iter.map(Self::map).collect(),
             }
@@ -120,7 +109,6 @@ macro_rules! def_exact_size_iter {
     () => {
         fn len(&self) -> usize {
             match self {
-                Self::Empty => 0,
                 Self::Vec(iter) => iter.len(),
                 Self::Map(iter) => iter.len(),
             }
@@ -130,7 +118,6 @@ macro_rules! def_exact_size_iter {
 
 #[derive(Clone_)]
 enum MHKeys<'a, K: 'a, V: 'a> {
-    Empty,
     Vec(VMKeys<'a, K, V>),
     Map(indexmap::map::Keys<'a, Hashed<K>, V>),
 }
@@ -153,7 +140,6 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHKeys<'a, K, V> {
 
 #[derive(Clone_)]
 enum MHValues<'a, K: 'a, V: 'a> {
-    Empty,
     Vec(VMValues<'a, K, V>),
     Map(indexmap::map::Values<'a, Hashed<K>, V>),
 }
@@ -175,7 +161,6 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValues<'a, K, V> {
 }
 
 enum MHValuesMut<'a, K: 'a, V: 'a> {
-    Empty,
     Vec(VMValuesMut<'a, K, V>),
     Map(indexmap::map::ValuesMut<'a, Hashed<K>, V>),
 }
@@ -198,7 +183,6 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHValuesMut<'a, K, V> {
 
 #[derive(Clone_)]
 pub enum MHIter<'a, K: 'a, V: 'a> {
-    Empty,
     Vec(VMIter<'a, K, V>),
     Map(indexmap::map::Iter<'a, Hashed<K>, V>),
 }
@@ -220,7 +204,6 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIter<'a, K, V> {
 }
 
 enum MHIterHash<'a, K: 'a, V: 'a> {
-    Empty,
     Vec(VMIterHash<'a, K, V>),
     Map(indexmap::map::Iter<'a, Hashed<K>, V>),
 }
@@ -242,7 +225,6 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIterHash<'a, K, V> {
 }
 
 enum MHIntoIterHash<K, V> {
-    Empty,
     Vec(VMIntoIterHash<K, V>),
     Map(indexmap::map::IntoIter<Hashed<K>, V>),
 }
@@ -264,7 +246,6 @@ impl<K, V> ExactSizeIterator for MHIntoIterHash<K, V> {
 }
 
 pub enum MHIterMut<'a, K: 'a, V: 'a> {
-    Empty,
     Vec(VMIterMut<'a, K, V>),
     Map(indexmap::map::IterMut<'a, Hashed<K>, V>),
 }
@@ -286,7 +267,6 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for MHIterMut<'a, K, V> {
 }
 
 pub enum MHIntoIter<K, V> {
-    Empty,
     Vec(VMIntoIter<K, V>),
     Map(indexmap::map::IntoIter<Hashed<K>, V>),
 }
@@ -309,13 +289,9 @@ impl<K, V> ExactSizeIterator for MHIntoIter<K, V> {
 
 impl<K, V> MapHolder<K, V> {
     fn with_capacity(n: usize) -> Self {
-        if n == 0 {
-            MapHolder::Empty
-        } else {
-            match VecMap::try_with_capacity(n) {
-                Some(vec) => MapHolder::Vec(vec),
-                None => MapHolder::Map(IndexMap::with_capacity_and_hasher(n, Default::default())),
-            }
+        match VecMap::try_with_capacity(n) {
+            Some(vec) => MapHolder::Vec(vec),
+            None => MapHolder::Map(IndexMap::with_capacity_and_hasher(n, Default::default())),
         }
     }
 
@@ -326,7 +302,7 @@ impl<K, V> MapHolder<K, V> {
 
 impl<K, V> Default for MapHolder<K, V> {
     fn default() -> Self {
-        MapHolder::Empty
+        MapHolder::Vec(VecMap::default())
     }
 }
 
@@ -376,7 +352,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> + Clone {
         match self.state {
-            MapHolder::Empty => MHKeys::Empty,
             MapHolder::Vec(ref v) => MHKeys::Vec(v.keys()),
             MapHolder::Map(ref m) => MHKeys::Map(m.keys()),
         }
@@ -384,7 +359,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + Clone {
         match self.state {
-            MapHolder::Empty => MHValues::Empty,
             MapHolder::Vec(ref v) => MHValues::Vec(v.values()),
             MapHolder::Map(ref m) => MHValues::Map(m.values()),
         }
@@ -392,7 +366,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> {
         match self.state {
-            MapHolder::Empty => MHValuesMut::Empty,
             MapHolder::Vec(ref mut v) => MHValuesMut::Vec(v.values_mut()),
             MapHolder::Map(ref mut m) => MHValuesMut::Map(m.values_mut()),
         }
@@ -400,7 +373,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn iter(&self) -> MHIter<'_, K, V> {
         match self.state {
-            MapHolder::Empty => MHIter::Empty,
             MapHolder::Vec(ref v) => MHIter::Vec(v.iter()),
             MapHolder::Map(ref m) => MHIter::Map(m.iter()),
         }
@@ -408,7 +380,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn iter_hashed(&self) -> impl ExactSizeIterator<Item = (BorrowHashed<K>, &V)> {
         match self.state {
-            MapHolder::Empty => MHIterHash::Empty,
             MapHolder::Vec(ref v) => MHIterHash::Vec(v.iter_hashed()),
             MapHolder::Map(ref m) => MHIterHash::Map(m.iter()),
         }
@@ -416,7 +387,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn into_iter_hashed(self) -> impl ExactSizeIterator<Item = (Hashed<K>, V)> {
         match self.state {
-            MapHolder::Empty => MHIntoIterHash::Empty,
             MapHolder::Vec(v) => MHIntoIterHash::Vec(v.into_iter_hashed()),
             MapHolder::Map(m) => MHIntoIterHash::Map(m.into_iter()),
         }
@@ -424,7 +394,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn iter_mut(&mut self) -> MHIterMut<'_, K, V> {
         match self.state {
-            MapHolder::Empty => MHIterMut::Empty,
             MapHolder::Vec(ref mut v) => MHIterMut::Vec(v.iter_mut()),
             MapHolder::Map(ref mut m) => MHIterMut::Map(m.iter_mut()),
         }
@@ -432,7 +401,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn into_iter(self) -> MHIntoIter<K, V> {
         match self.state {
-            MapHolder::Empty => MHIntoIter::Empty,
             MapHolder::Vec(v) => MHIntoIter::Vec(v.into_iter()),
             MapHolder::Map(m) => MHIntoIter::Map(m.into_iter()),
         }
@@ -444,7 +412,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(ref v) => v.get_hashed(key),
             MapHolder::Map(ref m) => m.get(&key),
         }
@@ -464,7 +431,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(ref v) => v.get_full(BorrowHashed::new(key)),
             MapHolder::Map(ref m) => m
                 .get_full(&BorrowHashed::new(key))
@@ -478,7 +444,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(ref v) => v.get_index_of_hashed(key),
             MapHolder::Map(ref m) => m.get_index_of(&key),
         }
@@ -486,7 +451,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn get_index(&self, index: usize) -> Option<(&K, &V)> {
         match &self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(x) => x.get_index(index),
             MapHolder::Map(m) => m.get_index(index).map(|(k, v)| (k.key(), v)),
         }
@@ -506,7 +470,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(ref mut v) => v.get_mut_hashed(key),
             MapHolder::Map(ref mut m) => m.get_mut(&key),
         }
@@ -526,7 +489,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => false,
             MapHolder::Vec(ref v) => v.contains_key_hashed(key),
             MapHolder::Map(ref m) => m.contains_key(&key),
         }
@@ -548,9 +510,6 @@ impl<K, V> SmallMap<K, V> {
             return;
         }
         match &mut self.state {
-            MapHolder::Empty => {
-                self.state = MapHolder::with_capacity(additional);
-            }
             MapHolder::Vec(x) => {
                 if !x.try_reserve(additional) {
                     let want = additional + x.len();
@@ -563,7 +522,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn capacity(&self) -> usize {
         match &self.state {
-            MapHolder::Empty => 0,
             MapHolder::Vec(x) => x.capacity(),
             MapHolder::Map(x) => x.capacity(),
         }
@@ -573,7 +531,6 @@ impl<K, V> SmallMap<K, V> {
     /// Used internally, but not exported as this isn't a usual API.
     pub(crate) fn extra_memory(&self) -> usize {
         match &self.state {
-            MapHolder::Empty => 0,
             MapHolder::Vec(x) => x.capacity() * mem::size_of::<(K, V)>(),
             MapHolder::Map(x) => {
                 // Copy-pasted from hashbrown. Comments are stripped for succinctness, the point of
@@ -605,14 +562,6 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    fn upgrade_empty_to_vec(&mut self) -> &mut VecMap<K, V> {
-        self.state = MapHolder::Vec(VecMap::default());
-        if let MapHolder::Vec(ref mut v) = self.state {
-            return v;
-        }
-        unreachable!()
-    }
-
     fn upgrade_vec_to_map(&mut self, capacity: usize) -> &mut IndexMap<Hashed<K>, V, BuildIdHasher>
     where
         K: Eq,
@@ -637,10 +586,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => self
-                .upgrade_empty_to_vec()
-                .try_insert_hashed(key, val)
-                .unwrap(),
             MapHolder::Map(ref mut m) => m.insert(key, val),
             MapHolder::Vec(ref mut v) => match v.try_insert_hashed(key, val) {
                 Ok(v) => v,
@@ -665,7 +610,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(ref mut v) => v.remove_hashed(key),
             MapHolder::Map(ref mut m) => m.shift_remove(&key),
         }
@@ -677,7 +621,6 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         match self.state {
-            MapHolder::Empty => None,
             MapHolder::Vec(ref mut v) => v.remove_hashed_entry(key),
             MapHolder::Map(ref mut m) => m.shift_remove_entry(&key).map(|(k, v)| (k.into_key(), v)),
         }
@@ -706,7 +649,6 @@ impl<K, V> SmallMap<K, V> {
         let s = self as *mut Self;
 
         match self.state {
-            MapHolder::Empty => Entry::Vacant(VacantEntry(VacantEntryImpl::Empty(key, self))),
             MapHolder::Vec(ref mut v) => match v.entry_hashed(key) {
                 vec_map::Entry::Occupied(e) => {
                     Entry::Occupied(OccupiedEntry(OccupiedEntryImpl::Vec(e)))
@@ -748,7 +690,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn is_empty(&self) -> bool {
         match self.state {
-            MapHolder::Empty => true,
             MapHolder::Vec(ref v) => v.is_empty(),
             MapHolder::Map(ref m) => m.is_empty(),
         }
@@ -756,7 +697,6 @@ impl<K, V> SmallMap<K, V> {
 
     pub fn len(&self) -> usize {
         match self.state {
-            MapHolder::Empty => 0,
             MapHolder::Vec(ref v) => v.len(),
             MapHolder::Map(ref m) => m.len(),
         }
@@ -775,7 +715,6 @@ enum OccupiedEntryImpl<'a, K, V> {
 pub struct OccupiedEntry<'a, K, V>(OccupiedEntryImpl<'a, K, V>);
 
 enum VacantEntryImpl<'a, K, V> {
-    Empty(Hashed<K>, &'a mut SmallMap<K, V>),
     Vec(vec_map::VacantEntry<'a, K, V>),
     VecFull(Hashed<K>, &'a mut SmallMap<K, V>),
     Map(indexmap::map::VacantEntry<'a, Hashed<K>, V>),
@@ -817,7 +756,6 @@ where
 {
     pub fn key(&self) -> &K {
         match self.0 {
-            VacantEntryImpl::Empty(ref k, ..) => k.key(),
             VacantEntryImpl::Vec(ref e) => e.key(),
             VacantEntryImpl::VecFull(ref k, ..) => k.key(),
             VacantEntryImpl::Map(ref e) => e.key().key(),
@@ -827,11 +765,6 @@ where
     // NOTE(nga): `VacantEntry::insert` is supposed to return `&'a mut V`
     pub fn insert(self, value: V) {
         match self.0 {
-            VacantEntryImpl::Empty(k, map) => {
-                map.upgrade_empty_to_vec()
-                    .try_insert_hashed(k, value)
-                    .unwrap();
-            }
             VacantEntryImpl::Vec(e) => {
                 e.insert(value);
             }
@@ -915,7 +848,6 @@ impl<'a, K, V> IntoIterator for &'a mut SmallMap<K, V> {
 impl<K: Eq, V: PartialEq> PartialEq for SmallMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
         match (&self.state, &other.state) {
-            (MapHolder::Empty, MapHolder::Empty) => true,
             _ => {
                 self.len() == other.len()
                     && self
