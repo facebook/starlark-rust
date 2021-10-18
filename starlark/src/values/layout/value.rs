@@ -29,6 +29,8 @@
 // our val_ref requires a pointer to the value. We need to put that pointer
 // somewhere. The solution is to have a separate value storage vs vtable.
 
+use std::marker::PhantomData;
+
 use either::Either;
 use gazebo::{
     cast,
@@ -191,9 +193,25 @@ impl<'v> Value<'v> {
         self.0.ptr_eq(other.0)
     }
 
+    /// Returns an identity for this [`Value`], derived from its pointer. This function is
+    /// low-level and provides two guarantees. Those are valid until the next GC:
+    ///
+    /// 1. Calling it mulitple times on the same [`Value`]  will return [`ValueIdentity`] that
+    ///    compare equal.
+    /// 2. If two [`Value]` have [`ValueIdentity`]  that compare equal, then [`Value::ptr_eq`] and
+    ///    [`Value::equals`]  will also consider them to be equal.
+    pub fn identity(self) -> ValueIdentity<'v> {
+        ValueIdentity {
+            identity: self.0.ptr_value(),
+            phantom: PhantomData,
+        }
+    }
+
     /// Get the underlying pointer.
     /// Should be done sparingly as it slightly breaks the abstraction.
     /// Most useful as a hash key based on pointer.
+    /// For external users, `Value::identity` returns an opaque `ValueIdentity` that makes fewer
+    /// guarantees.
     pub(crate) fn ptr_value(self) -> usize {
         self.0.ptr_value()
     }
@@ -275,6 +293,14 @@ impl FrozenValue {
             Either::Right(x) => basic_ref(PointerI32::new(x)),
         }
     }
+}
+
+/// An opaque value representing the identity of a given Value. Two values have the same identity
+/// if and only if [`Value::ptr_eq`] would return [`true`] on them.
+#[derive(Eq, PartialEq, Copy, Clone, Dupe, Hash)]
+pub struct ValueIdentity<'v> {
+    identity: usize,
+    phantom: PhantomData<&'v ()>,
 }
 
 #[test]

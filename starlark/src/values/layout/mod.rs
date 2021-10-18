@@ -22,7 +22,7 @@ pub(crate) use constant::StringValueLike;
 pub use constant::{FrozenStringValue, StarlarkStrNRepr, StringValue};
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
-pub use value::{FrozenValue, Value};
+pub use value::{FrozenValue, Value, ValueIdentity};
 pub(crate) use value_captured::*;
 
 mod arena;
