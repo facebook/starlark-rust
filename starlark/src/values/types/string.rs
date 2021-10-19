@@ -538,7 +538,7 @@ impl<'v> ComplexValue<'v> for StringIterator<'v> {
 mod tests {
     use crate::{
         assert,
-        values::{index::apply_slice, Heap, Value, ValueLike},
+        values::{index::apply_slice, Heap, Value},
     };
 
     #[test]

@@ -159,13 +159,11 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value
         self.to_value().invoke(location, args, eval)
     }
 
-    fn get_hash(self) -> anyhow::Result<u64>;
-
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
 
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         Ok(Hashed::new_unchecked(
-            SmallHashResult::new_unchecked(self.get_hash()?),
+            SmallHashResult::new_unchecked(self.to_value().get_hash()?),
             self,
         ))
     }
@@ -238,10 +236,6 @@ impl<'v> ValueLike<'v> for Value<'v> {
         self.get_ref().collect_repr(collector);
     }
 
-    fn get_hash(self) -> anyhow::Result<u64> {
-        self.get_ref().get_hash()
-    }
-
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         self.get_ref().write_hash(hasher)
     }
@@ -282,10 +276,6 @@ impl<'v> ValueLike<'v> for FrozenValue {
 
     fn collect_repr(self, collector: &mut String) {
         self.to_value().collect_repr(collector)
-    }
-
-    fn get_hash(self) -> anyhow::Result<u64> {
-        self.to_value().get_hash()
     }
 
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {

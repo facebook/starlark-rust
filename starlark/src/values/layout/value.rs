@@ -180,6 +180,10 @@ impl<'v> Value<'v> {
         }
     }
 
+    pub(crate) fn get_hash(self) -> anyhow::Result<u64> {
+        self.get_ref().get_hash()
+    }
+
     /// Are two [`Value`]s equal, looking at only their underlying pointer. This function is
     /// low-level and provides two guarantees.
     ///
