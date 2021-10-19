@@ -20,8 +20,8 @@ use std::{fmt, fmt::Display, ops::Deref};
 use gazebo::prelude::*;
 
 use crate::values::{
-    AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, FrozenValueTyped, StarlarkValue,
-    Value,
+    none::NoneType, AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenValue, FrozenValueTyped,
+    StarlarkValue, Value,
 };
 
 /// A [`FrozenValue`] along with a [`FrozenHeapRef`] that ensures it is kept alive.
@@ -37,6 +37,12 @@ pub struct OwnedFrozenValue {
     owner: FrozenHeapRef,
     // Invariant: this FrozenValue must be kept alive by the `owner` field.
     value: FrozenValue,
+}
+
+impl Default for OwnedFrozenValue {
+    fn default() -> Self {
+        OwnedFrozenValue::alloc(NoneType)
+    }
 }
 
 impl Display for OwnedFrozenValue {
