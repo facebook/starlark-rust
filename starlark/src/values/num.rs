@@ -19,7 +19,10 @@
 
 use gazebo::prelude::*;
 
-use crate::values::{float::StarlarkFloat, Value};
+use crate::{
+    collections::SmallHashResult,
+    values::{float::StarlarkFloat, Value},
+};
 
 /// [`Num`] represents a numerical value that can be unpacked from a [`Value`].
 ///
@@ -95,6 +98,10 @@ impl Num {
                 i as u64
             }
         }
+    }
+
+    pub(crate) fn get_small_hash_result(self) -> SmallHashResult {
+        SmallHashResult::new_unchecked(self.get_hash())
     }
 }
 

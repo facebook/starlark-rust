@@ -31,7 +31,7 @@ use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 
 use crate::{
     codemap::Span,
-    collections::StarlarkHasher,
+    collections::{SmallHashResult, StarlarkHasher},
     environment::Globals,
     eval::{Arguments, Evaluator, FrozenDef},
     values::{
@@ -174,10 +174,10 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         let mut hasher = StarlarkHasher::new();
         self.write_hash(&mut hasher)?;
-        Ok(hasher.finish_get_hash())
+        Ok(hasher.finish_small())
     }
 }
 
@@ -204,7 +204,7 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
 
-    fn get_hash(&self) -> anyhow::Result<u64>;
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult>;
 }
 
 impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
@@ -232,7 +232,7 @@ impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
         self.unpack_starlark_str()
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         self.get_hash()
     }
 }
@@ -364,7 +364,7 @@ impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for Wrapper<Basic, T> {
         None
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         Ok(self.1.get_hash())
     }
 }
@@ -398,8 +398,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkFloat> {
         None
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        Ok(Num::from(self.1.0).get_hash())
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+        Ok(Num::from(self.1.0).get_small_hash_result())
     }
 }
 
@@ -443,8 +443,8 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         Some(&self.1)
     }
 
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        Ok(self.1.get_hash_64())
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+        Ok(SmallHashResult::new_unchecked(self.1.get_hash_64()))
     }
 }
 
@@ -808,7 +808,7 @@ impl<'v> AValueDyn<'v> for BlackHole {
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         unreachable!()
     }
-    fn get_hash(&self) -> anyhow::Result<u64> {
+    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         unreachable!()
     }
 }

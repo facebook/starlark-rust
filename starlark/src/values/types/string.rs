@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn test_zero_length_string_hash_is_not_zero() {
         let heap = Heap::new();
-        assert_ne!(0, heap.alloc("").get_hash().unwrap());
+        assert_ne!(0, heap.alloc("").get_hash().unwrap().get());
     }
 
     #[test]

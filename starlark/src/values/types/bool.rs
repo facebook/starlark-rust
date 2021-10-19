@@ -29,7 +29,7 @@ use std::{
 use gazebo::any::AnyLifetime;
 
 use crate::{
-    collections::StarlarkHasher,
+    collections::{SmallHashResult, StarlarkHasher},
     values::{
         basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
         StarlarkValue, UnpackValue, Value, ValueError,
@@ -121,7 +121,7 @@ impl StarlarkValue<'_> for StarlarkBool {
 }
 
 impl<'v> StarlarkValueBasic<'v> for StarlarkBool {
-    fn get_hash(&self) -> u64 {
-        if self.0 { 1 } else { 0 }
+    fn get_hash(&self) -> SmallHashResult {
+        SmallHashResult::new_unchecked(if self.0 { 1 } else { 0 })
     }
 }

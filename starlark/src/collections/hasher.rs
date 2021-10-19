@@ -30,12 +30,7 @@ impl StarlarkHasher {
         StarlarkHasher::default()
     }
 
-    /// Finish hashing with return type of [`get_hash`](crate::avalue::AValue::get_hash).
-    pub(crate) fn finish_get_hash(self) -> u64 {
-        self.finish()
-    }
-
-    pub fn finish_small(self) -> SmallHashResult {
+    pub(crate) fn finish_small(self) -> SmallHashResult {
         SmallHashResult::new_unchecked(self.finish())
     }
 }

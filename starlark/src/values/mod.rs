@@ -45,7 +45,7 @@ pub use crate::values::{
 };
 use crate::{
     codemap::Span,
-    collections::{Hashed, SmallHashResult, StarlarkHasher},
+    collections::{Hashed, StarlarkHasher},
     eval::{Arguments, Evaluator},
     values::function::FUNCTION_TYPE,
 };
@@ -162,10 +162,7 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
 
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
-        Ok(Hashed::new_unchecked(
-            SmallHashResult::new_unchecked(self.to_value().get_hash()?),
-            self,
-        ))
+        Ok(Hashed::new_unchecked(self.to_value().get_hash()?, self))
     }
 
     fn collect_repr(self, collector: &mut String);

@@ -23,7 +23,7 @@ use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate::{
-    collections::StarlarkHasher,
+    collections::{SmallHashResult, StarlarkHasher},
     values::{
         basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
         StarlarkValue, UnpackValue, Value,
@@ -55,15 +55,15 @@ impl<'v> StarlarkValue<'v> for NoneType {
         false
     }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u64(self.get_hash());
+        hasher.write_u64(9_223_380_832_852_120_682);
         Ok(())
     }
 }
 
 impl<'v> StarlarkValueBasic<'v> for NoneType {
-    fn get_hash(&self) -> u64 {
+    fn get_hash(&self) -> SmallHashResult {
         // just took the result of hash(None) in macos python 2.7.10 interpreter.
-        9_223_380_832_852_120_682
+        SmallHashResult::new_unchecked(9_223_380_832_852_120_682)
     }
 }
 

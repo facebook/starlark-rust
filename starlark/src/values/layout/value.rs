@@ -38,16 +38,19 @@ use gazebo::{
     prelude::*,
 };
 
-use crate::values::{
-    layout::{
-        arena::{AValueHeader, AValueRepr},
-        avalue::{basic_ref, AValueDyn, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
-        constant::VALUE_EMPTY_STRING,
-        pointer::Pointer,
-        pointer_i32::PointerI32,
+use crate::{
+    collections::SmallHashResult,
+    values::{
+        layout::{
+            arena::{AValueHeader, AValueRepr},
+            avalue::{basic_ref, AValueDyn, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
+            constant::VALUE_EMPTY_STRING,
+            pointer::Pointer,
+            pointer_i32::PointerI32,
+        },
+        num::Num,
+        string::StarlarkStr,
     },
-    num::Num,
-    string::StarlarkStr,
 };
 
 /// A Starlark value. The lifetime argument `'v` corresponds to the [`Heap`](crate::values::Heap) it is stored on.
@@ -180,7 +183,7 @@ impl<'v> Value<'v> {
         }
     }
 
-    pub(crate) fn get_hash(self) -> anyhow::Result<u64> {
+    pub(crate) fn get_hash(self) -> anyhow::Result<SmallHashResult> {
         self.get_ref().get_hash()
     }
 
