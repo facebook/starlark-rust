@@ -20,6 +20,7 @@ use std::sync::Mutex;
 use anyhow::anyhow;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+use thiserror::Error;
 
 use crate::{
     self as starlark,
@@ -193,6 +194,12 @@ fn breakpoint_loop(
     }
 }
 
+#[derive(Error, Debug)]
+enum BreakpointError {
+    #[error("Breakpoint handler is not enabled for current Evaluator")]
+    NoHandler,
+}
+
 const BREAKPOINT_HIT_MESSAGE: &str = "BREAKPOINT HIT! :resume to continue, :help for all options";
 
 #[starlark_module]
@@ -201,7 +208,10 @@ pub fn global(builder: &mut GlobalsBuilder) {
         {
             let mut guard = BREAKPOINT_MUTEX.lock().unwrap();
             if *guard == State::Allow {
-                let mut rl = (eval.breakpoint_handler)();
+                let mut rl = match &mut eval.breakpoint_handler {
+                    Some(rl) => rl(),
+                    None => return Err(BreakpointError::NoHandler.into()),
+                };
                 rl.println(BREAKPOINT_HIT_MESSAGE);
                 *guard = breakpoint_loop(eval, rl)?;
             }
@@ -217,71 +227,94 @@ mod test {
     use gazebo::dupe::Dupe;
 
     use super::*;
-    use crate::{
-        assert::Assert,
-        environment::{Globals, Module},
-    };
+    use crate::assert::Assert;
+
+    // Breakpoint tests should not be executed concurrently
+    // to avoid interfering with `BREAKPOINT_MUTEX`.
+    static TEST_MUTEX: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+
+    fn reset_global_state() {
+        // `breakpoint()` function modifies the global state.
+        *BREAKPOINT_MUTEX.lock().unwrap() = State::Allow;
+    }
 
     #[test]
     // Test with: BREAKPOINT=1 cargo test -p starlark breakpoint -- --nocapture
     fn test_breakpoint_real() {
+        let _g = TEST_MUTEX.lock();
+        reset_global_state();
+
         if env::var("BREAKPOINT") != Ok("1".to_owned()) {
             return;
         }
 
         let mut a = Assert::new();
+        a.setup_eval(|e| e.enable_terminal_breakpoint_console());
         a.globals_add(global);
         a.pass("x = [1,2,3]; breakpoint(); print(x)");
     }
 
     #[test]
     fn test_breakpoint_mock() {
-        let module = Module::new();
-        let globals = Globals::extended();
-        let mut eval = Evaluator::new(&module);
+        let _g = TEST_MUTEX.lock();
+        reset_global_state();
+
         let printed_lines = Rc::new(RefCell::new(Vec::new()));
         let printed_lines_copy = printed_lines.dupe();
-        eval.breakpoint_handler = box move || {
-            struct Handler {
-                printed_lines: Rc<RefCell<Vec<String>>>,
-                called: bool,
-            }
 
-            impl BreakpointConsole for Handler {
-                fn read_line(&mut self) -> anyhow::Result<Option<String>> {
-                    let called = self.called;
-                    self.called = true;
-                    if !called {
-                        Ok(Some("x".to_owned()))
-                    } else {
-                        Ok(None)
+        let mut a = Assert::new();
+        a.globals_add(global);
+        a.setup_eval(move |eval| {
+            let printed_lines = printed_lines.dupe();
+            eval.breakpoint_handler = Some(box move || {
+                // `Assert` runs tests several times, take only lines from the last iteration.
+                printed_lines.borrow_mut().clear();
+
+                struct Handler {
+                    printed_lines: Rc<RefCell<Vec<String>>>,
+                    called: bool,
+                }
+
+                impl BreakpointConsole for Handler {
+                    fn read_line(&mut self) -> anyhow::Result<Option<String>> {
+                        let called = self.called;
+                        self.called = true;
+                        if !called {
+                            Ok(Some("x".to_owned()))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+
+                    fn println(&mut self, line: &str) {
+                        self.printed_lines.borrow_mut().push(line.to_owned());
                     }
                 }
 
-                fn println(&mut self, line: &str) {
-                    self.printed_lines.borrow_mut().push(line.to_owned());
+                box Handler {
+                    printed_lines: printed_lines.dupe(),
+                    called: false,
                 }
-            }
-
-            box Handler {
-                printed_lines: printed_lines.dupe(),
-                called: false,
-            }
-        };
-        eval.eval_module(
-            AstModule::parse(
-                "x.star",
-                "x = [1,2,3]; breakpoint()".to_owned(),
-                &Dialect::Extended,
-            )
-            .unwrap(),
-            &globals,
-        )
-        .unwrap();
+            });
+        });
+        a.pass("x = [1,2,3]; breakpoint()");
 
         assert_eq!(
             vec![BREAKPOINT_HIT_MESSAGE, "[1, 2, 3]"],
             *printed_lines_copy.borrow()
+        );
+    }
+
+    #[test]
+    fn test_breakpoint_disabled() {
+        let _g = TEST_MUTEX.lock();
+        reset_global_state();
+
+        let mut a = Assert::new();
+        a.globals_add(global);
+        a.fail(
+            "x = [1,2,3]; breakpoint()",
+            "Breakpoint handler is not enabled",
         );
     }
 }

@@ -145,6 +145,7 @@ impl Context {
             }
         };
         let mut eval = Evaluator::new(module);
+        eval.enable_terminal_breakpoint_console();
         let globals = globals();
         Self::err(file, eval.eval_module(ast, &globals).map(|_| iter::empty()))
     }

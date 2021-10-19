@@ -194,12 +194,12 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 }
 
 /// Environment in which to run assertion tests.
-#[derive(Clone)]
 pub struct Assert {
     dialect: Dialect,
     modules: HashMap<String, FrozenModule>,
     globals: Globals,
     gc_strategy: Option<GcStrategy>,
+    setup_eval: Option<Box<dyn Fn(&mut Evaluator)>>,
 }
 
 /// Construction and state management.
@@ -215,12 +215,17 @@ impl Assert {
             modules: hashmap!["assert.star".to_owned() => Lazy::force(&ASSERT_STAR).dupe()],
             globals: Lazy::force(&GLOBALS).dupe(),
             gc_strategy: None,
+            setup_eval: None,
         }
     }
 
     /// Disable garbage collection on the tests.
     pub fn disable_gc(&mut self) {
         self.gc_strategy = Some(GcStrategy::Never)
+    }
+
+    pub fn setup_eval(&mut self, setup: impl Fn(&mut Evaluator) + 'static) {
+        self.setup_eval = Some(box setup);
     }
 
     fn with_gc<A>(&self, f: impl Fn(GcStrategy) -> A) -> A {
@@ -250,6 +255,9 @@ impl Assert {
         let loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
         let mut eval = Evaluator::new(module);
+        if let Some(setup_eval) = &self.setup_eval {
+            setup_eval(&mut eval);
+        }
 
         let gc_always = |_, eval: &mut Evaluator| {
             eval.trigger_gc();

@@ -108,7 +108,7 @@ pub struct Evaluator<'v, 'a> {
     /// If this value is used, garbage collection is disabled.
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
     /// Called to perform console IO each time `breakpoint` function is called.
-    pub(crate) breakpoint_handler: Box<dyn Fn() -> Box<dyn BreakpointConsole>>,
+    pub(crate) breakpoint_handler: Option<Box<dyn Fn() -> Box<dyn BreakpointConsole>>>,
     // The Starlark-level call-stack of functions.
     // Must go last because it's quite a big structure
     pub(crate) call_stack: CallStack<'v>,
@@ -148,8 +148,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             heap_or_flame_profile: false,
             before_stmt: Vec::new(),
             def_info: DefInfo::empty(), // Will be replaced before it is used
-            breakpoint_handler: RealBreakpointConsole::factory(),
             string_pool: StringPool::default(),
+            breakpoint_handler: None,
         }
     }
 
@@ -261,6 +261,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.flame_profile
             .write(filename.as_ref())
             .unwrap_or_else(|| Err(EvaluatorError::FlameProfilingNotEnabled.into()))
+    }
+
+    /// Enable interactive `breakpoint()`. When enabled, `breakpoint()`
+    /// reads commands from stdin and write to stdout.
+    /// When disabled (default), `breakpoint()` function results in error.
+    pub fn enable_terminal_breakpoint_console(&mut self) {
+        self.breakpoint_handler = Some(RealBreakpointConsole::factory());
     }
 
     /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
