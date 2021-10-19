@@ -557,6 +557,25 @@ impl Compiler<'_> {
         }
     }
 
+    pub(crate) fn module_top_level_stmt(&mut self, stmt: CstStmt) -> StmtsCompiled {
+        match stmt.node {
+            StmtP::Statements(..) => {
+                unreachable!("top level statement lists are handled by outer loop")
+            }
+            StmtP::Expression(expr) => {
+                let stmt = Spanned {
+                    span: expr.span,
+                    // When top level statement is an expression, compile it as return.
+                    // This is used to obtain the result of evaluation
+                    // of the last statement-expression in module.
+                    node: StmtP::Return(Some(expr)),
+                };
+                self.stmt(stmt, true)
+            }
+            _ => self.stmt(stmt, true),
+        }
+    }
+
     fn stmt_if(
         &mut self,
         span: Span,

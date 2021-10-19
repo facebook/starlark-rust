@@ -19,7 +19,6 @@ pub(crate) mod scope;
 
 use std::fmt::Debug;
 
-use anyhow::anyhow;
 use gazebo::prelude::*;
 use once_cell::sync::Lazy;
 
@@ -31,25 +30,12 @@ use crate::{
         compiler::scope::{ScopeData, ScopeId},
         Evaluator, ScopeNames,
     },
-    values::{FrozenRef, FrozenValue, Value},
+    values::{FrozenRef, FrozenValue},
 };
-
-#[derive(Debug)]
-pub(crate) enum EvalException<'v> {
-    Return(Value<'v>),
-    // Error bubbling up
-    Error(anyhow::Error),
-}
 
 /// Error of evaluation of an expression.
 #[derive(Debug)]
 pub(crate) struct ExprEvalException(pub(crate) anyhow::Error);
-
-impl<'v> From<ExprEvalException> for EvalException<'v> {
-    fn from(ExprEvalException(e): ExprEvalException) -> Self {
-        Self::Error(e)
-    }
-}
 
 #[cold]
 #[inline(never)]
@@ -70,29 +56,6 @@ pub(crate) fn add_span_to_expr_error(
     ExprEvalException(add_span_to_error(e, span, eval))
 }
 
-#[cold]
-#[inline(never)]
-pub(crate) fn add_span_to_stmt_error<'v>(
-    e: anyhow::Error,
-    span: Span,
-    eval: &Evaluator,
-) -> EvalException<'v> {
-    EvalException::Error(add_span_to_error(e, span, eval))
-}
-
-/// Convert syntax error to spanned evaluation exception
-#[inline(always)]
-pub(crate) fn throw<'v, T>(
-    r: anyhow::Result<T>,
-    span: Span,
-    eval: &Evaluator<'v, '_>,
-) -> Result<T, EvalException<'v>> {
-    match r {
-        Ok(v) => Ok(v),
-        Err(e) => Err(add_span_to_stmt_error(e, span, eval)),
-    }
-}
-
 /// Convert syntax error to spanned evaluation exception
 #[inline(always)]
 pub(crate) fn expr_throw<'v, T>(
@@ -104,17 +67,6 @@ pub(crate) fn expr_throw<'v, T>(
         Ok(v) => Ok(v),
         Err(e) => Err(add_span_to_expr_error(e, span, eval)),
     }
-}
-
-#[cold]
-#[inline(never)]
-pub(crate) fn throw_eval_exception<T>(x: EvalException<'_>) -> anyhow::Result<T> {
-    Err(match x {
-        EvalException::Error(e) => e,
-        EvalException::Return(..) => {
-            anyhow!("Return statement used outside of a function call")
-        }
-    })
 }
 
 pub(crate) struct Compiler<'a> {

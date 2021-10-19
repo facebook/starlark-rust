@@ -21,12 +21,14 @@ use crate::{
     environment::EnvironmentError,
     eval::{
         compiler::{
+            add_span_to_expr_error, expr_throw,
             scope::{CstLoad, CstStmt, ScopeId, Slot},
-            throw, Compiler, EvalException,
+            Compiler, ExprEvalException,
         },
         Evaluator,
     },
     syntax::ast::StmtP,
+    values::Value,
 };
 
 impl Compiler<'_> {
@@ -34,16 +36,18 @@ impl Compiler<'_> {
         &mut self,
         load: CstLoad,
         eval: &mut Evaluator<'v, '_>,
-    ) -> Result<(), EvalException<'v>> {
+    ) -> Result<(), ExprEvalException> {
         let name = load.node.module.node;
 
         let loadenv = match eval.loader.as_ref() {
             None => {
-                return Err(EvalException::Error(
+                return Err(add_span_to_expr_error(
                     EnvironmentError::NoImportsAvailable(name).into(),
+                    load.span,
+                    eval,
                 ));
             }
-            Some(load) => load.load(&name).map_err(EvalException::Error)?,
+            Some(loader) => expr_throw(loader.load(&name), load.span, eval)?,
         };
 
         for (our_name, their_name) in load.node.args {
@@ -52,7 +56,7 @@ impl Compiler<'_> {
                 Slot::Local(..) => unreachable!("symbol need to be resolved to module"),
                 Slot::Module(slot) => slot,
             };
-            let value = throw(
+            let value = expr_throw(
                 eval.module_env.load_symbol(&loadenv, &their_name.node),
                 our_name.span.merge(their_name.span),
                 eval,
@@ -67,26 +71,23 @@ impl Compiler<'_> {
         &mut self,
         stmt: CstStmt,
         evaluator: &mut Evaluator<'v, '_>,
-    ) -> Result<(), EvalException<'v>> {
+    ) -> Result<Value<'v>, ExprEvalException> {
         match stmt.node {
             StmtP::Statements(stmts) => {
+                let mut last = Value::new_none();
                 for stmt in stmts {
-                    self.eval_top_level_stmt(stmt, evaluator)?;
+                    last = self.eval_top_level_stmt(stmt, evaluator)?;
                 }
-                Ok(())
+                Ok(last)
             }
-            StmtP::Load(load) => self.eval_load(load, evaluator),
-            StmtP::Return(..) => {
-                let stmt = self.stmt(stmt, true);
-                let bc = stmt.as_bc(&self.compile_context());
-                let value = bc.run(evaluator)?;
-                Err(EvalException::Return(value))
+            StmtP::Load(load) => {
+                self.eval_load(load, evaluator)?;
+                Ok(Value::new_none())
             }
             _ => {
-                let stmt = self.stmt(stmt, true);
+                let stmt = self.module_top_level_stmt(stmt);
                 let bc = stmt.as_bc(&self.compile_context());
-                bc.run(evaluator)?;
-                Ok(())
+                bc.run(evaluator)
             }
         }
     }
@@ -95,11 +96,11 @@ impl Compiler<'_> {
         &mut self,
         stmt: CstStmt,
         evaluator: &mut Evaluator<'v, '_>,
-    ) -> Result<(), EvalException<'v>> {
+    ) -> Result<Value<'v>, ExprEvalException> {
         self.enter_scope(ScopeId::module());
-        self.eval_top_level_stmt(stmt, evaluator)?;
+        let value = self.eval_top_level_stmt(stmt, evaluator)?;
         self.exit_scope();
         assert!(self.locals.is_empty());
-        Ok(())
+        Ok(value)
     }
 }

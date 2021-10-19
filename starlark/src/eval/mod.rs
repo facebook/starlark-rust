@@ -30,17 +30,16 @@ pub use runtime::{
 };
 
 use crate::{
-    codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
     environment::Globals,
     eval::{
         compiler::{
             scope::{CompilerAstMap, Scope, ScopeData},
-            throw_eval_exception, Compiler, Constants, EvalException,
+            Compiler, Constants,
         },
         fragment::def::DefInfo,
     },
-    syntax::ast::{AstModule, AstStmt, Expr, Stmt},
+    syntax::ast::AstModule,
     values::{docs::DocString, Value},
 };
 
@@ -52,40 +51,11 @@ mod runtime;
 #[cfg(test)]
 mod tests;
 
-/// For modules, we want to capture the "last" statement in the code,
-/// if it was an expression. Rather than keep track of the value of every
-/// expression, instead add a fake return at the end if the final statement
-/// is an expression.
-fn inject_return(x: &mut AstStmt) {
-    match &mut x.node {
-        Stmt::Statements(xs) => {
-            if let Some(x) = xs.last_mut() {
-                inject_return(x)
-            }
-        }
-        Stmt::Expression(e) => {
-            let e = mem::replace(
-                e,
-                Spanned {
-                    node: Expr::Tuple(Vec::new()),
-                    span: Span::default(),
-                },
-            );
-            x.node = Stmt::Return(Some(e));
-        }
-        _ => {}
-    }
-}
-
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
     /// [`Module`](crate::environment::Module) as appropriate.
     pub fn eval_module(&mut self, ast: AstModule, globals: &Globals) -> anyhow::Result<Value<'v>> {
-        let AstModule {
-            codemap,
-            mut statement,
-        } = ast;
-        inject_return(&mut statement);
+        let AstModule { codemap, statement } = ast;
 
         let globals = self.module_env.frozen_heap().alloc_any(globals.dupe());
 
@@ -172,11 +142,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.def_info = old_def_info;
 
         // Return the result of evaluation
-        match res {
-            Ok(_) => Ok(Value::new_none()),
-            Err(EvalException::Return(x)) => Ok(x),
-            Err(e) => throw_eval_exception(e),
-        }
+        res.map_err(|e| e.0)
     }
 
     /// Evaluate a function stored in a [`Value`], passing in `positional` and `named` arguments.
