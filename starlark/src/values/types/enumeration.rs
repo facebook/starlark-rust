@@ -344,10 +344,6 @@ where
         }
     }
 
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        self.value.get_hash()
-    }
-
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         self.value.write_hash(hasher)
     }

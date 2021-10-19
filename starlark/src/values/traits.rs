@@ -324,15 +324,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         ValueError::unsupported(self, "int()")
     }
 
-    /// This function is deprecated and will be removed soon.
-    ///
-    /// It delegates to `write_hash`.
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        let mut hasher = StarlarkHasher::new();
-        self.write_hash(&mut hasher)?;
-        Ok(hasher.finish_get_hash())
-    }
-
     /// Return a hash data for self to be used when self is placed as a key in a `Dict`.
     /// Return an [`Err`] if there is no hash for this value (e.g. list).
     /// Must be stable between frozen and non-frozen values.
@@ -723,7 +714,6 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn to_json(&self) -> anyhow::Result<String>;
     fn to_bool(&self) -> bool;
     fn to_int(&self) -> anyhow::Result<i32>;
-    fn get_hash(&self) -> anyhow::Result<u64>;
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
     fn extra_memory(&self) -> usize;
     fn equals(&self, _other: Value<'v>) -> anyhow::Result<bool>;

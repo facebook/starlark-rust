@@ -18,4 +18,6 @@
 use crate::values::StarlarkValue;
 
 /// Implemented by "basic" (non-heap allocated) types like `int` or `NoneType`.
-pub(crate) trait StarlarkValueBasic<'v>: StarlarkValue<'v> {}
+pub(crate) trait StarlarkValueBasic<'v>: StarlarkValue<'v> {
+    fn get_hash(&self) -> u64;
+}

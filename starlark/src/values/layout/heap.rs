@@ -43,14 +43,15 @@ use crate::{
         layout::{
             arena::{AValueHeader, Arena, HeapSummary, Reservation},
             avalue::{
-                array_avalue, complex, frozen_list_avalue, frozen_tuple_avalue, list_avalue,
-                simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
+                array_avalue, complex, float_avalue, frozen_list_avalue, frozen_tuple_avalue,
+                list_avalue, simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
                 VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
             constant::constant_string,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
+        types::float::StarlarkFloat,
         AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, SimpleValue, ValueTyped,
     },
 };
@@ -230,6 +231,10 @@ impl FrozenHeap {
             MaybeUninit::write_slice(elem_places, elems);
             FrozenValue::new_repr(&*avalue)
         }
+    }
+
+    pub(crate) fn alloc_float(&self, f: StarlarkFloat) -> FrozenValue {
+        self.alloc_raw(float_avalue(f))
     }
 
     /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
@@ -493,6 +498,10 @@ impl Heap {
         let mut dst = [0; 4];
         let res = x.encode_utf8(&mut dst);
         self.alloc_str(res)
+    }
+
+    pub(crate) fn alloc_float<'v>(&'v self, f: StarlarkFloat) -> Value<'v> {
+        self.alloc_raw(float_avalue(f))
     }
 
     /// Allocate a [`SimpleValue`] on the [`Heap`].

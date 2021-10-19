@@ -54,18 +54,18 @@ impl<'v> StarlarkValue<'v> for NoneType {
     fn to_bool(&self) -> bool {
         false
     }
-    // just took the result of hash(None) in macos python 2.7.10 interpreter.
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        Ok(9_223_380_832_852_120_682)
-    }
-
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u64(9_223_380_832_852_120_682);
+        hasher.write_u64(self.get_hash());
         Ok(())
     }
 }
 
-impl<'v> StarlarkValueBasic<'v> for NoneType {}
+impl<'v> StarlarkValueBasic<'v> for NoneType {
+    fn get_hash(&self) -> u64 {
+        // just took the result of hash(None) in macos python 2.7.10 interpreter.
+        9_223_380_832_852_120_682
+    }
+}
 
 impl<'v> AllocValue<'v> for NoneType {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {

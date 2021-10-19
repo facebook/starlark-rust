@@ -38,9 +38,11 @@ use crate::{
         basic::StarlarkValueBasic,
         bool::StarlarkBool,
         docs::DocItem,
+        float::StarlarkFloat,
         layout::arena::{AValueForward, AValueHeader, AValueRepr},
         list::{FrozenList, List, ListGen},
         none::NoneType,
+        num::Num,
         string::StarlarkStr,
         types::{
             array::Array,
@@ -171,6 +173,12 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
+
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        let mut hasher = StarlarkHasher::new();
+        self.write_hash(&mut hasher)?;
+        Ok(hasher.finish_get_hash())
+    }
 }
 
 /// A trait that covers [`StarlarkValue`].
@@ -195,6 +203,8 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
+
+    fn get_hash(&self) -> anyhow::Result<u64>;
 }
 
 impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
@@ -220,6 +230,10 @@ impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         self.unpack_starlark_str()
+    }
+
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        self.get_hash()
     }
 }
 
@@ -286,6 +300,10 @@ pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v, ExtraElem
     Wrapper(Complex, x)
 }
 
+pub(crate) fn float_avalue<'v>(x: StarlarkFloat) -> impl AValue<'v, ExtraElem = ()> {
+    Wrapper(Direct, x)
+}
+
 // A type where the second element is in control of what instances are in scope
 struct Direct;
 
@@ -345,6 +363,44 @@ impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for Wrapper<Basic, T> {
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         None
     }
+
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        Ok(self.1.get_hash())
+    }
+}
+
+impl<'v> AValue<'v> for Wrapper<Direct, StarlarkFloat> {
+    type StarlarkValue = StarlarkFloat;
+
+    type ExtraElem = ();
+
+    fn extra_len(&self) -> usize {
+        0
+    }
+
+    fn offset_of_extra() -> usize {
+        mem::size_of::<Self>()
+    }
+
+    unsafe fn heap_freeze(
+        &self,
+        me: *mut AValueHeader,
+        freezer: &Freezer,
+    ) -> anyhow::Result<FrozenValue> {
+        heap_freeze_simple_impl(self, me, freezer)
+    }
+
+    unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
+        heap_copy_simple_impl(self, me, tracer)
+    }
+
+    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        None
+    }
+
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        Ok(Num::from(self.1.0).get_hash())
+    }
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
@@ -385,6 +441,10 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
         Some(&self.1)
+    }
+
+    fn get_hash(&self) -> anyhow::Result<u64> {
+        Ok(self.1.get_hash_64())
     }
 }
 
@@ -508,7 +568,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        heap_copy_impl(self, me, tracer)
+        heap_copy_complex_impl(self, me, tracer)
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
@@ -603,6 +663,38 @@ impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
     }
 }
 
+/// `heap_freeze` implementation for `SimpleValue` and `StarlarkFloat`
+/// (`StarlarkFloat` is logically a simple type, but does not implement `SimpleValue` trait).
+unsafe fn heap_freeze_simple_impl<'v, Mode, C>(
+    _: &Wrapper<Mode, C>,
+    me: *mut AValueHeader,
+    freezer: &Freezer,
+) -> anyhow::Result<FrozenValue>
+where
+    Wrapper<Mode, C>: AValue<'v, ExtraElem = ()>,
+{
+    let (fv, r) = freezer.reserve::<Wrapper<Mode, C>>();
+    let x = AValueHeader::overwrite::<Wrapper<Mode, C>>(me, fv.0.ptr_value());
+    r.fill(x);
+    Ok(fv)
+}
+
+/// `heap_copy` implementation for `SimpleValue` and `StarlarkFloat`
+/// (`StarlarkFloat` is logically a simple type, but does not implement `SimpleValue` trait).
+unsafe fn heap_copy_simple_impl<'v, Mode, C>(
+    _: &Wrapper<Mode, C>,
+    me: *mut AValueHeader,
+    tracer: &Tracer<'v>,
+) -> Value<'v>
+where
+    Wrapper<Mode, C>: AValue<'v, ExtraElem = ()>,
+{
+    let (v, r) = tracer.reserve::<Wrapper<Mode, C>>();
+    let x = AValueHeader::overwrite::<Wrapper<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
+    r.fill(x);
+    v
+}
+
 impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
 where
     'v: 'static,
@@ -624,17 +716,11 @@ where
         me: *mut AValueHeader,
         freezer: &Freezer,
     ) -> anyhow::Result<FrozenValue> {
-        let (fv, r) = freezer.reserve::<Self>();
-        let x = AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
-        r.fill(x);
-        Ok(fv)
+        heap_freeze_simple_impl(self, me, freezer)
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        let (v, r) = tracer.reserve::<Self>();
-        let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
-        r.fill(x);
-        v
+        heap_copy_simple_impl(self, me, tracer)
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
@@ -642,10 +728,10 @@ where
     }
 }
 
-/// `heap_copy` implementation for `ComplexType` and `List`
-/// (`List` is logically a complex type, but does not implement `ComplexType` trait
+/// `heap_copy` implementation for `ComplexValue` and `List`
+/// (`List` is logically a complex type, but does not implement `ComplexValue` trait
 /// because it gets frozen into `FrozenList` which is not `SimpleType`).
-unsafe fn heap_copy_impl<'v, Mode, C>(
+unsafe fn heap_copy_complex_impl<'v, Mode, C>(
     _: &Wrapper<Mode, C>,
     me: *mut AValueHeader,
     tracer: &Tracer<'v>,
@@ -692,7 +778,7 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        heap_copy_impl(self, me, tracer)
+        heap_copy_complex_impl(self, me, tracer)
     }
 
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
@@ -720,6 +806,9 @@ impl<'v> AValueDyn<'v> for BlackHole {
         unreachable!()
     }
     fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
+        unreachable!()
+    }
+    fn get_hash(&self) -> anyhow::Result<u64> {
         unreachable!()
     }
 }
@@ -776,9 +865,6 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
         panic!()
     }
     fn to_int(&self) -> anyhow::Result<i32> {
-        panic!()
-    }
-    fn get_hash(&self) -> anyhow::Result<u64> {
         panic!()
     }
     fn write_hash(&self, _hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
@@ -946,9 +1032,6 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<M
     }
     fn to_int(&self) -> anyhow::Result<i32> {
         self.1.to_int()
-    }
-    fn get_hash(&self) -> anyhow::Result<u64> {
-        self.1.get_hash_internal()
     }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         self.1.write_hash(hasher)

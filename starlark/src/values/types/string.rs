@@ -104,7 +104,7 @@ impl StarlarkStr {
         }
     }
 
-    fn get_hash_64(&self) -> u64 {
+    pub(crate) fn get_hash_64(&self) -> u64 {
         // Note relaxed load and store are practically non-locking memory operations.
         let hash = self.str.hash.load(atomic::Ordering::Relaxed);
         if hash != 0 {
@@ -285,10 +285,6 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn to_bool(&self) -> bool {
         !self.is_empty()
-    }
-
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        Ok(self.get_hash_64())
     }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {

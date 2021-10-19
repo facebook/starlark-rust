@@ -97,9 +97,6 @@ impl StarlarkValue<'_> for StarlarkBool {
     fn to_bool(&self) -> bool {
         self.0
     }
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        Ok(self.to_int().unwrap() as u64)
-    }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         hasher.write_u8(if self.0 { 1 } else { 0 });
@@ -123,4 +120,8 @@ impl StarlarkValue<'_> for StarlarkBool {
     }
 }
 
-impl<'v> StarlarkValueBasic<'v> for StarlarkBool {}
+impl<'v> StarlarkValueBasic<'v> for StarlarkBool {
+    fn get_hash(&self) -> u64 {
+        if self.0 { 1 } else { 0 }
+    }
+}

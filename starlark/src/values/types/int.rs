@@ -100,9 +100,6 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     fn to_bool(&self) -> bool {
         self.get() != 0
     }
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        Ok(Num::from(self.get()).get_hash())
-    }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         hasher.write_u64(Num::from(self.get()).get_hash());
         Ok(())
@@ -253,7 +250,11 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
 }
 
-impl<'v> StarlarkValueBasic<'v> for PointerI32 {}
+impl<'v> StarlarkValueBasic<'v> for PointerI32 {
+    fn get_hash(&self) -> u64 {
+        Num::from(self.get()).get_hash()
+    }
+}
 
 #[cfg(test)]
 mod tests {

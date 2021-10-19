@@ -28,8 +28,8 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use crate::{
     collections::StarlarkHasher,
     values::{
-        num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Value, ValueError,
+        num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
+        Value, ValueError,
     },
 };
 
@@ -148,17 +148,15 @@ impl StarlarkFloat {
 
 impl<'v> AllocValue<'v> for f64 {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_simple(StarlarkFloat(self))
+        heap.alloc_float(StarlarkFloat(self))
     }
 }
 
 impl AllocFrozenValue for f64 {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_simple(StarlarkFloat(self))
+        heap.alloc_float(StarlarkFloat(self))
     }
 }
-
-impl SimpleValue for StarlarkFloat {}
 
 fn f64_arith_bin_op<'v, F>(
     left: f64,
@@ -171,7 +169,7 @@ where
     F: FnOnce(f64, f64) -> anyhow::Result<f64>,
 {
     if let Some(right) = right.unpack_num().map(|n| n.as_float()) {
-        Ok(heap.alloc_simple(StarlarkFloat(f(left, right)?)))
+        Ok(heap.alloc_float(StarlarkFloat(f(left, right)?)))
     } else {
         ValueError::unsupported_with(&StarlarkFloat(left), op, right)
     }
@@ -221,21 +219,17 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
         self.0 != 0.0
     }
 
-    fn get_hash_internal(&self) -> anyhow::Result<u64> {
-        Ok(Num::from(self.0).get_hash())
-    }
-
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         hasher.write_u64(Num::from(self.0).get_hash());
         Ok(())
     }
 
     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc_simple(*self))
+        Ok(heap.alloc_float(*self))
     }
 
     fn minus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc_simple(StarlarkFloat(-self.0)))
+        Ok(heap.alloc_float(StarlarkFloat(-self.0)))
     }
 
     fn add(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
