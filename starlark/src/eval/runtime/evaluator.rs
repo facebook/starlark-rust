@@ -202,8 +202,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, &eval.def_info.codemap));
     }
 
-    /// Enable bytecode profiling, allowing [`Evaluator::write_bc_profile`] to be used.
-    pub fn enable_bc_profile(&mut self) {
+    /// Enable bytecode profiling, allowing [`Evaluator::write_bytecode_profile`] to be used.
+    pub fn enable_bytecode_profile(&mut self) {
         self.bc_profile.enable();
     }
 
@@ -247,9 +247,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     /// Write a profile (as a `.csv` file) to a file.
-    /// Only valid if [`enable_bc_profile`](Self::enable_bc_profile) was called
+    /// Only valid if [`enable_bc_profile`](Self::enable_bytecode_profile) was called
     /// before execution began.
-    pub fn write_bc_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
+    pub fn write_bytecode_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
         self.bc_profile.write_csv(filename.as_ref())
     }
 
