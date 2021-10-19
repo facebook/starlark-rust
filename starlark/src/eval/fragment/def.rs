@@ -38,7 +38,7 @@ use crate::{
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
-            Compiler, ExprEvalException,
+            Compiler, EvalException,
         },
         fragment::{
             expr::{ExprCompiledValue, MaybeNot},
@@ -635,7 +635,7 @@ where
         eval.local_variables.release(old_locals);
 
         let ret = match res {
-            Err(ExprEvalException(e)) => return Err(e),
+            Err(EvalException(e)) => return Err(e),
             Ok(v) => v,
         };
 

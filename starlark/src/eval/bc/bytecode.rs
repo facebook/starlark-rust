@@ -28,7 +28,7 @@ use crate::{
             opcode::{BcOpcode, BcOpcodeHandler},
             stack_ptr::BcStackPtr,
         },
-        compiler::{add_span_to_expr_error, ExprEvalException},
+        compiler::{add_span_to_expr_error, EvalException},
         Evaluator,
     },
     values::{FrozenHeapRef, Value},
@@ -75,15 +75,12 @@ impl Bc {
         ptr: BcPtrAddr,
         e: anyhow::Error,
         eval: &Evaluator,
-    ) -> ExprEvalException {
+    ) -> EvalException {
         let span = Self::span_at_ptr(ptr);
         add_span_to_expr_error(e, span, eval)
     }
 
-    pub(crate) fn run<'v>(
-        &self,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> Result<Value<'v>, ExprEvalException> {
+    pub(crate) fn run<'v>(&self, eval: &mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException> {
         BcStackPtr::alloca(eval, self.max_stack_size, |eval, stack_ptr| {
             self.run_with_stack(eval, stack_ptr)
         })
@@ -93,7 +90,7 @@ impl Bc {
         &self,
         eval: &mut Evaluator<'v, '_>,
         mut stack_ptr: BcStackPtr<'v, '_>,
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         // println!("{}", self.bc);
         match run_block(eval, &mut stack_ptr, self.instrs.start_ptr()) {
             RunBlockResult::Return(v) => {
@@ -144,7 +141,7 @@ pub(crate) enum RunBlockResult<'v> {
     /// Return from the function.
     Return(Value<'v>),
     /// Error.
-    Err(ExprEvalException),
+    Err(EvalException),
 }
 
 /// Execute the code block, either a module, a function body or a loop body.

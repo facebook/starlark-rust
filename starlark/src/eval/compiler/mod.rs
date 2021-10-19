@@ -35,7 +35,7 @@ use crate::{
 
 /// Error of evaluation of an expression.
 #[derive(Debug)]
-pub(crate) struct ExprEvalException(pub(crate) anyhow::Error);
+pub(crate) struct EvalException(pub(crate) anyhow::Error);
 
 #[cold]
 #[inline(never)]
@@ -52,8 +52,8 @@ pub(crate) fn add_span_to_expr_error(
     e: anyhow::Error,
     span: Span,
     eval: &Evaluator,
-) -> ExprEvalException {
-    ExprEvalException(add_span_to_error(e, span, eval))
+) -> EvalException {
+    EvalException(add_span_to_error(e, span, eval))
 }
 
 /// Convert syntax error to spanned evaluation exception
@@ -62,7 +62,7 @@ pub(crate) fn expr_throw<'v, T>(
     r: anyhow::Result<T>,
     span: Span,
     eval: &Evaluator<'v, '_>,
-) -> Result<T, ExprEvalException> {
+) -> Result<T, EvalException> {
     match r {
         Ok(v) => Ok(v),
         Err(e) => Err(add_span_to_expr_error(e, span, eval)),

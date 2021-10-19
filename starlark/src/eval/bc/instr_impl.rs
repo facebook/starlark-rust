@@ -38,7 +38,7 @@ use crate::{
             stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
         },
-        compiler::{add_span_to_expr_error, expr_throw, scope::Captured, ExprEvalException},
+        compiler::{add_span_to_expr_error, expr_throw, scope::Captured, EvalException},
         fragment::{
             def::{DefInfo, ParameterCompiled},
             expr::{get_attr_hashed, EvalError},
@@ -72,7 +72,7 @@ pub(crate) trait InstrNoFlowImpl: 'static {
         ip: BcPtrAddr,
         arg: &Self::Arg,
         pops: Self::Pop<'v>,
-    ) -> Result<Self::Push<'v>, ExprEvalException>;
+    ) -> Result<Self::Push<'v>, EvalException>;
 }
 
 pub(crate) struct InstrNoFlow<I: InstrNoFlowImpl>(marker::PhantomData<I>);
@@ -132,7 +132,7 @@ impl<I: InstrNoFlowAddSpanImpl> InstrNoFlowImpl for InstrNoFlowAddSpanWrapper<I>
         ip: BcPtrAddr,
         arg: &Self::Arg,
         pops: Self::Pop<'v>,
-    ) -> Result<Self::Push<'v>, ExprEvalException> {
+    ) -> Result<Self::Push<'v>, EvalException> {
         match I::run_with_args(eval, stack, arg, pops) {
             Ok(pushs) => Ok(pushs),
             Err(e) => Err(Bc::wrap_error_for_instr_ptr(ip, e, eval)),
@@ -159,7 +159,7 @@ impl InstrNoFlowImpl for InstrDupImpl {
         _ip: BcPtrAddr,
         (): &(),
         v: Value<'v>,
-    ) -> Result<[Value<'v>; 2], ExprEvalException> {
+    ) -> Result<[Value<'v>; 2], EvalException> {
         Ok([v, v])
     }
 }
@@ -177,7 +177,7 @@ impl InstrNoFlowImpl for InstrPopImpl {
         _ip: BcPtrAddr,
         (): &(),
         _v: Value<'v>,
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         Ok(())
     }
 }
@@ -198,7 +198,7 @@ impl InstrNoFlowImpl for InstrConstImpl {
         _ip: BcPtrAddr,
         arg: &FrozenValue,
         (): (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         Ok(arg.to_value())
     }
 }
@@ -221,7 +221,7 @@ macro_rules! instr_const_n {
                 _ip: BcPtrAddr,
                 vs: &Self::Arg,
                 _pops: (),
-            ) -> Result<[Value<'v>; $n], ExprEvalException> {
+            ) -> Result<[Value<'v>; $n], EvalException> {
                 Ok(coerce(*vs))
             }
         }
@@ -290,7 +290,7 @@ fn load_local<'v, const N: usize>(
     eval: &mut Evaluator<'v, '_>,
     slots: &[LocalSlotId; N],
     spans: FrozenRef<Vec<Span>>,
-) -> Result<[Value<'v>; N], ExprEvalException> {
+) -> Result<[Value<'v>; N], EvalException> {
     #[cold]
     #[inline(never)]
     fn fail<'v>(
@@ -298,7 +298,7 @@ fn load_local<'v, const N: usize>(
         index: usize,
         slot: LocalSlotId,
         spans: FrozenRef<Vec<Span>>,
-    ) -> ExprEvalException {
+    ) -> EvalException {
         let err = eval.local_var_referenced_before_assignment(slot);
         let span = spans[index];
         add_span_to_expr_error(err, span, eval)
@@ -337,7 +337,7 @@ macro_rules! instr_local_local_n {
                 _ip: BcPtrAddr,
                 (slots, spans): &Self::Arg,
                 _pops: (),
-            ) -> Result<[Value<'v>; $n], ExprEvalException> {
+            ) -> Result<[Value<'v>; $n], EvalException> {
                 load_local(eval, slots, *spans)
             }
         }
@@ -412,7 +412,7 @@ impl InstrNoFlowImpl for InstrStoreLocalImpl {
         _ip: BcPtrAddr,
         arg: &LocalSlotId,
         v: Value<'v>,
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         eval.set_slot_local(*arg, v);
         Ok(())
     }
@@ -430,7 +430,7 @@ impl InstrNoFlowImpl for InstrStoreLocalCapturedImpl {
         _ip: BcPtrAddr,
         arg: &LocalSlotId,
         v: Value<'v>,
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         eval.set_slot_local_captured(*arg, v);
         Ok(())
     }
@@ -448,7 +448,7 @@ impl InstrNoFlowImpl for InstrStoreModuleAndExportImpl {
         _ip: BcPtrAddr,
         (slot, name): &(ModuleSlotId, String),
         v: Value<'v>,
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         v.export_as(name.as_str(), eval);
         eval.set_slot_module(*slot, v);
         Ok(())
@@ -467,7 +467,7 @@ impl InstrNoFlowImpl for InstrStoreModuleImpl {
         _ip: BcPtrAddr,
         slot: &ModuleSlotId,
         v: Value<'v>,
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         eval.set_slot_module(*slot, v);
         Ok(())
     }
@@ -1081,7 +1081,7 @@ impl InstrNoFlowImpl for InstrTypeIsImpl {
         _: BcPtrAddr,
         t: &FrozenStringValue,
         v: Value<'v>,
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         Ok(Value::new_bool(v.get_type_value() == *t))
     }
 }
@@ -1133,7 +1133,7 @@ impl InstrNoFlowImpl for InstrTupleNPopImpl {
         _: BcPtrAddr,
         npops: &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         let items = stack.pop_slice(*npops);
         Ok(eval.heap().alloc_tuple(items))
     }
@@ -1152,7 +1152,7 @@ impl InstrNoFlowImpl for InstrListNPopImpl {
         _: BcPtrAddr,
         npops: &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         let items = stack.pop_slice(*npops);
         Ok(eval.heap().alloc_list(items))
     }
@@ -1171,7 +1171,7 @@ impl InstrNoFlowImpl for InstrListOfConstsImpl {
         _: BcPtrAddr,
         values: &Self::Arg,
         (): (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         Ok(eval.heap().alloc_list(coerce(&values)))
     }
 }
@@ -1189,7 +1189,7 @@ impl InstrNoFlowImpl for InstrDictOfConstsImpl {
         _: BcPtrAddr,
         values: &Self::Arg,
         (): (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         Ok(eval.heap().alloc(Dict::new((*coerce(values)).clone())))
     }
 }
@@ -1206,7 +1206,7 @@ impl InstrNoFlowImpl for InstrDictNPopImpl {
         _: BcPtrAddr,
         (npops, spans): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         let items = stack.pop_slice(*npops);
         debug_assert!(items.len() % 2 == 0);
         debug_assert!(spans.len() == items.len() / 2);
@@ -1240,7 +1240,7 @@ impl InstrNoFlowImpl for InstrDictConstKeysImpl {
         _: BcPtrAddr,
         (npops, keys): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         let values = stack.pop_slice(*npops);
         assert!(keys.len() == values.len());
         let mut dict = SmallMap::with_capacity(keys.len());
@@ -1265,7 +1265,7 @@ impl InstrNoFlowImpl for InstrListNewImpl {
         _: BcPtrAddr,
         (): &(),
         (): (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         Ok(eval.heap().alloc_list(&[]))
     }
 }
@@ -1283,7 +1283,7 @@ impl InstrNoFlowImpl for InstrDictNewImpl {
         _: BcPtrAddr,
         (): &(),
         (): (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         Ok(eval.heap().alloc(Dict::default()))
     }
 }
@@ -1301,7 +1301,7 @@ impl InstrNoFlowImpl for InstrComprListAppendImpl {
         _: BcPtrAddr,
         (): &(),
         [list, item]: [Value<'v>; 2],
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         List::from_value_mut(list)
             .unwrap()
             .unwrap()
@@ -1420,7 +1420,7 @@ impl BcInstr for InstrForLoop {
         enum LoopResult<'v> {
             Ok,
             Return(Value<'v>),
-            Err(ExprEvalException),
+            Err(EvalException),
         }
 
         let iter_ret = collection.with_iterator(eval.heap(), |iter| {
@@ -1546,7 +1546,7 @@ impl InstrNoFlowImpl for InstrDefImpl {
         _ip: BcPtrAddr,
         (pops, def_data): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         let pop = stack.pop_slice(*pops);
 
         let mut parameters =
@@ -1874,7 +1874,7 @@ impl InstrNoFlowImpl for InstrPossibleGcImpl {
         _ip: BcPtrAddr,
         (): &(),
         (): (),
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         possible_gc(eval);
         Ok(())
     }
@@ -1892,7 +1892,7 @@ impl InstrNoFlowImpl for InstrBeforeStmtImpl {
         _: BcPtrAddr,
         span: &Span,
         (): (),
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         before_stmt(*span, eval);
         Ok(())
     }
@@ -1910,7 +1910,7 @@ impl InstrNoFlowImpl for InstrProfileBcImpl {
         _ip: BcPtrAddr,
         opcode: &BcOpcode,
         (): (),
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         eval.bc_profile.before_instr(*opcode);
         Ok(())
     }

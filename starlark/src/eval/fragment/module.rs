@@ -23,7 +23,7 @@ use crate::{
         compiler::{
             add_span_to_expr_error, expr_throw,
             scope::{CstLoad, CstStmt, ScopeId, Slot},
-            Compiler, ExprEvalException,
+            Compiler, EvalException,
         },
         Evaluator,
     },
@@ -36,7 +36,7 @@ impl Compiler<'_> {
         &mut self,
         load: CstLoad,
         eval: &mut Evaluator<'v, '_>,
-    ) -> Result<(), ExprEvalException> {
+    ) -> Result<(), EvalException> {
         let name = load.node.module.node;
 
         let loadenv = match eval.loader.as_ref() {
@@ -71,7 +71,7 @@ impl Compiler<'_> {
         &mut self,
         stmt: CstStmt,
         evaluator: &mut Evaluator<'v, '_>,
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         match stmt.node {
             StmtP::Statements(stmts) => {
                 let mut last = Value::new_none();
@@ -96,7 +96,7 @@ impl Compiler<'_> {
         &mut self,
         stmt: CstStmt,
         evaluator: &mut Evaluator<'v, '_>,
-    ) -> Result<Value<'v>, ExprEvalException> {
+    ) -> Result<Value<'v>, EvalException> {
         self.enter_scope(ScopeId::module());
         let value = self.eval_top_level_stmt(stmt, evaluator)?;
         self.exit_scope();
