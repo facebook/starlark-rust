@@ -25,6 +25,7 @@ use crate::collections::StarlarkHasher;
 
 /// A hash result.
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default, Trace)]
+// Hash value must be well swizzled.
 pub struct SmallHashResult(u32);
 
 /// A key and its hash.
@@ -54,11 +55,24 @@ impl SmallHashResult {
     /// Directly create a new [`SmallHashResult`] using a hash.
     /// The expectation is that the key will be well-swizzled,
     /// or there may be many hash collisions.
-    pub fn new_unchecked(hash: u64) -> Self {
-        // NOTE: Here we throw away half the key material we are given,
-        // taking only the lower 32 bits.
-        // Not a problem because `DefaultHasher` produces well-swizzled bits.
-        Self(hash as u32)
+    pub fn new_unchecked(hash: u32) -> Self {
+        Self(hash)
+    }
+
+    /// Hash 64-bit integer.
+    ///
+    /// Input can also be a non-well swizzled hash to create better hash.
+    pub(crate) const fn hash_64(h: u64) -> Self {
+        // `fmix64` function from MurMur3 hash (which is in public domain).
+        // https://github.com/aappleby/smhasher/blob/61a0530f28277f2e850bfc39600ce61d02b518de/src/MurmurHash3.cpp#L81
+
+        let h = h ^ (h >> 33);
+        let h = h.wrapping_mul(0xff51afd7ed558ccd);
+        let h = h ^ (h >> 33);
+        let h = h.wrapping_mul(0xc4ceb9fe1a85ec53);
+        let h = h ^ (h >> 33);
+
+        SmallHashResult(h as u32)
     }
 
     pub(crate) fn get(self) -> u32 {

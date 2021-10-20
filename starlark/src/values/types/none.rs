@@ -55,6 +55,7 @@ impl<'v> StarlarkValue<'v> for NoneType {
         false
     }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        // just took the result of hash(None) in macos python 2.7.10 interpreter.
         hasher.write_u64(9_223_380_832_852_120_682);
         Ok(())
     }
@@ -62,8 +63,8 @@ impl<'v> StarlarkValue<'v> for NoneType {
 
 impl<'v> StarlarkValueBasic<'v> for NoneType {
     fn get_hash(&self) -> SmallHashResult {
-        // just took the result of hash(None) in macos python 2.7.10 interpreter.
-        SmallHashResult::new_unchecked(9_223_380_832_852_120_682)
+        // Just a random number.
+        SmallHashResult::new_unchecked(0xf9c2263d)
     }
 }
 

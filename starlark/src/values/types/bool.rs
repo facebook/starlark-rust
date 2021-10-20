@@ -122,6 +122,7 @@ impl StarlarkValue<'_> for StarlarkBool {
 
 impl<'v> StarlarkValueBasic<'v> for StarlarkBool {
     fn get_hash(&self) -> SmallHashResult {
-        SmallHashResult::new_unchecked(if self.0 { 1 } else { 0 })
+        // These constants are just two random numbers.
+        SmallHashResult::new_unchecked(if self.0 { 0xa4acba08 } else { 0x71e8ba71 })
     }
 }

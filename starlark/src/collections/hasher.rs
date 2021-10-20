@@ -31,7 +31,10 @@ impl StarlarkHasher {
     }
 
     pub(crate) fn finish_small(self) -> SmallHashResult {
-        SmallHashResult::new_unchecked(self.finish())
+        // NOTE: Here we throw away half the key material we are given,
+        // taking only the lower 32 bits.
+        // Not a problem because `DefaultHasher` produces well-swizzled bits.
+        SmallHashResult::new_unchecked(self.finish() as u32)
     }
 }
 

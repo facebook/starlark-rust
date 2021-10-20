@@ -121,7 +121,7 @@ impl StarlarkStr {
 
     pub fn as_str_hashed(&self) -> BorrowHashed<str> {
         BorrowHashed::new_unchecked(
-            SmallHashResult::new_unchecked(self.get_hash_64()),
+            SmallHashResult::new_unchecked(self.get_hash_64() as u32),
             self.unpack(),
         )
     }

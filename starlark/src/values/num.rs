@@ -101,7 +101,7 @@ impl Num {
     }
 
     pub(crate) fn get_small_hash_result(self) -> SmallHashResult {
-        SmallHashResult::new_unchecked(self.get_hash())
+        SmallHashResult::hash_64(self.get_hash())
     }
 }
 
