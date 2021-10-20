@@ -242,10 +242,10 @@ fn string_repr(str: &str, buffer: &mut String) {
             }
             // We enumerated all the bytes from 0..127.
             // The ones '"\ prepend an escape.
-            // The ones below 31 print with a unicode escape.
+            // The ones below 31 or equal 127 print with a unicode escape.
             // Make sure we perfectly match escape_debug so if we take the
             // bailout its not a visible difference.
-            if x <= 31 {
+            if x <= 31 || x == 127 {
                 for c in char::from(x).escape_debug() {
                     buffer.push(c)
                 }
@@ -538,7 +538,7 @@ impl<'v> ComplexValue<'v> for StringIterator<'v> {
 mod tests {
     use crate::{
         assert,
-        values::{index::apply_slice, Heap, Value},
+        values::{index::apply_slice, types::string::string_repr, Heap, Value},
     };
 
     #[test]
@@ -605,6 +605,18 @@ mod tests {
 "\"Hello, 世界\"" == repr("Hello, 世界")
 "#,
         );
+    }
+
+    #[test]
+    fn test_string_repr() {
+        fn test(expected: &str, input: &str) {
+            let mut repr = String::new();
+            string_repr(input, &mut repr);
+            assert_eq!(expected, &repr);
+        }
+        // TODO(nga): should use \x escapes according to Starlark spec.
+        test(r#""\u{12}""#, "\x12");
+        test(r#""\u{7f}""#, "\x7f");
     }
 
     #[test]
