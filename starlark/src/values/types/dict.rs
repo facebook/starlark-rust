@@ -186,10 +186,7 @@ impl<'v> Dict<'v> {
     }
 
     /// Iterate through the key/value pairs in the dictionary.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a
-    where
-        'v: 'a,
-    {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a {
         self.content.iter().map(|(l, r)| (*l, *r))
     }
 
@@ -472,9 +469,25 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for
 
 /// Like [`ValueOf`](crate::values::ValueOf), but only validates key and value types; does not construct
 /// or store a map. Use `to_dict` to get at the map.
-pub struct DictOf<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> {
+pub struct DictOf<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> {
     value: Value<'v>,
     phantom: PhantomData<(K, V)>,
+}
+
+impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> DictOf<'v, K, V> {
+    // This should return an iterator, but it is not trivial to do with `ARef`.
+    pub fn collect_entries(&self) -> Vec<(K, V)> {
+        Dict::from_value(self.value)
+            .expect("already validated as a dict")
+            .iter()
+            .map(|(k, v)| {
+                (
+                    K::unpack_value(k).expect("already validated key"),
+                    V::unpack_value(v).expect("already validated value"),
+                )
+            })
+            .collect()
+    }
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
@@ -492,7 +505,7 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
     }
 }
 
-impl<'v, K: UnpackValue<'v> + Hash, V: UnpackValue<'v>> UnpackValue<'v> for DictOf<'v, K, V> {
+impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> UnpackValue<'v> for DictOf<'v, K, V> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let dict = Dict::from_value(value)?;
         let all_valid = dict
