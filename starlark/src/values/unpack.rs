@@ -20,7 +20,7 @@
 use std::ops::Deref;
 
 use either::Either;
-use gazebo::cell::ARef;
+use gazebo::{cell::ARef, prelude::*};
 
 use crate::values::{list::List, tuple::Tuple, Value};
 
@@ -47,7 +47,7 @@ impl<'v> UnpackValue<'v> for Value<'v> {
 /// and [`DictOf`](crate::values::dict::DictOf), which
 /// validate the types of their containers on unpack, but do not store the
 /// resulting Vec/Map
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Dupe)]
 pub struct ValueOf<'v, T: UnpackValue<'v>> {
     /// The original [`Value`] on the same heap.
     pub value: Value<'v>,
