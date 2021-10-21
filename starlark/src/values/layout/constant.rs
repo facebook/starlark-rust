@@ -23,7 +23,7 @@ use std::{
     intrinsics::copy_nonoverlapping,
     ops::Deref,
     ptr,
-    sync::atomic::AtomicU64,
+    sync::atomic::AtomicU32,
 };
 
 use gazebo::{
@@ -60,7 +60,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
                 header: VALUE_STR_A_VALUE_PTR,
                 payload: StarlarkStrN {
                     len: N as u32,
-                    hash: AtomicU64::new(0),
+                    hash: AtomicU32::new(0),
                     body: payload,
                 },
             },

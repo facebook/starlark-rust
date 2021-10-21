@@ -49,9 +49,8 @@ pub const STRING_TYPE: &str = "string";
 #[repr(C)] // We want the body to come after len
 pub(crate) struct StarlarkStrN<const N: usize> {
     // Lazily-initialized cached hash code.
-    // TODO(nga): if we could change `hash` field to 32-bit, we would save 0.3% memory.
-    pub(crate) hash: atomic::AtomicU64,
-    // Len must come after hash for alignment.
+    pub(crate) hash: atomic::AtomicU32,
+    // Length in bytes.
     pub(crate) len: u32,
     // Followed by an unsized block, meaning this type is unsized.
     // But we can't mark it as such since we really want &StarlarkStr to
@@ -91,7 +90,7 @@ impl StarlarkStr {
         assert!(len as u32 as usize == len, "len overflow");
         StarlarkStr {
             str: StarlarkStrN {
-                hash: atomic::AtomicU64::new(0),
+                hash: atomic::AtomicU32::new(0),
                 len: len as u32,
                 body: [],
             },
@@ -105,26 +104,23 @@ impl StarlarkStr {
         }
     }
 
-    pub(crate) fn get_hash_64(&self) -> u64 {
+    pub(crate) fn get_small_hash_result(&self) -> SmallHashResult {
         // Note relaxed load and store are practically non-locking memory operations.
         let hash = self.str.hash.load(atomic::Ordering::Relaxed);
         if hash != 0 {
-            hash
+            SmallHashResult::new_unchecked(hash)
         } else {
             let mut s = StarlarkHasher::new();
             hash_string_value(self.unpack(), &mut s);
-            let hash = s.finish();
+            let hash = s.finish_small();
             // If hash is zero, we are unlucky, but it is highly improbable.
-            self.str.hash.store(hash, atomic::Ordering::Relaxed);
+            self.str.hash.store(hash.get(), atomic::Ordering::Relaxed);
             hash
         }
     }
 
     pub fn as_str_hashed(&self) -> BorrowHashed<str> {
-        BorrowHashed::new_unchecked(
-            SmallHashResult::new_unchecked(self.get_hash_64() as u32),
-            self.unpack(),
-        )
+        BorrowHashed::new_unchecked(self.get_small_hash_result(), self.unpack())
     }
 
     pub fn len(&self) -> usize {
@@ -419,7 +415,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u64(self.get_hash_64());
+        hasher.write_u32(self.get_small_hash_result().get());
         Ok(())
     }
 

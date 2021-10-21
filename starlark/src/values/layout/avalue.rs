@@ -444,7 +444,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
     }
 
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
-        Ok(SmallHashResult::new_unchecked(self.1.get_hash_64() as u32))
+        Ok(self.1.get_small_hash_result())
     }
 }
 
