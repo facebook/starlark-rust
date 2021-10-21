@@ -28,7 +28,8 @@ use crate::{
     gazebo::any::AnyLifetime,
     values::{
         layout::{arena::AValueRepr, avalue::AValue},
-        FrozenValue, PointerI32, StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, PointerI32, StarlarkValue,
+        Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -159,6 +160,24 @@ impl<'v, T: StarlarkValue<'v>> Deref for ValueTyped<'v, T> {
 impl<'v, T: StarlarkValue<'v>> UnpackValue<'v> for ValueTyped<'v, T> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         ValueTyped::new(value)
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> AllocValue<'v> for ValueTyped<'v, T> {
+    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+        self.0
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> AllocValue<'v> for FrozenValueTyped<'v, T> {
+    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+        self.0.to_value()
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> AllocFrozenValue for FrozenValueTyped<'v, T> {
+    fn alloc_frozen_value(self, _heap: &FrozenHeap) -> FrozenValue {
+        self.0
     }
 }
 
