@@ -22,14 +22,14 @@ use std::cmp;
 use anyhow::anyhow;
 use gazebo::prelude::*;
 
+use crate as starlark;
 use crate::{
-    self as starlark,
     environment::GlobalsBuilder,
     eval::Arguments,
     stdlib::util::convert_indices,
     values::{
-        fast_string, interpolation, none::NoneOr, string, tuple::Tuple, StringValue, UnpackValue,
-        Value, ValueError, ValueOf,
+        interpolation, none::NoneOr, string, string::fast_string, tuple::Tuple, StringValue,
+        UnpackValue, Value, ValueError, ValueOf,
     },
 };
 
