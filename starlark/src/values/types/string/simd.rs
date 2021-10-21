@@ -41,7 +41,7 @@ mod sse2 {
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::*;
 
-    use crate::values::types::simd::Vector;
+    use crate::values::types::string::simd::Vector;
 
     impl Vector for __m128i {
         #[inline(always)]

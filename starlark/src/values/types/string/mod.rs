@@ -31,17 +31,20 @@ use std::{
 
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
+use simd::Vector;
 
 use crate as starlark;
 use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
-        fast_string, index::apply_slice, interpolation, types::simd::Vector, AllocFrozenValue,
-        AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Trace, UnpackValue, Value, ValueError, ValueLike,
+        fast_string, index::apply_slice, interpolation, AllocFrozenValue, AllocValue, ComplexValue,
+        Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue,
+        Value, ValueError, ValueLike,
     },
 };
+
+pub(crate) mod simd;
 
 /// The result of calling `type()` on strings.
 pub const STRING_TYPE: &str = "string";
@@ -812,7 +815,7 @@ mod tests {
     fn test_need_escape() {
         use std::arch::x86_64::*;
 
-        use crate::values::types::simd::Vector;
+        use crate::values::types::string::simd::Vector;
 
         unsafe fn load(s: &str) -> __m128i {
             assert_eq!(s.len(), mem::size_of::<__m128i>());

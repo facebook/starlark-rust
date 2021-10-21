@@ -27,7 +27,6 @@ pub mod list;
 pub mod none;
 pub mod range;
 pub mod record;
-pub(crate) mod simd;
 pub mod string;
 pub mod structs;
 pub mod tuple;
