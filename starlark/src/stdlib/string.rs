@@ -28,8 +28,11 @@ use crate::{
     eval::Arguments,
     stdlib::util::convert_indices,
     values::{
-        interpolation, none::NoneOr, string, string::fast_string, tuple::Tuple, StringValue,
-        UnpackValue, Value, ValueError, ValueOf,
+        none::NoneOr,
+        string,
+        string::{fast_string, interpolation},
+        tuple::Tuple,
+        StringValue, UnpackValue, Value, ValueError, ValueOf,
     },
 };
 

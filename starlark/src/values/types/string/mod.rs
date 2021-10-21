@@ -36,13 +36,14 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
-        index::apply_slice, interpolation, string::repr::string_repr, AllocFrozenValue, AllocValue,
-        ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace,
-        UnpackValue, Value, ValueError, ValueLike,
+        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, ComplexValue,
+        Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue,
+        Value, ValueError, ValueLike,
     },
 };
 
 pub(crate) mod fast_string;
+pub(crate) mod interpolation;
 mod repr;
 pub(crate) mod simd;
 

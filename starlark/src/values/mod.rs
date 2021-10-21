@@ -60,7 +60,6 @@ pub mod docs;
 mod error;
 mod frozen_ref;
 mod index;
-pub(crate) mod interpolation;
 pub(crate) mod iter;
 mod layout;
 pub(crate) mod num;

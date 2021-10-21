@@ -50,8 +50,8 @@ use crate::{
     values::{
         dict::Dict,
         function::{BoundMethod, NativeAttribute, NativeFunction},
-        interpolation::{format_one, percent_s_one},
         list::List,
+        string::interpolation::{format_one, percent_s_one},
         typed::FrozenValueTyped,
         typing::TypeCompiled,
         AttrType, FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value, ValueLike,

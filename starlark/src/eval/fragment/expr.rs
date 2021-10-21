@@ -38,8 +38,8 @@ use crate::{
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
-        interpolation::parse_percent_s_one, AttrType, FrozenHeap, FrozenStringValue, FrozenValue,
-        Heap, Value, ValueError, ValueLike,
+        string::interpolation::parse_percent_s_one, AttrType, FrozenHeap, FrozenStringValue,
+        FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
 

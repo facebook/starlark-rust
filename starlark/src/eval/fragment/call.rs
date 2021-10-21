@@ -32,7 +32,8 @@ use crate::{
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
     values::{
-        interpolation::parse_format_one, AttrType, FrozenStringValue, FrozenValue, ValueLike,
+        string::interpolation::parse_format_one, AttrType, FrozenStringValue, FrozenValue,
+        ValueLike,
     },
 };
 
