@@ -18,7 +18,7 @@
 use std::{
     borrow::Borrow,
     fmt,
-    fmt::{Debug, Formatter},
+    fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     intrinsics::copy_nonoverlapping,
     ops::Deref,
@@ -248,9 +248,21 @@ impl<'v> StringValue<'v> {
     }
 }
 
+impl<'v> Display for StringValue<'v> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
+impl Display for FrozenStringValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.to_string_value(), f)
+    }
+}
+
 /// Common type for [`StringValue`] and [`FrozenStringValue`].
 pub trait StringValueLike<'v>:
-    Trace<'v> + CoerceKey<StringValue<'v>> + Debug + Copy + Clone + Dupe
+    Trace<'v> + CoerceKey<StringValue<'v>> + Display + Debug + Copy + Clone + Dupe
 {
     fn to_string_value(self) -> StringValue<'v>;
 }
