@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use std::hash::{BuildHasherDefault, Hasher};
+use std::hash::Hasher;
 
 use gazebo::prelude::*;
 
@@ -32,8 +32,6 @@ use gazebo::prelude::*;
 pub(crate) fn mix_u32(n: u32) -> u64 {
     (n as u64).wrapping_mul(0x9e3779b97f4a7c15)
 }
-
-pub(crate) type BuildIdHasher = BuildHasherDefault<IdHasher>;
 
 /// A Hasher, faster than `DefaultHasher`, but can only hash
 /// one single pre-hashed u32. That matches `SmallHashResult`.
