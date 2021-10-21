@@ -307,10 +307,8 @@ impl Arena {
 
     // Iterate over the values in the heap in the order they
     // were added.
-    // Requires relying on internal bumpalo invariants, since
-    // there is no spec to the resulting order.
     pub fn for_each_ordered<'a>(&'a mut self, mut f: impl FnMut(&'a AValueHeader)) {
-        // It seems that we get the chunks from most newest to oldest.
+        // We get the chunks from most newest to oldest as per the bumpalo spec.
         // And within each chunk, the values are filled newest to oldest.
         // So need to do two sets of reversing.
         for bump in [&mut self.drop, &mut self.non_drop] {
@@ -334,24 +332,13 @@ impl Arena {
 
     // For each Rust-level type (the String) report how many entries there are in the heap, and how much size they consume
     pub fn allocated_summary(&self) -> HeapSummary {
-        #[cold] // Try and avoid problematic UB :-(
-        #[inline(never)]
         fn for_each<'a>(bump: &'a Bump, mut f: impl FnMut(&'a AValueHeader)) {
-            // We have a problem that `iter_allocated_chunks` requires a &mut, and for things like
-            // FrozenModule we don't have a mutable Bump. The only reason that the function requires &mut
-            // is to make sure new values don't get allocated while you have references to old values,
-            // but that's not a problem for us, since we immediately use the values and don't keep them around.
-            //
-            // We have requested an alternative function in terms of *const, which would be safe,
-            // but until that arrives, we cast the & pointer to &mut, accepting a small amount of UB.
-            // See https://github.com/fitzgen/bumpalo/issues/121.
-            //
-            // This might not be safe if the function `f` allocated on the heap,
-            // but since this is a local function with a controlled closure, we know that it doesn't.
-            #[allow(clippy::cast_ref_to_mut)]
-            let bump = unsafe { &mut *(bump as *const Bump as *mut Bump) };
-            bump.iter_allocated_chunks()
-                .for_each(|chunk| Arena::iter_chunk(chunk, &mut f))
+            // SAFE: We're consuming the iterator immediately and not allocating from the arena during.
+            unsafe {
+                bump.iter_allocated_chunks_raw().for_each(|(data, len)| {
+                    Arena::iter_chunk(slice::from_raw_parts(data as *const _, len), &mut f)
+                })
+            }
         }
 
         // Record how many times each header occurs
