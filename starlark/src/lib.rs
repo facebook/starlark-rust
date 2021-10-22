@@ -352,7 +352,6 @@
 #![feature(const_fn_trait_bound)]
 #![feature(const_intrinsic_copy)]
 #![feature(const_mut_refs)]
-#![feature(const_panic)]
 #![feature(const_ptr_offset)]
 #![feature(const_raw_ptr_deref)]
 #![feature(const_refs_to_cell)]
@@ -367,6 +366,7 @@
 #![feature(thread_local)]
 #![feature(try_blocks)]
 #![feature(iter_intersperse)]
+#![cfg_attr(fbcode_build, feature(const_panic))]
 //
 // Plugins
 #![cfg_attr(feature = "custom_linter", feature(plugin))]
