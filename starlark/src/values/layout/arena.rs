@@ -248,16 +248,15 @@ impl Arena {
     pub(crate) fn alloc<'v, 'v2: 'v, T: AValue<'v2, ExtraElem = ()>>(
         &'v self,
         x: T,
-    ) -> &'v AValueHeader {
+    ) -> &'v AValueRepr<T> {
         debug_assert!(x.extra_len() == 0);
         let bump = self.bump_for_type::<T>();
         let (p, extra) = Self::alloc_uninit::<T>(bump, 0);
         debug_assert!(extra.is_empty());
-        let p = p.write(AValueRepr {
+        p.write(AValueRepr {
             header: AValueHeader::new(&x),
             payload: x,
-        });
-        &p.header
+        })
     }
 
     /// Allocate a type `T` plus `extra` bytes.

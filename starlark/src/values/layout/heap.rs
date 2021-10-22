@@ -41,7 +41,7 @@ use crate::{
         any::StarlarkAny,
         array::Array,
         layout::{
-            arena::{AValueHeader, Arena, HeapSummary, Reservation},
+            arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation},
             avalue::{
                 array_avalue, complex, float_avalue, frozen_list_avalue, frozen_tuple_avalue,
                 list_avalue, simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
@@ -182,8 +182,8 @@ impl FrozenHeap {
     }
 
     fn alloc_raw(&self, x: impl AValue<'static, ExtraElem = ()>) -> FrozenValue {
-        let v: &AValueHeader = self.arena.alloc(x);
-        FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(v) })
+        let v: &AValueRepr<_> = self.arena.alloc(x);
+        unsafe { FrozenValue::new_repr(cast::ptr_lifetime(v)) }
     }
 
     /// Allocate a string on this heap. Be careful about the warnings
@@ -366,12 +366,15 @@ impl Heap {
     fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2, ExtraElem = ()>) -> Value<'v> {
         let arena_ref = self.arena.borrow_mut();
         let arena = &*arena_ref;
-        let v: &AValueHeader = arena.alloc(x);
+        let v: &AValueRepr<_> = arena.alloc(x);
 
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        Value::new_ptr(unsafe { cast::ptr_lifetime(v) })
+        unsafe {
+            let value = Value::new_repr(cast::ptr_lifetime(v));
+            transmute!(Value, Value, value)
+        }
     }
 
     fn alloc_raw_typed<'v, A: AValue<'v, ExtraElem = ()>>(
@@ -394,7 +397,7 @@ impl Heap {
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
+        unsafe { transmute!(Value, Value, Value::new_repr(&*v)) }
     }
 
     /// Allocate a string on the heap.
@@ -587,7 +590,7 @@ impl<'v> Tracer<'v> {
     pub(crate) fn alloc_str(&self, x: &str) -> Value<'v> {
         let (v, extra) = self.arena.alloc_extra_non_drop(starlark_str(x.len()));
         MaybeUninit::write_slice(extra, x.as_bytes());
-        Value::new_repr(unsafe { cast::ptr_lifetime(&*v) })
+        unsafe { transmute!(Value, Value, Value::new_repr(&*v)) }
     }
 
     fn adjust(&self, value: Value<'v>) -> Value<'v> {

@@ -92,6 +92,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
 /// ```
 #[derive(Copy, Clone, Dupe)]
 #[repr(C)]
+// TODO(nga): wrong `AValueRepr` parameter: it is not `AValue`.
 pub struct FrozenStringValue(&'static AValueRepr<StarlarkStr>);
 
 impl Debug for FrozenStringValue {
@@ -171,7 +172,7 @@ impl<'v> Equivalent<StringValue<'v>> for FrozenStringValue {
 impl FrozenStringValue {
     /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
     pub fn unpack(self) -> FrozenValue {
-        FrozenValue::new_repr(self.0)
+        FrozenValue::new_ptr(&self.0.header)
     }
 
     /// Construct without a check that the value contains a string.

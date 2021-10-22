@@ -43,7 +43,7 @@ use crate::{
     values::{
         layout::{
             arena::{AValueHeader, AValueRepr},
-            avalue::{basic_ref, AValueDyn, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
+            avalue::{basic_ref, AValue, AValueDyn, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
             constant::VALUE_EMPTY_STRING,
             pointer::Pointer,
             pointer_i32::PointerI32,
@@ -85,7 +85,7 @@ impl<'v> Value<'v> {
         Self(Pointer::new_unfrozen(x))
     }
 
-    pub(crate) fn new_repr<T: 'v>(x: &'v AValueRepr<T>) -> Self {
+    pub(crate) fn new_repr<T: AValue<'v>>(x: &'v AValueRepr<T>) -> Self {
         Self::new_ptr(&x.header)
     }
 
@@ -229,7 +229,7 @@ impl FrozenValue {
         Self(Pointer::new_frozen(x))
     }
 
-    pub(crate) fn new_repr<'a, T: 'a>(x: &'static AValueRepr<T>) -> Self {
+    pub(crate) fn new_repr<'a, T: AValue<'a>>(x: &'static AValueRepr<T>) -> Self {
         Self::new_ptr(&x.header)
     }
 
