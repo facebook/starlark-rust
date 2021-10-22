@@ -37,8 +37,8 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, ComplexValue,
-        Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue,
-        Value, ValueError, ValueLike,
+        Freezer, FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value,
+        ValueError, ValueLike,
     },
 };
 
@@ -205,8 +205,6 @@ pub(crate) fn json_escape(x: &str) -> String {
     escaped.push(b'\"');
     unsafe { String::from_utf8_unchecked(escaped) }
 }
-
-impl SimpleValue for StarlarkStr {}
 
 impl Display for StarlarkStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
