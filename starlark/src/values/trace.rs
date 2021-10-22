@@ -76,7 +76,7 @@ unsafe impl<'v, T: Trace<'v> + Copy> Trace<'v> for Cell<T> {
     }
 }
 
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for Box<T> {
+unsafe impl<'v, T: Trace<'v> + ?Sized> Trace<'v> for Box<T> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         Box::as_mut(self).trace(tracer)
     }

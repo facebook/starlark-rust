@@ -84,7 +84,7 @@ fn trace_struct(data: &DataStruct) -> TokenStream {
                     if !is_ignore(&f.attrs) {
                         let name = &f.ident;
                         Some(quote_spanned! {f.span() =>
-                            self.#name.trace(tracer);
+                            starlark::values::Trace::trace(&mut self.#name, tracer);
                         })
                     } else {
                         None
@@ -103,7 +103,7 @@ fn trace_struct(data: &DataStruct) -> TokenStream {
                 .filter_map(|(i, f)| {
                     if !is_ignore(&f.attrs) {
                         let i = syn::Index::from(i);
-                        Some(quote_spanned! {f.span() => self.#i.trace(tracer);})
+                        Some(quote_spanned! {f.span() => starlark::values::Trace::trace(&mut self.#i, tracer);})
                     } else {
                         None
                     }
