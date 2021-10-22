@@ -507,12 +507,12 @@ fn test_module_visibility_preserved_by_evaluator() -> anyhow::Result<()> {
 
     let msg = err.to_string();
     let expected_msg = "Variable `b` not found";
-    if !msg.contains(expected_msg) {
-        panic!(
-            "Expected `{}` to be in error message `{}`",
-            expected_msg, msg
-        );
-    }
+    assert!(
+        msg.contains(expected_msg),
+        "Expected `{}` to be in error message `{}`",
+        expected_msg,
+        msg
+    );
 
     Ok(())
 }
