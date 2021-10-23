@@ -53,28 +53,22 @@ use crate::{
     },
 };
 
-pub(crate) static VALUE_NONE: &AValueHeader = {
+pub(crate) static VALUE_NONE: AValueRepr<AValueImpl<Basic, NoneType>> = {
     const PAYLOAD: AValueImpl<Basic, NoneType> = AValueImpl(Basic, NoneType);
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<AValueImpl<Basic, NoneType>> =
-        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    &DATA.header
+    AValueRepr::with_metadata(metadata(DYN), PAYLOAD)
 };
 
-pub(crate) static VALUE_FALSE: &AValueHeader = {
+pub(crate) static VALUE_FALSE: AValueRepr<AValueImpl<Basic, StarlarkBool>> = {
     const PAYLOAD: AValueImpl<Basic, StarlarkBool> = AValueImpl(Basic, StarlarkBool(false));
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<AValueImpl<Basic, StarlarkBool>> =
-        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    &DATA.header
+    AValueRepr::with_metadata(metadata(DYN), PAYLOAD)
 };
 
-pub(crate) static VALUE_TRUE: &AValueHeader = {
+pub(crate) static VALUE_TRUE: AValueRepr<AValueImpl<Basic, StarlarkBool>> = {
     const PAYLOAD: AValueImpl<Basic, StarlarkBool> = AValueImpl(Basic, StarlarkBool(true));
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<AValueImpl<Basic, StarlarkBool>> =
-        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    &DATA.header
+    AValueRepr::with_metadata(metadata(DYN), PAYLOAD)
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
@@ -86,22 +80,18 @@ pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
     ))
 };
 
-pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
+pub(crate) static VALUE_EMPTY_TUPLE: AValueRepr<AValueImpl<Direct, FrozenTuple>> = {
     const PAYLOAD: AValueImpl<Direct, FrozenTuple> =
         AValueImpl(Direct, unsafe { FrozenTuple::new(0) });
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<AValueImpl<Direct, FrozenTuple>> =
-        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    &DATA.header
+    AValueRepr::with_metadata(metadata(DYN), PAYLOAD)
 };
 
-pub(crate) static VALUE_EMPTY_FROZEN_LIST: &AValueHeader = {
+pub(crate) static VALUE_EMPTY_FROZEN_LIST: AValueRepr<AValueImpl<Direct, ListGen<FrozenList>>> = {
     const PAYLOAD: AValueImpl<Direct, ListGen<FrozenList>> =
         AValueImpl(Direct, ListGen(unsafe { FrozenList::new(0) }));
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<AValueImpl<Direct, ListGen<FrozenList>>> =
-        AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
-    &DATA.header
+    AValueRepr::with_metadata(metadata(DYN), PAYLOAD)
 };
 
 /// `Array` is not `Sync`, so wrap it into this struct to store it in static variable.
@@ -297,24 +287,24 @@ pub(crate) fn float_avalue<'v>(x: StarlarkFloat) -> impl AValue<'v, ExtraElem = 
 }
 
 // A type where the second element is in control of what instances are in scope
-struct Direct;
+pub(crate) struct Direct;
 
 // A type that implements StarlarkValue but nothing else, so will never be stored
 // in the heap (e.g. bool, None)
-struct Basic;
+pub(crate) struct Basic;
 
 // A type that implements SimpleValue.
-struct Simple;
+pub(crate) struct Simple;
 
 // A type that implements ComplexValue.
-struct Complex;
+pub(crate) struct Complex;
 
 // We want to define several types (Simple, Complex) that wrap a StarlarkValue,
 // reimplement it, and do some things custom. The easiest way to avoid repeating
 // the StarlarkValue trait each time is to make them all share a single wrapper,
 // where Mode is one of Simple/Complex.
 #[repr(C)]
-struct AValueImpl<Mode, T>(Mode, T);
+pub(crate) struct AValueImpl<Mode, T>(Mode, T);
 
 // Safe because Simple/Complex are ZST
 unsafe impl<T> Coerce<T> for AValueImpl<Simple, T> {}

@@ -207,7 +207,7 @@ impl FrozenHeap {
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
         if elems.is_empty() {
-            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE, false);
+            return FrozenValue::new_repr(&VALUE_EMPTY_TUPLE);
         }
 
         unsafe {
@@ -221,7 +221,7 @@ impl FrozenHeap {
 
     pub fn alloc_list(&self, elems: &[FrozenValue]) -> FrozenValue {
         if elems.is_empty() {
-            return FrozenValue::new_ptr(VALUE_EMPTY_FROZEN_LIST, false);
+            return FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_LIST);
         }
 
         unsafe {
@@ -450,7 +450,7 @@ impl Heap {
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
         if elems.is_empty() {
-            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE, false).to_value();
+            return FrozenValue::new_repr(&VALUE_EMPTY_TUPLE).to_value();
         }
 
         unsafe {

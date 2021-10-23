@@ -138,7 +138,7 @@ impl<'v> Value<'v> {
     /// Is this value `None`.
     pub fn is_none(self) -> bool {
         // Safe because frozen values never have a tag
-        self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
+        self.0.ptr_value() == cast::ptr_to_usize(&VALUE_NONE)
     }
 
     /// Obtain the underlying numerical value, if it is one.
@@ -149,9 +149,9 @@ impl<'v> Value<'v> {
     /// Obtain the underlying `bool` if it is a boolean.
     pub fn unpack_bool(self) -> Option<bool> {
         let p = self.0.ptr_value();
-        if p == cast::ptr_to_usize(VALUE_TRUE) {
+        if p == cast::ptr_to_usize(&VALUE_TRUE) {
             Some(true)
-        } else if p == cast::ptr_to_usize(VALUE_FALSE) {
+        } else if p == cast::ptr_to_usize(&VALUE_FALSE) {
             Some(false)
         } else {
             None
@@ -259,15 +259,15 @@ impl FrozenValue {
 
     /// Create a new value representing `None` in Starlark.
     pub fn new_none() -> Self {
-        Self::new_ptr(VALUE_NONE, false)
+        Self::new_repr(&VALUE_NONE)
     }
 
     /// Create a new boolean in Starlark.
     pub fn new_bool(x: bool) -> Self {
         if x {
-            Self::new_ptr(VALUE_TRUE, false)
+            Self::new_repr(&VALUE_TRUE)
         } else {
-            Self::new_ptr(VALUE_FALSE, false)
+            Self::new_repr(&VALUE_FALSE)
         }
     }
 
@@ -284,15 +284,15 @@ impl FrozenValue {
     /// Is a value a Starlark `None`.
     pub fn is_none(self) -> bool {
         // Safe because frozen values never have a tag
-        self.0.ptr_value() == cast::ptr_to_usize(VALUE_NONE)
+        self.0.ptr_value() == cast::ptr_to_usize(&VALUE_NONE)
     }
 
     /// Return the [`bool`] if the value is a boolean, otherwise [`None`].
     pub fn unpack_bool(self) -> Option<bool> {
         let p = self.0.ptr_value();
-        if p == cast::ptr_to_usize(VALUE_TRUE) {
+        if p == cast::ptr_to_usize(&VALUE_TRUE) {
             Some(true)
-        } else if p == cast::ptr_to_usize(VALUE_FALSE) {
+        } else if p == cast::ptr_to_usize(&VALUE_FALSE) {
             Some(false)
         } else {
             None
