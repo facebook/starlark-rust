@@ -88,10 +88,12 @@ impl<'p, P> Pointer<'p, P> {
     }
 
     pub fn new_unfrozen_usize(x: usize) -> Self {
+        debug_assert!((x & TAG_BITS) == 0);
         Self::new(x | TAG_UNFROZEN)
     }
 
     pub fn new_frozen_usize(x: usize) -> Self {
+        debug_assert!((x & TAG_BITS) == 0);
         Self::new(x)
     }
 
