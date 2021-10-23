@@ -17,11 +17,13 @@
 
 use gazebo::prelude::*;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::quote_spanned;
+use syn::spanned::Spanned;
 
 use crate::{typ::*, util::*};
 
 pub(crate) fn render(x: StarModule) -> TokenStream {
+    let span = x.span();
     let StarModule {
         name,
         globals_builder,
@@ -29,10 +31,13 @@ pub(crate) fn render(x: StarModule) -> TokenStream {
         stmts,
     } = x;
     let stmts = stmts.into_map(render_stmt);
-    quote! {
+    quote_spanned! {
+        span=>
         #visibility fn #name(globals_builder: #globals_builder) {
             fn build(globals_builder: &mut starlark::environment::GlobalsBuilder) {
                 #( #stmts )*
+                // Mute warning if stmts is empty.
+                let _ = globals_builder;
             }
             static RES: starlark::environment::GlobalsStatic = starlark::environment::GlobalsStatic::new();
             RES.populate(build, globals_builder);
@@ -50,13 +55,16 @@ fn render_stmt(x: StarStmt) -> TokenStream {
 
 fn render_const(x: StarConst) -> TokenStream {
     let StarConst { name, ty, value } = x;
+    let span = name.span();
     let name = ident_string(&name);
-    quote! {
+    quote_spanned! {
+        span=>
         globals_builder.set::<#ty>(#name, #value);
     }
 }
 
 fn render_attr(x: StarAttr) -> TokenStream {
+    let span = x.span();
     let StarAttr {
         name,
         arg,
@@ -65,7 +73,8 @@ fn render_attr(x: StarAttr) -> TokenStream {
         body,
     } = x;
     let name_str = ident_string(&name);
-    quote! {
+    quote_spanned! {
+        span=>
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v, 'a>(
@@ -97,6 +106,8 @@ fn render_attr(x: StarAttr) -> TokenStream {
 }
 
 fn render_fun(x: StarFun) -> TokenStream {
+    let span = x.span();
+
     let name_str = ident_string(&x.name);
     let signature = render_signature(&x);
     let binding = render_binding(&x);
@@ -112,7 +123,9 @@ fn render_fun(x: StarFun) -> TokenStream {
     } = x;
 
     let set_type = type_attribute.map(|x| {
-        quote! {
+        let span = x.span();
+        quote_spanned! {
+            span=>
             const TYPE_N: usize = #x.len();
             static TYPE: starlark::values::StarlarkStrNRepr<TYPE_N> =
                 starlark::values::StarlarkStrNRepr::new(#x);
@@ -121,12 +134,17 @@ fn render_fun(x: StarFun) -> TokenStream {
     });
 
     let signature_arg = signature.as_ref().map(
-        |_| quote! {__signature: &starlark::eval::ParametersSpec<starlark::values::FrozenValue>,},
+        |_| quote_spanned! {span=> __signature: &starlark::eval::ParametersSpec<starlark::values::FrozenValue>,},
     );
-    let signature_val = signature.as_ref().map(|_| quote! {__signature});
-    let signature_val_ref = signature.as_ref().map(|_| quote! {&__signature});
+    let signature_val = signature
+        .as_ref()
+        .map(|_| quote_spanned! {span=> __signature});
+    let signature_val_ref = signature
+        .as_ref()
+        .map(|_| quote_spanned! {span=> &__signature});
 
-    quote! {
+    quote_spanned! {
+        span=>
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v>(
@@ -153,6 +171,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         {
             #signature
             #[allow(unused_mut)]
+            #[allow(clippy::redundant_closure)]
             let mut func = starlark::values::function::NativeFunction::new_direct(
                 move |eval, parameters| #name(eval, parameters, #signature_val_ref),
                 #name_str.to_owned(),
@@ -166,9 +185,11 @@ fn render_fun(x: StarFun) -> TokenStream {
 // Given __args and __signature (if render_signature was Some)
 // create bindings for all the arguments
 fn render_binding(x: &StarFun) -> TokenStream {
+    let span = x.args_span();
     match x.source {
         StarFunSource::Parameters => {
             let StarArg {
+                span,
                 attrs,
                 mutable: _,
                 by_ref: _,
@@ -177,11 +198,13 @@ fn render_binding(x: &StarFun) -> TokenStream {
                 default: _,
                 source: _,
             } = &x.args[0];
-            quote! { #( #attrs )* let #name : #ty = __args; }
+            let span = *span;
+            quote_spanned! { span=> #( #attrs )* let #name : #ty = __args; }
         }
         StarFunSource::Argument(arg_count) => {
             let bind_args = x.args.map(render_binding_arg);
-            quote! {
+            quote_spanned! {
+                span=>
                 let __this = __args.this;
                 let __args: [_; #arg_count] = __signature.collect_into(__args, eval.heap())?;
                 #( #bind_args )*
@@ -190,14 +213,16 @@ fn render_binding(x: &StarFun) -> TokenStream {
         StarFunSource::Positional(required, optional) => {
             let bind_args = x.args.map(render_binding_arg);
             if optional == 0 {
-                quote! {
+                quote_spanned! {
+                    span=>
                     let __this = __args.this;
                     __args.no_named_args()?;
                     let __required: [_; #required] = __args.positional(eval.heap())?;
                     #( #bind_args )*
                 }
             } else {
-                quote! {
+                quote_spanned! {
+                    span=>
                     let __this = __args.this;
                     __args.no_named_args()?;
                     let (__required, __optional): ([_; #required], [_; #optional]) = __args.optional(eval.heap())?;
@@ -211,41 +236,52 @@ fn render_binding(x: &StarFun) -> TokenStream {
 
 // Create a binding for an argument given. If it requires an index, take from the index
 fn render_binding_arg(arg: &StarArg) -> TokenStream {
+    let span = arg.span;
     let name = &arg.name;
     let name_str = ident_string(name);
     let ty = &arg.ty;
 
     let source = match arg.source {
-        StarArgSource::This => quote! {__this},
-        StarArgSource::Argument(i) => quote! {__args[#i].get()},
-        StarArgSource::Required(i) => quote! {Some(__required[#i])},
-        StarArgSource::Optional(i) => quote! {__optional[#i]},
+        StarArgSource::This => quote_spanned! {span=> __this},
+        StarArgSource::Argument(i) => quote_spanned! {span=> __args[#i].get()},
+        StarArgSource::Required(i) => quote_spanned! {span=> Some(__required[#i])},
+        StarArgSource::Optional(i) => quote_spanned! {span=> __optional[#i]},
         _ => unreachable!(),
     };
 
     // Rust doesn't have powerful enough nested if yet
     let next = if arg.is_this() {
-        quote! { starlark::eval::Arguments::check_this(#source)? }
+        quote_spanned! { span=> starlark::eval::Arguments::check_this(#source)? }
     } else if arg.is_option() {
         assert!(
             arg.default.is_none(),
             "Can't have Option argument with a default, for `{}`",
             name_str
         );
-        quote! { starlark::eval::Arguments::check_optional(#name_str, #source)? }
+        quote_spanned! { span=> starlark::eval::Arguments::check_optional(#name_str, #source)? }
     } else if !arg.is_value() && arg.default.is_some() {
         let default = arg
             .default
             .as_ref()
             .unwrap_or_else(|| unreachable!("Checked on the line above"));
-        quote! { starlark::eval::Arguments::check_optional(#name_str, #source)?.unwrap_or(#default) }
+        quote_spanned! { span=>
+            {
+                // Combo
+                #[allow(clippy::manual_unwrap_or)]
+                #[allow(clippy::unnecessary_lazy_evaluations)]
+                #[allow(clippy::redundant_closure)]
+                let x = starlark::eval::Arguments::check_optional(#name_str, #source)?.unwrap_or_else(|| #default);
+                x
+            }
+        }
     } else {
-        quote! { starlark::eval::Arguments::check_required(#name_str, #source)? }
+        quote_spanned! { span=> starlark::eval::Arguments::check_required(#name_str, #source)? }
     };
 
     let mutability = mut_token(arg.mutable);
     let attrs = &arg.attrs;
-    quote! {
+    quote_spanned! {
+        span=>
         #( #attrs )*
         let #mutability #name: #ty = #next;
     }
@@ -254,10 +290,12 @@ fn render_binding_arg(arg: &StarArg) -> TokenStream {
 // Given the arguments, create a variable `signature` with a `ParametersSpec` object.
 // Or return None if you don't need a signature
 fn render_signature(x: &StarFun) -> Option<TokenStream> {
+    let span = x.args_span();
     if let StarFunSource::Argument(args_count) = x.source {
         let name_str = ident_string(&x.name);
         let sig_args = x.args.map(render_signature_arg);
-        Some(quote! {
+        Some(quote_spanned! {
+            span=>
             #[allow(unused_mut)]
             let mut __signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
             #( #sig_args )*
@@ -269,30 +307,32 @@ fn render_signature(x: &StarFun) -> Option<TokenStream> {
 
 // Generate a statement that modifies signature to add a new argument in.
 fn render_signature_arg(arg: &StarArg) -> TokenStream {
+    let span = arg.span;
+
     let mut name_str_full = (if arg.by_ref { "$" } else { "" }).to_owned();
     name_str_full += &ident_string(&arg.name);
     let name_str = name_str_full.trim_matches('_');
 
     if arg.is_args() {
         assert!(arg.default.is_none(), "Can't have *args with a default");
-        quote! {__signature.args();}
+        quote_spanned! { span=> __signature.args();}
     } else if arg.is_kwargs() {
         assert!(arg.default.is_none(), "Can't have **kwargs with a default");
-        quote! {__signature.kwargs();}
+        quote_spanned! { span=> __signature.kwargs();}
     } else if arg.is_this() {
-        quote! {}
+        quote_spanned! { span=> }
     } else if arg.is_option() {
-        quote! {__signature.optional(#name_str);}
+        quote_spanned! { span=> __signature.optional(#name_str);}
     } else if let Some(default) = &arg.default {
         // For things that are type Value, we put them on the frozen heap.
         // For things that aren't type value, use optional and then next_opt/unwrap
         // to avoid the to/from value conversion.
         if arg.is_value() {
-            quote! {__signature.defaulted(#name_str, globals_builder.alloc(#default));}
+            quote_spanned! { span=> __signature.defaulted(#name_str, globals_builder.alloc(#default));}
         } else {
-            quote! {__signature.optional(#name_str);}
+            quote_spanned! { span=> __signature.optional(#name_str);}
         }
     } else {
-        quote! {__signature.required(#name_str);}
+        quote_spanned! { span=> __signature.required(#name_str);}
     }
 }

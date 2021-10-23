@@ -16,7 +16,7 @@
  */
 
 use gazebo::prelude::*;
-use syn::*;
+use syn::{spanned::Spanned, *};
 
 use crate::{typ::*, util::*};
 
@@ -152,6 +152,7 @@ fn parse_fun(func: ItemFn) -> StarStmt {
 }
 
 fn parse_arg(x: FnArg) -> StarArg {
+    let span = x.span();
     match x {
         FnArg::Typed(PatType {
             attrs,
@@ -159,6 +160,7 @@ fn parse_arg(x: FnArg) -> StarArg {
             ty: box ty,
             ..
         }) => StarArg {
+            span,
             attrs,
             mutable: ident.mutability.is_some(),
             name: ident.ident,
