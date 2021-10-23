@@ -69,12 +69,12 @@ impl<const N: usize> StarlarkStrNRepr<N> {
 
     /// Obtain the [`FrozenValue`] for a [`StarlarkStrNRepr`].
     pub fn unpack(&'static self) -> FrozenValue {
-        self.erase().unpack()
+        FrozenValue::new_ptr(&self.repr.header)
     }
 
     /// Erase the type parameter, giving a slightly nicer user experience.
-    pub const fn erase(&'static self) -> FrozenStringValue {
-        unsafe { FrozenStringValue(&*(&self.repr as *const AValueRepr<_> as *const AValueRepr<_>)) }
+    pub fn erase(&'static self) -> FrozenStringValue {
+        unsafe { FrozenStringValue::new_unchecked(self.unpack()) }
     }
 }
 
@@ -86,14 +86,12 @@ impl<const N: usize> StarlarkStrNRepr<N> {
 /// use starlark::const_frozen_string;
 /// use starlark::values::{FrozenStringValue, FrozenValue};
 ///
-/// static RES: FrozenStringValue = const_frozen_string!("magic");
-/// let fv: FrozenValue = RES.unpack();
+/// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
 #[derive(Copy, Clone, Dupe)]
 #[repr(C)]
-// TODO(nga): wrong `AValueRepr` parameter: it is not `AValue`.
-pub struct FrozenStringValue(&'static AValueRepr<StarlarkStr>);
+pub struct FrozenStringValue(FrozenValue);
 
 impl Debug for FrozenStringValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -131,7 +129,7 @@ impl Deref for FrozenStringValue {
     type Target = StarlarkStr;
 
     fn deref(&self) -> &StarlarkStr {
-        &self.0.payload
+        self.as_starlark_str()
     }
 }
 
@@ -172,7 +170,7 @@ impl<'v> Equivalent<StringValue<'v>> for FrozenStringValue {
 impl FrozenStringValue {
     /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
     pub fn unpack(self) -> FrozenValue {
-        FrozenValue::new_ptr(&self.0.header)
+        self.0
     }
 
     /// Construct without a check that the value contains a string.
@@ -180,7 +178,7 @@ impl FrozenStringValue {
     /// If passed value does not contain a string, it may lead to memory corruption.
     pub unsafe fn new_unchecked(value: FrozenValue) -> FrozenStringValue {
         debug_assert!(value.unpack_str().is_some());
-        FrozenStringValue(&*(value.0.ptr_value() as *const AValueRepr<StarlarkStr>))
+        FrozenStringValue(value)
     }
 
     /// Construct from a value. Returns [`None`] if a value does not contain a string.
@@ -192,9 +190,21 @@ impl FrozenStringValue {
         }
     }
 
+    pub(crate) fn as_starlark_str(self) -> &'static StarlarkStr {
+        // TODO: `StarlarkStr` is not `AValue`.
+        unsafe {
+            &self
+                .0
+                .0
+                .unpack_ptr_no_int_unchecked()
+                .as_repr::<StarlarkStr>()
+                .payload
+        }
+    }
+
     /// Get a string.
     pub fn as_str(self) -> &'static str {
-        self.0.payload.unpack()
+        self.as_starlark_str().unpack()
     }
 }
 
