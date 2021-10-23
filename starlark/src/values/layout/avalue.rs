@@ -54,64 +54,66 @@ use crate::{
 };
 
 pub(crate) static VALUE_NONE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, NoneType> = Wrapper(Basic, NoneType);
+    const PAYLOAD: AValueImpl<Basic, NoneType> = AValueImpl(Basic, NoneType);
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, NoneType>> =
+    static DATA: AValueRepr<AValueImpl<Basic, NoneType>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
 
 pub(crate) static VALUE_FALSE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(false));
+    const PAYLOAD: AValueImpl<Basic, StarlarkBool> = AValueImpl(Basic, StarlarkBool(false));
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
+    static DATA: AValueRepr<AValueImpl<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
 
 pub(crate) static VALUE_TRUE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Basic, StarlarkBool> = Wrapper(Basic, StarlarkBool(true));
+    const PAYLOAD: AValueImpl<Basic, StarlarkBool> = AValueImpl(Basic, StarlarkBool(true));
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Basic, StarlarkBool>> =
+    static DATA: AValueRepr<AValueImpl<Basic, StarlarkBool>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
 
 pub(crate) const VALUE_STR_A_VALUE_PTR: AValueHeader = {
     #[allow(clippy::declare_interior_mutable_const)]
-    const VTABLE: Wrapper<Direct, StarlarkStr> = Wrapper(Direct, unsafe { StarlarkStr::new(0) });
+    const VTABLE: AValueImpl<Direct, StarlarkStr> =
+        AValueImpl(Direct, unsafe { StarlarkStr::new(0) });
     AValueHeader::with_metadata(metadata(
-        &VTABLE as *const Wrapper<Direct, StarlarkStr> as *const dyn AValueDyn<'static>,
+        &VTABLE as *const AValueImpl<Direct, StarlarkStr> as *const dyn AValueDyn<'static>,
     ))
 };
 
 pub(crate) static VALUE_EMPTY_TUPLE: &AValueHeader = {
-    const PAYLOAD: Wrapper<Direct, FrozenTuple> = Wrapper(Direct, unsafe { FrozenTuple::new(0) });
+    const PAYLOAD: AValueImpl<Direct, FrozenTuple> =
+        AValueImpl(Direct, unsafe { FrozenTuple::new(0) });
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Direct, FrozenTuple>> =
+    static DATA: AValueRepr<AValueImpl<Direct, FrozenTuple>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
 
 pub(crate) static VALUE_EMPTY_FROZEN_LIST: &AValueHeader = {
-    const PAYLOAD: Wrapper<Direct, ListGen<FrozenList>> =
-        Wrapper(Direct, ListGen(unsafe { FrozenList::new(0) }));
+    const PAYLOAD: AValueImpl<Direct, ListGen<FrozenList>> =
+        AValueImpl(Direct, ListGen(unsafe { FrozenList::new(0) }));
     const DYN: &dyn AValueDyn<'static> = &PAYLOAD;
-    static DATA: AValueRepr<Wrapper<Direct, ListGen<FrozenList>>> =
+    static DATA: AValueRepr<AValueImpl<Direct, ListGen<FrozenList>>> =
         AValueRepr::with_metadata(metadata(DYN), PAYLOAD);
     &DATA.header
 };
 
 /// `Array` is not `Sync`, so wrap it into this struct to store it in static variable.
 /// Empty `Array` is logically `Sync`.
-pub(crate) struct ValueEmptyArray(AValueRepr<Wrapper<Direct, Array<'static>>>);
+pub(crate) struct ValueEmptyArray(AValueRepr<AValueImpl<Direct, Array<'static>>>);
 unsafe impl Sync for ValueEmptyArray {}
 
 pub(crate) static VALUE_EMPTY_ARRAY: ValueEmptyArray = {
-    const DYN: *const dyn AValueDyn<'static> = ptr::null::<Wrapper<Direct, Array>>();
+    const DYN: *const dyn AValueDyn<'static> = ptr::null::<AValueImpl<Direct, Array>>();
     ValueEmptyArray(AValueRepr::with_metadata(
         metadata(DYN),
-        Wrapper(Direct, unsafe { Array::new(0, 0) }),
+        AValueImpl(Direct, unsafe { Array::new(0, 0) }),
     ))
 };
 
@@ -123,8 +125,8 @@ impl ValueEmptyArray {
         // because type parameter of `AValue` also need to be casted.
         unsafe {
             transmute!(
-                &AValueRepr<Wrapper<Direct, Array>>,
-                &AValueRepr<Wrapper<Direct, Array>>,
+                &AValueRepr<AValueImpl<Direct, Array>>,
+                &AValueRepr<AValueImpl<Direct, Array>>,
                 &self.0
             )
         }
@@ -249,49 +251,49 @@ impl<'v> dyn AValueDyn<'v> {
 }
 
 pub(crate) fn starlark_str(len: usize) -> impl AValue<'static, ExtraElem = u8> + Send + Sync {
-    Wrapper(Direct, unsafe { StarlarkStr::new(len) })
+    AValueImpl(Direct, unsafe { StarlarkStr::new(len) })
 }
 
 pub(crate) fn tuple_avalue<'v>(len: usize) -> impl AValue<'v, ExtraElem = Value<'v>> {
-    Wrapper(Direct, unsafe { Tuple::new(len) })
+    AValueImpl(Direct, unsafe { Tuple::new(len) })
 }
 
 pub(crate) fn frozen_tuple_avalue(len: usize) -> impl AValue<'static, ExtraElem = FrozenValue> {
-    Wrapper(Direct, unsafe { FrozenTuple::new(len) })
+    AValueImpl(Direct, unsafe { FrozenTuple::new(len) })
 }
 
 pub(crate) fn list_avalue<'v>(
     content: ValueTyped<'v, Array<'v>>,
 ) -> impl AValue<'v, StarlarkValue = ListGen<List<'v>>, ExtraElem = ()> {
-    Wrapper(Direct, ListGen(List::new(content)))
+    AValueImpl(Direct, ListGen(List::new(content)))
 }
 
 pub(crate) fn frozen_list_avalue(len: usize) -> impl AValue<'static, ExtraElem = FrozenValue> {
-    Wrapper(Direct, unsafe { ListGen(FrozenList::new(len)) })
+    AValueImpl(Direct, unsafe { ListGen(FrozenList::new(len)) })
 }
 
 pub(crate) fn array_avalue<'v>(
     cap: u32,
 ) -> impl AValue<'v, StarlarkValue = Array<'v>, ExtraElem = Value<'v>> {
-    Wrapper(Direct, unsafe { Array::new(0, cap) })
+    AValueImpl(Direct, unsafe { Array::new(0, cap) })
 }
 
 pub(crate) fn basic_ref<'v, T: StarlarkValueBasic<'v>>(x: &T) -> &dyn AValueDyn<'v> {
     // These are the same representation, so safe to convert
-    let x: &Wrapper<Basic, T> = unsafe { cast::ptr(x) };
+    let x: &AValueImpl<Basic, T> = unsafe { cast::ptr(x) };
     x
 }
 
 pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static, ExtraElem = ()> {
-    Wrapper(Simple, x)
+    AValueImpl(Simple, x)
 }
 
 pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v, ExtraElem = ()> {
-    Wrapper(Complex, x)
+    AValueImpl(Complex, x)
 }
 
 pub(crate) fn float_avalue<'v>(x: StarlarkFloat) -> impl AValue<'v, ExtraElem = ()> {
-    Wrapper(Direct, x)
+    AValueImpl(Direct, x)
 }
 
 // A type where the second element is in control of what instances are in scope
@@ -312,11 +314,11 @@ struct Complex;
 // the StarlarkValue trait each time is to make them all share a single wrapper,
 // where Mode is one of Simple/Complex.
 #[repr(C)]
-struct Wrapper<Mode, T>(Mode, T);
+struct AValueImpl<Mode, T>(Mode, T);
 
 // Safe because Simple/Complex are ZST
-unsafe impl<T> Coerce<T> for Wrapper<Simple, T> {}
-unsafe impl<T> Coerce<T> for Wrapper<Complex, T> {}
+unsafe impl<T> Coerce<T> for AValueImpl<Simple, T> {}
+unsafe impl<T> Coerce<T> for AValueImpl<Complex, T> {}
 
 /// The overwrite operation in the heap requires that the LSB not be set.
 /// For FrozenValue this is the case, but for Value the LSB is always set.
@@ -326,7 +328,7 @@ fn clear_lsb(x: usize) -> usize {
     x & !1
 }
 
-impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for Wrapper<Basic, T> {
+impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for AValueImpl<Basic, T> {
     type StarlarkValue = T;
 
     type ExtraElem = ();
@@ -355,7 +357,7 @@ impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for Wrapper<Basic, T> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, StarlarkFloat> {
+impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkFloat> {
     type StarlarkValue = StarlarkFloat;
 
     type ExtraElem = ();
@@ -385,7 +387,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkFloat> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
+impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
     type StarlarkValue = StarlarkStr;
 
     type ExtraElem = u8;
@@ -431,7 +433,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
+impl<'v> AValue<'v> for AValueImpl<Direct, Tuple<'v>> {
     type StarlarkValue = Tuple<'v>;
 
     type ExtraElem = Value<'v>;
@@ -455,12 +457,12 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         let content = ((*me).as_repr::<Self>()).payload.1.content();
 
         let (fv, r, extra) =
-            freezer.reserve_with_extra::<Wrapper<Direct, FrozenTuple>>(content.len());
+            freezer.reserve_with_extra::<AValueImpl<Direct, FrozenTuple>>(content.len());
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
 
         // TODO: this allocation is unnecessary
         let frozen_values = content.try_map(|v| freezer.freeze(*v))?;
-        r.fill(Wrapper(Direct, FrozenTuple::new(content.len())));
+        r.fill(AValueImpl(Direct, FrozenTuple::new(content.len())));
         MaybeUninit::write_slice(extra, &frozen_values);
 
         Ok(fv)
@@ -486,7 +488,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
+impl<'v> AValue<'v> for AValueImpl<Direct, FrozenTuple> {
     type StarlarkValue = FrozenTuple;
 
     type ExtraElem = FrozenValue;
@@ -512,7 +514,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
+impl<'v> AValue<'v> for AValueImpl<Direct, ListGen<List<'v>>> {
     type StarlarkValue = ListGen<List<'v>>;
 
     type ExtraElem = ();
@@ -532,9 +534,9 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
     ) -> anyhow::Result<FrozenValue> {
         let content = self.1.0.content();
         let (fv, r, extra) =
-            freezer.reserve_with_extra::<Wrapper<Direct, ListGen<FrozenList>>>(content.len());
+            freezer.reserve_with_extra::<AValueImpl<Direct, ListGen<FrozenList>>>(content.len());
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
-        r.fill(Wrapper(Direct, ListGen(FrozenList::new(content.len()))));
+        r.fill(AValueImpl(Direct, ListGen(FrozenList::new(content.len()))));
         assert_eq!(extra.len(), content.len());
         for (elem_place, elem) in extra.iter_mut().zip(content) {
             elem_place.write(freezer.freeze(*elem)?);
@@ -547,7 +549,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
+impl<'v> AValue<'v> for AValueImpl<Direct, ListGen<FrozenList>> {
     type StarlarkValue = ListGen<FrozenList>;
 
     type ExtraElem = FrozenValue;
@@ -573,7 +575,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
     }
 }
 
-impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
+impl<'v> AValue<'v> for AValueImpl<Direct, Array<'v>> {
     type StarlarkValue = Array<'v>;
 
     type ExtraElem = Value<'v>;
@@ -617,7 +619,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
             tracer.trace(elem);
         }
         // Note when copying we are dropping extra capacity.
-        r.fill(Wrapper(
+        r.fill(AValueImpl(
             Direct,
             Array::new(content.len() as u32, content.len() as u32),
         ));
@@ -629,15 +631,15 @@ impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
 /// `heap_freeze` implementation for `SimpleValue` and `StarlarkFloat`
 /// (`StarlarkFloat` is logically a simple type, but does not implement `SimpleValue` trait).
 unsafe fn heap_freeze_simple_impl<'v, Mode, C>(
-    _: &Wrapper<Mode, C>,
+    _: &AValueImpl<Mode, C>,
     me: *mut AValueHeader,
     freezer: &Freezer,
 ) -> anyhow::Result<FrozenValue>
 where
-    Wrapper<Mode, C>: AValue<'v, ExtraElem = ()>,
+    AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
-    let (fv, r) = freezer.reserve::<Wrapper<Mode, C>>();
-    let x = AValueHeader::overwrite::<Wrapper<Mode, C>>(me, fv.0.ptr_value());
+    let (fv, r) = freezer.reserve::<AValueImpl<Mode, C>>();
+    let x = AValueHeader::overwrite::<AValueImpl<Mode, C>>(me, fv.0.ptr_value());
     r.fill(x);
     Ok(fv)
 }
@@ -645,20 +647,20 @@ where
 /// `heap_copy` implementation for `SimpleValue` and `StarlarkFloat`
 /// (`StarlarkFloat` is logically a simple type, but does not implement `SimpleValue` trait).
 unsafe fn heap_copy_simple_impl<'v, Mode, C>(
-    _: &Wrapper<Mode, C>,
+    _: &AValueImpl<Mode, C>,
     me: *mut AValueHeader,
     tracer: &Tracer<'v>,
 ) -> Value<'v>
 where
-    Wrapper<Mode, C>: AValue<'v, ExtraElem = ()>,
+    AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
-    let (v, r) = tracer.reserve::<Wrapper<Mode, C>>();
-    let x = AValueHeader::overwrite::<Wrapper<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
+    let (v, r) = tracer.reserve::<AValueImpl<Mode, C>>();
+    let x = AValueHeader::overwrite::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
     r.fill(x);
     v
 }
 
-impl<'v, T: SimpleValue> AValue<'v> for Wrapper<Simple, T>
+impl<'v, T: SimpleValue> AValue<'v> for AValueImpl<Simple, T>
 where
     'v: 'static,
 {
@@ -691,23 +693,23 @@ where
 /// (`List` is logically a complex type, but does not implement `ComplexValue` trait
 /// because it gets frozen into `FrozenList` which is not `SimpleType`).
 unsafe fn heap_copy_complex_impl<'v, Mode, C>(
-    _: &Wrapper<Mode, C>,
+    _: &AValueImpl<Mode, C>,
     me: *mut AValueHeader,
     tracer: &Tracer<'v>,
 ) -> Value<'v>
 where
     C: Trace<'v>,
-    Wrapper<Mode, C>: AValue<'v, ExtraElem = ()>,
+    AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
-    let (v, r) = tracer.reserve::<Wrapper<Mode, C>>();
-    let mut x = AValueHeader::overwrite::<Wrapper<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
+    let (v, r) = tracer.reserve::<AValueImpl<Mode, C>>();
+    let mut x = AValueHeader::overwrite::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
     // We have to put the forwarding node in _before_ we trace in case there are cycles
     x.1.trace(tracer);
     r.fill(x);
     v
 }
 
-impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
+impl<'v, T: ComplexValue<'v>> AValue<'v> for AValueImpl<Complex, T> {
     type StarlarkValue = T;
 
     type ExtraElem = ();
@@ -725,10 +727,10 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
         me: *mut AValueHeader,
         freezer: &Freezer,
     ) -> anyhow::Result<FrozenValue> {
-        let (fv, r) = freezer.reserve::<Wrapper<Simple, T::Frozen>>();
+        let (fv, r) = freezer.reserve::<AValueImpl<Simple, T::Frozen>>();
         let x = AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
         let res = x.1.freeze(freezer)?;
-        r.fill(Wrapper(Simple, res));
+        r.fill(AValueImpl(Simple, res));
         if TypeId::of::<T::Frozen>() == TypeId::of::<FrozenDef>() {
             let frozen_def = fv.downcast_frozen_ref().unwrap();
             freezer.frozen_defs.borrow_mut().push(frozen_def);
@@ -942,7 +944,7 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     }
 }
 
-impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for Wrapper<Mode, T> {
+impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImpl<Mode, T> {
     fn static_type_id_of_value() -> TypeId
     where
         Self: Sized,
