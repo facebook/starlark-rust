@@ -48,6 +48,7 @@ assert_eq_size!(Option<Pointer<'static, String>>, usize);
 const TAG_BITS: usize = 0b111;
 
 const TAG_INT: usize = 0b10;
+const TAG_STR: usize = 0b100;
 // Pointer to an object, which is not frozen.
 // Note, an object can be changed from unfrozen to frozen, not vice versa.
 const TAG_UNFROZEN: usize = 0b01;
@@ -87,26 +88,42 @@ impl<'p, P> Pointer<'p, P> {
         Self::new(tag_int(x))
     }
 
-    pub fn new_unfrozen_usize(x: usize) -> Self {
+    pub fn new_unfrozen_usize(x: usize, is_string: bool) -> Self {
         debug_assert!((x & TAG_BITS) == 0);
+        let x = if is_string { x | TAG_STR } else { x };
         Self::new(x | TAG_UNFROZEN)
     }
 
-    pub fn new_frozen_usize(x: usize) -> Self {
+    pub fn new_unfrozen_usize_with_str_tag(x: usize) -> Self {
+        debug_assert!((x & TAG_BITS & !TAG_STR) == 0);
+        Self::new(x | TAG_UNFROZEN)
+    }
+
+    pub fn new_frozen_usize(x: usize, is_string: bool) -> Self {
         debug_assert!((x & TAG_BITS) == 0);
+        let x = if is_string { x | TAG_STR } else { x };
         Self::new(x)
     }
 
-    pub fn new_unfrozen(x: &'p P) -> Self {
-        Self::new_unfrozen_usize(cast::ptr_to_usize(x))
+    pub fn new_frozen_usize_with_str_tag(x: usize) -> Self {
+        debug_assert!((x & TAG_BITS & !TAG_STR) == 0);
+        Self::new(x)
     }
 
-    pub fn new_frozen(x: &'p P) -> Self {
-        Self::new_frozen_usize(cast::ptr_to_usize(x))
+    pub fn new_unfrozen(x: &'p P, is_string: bool) -> Self {
+        Self::new_unfrozen_usize(cast::ptr_to_usize(x), is_string)
+    }
+
+    pub fn new_frozen(x: &'p P, is_string: bool) -> Self {
+        Self::new_frozen_usize(cast::ptr_to_usize(x), is_string)
+    }
+
+    pub(crate) fn is_str(self) -> bool {
+        (self.pointer.get() & TAG_STR) != 0
     }
 
     pub fn is_unfrozen(self) -> bool {
-        self.pointer.get() & TAG_UNFROZEN == TAG_UNFROZEN
+        (self.pointer.get() & TAG_UNFROZEN) != 0
     }
 
     pub fn unpack(self) -> Either<&'p P, i32> {

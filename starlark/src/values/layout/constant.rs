@@ -69,7 +69,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
 
     /// Obtain the [`FrozenValue`] for a [`StarlarkStrNRepr`].
     pub fn unpack(&'static self) -> FrozenValue {
-        FrozenValue::new_ptr(&self.repr.header)
+        FrozenValue::new_ptr(&self.repr.header, true)
     }
 
     /// Erase the type parameter, giving a slightly nicer user experience.
@@ -227,13 +227,13 @@ impl<'v> StringValue<'v> {
     ///
     /// If passed value does not contain a string, it may lead to memory corruption.
     pub unsafe fn new_unchecked(value: Value<'v>) -> StringValue<'v> {
-        debug_assert!(value.unpack_str().is_some());
+        debug_assert!(value.is_str());
         StringValue(value)
     }
 
     /// Construct from a value. Returns [`None`] if a value does not contain a string.
     pub fn new(value: Value<'v>) -> Option<StringValue<'v>> {
-        if value.unpack_str().is_some() {
+        if value.is_str() {
             Some(StringValue(value))
         } else {
             None
@@ -241,7 +241,7 @@ impl<'v> StringValue<'v> {
     }
 
     pub(crate) fn unpack_starlark_str(self) -> &'v StarlarkStr {
-        debug_assert!(self.0.unpack_str().is_some());
+        debug_assert!(self.0.is_str());
         unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
     }
 
@@ -286,7 +286,7 @@ impl<'v> StringValueLike<'v> for StringValue<'v> {
 
 impl<'v> StringValueLike<'v> for FrozenStringValue {
     fn to_string_value(self) -> StringValue<'v> {
-        StringValue(self.unpack().to_value())
+        unsafe { StringValue::new_unchecked(self.unpack().to_value()) }
     }
 }
 

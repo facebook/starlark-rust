@@ -238,7 +238,7 @@ impl<'v> Dict<'v> {
     /// Try to coerce all keys to strings.
     pub(crate) fn downcast_ref_key_string(&self) -> Option<&SmallMap<StringValue<'v>, Value<'v>>> {
         for &key in self.content.keys() {
-            if unlikely(StringValue::new(key).is_none()) {
+            if unlikely(!key.is_str()) {
                 return None;
             }
         }

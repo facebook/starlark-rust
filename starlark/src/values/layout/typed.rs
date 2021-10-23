@@ -113,7 +113,10 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
     ) -> FrozenValueTyped<'v, T> {
         // drop lifetime: `FrozenValue` is not (yet) parameterized with lifetime.
         let header = unsafe { cast::ptr_lifetime(&repr.header) };
-        FrozenValueTyped(FrozenValue::new_ptr(header), marker::PhantomData)
+        FrozenValueTyped(
+            FrozenValue::new_ptr(header, A::is_str()),
+            marker::PhantomData,
+        )
     }
 
     pub fn to_frozen_value(self) -> FrozenValue {

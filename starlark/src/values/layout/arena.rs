@@ -216,6 +216,13 @@ impl Arena {
         &'v self,
         extra_len: usize,
     ) -> (Reservation<'v, 'v2, T>, &'v mut [MaybeUninit<T::ExtraElem>]) {
+        // We don't create reservations for strings because we don't need to,
+        // but also because we need to be able to reconstruct a `Pointer`
+        // from `AValueHeader` (with `TAG_STR` when appropriate).
+        // `BlackHole` assumes it is created for non-string, so
+        // it returns `false` from `is_str`.
+        assert!(!T::is_str());
+
         let (p, extra) = Self::alloc_uninit::<T>(self.bump_for_type::<T>(), extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,
         // so very important to put in a current vtable

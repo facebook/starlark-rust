@@ -81,16 +81,21 @@ unsafe impl Send for FrozenValue {}
 unsafe impl Sync for FrozenValue {}
 
 impl<'v> Value<'v> {
-    pub(crate) fn new_ptr(x: &'v AValueHeader) -> Self {
-        Self(Pointer::new_unfrozen(x))
+    pub(crate) fn new_ptr(x: &'v AValueHeader, is_str: bool) -> Self {
+        Self(Pointer::new_unfrozen(x, is_str))
+    }
+
+    pub(crate) fn new_ptr_query_is_str(x: &'v AValueHeader) -> Self {
+        let is_string = x.unpack().is_str();
+        Self::new_ptr(x, is_string)
     }
 
     pub(crate) fn new_repr<T: AValue<'v>>(x: &'v AValueRepr<T>) -> Self {
-        Self::new_ptr(&x.header)
+        Self::new_ptr(&x.header, T::is_str())
     }
 
-    pub(crate) fn new_ptr_usize(x: usize) -> Self {
-        Self(Pointer::new_unfrozen_usize(x))
+    pub(crate) fn new_ptr_usize_with_str_tag(x: usize) -> Self {
+        Self(Pointer::new_unfrozen_usize_with_str_tag(x))
     }
 
     /// Create a new `None` value.
@@ -158,6 +163,10 @@ impl<'v> Value<'v> {
         self.0.unpack_int()
     }
 
+    pub(crate) fn is_str(self) -> bool {
+        self.0.is_str()
+    }
+
     /// Like [`unpack_str`](Value::unpack_str), but gives a pointer to a boxed string.
     /// Mostly useful for when you want to convert the string to a `dyn` trait, but can't
     /// form a `dyn` of an unsized type.
@@ -165,14 +174,25 @@ impl<'v> Value<'v> {
     /// Unstable and likely to be removed in future, as the presence of the `Box` is
     /// not a guaranteed part of the API.
     pub fn unpack_starlark_str(self) -> Option<&'v StarlarkStr> {
-        self.0
-            .unpack_ptr()
-            .and_then(|x| x.unpack().unpack_starlark_str())
+        if self.is_str() {
+            // TODO(nga): wrong repr param
+            unsafe {
+                Some(
+                    &self
+                        .0
+                        .unpack_ptr_no_int_unchecked()
+                        .as_repr::<StarlarkStr>()
+                        .payload,
+                )
+            }
+        } else {
+            None
+        }
     }
 
     /// Obtain the underlying `str` if it is a string.
     pub fn unpack_str(self) -> Option<&'v str> {
-        self.0.unpack_ptr().and_then(|x| x.unpack().unpack_str())
+        self.unpack_starlark_str().map(|s| s.unpack())
     }
 
     /// Get a pointer to a [`AValue`].
@@ -225,29 +245,29 @@ impl<'v> Value<'v> {
 }
 
 impl FrozenValue {
-    pub(crate) fn new_ptr(x: &'static AValueHeader) -> Self {
-        Self(Pointer::new_frozen(x))
+    pub(crate) fn new_ptr(x: &'static AValueHeader, is_str: bool) -> Self {
+        Self(Pointer::new_frozen(x, is_str))
     }
 
     pub(crate) fn new_repr<'a, T: AValue<'a>>(x: &'static AValueRepr<T>) -> Self {
-        Self::new_ptr(&x.header)
+        Self::new_ptr(&x.header, T::is_str())
     }
 
-    pub(crate) fn new_ptr_usize(x: usize) -> Self {
-        Self(Pointer::new_frozen_usize(x))
+    pub(crate) fn new_ptr_usize_with_str_tag(x: usize) -> Self {
+        Self(Pointer::new_frozen_usize_with_str_tag(x))
     }
 
     /// Create a new value representing `None` in Starlark.
     pub fn new_none() -> Self {
-        Self::new_ptr(VALUE_NONE)
+        Self::new_ptr(VALUE_NONE, false)
     }
 
     /// Create a new boolean in Starlark.
     pub fn new_bool(x: bool) -> Self {
         if x {
-            Self::new_ptr(VALUE_TRUE)
+            Self::new_ptr(VALUE_TRUE, false)
         } else {
-            Self::new_ptr(VALUE_FALSE)
+            Self::new_ptr(VALUE_FALSE, false)
         }
     }
 
@@ -284,13 +304,17 @@ impl FrozenValue {
         self.0.unpack_int()
     }
 
+    pub(crate) fn is_str(self) -> bool {
+        self.to_value().is_str()
+    }
+
     // The resulting `str` is alive as long as the `FrozenHeap` is,
     // but we don't have that lifetime available to us. Therefore,
     // we cheat a little, and use the lifetime of the `FrozenValue`.
     // Because of this cheating, we don't expose it outside Starlark.
     #[allow(clippy::trivially_copy_pass_by_ref)]
     pub(crate) fn unpack_str<'v>(&'v self) -> Option<&'v str> {
-        self.0.unpack_ptr().and_then(|x| x.unpack().unpack_str())
+        self.to_value().unpack_str()
     }
 
     /// Get a pointer to the [`AValue`] object this value represents.

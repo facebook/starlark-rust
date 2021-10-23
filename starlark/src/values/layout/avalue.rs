@@ -148,6 +148,10 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
     /// Return `mem::size_of::<Self>()` if there's no extra content.
     fn offset_of_extra() -> usize;
 
+    fn is_str() -> bool {
+        false
+    }
+
     fn memory_size_for_extra_len(extra_len: usize) -> usize {
         assert!(
             Self::offset_of_extra() % mem::align_of::<Self::ExtraElem>() == 0,
@@ -167,12 +171,6 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
     ) -> anyhow::Result<FrozenValue>;
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
-
-    fn unpack_str(&self) -> Option<&str> {
-        self.unpack_starlark_str().map(|x| x.unpack())
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
 
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         let mut hasher = StarlarkHasher::new();
@@ -198,11 +196,7 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
     /// This function is not safe because it overwrites `self` value with forward.
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v>;
 
-    fn unpack_str(&self) -> Option<&str> {
-        self.unpack_starlark_str().map(|x| x.unpack())
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr>;
+    fn is_str(&self) -> bool;
 
     fn get_hash(&self) -> anyhow::Result<SmallHashResult>;
 }
@@ -224,12 +218,8 @@ impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
         self.heap_copy(me, tracer)
     }
 
-    fn unpack_str(&self) -> Option<&str> {
-        self.unpack_str()
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        self.unpack_starlark_str()
+    fn is_str(&self) -> bool {
+        A::is_str()
     }
 
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
@@ -360,10 +350,6 @@ impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for Wrapper<Basic, T> {
         unreachable!("Basic types don't appear in the heap")
     }
 
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
-    }
-
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         Ok(self.1.get_hash())
     }
@@ -394,10 +380,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkFloat> {
         heap_copy_simple_impl(self, me, tracer)
     }
 
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
-    }
-
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         Ok(Num::from(self.1.0).get_small_hash_result())
     }
@@ -416,6 +398,9 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
         StarlarkStr::offset_of_content()
     }
 
+    fn is_str() -> bool {
+        true
+    }
 
     unsafe fn heap_freeze(
         &self,
@@ -426,6 +411,7 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
+        debug_assert!(fv.is_str());
         AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
         Ok(fv)
     }
@@ -435,12 +421,9 @@ impl<'v> AValue<'v> for Wrapper<Direct, StarlarkStr> {
 
         let s = self.1.unpack();
         let v = tracer.alloc_str(s);
+        debug_assert!(v.is_str());
         AValueHeader::overwrite::<Self>(me, v.0.ptr_value() & !1);
         v
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        Some(&self.1)
     }
 
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
@@ -501,10 +484,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, Tuple<'v>> {
         MaybeUninit::write_slice(extra, content);
         v
     }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
-    }
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
@@ -530,10 +509,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, FrozenTuple> {
 
     unsafe fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         panic!("shouldn't be copying frozen values");
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
     }
 }
 
@@ -570,10 +545,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<List<'v>>> {
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         heap_copy_complex_impl(self, me, tracer)
     }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
-    }
 }
 
 impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
@@ -599,10 +570,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, ListGen<FrozenList>> {
 
     unsafe fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         panic!("shouldn't be copying frozen values");
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
     }
 }
 
@@ -656,10 +623,6 @@ impl<'v> AValue<'v> for Wrapper<Direct, Array<'v>> {
         ));
         MaybeUninit::write_slice(extra, content);
         v
-    }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
     }
 }
 
@@ -722,10 +685,6 @@ where
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         heap_copy_simple_impl(self, me, tracer)
     }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
-    }
 }
 
 /// `heap_copy` implementation for `ComplexValue` and `List`
@@ -780,10 +739,6 @@ impl<'v, T: ComplexValue<'v>> AValue<'v> for Wrapper<Complex, T> {
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
         heap_copy_complex_impl(self, me, tracer)
     }
-
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        None
-    }
 }
 
 #[derive(Debug, Display)]
@@ -805,9 +760,12 @@ impl<'v> AValueDyn<'v> for BlackHole {
     unsafe fn heap_copy(&self, _me: *mut AValueHeader, _tracer: &Tracer<'v>) -> Value<'v> {
         unreachable!()
     }
-    fn unpack_starlark_str(&self) -> Option<&StarlarkStr> {
-        unreachable!()
+
+    fn is_str(&self) -> bool {
+        // We don't create reservations for `StarlarkStr`.
+        false
     }
+
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
         unreachable!()
     }

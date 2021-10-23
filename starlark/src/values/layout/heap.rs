@@ -207,7 +207,7 @@ impl FrozenHeap {
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
         if elems.is_empty() {
-            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE);
+            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE, false);
         }
 
         unsafe {
@@ -221,7 +221,7 @@ impl FrozenHeap {
 
     pub fn alloc_list(&self, elems: &[FrozenValue]) -> FrozenValue {
         if elems.is_empty() {
-            return FrozenValue::new_ptr(VALUE_EMPTY_FROZEN_LIST);
+            return FrozenValue::new_ptr(VALUE_EMPTY_FROZEN_LIST, false);
         }
 
         unsafe {
@@ -318,7 +318,7 @@ impl Freezer {
         &'v mut [MaybeUninit<T::ExtraElem>],
     ) {
         let (r, extra) = self.heap.arena.reserve_with_extra::<T>(extra_len);
-        let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
+        let fv = FrozenValue::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) }, false);
         (fv, r, extra)
     }
 
@@ -332,7 +332,7 @@ impl Freezer {
         // Case 2: We have already been replaced with a forwarding, or need to freeze
         let value = value.0.unpack_ptr().unwrap();
         match value.unpack_overwrite() {
-            Either::Left(x) => Ok(FrozenValue::new_ptr_usize(x)),
+            Either::Left(x) => Ok(FrozenValue::new_ptr_usize_with_str_tag(x)),
             Either::Right(v) => unsafe {
                 v.heap_freeze(value as *const AValueHeader as *mut AValueHeader, self)
             },
@@ -450,7 +450,7 @@ impl Heap {
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
         if elems.is_empty() {
-            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE).to_value();
+            return FrozenValue::new_ptr(VALUE_EMPTY_TUPLE, false).to_value();
         }
 
         unsafe {
@@ -522,7 +522,9 @@ impl Heap {
             // Otherwise the Value is constrainted by the borrow_mut, when
             // we consider values to be kept alive permanently, other than
             // when a GC happens
-            f(Value::new_ptr(unsafe { cast::ptr_lifetime(x) }))
+            f(Value::new_ptr_query_is_str(unsafe {
+                cast::ptr_lifetime(x)
+            }))
         })
     }
 
@@ -582,8 +584,9 @@ impl<'v> Tracer<'v> {
         Reservation<'a, 'v2, T>,
         &'a mut [MaybeUninit<T::ExtraElem>],
     ) {
+        assert!(!T::is_str(), "strings cannot be reserved");
         let (r, extra) = self.arena.reserve_with_extra::<T>(extra_len);
-        let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) });
+        let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) }, false);
         (v, r, extra)
     }
 
@@ -602,7 +605,7 @@ impl<'v> Tracer<'v> {
 
         // Case 2: We have already been replaced with a forwarding, or need to freeze
         let res = match old_val.unpack_overwrite() {
-            Either::Left(x) => Value::new_ptr_usize(x),
+            Either::Left(x) => Value::new_ptr_usize_with_str_tag(x),
             Either::Right(v) => unsafe {
                 v.heap_copy(old_val as *const AValueHeader as *mut AValueHeader, self)
             },
