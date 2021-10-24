@@ -28,8 +28,8 @@ use crate::{
     codemap::Span,
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
-        AllocFrozenValue, AllocValue, ComplexValue, Freezer, FrozenHeap, FrozenValue, Heap,
-        SimpleValue, StarlarkValue, Trace, Value, ValueLike,
+        AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue,
+        StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -256,7 +256,7 @@ impl<'v> BoundMethod<'v> {
     }
 }
 
-impl<'v> ComplexValue<'v> for BoundMethod<'v> {
+impl<'v> Freeze for BoundMethod<'v> {
     type Frozen = FrozenBoundMethod;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(BoundMethodGen {

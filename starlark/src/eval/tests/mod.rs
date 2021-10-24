@@ -28,7 +28,7 @@ use crate::{
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value},
+    values::{Freeze, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value},
 };
 
 mod basic;
@@ -671,7 +671,7 @@ fn test_label_assign() {
 
     impl SimpleValue for FrozenWrapper {}
 
-    impl<'v> ComplexValue<'v> for Wrapper<'v> {
+    impl<'v> Freeze for Wrapper<'v> {
         type Frozen = FrozenWrapper;
         fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
             Ok(FrozenWrapper)

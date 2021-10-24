@@ -56,7 +56,7 @@ use crate::{
     values::{
         function::{NativeFunction, FUNCTION_TYPE},
         index::convert_index,
-        ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
+        Freeze, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -120,7 +120,7 @@ impl<V: Display> Display for EnumValueGen<V> {
 starlark_complex_values!(EnumType);
 starlark_complex_value!(pub EnumValue);
 
-impl<'v> ComplexValue<'v> for EnumType<'v> {
+impl<'v> Freeze for EnumType<'v> {
     type Frozen = FrozenEnumType;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut elements = SmallMap::with_capacity(self.elements.len());
@@ -135,7 +135,7 @@ impl<'v> ComplexValue<'v> for EnumType<'v> {
     }
 }
 
-impl<'v> ComplexValue<'v> for EnumValue<'v> {
+impl<'v> Freeze for EnumValue<'v> {
     type Frozen = FrozenEnumValue;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenEnumValue {

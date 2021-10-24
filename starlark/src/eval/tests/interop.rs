@@ -33,7 +33,7 @@ use crate::{
     environment::{GlobalsBuilder, Module},
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{any::StarlarkAny, none::NoneType, StarlarkValue, Value},
+    values::{any::StarlarkAny, none::NoneType, Freeze, StarlarkValue, Value},
 };
 
 #[test]
@@ -43,9 +43,7 @@ fn test_export_as() {
     use gazebo::any::AnyLifetime;
 
     use crate as starlark;
-    use crate::values::{
-        AllocValue, ComplexValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value,
-    };
+    use crate::values::{AllocValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value};
 
     #[derive(Debug, Trace)]
     struct Exporter<T> {
@@ -81,7 +79,7 @@ fn test_export_as() {
         }
     }
 
-    impl<'v> ComplexValue<'v> for Exporter<RefCell<String>> {
+    impl<'v> Freeze for Exporter<RefCell<String>> {
         type Frozen = Exporter<String>;
         fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
             Ok(Exporter {

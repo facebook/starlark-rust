@@ -273,7 +273,7 @@ impl FrozenHeap {
     }
 }
 
-/// Used to `freeze` values by [`ComplexValue::freeze`].
+/// Used to `freeze` values by [`Freeze::freeze`](crate::values::Freeze::freeze).
 // A freezer is a pair of the FrozenHeap and a "magic" value,
 // which we happen to use for the slots (see `FrozenSlotsRef`)
 // but could be used for anything.
@@ -513,7 +513,10 @@ impl Heap {
     }
 
     /// Allocate a [`ComplexValue`] on the [`Heap`].
-    pub fn alloc_complex<'v, T: ComplexValue<'v>>(&'v self, x: T) -> Value<'v> {
+    pub fn alloc_complex<'v, T>(&'v self, x: T) -> Value<'v>
+    where
+        T: ComplexValue<'v>,
+    {
         self.alloc_raw(complex(x))
     }
 

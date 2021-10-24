@@ -43,7 +43,7 @@ use crate::{
     environment::Globals,
     eval::{Arguments, Evaluator},
     values::{
-        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freezer, FrozenStringValue, Heap,
+        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freeze, FrozenStringValue, Heap,
         Trace, Value, ValueError,
     },
 };
@@ -63,7 +63,7 @@ use crate::{
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
-/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer};
+/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze};
 /// use starlark::{starlark_complex_value, starlark_type};
 /// use derive_more::Display;
 ///
@@ -81,7 +81,7 @@ use crate::{
 ///     // use the `ValueLike` trait.
 /// }
 ///
-/// impl<'v> ComplexValue<'v> for One<'v> {
+/// impl<'v> Freeze for One<'v> {
 ///     type Frozen = FrozenOne;
 ///     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
 ///         Ok(OneGen(self.0.freeze(freezer)?))
@@ -144,13 +144,9 @@ use crate::{
 /// * If your type doesn't contain any [`Value`] types, but instead implements this trait for mutability.
 /// * If the difference between frozen and non-frozen is more complex, e.g. a [`Cell`](std::cell::Cell)
 ///   when non-frozen and a direct value when frozen.
-pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> {
-    type Frozen: SimpleValue;
+pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> + Freeze {}
 
-    /// Freeze a value. The frozen value _must_ be equal to the original,
-    /// and produce the same hash.
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen>;
-}
+impl<'v, V> ComplexValue<'v> for V where V: StarlarkValue<'v> + Trace<'v> + Freeze {}
 
 /// A trait representing Starlark values which are simple - they
 /// aren't mutable and can't contain other Starlark values.

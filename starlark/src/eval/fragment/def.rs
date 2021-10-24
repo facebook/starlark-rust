@@ -57,7 +57,7 @@ use crate::{
         docs::{DocItem, DocString},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        AtomicFrozenRefOption, ComplexValue, Freezer, FrozenRef, FrozenStringValue, FrozenValue,
+        AtomicFrozenRefOption, Freeze, Freezer, FrozenRef, FrozenStringValue, FrozenValue,
         StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
@@ -514,7 +514,7 @@ unsafe impl<'v> Trace<'v> for Def<'v> {
     }
 }
 
-impl<'v> ComplexValue<'v> for Def<'v> {
+impl<'v> Freeze for Def<'v> {
     type Frozen = FrozenDef;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {

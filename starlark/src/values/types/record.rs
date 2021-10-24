@@ -65,7 +65,7 @@ use crate::{
         comparison::equals_slice,
         function::{NativeFunction, FUNCTION_TYPE},
         typing::TypeCompiled,
-        ComplexValue, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
+        Freeze, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -239,7 +239,7 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
     }
 }
 
-impl<'v> ComplexValue<'v> for Field<'v> {
+impl<'v> Freeze for Field<'v> {
     type Frozen = FrozenField;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenField {
@@ -265,7 +265,7 @@ where
     }
 }
 
-impl<'v> ComplexValue<'v> for RecordType<'v> {
+impl<'v> Freeze for RecordType<'v> {
     type Frozen = FrozenRecordType;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let mut fields = SmallMap::with_capacity(self.fields.len());
@@ -372,7 +372,7 @@ where
     }
 }
 
-impl<'v> ComplexValue<'v> for Record<'v> {
+impl<'v> Freeze for Record<'v> {
     type Frozen = FrozenRecord;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenRecord {

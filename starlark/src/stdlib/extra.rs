@@ -35,7 +35,7 @@ use crate::{
     environment::GlobalsBuilder,
     eval::{Arguments, Evaluator},
     values::{
-        dict::Dict, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, ComplexValue, Freezer,
+        dict::Dict, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, Freeze, Freezer,
         FrozenStringValue, FrozenValue, StarlarkValue, StringValue, StringValueLike, Trace, Value,
         ValueLike,
     },
@@ -187,7 +187,7 @@ type Partial<'v> = PartialGen<Value<'v>, StringValue<'v>>;
 type FrozenPartial = PartialGen<FrozenValue, FrozenStringValue>;
 starlark_complex_values!(Partial);
 
-impl<'v> ComplexValue<'v> for Partial<'v> {
+impl<'v> Freeze for Partial<'v> {
     type Frozen = FrozenPartial;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenPartial {

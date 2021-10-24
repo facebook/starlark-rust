@@ -278,7 +278,11 @@ pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static, ExtraElem = ()
     AValueImpl(Simple, x)
 }
 
-pub(crate) fn complex<'v>(x: impl ComplexValue<'v>) -> impl AValue<'v, ExtraElem = ()> {
+pub(crate) fn complex<'v, C>(x: C) -> impl AValue<'v, ExtraElem = ()>
+where
+    C: ComplexValue<'v>,
+    C::Frozen: SimpleValue,
+{
     AValueImpl(Complex, x)
 }
 
@@ -699,7 +703,10 @@ where
     v
 }
 
-impl<'v, T: ComplexValue<'v>> AValue<'v> for AValueImpl<Complex, T> {
+impl<'v, T> AValue<'v> for AValueImpl<Complex, T>
+where
+    T: ComplexValue<'v>,
+{
     type StarlarkValue = T;
 
     type ExtraElem = ();

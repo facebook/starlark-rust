@@ -35,8 +35,7 @@ use crate as starlark;
 use crate::{
     eval::runtime::csv::CsvWriter,
     values::{
-        ComplexValue, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value,
-        ValueLike,
+        Freeze, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -83,7 +82,7 @@ unsafe impl<'v, D: MaybeDrop + AnyLifetime<'v>> AnyLifetime<'v> for CallEnter<'v
     any_lifetime_body!(CallEnter<'static, D>);
 }
 
-impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> ComplexValue<'v> for CallEnter<'v, D> {
+impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> Freeze for CallEnter<'v, D> {
     type Frozen = NoSimpleValue;
     fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         unreachable!("Should never end up freezing a CallEnter")

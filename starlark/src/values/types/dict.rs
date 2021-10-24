@@ -40,7 +40,7 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
-        string::hash_string_value, AllocFrozenValue, AllocValue, ComplexValue, Freezer, FromValue,
+        string::hash_string_value, AllocFrozenValue, AllocValue, Freeze, Freezer, FromValue,
         FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, StringValue,
         Trace, UnpackValue, Value, ValueLike,
     },
@@ -312,7 +312,7 @@ impl FrozenDict {
     }
 }
 
-impl<'v> ComplexValue<'v> for DictGen<RefCell<Dict<'v>>> {
+impl<'v> Freeze for DictGen<RefCell<Dict<'v>>> {
     type Frozen = DictGen<FrozenDict>;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         let old = self.0.into_inner().content;

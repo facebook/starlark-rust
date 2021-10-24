@@ -36,7 +36,7 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, ComplexValue,
+        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, Freeze,
         Freezer, FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value,
         ValueError, ValueLike,
     },
@@ -475,7 +475,7 @@ where
     }
 }
 
-impl<'v> ComplexValue<'v> for StringIterator<'v> {
+impl<'v> Freeze for StringIterator<'v> {
     type Frozen = FrozenStringIterator;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
         Ok(FrozenStringIterator {
