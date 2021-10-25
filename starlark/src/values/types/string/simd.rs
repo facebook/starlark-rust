@@ -34,6 +34,35 @@ pub(crate) trait Vector: Copy {
     unsafe fn movemask(self) -> u32;
 }
 
+/// Run different code depending on whether SIMD is available or not.
+pub(crate) trait SwitchHaveSimd<R>
+where
+    Self: Sized,
+{
+    /// This function is called when SIMD is not available.
+    fn no_simd(self) -> R;
+    /// This function is called when SIMD is available.
+    fn simd<V: Vector>(self) -> R;
+
+    /// Call either `simd` or `no_simd` function.
+    fn switch(self) -> R {
+        // Any x86_64 supports SSE2.
+        #[cfg(target_feature = "sse2")]
+        {
+            #[cfg(target_arch = "x86")]
+            use std::arch::x86::*;
+            #[cfg(target_arch = "x86_64")]
+            use std::arch::x86_64::*;
+
+            self.simd::<__m128i>()
+        }
+        #[cfg(not(target_feature = "sse2"))]
+        {
+            self.no_simd()
+        }
+    }
+}
+
 #[cfg(target_feature = "sse2")]
 mod sse2 {
     #[cfg(target_arch = "x86")]

@@ -19,10 +19,9 @@
 
 use std::mem;
 
-use crate::values::types::string::simd::Vector;
+use crate::values::types::string::simd::{SwitchHaveSimd, Vector};
 
 /// Check if any byte in the buffer is non-ASCII or need escape.
-#[cfg(target_feature = "sse2")]
 #[inline(always)]
 unsafe fn need_escape<V: Vector>(chunk: V) -> bool {
     #[allow(clippy::many_single_char_names)]
@@ -92,7 +91,6 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
         }
     }
 
-    #[cfg(target_feature = "sse2")]
     #[inline(always)]
     unsafe fn loop_ascii_simd<V: Vector>(val: &str, buffer: &mut String) {
         // `buffer` must have enough capacity to contain `val` if it does not need escaping
@@ -177,25 +175,24 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
         }
     }
 
-    // SSE2 is available on all x86_64.
-    #[cfg(target_feature = "sse2")]
-    fn loop_ascii_fast(val: &str, buffer: &mut String) {
-        #[cfg(target_arch = "x86")]
-        use std::arch::x86::*;
-        #[cfg(target_arch = "x86_64")]
-        use std::arch::x86_64::*;
-
-        unsafe { loop_ascii_simd::<__m128i>(val, buffer) }
+    struct Switch<'a> {
+        s: &'a str,
+        buffer: &'a mut String,
     }
 
-    #[cfg(not(target_feature = "sse"))]
-    fn loop_ascii_fast(val: &str, buffer: &mut String) {
-        loop_ascii(val, buffer)
+    impl<'a> SwitchHaveSimd<()> for Switch<'a> {
+        fn no_simd(self) {
+            loop_ascii(self.s, self.buffer)
+        }
+
+        fn simd<V: Vector>(self) {
+            unsafe { loop_ascii_simd::<V>(self.s, self.buffer) }
+        }
     }
 
     buffer.reserve(2 + str.len());
     buffer.push('"');
-    loop_ascii_fast(str, buffer);
+    Switch { s: str, buffer }.switch();
     buffer.push('"');
 }
 
