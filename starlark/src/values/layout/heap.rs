@@ -516,6 +516,7 @@ impl Heap {
     pub fn alloc_complex<'v, T>(&'v self, x: T) -> Value<'v>
     where
         T: ComplexValue<'v>,
+        T::Frozen: SimpleValue,
     {
         self.alloc_raw(complex(x))
     }

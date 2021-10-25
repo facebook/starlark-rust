@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::values::{Freezer, SimpleValue};
+use crate::values::Freezer;
 
 /// Need to be implemented for non-simple `StarlarkValue`.
 ///
@@ -24,7 +24,7 @@ use crate::values::{Freezer, SimpleValue};
 ///
 /// For relatively simple cases it can be implemented with `#[derive(Freeze)]`.
 pub trait Freeze {
-    type Frozen: SimpleValue;
+    type Frozen;
 
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.

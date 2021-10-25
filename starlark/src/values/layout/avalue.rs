@@ -708,6 +708,7 @@ where
 impl<'v, T> AValue<'v> for AValueImpl<Complex, T>
 where
     T: ComplexValue<'v>,
+    T::Frozen: SimpleValue,
 {
     type StarlarkValue = T;
 

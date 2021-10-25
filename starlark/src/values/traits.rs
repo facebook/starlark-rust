@@ -144,9 +144,18 @@ use crate::{
 /// * If your type doesn't contain any [`Value`] types, but instead implements this trait for mutability.
 /// * If the difference between frozen and non-frozen is more complex, e.g. a [`Cell`](std::cell::Cell)
 ///   when non-frozen and a direct value when frozen.
-pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> + Freeze {}
+pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> + Freeze
+where
+    <Self as Freeze>::Frozen: SimpleValue,
+{
+}
 
-impl<'v, V> ComplexValue<'v> for V where V: StarlarkValue<'v> + Trace<'v> + Freeze {}
+impl<'v, V> ComplexValue<'v> for V
+where
+    V: StarlarkValue<'v> + Trace<'v> + Freeze,
+    <V as Freeze>::Frozen: SimpleValue,
+{
+}
 
 /// A trait representing Starlark values which are simple - they
 /// aren't mutable and can't contain other Starlark values.
