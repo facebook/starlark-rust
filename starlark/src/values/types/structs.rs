@@ -39,6 +39,7 @@ use std::{
     fmt::{self, Display},
     hash::Hash,
     marker,
+    marker::PhantomData,
 };
 
 use gazebo::{
@@ -54,7 +55,7 @@ use crate::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
         AllocValue, Freeze, Freezer, FrozenValue, Heap, StarlarkValue, StringValue,
-        StringValueLike, Trace, Value, ValueLike,
+        StringValueLike, Trace, UnpackValue, Value, ValueLike, ValueOf,
     },
 };
 
@@ -215,6 +216,52 @@ where
         self.fields
             .keys()
             .map(|x| x.to_string_value().as_str().to_owned())
+            .collect()
+    }
+}
+
+impl<'v> UnpackValue<'v> for &'v Struct<'v> {
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        Struct::from_value(value)
+    }
+}
+
+/// Like [`ValueOf`](crate::values::ValueOf), but only validates value types; does not construct
+/// or store a map.
+pub struct StructOf<'v, V: UnpackValue<'v>> {
+    value: ValueOf<'v, &'v Struct<'v>>,
+    _marker: PhantomData<V>,
+}
+
+impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for StructOf<'v, V> {
+    fn unpack_value(value: Value<'v>) -> Option<StructOf<'v, V>> {
+        let value = ValueOf::<&Struct>::unpack_value(value)?;
+        for (_k, &v) in &value.typed.fields {
+            // Validate field types
+            V::unpack_value(v)?;
+        }
+        Some(StructOf {
+            value,
+            _marker: marker::PhantomData,
+        })
+    }
+}
+
+impl<'v, V: UnpackValue<'v>> StructOf<'v, V> {
+    pub fn to_value(&self) -> Value<'v> {
+        self.value.value
+    }
+
+    pub fn as_struct(&self) -> &Struct<'v> {
+        self.value.typed
+    }
+
+    /// Collect field structs.
+    pub fn to_map(&self) -> SmallMap<StringValue<'v>, V> {
+        self.as_struct()
+            .fields
+            .iter()
+            .map(|(&k, &v)| (k, V::unpack_value(v).expect("validated at construction")))
             .collect()
     }
 }

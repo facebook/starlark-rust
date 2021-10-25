@@ -234,7 +234,7 @@ mod value_of {
         self as starlark,
         assert::Assert,
         environment::GlobalsBuilder,
-        values::{dict::DictOf, list::ListOf, ValueOf},
+        values::{dict::DictOf, list::ListOf, structs::StructOf, ValueOf},
     };
 
     // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
@@ -299,6 +299,14 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
+        fn with_struct_int(v: StructOf<i32>) -> (Value<'v>, String) {
+            let repr = v
+                .to_map()
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .join(" + ");
+            Ok((v.to_value(), repr))
+        }
         fn with_either(v: Either<i32, Either<String, ListOf<i32>>>) -> String {
             match v {
                 Either::Left(i) => Ok(i.to_string()),
@@ -356,6 +364,14 @@ mod value_of {
         let expected = r#"({1: {2: 3, 4: 5}, 6: {7: 8}}, "1: 2:3, 4:5 + 6: 7:8")"#;
         let test = r#"with_dict_dict({1: {2: 3, 4: 5}, 6: {7: 8}})"#;
         a.eq(expected, test);
+    }
+
+    #[test]
+    fn test_struct_of() {
+        let mut a = Assert::new();
+        a.globals_add(validate_module);
+        a.eq("(struct(a=1), '\"a\"=1')", "with_struct_int(struct(a=1))");
+        a.fail("with_struct_int(struct(a=True))", BAD);
     }
 
     #[test]
