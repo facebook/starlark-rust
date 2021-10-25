@@ -411,9 +411,12 @@ impl AValueHeader {
 
     /// After performing the overwrite any existing pointers to this value
     /// are corrupted.
-    pub unsafe fn overwrite<'v, T: AValueDyn<'v>>(me: *mut AValueHeader, x: usize) -> T {
+    pub unsafe fn overwrite<'v, T: AValue<'v>>(me: *mut AValueHeader, x: usize) -> T {
         assert!(x & 1 == 0, "Can't have the lowest bit set");
-        assert_eq!((*me).0.layout(), Layout::new::<T>());
+        assert_eq!(
+            (*me).unpack().static_type_of_value(),
+            T::static_type_id_of_value()
+        );
 
         let sz = (*me).unpack().memory_size();
         let p = me as *const AValueRepr<T>;
