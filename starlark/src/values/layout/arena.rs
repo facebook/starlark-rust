@@ -411,8 +411,11 @@ impl AValueHeader {
 
     /// After performing the overwrite any existing pointers to this value
     /// are corrupted.
-    pub unsafe fn overwrite_with_forward<'v, T: AValue<'v>>(me: *mut AValueHeader, x: usize) -> T {
-        assert!(x & 1 == 0, "Can't have the lowest bit set");
+    pub unsafe fn overwrite_with_forward<'v, T: AValue<'v>>(
+        me: *mut AValueHeader,
+        forward_ptr: usize,
+    ) -> T {
+        assert!(forward_ptr & 1 == 0, "Can't have the lowest bit set");
         assert_eq!(
             (*me).unpack().static_type_of_value(),
             T::static_type_id_of_value()
@@ -423,7 +426,7 @@ impl AValueHeader {
         let res = ptr::read(p).payload;
         let p = me as *mut AValueForward;
         *p = AValueForward {
-            forward_ptr: x | 1,
+            forward_ptr: forward_ptr | 1,
             object_size: sz,
         };
         res
