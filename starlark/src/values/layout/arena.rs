@@ -411,7 +411,7 @@ impl AValueHeader {
 
     /// After performing the overwrite any existing pointers to this value
     /// are corrupted.
-    pub unsafe fn overwrite<'v, T: AValue<'v>>(me: *mut AValueHeader, x: usize) -> T {
+    pub unsafe fn overwrite_with_forward<'v, T: AValue<'v>>(me: *mut AValueHeader, x: usize) -> T {
         assert!(x & 1 == 0, "Can't have the lowest bit set");
         assert_eq!(
             (*me).unpack().static_type_of_value(),

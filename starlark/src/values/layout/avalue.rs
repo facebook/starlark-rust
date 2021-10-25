@@ -408,7 +408,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
         let s = self.1.unpack();
         let fv = freezer.alloc(s);
         debug_assert!(fv.is_str());
-        AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
+        AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
         Ok(fv)
     }
 
@@ -418,7 +418,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
         let s = self.1.unpack();
         let v = tracer.alloc_str(s);
         debug_assert!(v.is_str());
-        AValueHeader::overwrite::<Self>(me, v.0.ptr_value() & !1);
+        AValueHeader::overwrite_with_forward::<Self>(me, v.0.ptr_value() & !1);
         v
     }
 
@@ -452,7 +452,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Tuple<'v>> {
 
         let (fv, r, extra) =
             freezer.reserve_with_extra::<AValueImpl<Direct, FrozenTuple>>(content.len());
-        AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
+        AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
 
         // TODO: this allocation is unnecessary
         let frozen_values = content.try_map(|v| freezer.freeze(*v))?;
@@ -469,7 +469,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Tuple<'v>> {
         let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
 
         let (v, r, extra) = tracer.reserve_with_extra::<Self>(content.len());
-        let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
+        let x = AValueHeader::overwrite_with_forward::<Self>(me, clear_lsb(v.0.ptr_value()));
 
         debug_assert_eq!(content.len(), x.1.len());
 
@@ -529,7 +529,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, ListGen<List<'v>>> {
         let content = self.1.0.content();
         let (fv, r, extra) =
             freezer.reserve_with_extra::<AValueImpl<Direct, ListGen<FrozenList>>>(content.len());
-        AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
+        AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
         r.fill(AValueImpl(Direct, ListGen(FrozenList::new(content.len()))));
         assert_eq!(extra.len(), content.len());
         for (elem_place, elem) in extra.iter_mut().zip(content) {
@@ -605,7 +605,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Array<'v>> {
         let content = ((*me).as_repr_mut::<Self>()).payload.1.content_mut();
 
         let (v, r, extra) = tracer.reserve_with_extra::<Self>(content.len());
-        let x = AValueHeader::overwrite::<Self>(me, clear_lsb(v.0.ptr_value()));
+        let x = AValueHeader::overwrite_with_forward::<Self>(me, clear_lsb(v.0.ptr_value()));
 
         debug_assert_eq!(content.len(), x.1.len());
 
@@ -633,7 +633,7 @@ where
     AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
     let (fv, r) = freezer.reserve::<AValueImpl<Mode, C>>();
-    let x = AValueHeader::overwrite::<AValueImpl<Mode, C>>(me, fv.0.ptr_value());
+    let x = AValueHeader::overwrite_with_forward::<AValueImpl<Mode, C>>(me, fv.0.ptr_value());
     r.fill(x);
     Ok(fv)
 }
@@ -649,7 +649,8 @@ where
     AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
     let (v, r) = tracer.reserve::<AValueImpl<Mode, C>>();
-    let x = AValueHeader::overwrite::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
+    let x =
+        AValueHeader::overwrite_with_forward::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
     r.fill(x);
     v
 }
@@ -696,7 +697,8 @@ where
     AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
     let (v, r) = tracer.reserve::<AValueImpl<Mode, C>>();
-    let mut x = AValueHeader::overwrite::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
+    let mut x =
+        AValueHeader::overwrite_with_forward::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
     // We have to put the forwarding node in _before_ we trace in case there are cycles
     x.1.trace(tracer);
     r.fill(x);
@@ -725,7 +727,7 @@ where
         freezer: &Freezer,
     ) -> anyhow::Result<FrozenValue> {
         let (fv, r) = freezer.reserve::<AValueImpl<Simple, T::Frozen>>();
-        let x = AValueHeader::overwrite::<Self>(me, fv.0.ptr_value());
+        let x = AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
         let res = x.1.freeze(freezer)?;
         r.fill(AValueImpl(Simple, res));
         if TypeId::of::<T::Frozen>() == TypeId::of::<FrozenDef>() {
