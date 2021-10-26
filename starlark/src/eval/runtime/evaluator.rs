@@ -28,9 +28,7 @@ use thiserror::Error;
 use crate::{
     codemap::{FileSpan, Span},
     collections::{alloca::Alloca, string_pool::StringPool},
-    environment::{
-        slots::ModuleSlotId, EnvironmentError, FrozenModuleData, FrozenModuleRef, Module,
-    },
+    environment::{slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, Module},
     errors::{Diagnostic, Frame},
     eval::{
         fragment::def::DefInfo,
@@ -74,7 +72,7 @@ pub struct Evaluator<'v, 'a> {
     // The module-level variables in scope at the moment.
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
-    pub(crate) module_variables: Option<(&'static FrozenModuleData, FrozenRef<FrozenModuleRef>)>,
+    pub(crate) module_variables: Option<FrozenRef<FrozenModuleRef>>,
     // Local variables for this function, and older stack frames too.
     pub(crate) local_variables: LocalSlots<'v>,
     // How we deal with a `load` function.
@@ -353,10 +351,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let old_def_info = mem::replace(&mut self.def_info, def_info);
 
         // Set up for the new function call
-        let old_module_variables = mem::replace(
-            &mut self.module_variables,
-            module.map(|x| (x.as_ref().get_module_data(), x)),
-        );
+        let old_module_variables = mem::replace(&mut self.module_variables, module);
 
         // Run the computation
         let res = within(self);

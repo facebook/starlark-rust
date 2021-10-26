@@ -386,7 +386,7 @@ impl<'v> Def<'v> {
             parameter_types,
             return_type,
             captured,
-            module: AtomicFrozenRefOption::new(eval.module_variables.map(|x| x.1)),
+            module: AtomicFrozenRefOption::new(eval.module_variables),
             optimized_on_freeze_stmt: StmtCompiledCell::new(),
             def_info: stmt,
         })
