@@ -70,7 +70,7 @@ use crate::{
 };
 
 /// The result of `field()`.
-#[derive(Clone, Debug, Dupe, Trace)]
+#[derive(Clone, Debug, Dupe, Trace, Freeze)]
 pub struct FieldGen<V> {
     pub(crate) typ: V,
     default: Option<V>,
@@ -124,7 +124,7 @@ pub type RecordType<'v> = RecordTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenRecordType = RecordTypeGen<FrozenValue, Option<String>>;
 
 /// An actual record.
-#[derive(Clone, Debug, Trace, Coerce)]
+#[derive(Clone, Debug, Trace, Coerce, Freeze)]
 #[repr(C)]
 pub struct RecordGen<V> {
     typ: V, // Must be RecordType
@@ -236,16 +236,6 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
 
     fn get_record_fields(&self) -> &'v SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)> {
         record_fields(self.get_record_type())
-    }
-}
-
-impl<'v> Freeze for Field<'v> {
-    type Frozen = FrozenField;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(FrozenField {
-            typ: self.typ.freeze(freezer)?,
-            default: self.default.into_try_map(|x| x.freeze(freezer))?,
-        })
     }
 }
 
@@ -369,16 +359,6 @@ where
                 *typ = Some(variable_name.to_owned())
             }
         }
-    }
-}
-
-impl<'v> Freeze for Record<'v> {
-    type Frozen = FrozenRecord;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(FrozenRecord {
-            typ: self.typ.freeze(freezer)?,
-            values: self.values.try_map(|v| v.freeze(freezer))?,
-        })
     }
 }
 

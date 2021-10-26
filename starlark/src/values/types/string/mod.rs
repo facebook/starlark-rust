@@ -36,9 +36,8 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, Freeze,
-        Freezer, FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value,
-        ValueError, ValueLike,
+        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, FrozenHeap,
+        FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError, ValueLike,
     },
 };
 
@@ -416,7 +415,7 @@ impl<'v, 'a> AllocFrozenValue for &'a str {
 }
 
 /// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug, Trace, Coerce, Display)]
+#[derive(Debug, Trace, Coerce, Display, Freeze)]
 #[display(fmt = "iterator")]
 #[repr(C)]
 struct StringIteratorGen<V> {
@@ -472,16 +471,6 @@ where
         } else {
             f(&mut s.map(|x| Value::new_int(u32::from(x) as i32)))
         }
-    }
-}
-
-impl<'v> Freeze for StringIterator<'v> {
-    type Frozen = FrozenStringIterator;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(FrozenStringIterator {
-            string: freezer.freeze(self.string)?,
-            produce_char: self.produce_char,
-        })
     }
 }
 

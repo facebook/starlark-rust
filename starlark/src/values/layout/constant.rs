@@ -36,7 +36,7 @@ use crate::values::{
     layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
     string::StarlarkStr,
     types::string::StarlarkStrN,
-    AllocValue, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
+    AllocValue, Freeze, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
 };
 
 /// A constant string that can be converted to a [`FrozenValue`].
@@ -273,7 +273,14 @@ impl Display for FrozenStringValue {
 
 /// Common type for [`StringValue`] and [`FrozenStringValue`].
 pub trait StringValueLike<'v>:
-    Trace<'v> + CoerceKey<StringValue<'v>> + Display + Debug + Copy + Clone + Dupe
+    Trace<'v>
+    + Freeze<Frozen = FrozenStringValue>
+    + CoerceKey<StringValue<'v>>
+    + Display
+    + Debug
+    + Copy
+    + Clone
+    + Dupe
 {
     fn to_string_value(self) -> StringValue<'v>;
 }

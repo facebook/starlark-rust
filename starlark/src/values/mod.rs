@@ -37,7 +37,7 @@ use std::{
 use gazebo::coerce::CoerceKey;
 pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
-pub use starlark_derive::{starlark_attrs, StarlarkAttrs, Trace};
+pub use starlark_derive::{starlark_attrs, Freeze, StarlarkAttrs, Trace};
 
 pub use crate::values::{
     alloc_value::*, error::*, freeze::*, frozen_ref::*, layout::*, owned::*, trace::*, traits::*,
@@ -191,16 +191,6 @@ impl<'v> Hashed<Value<'v>> {
         let key = self.key().freeze(freezer)?;
         // But it's an easy mistake to make, so actually check it in debug
         debug_assert_eq!(Some(self.hash()), key.get_hashed().ok().map(|x| x.hash()));
-        Ok(Hashed::new_unchecked(self.hash(), key))
-    }
-}
-
-impl<'v> Hashed<StringValue<'v>> {
-    pub(crate) fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Hashed<FrozenStringValue>> {
-        // Safe because we know frozen values have the same hash as non-frozen ones
-        let key = self.key().freeze(freezer)?;
-        // But it's an easy mistake to make, so actually check it in debug
-        debug_assert_eq!(self.hash(), Hashed::new(key).hash());
         Ok(Hashed::new_unchecked(self.hash(), key))
     }
 }

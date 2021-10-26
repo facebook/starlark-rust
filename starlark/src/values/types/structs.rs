@@ -54,8 +54,8 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
-        AllocValue, Freeze, Freezer, FrozenValue, Heap, StarlarkValue, StringValue,
-        StringValueLike, Trace, UnpackValue, Value, ValueLike, ValueOf,
+        AllocValue, Freeze, FrozenValue, Heap, StarlarkValue, StringValue, StringValueLike, Trace,
+        UnpackValue, Value, ValueLike, ValueOf,
     },
 };
 
@@ -75,7 +75,7 @@ impl<'v, V: ValueLike<'v>> StructGen<'v, V> {
 starlark_complex_value!(pub Struct<'v>);
 
 /// The result of calling `struct()`.
-#[derive(Clone, Default, Debug, Trace)]
+#[derive(Clone, Default, Debug, Trace, Freeze)]
 #[repr(C)]
 pub struct StructGen<'v, V: ValueLike<'v>> {
     /// The fields in a struct.
@@ -125,20 +125,6 @@ impl<'v> StructBuilder<'v> {
             fields: self.1,
             _marker: marker::PhantomData,
         }
-    }
-}
-
-impl<'v> Freeze for Struct<'v> {
-    type Frozen = FrozenStruct;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let mut frozen = SmallMap::with_capacity(self.fields.len());
-        for (k, v) in self.fields.into_iter_hashed() {
-            frozen.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
-        }
-        Ok(FrozenStruct {
-            fields: frozen,
-            _marker: marker::PhantomData,
-        })
     }
 }
 

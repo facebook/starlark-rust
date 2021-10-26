@@ -26,6 +26,7 @@ use proc_macro::TokenStream;
 use syn::*;
 
 mod attrs;
+mod freeze;
 mod parse;
 mod render;
 mod trace;
@@ -89,6 +90,12 @@ pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Trace, attributes(trace))]
 pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     trace::derive_trace(input)
+}
+
+/// Derive the `Freeze` trait.
+#[proc_macro_derive(Freeze, attributes(freeze))]
+pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    freeze::derive_freeze(input)
 }
 
 /// Derive accessor methods that are designed to be used from {has,get,dir}_attr

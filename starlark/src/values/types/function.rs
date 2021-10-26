@@ -28,8 +28,8 @@ use crate::{
     codemap::Span,
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
-        AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap, FrozenValue, Heap, SimpleValue,
-        StarlarkValue, Trace, Value, ValueLike,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue,
+        Trace, Value, ValueLike,
     },
 };
 
@@ -238,7 +238,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 }
 
 /// A wrapper for a method with a self object already bound.
-#[derive(Clone, Debug, Trace, Coerce, Display)]
+#[derive(Clone, Debug, Trace, Coerce, Display, Freeze)]
 #[repr(C)]
 #[display(fmt = "{}", method)]
 pub struct BoundMethodGen<V> {
@@ -253,16 +253,6 @@ impl<'v> BoundMethod<'v> {
     /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
     pub fn new(this: Value<'v>, method: Value<'v>) -> Self {
         BoundMethod { method, this }
-    }
-}
-
-impl<'v> Freeze for BoundMethod<'v> {
-    type Frozen = FrozenBoundMethod;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(BoundMethodGen {
-            method: self.method.freeze(freezer)?,
-            this: self.this.freeze(freezer)?,
-        })
     }
 }
 

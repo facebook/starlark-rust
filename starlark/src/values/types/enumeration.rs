@@ -100,7 +100,7 @@ pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenEnumType = EnumTypeGen<FrozenValue, Option<String>>;
 
 /// A value from an enumeration.
-#[derive(Clone, Derivative, Trace, Coerce)]
+#[derive(Clone, Derivative, Trace, Coerce, Freeze)]
 #[repr(C)]
 #[derivative(Debug)]
 pub struct EnumValueGen<V> {
@@ -131,17 +131,6 @@ impl<'v> Freeze for EnumType<'v> {
             typ: self.typ.into_inner(),
             elements,
             constructor: self.constructor.freeze(freezer)?,
-        })
-    }
-}
-
-impl<'v> Freeze for EnumValue<'v> {
-    type Frozen = FrozenEnumValue;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(FrozenEnumValue {
-            typ: self.typ.freeze(freezer)?,
-            value: self.value.freeze(freezer)?,
-            index: self.index,
         })
     }
 }
