@@ -527,6 +527,13 @@ impl<'v> AValue<'v> for AValueImpl<Direct, ListGen<List<'v>>> {
         freezer: &Freezer,
     ) -> anyhow::Result<FrozenValue> {
         let content = self.1.0.content();
+
+        if content.is_empty() {
+            let fv = FrozenValue::new_repr(&VALUE_EMPTY_FROZEN_LIST);
+            AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
+            return Ok(fv);
+        }
+
         let (fv, r, extra) =
             freezer.reserve_with_extra::<AValueImpl<Direct, ListGen<FrozenList>>>(content.len());
         AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
