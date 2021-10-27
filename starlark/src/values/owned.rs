@@ -176,8 +176,12 @@ impl<T: StarlarkValue<'static>> Deref for OwnedFrozenValueTyped<T> {
 }
 
 impl<T: StarlarkValue<'static>> OwnedFrozenValueTyped<T> {
-    pub fn to_frozen_value(&self) -> FrozenValue {
+    pub unsafe fn to_frozen_value(&self) -> FrozenValue {
         self.value.to_frozen_value()
+    }
+
+    pub fn to_value<'v>(&'v self) -> Value<'v> {
+        unsafe { self.to_frozen_value().to_value() }
     }
 
     pub fn to_owned_frozen_value(&self) -> OwnedFrozenValue {
