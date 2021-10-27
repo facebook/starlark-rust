@@ -40,9 +40,9 @@ use crate::{
     environment::{Globals, GlobalsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
-        string::hash_string_value, AllocFrozenValue, AllocValue, Freeze, Freezer, FromValue,
-        FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, StringValue,
-        Trace, UnpackValue, Value, ValueLike,
+        string::hash_string_value, AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap,
+        FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, StringValue, Trace,
+        UnpackValue, Value, ValueLike,
     },
 };
 
@@ -127,9 +127,9 @@ impl<'v> Dict<'v> {
     }
 }
 
-impl<'v> FromValue<'v> for Dict<'v> {
-    fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
-        Dict::from_value(x)
+impl<'v> UnpackValue<'v> for ARef<'v, Dict<'v>> {
+    fn unpack_value(value: Value<'v>) -> Option<ARef<'v, Dict<'v>>> {
+        Dict::from_value(value)
     }
 }
 

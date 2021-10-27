@@ -107,7 +107,7 @@ use crate::{
 /// [`AllocValue`](crate::values::AllocValue) for both,
 /// [`AllocFrozenValue`](crate::values::AllocFrozenValue) for the frozen one,
 /// [`SimpleValue`] for the frozen one and
-/// [`FromValue`](crate::values::FromValue) for the non-frozen one.
+/// [`UnpackValue`](crate::values::UnpackValue) for the non-frozen one.
 /// It also defines the methods:
 ///
 /// ```
@@ -184,7 +184,7 @@ where
 /// The [`starlark_simple_value!`] macro defines instances of [`AnyLifetime`],
 /// [`AllocValue`](crate::values::AllocValue),
 /// [`AllocFrozenValue`](crate::values::AllocFrozenValue), [`SimpleValue`] and
-/// [`FromValue`](crate::values::FromValue). It also defines a method:
+/// [`UnpackValue`](crate::values::UnpackValue). It also defines a method:
 ///
 /// ```
 /// # use crate::starlark::values::*;

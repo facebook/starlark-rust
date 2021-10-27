@@ -20,7 +20,7 @@
 use std::ops::Deref;
 
 use either::Either;
-use gazebo::{cell::ARef, prelude::*};
+use gazebo::prelude::*;
 
 use crate::values::{list::List, tuple::Tuple, Value};
 
@@ -80,22 +80,6 @@ impl<'v, TLeft: UnpackValue<'v>, TRight: UnpackValue<'v>> UnpackValue<'v>
         } else {
             TRight::unpack_value(value).map(Self::Right)
         }
-    }
-}
-
-/// Unpack a [`Value`] which is a reference to an underlying type.
-///
-/// Usually implemented by [`starlark_simple_value!`] or [`starlark_complex_value!`].
-/// The from value instance for container types, e.g. [`List`](crate::values::list::List),
-/// can work if the underlying value matches or is the frozen variant,
-/// e.g. either [`List`](crate::values::list::List) or [`FrozenList`](crate::values::list::FrozenList).
-pub trait FromValue<'v> {
-    fn from_value(value: Value<'v>) -> Option<ARef<'v, Self>>;
-}
-
-impl<'v, T: FromValue<'v>> UnpackValue<'v> for ARef<'v, T> {
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        T::from_value(value)
     }
 }
 

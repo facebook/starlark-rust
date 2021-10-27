@@ -34,8 +34,7 @@ use crate::{
     values::{
         comparison::{compare_slice, equals_slice},
         index::{apply_slice, convert_index},
-        ARef, AllocValue, FromValue, FrozenValue, Heap, StarlarkValue, UnpackValue, Value,
-        ValueError, ValueLike,
+        AllocValue, FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError, ValueLike,
     },
 };
 
@@ -104,12 +103,6 @@ impl<'v> Tuple<'v> {
         } else {
             value.downcast_ref::<Tuple<'v>>()
         }
-    }
-}
-
-impl<'v> FromValue<'v> for TupleGen<Value<'v>> {
-    fn from_value(value: Value<'v>) -> Option<ARef<'v, Self>> {
-        Tuple::from_value(value).map(ARef::new_ptr)
     }
 }
 
