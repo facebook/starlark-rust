@@ -241,17 +241,17 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 #[derive(Clone, Debug, Trace, Coerce, Display, Freeze)]
 #[repr(C)]
 #[display(fmt = "{}", method)]
-pub struct BoundMethodGen<V> {
+pub(crate) struct BoundMethodGen<V> {
     pub(crate) method: V,
     pub(crate) this: V,
 }
 
-starlark_complex_value!(pub BoundMethod);
+starlark_complex_value!(pub(crate) BoundMethod);
 
 impl<'v> BoundMethod<'v> {
     /// Create a new [`BoundMethod`]. Given the expression `object.function`,
     /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
-    pub fn new(this: Value<'v>, method: Value<'v>) -> Self {
+    pub(crate) fn new(this: Value<'v>, method: Value<'v>) -> Self {
         BoundMethod { method, this }
     }
 }

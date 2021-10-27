@@ -299,8 +299,7 @@ pub enum AttrType {
     Field,
     /// The attribute is a method, which should be called passing the `x` value
     /// as its first argument. It will either be a function (which is transformed
-    /// into a [`BoundMethod`](crate::values::function::BoundMethod)) or a
-    /// [`NativeAttribute`](crate::values::function::NativeAttribute)
+    /// into a `BoundMethod` or a [`NativeAttribute`](crate::values::function::NativeAttribute)
     /// (which is evaluated immediately).
     Method,
 }
