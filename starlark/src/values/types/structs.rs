@@ -206,12 +206,6 @@ where
     }
 }
 
-impl<'v> UnpackValue<'v> for &'v Struct<'v> {
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        Struct::from_value(value)
-    }
-}
-
 /// Like [`ValueOf`](crate::values::ValueOf), but only validates value types; does not construct
 /// or store a map.
 pub struct StructOf<'v, V: UnpackValue<'v>> {

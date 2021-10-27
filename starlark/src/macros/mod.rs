@@ -67,6 +67,12 @@ macro_rules! starlark_complex_value {
                 }
             }
 
+            impl<'v> $crate::values::UnpackValue<'v> for &'v $x<'v> {
+                fn unpack_value(x: $crate::values::Value<'v>) -> Option<&'v $x<'v>> {
+                    $x::from_value(x)
+                }
+            }
+
             impl<'v> $crate::values::FromValue<'v> for $x<'v> {
                 fn from_value(x: $crate::values::Value<'v>) -> Option<$crate::values::ARef<'v, Self>> {
                     $x::from_value(x).map(|x| $crate::values::ARef::new_ptr(x))
