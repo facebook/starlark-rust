@@ -272,7 +272,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         // but modified to be UTF8 string friendly.
         let s = self.unpack();
         match index.to_int() {
-            Err(_) => Err(ValueError::IncorrectParameterType.into()),
+            Err(_) => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
             Ok(i) => {
                 if i >= 0 {
                     match fast_string::at(s, i as usize) {
@@ -316,7 +316,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
                     Ok(me.contains(s))
                 }
             }
-            None => Err(ValueError::IncorrectParameterType.into()),
+            None => Err(ValueError::IncorrectParameterTypeWithExpected("str".to_owned()).into()),
         }
     }
 
@@ -402,7 +402,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
                 }
                 Ok(heap.alloc(result))
             }
-            None => Err(ValueError::IncorrectParameterType.into()),
+            None => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
         }
     }
 

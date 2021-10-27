@@ -597,8 +597,11 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 
     // Utility for improving the error message with more information
-    fn named_err<T>(name: &str, x: Option<T>) -> anyhow::Result<T> {
-        x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
+    fn named_err<'v1, T: UnpackValue<'v1>>(name: &str, x: Option<T>) -> anyhow::Result<T> {
+        x.ok_or_else(|| {
+            ValueError::IncorrectParameterTypeNamedWithExpected(name.to_owned(), T::expected())
+                .into()
+        })
     }
 
     fn get_next(&mut self) -> Option<Value<'v>> {
@@ -887,8 +890,10 @@ impl<'v, 'a> Arguments<'v, 'a> {
 }
 
 // Utility for improving the error message with more information
-fn named_err<T>(name: &str, x: Option<T>) -> anyhow::Result<T> {
-    x.ok_or_else(|| ValueError::IncorrectParameterTypeNamed(name.to_owned()).into())
+fn named_err<'v1, T: UnpackValue<'v1>>(name: &str, x: Option<T>) -> anyhow::Result<T> {
+    x.ok_or_else(|| {
+        ValueError::IncorrectParameterTypeNamedWithExpected(name.to_owned(), T::expected()).into()
+    })
 }
 
 impl Arguments<'_, '_> {
@@ -912,7 +917,15 @@ impl Arguments<'_, '_> {
     ) -> anyhow::Result<Option<T>> {
         match x {
             None => Ok(None),
-            Some(x) => named_err(name, T::unpack_value(x).map(Some)),
+            Some(x) => Ok(Some(T::unpack_value(x).ok_or_else::<anyhow::Error, _>(
+                || {
+                    ValueError::IncorrectParameterTypeNamedWithExpected(
+                        name.to_owned(),
+                        T::expected(),
+                    )
+                    .into()
+                },
+            )?)),
         }
     }
 }

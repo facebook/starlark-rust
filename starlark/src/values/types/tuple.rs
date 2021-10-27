@@ -244,7 +244,7 @@ where
                 }
                 Ok(heap.alloc_tuple(&result))
             }
-            None => Err(ValueError::IncorrectParameterType.into()),
+            None => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
         }
     }
 }

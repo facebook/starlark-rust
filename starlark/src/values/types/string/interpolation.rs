@@ -130,35 +130,55 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
                     b'e' => {
                         let v = next_value()?
                             .unpack_num()
-                            .ok_or(ValueError::IncorrectParameterType)?
+                            .ok_or_else(|| {
+                                ValueError::IncorrectParameterTypeWithExpected(
+                                    "int or float".to_owned(),
+                                )
+                            })?
                             .as_float();
                         float::write_scientific(out, v, 'e', false).unwrap()
                     }
                     b'E' => {
                         let v = next_value()?
                             .unpack_num()
-                            .ok_or(ValueError::IncorrectParameterType)?
+                            .ok_or_else(|| {
+                                ValueError::IncorrectParameterTypeWithExpected(
+                                    "int or float".to_owned(),
+                                )
+                            })?
                             .as_float();
                         float::write_scientific(out, v, 'E', false).unwrap()
                     }
                     b'f' | b'F' => {
                         let v = next_value()?
                             .unpack_num()
-                            .ok_or(ValueError::IncorrectParameterType)?
+                            .ok_or_else(|| {
+                                ValueError::IncorrectParameterTypeWithExpected(
+                                    "int or float".to_owned(),
+                                )
+                            })?
                             .as_float();
                         float::write_decimal(out, v).unwrap()
                     }
                     b'g' => {
                         let v = next_value()?
                             .unpack_num()
-                            .ok_or(ValueError::IncorrectParameterType)?
+                            .ok_or_else(|| {
+                                ValueError::IncorrectParameterTypeWithExpected(
+                                    "int or float".to_owned(),
+                                )
+                            })?
                             .as_float();
                         float::write_compact(out, v, 'e').unwrap()
                     }
                     b'G' => {
                         let v = next_value()?
                             .unpack_num()
-                            .ok_or(ValueError::IncorrectParameterType)?
+                            .ok_or_else(|| {
+                                ValueError::IncorrectParameterTypeWithExpected(
+                                    "int or float".to_owned(),
+                                )
+                            })?
                             .as_float();
                         float::write_compact(out, v, 'E').unwrap()
                     }

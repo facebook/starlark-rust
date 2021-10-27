@@ -40,7 +40,10 @@ fn convert_index_aux(
                         Ok(i)
                     }
                 }
-                Err(..) => Err(ValueError::IncorrectParameterType.into()),
+                Err(..) => Err(ValueError::IncorrectParameterTypeWithExpected(
+                    "none or int".to_owned(),
+                )
+                .into()),
             }
         }
     } else {
@@ -67,7 +70,7 @@ pub(crate) fn convert_index(v: Value, len: i32) -> anyhow::Result<i32> {
                 Ok(i)
             }
         }
-        Err(..) => Err(ValueError::IncorrectParameterType.into()),
+        Err(..) => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
     }
 }
 
@@ -102,7 +105,7 @@ pub(crate) fn convert_slice_indices(
                 (Ok(..), Err(x)) => Err(x),
             }
         }
-        _ => Err(ValueError::IncorrectParameterType.into()),
+        _ => Err(ValueError::IncorrectParameterTypeWithExpected("int or None".to_owned()).into()),
     }
 }
 

@@ -629,7 +629,11 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
         #[inline(always)]
         fn as_str<'v>(x: Value<'v>) -> anyhow::Result<&'v str> {
             match x.unpack_str() {
-                None => Err(ValueError::IncorrectParameterTypeNamed("to_join".to_owned()).into()),
+                None => Err(ValueError::IncorrectParameterTypeNamedWithExpected(
+                    "to_join".to_owned(),
+                    "str".to_owned(),
+                )
+                .into()),
                 Some(v) => Ok(v),
             }
         }

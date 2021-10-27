@@ -91,7 +91,10 @@ fn render_attr(x: StarAttr) -> TokenStream {
                 let heap = eval.heap();
                 #[allow(unused_variables)]
                 let this: #arg = match starlark::values::UnpackValue::unpack_value(this) {
-                    None => return Err(starlark::values::ValueError::IncorrectParameterTypeNamed("this".to_owned()).into()),
+                    None => return Err(starlark::values::ValueError::IncorrectParameterTypeNamedWithExpected(
+                        "this".to_owned(),
+                        <#arg as starlark::values::UnpackValue>::expected(),
+                    ).into()),
                     Some(v) => v,
                 };
                 #body

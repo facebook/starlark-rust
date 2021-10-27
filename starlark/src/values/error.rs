@@ -36,6 +36,10 @@ pub enum ValueError {
     DivisionByZero,
     #[error("Integer overflow")]
     IntegerOverflow,
+    #[error("Type of parameters mismatch, expected `{0}`")]
+    IncorrectParameterTypeWithExpected(String),
+    #[error("Type of parameter `{0}` doesn't match, expected `{1}`")]
+    IncorrectParameterTypeNamedWithExpected(String, String),
     #[error("Type of parameters mismatch")]
     IncorrectParameterType,
     #[error("Type of parameter `{0}` doesn't match")]
