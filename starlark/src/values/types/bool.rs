@@ -66,6 +66,10 @@ impl AllocFrozenValue for bool {
 }
 
 impl UnpackValue<'_> for bool {
+    fn expected() -> String {
+        "bool".to_owned()
+    }
+
     fn unpack_value(value: Value) -> Option<Self> {
         value.unpack_bool()
     }

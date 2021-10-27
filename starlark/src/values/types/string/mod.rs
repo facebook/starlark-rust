@@ -36,8 +36,9 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Globals, GlobalsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, FrozenHeap,
-        FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError, ValueLike,
+        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, Freeze,
+        FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError,
+        ValueLike,
     },
 };
 
@@ -164,12 +165,20 @@ impl<'v> AllocValue<'v> for &'_ str {
 }
 
 impl<'v> UnpackValue<'v> for &'v str {
+    fn expected() -> String {
+        "str".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         value.unpack_str()
     }
 }
 
 impl<'v> UnpackValue<'v> for String {
+    fn expected() -> String {
+        "str".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         value.unpack_str().map(ToOwned::to_owned)
     }

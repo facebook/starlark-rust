@@ -309,6 +309,10 @@ unsafe impl<'v> Trace<'v> for StringValue<'v> {
 }
 
 impl<'v> UnpackValue<'v> for StringValue<'v> {
+    fn expected() -> String {
+        "str".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         StringValue::new(value)
     }

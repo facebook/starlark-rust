@@ -161,6 +161,10 @@ impl<'v, T: StarlarkValue<'v>> Deref for ValueTyped<'v, T> {
 }
 
 impl<'v, T: StarlarkValue<'v>> UnpackValue<'v> for ValueTyped<'v, T> {
+    fn expected() -> String {
+        T::get_type_value_static().as_str().to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         ValueTyped::new(value)
     }

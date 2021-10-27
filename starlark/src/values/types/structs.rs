@@ -214,6 +214,10 @@ pub struct StructOf<'v, V: UnpackValue<'v>> {
 }
 
 impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for StructOf<'v, V> {
+    fn expected() -> String {
+        format!("struct with fields of type {}", V::expected())
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<StructOf<'v, V>> {
         let value = ValueOf::<&Struct>::unpack_value(value)?;
         for (_k, &v) in &value.typed.fields {

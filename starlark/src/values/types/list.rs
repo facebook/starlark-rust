@@ -582,12 +582,20 @@ impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
 }
 
 impl<'v> UnpackValue<'v> for &'v ListRef<'v> {
+    fn expected() -> String {
+        "list".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         List::from_value(value)
     }
 }
 
 impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for ListOf<'v, V> {
+    fn expected() -> String {
+        format!("list of {}", V::expected())
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let list = List::from_value(value)?;
         if list.iter().all(|v| V::unpack_value(v).is_some()) {

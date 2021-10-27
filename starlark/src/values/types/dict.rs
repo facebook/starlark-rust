@@ -128,6 +128,10 @@ impl<'v> Dict<'v> {
 }
 
 impl<'v> UnpackValue<'v> for ARef<'v, Dict<'v>> {
+    fn expected() -> String {
+        "dict".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<ARef<'v, Dict<'v>>> {
         Dict::from_value(value)
     }
@@ -457,6 +461,10 @@ where
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for SmallMap<K, V> {
+    fn expected() -> String {
+        format!("dict mapping {} to {}", K::expected(), V::expected())
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let dict = Dict::from_value(value)?;
         let mut r = SmallMap::new();
@@ -506,6 +514,10 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
 }
 
 impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> UnpackValue<'v> for DictOf<'v, K, V> {
+    fn expected() -> String {
+        format!("dict mapping {} to {}", K::expected(), V::expected())
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let dict = Dict::from_value(value)?;
         let all_valid = dict

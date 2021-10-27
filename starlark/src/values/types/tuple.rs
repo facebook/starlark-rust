@@ -274,6 +274,10 @@ impl<'v, T1: AllocValue<'v>, T2: AllocValue<'v>, T3: AllocValue<'v>> AllocValue<
 }
 
 impl<'v, T1: UnpackValue<'v>, T2: UnpackValue<'v>> UnpackValue<'v> for (T1, T2) {
+    fn expected() -> String {
+        format!("tuple ({}, {})", T1::expected(), T2::expected())
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let t = Tuple::from_value(value)?;
         if t.len() != 2 {

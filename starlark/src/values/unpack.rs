@@ -26,12 +26,19 @@ use crate::values::{list::List, tuple::Tuple, Value};
 
 /// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {
+    /// Description of values acceptable by `unpack_value`, e. g. `list or str`.
+    fn expected() -> String;
+
     /// Given a [`Value`], try and unpack it into the given type, which may involve some element of conversion.
     /// The `heap` argument is _usually_ not required.
     fn unpack_value(value: Value<'v>) -> Option<Self>;
 }
 
 impl<'v> UnpackValue<'v> for Value<'v> {
+    fn expected() -> String {
+        "Value".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         Some(value)
     }
@@ -64,6 +71,10 @@ impl<'v, T: UnpackValue<'v>> Deref for ValueOf<'v, T> {
 }
 
 impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
+    fn expected() -> String {
+        T::expected()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let typed = T::unpack_value(value)?;
         Some(Self { value, typed })
@@ -73,6 +84,10 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
 impl<'v, TLeft: UnpackValue<'v>, TRight: UnpackValue<'v>> UnpackValue<'v>
     for Either<TLeft, TRight>
 {
+    fn expected() -> String {
+        format!("either {} or {}", TLeft::expected(), TRight::expected())
+    }
+
     // Only implemented for types that implement [`UnpackValue`]. Nonsensical for other types.
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         if let Some(left) = TLeft::unpack_value(value) {
@@ -84,6 +99,10 @@ impl<'v, TLeft: UnpackValue<'v>, TRight: UnpackValue<'v>> UnpackValue<'v>
 }
 
 impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for Vec<T> {
+    fn expected() -> String {
+        format!("list or tuple of {}", T::expected())
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         if let Some(o) = List::from_value(value) {
             o.iter().map(T::unpack_value).collect::<Option<Vec<_>>>()

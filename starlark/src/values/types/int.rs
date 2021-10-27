@@ -53,6 +53,10 @@ impl AllocFrozenValue for i32 {
 }
 
 impl UnpackValue<'_> for i32 {
+    fn expected() -> String {
+        "int".to_owned()
+    }
+
     fn unpack_value(value: Value) -> Option<Self> {
         value.unpack_int()
     }

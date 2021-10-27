@@ -97,6 +97,10 @@ enum StringOrTuple<'v> {
 }
 
 impl<'v> UnpackValue<'v> for StringOrTuple<'v> {
+    fn expected() -> String {
+        "str or tuple".to_owned()
+    }
+
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         if let Some(s) = value.unpack_str() {
             Some(Self::String(s))
