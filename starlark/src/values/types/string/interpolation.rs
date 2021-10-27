@@ -129,43 +129,23 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
                         .unwrap()
                     }
                     b'e' => {
-                        let v = Num::unpack_value(next_value()?)
-                            .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
-                            })?
-                            .as_float();
+                        let v = Num::unpack_param(next_value()?)?.as_float();
                         float::write_scientific(out, v, 'e', false).unwrap()
                     }
                     b'E' => {
-                        let v = Num::unpack_value(next_value()?)
-                            .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
-                            })?
-                            .as_float();
+                        let v = Num::unpack_param(next_value()?)?.as_float();
                         float::write_scientific(out, v, 'E', false).unwrap()
                     }
                     b'f' | b'F' => {
-                        let v = Num::unpack_value(next_value()?)
-                            .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
-                            })?
-                            .as_float();
+                        let v = Num::unpack_param(next_value()?)?.as_float();
                         float::write_decimal(out, v).unwrap()
                     }
                     b'g' => {
-                        let v = Num::unpack_value(next_value()?)
-                            .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
-                            })?
-                            .as_float();
+                        let v = Num::unpack_param(next_value()?)?.as_float();
                         float::write_compact(out, v, 'e').unwrap()
                     }
                     b'G' => {
-                        let v = Num::unpack_value(next_value()?)
-                            .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
-                            })?
-                            .as_float();
+                        let v = Num::unpack_param(next_value()?)?.as_float();
                         float::write_compact(out, v, 'E').unwrap()
                     }
                     c => {

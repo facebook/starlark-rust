@@ -271,26 +271,22 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         // This method is disturbingly hot. Use the logic from `convert_index`,
         // but modified to be UTF8 string friendly.
         let s = self.unpack();
-        match index.to_int() {
-            Err(_) => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
-            Ok(i) => {
-                if i >= 0 {
-                    match fast_string::at(s, i as usize) {
-                        None => Err(ValueError::IndexOutOfBound(i).into()),
-                        Some(c) => Ok(heap.alloc(c)),
-                    }
-                } else {
-                    let len_chars = fast_string::len(s);
-                    let ind = (-i) as usize; // Index from the end, minimum of 1
-                    if ind > len_chars {
-                        Err(ValueError::IndexOutOfBound(i).into())
-                    } else if len_chars == s.len() {
-                        // We are a 7bit ASCII string, so take the fast-path
-                        Ok(heap.alloc(s.as_bytes()[len_chars - ind] as char))
-                    } else {
-                        Ok(heap.alloc(fast_string::at(s, len_chars - ind).unwrap()))
-                    }
-                }
+        let i = i32::unpack_param(index)?;
+        if i >= 0 {
+            match fast_string::at(s, i as usize) {
+                None => Err(ValueError::IndexOutOfBound(i).into()),
+                Some(c) => Ok(heap.alloc(c)),
+            }
+        } else {
+            let len_chars = fast_string::len(s);
+            let ind = (-i) as usize; // Index from the end, minimum of 1
+            if ind > len_chars {
+                Err(ValueError::IndexOutOfBound(i).into())
+            } else if len_chars == s.len() {
+                // We are a 7bit ASCII string, so take the fast-path
+                Ok(heap.alloc(s.as_bytes()[len_chars - ind] as char))
+            } else {
+                Ok(heap.alloc(fast_string::at(s, len_chars - ind).unwrap()))
             }
         }
     }
@@ -307,16 +303,12 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
-        match other.unpack_str() {
-            Some(s) => {
-                let me = self.unpack();
-                if s.len() == 1 {
-                    Ok(me.as_bytes().contains(&s.as_bytes()[0]))
-                } else {
-                    Ok(me.contains(s))
-                }
-            }
-            None => Err(ValueError::IncorrectParameterTypeWithExpected("str".to_owned()).into()),
+        let s = <&str>::unpack_param(other)?;
+        let me = self.unpack();
+        if s.len() == 1 {
+            Ok(me.as_bytes().contains(&s.as_bytes()[0]))
+        } else {
+            Ok(me.contains(s))
         }
     }
 
@@ -393,17 +385,13 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match other.unpack_int() {
-            Some(l) => {
-                let s = self.unpack();
-                let mut result = String::with_capacity(s.len() * cmp::max(0, l) as usize);
-                for _i in 0..l {
-                    result.push_str(s)
-                }
-                Ok(heap.alloc(result))
-            }
-            None => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
+        let l = i32::unpack_param(other)?;
+        let s = self.unpack();
+        let mut result = String::with_capacity(s.len() * cmp::max(0, l) as usize);
+        for _i in 0..l {
+            result.push_str(s)
         }
+        Ok(heap.alloc(result))
     }
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

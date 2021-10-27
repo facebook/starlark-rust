@@ -32,7 +32,7 @@ use crate::{
         string,
         string::{fast_string, interpolation},
         tuple::Tuple,
-        StringValue, UnpackValue, Value, ValueError, ValueOf,
+        StringValue, UnpackValue, Value, ValueOf,
     },
 };
 
@@ -628,14 +628,7 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     fn join(this: &str, ref to_join: Value) -> Value<'v> {
         #[inline(always)]
         fn as_str<'v>(x: Value<'v>) -> anyhow::Result<&'v str> {
-            match x.unpack_str() {
-                None => Err(ValueError::IncorrectParameterTypeNamedWithExpected(
-                    "to_join".to_owned(),
-                    "str".to_owned(),
-                )
-                .into()),
-                Some(v) => Ok(v),
-            }
+            <&str>::unpack_named_param(x, "to_join")
         }
 
         to_join.with_iterator(heap, |it| {

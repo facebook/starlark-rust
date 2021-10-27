@@ -545,17 +545,12 @@ where
     }
 
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match other.unpack_int() {
-            Some(l) => {
-                let mut result =
-                    Vec::with_capacity(self.0.content().len() * cmp::max(0, l) as usize);
-                for _ in 0..l {
-                    result.extend(self.0.content().iter());
-                }
-                Ok(heap.alloc_list(&result))
-            }
-            None => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
+        let l = i32::unpack_param(other)?;
+        let mut result = Vec::with_capacity(self.0.content().len() * cmp::max(0, l) as usize);
+        for _ in 0..l {
+            result.extend(self.0.content().iter());
         }
+        Ok(heap.alloc_list(&result))
     }
 
     fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {

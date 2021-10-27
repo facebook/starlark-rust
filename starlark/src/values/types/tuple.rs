@@ -236,16 +236,12 @@ where
     }
 
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match other.unpack_int() {
-            Some(l) => {
-                let mut result = Vec::new();
-                for _i in 0..l {
-                    result.extend(self.content().iter().map(|e| e.to_value()));
-                }
-                Ok(heap.alloc_tuple(&result))
-            }
-            None => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
+        let l = i32::unpack_param(other)?;
+        let mut result = Vec::new();
+        for _i in 0..l {
+            result.extend(self.content().iter().map(|e| e.to_value()));
         }
+        Ok(heap.alloc_tuple(&result))
     }
 }
 

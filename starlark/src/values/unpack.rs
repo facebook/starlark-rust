@@ -22,7 +22,7 @@ use std::ops::Deref;
 use either::Either;
 use gazebo::prelude::*;
 
-use crate::values::{list::List, tuple::Tuple, Value};
+use crate::values::{list::List, tuple::Tuple, Value, ValueError};
 
 /// How to convert a [`Value`] to a Rust type. Required for all arguments in a [`#[starlark_module]`](macro@starlark_module) definition.
 pub trait UnpackValue<'v>: Sized {
@@ -32,6 +32,23 @@ pub trait UnpackValue<'v>: Sized {
     /// Given a [`Value`], try and unpack it into the given type, which may involve some element of conversion.
     /// The `heap` argument is _usually_ not required.
     fn unpack_value(value: Value<'v>) -> Option<Self>;
+
+    /// Unpack value, but instead of `None` return error about incorrect argument type.
+    fn unpack_param(value: Value<'v>) -> anyhow::Result<Self> {
+        Self::unpack_value(value)
+            .ok_or_else(|| ValueError::IncorrectParameterTypeWithExpected(Self::expected()).into())
+    }
+
+    /// Unpack value, but instead of `None` return error about incorrect named argument type.
+    fn unpack_named_param(value: Value<'v>, param_name: &str) -> anyhow::Result<Self> {
+        Self::unpack_value(value).ok_or_else(|| {
+            ValueError::IncorrectParameterTypeNamedWithExpected(
+                param_name.to_owned(),
+                Self::expected(),
+            )
+            .into()
+        })
+    }
 }
 
 impl<'v> UnpackValue<'v> for Value<'v> {
