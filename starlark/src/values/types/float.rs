@@ -29,7 +29,7 @@ use crate::{
     collections::StarlarkHasher,
     values::{
         num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
-        Value, ValueError,
+        UnpackValue, Value, ValueError, ValueLike,
     },
 };
 
@@ -155,6 +155,16 @@ impl<'v> AllocValue<'v> for f64 {
 impl AllocFrozenValue for f64 {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_float(StarlarkFloat(self))
+    }
+}
+
+impl<'v> UnpackValue<'v> for StarlarkFloat {
+    fn expected() -> String {
+        StarlarkFloat::get_type_value_static().as_str().to_owned()
+    }
+
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        Some(*value.downcast_ref::<StarlarkFloat>()?)
     }
 }
 

@@ -50,6 +50,7 @@ use crate::{
         },
         num::Num,
         string::StarlarkStr,
+        UnpackValue,
     },
 };
 
@@ -143,7 +144,7 @@ impl<'v> Value<'v> {
 
     /// Obtain the underlying numerical value, if it is one.
     pub fn unpack_num(self) -> Option<Num> {
-        Num::try_from_value(self)
+        Num::unpack_value(self)
     }
 
     /// Obtain the underlying `bool` if it is a boolean.

@@ -17,11 +17,12 @@
 
 //! Helpers for numerical values.
 
+use either::Either;
 use gazebo::prelude::*;
 
 use crate::{
     collections::SmallHashResult,
-    values::{float::StarlarkFloat, Value},
+    values::{types::float::StarlarkFloat, UnpackValue, Value},
 };
 
 /// [`Num`] represents a numerical value that can be unpacked from a [`Value`].
@@ -35,18 +36,22 @@ pub enum Num {
     Float(f64),
 }
 
-impl Num {
-    /// Try unpacking Value into a Num
-    pub fn try_from_value(value: Value) -> Option<Self> {
-        if let Some(i) = value.unpack_int() {
-            Some(Self::Int(i))
-        } else if let Some(&f) = value.get_ref().downcast_ref::<StarlarkFloat>() {
-            Some(Self::Float(f.0))
-        } else {
-            None
-        }
+type UnpackNumImpl = Either<i32, StarlarkFloat>;
+
+impl<'v> UnpackValue<'v> for Num {
+    fn expected() -> String {
+        UnpackNumImpl::expected()
     }
 
+    fn unpack_value(value: Value<'v>) -> Option<Self> {
+        Some(match UnpackNumImpl::unpack_value(value)? {
+            Either::Left(i) => Num::Int(i),
+            Either::Right(f) => Num::Float(f.0),
+        })
+    }
+}
+
+impl Num {
     /// Get underlying value as float
     pub fn as_float(self) -> f64 {
         match self {
@@ -123,21 +128,21 @@ mod tests {
 
     #[test]
     fn test_from_value() {
-        assert!(Num::try_from_value(Value::new_bool(true)).is_none());
-        assert!(Num::try_from_value(Value::new_bool(false)).is_none());
-        assert!(Num::try_from_value(Value::new_empty_string()).is_none());
-        assert!(Num::try_from_value(Value::new_none()).is_none());
+        assert!(Num::unpack_value(Value::new_bool(true)).is_none());
+        assert!(Num::unpack_value(Value::new_bool(false)).is_none());
+        assert!(Num::unpack_value(Value::new_empty_string()).is_none());
+        assert!(Num::unpack_value(Value::new_none()).is_none());
 
         assert_eq!(
-            Num::try_from_value(Value::new_int(0)).unwrap().as_int(),
+            Num::unpack_value(Value::new_int(0)).unwrap().as_int(),
             Some(0)
         );
         assert_eq!(
-            Num::try_from_value(Value::new_int(42)).unwrap().as_int(),
+            Num::unpack_value(Value::new_int(42)).unwrap().as_int(),
             Some(42)
         );
         assert_eq!(
-            Num::try_from_value(Value::new_int(-42)).unwrap().as_int(),
+            Num::unpack_value(Value::new_int(-42)).unwrap().as_int(),
             Some(-42)
         );
     }

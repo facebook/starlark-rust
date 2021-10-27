@@ -27,7 +27,8 @@ use thiserror::Error;
 use crate::{
     collections::string_pool::StringPool,
     values::{
-        dict::Dict, float, num, tuple::Tuple, Heap, StringValue, Value, ValueError, ValueLike,
+        dict::Dict, float, num, num::Num, tuple::Tuple, Heap, StringValue, UnpackValue, Value,
+        ValueError, ValueLike,
     },
 };
 
@@ -128,56 +129,41 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
                         .unwrap()
                     }
                     b'e' => {
-                        let v = next_value()?
-                            .unpack_num()
+                        let v = Num::unpack_value(next_value()?)
                             .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(
-                                    "int or float".to_owned(),
-                                )
+                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
                             })?
                             .as_float();
                         float::write_scientific(out, v, 'e', false).unwrap()
                     }
                     b'E' => {
-                        let v = next_value()?
-                            .unpack_num()
+                        let v = Num::unpack_value(next_value()?)
                             .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(
-                                    "int or float".to_owned(),
-                                )
+                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
                             })?
                             .as_float();
                         float::write_scientific(out, v, 'E', false).unwrap()
                     }
                     b'f' | b'F' => {
-                        let v = next_value()?
-                            .unpack_num()
+                        let v = Num::unpack_value(next_value()?)
                             .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(
-                                    "int or float".to_owned(),
-                                )
+                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
                             })?
                             .as_float();
                         float::write_decimal(out, v).unwrap()
                     }
                     b'g' => {
-                        let v = next_value()?
-                            .unpack_num()
+                        let v = Num::unpack_value(next_value()?)
                             .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(
-                                    "int or float".to_owned(),
-                                )
+                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
                             })?
                             .as_float();
                         float::write_compact(out, v, 'e').unwrap()
                     }
                     b'G' => {
-                        let v = next_value()?
-                            .unpack_num()
+                        let v = Num::unpack_value(next_value()?)
                             .ok_or_else(|| {
-                                ValueError::IncorrectParameterTypeWithExpected(
-                                    "int or float".to_owned(),
-                                )
+                                ValueError::IncorrectParameterTypeWithExpected(Num::expected())
                             })?
                             .as_float();
                         float::write_compact(out, v, 'E').unwrap()
