@@ -222,7 +222,6 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
 
     fn left_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
-        use std::convert::TryInto;
         if let Some(other) = other.unpack_int() {
             other
                 .try_into()
@@ -236,7 +235,6 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
 
     fn right_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
-        use std::convert::TryInto;
         if let Some(other) = other.unpack_int() {
             other
                 .try_into()
