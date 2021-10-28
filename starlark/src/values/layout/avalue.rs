@@ -373,7 +373,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkFloat> {
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        heap_copy_simple_impl(self, me, tracer)
+        heap_copy_impl(self, me, tracer, |_v, _tracer| {})
     }
 
     fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
@@ -546,7 +546,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, ListGen<List<'v>>> {
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        heap_copy_complex_impl(self, me, tracer)
+        heap_copy_impl(self, me, tracer, Trace::trace)
     }
 }
 
@@ -645,23 +645,6 @@ where
     Ok(fv)
 }
 
-/// `heap_copy` implementation for `SimpleValue` and `StarlarkFloat`
-/// (`StarlarkFloat` is logically a simple type, but does not implement `SimpleValue` trait).
-unsafe fn heap_copy_simple_impl<'v, Mode, C>(
-    _: &AValueImpl<Mode, C>,
-    me: *mut AValueHeader,
-    tracer: &Tracer<'v>,
-) -> Value<'v>
-where
-    AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
-{
-    let (v, r) = tracer.reserve::<AValueImpl<Mode, C>>();
-    let x =
-        AValueHeader::overwrite_with_forward::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
-    r.fill(x);
-    v
-}
-
 impl<'v, T: SimpleValue> AValue<'v> for AValueImpl<Simple, T>
 where
     'v: 'static,
@@ -687,27 +670,25 @@ where
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        heap_copy_simple_impl(self, me, tracer)
+        heap_copy_impl(self, me, tracer, |_v, _tracer| {})
     }
 }
 
-/// `heap_copy` implementation for `ComplexValue` and `List`
-/// (`List` is logically a complex type, but does not implement `ComplexValue` trait
-/// because it gets frozen into `FrozenList` which is not `SimpleType`).
-unsafe fn heap_copy_complex_impl<'v, Mode, C>(
+/// Common `heap_copy` implementation for types without extra.
+unsafe fn heap_copy_impl<'v, Mode, C>(
     _: &AValueImpl<Mode, C>,
     me: *mut AValueHeader,
     tracer: &Tracer<'v>,
+    trace: impl FnOnce(&mut C, &Tracer<'v>),
 ) -> Value<'v>
 where
-    C: Trace<'v>,
     AValueImpl<Mode, C>: AValue<'v, ExtraElem = ()>,
 {
     let (v, r) = tracer.reserve::<AValueImpl<Mode, C>>();
     let mut x =
         AValueHeader::overwrite_with_forward::<AValueImpl<Mode, C>>(me, clear_lsb(v.0.ptr_value()));
     // We have to put the forwarding node in _before_ we trace in case there are cycles
-    x.1.trace(tracer);
+    trace(&mut x.1, tracer);
     r.fill(x);
     v
 }
@@ -746,7 +727,7 @@ where
     }
 
     unsafe fn heap_copy(&self, me: *mut AValueHeader, tracer: &Tracer<'v>) -> Value<'v> {
-        heap_copy_complex_impl(self, me, tracer)
+        heap_copy_impl(self, me, tracer, Trace::trace)
     }
 }
 
