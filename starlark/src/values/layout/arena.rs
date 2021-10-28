@@ -391,10 +391,14 @@ impl AValueHeader {
         AValueHeader(metadata)
     }
 
+    pub(crate) fn payload_ptr(&self) -> *const () {
+        let self_repr = self as *const AValueHeader as *const AValueRepr<()>;
+        unsafe { &(*self_repr).payload }
+    }
+
     pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValueDyn<'v> {
         unsafe {
-            let self_repr = self.as_repr::<()>();
-            let res = &*(from_raw_parts(&self_repr.payload, self.0));
+            let res = &*(from_raw_parts(self.payload_ptr(), self.0));
             mem::transmute::<&'v dyn AValueDyn<'static>, &'v dyn AValueDyn<'v>>(res)
         }
     }
@@ -412,16 +416,13 @@ impl AValueHeader {
     /// After performing the overwrite any existing pointers to this value
     /// are corrupted.
     pub unsafe fn overwrite_with_forward<'v, T: AValue<'v>>(
-        me: *mut AValueHeader,
+        me: *mut AValueRepr<T>,
         forward_ptr: usize,
     ) -> T {
         assert!(forward_ptr & 1 == 0, "Can't have the lowest bit set");
-        assert_eq!(
-            (*me).unpack().static_type_of_value(),
-            T::static_type_id_of_value()
-        );
 
-        let sz = (*me).unpack().memory_size();
+        // TODO(nga): we don't need to do virtual call to obtain memory size
+        let sz = (*me).header.unpack().memory_size();
         let p = me as *const AValueRepr<T>;
         let res = ptr::read(p).payload;
         let p = me as *mut AValueForward;
@@ -433,13 +434,21 @@ impl AValueHeader {
     }
 
     /// Cast header pointer to repr pointer.
-    pub(crate) unsafe fn as_repr<T>(&self) -> &AValueRepr<T> {
-        &*(self as *const AValueHeader as *const AValueRepr<T>)
+    pub(crate) unsafe fn as_repr<'v, A: AValue<'v>>(&self) -> &AValueRepr<A> {
+        debug_assert_eq!(
+            A::static_type_id_of_value(),
+            self.unpack().static_type_of_value()
+        );
+        &*(self as *const AValueHeader as *const AValueRepr<A>)
     }
 
     /// Cast header pointer to repr pointer.
-    pub(crate) unsafe fn as_repr_mut<T>(&mut self) -> &mut AValueRepr<T> {
-        &mut *(self as *mut AValueHeader as *mut AValueRepr<T>)
+    pub(crate) unsafe fn as_repr_mut<'v, A: AValue<'v>>(&mut self) -> &mut AValueRepr<A> {
+        debug_assert_eq!(
+            A::static_type_id_of_value(),
+            self.unpack().static_type_of_value()
+        );
+        &mut *(self as *mut AValueHeader as *mut AValueRepr<A>)
     }
 }
 

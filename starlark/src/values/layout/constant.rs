@@ -33,7 +33,11 @@ use gazebo::{
 use indexmap::Equivalent;
 
 use crate::values::{
-    layout::{arena::AValueRepr, avalue::VALUE_STR_A_VALUE_PTR, value::FrozenValue},
+    layout::{
+        arena::AValueRepr,
+        avalue::{StarlarkStrAValue, VALUE_STR_A_VALUE_PTR},
+        value::FrozenValue,
+    },
     string::StarlarkStr,
     types::string::StarlarkStrN,
     AllocValue, Freeze, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
@@ -191,14 +195,14 @@ impl FrozenStringValue {
     }
 
     pub(crate) fn as_starlark_str(self) -> &'static StarlarkStr {
-        // TODO: `StarlarkStr` is not `AValue`.
         unsafe {
             &self
                 .0
                 .0
                 .unpack_ptr_no_int_unchecked()
-                .as_repr::<StarlarkStr>()
+                .as_repr::<StarlarkStrAValue>()
                 .payload
+                .1
         }
     }
 
@@ -242,7 +246,15 @@ impl<'v> StringValue<'v> {
 
     pub(crate) fn unpack_starlark_str(self) -> &'v StarlarkStr {
         debug_assert!(self.0.is_str());
-        unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
+        unsafe {
+            &self
+                .0
+                .0
+                .unpack_ptr_no_int_unchecked()
+                .as_repr::<StarlarkStrAValue>()
+                .payload
+                .1
+        }
     }
 
     pub fn as_str(self) -> &'v str {

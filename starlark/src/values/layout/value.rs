@@ -43,7 +43,10 @@ use crate::{
     values::{
         layout::{
             arena::{AValueHeader, AValueRepr},
-            avalue::{basic_ref, AValue, AValueDyn, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
+            avalue::{
+                basic_ref, AValue, AValueDyn, StarlarkStrAValue, VALUE_FALSE, VALUE_NONE,
+                VALUE_TRUE,
+            },
             constant::VALUE_EMPTY_STRING,
             pointer::Pointer,
             pointer_i32::PointerI32,
@@ -176,14 +179,14 @@ impl<'v> Value<'v> {
     /// not a guaranteed part of the API.
     pub fn unpack_starlark_str(self) -> Option<&'v StarlarkStr> {
         if self.is_str() {
-            // TODO(nga): wrong repr param
             unsafe {
                 Some(
                     &self
                         .0
                         .unpack_ptr_no_int_unchecked()
-                        .as_repr::<StarlarkStr>()
-                        .payload,
+                        .as_repr::<StarlarkStrAValue>()
+                        .payload
+                        .1,
                 )
             }
         } else {

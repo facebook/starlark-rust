@@ -96,7 +96,7 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
                 )
             }
         } else {
-            unsafe { &self.0.0.unpack_ptr_no_int_unchecked().as_repr().payload }
+            unsafe { &*(self.0.0.unpack_ptr_no_int_unchecked().payload_ptr() as *const T) }
         }
     }
 }
