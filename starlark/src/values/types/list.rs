@@ -22,7 +22,7 @@ use std::{
     cell::Cell,
     cmp,
     cmp::Ordering,
-    fmt::{self, Debug, Display},
+    fmt::{self, Debug, Display, Formatter},
     intrinsics::{likely, unlikely},
     marker::PhantomData,
     ops::Deref,
@@ -60,12 +60,20 @@ pub struct List<'v> {
 }
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(Debug, AnyLifetime)]
+#[derive(AnyLifetime)]
 #[repr(C)]
 pub struct FrozenList {
     len: usize,
     /// The data stored by the tuple.
     content: [FrozenValue; 0],
+}
+
+impl<'v> Debug for FrozenList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FrozenList")
+            .field("content", &self.content())
+            .finish()
+    }
 }
 
 impl ListGen<FrozenList> {
