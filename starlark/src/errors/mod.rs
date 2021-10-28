@@ -70,7 +70,11 @@ impl Display for Frame {
 
 impl Error for Diagnostic {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&*self.message)
+        // We do have an underlying source (namely `self.message`), but if we return
+        // it then `anyhow` will print it with `{:#}`, and we already print it in our
+        // `Display`, which would cause it to appear twice.
+        // Therefore, we say we have no source.
+        None
     }
 
     fn backtrace(&self) -> Option<&std::backtrace::Backtrace> {
