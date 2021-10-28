@@ -179,6 +179,12 @@ fn drain(xs: impl Iterator<Item = Message>, json: bool, stats: &mut Stats) {
         stats.increment(x.severity);
         if json {
             println!("{}", serde_json::to_string(&LintMessage::new(x)).unwrap());
+        } else if let Some(error) = x.full_error_with_span {
+            let mut error = error.to_owned();
+            if !error.is_empty() && !error.ends_with('\n') {
+                error.push('\n');
+            }
+            print!("{}", error);
         } else {
             println!("{}", x);
         }

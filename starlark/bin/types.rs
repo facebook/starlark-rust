@@ -54,6 +54,7 @@ pub struct Message {
     pub severity: Severity,
     pub name: String,
     pub description: String,
+    pub full_error_with_span: Option<String>,
     /// The text referred to by span
     pub original: Option<String>,
 }
@@ -71,11 +72,13 @@ impl Display for Message {
 impl Message {
     pub fn from_anyhow(file: &str, x: anyhow::Error) -> Self {
         match x.downcast_ref::<Diagnostic>() {
-            Some(Diagnostic {
-                message,
-                span: Some(span),
-                ..
-            }) => {
+            Some(
+                d @ Diagnostic {
+                    message,
+                    span: Some(span),
+                    ..
+                },
+            ) => {
                 let original = span.file.source_span(span.span).to_owned();
                 let resolved_span = span.resolve_span();
                 Self {
@@ -84,6 +87,7 @@ impl Message {
                     severity: Severity::Error,
                     name: "error".to_owned(),
                     description: format!("{:#}", message),
+                    full_error_with_span: Some(d.to_string()),
                     original: Some(original),
                 }
             }
@@ -93,6 +97,7 @@ impl Message {
                 severity: Severity::Error,
                 name: "error".to_owned(),
                 description: format!("{:#}", x),
+                full_error_with_span: None,
                 original: None,
             },
         }
@@ -110,6 +115,7 @@ impl Message {
             },
             name: x.short_name,
             description: x.problem,
+            full_error_with_span: None,
             original: Some(x.original),
         }
     }
