@@ -17,7 +17,10 @@
 
 //! This mod defines utilities to easily create Rust values as Starlark values.
 
-use crate::values::{layout::Value, FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue};
+use crate::values::{
+    layout::Value, FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue, UnpackValue,
+    ValueOf,
+};
 
 /// Trait for things that can be created on a [`Heap`] producing a [`Value`].
 ///
@@ -83,5 +86,16 @@ impl Heap {
 
     pub fn alloc_string_value<'v>(&'v self, s: &str) -> StringValue<'v> {
         unsafe { StringValue::new_unchecked(self.alloc_str(s)) }
+    }
+
+    /// Allocate a value and return [`ValueOf`] of it.
+    pub fn alloc_value_of<'v, T>(&'v self, x: T) -> ValueOf<'v, &'v T>
+    where
+        T: AllocValue<'v>,
+        &'v T: UnpackValue<'v>,
+    {
+        let value = self.alloc(x);
+        ValueOf::unpack_value(value)
+            .expect("just allocate value must be unpackable to the type of value")
     }
 }
