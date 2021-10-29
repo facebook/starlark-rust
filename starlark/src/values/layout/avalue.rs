@@ -621,9 +621,8 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Array<'v>> {
 
         debug_assert_eq!(content.len(), x.1.len());
 
-        for elem in content.iter_mut() {
-            tracer.trace(elem);
-        }
+        content.trace(tracer);
+
         // Note when copying we are dropping extra capacity.
         r.fill(AValueImpl(
             Direct,
