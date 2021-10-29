@@ -38,7 +38,7 @@ use indexmap::Equivalent;
 use crate::collections::{
     hash::{BorrowHashed, Hashed},
     idhasher::mix_u32,
-    vec_map::{VMIntoIter, VMIter, VMIterMut, VecMap},
+    vec_map::{Bucket, VMIntoIter, VMIter, VMIterMut, VecMap},
     StarlarkHasher,
 };
 
@@ -143,7 +143,7 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         self.get_index_of_hashed(key)
-            .map(|index| unsafe { &self.entries.get_unchecked(index).2 })
+            .map(|index| unsafe { &self.entries.get_unchecked(index).value })
     }
 
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
@@ -161,8 +161,8 @@ impl<K, V> SmallMap<K, V> {
     {
         self.get_index_of_hashed(BorrowHashed::new(key))
             .map(|index| {
-                let (_hash, k, v) = unsafe { self.entries.get_unchecked(index) };
-                (index, k, v)
+                let Bucket { key, value, .. } = unsafe { self.entries.get_unchecked(index) };
+                (index, key, value)
             })
     }
 
@@ -175,7 +175,7 @@ impl<K, V> SmallMap<K, V> {
             None => self.entries.get_index_of_hashed(key),
             Some(index) => index
                 .get(mix_u32(key.hash().get()), |&index| unsafe {
-                    key.key().equivalent(&self.entries.get_unchecked(index).1)
+                    key.key().equivalent(&self.entries.get_unchecked(index).key)
                 })
                 .copied(),
         }
@@ -200,7 +200,7 @@ impl<K, V> SmallMap<K, V> {
     {
         let i = self.get_index_of_hashed(key)?;
         debug_assert!(i < self.entries.values.len());
-        Some(unsafe { &mut self.entries.values.get_unchecked_mut(i).2 })
+        Some(unsafe { &mut self.entries.values.get_unchecked_mut(i).value })
     }
 
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
@@ -266,8 +266,8 @@ impl<K, V> SmallMap<K, V> {
         debug_assert!(self.index.is_none());
         debug_assert!(capacity >= self.entries.len());
         let mut index = RawTable::with_capacity(capacity);
-        for (i, (hash, ..)) in self.entries.values.iter().enumerate() {
-            index.insert_no_grow(mix_u32(hash.get()), i);
+        for (i, b) in self.entries.values.iter().enumerate() {
+            index.insert_no_grow(mix_u32(b.hash.get()), i);
         }
         self.index = Some(box index);
     }
@@ -276,7 +276,7 @@ impl<K, V> SmallMap<K, V> {
     fn hasher<'a>(entries: &'a VecMap<K, V>) -> impl Fn(&usize) -> u64 + 'a {
         move |&index| {
             debug_assert!(index < entries.len());
-            unsafe { mix_u32(entries.values.get_unchecked(index).0.get()) }
+            unsafe { mix_u32(entries.values.get_unchecked(index).hash.get()) }
         }
     }
 
@@ -309,7 +309,7 @@ impl<K, V> SmallMap<K, V> {
             Some(i) => unsafe {
                 debug_assert!(i < self.entries.len());
                 Some(mem::replace(
-                    &mut self.entries.values.get_unchecked_mut(i).2,
+                    &mut self.entries.values.get_unchecked_mut(i).value,
                     val,
                 ))
             },
@@ -340,7 +340,7 @@ impl<K, V> SmallMap<K, V> {
         if let Some(index) = &mut self.index {
             let entries = &self.entries;
             let i = index.remove_entry(mix_u32(hash.get()), |&i| unsafe {
-                key.key().equivalent(&entries.get_unchecked(i).1)
+                key.key().equivalent(&entries.get_unchecked(i).key)
             })?;
             unsafe {
                 // This updates all the table, which is `O(N)`,
@@ -354,8 +354,8 @@ impl<K, V> SmallMap<K, V> {
                     }
                 }
             }
-            let (_hash, k, v) = self.entries.values.remove(i);
-            Some((k, v))
+            let Bucket { key, value, .. } = self.entries.values.remove(i);
+            Some((key, value))
         } else {
             self.entries.remove_hashed_entry(key)
         }
@@ -385,8 +385,8 @@ impl<K, V> SmallMap<K, V> {
             Some(i) => {
                 let entry = unsafe { self.entries.get_unchecked_mut(i) };
                 Entry::Occupied(OccupiedEntry {
-                    key: &entry.1,
-                    value: &mut entry.2,
+                    key: &entry.key,
+                    value: &mut entry.value,
                 })
             }
             None => Entry::Vacant(VacantEntry { key, map: self }),

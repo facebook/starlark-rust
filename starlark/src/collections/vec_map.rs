@@ -56,19 +56,27 @@ macro_rules! def_iter {
     };
 }
 
+/// Bucket in [`VecMap`].
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(crate) struct Bucket<K, V> {
+    pub(crate) hash: SmallHashResult,
+    pub(crate) key: K,
+    pub(crate) value: V,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Default_)]
 pub struct VecMap<K, V> {
-    pub(crate) values: Vec<(SmallHashResult, K, V)>,
+    pub(crate) values: Vec<Bucket<K, V>>,
 }
 
 #[derive(Clone_)]
 pub struct VMKeys<'a, K: 'a, V: 'a> {
-    iter: std::slice::Iter<'a, (SmallHashResult, K, V)>,
+    iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
 impl<'a, K: 'a, V: 'a> VMKeys<'a, K, V> {
-    fn map((_h, k, _v): &'a (SmallHashResult, K, V)) -> <Self as Iterator>::Item {
-        k
+    fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
+        &b.key
     }
 }
 
@@ -86,12 +94,12 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMKeys<'a, K, V> {
 
 #[derive(Clone_)]
 pub struct VMValues<'a, K: 'a, V: 'a> {
-    iter: std::slice::Iter<'a, (SmallHashResult, K, V)>,
+    iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
 impl<'a, K: 'a, V: 'a> VMValues<'a, K, V> {
-    fn map((_h, _k, v): &'a (SmallHashResult, K, V)) -> <Self as Iterator>::Item {
-        v
+    fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
+        &b.value
     }
 }
 
@@ -108,12 +116,12 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValues<'a, K, V> {
 }
 
 pub struct VMValuesMut<'a, K: 'a, V: 'a> {
-    iter: std::slice::IterMut<'a, (SmallHashResult, K, V)>,
+    iter: std::slice::IterMut<'a, Bucket<K, V>>,
 }
 
 impl<'a, K: 'a, V: 'a> VMValuesMut<'a, K, V> {
-    fn map((_h, _k, v): &'a mut (SmallHashResult, K, V)) -> <Self as Iterator>::Item {
-        v
+    fn map(b: &'a mut Bucket<K, V>) -> <Self as Iterator>::Item {
+        &mut b.value
     }
 }
 
@@ -131,7 +139,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValuesMut<'a, K, V> {
 
 #[derive(Clone_)]
 pub struct VMIter<'a, K: 'a, V: 'a> {
-    iter: std::slice::Iter<'a, (SmallHashResult, K, V)>,
+    iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
 impl<'a, K: 'a, V: 'a> Iterator for VMIter<'a, K, V> {
@@ -141,18 +149,18 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIter<'a, K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> VMIter<'a, K, V> {
-    fn map((_h, k, v): &(SmallHashResult, K, V)) -> (&K, &V) {
-        (k, v)
+    fn map(b: &Bucket<K, V>) -> (&K, &V) {
+        (&b.key, &b.value)
     }
 }
 
 pub struct VMIterHash<'a, K: 'a, V: 'a> {
-    iter: std::slice::Iter<'a, (SmallHashResult, K, V)>,
+    iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
 impl<'a, K: 'a, V: 'a> VMIterHash<'a, K, V> {
-    fn map((h, k, v): &'a (SmallHashResult, K, V)) -> (BorrowHashed<'a, K>, &'a V) {
-        (BorrowHashed::new_unchecked(*h, k), v)
+    fn map(b: &'a Bucket<K, V>) -> (BorrowHashed<'a, K>, &'a V) {
+        (BorrowHashed::new_unchecked(b.hash, &b.key), &b.value)
     }
 }
 
@@ -169,12 +177,12 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterHash<'a, K, V> {
 }
 
 pub struct VMIterMut<'a, K: 'a, V: 'a> {
-    iter: std::slice::IterMut<'a, (SmallHashResult, K, V)>,
+    iter: std::slice::IterMut<'a, Bucket<K, V>>,
 }
 
 impl<'a, K: 'a, V: 'a> VMIterMut<'a, K, V> {
-    fn map((_h, k, v): &mut (SmallHashResult, K, V)) -> (&K, &mut V) {
-        (k, v)
+    fn map(b: &mut Bucket<K, V>) -> (&K, &mut V) {
+        (&b.key, &mut b.value)
     }
 }
 
@@ -191,7 +199,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterMut<'a, K, V> {
 }
 
 pub struct VMIntoIterHash<K, V> {
-    iter: std::vec::IntoIter<(SmallHashResult, K, V)>,
+    iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
 impl<K, V> Iterator for VMIntoIterHash<K, V> {
@@ -200,20 +208,20 @@ impl<K, V> Iterator for VMIntoIterHash<K, V> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .map(|(h, k, v)| (Hashed::new_unchecked(h, k), v))
+            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.iter
             .nth(n)
-            .map(|(h, k, v)| (Hashed::new_unchecked(h, k), v))
+            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
     }
 
     fn last(mut self) -> Option<Self::Item> {
         // Since these are all double-ended iterators we can skip to the end quickly
         self.iter
             .next_back()
-            .map(|(h, k, v)| (Hashed::new_unchecked(h, k), v))
+            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -229,7 +237,7 @@ impl<K, V> Iterator for VMIntoIterHash<K, V> {
         C: std::iter::FromIterator<Self::Item>,
     {
         self.iter
-            .map(|(h, k, v)| (Hashed::new_unchecked(h, k), v))
+            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
             .collect()
     }
 }
@@ -241,12 +249,12 @@ impl<K, V> ExactSizeIterator for VMIntoIterHash<K, V> {
 }
 
 pub struct VMIntoIter<K, V> {
-    iter: std::vec::IntoIter<(SmallHashResult, K, V)>,
+    iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
 impl<K, V> VMIntoIter<K, V> {
-    fn map((_hash, k, v): (SmallHashResult, K, V)) -> (K, V) {
-        (k, v)
+    fn map(b: Bucket<K, V>) -> (K, V) {
+        (b.key, b.value)
     }
 }
 
@@ -278,7 +286,7 @@ impl<K, V> VecMap<K, V> {
     }
 
     pub(crate) fn extra_memory(&self) -> usize {
-        self.values.capacity() * mem::size_of::<(SmallHashResult, K, V)>()
+        self.values.capacity() * mem::size_of::<Bucket<K, V>>()
     }
 
     pub fn get_full<Q>(&self, key: BorrowHashed<Q>) -> Option<(usize, &K, &V)>
@@ -293,10 +301,10 @@ impl<K, V> VecMap<K, V> {
         // (25% on a benchmark which did a lot of other stuff too).
         let mut i = 0;
         #[allow(clippy::explicit_counter_loop)] // we are paranoid about performance
-        for (h, k, v) in &self.values {
+        for b in &self.values {
             // We always have at least as many hashes as value, so this index is safe.
-            if *h == key.hash() && key.key().equivalent(k) {
-                return Some((i, k, v));
+            if b.hash == key.hash() && key.key().equivalent(&b.key) {
+                return Some((i, &b.key, &b.value));
             }
             i += 1;
         }
@@ -311,24 +319,25 @@ impl<K, V> VecMap<K, V> {
     }
 
     pub fn get_index(&self, index: usize) -> Option<(&K, &V)> {
-        self.values.get(index).map(|x| (&x.1, &x.2))
+        self.values.get(index).map(|x| (&x.key, &x.value))
     }
 
-    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &(SmallHashResult, K, V) {
+    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &Bucket<K, V> {
         debug_assert!(index < self.values.len());
         self.values.get_unchecked(index)
     }
 
-    pub(crate) unsafe fn get_unchecked_mut(
-        &mut self,
-        index: usize,
-    ) -> &mut (SmallHashResult, K, V) {
+    pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Bucket<K, V> {
         debug_assert!(index < self.values.len());
         self.values.get_unchecked_mut(index)
     }
 
     pub(crate) fn insert_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
-        self.values.push((key.hash(), key.into_key(), value));
+        self.values.push(Bucket {
+            hash: key.hash(),
+            key: key.into_key(),
+            value,
+        });
     }
 
     pub fn remove_hashed_entry<Q>(&mut self, key: BorrowHashed<Q>) -> Option<(K, V)>
@@ -341,9 +350,9 @@ impl<K, V> VecMap<K, V> {
         }
 
         for i in 0..len {
-            if self.values[i].0 == key.hash() && key.key().equivalent(&self.values[i].1) {
-                let (_, k, v) = self.values.remove(i);
-                return Some((k, v));
+            if self.values[i].hash == key.hash() && key.key().equivalent(&self.values[i].key) {
+                let b = self.values.remove(i);
+                return Some((b.key, b.value));
             }
         }
         None
