@@ -98,7 +98,7 @@ impl<'v> ListRef<'v> {
     }
 
     /// Iterate over the elements in the list.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
+    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Value<'v>> + 'a
     where
         'v: 'a,
     {
@@ -322,7 +322,7 @@ impl<'v> List<'v> {
     }
 
     /// Iterate over the elements in the list.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
+    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = Value<'v>> + 'a
     where
         'v: 'a,
     {
@@ -350,7 +350,7 @@ impl<'v> Display for ListRef<'v> {
 
 impl FrozenList {
     /// Iterate over the elements in the list.
-    pub fn iter<'a, 'v>(&'a self) -> impl Iterator<Item = Value<'v>> + 'a
+    pub fn iter<'a, 'v>(&'a self) -> impl ExactSizeIterator<Item = Value<'v>> + 'a
     where
         'v: 'a,
     {
