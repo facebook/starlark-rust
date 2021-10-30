@@ -18,10 +18,12 @@
 use std::{marker, marker::PhantomData};
 
 use gazebo::prelude::*;
-use thiserror::Error;
 
 use crate::{
-    collections::{Hashed, SmallMap},
+    collections::{
+        vec_map::{Bucket, VecMap},
+        SmallMap,
+    },
     values::{Freezer, FrozenStringValue, FrozenValue, StringValue, Value},
 };
 
@@ -115,10 +117,22 @@ where
     }
 }
 
-#[derive(Debug, Error)]
-enum FreezeFieldError {
-    #[error("Non-unique map key")]
-    NonUniqueMapKey,
+impl<K, V> Freeze for VecMap<K, V>
+where
+    K: Freeze,
+    V: Freeze,
+{
+    type Frozen = VecMap<K::Frozen, V::Frozen>;
+
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        let buckets = self.buckets.into_try_map(|Bucket { hash, key, value }| {
+            let key = key.freeze(freezer)?;
+            let value = value.freeze(freezer)?;
+            // `freeze` must not change hash.
+            Ok::<_, anyhow::Error>(Bucket { hash, key, value })
+        })?;
+        Ok(VecMap { buckets })
+    }
 }
 
 impl<K, V> Freeze for SmallMap<K, V>
@@ -131,19 +145,9 @@ where
     type Frozen = SmallMap<K::Frozen, V::Frozen>;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<SmallMap<K::Frozen, V::Frozen>> {
-        let mut result = SmallMap::with_capacity(self.len());
-        for (k, v) in self.into_iter_hashed() {
-            let hash = k.hash();
-            let k = k.into_key().freeze(freezer)?;
-            // Trust hash is unchanged.
-            let k = Hashed::new_unchecked(hash, k);
-            let v = v.freeze(freezer)?;
-            let prev = result.insert_hashed(k, v);
-            if prev.is_some() {
-                return Err(FreezeFieldError::NonUniqueMapKey.into());
-            }
-        }
-        Ok(result)
+        let (entries, index) = self.into_raw_parts();
+        let entries = entries.freeze(freezer)?;
+        unsafe { Ok(SmallMap::from_raw_parts(entries, index)) }
     }
 }
 

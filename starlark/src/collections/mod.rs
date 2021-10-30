@@ -36,4 +36,4 @@ mod small_set;
 pub(crate) mod stack;
 pub(crate) mod string_pool;
 pub(crate) mod symbol_map;
-mod vec_map;
+pub(crate) mod vec_map;

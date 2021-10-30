@@ -105,6 +105,24 @@ impl<K, V> SmallMap<K, V> {
         Self::with_capacity(NO_INDEX_THRESHOLD)
     }
 
+    pub(crate) fn into_raw_parts(self) -> (VecMap<K, V>, Option<Box<RawTable<usize>>>) {
+        (self.entries, self.index)
+    }
+
+    pub(crate) unsafe fn from_raw_parts(
+        entries: VecMap<K, V>,
+        index: Option<Box<RawTable<usize>>>,
+    ) -> SmallMap<K, V> {
+        if let Some(index) = &index {
+            // Quick smoke test.
+            // We don't validate indices are correct hence this function is unsafe.
+            assert!(entries.len() == index.len());
+        } else {
+            assert!(entries.len() <= NO_INDEX_THRESHOLD);
+        }
+        SmallMap { entries, index }
+    }
+
     pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> + Clone {
         self.entries.keys()
     }

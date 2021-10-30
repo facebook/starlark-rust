@@ -319,11 +319,7 @@ impl FrozenDict {
 impl<'v> Freeze for DictGen<RefCell<Dict<'v>>> {
     type Frozen = DictGen<FrozenDict>;
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let old = self.0.into_inner().content;
-        let mut content: SmallMap<FrozenValue, FrozenValue> = SmallMap::with_capacity(old.len());
-        for (k, v) in old.into_iter_hashed() {
-            content.insert_hashed(k.freeze(freezer)?, v.freeze(freezer)?);
-        }
+        let content = self.0.into_inner().content.freeze(freezer)?;
         Ok(DictGen(FrozenDict { content }))
     }
 }
