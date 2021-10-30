@@ -188,7 +188,12 @@ impl TypeCompiled {
 }
 
 fn invalid_type_annotation<'h>(ty: Value<'h>, heap: &'h Heap) -> TypingError {
-    if let Some(name) = ty.get_attr("type", heap).and_then(|(_, v)| v.unpack_str()) {
+    if let Some(name) = ty
+        .get_attr("type", heap)
+        .ok()
+        .flatten()
+        .and_then(|v| v.unpack_str())
+    {
         TypingError::PerhapsYouMeant(ty.to_str(), name.into())
     } else {
         TypingError::InvalidTypeAnnotation(ty.to_str())

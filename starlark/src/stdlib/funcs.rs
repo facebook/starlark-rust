@@ -28,18 +28,9 @@ use crate::{
     environment::GlobalsBuilder,
     eval::Arguments,
     values::{
-        bool::BOOL_TYPE,
-        dict::Dict,
-        float::StarlarkFloat,
-        function::{BoundMethod, NativeAttribute},
-        int::INT_TYPE,
-        list::List,
-        none::NoneType,
-        num::Num,
-        range::Range,
-        string::STRING_TYPE,
-        tuple::Tuple,
-        AttrType, Heap, Value, ValueError, ValueLike,
+        bool::BOOL_TYPE, dict::Dict, float::StarlarkFloat, int::INT_TYPE, list::List,
+        none::NoneType, num::Num, range::Range, string::STRING_TYPE, tuple::Tuple, Heap, Value,
+        ValueError, ValueLike,
     },
 };
 
@@ -394,17 +385,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     fn getattr(ref a: Value, ref attr: &str, ref default: Option<Value>) -> Value<'v> {
         // Make sure we check if its a function first, to be consistent with `a.f`
-        match a.get_attr(attr, heap) {
-            Some((attr_type, v)) => {
-                if attr_type == AttrType::Field {
-                    Ok(v)
-                } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                    v_attr.call(a, eval.heap())
-                } else {
-                    // Insert self so the method see the object it is acting on
-                    Ok(heap.alloc(BoundMethod::new(a, v)))
-                }
-            }
+        match a.get_attr(attr, heap)? {
+            Some(v) => Ok(v),
             None => match default {
                 Some(x) => Ok(x),
                 None => ValueError::unsupported_owned(a.get_type(), &format!(".{}", attr), None),

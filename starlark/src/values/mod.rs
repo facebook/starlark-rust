@@ -48,7 +48,10 @@ use crate::{
     codemap::Span,
     collections::{Hashed, StarlarkHasher},
     eval::{Arguments, Evaluator},
-    values::function::FUNCTION_TYPE,
+    values::{
+        function::{BoundMethod, FUNCTION_TYPE},
+        types::function::NativeAttribute,
+    },
 };
 
 #[macro_use]
@@ -295,7 +298,7 @@ impl FrozenValue {
 
 /// How an attribute (e.g. `x.f`) should behave.
 #[derive(Clone, Copy, Dupe, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub enum AttrType {
+pub(crate) enum AttrType {
     /// The attribute is a field, a direct value with no special behaviour.
     Field,
     /// The attribute is a method, which should be called passing the `x` value
@@ -414,29 +417,25 @@ impl<'v> Value<'v> {
         self.get_ref().export_as(variable_name, eval)
     }
 
-    /// Return the attribute with the given name. Returns a pair of a boolean and the value.
-    ///
-    /// The type is [`AttrType::Method`] if the attribute was defined via [`StarlarkValue::get_methods`]
-    /// and should be used as a signal that if the attribute is subsequently called,
-    /// e.g. `object.attribute(argument)` then the `object` should be passed as the first
-    /// argument to the function, e.g. `object.attribute(object, argument)`.
-    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> Option<(AttrType, Value<'v>)> {
+    /// Return the attribute with the given name.
+    pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Option<Value<'v>>> {
         let aref = self.get_ref();
         if let Some(methods) = aref.get_methods() {
             if let Some(v) = methods.get(attribute) {
-                return Some((AttrType::Method, v));
+                return Ok(Some(if let Some(v) = v.downcast_ref::<NativeAttribute>() {
+                    v.call(self, heap)?
+                } else {
+                    // Insert self so the method see the object it is acting on
+                    heap.alloc(BoundMethod::new(self, v))
+                }));
             }
         }
-        aref.get_attr(attribute, heap).map(|v| (AttrType::Field, v))
+        Ok(aref.get_attr(attribute, heap))
     }
 
     /// Like `get_attr` but return an error if the attribute is not available.
-    pub fn get_attr_error(
-        self,
-        attribute: &str,
-        heap: &'v Heap,
-    ) -> anyhow::Result<(AttrType, Value<'v>)> {
-        match self.get_attr(attribute, heap) {
+    pub fn get_attr_error(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match self.get_attr(attribute, heap)? {
             None => {
                 ValueError::unsupported_owned(self.get_type(), &format!(".{}", attribute), None)
             }
