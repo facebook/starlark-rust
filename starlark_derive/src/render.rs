@@ -77,18 +77,16 @@ fn render_attr(x: StarAttr) -> TokenStream {
         span=>
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
-        fn #name<'v, 'a>(
+        fn #name<'v>(
             #[allow(unused_variables)]
             this: starlark::values::Value<'v>,
-            eval: &mut starlark::eval::Evaluator<'v, 'a>,
+            heap: &'v starlark::values::Heap,
         ) -> anyhow::Result<starlark::values::Value<'v>> {
-             fn inner<'v, 'a>(
+             fn inner<'v>(
                 this: Value<'v>,
                 #[allow(unused_variables)]
-                eval: &mut starlark::eval::Evaluator<'v, 'a>,
+                heap: &'v starlark::values::Heap,
             ) -> anyhow::Result<#return_type> {
-                #[allow(unused_variables)]
-                let heap = eval.heap();
                 #[allow(unused_variables)]
                 let this: #arg = match starlark::values::UnpackValue::unpack_value(this) {
                     None => return Err(starlark::values::ValueError::IncorrectParameterTypeNamedWithExpected(
@@ -99,7 +97,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
                 };
                 #body
             }
-            Ok(eval.heap().alloc(inner(this, eval)?))
+            Ok(heap.alloc(inner(this, heap)?))
         }
         globals_builder.set(
             #name_str,

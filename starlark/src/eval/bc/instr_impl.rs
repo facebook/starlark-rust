@@ -595,7 +595,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
         if attr_type == AttrType::Field {
             Ok(v)
         } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-            v_attr.call(object, eval)
+            v_attr.call(object, eval.heap())
         } else {
             // Insert self so the method see the object it is acting on
             Ok(eval.heap().alloc(BoundMethod::new(object, v)))

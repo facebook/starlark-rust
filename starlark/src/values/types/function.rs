@@ -54,15 +54,12 @@ impl<T> NativeFunc for T where
 
 /// A native function that can be evaluated.
 pub trait NativeAttr:
-    for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> + Send + Sync + 'static
+    for<'v> Fn(Value<'v>, &'v Heap) -> anyhow::Result<Value<'v>> + Send + Sync + 'static
 {
 }
 
 impl<T> NativeAttr for T where
-    T: for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>
-        + Send
-        + Sync
-        + 'static
+    T: for<'v> Fn(Value<'v>, &'v Heap) -> anyhow::Result<Value<'v>> + Send + Sync + 'static
 {
 }
 
@@ -202,22 +199,15 @@ impl NativeAttribute {
     pub fn new<F>(function: F) -> Self
     where
         // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(Value<'v>, &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>>
-            + Send
-            + Sync
-            + 'static,
+        F: for<'v> Fn(Value<'v>, &'v Heap) -> anyhow::Result<Value<'v>> + Send + Sync + 'static,
     {
         NativeAttribute {
             function: box function,
         }
     }
 
-    pub(crate) fn call<'v>(
-        &self,
-        value: Value<'v>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
-        (self.function)(value, eval)
+    pub(crate) fn call<'v>(&self, value: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        (self.function)(value, heap)
     }
 }
 
@@ -232,7 +222,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         // If someone tries to invoke us with a this, first unwind the call, then continue onwards
-        let me = self.call(args.this.unwrap(), eval)?;
+        let me = self.call(args.this.unwrap(), eval.heap())?;
         me.invoke(location, args, eval)
     }
 }

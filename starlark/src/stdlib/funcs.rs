@@ -399,7 +399,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 if attr_type == AttrType::Field {
                     Ok(v)
                 } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-                    v_attr.call(a, eval)
+                    v_attr.call(a, eval.heap())
                 } else {
                     // Insert self so the method see the object it is acting on
                     Ok(heap.alloc(BoundMethod::new(a, v)))
