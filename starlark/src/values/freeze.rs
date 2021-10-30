@@ -144,7 +144,8 @@ where
 {
     type Frozen = SmallMap<K::Frozen, V::Frozen>;
 
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<SmallMap<K::Frozen, V::Frozen>> {
+    fn freeze(mut self, freezer: &Freezer) -> anyhow::Result<SmallMap<K::Frozen, V::Frozen>> {
+        self.maybe_drop_index();
         let (entries, index) = self.into_raw_parts();
         let entries = entries.freeze(freezer)?;
         unsafe { Ok(SmallMap::from_raw_parts(entries, index)) }

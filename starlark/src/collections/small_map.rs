@@ -105,6 +105,18 @@ impl<K, V> SmallMap<K, V> {
         Self::with_capacity(NO_INDEX_THRESHOLD)
     }
 
+    /// Drop the index if the map is too small, and the index is not really needed.
+    ///
+    /// We don't allocate index prematurely when we add entries the map,
+    /// but we keep it allocated when we remove entries from the map.
+    ///
+    /// This function allows to reclaim memory after some entries are removed.
+    pub(crate) fn maybe_drop_index(&mut self) {
+        if self.entries.len() <= NO_INDEX_THRESHOLD {
+            self.index = None;
+        }
+    }
+
     pub(crate) fn into_raw_parts(self) -> (VecMap<K, V>, Option<Box<RawTable<usize>>>) {
         (self.entries, self.index)
     }
