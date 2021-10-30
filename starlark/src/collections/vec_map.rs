@@ -66,7 +66,7 @@ pub(crate) struct Bucket<K, V> {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default_)]
 pub struct VecMap<K, V> {
-    pub(crate) values: Vec<Bucket<K, V>>,
+    pub(crate) buckets: Vec<Bucket<K, V>>,
 }
 
 #[derive(Clone_)]
@@ -273,20 +273,20 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
 impl<K, V> VecMap<K, V> {
     pub fn with_capacity(n: usize) -> Self {
         VecMap {
-            values: Vec::with_capacity(n),
+            buckets: Vec::with_capacity(n),
         }
     }
 
     pub fn reserve(&mut self, additional: usize) {
-        self.values.reserve(additional);
+        self.buckets.reserve(additional);
     }
 
     pub fn capacity(&self) -> usize {
-        self.values.capacity()
+        self.buckets.capacity()
     }
 
     pub(crate) fn extra_memory(&self) -> usize {
-        self.values.capacity() * mem::size_of::<Bucket<K, V>>()
+        self.buckets.capacity() * mem::size_of::<Bucket<K, V>>()
     }
 
     pub fn get_full<Q>(&self, key: BorrowHashed<Q>) -> Option<(usize, &K, &V)>
@@ -301,7 +301,7 @@ impl<K, V> VecMap<K, V> {
         // (25% on a benchmark which did a lot of other stuff too).
         let mut i = 0;
         #[allow(clippy::explicit_counter_loop)] // we are paranoid about performance
-        for b in &self.values {
+        for b in &self.buckets {
             // We always have at least as many hashes as value, so this index is safe.
             if b.hash == key.hash() && key.key().equivalent(&b.key) {
                 return Some((i, &b.key, &b.value));
@@ -319,21 +319,21 @@ impl<K, V> VecMap<K, V> {
     }
 
     pub fn get_index(&self, index: usize) -> Option<(&K, &V)> {
-        self.values.get(index).map(|x| (&x.key, &x.value))
+        self.buckets.get(index).map(|x| (&x.key, &x.value))
     }
 
     pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &Bucket<K, V> {
-        debug_assert!(index < self.values.len());
-        self.values.get_unchecked(index)
+        debug_assert!(index < self.buckets.len());
+        self.buckets.get_unchecked(index)
     }
 
     pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Bucket<K, V> {
-        debug_assert!(index < self.values.len());
-        self.values.get_unchecked_mut(index)
+        debug_assert!(index < self.buckets.len());
+        self.buckets.get_unchecked_mut(index)
     }
 
     pub(crate) fn insert_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
-        self.values.push(Bucket {
+        self.buckets.push(Bucket {
             hash: key.hash(),
             key: key.into_key(),
             value,
@@ -344,14 +344,14 @@ impl<K, V> VecMap<K, V> {
     where
         Q: ?Sized + Equivalent<K>,
     {
-        let len = self.values.len();
+        let len = self.buckets.len();
         if len == 0 {
             return None;
         }
 
         for i in 0..len {
-            if self.values[i].hash == key.hash() && key.key().equivalent(&self.values[i].key) {
-                let b = self.values.remove(i);
+            if self.buckets[i].hash == key.hash() && key.key().equivalent(&self.buckets[i].key) {
+                let b = self.buckets.remove(i);
                 return Some((b.key, b.value));
             }
         }
@@ -359,64 +359,64 @@ impl<K, V> VecMap<K, V> {
     }
 
     pub fn len(&self) -> usize {
-        self.values.len()
+        self.buckets.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.buckets.is_empty()
     }
 
     pub fn clear(&mut self) {
-        self.values.clear();
+        self.buckets.clear();
     }
 
     pub fn values(&self) -> VMValues<K, V> {
         VMValues {
-            iter: self.values.iter(),
+            iter: self.buckets.iter(),
         }
     }
 
     pub fn values_mut(&mut self) -> VMValuesMut<K, V> {
         VMValuesMut {
-            iter: self.values.iter_mut(),
+            iter: self.buckets.iter_mut(),
         }
     }
 
     pub fn keys(&self) -> VMKeys<K, V> {
         VMKeys {
-            iter: self.values.iter(),
+            iter: self.buckets.iter(),
         }
     }
 
     pub fn into_iter(self) -> VMIntoIter<K, V> {
         VMIntoIter {
-            iter: self.values.into_iter(),
+            iter: self.buckets.into_iter(),
         }
     }
 
     pub fn iter(&self) -> VMIter<K, V> {
         VMIter {
-            iter: self.values.iter(),
+            iter: self.buckets.iter(),
         }
     }
 
     pub fn iter_hashed(&self) -> VMIterHash<K, V> {
         VMIterHash {
             // Values go first since they terminate first and we can short-circuit
-            iter: self.values.iter(),
+            iter: self.buckets.iter(),
         }
     }
 
     pub fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
         VMIntoIterHash {
-            iter: self.values.into_iter(),
+            iter: self.buckets.into_iter(),
         }
     }
 
     pub fn iter_mut(&mut self) -> VMIterMut<K, V> {
         VMIterMut {
-            iter: self.values.iter_mut(),
+            iter: self.buckets.iter_mut(),
         }
     }
 }

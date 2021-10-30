@@ -199,8 +199,8 @@ impl<K, V> SmallMap<K, V> {
         K: Eq,
     {
         let i = self.get_index_of_hashed(key)?;
-        debug_assert!(i < self.entries.values.len());
-        Some(unsafe { &mut self.entries.values.get_unchecked_mut(i).value })
+        debug_assert!(i < self.entries.buckets.len());
+        Some(unsafe { &mut self.entries.buckets.get_unchecked_mut(i).value })
     }
 
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
@@ -266,7 +266,7 @@ impl<K, V> SmallMap<K, V> {
         debug_assert!(self.index.is_none());
         debug_assert!(capacity >= self.entries.len());
         let mut index = RawTable::with_capacity(capacity);
-        for (i, b) in self.entries.values.iter().enumerate() {
+        for (i, b) in self.entries.buckets.iter().enumerate() {
             index.insert_no_grow(mix_u32(b.hash.get()), i);
         }
         self.index = Some(box index);
@@ -276,7 +276,7 @@ impl<K, V> SmallMap<K, V> {
     fn hasher<'a>(entries: &'a VecMap<K, V>) -> impl Fn(&usize) -> u64 + 'a {
         move |&index| {
             debug_assert!(index < entries.len());
-            unsafe { mix_u32(entries.values.get_unchecked(index).hash.get()) }
+            unsafe { mix_u32(entries.buckets.get_unchecked(index).hash.get()) }
         }
     }
 
@@ -309,7 +309,7 @@ impl<K, V> SmallMap<K, V> {
             Some(i) => unsafe {
                 debug_assert!(i < self.entries.len());
                 Some(mem::replace(
-                    &mut self.entries.values.get_unchecked_mut(i).value,
+                    &mut self.entries.buckets.get_unchecked_mut(i).value,
                     val,
                 ))
             },
@@ -354,7 +354,7 @@ impl<K, V> SmallMap<K, V> {
                     }
                 }
             }
-            let Bucket { key, value, .. } = self.entries.values.remove(i);
+            let Bucket { key, value, .. } = self.entries.buckets.remove(i);
             Some((key, value))
         } else {
             self.entries.remove_hashed_entry(key)
