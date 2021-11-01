@@ -520,4 +520,15 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
         alloca.alloca_uninit(len, |xs| f(xs, self))
     }
+
+    /// Allocate `len` elements, initialize them with `init` function, and invoke
+    /// a callback `f` with the pointer to the allocated memory and `self`.
+    #[inline(always)]
+    pub(crate) fn alloca_init<T, R, F>(&mut self, len: usize, init: impl Fn() -> T, f: F) -> R
+    where
+        F: FnOnce(&mut [T], &mut Self) -> R,
+    {
+        let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
+        alloca.alloca_init(len, init, |xs| f(xs, self))
+    }
 }

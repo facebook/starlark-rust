@@ -124,16 +124,26 @@ impl Alloca {
         res
     }
 
-    #[allow(dead_code)] // Dead, but morally a sensible API to provide, and useful for testing
     #[inline(always)]
-    pub fn alloca_fill<T: Copy, R>(&self, len: usize, fill: T, f: impl FnOnce(&mut [T]) -> R) -> R {
+    pub fn alloca_init<T, R>(
+        &self,
+        len: usize,
+        mut init: impl FnMut() -> T,
+        f: impl FnOnce(&mut [T]) -> R,
+    ) -> R {
         self.alloca_uninit(len, |data| {
             for x in data.iter_mut() {
-                x.write(fill);
+                x.write(init());
             }
             let data = unsafe { MaybeUninit::slice_assume_init_mut(data) };
             f(data)
         })
+    }
+
+    #[allow(dead_code)] // Dead, but morally a sensible API to provide, and useful for testing
+    #[inline(always)]
+    pub fn alloca_fill<T: Copy, R>(&self, len: usize, fill: T, f: impl FnOnce(&mut [T]) -> R) -> R {
+        self.alloca_init(len, || fill, f)
     }
 }
 

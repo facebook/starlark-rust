@@ -17,7 +17,7 @@
 
 //! Function types, including native functions and `object.member` functions.
 
-use std::{cell::Cell, mem::MaybeUninit};
+use std::cell::Cell;
 
 use derivative::Derivative;
 use derive_more::Display;
@@ -114,18 +114,16 @@ impl NativeFunction {
     {
         NativeFunction {
             function: box move |eval, params| {
-                eval.alloca_uninit(parameters.len(), |slots, eval| {
-                    // Fill in all the slots, because ValueRef lacks a Clone or similar
-                    for slot in slots.iter_mut() {
-                        slot.write(Cell::new(None));
-                    }
-                    let slots = unsafe { MaybeUninit::slice_assume_init_ref(slots) };
-
-                    let this = params.this;
-                    parameters.collect_inline(params, slots, eval.heap())?;
-                    let parser = ParametersParser::new(slots);
-                    function(eval, this, parser)
-                })
+                eval.alloca_init(
+                    parameters.len(),
+                    || Cell::new(None),
+                    |slots, eval| {
+                        let this = params.this;
+                        parameters.collect_inline(params, slots, eval.heap())?;
+                        let parser = ParametersParser::new(slots);
+                        function(eval, this, parser)
+                    },
+                )
             },
             name,
             typ: None,
