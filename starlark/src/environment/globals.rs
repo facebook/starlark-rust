@@ -212,16 +212,12 @@ impl GlobalsBuilder {
     pub fn set_attribute<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
         // We want to build an attribute, that ignores its self argument, and does no subsequent allocation.
         let value = self.alloc(value);
-        let func = self.alloc(NativeAttribute {
-            function: box move |_, _| Ok(value.to_value()),
-        });
-        match &mut self.struct_fields {
-            None => self.variables.insert(name, func),
-            Some(fields) => {
-                let name = self.heap.alloc_string_value(name);
-                fields.insert(name, func)
-            }
-        };
+        self.set(
+            name,
+            NativeAttribute {
+                function: box move |_, _| Ok(value.to_value()),
+            },
+        );
     }
 
     /// Allocate a value using the same underlying heap as the [`GlobalsBuilder`],
