@@ -44,6 +44,10 @@ pub enum ValueError {
     IncorrectParameterType,
     #[error("Type of parameter `{0}` doesn't match")]
     IncorrectParameterTypeNamed(String),
+    #[error("Missing this parameter")]
+    MissingThis,
+    #[error("Missing required parameter `{0}`")]
+    MissingRequired(String),
     #[error("Index `{0}` is out of bound")]
     IndexOutOfBound(i32),
     #[error("Key `{0}` was not found")]

@@ -591,14 +591,6 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         Self(slots.iter())
     }
 
-    // Utility for improving the error message with more information
-    fn named_err<'v1, T: UnpackValue<'v1>>(name: &str, x: Option<T>) -> anyhow::Result<T> {
-        x.ok_or_else(|| {
-            ValueError::IncorrectParameterTypeNamedWithExpected(name.to_owned(), T::expected())
-                .into()
-        })
-    }
-
     fn get_next(&mut self) -> Option<Value<'v>> {
         let v = self
             .0
@@ -608,7 +600,8 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 
     pub fn this<T: UnpackValue<'v>>(&self, this: Option<Value<'v>>) -> anyhow::Result<T> {
-        Self::named_err("this", this.and_then(T::unpack_value))
+        let this = this.ok_or(ValueError::MissingThis)?;
+        T::unpack_named_param(this, "this")
     }
 
     /// Obtain the next parameter, corresponding to [`ParametersSpec::optional`].
@@ -617,7 +610,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     pub fn next_opt<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<Option<T>> {
         match self.get_next() {
             None => Ok(None),
-            Some(v) => Ok(Some(Self::named_err(name, T::unpack_value(v))?)),
+            Some(v) => Ok(Some(T::unpack_named_param(v, name)?)),
         }
     }
 
@@ -632,7 +625,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
         let v = self.get_next().unwrap();
-        Self::named_err(name, T::unpack_value(v))
+        T::unpack_named_param(v, name)
     }
 }
 
@@ -884,17 +877,11 @@ impl<'v, 'a> Arguments<'v, 'a> {
     }
 }
 
-// Utility for improving the error message with more information
-fn named_err<'v1, T: UnpackValue<'v1>>(name: &str, x: Option<T>) -> anyhow::Result<T> {
-    x.ok_or_else(|| {
-        ValueError::IncorrectParameterTypeNamedWithExpected(name.to_owned(), T::expected()).into()
-    })
-}
-
 impl Arguments<'_, '_> {
     /// Utility for checking a `this` parameter matches what you expect.
     pub fn check_this<'v, T: UnpackValue<'v>>(this: Option<Value<'v>>) -> anyhow::Result<T> {
-        named_err("this", this.and_then(T::unpack_value))
+        let this = this.ok_or(ValueError::MissingThis)?;
+        T::unpack_named_param(this, "this")
     }
 
     /// Utility for checking a required parameter matches what you expect.
@@ -902,7 +889,8 @@ impl Arguments<'_, '_> {
         name: &str,
         x: Option<Value<'v>>,
     ) -> anyhow::Result<T> {
-        named_err(name, x.and_then(T::unpack_value))
+        let x = x.ok_or_else(|| ValueError::MissingRequired(name.to_owned()))?;
+        T::unpack_named_param(x, name)
     }
 
     /// Utility for checking an optional parameter matches what you expect.
