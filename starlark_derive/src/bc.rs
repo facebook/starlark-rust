@@ -73,6 +73,27 @@ impl BcOpcodeEnum {
             }
         }
     }
+
+    fn render_dispatch_all_variant(&self, variant: &Ident) -> TokenStream {
+        let instr = format_ident!("Instr{}", variant);
+        quote_spanned! {
+            variant.span()=>
+            handler.handle::<#instr>(BcOpcode::#variant);
+        }
+    }
+
+    fn render_dispatch_all(&self) -> TokenStream {
+        let variants = self.variants.map(|v| self.render_dispatch_all_variant(v));
+        quote_spanned! {
+            self.span=>
+            impl BcOpcode {
+                #[inline(always)]
+                fn do_dispatch_all(handler: &mut impl BcOpcodeAllHandler) {
+                    #(#variants)*
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn starlark_internal_bc(
@@ -84,9 +105,11 @@ pub(crate) fn starlark_internal_bc(
     let bc_opcode_enum = BcOpcodeEnum::parse(bc_opcode_enum);
     let input = TokenStream::from(input);
     let dispatch = bc_opcode_enum.render_dispatch();
+    let dispatch_all = bc_opcode_enum.render_dispatch_all();
     proc_macro::TokenStream::from(quote_spanned! {
         input.span()=>
         #input
         #dispatch
+        #dispatch_all
     })
 }
