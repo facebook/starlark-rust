@@ -143,7 +143,7 @@ impl<'b> BcPtrAddr<'b> {
         debug_assert!(self.remaining_if_debug() >= mem::size_of::<BcInstrRepr<I>>());
         let ptr = self.ptr as *const BcInstrRepr<I>;
         let repr = unsafe { &*ptr };
-        debug_assert_eq!(repr.header.opcode, I::OPCODE);
+        debug_assert_eq!(repr.header.opcode, BcOpcode::for_instr::<I>());
         repr
     }
 

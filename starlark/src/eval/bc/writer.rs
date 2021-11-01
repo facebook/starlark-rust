@@ -188,7 +188,8 @@ impl BcWriter {
     fn do_write_generic<I: BcInstr>(&mut self, span: Span, arg: I::Arg) -> (BcAddr, *const I::Arg) {
         if self.profile {
             // This instruction does not fail, so do not write span for it.
-            self.instrs.write::<InstrProfileBc>(I::OPCODE);
+            self.instrs
+                .write::<InstrProfileBc>(BcOpcode::for_instr::<I>());
         }
         self.spans.push((self.ip(), span));
         self.instrs.write::<I>(arg)
@@ -201,15 +202,15 @@ impl BcWriter {
         arg: I::Arg,
     ) -> (BcAddr, *const I::Arg) {
         // Local and const instructions must be queued.
-        assert_ne!(I::OPCODE, BcOpcode::Const);
-        assert_ne!(I::OPCODE, BcOpcode::Const2);
-        assert_ne!(I::OPCODE, BcOpcode::Const3);
-        assert_ne!(I::OPCODE, BcOpcode::Const4);
-        assert_ne!(I::OPCODE, BcOpcode::LoadLocal);
-        assert_ne!(I::OPCODE, BcOpcode::LoadLocal2);
-        assert_ne!(I::OPCODE, BcOpcode::LoadLocal3);
-        assert_ne!(I::OPCODE, BcOpcode::LoadLocal4);
-        assert_ne!(I::OPCODE, BcOpcode::LoadLocalAndConst);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::Const);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::Const2);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::Const3);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::Const4);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocal);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocal2);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocal3);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocal4);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocalAndConst);
         self.flush_instrs();
         self.update_stack_size::<I>(&arg);
         self.do_write_generic::<I>(span, arg)

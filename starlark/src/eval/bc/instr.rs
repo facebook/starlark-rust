@@ -20,7 +20,7 @@
 use crate::{
     eval::{
         bc::{
-            addr::BcPtrAddr, instr_arg::BcInstrArg, opcode::BcOpcode, stack_ptr::BcStackPtr,
+            addr::BcPtrAddr, instr_arg::BcInstrArg, stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
         },
         compiler::EvalException,
@@ -49,7 +49,6 @@ pub(crate) enum InstrControl<'v, 'b> {
 }
 
 pub(crate) trait BcInstr: Sized + 'static {
-    const OPCODE: BcOpcode;
     /// Values this instruction pops off the stack.
     type Pop<'v>: BcStackValues<'v>;
     /// Values this instruction pushes on the stack.

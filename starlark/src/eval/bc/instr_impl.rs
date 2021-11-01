@@ -61,7 +61,6 @@ use crate::{
 /// Instructions which either fail or proceed to the following instruction,
 /// and it returns error with span.
 pub(crate) trait InstrNoFlowImpl: 'static {
-    const OPCODE: BcOpcode;
     type Pop<'v>: BcStackValues<'v>;
     type Push<'v>: BcStackValues<'v>;
     type Arg: BcInstrArg;
@@ -78,7 +77,6 @@ pub(crate) trait InstrNoFlowImpl: 'static {
 pub(crate) struct InstrNoFlow<I: InstrNoFlowImpl>(marker::PhantomData<I>);
 
 impl<I: InstrNoFlowImpl> BcInstr for InstrNoFlow<I> {
-    const OPCODE: BcOpcode = I::OPCODE;
     type Pop<'v> = I::Pop<'v>;
     type Push<'v> = I::Push<'v>;
     type Arg = I::Arg;
@@ -106,7 +104,6 @@ pub(crate) type InstrNoFlowAddSpan<I> = InstrNoFlow<InstrNoFlowAddSpanWrapper<I>
 
 /// Instructions which either fail or proceed to the following instruction.
 pub(crate) trait InstrNoFlowAddSpanImpl: 'static {
-    const OPCODE: BcOpcode;
     type Pop<'v>: BcStackValues<'v>;
     type Push<'v>: BcStackValues<'v>;
     type Arg: BcInstrArg;
@@ -120,7 +117,6 @@ pub(crate) trait InstrNoFlowAddSpanImpl: 'static {
 }
 
 impl<I: InstrNoFlowAddSpanImpl> InstrNoFlowImpl for InstrNoFlowAddSpanWrapper<I> {
-    const OPCODE: BcOpcode = I::OPCODE;
     type Pop<'v> = I::Pop<'v>;
     type Push<'v> = I::Push<'v>;
     type Arg = I::Arg;
@@ -147,7 +143,6 @@ pub(crate) type InstrDup = InstrNoFlow<InstrDupImpl>;
 pub(crate) type InstrPop = InstrNoFlow<InstrPopImpl>;
 
 impl InstrNoFlowImpl for InstrDupImpl {
-    const OPCODE: BcOpcode = BcOpcode::Dup;
     type Pop<'v> = Value<'v>;
     type Push<'v> = [Value<'v>; 2];
     type Arg = ();
@@ -165,7 +160,6 @@ impl InstrNoFlowImpl for InstrDupImpl {
 }
 
 impl InstrNoFlowImpl for InstrPopImpl {
-    const OPCODE: BcOpcode = BcOpcode::Pop;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = ();
@@ -186,7 +180,6 @@ pub(crate) struct InstrConstImpl;
 pub(crate) type InstrConst = InstrNoFlow<InstrConstImpl>;
 
 impl InstrNoFlowImpl for InstrConstImpl {
-    const OPCODE: BcOpcode = BcOpcode::Const;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = FrozenValue;
@@ -209,7 +202,6 @@ macro_rules! instr_const_n {
         pub(crate) type $struct_name = InstrNoFlow<$impl_name>;
 
         impl InstrNoFlowImpl for $impl_name {
-            const OPCODE: BcOpcode = BcOpcode::$opcode;
             type Pop<'v> = ();
             type Push<'v> = [Value<'v>; $n];
             type Arg = [FrozenValue; $n];
@@ -269,7 +261,6 @@ pub(crate) type InstrObjectSetField = InstrNoFlowAddSpan<InstrObjectSetFieldImpl
 pub(crate) type InstrSlice = InstrNoFlowAddSpan<InstrSliceImpl>;
 
 impl InstrNoFlowAddSpanImpl for InstrLoadLocalImpl {
-    const OPCODE: BcOpcode = BcOpcode::LoadLocal;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = LocalSlotId;
@@ -325,7 +316,6 @@ macro_rules! instr_local_local_n {
         pub(crate) type $struct_name = InstrNoFlow<$impl_name>;
 
         impl InstrNoFlowImpl for $impl_name {
-            const OPCODE: BcOpcode = BcOpcode::$opcode;
             type Pop<'v> = ();
             type Push<'v> = [Value<'v>; $n];
             type Arg = ([LocalSlotId; $n], FrozenRef<Vec<Span>>);
@@ -349,7 +339,6 @@ instr_local_local_n!(3, InstrLoadLocal3, InstrLoadLocal3Impl, LoadLocal3);
 instr_local_local_n!(4, InstrLoadLocal4, InstrLoadLocal4Impl, LoadLocal4);
 
 impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
-    const OPCODE: BcOpcode = BcOpcode::LoadLocalAndConst;
     type Pop<'v> = ();
     type Push<'v> = [Value<'v>; 2];
     type Arg = (LocalSlotId, FrozenValue);
@@ -366,7 +355,6 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrLoadLocalCapturedImpl {
-    const OPCODE: BcOpcode = BcOpcode::LoadLocalCaptured;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = LocalSlotId;
@@ -383,7 +371,6 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalCapturedImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrLoadModuleImpl {
-    const OPCODE: BcOpcode = BcOpcode::LoadModule;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = ModuleSlotId;
@@ -400,7 +387,6 @@ impl InstrNoFlowAddSpanImpl for InstrLoadModuleImpl {
 }
 
 impl InstrNoFlowImpl for InstrStoreLocalImpl {
-    const OPCODE: BcOpcode = BcOpcode::StoreLocal;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = LocalSlotId;
@@ -419,7 +405,6 @@ impl InstrNoFlowImpl for InstrStoreLocalImpl {
 }
 
 impl InstrNoFlowImpl for InstrStoreLocalCapturedImpl {
-    const OPCODE: BcOpcode = BcOpcode::StoreLocalCaptured;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = LocalSlotId;
@@ -437,7 +422,6 @@ impl InstrNoFlowImpl for InstrStoreLocalCapturedImpl {
 }
 
 impl InstrNoFlowImpl for InstrStoreModuleAndExportImpl {
-    const OPCODE: BcOpcode = BcOpcode::StoreModuleAndExport;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = (ModuleSlotId, String);
@@ -456,7 +440,6 @@ impl InstrNoFlowImpl for InstrStoreModuleAndExportImpl {
 }
 
 impl InstrNoFlowImpl for InstrStoreModuleImpl {
-    const OPCODE: BcOpcode = BcOpcode::StoreModule;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = ModuleSlotId;
@@ -474,7 +457,6 @@ impl InstrNoFlowImpl for InstrStoreModuleImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrUnpackImpl {
-    const OPCODE: BcOpcode = BcOpcode::Unpack;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = ArgPushesStack;
@@ -509,7 +491,6 @@ impl InstrNoFlowAddSpanImpl for InstrUnpackImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrArrayIndexImpl {
-    const OPCODE: BcOpcode = BcOpcode::ArrayIndex;
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -526,7 +507,6 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrArrayIndexNoPopImpl {
-    const OPCODE: BcOpcode = BcOpcode::ArrayIndexNoPop;
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = [Value<'v>; 3];
     type Arg = ();
@@ -544,7 +524,6 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexNoPopImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrSetArrayIndexImpl {
-    const OPCODE: BcOpcode = BcOpcode::SetArrayIndex;
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = ();
     type Arg = ();
@@ -561,7 +540,6 @@ impl InstrNoFlowAddSpanImpl for InstrSetArrayIndexImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrArrayIndexSetImpl {
-    const OPCODE: BcOpcode = BcOpcode::ArrayIndexSet;
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = ();
     type Arg = ();
@@ -578,8 +556,6 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexSetImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
-    const OPCODE: BcOpcode = BcOpcode::ObjectField;
-
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = Symbol;
@@ -604,8 +580,6 @@ impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrSetObjectFieldImpl {
-    const OPCODE: BcOpcode = BcOpcode::SetObjectField;
-
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = ();
     type Arg = Symbol;
@@ -621,8 +595,6 @@ impl InstrNoFlowAddSpanImpl for InstrSetObjectFieldImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrObjectSetFieldImpl {
-    const OPCODE: BcOpcode = BcOpcode::ObjectSetField;
-
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = ();
     type Arg = Symbol;
@@ -638,7 +610,6 @@ impl InstrNoFlowAddSpanImpl for InstrObjectSetFieldImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrSliceImpl {
-    const OPCODE: BcOpcode = BcOpcode::Slice;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (
@@ -671,8 +642,6 @@ pub(crate) type InstrEq = InstrBinOp<InstrEqImpl>;
 pub(crate) type InstrNotEq = InstrBinOp<InstrNotEqImpl>;
 
 impl InstrBinOpImpl for InstrEqImpl {
-    const OPCODE: BcOpcode = BcOpcode::Eq;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.equals(v1).map(Value::new_bool)
@@ -680,8 +649,6 @@ impl InstrBinOpImpl for InstrEqImpl {
 }
 
 impl InstrBinOpImpl for InstrNotEqImpl {
-    const OPCODE: BcOpcode = BcOpcode::NotEq;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.equals(v1).map(|v| Value::new_bool(!v))
@@ -699,8 +666,6 @@ pub(crate) type InstrPlus = InstrUnOp<InstrPlusImpl>;
 pub(crate) type InstrBitNot = InstrUnOp<InstrBitNotImpl>;
 
 impl InstrUnOpImpl for InstrNotImpl {
-    const OPCODE: BcOpcode = BcOpcode::Not;
-
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(Value::new_bool(!v.to_bool()))
@@ -708,8 +673,6 @@ impl InstrUnOpImpl for InstrNotImpl {
 }
 
 impl InstrUnOpImpl for InstrPlusImpl {
-    const OPCODE: BcOpcode = BcOpcode::Plus;
-
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v.plus(heap)
@@ -717,8 +680,6 @@ impl InstrUnOpImpl for InstrPlusImpl {
 }
 
 impl InstrUnOpImpl for InstrMinusImpl {
-    const OPCODE: BcOpcode = BcOpcode::Minus;
-
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v.minus(heap)
@@ -726,8 +687,6 @@ impl InstrUnOpImpl for InstrMinusImpl {
 }
 
 impl InstrUnOpImpl for InstrBitNotImpl {
-    const OPCODE: BcOpcode = BcOpcode::BitNot;
-
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(Value::new_int(!v.to_int()?))
@@ -735,14 +694,10 @@ impl InstrUnOpImpl for InstrBitNotImpl {
 }
 
 pub(crate) trait InstrBinOpImpl: 'static {
-    const OPCODE: BcOpcode;
-
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error>;
 }
 
 pub(crate) trait InstrUnOpImpl: 'static {
-    const OPCODE: BcOpcode;
-
     fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error>;
 }
 
@@ -752,7 +707,6 @@ pub(crate) type InstrBinOp<I> = InstrNoFlowAddSpan<InstrBinOpWrapper<I>>;
 pub(crate) type InstrUnOp<I> = InstrNoFlowAddSpan<InstrUnOpWrapper<I>>;
 
 impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
-    const OPCODE: BcOpcode = I::OPCODE;
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -768,7 +722,6 @@ impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
 }
 
 impl<I: InstrUnOpImpl> InstrNoFlowAddSpanImpl for InstrUnOpWrapper<I> {
-    const OPCODE: BcOpcode = I::OPCODE;
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -814,8 +767,6 @@ pub(crate) type InstrIn = InstrBinOp<InstrInImpl>;
 pub(crate) type InstrNotIn = InstrBinOp<InstrNotInImpl>;
 
 impl InstrBinOpImpl for InstrAddImpl {
-    const OPCODE: BcOpcode = BcOpcode::Add;
-
     #[inline(always)]
     fn eval<'v>(l: Value<'v>, r: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         // Addition of string is super common and pretty cheap, so have a special case for it.
@@ -836,8 +787,6 @@ impl InstrBinOpImpl for InstrAddImpl {
 }
 
 impl InstrBinOpImpl for InstrAddAssignImpl {
-    const OPCODE: BcOpcode = BcOpcode::AddAssign;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         add_assign(v0, v1, heap)
@@ -845,8 +794,6 @@ impl InstrBinOpImpl for InstrAddAssignImpl {
 }
 
 impl InstrBinOpImpl for InstrSubImpl {
-    const OPCODE: BcOpcode = BcOpcode::Sub;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.sub(v1, heap)
@@ -854,8 +801,6 @@ impl InstrBinOpImpl for InstrSubImpl {
 }
 
 impl InstrBinOpImpl for InstrMultiplyImpl {
-    const OPCODE: BcOpcode = BcOpcode::Multiply;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.mul(v1, heap)
@@ -863,8 +808,6 @@ impl InstrBinOpImpl for InstrMultiplyImpl {
 }
 
 impl InstrBinOpImpl for InstrPercentImpl {
-    const OPCODE: BcOpcode = BcOpcode::Percent;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.percent(v1, heap)
@@ -872,8 +815,6 @@ impl InstrBinOpImpl for InstrPercentImpl {
 }
 
 impl InstrBinOpImpl for InstrFloorDivideImpl {
-    const OPCODE: BcOpcode = BcOpcode::FloorDivide;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.floor_div(v1, heap)
@@ -881,8 +822,6 @@ impl InstrBinOpImpl for InstrFloorDivideImpl {
 }
 
 impl InstrBinOpImpl for InstrDivideImpl {
-    const OPCODE: BcOpcode = BcOpcode::Divide;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.div(v1, heap)
@@ -890,8 +829,6 @@ impl InstrBinOpImpl for InstrDivideImpl {
 }
 
 impl InstrBinOpImpl for InstrBitAndImpl {
-    const OPCODE: BcOpcode = BcOpcode::BitAnd;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.bit_and(v1)
@@ -899,8 +836,6 @@ impl InstrBinOpImpl for InstrBitAndImpl {
 }
 
 impl InstrBinOpImpl for InstrBitOrImpl {
-    const OPCODE: BcOpcode = BcOpcode::BitOr;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.bit_or(v1)
@@ -908,8 +843,6 @@ impl InstrBinOpImpl for InstrBitOrImpl {
 }
 
 impl InstrBinOpImpl for InstrBitXorImpl {
-    const OPCODE: BcOpcode = BcOpcode::BitXor;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.bit_xor(v1)
@@ -917,8 +850,6 @@ impl InstrBinOpImpl for InstrBitXorImpl {
 }
 
 impl InstrBinOpImpl for InstrLeftShiftImpl {
-    const OPCODE: BcOpcode = BcOpcode::LeftShift;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.left_shift(v1)
@@ -926,8 +857,6 @@ impl InstrBinOpImpl for InstrLeftShiftImpl {
 }
 
 impl InstrBinOpImpl for InstrRightShiftImpl {
-    const OPCODE: BcOpcode = BcOpcode::RightShift;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         v0.right_shift(v1)
@@ -935,8 +864,6 @@ impl InstrBinOpImpl for InstrRightShiftImpl {
 }
 
 impl InstrBinOpImpl for InstrInImpl {
-    const OPCODE: BcOpcode = BcOpcode::In;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(Value::new_bool(v1.is_in(v0)?))
@@ -944,8 +871,6 @@ impl InstrBinOpImpl for InstrInImpl {
 }
 
 impl InstrBinOpImpl for InstrNotInImpl {
-    const OPCODE: BcOpcode = BcOpcode::NotIn;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(Value::new_bool(!v1.is_in(v0)?))
@@ -958,7 +883,6 @@ pub(crate) struct InstrFormatOneImpl;
 pub(crate) type InstrFormatOne = InstrNoFlowAddSpan<InstrFormatOneImpl>;
 
 impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
-    const OPCODE: BcOpcode = BcOpcode::PercentSOne;
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = (FrozenStringValue, FrozenStringValue);
@@ -975,7 +899,6 @@ impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
-    const OPCODE: BcOpcode = BcOpcode::FormatOne;
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = (FrozenStringValue, FrozenStringValue);
@@ -992,15 +915,12 @@ impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
 }
 
 pub(crate) trait InstrCompareImpl: 'static {
-    const OPCODE: BcOpcode;
     fn eval_compare(ordering: Ordering) -> bool;
 }
 
 pub(crate) struct InstrCompare<I: InstrCompareImpl>(marker::PhantomData<I>);
 
 impl<I: InstrCompareImpl> InstrBinOpImpl for InstrCompare<I> {
-    const OPCODE: BcOpcode = I::OPCODE;
-
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(Value::new_bool(I::eval_compare(v0.compare(v1)?)))
@@ -1018,8 +938,6 @@ pub(crate) type InstrLessOrEqual = InstrBinOp<InstrCompare<InstrLessOrEqualImpl>
 pub(crate) type InstrGreaterOrEqual = InstrBinOp<InstrCompare<InstrGreaterOrEqualImpl>>;
 
 impl InstrCompareImpl for InstrLessImpl {
-    const OPCODE: BcOpcode = BcOpcode::Less;
-
     #[inline(always)]
     fn eval_compare(ordering: Ordering) -> bool {
         ordering == Ordering::Less
@@ -1027,8 +945,6 @@ impl InstrCompareImpl for InstrLessImpl {
 }
 
 impl InstrCompareImpl for InstrGreaterImpl {
-    const OPCODE: BcOpcode = BcOpcode::Greater;
-
     #[inline(always)]
     fn eval_compare(ordering: Ordering) -> bool {
         ordering == Ordering::Greater
@@ -1036,8 +952,6 @@ impl InstrCompareImpl for InstrGreaterImpl {
 }
 
 impl InstrCompareImpl for InstrLessOrEqualImpl {
-    const OPCODE: BcOpcode = BcOpcode::LessOrEqual;
-
     #[inline(always)]
     fn eval_compare(ordering: Ordering) -> bool {
         ordering != Ordering::Greater
@@ -1045,8 +959,6 @@ impl InstrCompareImpl for InstrLessOrEqualImpl {
 }
 
 impl InstrCompareImpl for InstrGreaterOrEqualImpl {
-    const OPCODE: BcOpcode = BcOpcode::GreaterOrEqual;
-
     #[inline(always)]
     fn eval_compare(ordering: Ordering) -> bool {
         ordering != Ordering::Less
@@ -1057,8 +969,6 @@ pub(crate) struct InstrTypeImpl;
 pub(crate) type InstrType = InstrUnOp<InstrTypeImpl>;
 
 impl InstrUnOpImpl for InstrTypeImpl {
-    const OPCODE: BcOpcode = BcOpcode::Type;
-
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(v.get_type_value().unpack().to_value())
@@ -1069,7 +979,6 @@ pub(crate) struct InstrTypeIsImpl;
 pub(crate) type InstrTypeIs = InstrNoFlow<InstrTypeIsImpl>;
 
 impl InstrNoFlowImpl for InstrTypeIsImpl {
-    const OPCODE: BcOpcode = BcOpcode::TypeIs;
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = FrozenStringValue;
@@ -1090,8 +999,6 @@ pub(crate) struct InstrLenImpl;
 pub(crate) type InstrLen = InstrUnOp<InstrLenImpl>;
 
 impl InstrUnOpImpl for InstrLenImpl {
-    const OPCODE: BcOpcode = BcOpcode::Len;
-
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
         Ok(Value::new_int(v.length()?))
@@ -1121,7 +1028,6 @@ pub(crate) type InstrComprListAppend = InstrNoFlow<InstrComprListAppendImpl>;
 pub(crate) type InstrComprDictInsert = InstrNoFlowAddSpan<InstrComprDictInsertImpl>;
 
 impl InstrNoFlowImpl for InstrTupleNPopImpl {
-    const OPCODE: BcOpcode = BcOpcode::TupleNPop;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = ArgPopsStack;
@@ -1140,7 +1046,6 @@ impl InstrNoFlowImpl for InstrTupleNPopImpl {
 }
 
 impl InstrNoFlowImpl for InstrListNPopImpl {
-    const OPCODE: BcOpcode = BcOpcode::ListNPop;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = ArgPopsStack;
@@ -1159,7 +1064,6 @@ impl InstrNoFlowImpl for InstrListNPopImpl {
 }
 
 impl InstrNoFlowImpl for InstrListOfConstsImpl {
-    const OPCODE: BcOpcode = BcOpcode::ListOfConsts;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = Box<[FrozenValue]>;
@@ -1177,7 +1081,6 @@ impl InstrNoFlowImpl for InstrListOfConstsImpl {
 }
 
 impl InstrNoFlowImpl for InstrDictOfConstsImpl {
-    const OPCODE: BcOpcode = BcOpcode::DictOfConsts;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = SmallMap<FrozenValue, FrozenValue>;
@@ -1195,7 +1098,6 @@ impl InstrNoFlowImpl for InstrDictOfConstsImpl {
 }
 
 impl InstrNoFlowImpl for InstrDictNPopImpl {
-    const OPCODE: BcOpcode = BcOpcode::DictNPop;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack, FrozenRef<Vec<Span>>);
@@ -1229,7 +1131,6 @@ impl InstrNoFlowImpl for InstrDictNPopImpl {
 }
 
 impl InstrNoFlowImpl for InstrDictConstKeysImpl {
-    const OPCODE: BcOpcode = BcOpcode::DictConstKeys;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack, Box<[Hashed<FrozenValue>]>);
@@ -1253,7 +1154,6 @@ impl InstrNoFlowImpl for InstrDictConstKeysImpl {
 }
 
 impl InstrNoFlowImpl for InstrListNewImpl {
-    const OPCODE: BcOpcode = BcOpcode::ListNew;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -1271,7 +1171,6 @@ impl InstrNoFlowImpl for InstrListNewImpl {
 }
 
 impl InstrNoFlowImpl for InstrDictNewImpl {
-    const OPCODE: BcOpcode = BcOpcode::DictNew;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -1289,7 +1188,6 @@ impl InstrNoFlowImpl for InstrDictNewImpl {
 }
 
 impl InstrNoFlowImpl for InstrComprListAppendImpl {
-    const OPCODE: BcOpcode = BcOpcode::ComprListAppend;
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -1311,7 +1209,6 @@ impl InstrNoFlowImpl for InstrComprListAppendImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrComprDictInsertImpl {
-    const OPCODE: BcOpcode = BcOpcode::ComprDictInsert;
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -1337,7 +1234,6 @@ pub(crate) struct InstrIfBr;
 pub(crate) struct InstrIfNotBr;
 
 impl BcInstr for InstrBr {
-    const OPCODE: BcOpcode = BcOpcode::Br;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = BcAddrOffset;
@@ -1354,7 +1250,6 @@ impl BcInstr for InstrBr {
 }
 
 impl BcInstr for InstrIfBr {
-    const OPCODE: BcOpcode = BcOpcode::IfBr;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = BcAddrOffset;
@@ -1376,7 +1271,6 @@ impl BcInstr for InstrIfBr {
 }
 
 impl BcInstr for InstrIfNotBr {
-    const OPCODE: BcOpcode = BcOpcode::IfNotBr;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = BcAddrOffset;
@@ -1402,7 +1296,6 @@ pub(crate) struct InstrBreak;
 pub(crate) struct InstrContinue;
 
 impl BcInstr for InstrForLoop {
-    const OPCODE: BcOpcode = BcOpcode::ForLoop;
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = BcAddrOffset;
@@ -1453,7 +1346,6 @@ impl BcInstr for InstrForLoop {
 }
 
 impl BcInstr for InstrBreak {
-    const OPCODE: BcOpcode = BcOpcode::Break;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = ();
@@ -1470,7 +1362,6 @@ impl BcInstr for InstrBreak {
 }
 
 impl BcInstr for InstrContinue {
-    const OPCODE: BcOpcode = BcOpcode::Continue;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = ();
@@ -1490,7 +1381,6 @@ pub(crate) struct InstrReturnNone;
 pub(crate) struct InstrReturn;
 
 impl BcInstr for InstrReturnNone {
-    const OPCODE: BcOpcode = BcOpcode::ReturnNone;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = ();
@@ -1506,7 +1396,6 @@ impl BcInstr for InstrReturnNone {
 }
 
 impl BcInstr for InstrReturn {
-    const OPCODE: BcOpcode = BcOpcode::Return;
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = ();
@@ -1535,7 +1424,6 @@ pub(crate) struct InstrDefData {
 }
 
 impl InstrNoFlowImpl for InstrDefImpl {
-    const OPCODE: BcOpcode = BcOpcode::Def;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack, InstrDefData);
@@ -1648,7 +1536,6 @@ pub(crate) type InstrCallMethod = InstrNoFlowAddSpan<InstrCallMethodImpl>;
 pub(crate) type InstrCallMethodPos = InstrNoFlowAddSpan<InstrCallMethodPosImpl>;
 
 impl InstrNoFlowAddSpanImpl for InstrCallImpl {
-    const OPCODE: BcOpcode = BcOpcode::Call;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack1, ArgsCompiledValueBc);
@@ -1667,7 +1554,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallPos;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack1, ArgPopsStack, Span);
@@ -1686,7 +1572,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallFrozenDef;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (FrozenValueTyped<'static, FrozenDef>, ArgsCompiledValueBc);
@@ -1705,7 +1590,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefPosImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallFrozenDefPos;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack, FrozenValueTyped<'static, FrozenDef>, Span);
@@ -1724,7 +1608,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefPosImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativeImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallFrozenNative;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (
@@ -1748,7 +1631,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativeImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativePosImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallFrozenNativePos;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (
@@ -1773,7 +1655,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativePosImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallFrozen;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (Option<FrozenValue>, FrozenValue, ArgsCompiledValueBc);
@@ -1792,7 +1673,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenPosImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallFrozenPos;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack, Option<FrozenValue>, FrozenValue, Span);
@@ -1811,7 +1691,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenPosImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallMethod;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack1, Symbol, ArgsCompiledValueBc);
@@ -1833,7 +1712,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
 }
 
 impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
-    const OPCODE: BcOpcode = BcOpcode::CallMethodPos;
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack1, ArgPopsStack, Symbol, Span);
@@ -1863,7 +1741,6 @@ pub(crate) type InstrBeforeStmt = InstrNoFlow<InstrBeforeStmtImpl>;
 pub(crate) type InstrProfileBc = InstrNoFlow<InstrProfileBcImpl>;
 
 impl InstrNoFlowImpl for InstrPossibleGcImpl {
-    const OPCODE: BcOpcode = BcOpcode::PossibleGc;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = ();
@@ -1881,7 +1758,6 @@ impl InstrNoFlowImpl for InstrPossibleGcImpl {
 }
 
 impl InstrNoFlowImpl for InstrBeforeStmtImpl {
-    const OPCODE: BcOpcode = BcOpcode::BeforeStmt;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = Span;
@@ -1899,7 +1775,6 @@ impl InstrNoFlowImpl for InstrBeforeStmtImpl {
 }
 
 impl InstrNoFlowImpl for InstrProfileBcImpl {
-    const OPCODE: BcOpcode = BcOpcode::ProfileBc;
     type Pop<'v> = ();
     type Push<'v> = ();
     type Arg = BcOpcode;
@@ -1925,7 +1800,6 @@ impl InstrNoFlowImpl for InstrProfileBcImpl {
 pub(crate) struct InstrEndOfBc;
 
 impl BcInstr for InstrEndOfBc {
-    const OPCODE: BcOpcode = BcOpcode::EndOfBc;
     type Pop<'v> = ();
     type Push<'v> = ();
     /// Offset of current instruction and spans of all instructions.

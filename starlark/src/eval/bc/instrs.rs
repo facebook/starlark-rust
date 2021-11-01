@@ -33,7 +33,7 @@ use crate::{
         instr::BcInstr,
         instr_impl::InstrEndOfBc,
         opcode::{BcOpcode, BcOpcodeHandler},
-        repr::{BcInstrRepr, BC_INSTR_ALIGN},
+        repr::{BcInstrHeader, BcInstrRepr, BC_INSTR_ALIGN},
     },
 };
 
@@ -85,7 +85,13 @@ unsafe fn drop_instrs(instrs: &[usize]) {
 /// allocated instructions, then both `BcInstrs::default` is free
 /// and evaluation start [is free](https://rust.godbolt.org/z/3nEhWGo4Y).
 fn empty_instrs() -> &'static [usize] {
-    static END_OF_BC: BcInstrRepr<InstrEndOfBc> = BcInstrRepr::new((BcAddr(0), Vec::new()));
+    static END_OF_BC: BcInstrRepr<InstrEndOfBc> = BcInstrRepr {
+        header: BcInstrHeader {
+            opcode: BcOpcode::EndOfBc,
+        },
+        arg: (BcAddr(0), Vec::new()),
+        _align: [],
+    };
     unsafe {
         slice::from_raw_parts(
             &END_OF_BC as *const BcInstrRepr<_> as *const usize,

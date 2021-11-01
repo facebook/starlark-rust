@@ -42,14 +42,16 @@ pub(crate) struct BcInstrRepr<I: BcInstr> {
     pub(crate) header: BcInstrHeader,
     pub(crate) arg: I::Arg,
     // Align all instructions to make IP increment simple.
-    _align: [FrozenValue; 0],
+    pub(crate) _align: [FrozenValue; 0],
 }
 
 impl<I: BcInstr> BcInstrRepr<I> {
-    pub(crate) const fn new(arg: I::Arg) -> BcInstrRepr<I> {
+    pub(crate) fn new(arg: I::Arg) -> BcInstrRepr<I> {
         BcInstrRepr::<I>::assert_align();
         BcInstrRepr {
-            header: BcInstrHeader { opcode: I::OPCODE },
+            header: BcInstrHeader {
+                opcode: BcOpcode::for_instr::<I>(),
+            },
             arg,
             _align: [],
         }

@@ -17,9 +17,12 @@
 
 //! Instruction opcode.
 
+use std::{any, any::TypeId, collections::HashMap, marker};
+
 use gazebo::dupe::Dupe;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use once_cell::sync::Lazy;
 
 use crate::eval::bc::{instr::BcInstr, instr_impl::*};
 
@@ -224,6 +227,91 @@ impl BcOpcode {
             BcOpcode::BeforeStmt => handler.handle::<InstrBeforeStmt>(),
             BcOpcode::ProfileBc => handler.handle::<InstrProfileBc>(),
             BcOpcode::EndOfBc => handler.handle::<InstrEndOfBc>(),
+        }
+    }
+
+    /// Iterate over the bytecode opcodes.
+    pub(crate) fn iter() -> impl Iterator<Item = BcOpcode> {
+        (0..BcOpcode::COUNT).map(|i| BcOpcode::by_number(i as u32).unwrap())
+    }
+
+    /// Does given instruction have this opcode?
+    fn is_for_instr<I: BcInstr>(self) -> bool {
+        struct Is<J: BcInstr> {
+            _marker: marker::PhantomData<J>,
+        }
+
+        impl<J: BcInstr> BcOpcodeHandler<bool> for Is<J> {
+            fn handle<I: BcInstr>(self) -> bool {
+                TypeId::of::<I>() == TypeId::of::<J>()
+            }
+        }
+
+        self.dispatch(Is::<I> {
+            _marker: marker::PhantomData,
+        })
+    }
+
+    /// Find bytecode opcode by instruction, panic if not found.
+    fn find_for_instr<I: BcInstr>() -> BcOpcode {
+        BcOpcode::iter()
+            .find(|opcode| opcode.is_for_instr::<I>())
+            .unwrap_or_else(|| {
+                panic!(
+                    "No bytecode opcode for instruction {:?}",
+                    any::type_name::<I>()
+                )
+            })
+    }
+
+    /// Get bytecode opcode for the instruction.
+    pub(crate) fn for_instr<I: BcInstr>() -> BcOpcode {
+        // `find_for_instr` is optimized away in release mode,
+        // but it is quadratic in debug mode.
+        // https://rust.godbolt.org/z/8fWcPxc3Y
+        // So we use it directly  in release, but create an index in debug.
+        // Note both branches are typechecked in both modes.
+        if !cfg!(debug_assertions) {
+            BcOpcode::find_for_instr::<I>()
+        } else {
+            struct Index {
+                instr_type_id_to_opcode: HashMap<TypeId, BcOpcode>,
+            }
+            static INDEX: Lazy<Index> = Lazy::new(|| {
+                let mut map = HashMap::new();
+                for opcode in BcOpcode::iter() {
+                    struct AddToMap<'m> {
+                        map: &'m mut HashMap<TypeId, BcOpcode>,
+                        opcode: BcOpcode,
+                    }
+                    impl BcOpcodeHandler<()> for AddToMap<'_> {
+                        fn handle<J: BcInstr>(self) {
+                            let prev = self.map.insert(TypeId::of::<J>(), self.opcode);
+                            assert!(
+                                prev.is_none(),
+                                "Non-unique entry for {}",
+                                any::type_name::<J>()
+                            );
+                        }
+                    }
+                    opcode.dispatch(AddToMap {
+                        map: &mut map,
+                        opcode,
+                    });
+                }
+                Index {
+                    instr_type_id_to_opcode: map,
+                }
+            });
+            *INDEX
+                .instr_type_id_to_opcode
+                .get(&TypeId::of::<I>())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "No bytecode opcode for instruction {:?}",
+                        any::type_name::<I>()
+                    )
+                })
         }
     }
 }
