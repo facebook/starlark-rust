@@ -20,6 +20,8 @@ use std::{
     marker,
 };
 
+use hashbrown::raw::RawTable;
+
 use crate::{
     collections::SmallMap,
     values::{Tracer, Value},
@@ -40,6 +42,14 @@ unsafe impl<'v, T: Trace<'v>> Trace<'v> for Vec<T> {
 unsafe impl<'v, T: Trace<'v>> Trace<'v> for [T] {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.iter_mut().for_each(|x| x.trace(tracer));
+    }
+}
+
+unsafe impl<'v, T: Trace<'v>> Trace<'v> for RawTable<T> {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        unsafe {
+            self.iter().for_each(|e| e.as_mut().trace(tracer));
+        }
     }
 }
 

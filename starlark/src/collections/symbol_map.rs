@@ -49,7 +49,7 @@ use crate::{
 
 // We use a RawTable (the thing that underlies HashMap) so we can look up efficiently
 // and easily by Symbol and str, without being limited by `Borrow` traits.
-#[derive(Clone)]
+#[derive(Clone, Trace)]
 pub(crate) struct SymbolMap<T>(RawTable<(Symbol, T)>);
 
 impl<T: Debug> Debug for SymbolMap<T> {

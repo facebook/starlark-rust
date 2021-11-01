@@ -26,6 +26,7 @@ use gazebo::{
 use itertools::Itertools;
 use thiserror::Error;
 
+use crate as starlark;
 use crate::{collections::BorrowHashed, values::StringValue};
 /// Deal with all aspects of runtime parameter evaluation.
 /// First build a Parameters structure, then use collect to collect the
@@ -102,7 +103,7 @@ impl<'v> ParameterKind<Value<'v>> {
 /// Define a list of parameters. This code assumes that all names are distinct and that
 /// `*args`/`**kwargs` occur in well-formed locations.
 // V = Value, or FrozenValue
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
 #[repr(C)]
 pub struct ParametersSpec<V> {
     /// Only used in error messages
@@ -564,12 +565,6 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             .into());
         }
         Ok(())
-    }
-}
-
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for ParametersSpec<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.kinds.trace(tracer);
     }
 }
 
