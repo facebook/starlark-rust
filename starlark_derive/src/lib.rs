@@ -26,6 +26,7 @@ use proc_macro::TokenStream;
 use syn::*;
 
 mod attrs;
+mod bc;
 mod freeze;
 mod parse;
 mod render;
@@ -84,6 +85,15 @@ pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
     let mut x = parse::parse(input);
     x.resolve();
     render::render(x).into()
+}
+
+/// Stubs for Starlark bytecode interpreter.
+#[proc_macro_attribute]
+pub fn starlark_internal_bc(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    bc::starlark_internal_bc(attr, input)
 }
 
 /// Derive the `Trace` trait.
