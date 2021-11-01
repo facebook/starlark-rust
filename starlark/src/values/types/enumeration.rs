@@ -54,9 +54,8 @@ use crate::{
     collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator},
     values::{
-        function::{NativeFunction, FUNCTION_TYPE},
-        index::convert_index,
-        Freeze, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
+        function::FUNCTION_TYPE, index::convert_index, Freeze, Freezer, FrozenValue, Heap,
+        StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -79,8 +78,6 @@ pub struct EnumTypeGen<V, Typ> {
     // The key is the value of the enumeration
     // The value is a value of type EnumValue
     elements: SmallMap<V, V>,
-    // Function to construct an enumeration, cached, so we don't recreate it on each invoke.
-    constructor: V,
 }
 
 impl<V: Display, Typ> Display for EnumTypeGen<V, Typ> {
@@ -130,7 +127,6 @@ impl<'v> Freeze for EnumType<'v> {
         Ok(FrozenEnumType {
             typ: self.typ.into_inner(),
             elements,
-            constructor: self.constructor.freeze(freezer)?,
         })
     }
 }
@@ -142,7 +138,6 @@ impl<'v> EnumType<'v> {
         let typ = heap.alloc(EnumType {
             typ: RefCell::new(None),
             elements: SmallMap::new(),
-            constructor: heap.alloc(Self::make_constructor()),
         });
 
         let mut res = SmallMap::with_capacity(elements.len());
@@ -169,28 +164,6 @@ impl<'v> EnumType<'v> {
         }
         Ok(typ)
     }
-
-    // The constructor is actually invariant in the enum type it works for, so we could try and allocate it
-    // once for all enumerations. But that seems like a lot of work for not much benefit.
-    fn make_constructor() -> NativeFunction {
-        // We want to get the value of `me` into the function, but that doesn't work since it
-        // might move between therads - so we create the NativeFunction and apply it later.
-        NativeFunction::new_direct(
-            move |eval, params| {
-                let this = params.this.unwrap();
-                params.no_named_args()?;
-                let val = params.positional1(eval.heap())?;
-                let elements = EnumType::from_value(this)
-                    .unwrap()
-                    .either(|x| &x.elements, |x| coerce_ref(&x.elements));
-                match elements.get_hashed(val.get_hashed()?.borrow()) {
-                    Some(v) => Ok(*v),
-                    None => Err(EnumError::InvalidElement(val.to_str(), this.to_repr()).into()),
-                }
-            },
-            "enum(value)".to_owned(),
-        )
-    }
 }
 
 impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
@@ -213,12 +186,20 @@ where
     fn invoke(
         &self,
         me: Value<'v>,
-        location: Option<Span>,
-        mut args: Arguments<'v, '_>,
+        _location: Option<Span>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        args.this = Some(me);
-        self.constructor.invoke(location, args, eval)
+        let this = me;
+        args.no_named_args()?;
+        let val = args.positional1(eval.heap())?;
+        let elements = EnumType::from_value(this)
+            .unwrap()
+            .either(|x| &x.elements, |x| coerce_ref(&x.elements));
+        match elements.get_hashed(val.get_hashed()?.borrow()) {
+            Some(v) => Ok(*v),
+            None => Err(EnumError::InvalidElement(val.to_str(), this.to_repr()).into()),
+        }
     }
 
     fn extra_memory(&self) -> usize {
