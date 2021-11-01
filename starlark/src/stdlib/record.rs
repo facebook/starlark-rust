@@ -42,7 +42,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
             let compiled = TypeCompiled::new(field.typ, heap)?;
             mp.insert_hashed(k, (field, compiled));
         }
-        Ok(RecordType::new(mp, heap))
+        Ok(RecordType::new(mp))
     }
 
     /// Creates a field record.

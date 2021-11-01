@@ -42,7 +42,7 @@
 //! ```
 
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fmt,
     fmt::{Debug, Display},
     hash::Hash,
@@ -62,10 +62,8 @@ use crate::{
     collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
-        comparison::equals_slice,
-        function::{NativeFunction, FUNCTION_TYPE},
-        typing::TypeCompiled,
-        Freeze, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
+        comparison::equals_slice, function::FUNCTION_TYPE, typing::TypeCompiled, Freeze, Freezer,
+        FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -99,11 +97,9 @@ pub struct RecordTypeGen<V, Typ> {
     typ: Typ,
     /// The V is the type the field must satisfy (e.g. `"string"`)
     fields: SmallMap<String, (FieldGen<V>, TypeCompiled)>,
-    /// The construction function, which takes a hidden parameter (this type)
-    /// followed by the arguments of the field.
     /// Creating these on every invoke is pretty expensive (profiling shows)
     /// so compute them in advance and cache.
-    constructor: V,
+    parameter_spec: ParametersSpec<FrozenValue>,
 }
 
 impl<V: Display, Typ> Display for RecordTypeGen<V, Typ> {
@@ -167,21 +163,18 @@ fn record_fields<'v>(
 }
 
 impl<'v> RecordType<'v> {
-    pub(crate) fn new(
-        fields: SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>,
-        heap: &'v Heap,
-    ) -> Self {
-        let constructor = heap.alloc(Self::make_constructor(&fields));
+    pub(crate) fn new(fields: SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>) -> Self {
+        let parameter_spec = Self::make_parameter_spec(&fields);
         Self {
             typ: RefCell::new(None),
             fields,
-            constructor,
+            parameter_spec,
         }
     }
 
-    fn make_constructor(
+    fn make_parameter_spec(
         fields: &SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)>,
-    ) -> NativeFunction {
+    ) -> ParametersSpec<FrozenValue> {
         let mut parameters = ParametersSpec::with_capacity("record".to_owned(), fields.len());
         parameters.no_args();
         for (name, field) in fields {
@@ -191,38 +184,7 @@ impl<'v> RecordType<'v> {
                 parameters.required(name);
             }
         }
-
-        // We want to get the value of `me` into the function, but that doesn't work since it
-        // might move between threads - so we create the NativeFunction and apply it later.
-        NativeFunction::new(
-            move |eval, this, mut param_parser: ParametersParser| {
-                let this = this.unwrap();
-                let fields = record_fields(RecordType::from_value(this).unwrap());
-                let mut values = Vec::with_capacity(fields.len());
-                for (name, field) in fields.iter() {
-                    match field.0.default {
-                        None => {
-                            let v: Value = param_parser.next(name)?;
-                            v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
-                            values.push(v);
-                        }
-                        Some(default) => {
-                            let v: Option<Value> = param_parser.next_opt(name)?;
-                            match v {
-                                None => values.push(default),
-                                Some(v) => {
-                                    v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
-                                    values.push(v);
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(eval.heap().alloc_complex(Record { typ: this, values }))
-            },
-            parameters.signature(),
-            parameters,
-        )
+        parameters
     }
 }
 
@@ -265,7 +227,7 @@ impl<'v> Freeze for RecordType<'v> {
         Ok(FrozenRecordType {
             typ: self.typ.into_inner(),
             fields,
-            constructor: self.constructor.freeze(freezer)?,
+            parameter_spec: self.parameter_spec,
         })
     }
 }
@@ -290,12 +252,43 @@ where
     fn invoke(
         &self,
         me: Value<'v>,
-        location: Option<Span>,
-        mut args: Arguments<'v, '_>,
+        _location: Option<Span>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        args.this = Some(me);
-        self.constructor.invoke(location, args, eval)
+        let this = me;
+
+        eval.alloca_init(
+            self.parameter_spec.len(),
+            || Cell::new(None),
+            move |slots, eval| {
+                self.parameter_spec
+                    .collect_inline(args, slots, eval.heap())?;
+                let mut param_parser = ParametersParser::new(slots);
+                let fields = record_fields(RecordType::from_value(this).unwrap());
+                let mut values = Vec::with_capacity(fields.len());
+                for (name, field) in fields.iter() {
+                    match field.0.default {
+                        None => {
+                            let v: Value = param_parser.next(name)?;
+                            v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
+                            values.push(v);
+                        }
+                        Some(default) => {
+                            let v: Option<Value> = param_parser.next_opt(name)?;
+                            match v {
+                                None => values.push(default),
+                                Some(v) => {
+                                    v.check_type_compiled(field.0.typ, &field.1, Some(name))?;
+                                    values.push(v);
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(eval.heap().alloc_complex(Record { typ: this, values }))
+            },
+        )
     }
 
     fn extra_memory(&self) -> usize {

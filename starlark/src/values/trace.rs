@@ -24,7 +24,7 @@ use hashbrown::raw::RawTable;
 
 use crate::{
     collections::SmallMap,
-    values::{Tracer, Value},
+    values::{FrozenValue, Tracer, Value},
 };
 
 /// Called by the garbage collection, and must walk over every contained `Value` in the type.
@@ -103,6 +103,10 @@ unsafe impl<'v> Trace<'v> for Value<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         tracer.trace(self)
     }
+}
+
+unsafe impl<'v> Trace<'v> for FrozenValue {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 
 unsafe impl<'v> Trace<'v> for String {
