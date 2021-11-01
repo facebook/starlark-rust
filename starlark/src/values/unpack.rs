@@ -35,8 +35,13 @@ pub trait UnpackValue<'v>: Sized {
 
     /// Unpack value, but instead of `None` return error about incorrect argument type.
     fn unpack_param(value: Value<'v>) -> anyhow::Result<Self> {
-        Self::unpack_value(value)
-            .ok_or_else(|| ValueError::IncorrectParameterTypeWithExpected(Self::expected()).into())
+        Self::unpack_value(value).ok_or_else(|| {
+            ValueError::IncorrectParameterTypeWithExpected(
+                Self::expected(),
+                value.get_type().to_owned(),
+            )
+            .into()
+        })
     }
 
     /// Unpack value, but instead of `None` return error about incorrect named argument type.
@@ -45,6 +50,7 @@ pub trait UnpackValue<'v>: Sized {
             ValueError::IncorrectParameterTypeNamedWithExpected(
                 param_name.to_owned(),
                 Self::expected(),
+                value.get_type().to_owned(),
             )
             .into()
         })

@@ -905,6 +905,7 @@ impl Arguments<'_, '_> {
                     ValueError::IncorrectParameterTypeNamedWithExpected(
                         name.to_owned(),
                         T::expected(),
+                        x.get_type().to_owned(),
                     )
                     .into()
                 },

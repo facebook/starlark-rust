@@ -42,6 +42,7 @@ fn convert_index_aux(
                 }
                 Err(..) => Err(ValueError::IncorrectParameterTypeWithExpected(
                     "none or int".to_owned(),
+                    v.get_type().to_owned(),
                 )
                 .into()),
             }
@@ -70,7 +71,11 @@ pub(crate) fn convert_index(v: Value, len: i32) -> anyhow::Result<i32> {
                 Ok(i)
             }
         }
-        Err(..) => Err(ValueError::IncorrectParameterTypeWithExpected("int".to_owned()).into()),
+        Err(..) => Err(ValueError::IncorrectParameterTypeWithExpected(
+            "int".to_owned(),
+            v.get_type().to_owned(),
+        )
+        .into()),
     }
 }
 
@@ -87,13 +92,18 @@ pub(crate) fn convert_slice_indices(
     stride: Option<Value>,
 ) -> anyhow::Result<(i32, i32, i32)> {
     let stride = match stride {
-        None => Ok(1),
-        Some(v) if v.is_none() => Ok(1),
-        Some(v) => v.to_int(),
+        None => 1,
+        Some(v) if v.is_none() => 1,
+        Some(v) => v.to_int().map_err(|_| {
+            ValueError::IncorrectParameterTypeWithExpected(
+                "int or None".to_owned(),
+                v.get_type().to_owned(),
+            )
+        })?,
     };
     match stride {
-        Ok(0) => Err(ValueError::IndexOutOfBound(0).into()),
-        Ok(stride) => {
+        0 => Err(ValueError::IndexOutOfBound(0).into()),
+        stride => {
             let def_start = if stride < 0 { len - 1 } else { 0 };
             let def_end = if stride < 0 { -1 } else { len };
             let clamp = if stride < 0 { -1 } else { 0 };
@@ -105,7 +115,6 @@ pub(crate) fn convert_slice_indices(
                 (Ok(..), Err(x)) => Err(x),
             }
         }
-        _ => Err(ValueError::IncorrectParameterTypeWithExpected("int or None".to_owned()).into()),
     }
 }
 

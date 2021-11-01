@@ -92,6 +92,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
                     None => return Err(starlark::values::ValueError::IncorrectParameterTypeNamedWithExpected(
                         "this".to_owned(),
                         <#arg as starlark::values::UnpackValue>::expected(),
+                        this.get_type().to_owned(),
                     ).into()),
                     Some(v) => v,
                 };
