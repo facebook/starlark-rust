@@ -28,8 +28,8 @@ use crate::{
     gazebo::any::AnyLifetime,
     values::{
         layout::{arena::AValueRepr, avalue::AValue},
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, PointerI32, StarlarkValue,
-        Trace, Tracer, UnpackValue, Value, ValueLike,
+        AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap, FrozenValue, Heap, PointerI32,
+        StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -39,6 +39,18 @@ pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<&
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.
 #[derive(Copy_, Clone_, Dupe_)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
+
+unsafe impl<'v, T: StarlarkValue<'v>> Trace<'v> for FrozenValueTyped<'v, T> {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+impl<T: StarlarkValue<'static>> Freeze for FrozenValueTyped<'static, T> {
+    type Frozen = Self;
+
+    fn freeze(self, _freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
+        Ok(self)
+    }
+}
 
 impl<'v, T: StarlarkValue<'v>> Debug for ValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
