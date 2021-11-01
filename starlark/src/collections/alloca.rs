@@ -90,7 +90,7 @@ impl Alloca {
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
     /// or you call it yourself.
     #[inline(always)]
-    pub fn alloca_uninit<T, R>(&self, len: usize, f: impl FnOnce(&mut [MaybeUninit<T>]) -> R) -> R {
+    pub fn alloca_uninit<T, R>(&self, len: usize, k: impl FnOnce(&mut [MaybeUninit<T>]) -> R) -> R {
         self.assert_state();
 
         assert_eq!(mem::size_of::<T>() % mem::size_of::<usize>(), 0);
@@ -110,7 +110,7 @@ impl Alloca {
         self.alloc.set(stop);
         let data = start as *mut MaybeUninit<T>;
         let slice = unsafe { slice::from_raw_parts_mut(data, len) };
-        let res = f(slice);
+        let res = k(slice);
 
         // If the pointer changed, it means a callback called alloca again,
         // which allocated a new buffer. So we are abandoning the current allocation here,
@@ -129,21 +129,21 @@ impl Alloca {
         &self,
         len: usize,
         mut init: impl FnMut() -> T,
-        f: impl FnOnce(&mut [T]) -> R,
+        k: impl FnOnce(&mut [T]) -> R,
     ) -> R {
         self.alloca_uninit(len, |data| {
             for x in data.iter_mut() {
                 x.write(init());
             }
             let data = unsafe { MaybeUninit::slice_assume_init_mut(data) };
-            f(data)
+            k(data)
         })
     }
 
     #[allow(dead_code)] // Dead, but morally a sensible API to provide, and useful for testing
     #[inline(always)]
-    pub fn alloca_fill<T: Copy, R>(&self, len: usize, fill: T, f: impl FnOnce(&mut [T]) -> R) -> R {
-        self.alloca_init(len, || fill, f)
+    pub fn alloca_fill<T: Copy, R>(&self, len: usize, fill: T, k: impl FnOnce(&mut [T]) -> R) -> R {
+        self.alloca_init(len, || fill, k)
     }
 }
 

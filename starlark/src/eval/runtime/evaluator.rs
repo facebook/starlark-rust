@@ -511,24 +511,24 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
     /// or you call it yourself.
     #[inline(always)]
-    pub(crate) fn alloca_uninit<T, R, F>(&mut self, len: usize, f: F) -> R
+    pub(crate) fn alloca_uninit<T, R, F>(&mut self, len: usize, k: F) -> R
     where
         F: FnOnce(&mut [MaybeUninit<T>], &mut Self) -> R,
     {
         // We want to be able to access the evaluator underneath the alloca.
         // We know that the alloca will be used in a stacked way, so that's fine.
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
-        alloca.alloca_uninit(len, |xs| f(xs, self))
+        alloca.alloca_uninit(len, |xs| k(xs, self))
     }
 
     /// Allocate `len` elements, initialize them with `init` function, and invoke
-    /// a callback `f` with the pointer to the allocated memory and `self`.
+    /// a callback `k` with the pointer to the allocated memory and `self`.
     #[inline(always)]
-    pub(crate) fn alloca_init<T, R, F>(&mut self, len: usize, init: impl Fn() -> T, f: F) -> R
+    pub(crate) fn alloca_init<T, R, F>(&mut self, len: usize, init: impl Fn() -> T, k: F) -> R
     where
         F: FnOnce(&mut [T], &mut Self) -> R,
     {
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
-        alloca.alloca_init(len, init, |xs| f(xs, self))
+        alloca.alloca_init(len, init, |xs| k(xs, self))
     }
 }
