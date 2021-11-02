@@ -42,7 +42,7 @@
 //! ```
 
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     fmt,
     fmt::{Debug, Display},
     hash::Hash,
@@ -60,7 +60,7 @@ use crate as starlark;
 use crate::{
     codemap::Span,
     collections::{SmallMap, StarlarkHasher},
-    eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
+    eval::{Arguments, Evaluator, ParametersSpec},
     values::{
         comparison::equals_slice, function::FUNCTION_TYPE, typing::TypeCompiled, Freeze, Freezer,
         FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
@@ -258,13 +258,8 @@ where
     ) -> anyhow::Result<Value<'v>> {
         let this = me;
 
-        eval.alloca_init(
-            self.parameter_spec.len(),
-            || Cell::new(None),
-            move |slots, eval| {
-                self.parameter_spec
-                    .collect_inline(args, slots, eval.heap())?;
-                let mut param_parser = ParametersParser::new(slots);
+        self.parameter_spec
+            .parser(args, eval, |mut param_parser, eval| {
                 let fields = record_fields(RecordType::from_value(this).unwrap());
                 let mut values = Vec::with_capacity(fields.len());
                 for (name, field) in fields.iter() {
@@ -287,8 +282,7 @@ where
                     }
                 }
                 Ok(eval.heap().alloc_complex(Record { typ: this, values }))
-            },
-        )
+            })
     }
 
     fn extra_memory(&self) -> usize {

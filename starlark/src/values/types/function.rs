@@ -16,9 +16,6 @@
  */
 
 //! Function types, including native functions and `object.member` functions.
-
-use std::cell::Cell;
-
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce};
@@ -133,15 +130,7 @@ impl NativeFunction {
     {
         NativeFunction {
             function: box move |eval, params| {
-                eval.alloca_init(
-                    parameters.len(),
-                    || Cell::new(None),
-                    |slots, eval| {
-                        parameters.collect_inline(params, slots, eval.heap())?;
-                        let parser = ParametersParser::new(slots);
-                        function(eval, parser)
-                    },
-                )
+                parameters.parser(params, eval, |parser, eval| function(eval, parser))
             },
             name,
             typ: None,

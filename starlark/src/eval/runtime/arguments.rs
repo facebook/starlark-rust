@@ -27,7 +27,7 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use crate as starlark;
-use crate::{collections::BorrowHashed, values::StringValue};
+use crate::{collections::BorrowHashed, eval::Evaluator, values::StringValue};
 /// Deal with all aspects of runtime parameter evaluation.
 /// First build a Parameters structure, then use collect to collect the
 /// parameters into slots.
@@ -566,6 +566,27 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
         Ok(())
     }
+
+    /// Create a [`ParametersParser`] for given arguments.
+    pub fn parser<R, F>(
+        &self,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+        k: F,
+    ) -> anyhow::Result<R>
+    where
+        F: FnOnce(ParametersParser<'v, '_>, &mut Evaluator<'v, '_>) -> anyhow::Result<R>,
+    {
+        eval.alloca_init(
+            self.len(),
+            || Cell::new(None),
+            |slots, eval| {
+                self.collect_inline(args, slots, eval.heap())?;
+                let parser = ParametersParser::new(slots);
+                k(parser, eval)
+            },
+        )
+    }
 }
 
 impl<'v> ParametersSpec<Value<'v>> {
@@ -584,6 +605,8 @@ impl<'v> ParametersSpec<Value<'v>> {
 }
 
 /// Parse a series of parameters which were specified by [`ParametersSpec`].
+///
+/// This is usually created with [`ParametersSpec::parser`].
 pub struct ParametersParser<'v, 'a>(std::slice::Iter<'a, Cell<Option<Value<'v>>>>);
 
 impl<'v, 'a> ParametersParser<'v, 'a> {
