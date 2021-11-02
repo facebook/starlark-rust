@@ -221,7 +221,6 @@ where
         let self_names = coerce_ref(&self.names);
 
         let params = Arguments {
-            this: args.this,
             pos: &[self_pos, args.pos].concat(),
             named: &[self_named, args.named].concat(),
             names: &[self_names, args.names].concat(),

@@ -382,6 +382,24 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         ValueError::unsupported(self, "call()")
     }
 
+    /// Invoke this function as a method (after getattr, so this object might be unbound).
+    ///
+    /// This is an internal operation, and does not need to be implemented
+    /// or used outside of the Starlark crate.
+    #[doc(hidden)]
+    fn invoke_method(
+        &self,
+        me: Value<'v>,
+        _this: Value<'v>,
+        location: Option<Span>,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        // Call regular invoke by default, assuming this object is bound.
+        // Unbound objects (attribute or method) need to override this.
+        self.invoke(me, location, args, eval)
+    }
+
     /// Return the result of `a[index]` if `a` is indexable.
     fn at(&self, index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "[]", index)
@@ -729,6 +747,14 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
         _location: Option<Span>,
         _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>>;
+    fn invoke_method(
+        &self,
+        me: Value<'v>,
+        this: Value<'v>,
+        location: Option<Span>,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
     fn at(&self, _index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn slice(

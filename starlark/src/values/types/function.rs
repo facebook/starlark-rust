@@ -28,8 +28,8 @@ use crate::{
     codemap::Span,
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, SimpleValue, StarlarkValue,
-        Trace, Value, ValueLike,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, FrozenValueTyped, Heap, SimpleValue,
+        StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -46,6 +46,26 @@ pub trait NativeFunc:
 
 impl<T> NativeFunc for T where
     T: for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+        + Send
+        + Sync
+        + 'static
+{
+}
+
+pub trait NativeMeth:
+    for<'v> Fn(&mut Evaluator<'v, '_>, Value<'v>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+    + Send
+    + Sync
+    + 'static
+{
+}
+
+impl<T> NativeMeth for T where
+    T: for<'v> Fn(
+            &mut Evaluator<'v, '_>,
+            Value<'v>,
+            Arguments<'v, '_>,
+        ) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -105,7 +125,6 @@ impl NativeFunction {
     where
         F: for<'v> Fn(
                 &mut Evaluator<'v, '_>,
-                Option<Value<'v>>,
                 ParametersParser<'v, '_>,
             ) -> anyhow::Result<Value<'v>>
             + Send
@@ -118,10 +137,9 @@ impl NativeFunction {
                     parameters.len(),
                     || Cell::new(None),
                     |slots, eval| {
-                        let this = params.this;
                         parameters.collect_inline(params, slots, eval.heap())?;
                         let parser = ParametersParser::new(slots);
-                        function(eval, this, parser)
+                        function(eval, parser)
                     },
                 )
             },
@@ -180,6 +198,56 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     }
 }
 
+#[derive(Derivative, Display)]
+#[derivative(Debug)]
+#[display(fmt = "{}", name)]
+pub struct NativeMethod {
+    #[derivative(Debug = "ignore")]
+    function: Box<dyn NativeMeth>,
+    name: String,
+    typ: Option<FrozenValue>,
+}
+
+impl NativeMethod {
+    /// Create a new [`NativeFunction`] from the Rust function which works directly on the parameters.
+    /// The called function is responsible for validating the parameters are correct.
+    pub fn new_direct<F>(function: F, name: String) -> Self
+    where
+        // If I switch this to the trait alias then it fails to resolve the usages
+        F: for<'v> Fn(
+                &mut Evaluator<'v, '_>,
+                Value<'v>,
+                Arguments<'v, '_>,
+            ) -> anyhow::Result<Value<'v>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        NativeMethod {
+            function: box function,
+            name,
+            typ: None,
+        }
+    }
+}
+
+starlark_simple_value!(NativeMethod);
+
+impl<'v> StarlarkValue<'v> for NativeMethod {
+    starlark_type!("native_method");
+
+    fn invoke_method(
+        &self,
+        me: Value<'v>,
+        this: Value<'v>,
+        location: Option<Span>,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        eval.with_call_stack(me, location, |eval| (self.function)(eval, this, args))
+    }
+}
+
 /// Used by the `#[attribute]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
 #[derive(Derivative, Display)]
@@ -212,16 +280,16 @@ impl NativeAttribute {
 impl<'v> StarlarkValue<'v> for NativeAttribute {
     starlark_type!("attribute");
 
-    fn invoke(
+    fn invoke_method(
         &self,
         _me: Value<'v>,
+        this: Value<'v>,
         location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        // If someone tries to invoke us with a this, first unwind the call, then continue onwards
-        let me = self.call(args.this.unwrap(), eval.heap())?;
-        me.invoke(location, args, eval)
+        let method = self.call(this, eval.heap())?;
+        method.invoke(location, args, eval)
     }
 }
 
@@ -230,17 +298,18 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 #[repr(C)]
 #[display(fmt = "{}", method)]
 pub(crate) struct BoundMethodGen<V> {
-    pub(crate) method: V,
+    #[trace(unsafe_ignore)]
+    pub(crate) method: FrozenValueTyped<'static, NativeMethod>,
     pub(crate) this: V,
 }
 
 starlark_complex_value!(pub(crate) BoundMethod);
 
-impl<'v> BoundMethod<'v> {
+impl<'v, V: ValueLike<'v>> BoundMethodGen<V> {
     /// Create a new [`BoundMethod`]. Given the expression `object.function`,
     /// the first argument would be `object`, and the second would be `getattr(object, "function")`.
-    pub(crate) fn new(this: Value<'v>, method: Value<'v>) -> Self {
-        BoundMethod { method, this }
+    pub(crate) fn new(this: V, method: FrozenValueTyped<'static, NativeMethod>) -> Self {
+        BoundMethodGen { method, this }
     }
 }
 
@@ -254,10 +323,15 @@ where
         &self,
         _me: Value<'v>,
         location: Option<Span>,
-        mut args: Arguments<'v, '_>,
+        args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        args.this = Some(self.this.to_value());
-        self.method.invoke(location, args, eval)
+        self.method.invoke_method(
+            self.method.to_value(),
+            self.this.to_value(),
+            location,
+            args,
+            eval,
+        )
     }
 }

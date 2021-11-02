@@ -839,6 +839,16 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     ) -> anyhow::Result<Value<'v>> {
         panic!()
     }
+    fn invoke_method(
+        &self,
+        _me: Value<'v>,
+        _this: Value<'v>,
+        _location: Option<Span>,
+        _args: Arguments<'v, '_>,
+        _eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        panic!()
+    }
     fn at(&self, _index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
@@ -1004,6 +1014,16 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.1.invoke(me, location, args, eval)
+    }
+    fn invoke_method(
+        &self,
+        me: Value<'v>,
+        this: Value<'v>,
+        location: Option<Span>,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.1.invoke_method(me, this, location, args, eval)
     }
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.1.at(index, heap)

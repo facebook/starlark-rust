@@ -38,7 +38,7 @@ use crate::{
         fragment::call::{ArgsCompiledValue, CallCompiled},
         FrozenDef,
     },
-    values::{function::NativeFunction, typed::FrozenValueTyped, FrozenStringValue},
+    values::{function::NativeFunction, typed::FrozenValueTyped, FrozenStringValue, FrozenValue},
 };
 
 #[derive(Debug)]
@@ -80,54 +80,59 @@ impl Spanned<CallCompiled> {
         }
     }
 
+    fn write_call_frozen(
+        span: Span,
+        fun: FrozenValue,
+        args: &ArgsCompiledValue,
+        bc: &mut BcWriter,
+    ) {
+        if let Some(fun) = FrozenValueTyped::<FrozenDef>::new(fun) {
+            match Self::write_args(span, args, bc) {
+                Either::Left(npops) => {
+                    bc.write_instr::<InstrCallFrozenDefPos>(span, (npops, fun, span));
+                }
+                Either::Right(args) => {
+                    bc.write_instr::<InstrCallFrozenDef>(span, (fun, args));
+                }
+            }
+        } else if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
+            match Self::write_args(span, args, bc) {
+                Either::Left(npops) => {
+                    bc.write_instr::<InstrCallFrozenNativePos>(span, (npops, fun, span));
+                }
+                Either::Right(args) => {
+                    bc.write_instr::<InstrCallFrozenNative>(span, (fun, args));
+                }
+            }
+        } else {
+            match Self::write_args(span, args, bc) {
+                Either::Left(npops) => {
+                    bc.write_instr::<InstrCallFrozenPos>(span, (npops, fun, span));
+                }
+                Either::Right(args) => {
+                    bc.write_instr::<InstrCallFrozen>(span, (fun, args));
+                }
+            }
+        }
+    }
+
     pub(crate) fn write_bc(&self, bc: &mut BcWriter) {
         let span = self.span;
         match self.node {
-            CallCompiled::Call(box (ref f, ref args)) => {
-                f.write_bc(bc);
-                match Self::write_args(span, args, bc) {
-                    Either::Left(npops) => {
-                        bc.write_instr::<InstrCallPos>(span, (ArgPopsStack1, npops, span))
-                    }
-                    Either::Right(args) => {
-                        bc.write_instr::<InstrCall>(span, (ArgPopsStack1, args));
-                    }
-                }
-            }
-            CallCompiled::Frozen(box (this, fun, ref args)) => {
-                if let Some(fun) = FrozenValueTyped::<FrozenDef>::new(fun) {
-                    assert!(this.is_none());
+            CallCompiled::Call(box (ref f, ref args)) => match f.as_value() {
+                Some(f) => Self::write_call_frozen(span, f, args, bc),
+                None => {
+                    f.write_bc(bc);
                     match Self::write_args(span, args, bc) {
                         Either::Left(npops) => {
-                            bc.write_instr::<InstrCallFrozenDefPos>(span, (npops, fun, span));
+                            bc.write_instr::<InstrCallPos>(span, (ArgPopsStack1, npops, span))
                         }
                         Either::Right(args) => {
-                            bc.write_instr::<InstrCallFrozenDef>(span, (fun, args));
-                        }
-                    }
-                } else if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
-                    match Self::write_args(span, args, bc) {
-                        Either::Left(npops) => {
-                            bc.write_instr::<InstrCallFrozenNativePos>(
-                                span,
-                                (npops, this, fun, span),
-                            );
-                        }
-                        Either::Right(args) => {
-                            bc.write_instr::<InstrCallFrozenNative>(span, (this, fun, args));
-                        }
-                    }
-                } else {
-                    match Self::write_args(span, args, bc) {
-                        Either::Left(npops) => {
-                            bc.write_instr::<InstrCallFrozenPos>(span, (npops, this, fun, span));
-                        }
-                        Either::Right(args) => {
-                            bc.write_instr::<InstrCallFrozen>(span, (this, fun, args));
+                            bc.write_instr::<InstrCall>(span, (ArgPopsStack1, args));
                         }
                     }
                 }
-            }
+            },
             CallCompiled::Method(box (ref this, ref symbol, ref args)) => {
                 this.write_bc(bc);
                 if let Some(pos) = args.pos_only() {

@@ -39,6 +39,7 @@ use gazebo::coerce::CoerceKey;
 pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 pub use starlark_derive::{starlark_attrs, Freeze, StarlarkAttrs, Trace};
+use types::unbound::MaybeUnboundValue;
 
 pub use crate::values::{
     alloc_value::*, error::*, freeze::*, frozen_ref::*, layout::*, owned::*, trace::*, traits::*,
@@ -48,10 +49,7 @@ use crate::{
     codemap::Span,
     collections::{Hashed, StarlarkHasher},
     eval::{Arguments, Evaluator},
-    values::{
-        function::{BoundMethod, FUNCTION_TYPE},
-        types::function::NativeAttribute,
-    },
+    values::function::FUNCTION_TYPE,
 };
 
 #[macro_use]
@@ -72,7 +70,7 @@ mod owned;
 mod stack_guard;
 mod trace;
 mod traits;
-mod types;
+pub(crate) mod types;
 pub(crate) mod typing;
 mod unpack;
 
@@ -296,18 +294,6 @@ impl FrozenValue {
     }
 }
 
-/// How an attribute (e.g. `x.f`) should behave.
-#[derive(Clone, Copy, Dupe, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub(crate) enum AttrType {
-    /// The attribute is a field, a direct value with no special behaviour.
-    Field,
-    /// The attribute is a method, which should be called passing the `x` value
-    /// as its first argument. It will either be a function (which is transformed
-    /// into a `BoundMethod` or a [`NativeAttribute`](crate::values::function::NativeAttribute)
-    /// (which is evaluated immediately).
-    Method,
-}
-
 impl<'v> Value<'v> {
     /// Add two [`Value`]s together. Will first try using [`radd`](StarlarkValue::radd),
     /// before falling back to [`add`](StarlarkValue::add).
@@ -421,13 +407,12 @@ impl<'v> Value<'v> {
     pub fn get_attr(self, attribute: &str, heap: &'v Heap) -> anyhow::Result<Option<Value<'v>>> {
         let aref = self.get_ref();
         if let Some(methods) = aref.get_methods() {
-            if let Some(v) = methods.get(attribute) {
-                return Ok(Some(if let Some(v) = v.downcast_ref::<NativeAttribute>() {
-                    v.call(self, heap)?
-                } else {
-                    // Insert self so the method see the object it is acting on
-                    heap.alloc(BoundMethod::new(self, v))
-                }));
+            if let Some(v) = methods.get_frozen(attribute) {
+                return Ok(Some(
+                    MaybeUnboundValue::new(v)
+                        .to_maybe_unbound_value()
+                        .bind(self, heap)?,
+                ));
             }
         }
         Ok(aref.get_attr(attribute, heap))
@@ -565,6 +550,17 @@ impl<'v> Value<'v> {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.get_ref().invoke(self, location, args, eval)
+    }
+
+    pub(crate) fn invoke_method(
+        self,
+        this: Value<'v>,
+        location: Option<Span>,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.get_ref()
+            .invoke_method(self, this, location, args, eval)
     }
 
     /// Invoke a function with only positional arguments.

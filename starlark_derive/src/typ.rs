@@ -87,6 +87,14 @@ pub(crate) struct StarFun {
 }
 
 impl StarFun {
+    /// Is this function a method? (I. e. has `this` as first parameter).
+    pub(crate) fn is_method(&self) -> bool {
+        match self.args.first() {
+            Some(first) => first.source == StarArgSource::This,
+            None => false,
+        }
+    }
+
     pub(crate) fn span(&self) -> Span {
         self.name
             .span()
@@ -133,7 +141,7 @@ pub(crate) struct StarArg {
     pub source: StarArgSource,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(crate) enum StarArgSource {
     Unknown,
     This,
@@ -146,7 +154,10 @@ pub(crate) enum StarArgSource {
 #[derive(Debug)]
 pub(crate) enum StarFunSource {
     Unknown,
+    /// Function signature is single `Arguments` parameter.
     Parameters,
+    /// Function signature is `this` parameter followed by `Arguments` parameter.
+    ThisParameters,
     Argument(usize),
     Positional(usize, usize),
 }
@@ -174,6 +185,10 @@ impl StarFun {
         if self.args.len() == 1 && self.args[0].is_arguments() {
             self.args[0].source = StarArgSource::Parameters;
             self.source = StarFunSource::Parameters;
+        } else if self.args.len() == 2 && self.args[0].is_this() && self.args[1].is_arguments() {
+            self.args[0].source = StarArgSource::This;
+            self.args[1].source = StarArgSource::Parameters;
+            self.source = StarFunSource::ThisParameters;
         } else {
             let use_arguments = self
                 .args

@@ -30,3 +30,4 @@ pub mod record;
 pub mod string;
 pub mod structs;
 pub mod tuple;
+pub(crate) mod unbound;

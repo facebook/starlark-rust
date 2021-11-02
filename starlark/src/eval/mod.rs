@@ -155,7 +155,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let names = named.map(|(s, _)| (Symbol::new(*s), self.heap().alloc_string_value(*s)));
         let named = named.map(|x| x.1);
         let params = Arguments {
-            this: None,
             pos: positional,
             named: &named,
             names: &names,

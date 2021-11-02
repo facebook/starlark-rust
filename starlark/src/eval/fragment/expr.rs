@@ -38,8 +38,9 @@ use crate::{
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
-        string::interpolation::parse_percent_s_one, AttrType, FrozenHeap, FrozenStringValue,
-        FrozenValue, Heap, Value, ValueError, ValueLike,
+        function::BoundMethodGen, string::interpolation::parse_percent_s_one,
+        types::unbound::MaybeUnboundValue, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value,
+        ValueError, ValueLike,
     },
 };
 
@@ -562,20 +563,52 @@ fn get_attr_no_attr_error<'v>(x: Value<'v>, attribute: &Symbol) -> anyhow::Error
     }
 }
 
-pub(crate) fn get_attr_hashed<'v>(
+pub(crate) fn get_attr_hashed_raw<'v>(
     x: Value<'v>,
     attribute: &Symbol,
     heap: &'v Heap,
-) -> anyhow::Result<(AttrType, Value<'v>)> {
+) -> anyhow::Result<Value<'v>> {
     let aref = x.get_ref();
     if let Some(methods) = aref.get_methods() {
         if let Some(v) = methods.get_frozen_symbol(attribute) {
-            return Ok((AttrType::Method, v.to_value()));
+            return Ok(v.to_value());
         }
     }
     match aref.get_attr(attribute.as_str(), heap) {
         None => Err(get_attr_no_attr_error(x, attribute)),
-        Some(x) => Ok((AttrType::Field, x)),
+        Some(x) => Ok(x),
+    }
+}
+
+pub(crate) fn get_attr_hashed_bind<'v>(
+    x: Value<'v>,
+    attribute: &Symbol,
+    heap: &'v Heap,
+) -> anyhow::Result<Value<'v>> {
+    let aref = x.get_ref();
+    if let Some(methods) = aref.get_methods() {
+        if let Some(v) = methods.get_frozen_symbol(attribute) {
+            return MaybeUnboundValue::new(v)
+                .to_maybe_unbound_value()
+                .bind(x, heap);
+        }
+    }
+    match aref.get_attr(attribute.as_str(), heap) {
+        None => Err(get_attr_no_attr_error(x, attribute)),
+        Some(x) => {
+            // Only `get_methods` is allowed to return unbound methods,
+            // so we assume the value is bound here.
+            // TODO(nga): if `NativeMethod` or `NativeAttribute` is returned from `get_attr`,
+            //   we get an inconsistency between handling of unbound objects
+            //   in various call sites in the crate.
+            //   However, `NativeMethod` and `NativeAttribute` are not actually useful
+            //   as Starlark values, and can be hidden from public API and can be made
+            //   to never appear as user-visible values.
+            //   Do that.
+            //   Alternatively, allow `NativeMethod` and `NativeAttribute` here,
+            //   but that would have negative performance implications.
+            Ok(x)
+        }
     }
 }
 
@@ -588,14 +621,18 @@ impl Compiler<'_> {
         &mut self,
         left: FrozenValue,
         attr: &Symbol,
-    ) -> Option<(AttrType, FrozenValue)> {
+    ) -> Option<FrozenValue> {
         // We assume `getattr` has no side effects.
-        let (attr_type, field) =
-            get_attr_hashed(left.to_value(), attr, self.module_env.heap()).ok()?;
-        // We take only frozen values, so if getattr returns fresh object on each call,
-        // we are discarding the result.
-        let field = field.unpack_frozen()?;
-        Some((attr_type, field))
+        let v = get_attr_hashed_raw(left.to_value(), attr, self.module_env.heap()).ok()?;
+        match MaybeUnboundValue::new(v.unpack_frozen()?) {
+            MaybeUnboundValue::Bound(v) => Some(v),
+            MaybeUnboundValue::Attr(..) => None,
+            MaybeUnboundValue::Method(m) => Some(
+                self.module_env
+                    .frozen_heap()
+                    .alloc_simple(BoundMethodGen::new(left, m)),
+            ),
+        }
     }
 
     fn expr_ident(
@@ -693,16 +730,11 @@ impl Compiler<'_> {
                 let s = Symbol::new(&right.node);
 
                 if let Some(left) = left.as_value() {
-                    if let Some((attr_type, v)) = self.compile_time_getattr(left, &s) {
-                        if attr_type == AttrType::Field {
-                            return Spanned {
-                                span,
-                                node: ExprCompiledValue::Value(v),
-                            };
-                        } else {
-                            // TODO: maybe call attribute at compile time
-                            // TODO: maybe create bound method at compile time
-                        }
+                    if let Some(v) = self.compile_time_getattr(left, &s) {
+                        return Spanned {
+                            span,
+                            node: ExprCompiledValue::Value(v),
+                        };
                     }
                 }
 

@@ -31,10 +31,7 @@ use crate::{
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
-    values::{
-        string::interpolation::parse_format_one, AttrType, FrozenStringValue, FrozenValue,
-        ValueLike,
-    },
+    values::{string::interpolation::parse_format_one, FrozenStringValue, FrozenValue, ValueLike},
 };
 
 #[derive(Default, Clone, Debug)]
@@ -52,7 +49,6 @@ pub(crate) struct ArgsCompiledValue {
 #[derive(Clone, Debug)]
 pub(crate) enum CallCompiled {
     Call(Box<(Spanned<ExprCompiledValue>, ArgsCompiledValue)>),
-    Frozen(Box<(Option<FrozenValue>, FrozenValue, ArgsCompiledValue)>),
     Method(Box<(Spanned<ExprCompiledValue>, Symbol, ArgsCompiledValue)>),
 }
 
@@ -62,19 +58,7 @@ impl Spanned<CallCompiled> {
             CallCompiled::Call(box (ref fun, ref args)) => {
                 let fun = fun.optimize_on_freeze(module);
                 let args = args.optimize_on_freeze(module);
-                if let Spanned {
-                    node: ExprCompiledValue::Value(fun),
-                    ..
-                } = fun
-                {
-                    CallCompiled::Frozen(box (None, fun, args))
-                } else {
-                    CallCompiled::Call(box (fun, args))
-                }
-            }
-            CallCompiled::Frozen(box (this, fun, ref args)) => {
-                let args = args.optimize_on_freeze(module);
-                CallCompiled::Frozen(box (this, fun, args))
+                CallCompiled::Call(box (fun, args))
             }
             CallCompiled::Method(box (ref this, ref field, ref args)) => {
                 let this = this.optimize_on_freeze(module);
@@ -135,14 +119,19 @@ impl Compiler<'_> {
     fn expr_call_fun_frozen_no_special(
         &mut self,
         span: Span,
-        this: Option<FrozenValue>,
         fun: FrozenValue,
         args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         let args = self.args(args);
         ExprCompiledValue::Call(Spanned {
             span,
-            node: CallCompiled::Frozen(box (this, fun, args)),
+            node: CallCompiled::Call(box (
+                Spanned {
+                    span,
+                    node: ExprCompiledValue::Value(fun),
+                },
+                args,
+            )),
         })
     }
 
@@ -174,7 +163,7 @@ impl Compiler<'_> {
                     }
                 }
             }
-            self.expr_call_fun_frozen_no_special(span, None, left, args)
+            self.expr_call_fun_frozen_no_special(span, left, args)
         }
     }
 
@@ -225,12 +214,8 @@ impl Compiler<'_> {
 
         let s = Symbol::new(&s.node);
         if let Some(e) = e.as_value() {
-            if let Some((at, fun)) = self.compile_time_getattr(e, &s) {
-                let this = match at {
-                    AttrType::Field => None,
-                    AttrType::Method => Some(e),
-                };
-                return self.expr_call_fun_frozen_no_special(span, this, fun, args);
+            if let Some(v) = self.compile_time_getattr(e, &s) {
+                return self.expr_call_fun_frozen_no_special(span, v, args);
             }
         }
         let args = self.args(args);

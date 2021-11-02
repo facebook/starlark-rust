@@ -148,7 +148,6 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         let pos_named = self.pop_slice(ArgPopsStack(a.pos_named));
         let (pos, named) = pos_named.split_at(pos_named.len() - a.names.len());
         Arguments {
-            this: None,
             pos,
             named,
             names: coerce_ref(&a.names),
@@ -160,7 +159,6 @@ impl<'v, 's> BcStackPtr<'v, 's> {
     pub(crate) fn pop_args_pos<'a>(&'a self, npos: ArgPopsStack) -> Arguments<'v, 'a> {
         let pos = self.pop_slice(npos);
         Arguments {
-            this: None,
             pos,
             named: &[],
             names: &[],

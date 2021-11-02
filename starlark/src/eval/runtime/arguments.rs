@@ -631,8 +631,6 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 
 #[derive(Default, Clone, Copy, Dupe)]
 pub struct Arguments<'v, 'a> {
-    /// This argument, used in method calls.
-    pub this: Option<Value<'v>>,
     /// Positional arguments.
     pub pos: &'a [Value<'v>],
     /// Named arguments.
@@ -879,8 +877,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
 
 impl Arguments<'_, '_> {
     /// Utility for checking a `this` parameter matches what you expect.
-    pub fn check_this<'v, T: UnpackValue<'v>>(this: Option<Value<'v>>) -> anyhow::Result<T> {
-        let this = this.ok_or(ValueError::MissingThis)?;
+    pub fn check_this<'v, T: UnpackValue<'v>>(this: Value<'v>) -> anyhow::Result<T> {
         T::unpack_named_param(this, "this")
     }
 

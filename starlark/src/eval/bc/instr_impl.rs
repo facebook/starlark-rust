@@ -41,7 +41,7 @@ use crate::{
         compiler::{add_span_to_expr_error, expr_throw, scope::Captured, EvalException},
         fragment::{
             def::{DefInfo, ParameterCompiled},
-            expr::{get_attr_hashed, EvalError},
+            expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError},
             stmt::{add_assign, before_stmt, possible_gc, AssignError},
         },
         runtime::slots::LocalSlotId,
@@ -49,12 +49,12 @@ use crate::{
     },
     values::{
         dict::Dict,
-        function::{BoundMethod, NativeAttribute, NativeFunction},
+        function::NativeFunction,
         list::List,
         string::interpolation::{format_one, percent_s_one},
         typed::FrozenValueTyped,
         typing::TypeCompiled,
-        AttrType, FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value, ValueLike,
+        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value, ValueLike,
     },
 };
 
@@ -567,15 +567,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
         symbol: &Symbol,
         object: Value<'v>,
     ) -> Result<Value<'v>, anyhow::Error> {
-        let (attr_type, v) = get_attr_hashed(object, symbol, eval.heap())?;
-        if attr_type == AttrType::Field {
-            Ok(v)
-        } else if let Some(v_attr) = v.downcast_ref::<NativeAttribute>() {
-            v_attr.call(object, eval.heap())
-        } else {
-            // Insert self so the method see the object it is acting on
-            Ok(eval.heap().alloc(BoundMethod::new(object, v)))
-        }
+        get_attr_hashed_bind(object, symbol, eval.heap())
     }
 }
 
@@ -1611,7 +1603,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativeImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (
-        Option<FrozenValue>,
         FrozenValueTyped<'static, NativeFunction>,
         ArgsCompiledValueBc,
     );
@@ -1620,11 +1611,10 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativeImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (this, fun, args): &Self::Arg,
+        (fun, args): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let mut arguments = stack.pop_args(args);
-        arguments.this = this.map(|v| v.to_value());
+        let arguments = stack.pop_args(args);
         fun.as_ref()
             .invoke(fun.to_value(), Some(args.span), arguments, eval)
     }
@@ -1635,7 +1625,6 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativePosImpl {
     type Push<'v> = Value<'v>;
     type Arg = (
         ArgPopsStack,
-        Option<FrozenValue>,
         FrozenValueTyped<'static, NativeFunction>,
         Span,
     );
@@ -1644,11 +1633,10 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativePosImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (npops, this, fun, span): &Self::Arg,
+        (npops, fun, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let mut arguments = stack.pop_args_pos(*npops);
-        arguments.this = this.map(|v| v.to_value());
+        let arguments = stack.pop_args_pos(*npops);
         fun.as_ref()
             .invoke(fun.to_value(), Some(*span), arguments, eval)
     }
@@ -1657,17 +1645,16 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativePosImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (Option<FrozenValue>, FrozenValue, ArgsCompiledValueBc);
+    type Arg = (FrozenValue, ArgsCompiledValueBc);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (this, fun, args): &Self::Arg,
+        (fun, args): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let mut arguments = stack.pop_args(args);
-        arguments.this = this.map(|v| v.to_value());
+        let arguments = stack.pop_args(args);
         fun.invoke(Some(args.span), arguments, eval)
     }
 }
@@ -1675,17 +1662,16 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallFrozenPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, Option<FrozenValue>, FrozenValue, Span);
+    type Arg = (ArgPopsStack, FrozenValue, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (npops, this, fun, span): &Self::Arg,
+        (npops, fun, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let mut arguments = stack.pop_args_pos(*npops);
-        arguments.this = this.map(|v| v.to_value());
+        let arguments = stack.pop_args_pos(*npops);
         fun.invoke(Some(*span), arguments, eval)
     }
 }
@@ -1702,12 +1688,11 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
         (_pop1, symbol, args): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let mut arguments = stack.pop_args(args);
+        let arguments = stack.pop_args(args);
         let this = stack.pop();
-        arguments.this = Some(this);
         // TODO: wrong span: should be span of `object.method`, not of the whole expression
-        let fun = get_attr_hashed(this, symbol, eval.heap())?.1;
-        fun.invoke(Some(args.span), arguments, eval)
+        let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
+        method.invoke_method(this, Some(args.span), arguments, eval)
     }
 }
 
@@ -1723,12 +1708,11 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
         (_pop1, npops, symbol, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let mut arguments = stack.pop_args_pos(*npops);
+        let arguments = stack.pop_args_pos(*npops);
         let this = stack.pop();
-        arguments.this = Some(this);
         // TODO: wrong span: should be span of `object.method`, not of the whole expression
-        let fun = get_attr_hashed(this, symbol, eval.heap())?.1;
-        fun.invoke(Some(*span), arguments, eval)
+        let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
+        method.invoke_method(this, Some(*span), arguments, eval)
     }
 }
 

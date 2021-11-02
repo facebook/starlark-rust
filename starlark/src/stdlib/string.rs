@@ -352,10 +352,10 @@ pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
     /// "Is {0!r} {0!s}?".format("heterological") == "Is \"heterological\" heterological?"
     /// # "#);
     /// ```
-    fn format(args: Arguments<'v, '_>) -> StringValue<'v> {
+    fn format(this: &str, args: Arguments<'v, '_>) -> StringValue<'v> {
         let iter = args.positions(heap)?;
         interpolation::format(
-            args.this.unwrap().unpack_str().unwrap(),
+            this,
             iter,
             args.names()?,
             &mut eval.string_pool,

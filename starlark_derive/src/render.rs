@@ -113,6 +113,7 @@ fn render_fun(x: StarFun) -> TokenStream {
     let name_str = ident_string(&x.name);
     let signature = render_signature(&x);
     let binding = render_binding(&x);
+    let is_method = x.is_method();
 
     let StarFun {
         name,
@@ -145,18 +146,34 @@ fn render_fun(x: StarFun) -> TokenStream {
         .as_ref()
         .map(|_| quote_spanned! {span=> &__signature});
 
+    let (this_param, this_arg, new_function_or_method) = if is_method {
+        (
+            quote_spanned! {span=> __this: starlark::values::Value<'v>, },
+            quote_spanned! {span=> __this, },
+            quote_spanned! {span=> starlark::values::function::NativeMethod::new_direct },
+        )
+    } else {
+        (
+            quote_spanned! {span=> },
+            quote_spanned! {span=> },
+            quote_spanned! {span=> starlark::values::function::NativeFunction::new_direct },
+        )
+    };
+
     quote_spanned! {
         span=>
         #( #attrs )*
         #[allow(non_snake_case)] // Starlark doesn't have this convention
         fn #name<'v>(
             eval: &mut starlark::eval::Evaluator<'v, '_>,
+            #this_param
             parameters: starlark::eval::Arguments<'v, '_>,
             #signature_arg
         ) -> anyhow::Result<starlark::values::Value<'v>> {
-                fn inner<'v>(
+            fn inner<'v>(
                 #[allow(unused_variables)]
                 eval: &mut starlark::eval::Evaluator<'v, '_>,
+                #this_param
                 __args: starlark::eval::Arguments<'v, '_>,
                 #signature_arg
             ) -> anyhow::Result<#return_type> {
@@ -165,7 +182,7 @@ fn render_fun(x: StarFun) -> TokenStream {
                 #binding
                 #body
             }
-            match inner(eval, parameters, #signature_val) {
+            match inner(eval, #this_arg parameters, #signature_val) {
                 Ok(v) => Ok(eval.heap().alloc(v)),
                 Err(e) => Err(e),
             }
@@ -174,8 +191,8 @@ fn render_fun(x: StarFun) -> TokenStream {
             #signature
             #[allow(unused_mut)]
             #[allow(clippy::redundant_closure)]
-            let mut func = starlark::values::function::NativeFunction::new_direct(
-                move |eval, parameters| #name(eval, parameters, #signature_val_ref),
+            let mut func = #new_function_or_method (
+                move |eval, #this_arg parameters| #name(eval, #this_arg parameters, #signature_val_ref),
                 #name_str.to_owned(),
             );
             #set_type
@@ -193,21 +210,33 @@ fn render_binding(x: &StarFun) -> TokenStream {
             let StarArg {
                 span,
                 attrs,
-                mutable: _,
-                by_ref: _,
                 name,
                 ty,
-                default: _,
-                source: _,
+                ..
             } = &x.args[0];
             let span = *span;
             quote_spanned! { span=> #( #attrs )* let #name : #ty = __args; }
+        }
+        StarFunSource::ThisParameters => {
+            let StarArg {
+                span,
+                attrs,
+                name,
+                ty,
+                ..
+            } = &x.args[1];
+            let span = *span;
+            let this = render_binding_arg(&x.args[0]);
+            quote_spanned! {
+                span=>
+                #this
+                #( #attrs )* let #name : #ty = __args;
+            }
         }
         StarFunSource::Argument(arg_count) => {
             let bind_args = x.args.map(render_binding_arg);
             quote_spanned! {
                 span=>
-                let __this = __args.this;
                 let __args: [_; #arg_count] = __signature.collect_into(__args, eval.heap())?;
                 #( #bind_args )*
             }
@@ -217,7 +246,6 @@ fn render_binding(x: &StarFun) -> TokenStream {
             if optional == 0 {
                 quote_spanned! {
                     span=>
-                    let __this = __args.this;
                     __args.no_named_args()?;
                     let __required: [_; #required] = __args.positional(eval.heap())?;
                     #( #bind_args )*
@@ -225,14 +253,13 @@ fn render_binding(x: &StarFun) -> TokenStream {
             } else {
                 quote_spanned! {
                     span=>
-                    let __this = __args.this;
                     __args.no_named_args()?;
                     let (__required, __optional): ([_; #required], [_; #optional]) = __args.optional(eval.heap())?;
                     #( #bind_args )*
                 }
             }
         }
-        _ => unreachable!(),
+        ref s => unreachable!("Unknown StarFunSource: {:?}", s),
     }
 }
 
@@ -248,7 +275,7 @@ fn render_binding_arg(arg: &StarArg) -> TokenStream {
         StarArgSource::Argument(i) => quote_spanned! {span=> __args[#i].get()},
         StarArgSource::Required(i) => quote_spanned! {span=> Some(__required[#i])},
         StarArgSource::Optional(i) => quote_spanned! {span=> __optional[#i]},
-        _ => unreachable!(),
+        ref s => unreachable!("unknown source: {:?}", s),
     };
 
     // Rust doesn't have powerful enough nested if yet
