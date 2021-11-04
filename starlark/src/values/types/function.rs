@@ -137,7 +137,7 @@ impl NativeFunction {
         }
     }
 
-    /// A `.type` value, if one exists. Specified using `#[starlark_type("the_type")]`.
+    /// A `.type` value, if one exists. Specified using `#[starlark(type("the_type"))]`.
     pub fn set_type(&mut self, typ: FrozenValue) {
         self.typ = Some(typ)
     }
@@ -237,7 +237,7 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
     }
 }
 
-/// Used by the `#[attribute]` tag of [`#[starlark_module]`](macro@starlark_module)
+/// Used by the `#[starlark(attribute)]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
 #[derive(Derivative, Display)]
 #[display(fmt = "Attribute")]

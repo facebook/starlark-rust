@@ -18,8 +18,8 @@
 use gazebo::prelude::*;
 use proc_macro2::Span;
 use syn::{
-    spanned::Spanned, Attribute, FnArg, Item, ItemConst, ItemFn, Meta, MetaList, NestedMeta, Pat,
-    PatType, ReturnType, Stmt, Type, TypeReference,
+    spanned::Spanned, Attribute, FnArg, Item, ItemConst, ItemFn, Meta, NestedMeta, Pat, PatType,
+    ReturnType, Stmt, Type, TypeReference,
 };
 
 use crate::{typ::*, util::*};
@@ -95,26 +95,6 @@ fn parse_const(x: ItemConst) -> StarConst {
     }
 }
 
-fn is_attribute_attribute(x: &Attribute) -> bool {
-    x.path.is_ident("attribute")
-}
-
-fn is_attribute_type(x: &Attribute) -> syn::Result<Option<NestedMeta>> {
-    if x.path.is_ident("starlark_type") {
-        if let Ok(Meta::List(MetaList { nested, .. })) = x.parse_meta() {
-            if nested.len() == 1 {
-                return Ok(Some(nested.first().unwrap().clone()));
-            }
-        }
-        Err(syn::Error::new(
-            x.span(),
-            "Couldn't parse attribute `{:?}`. Expected `#[starlark_type(\"my_type\")]`",
-        ))
-    } else {
-        Ok(None)
-    }
-}
-
 struct ProcessedAttributes {
     is_attribute: bool,
     type_attribute: Option<NestedMeta>,
@@ -122,16 +102,47 @@ struct ProcessedAttributes {
     attrs: Vec<Attribute>,
 }
 
-/// (#[attribute], #[starlark_type(x)], rest)
+/// Parse `#[starlark(...)]` attribute.
 fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAttributes> {
+    const ERROR: &str = "Couldn't parse attribute. \
+        Expected `#[starlark(type(\"ty\")]` or `#[starlark(attribute)]`";
+
     let mut attrs = Vec::with_capacity(xs.len());
     let mut is_attribute = false;
     let mut type_attribute = None;
     for x in xs {
-        if is_attribute_attribute(&x) {
-            is_attribute = true;
-        } else if let Some(t) = is_attribute_type(&x)? {
-            type_attribute = Some(t);
+        if x.path.is_ident("starlark") {
+            match x.parse_meta()? {
+                Meta::List(list) => {
+                    assert!(list.path.is_ident("starlark"));
+                    for nested in list.nested {
+                        match nested {
+                            NestedMeta::Lit(lit) => {
+                                return Err(syn::Error::new(lit.span(), ERROR));
+                            }
+                            NestedMeta::Meta(meta) => {
+                                if meta.path().is_ident("type") {
+                                    match meta {
+                                        Meta::List(list) => {
+                                            if list.nested.len() != 1 {
+                                                return Err(syn::Error::new(list.span(), ERROR));
+                                            }
+                                            type_attribute =
+                                                Some(list.nested.first().unwrap().clone());
+                                        }
+                                        _ => return Err(syn::Error::new(meta.span(), ERROR)),
+                                    }
+                                } else if meta.path().is_ident("attribute") {
+                                    is_attribute = true;
+                                } else {
+                                    return Err(syn::Error::new(meta.span(), ERROR));
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => return Err(syn::Error::new(x.span(), ERROR)),
+            }
         } else {
             attrs.push(x);
         }

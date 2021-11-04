@@ -170,7 +170,7 @@ mod tests {
 
         #[starlark_module]
         fn methods(builder: &mut MethodsBuilder) {
-            #[attribute]
+            #[starlark(attribute)]
             fn invert1(this: Bool2) -> Bool2 {
                 Ok(Bool2(!this.0))
             }

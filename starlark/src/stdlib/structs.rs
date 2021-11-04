@@ -25,7 +25,7 @@ use crate::{
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    #[starlark_type(Struct::TYPE)]
+    #[starlark(type(Struct::TYPE))]
     fn r#struct(args: Arguments<'v, '_>) -> Struct<'v> {
         args.no_positional_args(heap)?;
         Ok(Struct::new(args.names_map()?))

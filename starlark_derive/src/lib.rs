@@ -70,10 +70,10 @@ mod util;
 ///
 /// * When unattached, you can define constants with `const`. We define `True`, `False` and
 ///   `None` that way.
-/// * When attached, you can annotate the functions with `#[attribute]` to turn the name into
+/// * When attached, you can annotate the functions with `#[starlark(attribute)]` to turn the name into
 ///   an attribute on the value. Such a function must take exactly one argument, namely a value
 ///   of the type you have attached it to.
-/// * The attribute `#[starlark_type("test")]` causes `f.type` to return `"test"`.
+/// * The attribute `#[starlark(type("test"))]` causes `f.type` to return `"test"`.
 ///
 /// All these functions interoperate properly with `dir()`, `getattr()` and `hasattr()`.
 ///
