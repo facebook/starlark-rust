@@ -24,12 +24,12 @@ use gazebo::cell::ARef;
 
 use crate as starlark;
 use crate::{
-    environment::GlobalsBuilder,
+    environment::MethodsBuilder,
     values::{dict::Dict, none::NoneType, Value},
 };
 
 #[starlark_module]
-pub(crate) fn dict_methods(registry: &mut GlobalsBuilder) {
+pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// [dict.clear](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#dict·clear
     /// ): clear a dictionary

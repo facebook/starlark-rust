@@ -40,7 +40,7 @@ use gazebo::any::AnyLifetime;
 use crate::{
     codemap::Span,
     collections::StarlarkHasher,
-    environment::Globals,
+    environment::Methods,
     eval::{Arguments, Evaluator},
     values::{
         docs::DocItem, function::FUNCTION_TYPE, ControlError, Freeze, FrozenStringValue, Heap,
@@ -278,9 +278,9 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// Get the members associated with this type, accessible via `this_type.x`.
     /// These members will have `dir`/`getattr`/`hasattr` properly implemented,
     /// so it is the preferred way to go if possible. See
-    /// [`GlobalsStatic`](crate::environment::GlobalsStatic) for an example of how
+    /// [`MethodsStatic`](crate::environment::MethodsStatic) for an example of how
     /// to define this method.
-    fn get_methods(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Methods> {
         None
     }
 
@@ -731,7 +731,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn get_type(&self) -> &'static str;
     fn get_type_value(&self) -> FrozenStringValue;
     fn matches_type(&self, _ty: &str) -> bool;
-    fn get_methods(&self) -> Option<&'static Globals>;
+    fn get_methods(&self) -> Option<&'static Methods>;
     fn documentation(&self) -> Option<DocItem>;
     fn collect_repr(&self, _collector: &mut String);
     fn to_json(&self) -> anyhow::Result<String>;

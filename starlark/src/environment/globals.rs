@@ -40,6 +40,11 @@ use crate::{
 #[display(fmt = "globals")]
 pub struct Globals(Arc<GlobalsData>);
 
+/// Methods of an object.
+#[derive(Clone, Dupe, Debug, Display)]
+#[display(fmt = "methods")]
+pub struct Methods(Globals);
+
 #[derive(Debug)]
 struct GlobalsData {
     heap: FrozenHeapRef,
@@ -55,6 +60,12 @@ pub struct GlobalsBuilder {
     variables: SymbolMap<FrozenValue>,
     // Set to Some when we are in a struct builder, otherwise None
     struct_fields: Option<SmallMap<FrozenStringValue, FrozenValue>>,
+}
+
+/// Used to build a [`Methods`] value.
+#[derive(Debug)]
+pub struct MethodsBuilder {
+    globals: GlobalsBuilder,
 }
 
 impl Globals {
@@ -101,7 +112,6 @@ impl Globals {
 
     /// This function is only safe if you first call `heap` and keep a reference to it.
     /// Therefore, don't expose it on the public API.
-    #[allow(dead_code)] // Used in the next diff
     pub(crate) fn get_frozen_symbol(&self, name: &Symbol) -> Option<FrozenValue> {
         self.0.variables.get(name).copied()
     }
@@ -126,6 +136,24 @@ impl Globals {
             .iter()
             .map(|(name, val)| val.to_value().describe(name.as_str()))
             .join("\n")
+    }
+}
+
+impl Methods {
+    pub(crate) fn get<'v>(&'v self, name: &str) -> Option<Value<'v>> {
+        self.0.get(name)
+    }
+
+    pub(crate) fn get_frozen(&self, name: &str) -> Option<FrozenValue> {
+        self.0.get_frozen(name)
+    }
+
+    pub(crate) fn get_frozen_symbol(&self, name: &Symbol) -> Option<FrozenValue> {
+        self.0.get_frozen_symbol(name)
+    }
+
+    pub(crate) fn names(&self) -> Vec<String> {
+        self.0.names()
     }
 }
 
@@ -207,24 +235,56 @@ impl GlobalsBuilder {
         };
     }
 
-    /// Set a constant value in the [`GlobalsBuilder`] that will be suitable for use with
+    /// Allocate a value using the same underlying heap as the [`GlobalsBuilder`],
+    /// only intended for values that are referred to by those which are passed
+    /// to [`set`](GlobalsBuilder::set).
+    pub fn alloc<'v, V: AllocFrozenValue>(&'v self, value: V) -> FrozenValue {
+        value.alloc_frozen_value(&self.heap)
+    }
+}
+
+impl Methods {
+    /// Create an empty [`Globals`], with no functions in scope.
+    pub fn new() -> Self {
+        MethodsBuilder::new().build()
+    }
+}
+
+impl MethodsBuilder {
+    /// Create an empty [`MethodsBuilder`], with no functions in scope.
+    pub fn new() -> Self {
+        MethodsBuilder {
+            globals: GlobalsBuilder::new(),
+        }
+    }
+
+    /// Called at the end to build a [`Methods`].
+    pub fn build(self) -> Methods {
+        Methods(self.globals.build())
+    }
+
+    /// A fluent API for modifying [`MethodsBuilder`] and returning the result.
+    pub fn with(mut self, f: impl FnOnce(&mut Self)) -> Self {
+        f(&mut self);
+        self
+    }
+
+    /// Set a value in the [`MethodsBuilder`].
+    pub fn set<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
+        self.globals.set(name, value);
+    }
+
+    /// Set a constant value in the [`MethodsBuilder`] that will be suitable for use with
     /// [`StarlarkValue::get_methods`](crate::values::StarlarkValue::get_methods).
     pub fn set_attribute<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
         // We want to build an attribute, that ignores its self argument, and does no subsequent allocation.
-        let value = self.alloc(value);
+        let value = self.globals.alloc(value);
         self.set(
             name,
             NativeAttribute {
                 function: box move |_, _| Ok(value.to_value()),
             },
         );
-    }
-
-    /// Allocate a value using the same underlying heap as the [`GlobalsBuilder`],
-    /// only intended for values that are referred to by those which are passed
-    /// to [`set`](GlobalsBuilder::set).
-    pub fn alloc<'v, V: AllocFrozenValue>(&'v self, value: V) -> FrozenValue {
-        value.alloc_frozen_value(&self.heap)
     }
 }
 
@@ -251,6 +311,9 @@ impl GlobalsBuilder {
 /// ```
 pub struct GlobalsStatic(OnceCell<Globals>);
 
+/// Similar to [`GlobalsStatic`], but for methods.
+pub struct MethodsStatic(OnceCell<Methods>);
+
 impl GlobalsStatic {
     /// Create a new [`GlobalsStatic`].
     pub const fn new() -> Self {
@@ -259,12 +322,6 @@ impl GlobalsStatic {
 
     fn globals(&'static self, x: impl FnOnce(&mut GlobalsBuilder)) -> &'static Globals {
         self.0.get_or_init(|| GlobalsBuilder::new().with(x).build())
-    }
-
-    /// Populate the globals with a builder function. Always returns `Some`, but using this API
-    /// to be a better fit for [`StarlarkValue.get_methods`](crate::values::StarlarkValue::get_methods).
-    pub fn methods(&'static self, x: impl FnOnce(&mut GlobalsBuilder)) -> Option<&'static Globals> {
-        Some(self.globals(x))
     }
 
     /// Get a function out of the object. Requires that the function passed only set a single
@@ -285,6 +342,28 @@ impl GlobalsStatic {
     pub fn populate(&'static self, x: impl FnOnce(&mut GlobalsBuilder), out: &mut GlobalsBuilder) {
         let globals = self.globals(x);
         for (name, value) in globals.0.variables.iter() {
+            out.set(name.as_str(), *value)
+        }
+    }
+}
+
+impl MethodsStatic {
+    /// Create a new [`MethodsStatic`].
+    pub const fn new() -> Self {
+        Self(OnceCell::new())
+    }
+
+    /// Populate the globals with a builder function. Always returns `Some`, but using this API
+    /// to be a better fit for [`StarlarkValue.get_methods`](crate::values::StarlarkValue::get_methods).
+    pub fn methods(&'static self, x: impl FnOnce(&mut MethodsBuilder)) -> Option<&'static Methods> {
+        Some(self.0.get_or_init(|| MethodsBuilder::new().with(x).build()))
+    }
+
+    /// Move all the globals in this [`GlobalsBuilder`] into a new one. All variables will
+    /// only be allocated once (ensuring things like function comparison works properly).
+    pub fn populate(&'static self, x: impl FnOnce(&mut MethodsBuilder), out: &mut MethodsBuilder) {
+        let methods = self.methods(x).unwrap();
+        for (name, value) in methods.0.0.variables.iter() {
             out.set(name.as_str(), *value)
         }
     }
@@ -312,8 +391,8 @@ mod test {
         starlark_simple_value!(Magic);
         impl<'v> StarlarkValue<'v> for Magic {
             starlark_type!("magic");
-            fn get_methods(&self) -> Option<&'static Globals> {
-                static RES: GlobalsStatic = GlobalsStatic::new();
+            fn get_methods(&self) -> Option<&'static Methods> {
+                static RES: MethodsStatic = MethodsStatic::new();
                 RES.methods(|x| {
                     x.set_attribute("my_type", "magic");
                     x.set_attribute("my_value", 42);

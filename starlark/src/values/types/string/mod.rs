@@ -34,7 +34,7 @@ use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
 use crate as starlark;
 use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
-    environment::{Globals, GlobalsStatic},
+    environment::{Methods, MethodsStatic},
     values::{
         index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, Freeze,
         FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError,
@@ -228,8 +228,8 @@ impl Display for StarlarkStr {
 impl<'v> StarlarkValue<'v> for StarlarkStr {
     starlark_type!(STRING_TYPE);
 
-    fn get_methods(&self) -> Option<&'static Globals> {
-        static RES: GlobalsStatic = GlobalsStatic::new();
+    fn get_methods(&self) -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(crate::stdlib::string::string_methods)
     }
 

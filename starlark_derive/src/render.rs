@@ -17,7 +17,7 @@
 
 use gazebo::prelude::*;
 use proc_macro2::TokenStream;
-use quote::quote_spanned;
+use quote::{format_ident, quote_spanned};
 use syn::spanned::Spanned;
 
 use crate::{typ::*, util::*};
@@ -29,17 +29,19 @@ pub(crate) fn render(x: StarModule) -> TokenStream {
         globals_builder,
         visibility,
         stmts,
+        module_kind,
     } = x;
+    let statics = format_ident!("{}", module_kind.statics_type_name());
     let stmts = stmts.into_map(render_stmt);
     quote_spanned! {
         span=>
         #visibility fn #name(globals_builder: #globals_builder) {
-            fn build(globals_builder: &mut starlark::environment::GlobalsBuilder) {
+            fn build(globals_builder: #globals_builder) {
                 #( #stmts )*
                 // Mute warning if stmts is empty.
                 let _ = globals_builder;
             }
-            static RES: starlark::environment::GlobalsStatic = starlark::environment::GlobalsStatic::new();
+            static RES: starlark::environment::#statics = starlark::environment::#statics::new();
             RES.populate(build, globals_builder);
         }
     }

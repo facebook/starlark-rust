@@ -18,10 +18,11 @@
 use proc_macro2::Span;
 use syn::{spanned::Spanned, *};
 
-use crate::util::*;
+use crate::{parse::ModuleKind, util::*};
 
 #[derive(Debug)]
 pub(crate) struct StarModule {
+    pub module_kind: ModuleKind,
     pub visibility: Visibility,
     // We reuse the users globals_builder to make sure `use` statements etc
     // make sense

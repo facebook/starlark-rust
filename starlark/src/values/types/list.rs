@@ -37,7 +37,7 @@ use gazebo::{
 
 use crate as starlark;
 use crate::{
-    environment::{Globals, GlobalsStatic},
+    environment::{Methods, MethodsStatic},
     values::{
         array::Array,
         comparison::{compare_slice, equals_slice},
@@ -444,8 +444,8 @@ where
 {
     starlark_type!(List::TYPE);
 
-    fn get_methods(&self) -> Option<&'static Globals> {
-        static RES: GlobalsStatic = GlobalsStatic::new();
+    fn get_methods(&self) -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(crate::stdlib::list::list_methods)
     }
 

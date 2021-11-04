@@ -37,7 +37,7 @@ use indexmap::Equivalent;
 use crate as starlark;
 use crate::{
     collections::{BorrowHashed, Hashed, SmallMap},
-    environment::{Globals, GlobalsStatic},
+    environment::{Methods, MethodsStatic},
     values::{
         comparison::equals_small_map, error::ValueError, iter::ARefIterator,
         string::hash_string_value, AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap,
@@ -361,8 +361,8 @@ where
 {
     starlark_type!(Dict::TYPE);
 
-    fn get_methods(&self) -> Option<&'static Globals> {
-        static RES: GlobalsStatic = GlobalsStatic::new();
+    fn get_methods(&self) -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(crate::stdlib::dict::dict_methods)
     }
 

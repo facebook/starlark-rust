@@ -21,7 +21,7 @@ use anyhow::anyhow;
 
 use crate::{
     self as starlark,
-    environment::GlobalsBuilder,
+    environment::MethodsBuilder,
     stdlib::util::{convert_index, convert_indices},
     values::{
         list::{List, ListRef},
@@ -31,7 +31,7 @@ use crate::{
 };
 
 #[starlark_module]
-pub(crate) fn list_methods(builder: &mut GlobalsBuilder) {
+pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// [list.append](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#list·append
     /// ): append an element to a list.

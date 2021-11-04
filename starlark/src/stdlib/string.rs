@@ -24,7 +24,7 @@ use gazebo::prelude::*;
 
 use crate as starlark;
 use crate::{
-    environment::GlobalsBuilder,
+    environment::MethodsBuilder,
     eval::Arguments,
     stdlib::util::convert_indices,
     values::{
@@ -116,7 +116,7 @@ impl<'v> UnpackValue<'v> for StringOrTuple<'v> {
 }
 
 #[starlark_module]
-pub(crate) fn string_methods(builder: &mut GlobalsBuilder) {
+pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// [string.elems](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·elems
     /// ): returns an iterable of the bytes values of a string.

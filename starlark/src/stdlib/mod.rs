@@ -112,7 +112,7 @@ mod tests {
     use crate::{
         self as starlark,
         assert::Assert,
-        environment::{Globals, GlobalsBuilder, GlobalsStatic},
+        environment::{GlobalsBuilder, Methods, MethodsBuilder, MethodsStatic},
         values::{none::NoneType, StarlarkValue, UnpackValue, Value, ValueLike},
     };
 
@@ -139,8 +139,8 @@ mod tests {
         impl<'v> StarlarkValue<'v> for Bool2 {
             starlark_type!("bool2");
 
-            fn get_methods(&self) -> Option<&'static Globals> {
-                static RES: GlobalsStatic = GlobalsStatic::new();
+            fn get_methods(&self) -> Option<&'static Methods> {
+                static RES: MethodsStatic = MethodsStatic::new();
                 RES.methods(methods)
             }
 
@@ -169,7 +169,7 @@ mod tests {
         }
 
         #[starlark_module]
-        fn methods(builder: &mut GlobalsBuilder) {
+        fn methods(builder: &mut MethodsBuilder) {
             #[attribute]
             fn invert1(this: Bool2) -> Bool2 {
                 Ok(Bool2(!this.0))

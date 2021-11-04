@@ -50,7 +50,7 @@ use gazebo::{
 use crate as starlark;
 use crate::{
     collections::{SmallMap, StarlarkHasher},
-    environment::{Globals, GlobalsStatic},
+    environment::{Methods, MethodsStatic},
     values::{
         comparison::{compare_small_map, equals_small_map},
         error::ValueError,
@@ -134,8 +134,8 @@ where
 {
     starlark_type!(Struct::TYPE);
 
-    fn get_methods(&self) -> Option<&'static Globals> {
-        static RES: GlobalsStatic = GlobalsStatic::new();
+    fn get_methods(&self) -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(crate::stdlib::structs::struct_methods)
     }
 

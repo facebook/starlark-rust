@@ -20,14 +20,35 @@ use syn::{spanned::Spanned, *};
 
 use crate::{typ::*, util::*};
 
+#[derive(Debug)]
+pub(crate) enum ModuleKind {
+    Globals,
+    Methods,
+}
+
+impl ModuleKind {
+    pub(crate) fn statics_type_name(&self) -> &'static str {
+        match self {
+            ModuleKind::Globals => "GlobalsStatic",
+            ModuleKind::Methods => "MethodsStatic",
+        }
+    }
+}
+
 pub(crate) fn parse(mut input: ItemFn) -> StarModule {
     let visibility = input.vis;
     let name = input.sig.ident;
-    let ty = match input.sig.inputs.pop().map(|x| x.into_value()) {
-        Some(FnArg::Typed(PatType { ty, .. })) if is_mut_globals_builder(&ty) => ty,
-        _ => panic!("Must take on argument of type &mut GlobalsBuilder"),
+    let (ty, module_kind) = match input.sig.inputs.pop().map(|x| x.into_value()) {
+        Some(FnArg::Typed(PatType { ty, .. })) if is_mut_globals_builder(&ty) => {
+            (ty, ModuleKind::Globals)
+        }
+        Some(FnArg::Typed(PatType { ty, .. })) if is_mut_methods_builder(&ty) => {
+            (ty, ModuleKind::Methods)
+        }
+        _ => panic!("Must take on argument of type `&mut GlobalsBuilder` or `&mut MethodsBuilder`"),
     };
     StarModule {
+        module_kind,
         visibility,
         globals_builder: *ty,
         name,
@@ -173,14 +194,23 @@ fn parse_arg(x: FnArg) -> StarArg {
     }
 }
 
-// Is the type `&mut GlobalsBuilder`
-fn is_mut_globals_builder(x: &Type) -> bool {
+fn is_mut_something(x: &Type, smth: &str) -> bool {
     match x {
         Type::Reference(TypeReference {
             mutability: Some(_),
             elem: x,
             ..
-        }) => is_type_name(x, "GlobalsBuilder"),
+        }) => is_type_name(x, smth),
         _ => false,
     }
+}
+
+// Is the type `&mut GlobalsBuilder`
+fn is_mut_globals_builder(x: &Type) -> bool {
+    is_mut_something(x, "GlobalsBuilder")
+}
+
+// Is the type `&mut MethodsBuilder`
+fn is_mut_methods_builder(x: &Type) -> bool {
+    is_mut_something(x, "MethodsBuilder")
 }

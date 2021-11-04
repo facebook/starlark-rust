@@ -32,7 +32,7 @@ use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 use crate::{
     codemap::Span,
     collections::{SmallHashResult, StarlarkHasher},
-    environment::Globals,
+    environment::Methods,
     eval::{Arguments, Evaluator, FrozenDef},
     values::{
         basic::StarlarkValueBasic,
@@ -800,7 +800,7 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn matches_type(&self, _ty: &str) -> bool {
         panic!()
     }
-    fn get_methods(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Methods> {
         panic!()
     }
     fn documentation(&self) -> Option<DocItem> {
@@ -976,7 +976,7 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     fn matches_type(&self, ty: &str) -> bool {
         self.1.matches_type(ty)
     }
-    fn get_methods(&self) -> Option<&'static Globals> {
+    fn get_methods(&self) -> Option<&'static Methods> {
         self.1.get_methods()
     }
     fn documentation(&self) -> Option<DocItem> {

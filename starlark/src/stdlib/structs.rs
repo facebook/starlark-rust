@@ -18,7 +18,7 @@
 //! Implementation of `struct` function.
 use crate as starlark;
 use crate::{
-    environment::GlobalsBuilder,
+    environment::{GlobalsBuilder, MethodsBuilder},
     eval::Arguments,
     values::{structs::Struct, Value, ValueLike},
 };
@@ -33,7 +33,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 }
 
 #[starlark_module]
-pub(crate) fn struct_methods(builder: &mut GlobalsBuilder) {
+pub(crate) fn struct_methods(builder: &mut MethodsBuilder) {
     fn to_json(this: Value) -> String {
         this.to_json()
     }
