@@ -160,6 +160,13 @@ impl<'p, P> Pointer<'p, P> {
         untag_pointer(p)
     }
 
+    /// Unpack pointer when it is known to be not an integer, not a string, and not frozen.
+    pub(crate) unsafe fn unpack_frozen_ptr_no_int_no_str_unchecked(self) -> &'p P {
+        let p = self.pointer.get();
+        debug_assert!(p & TAG_BITS == 0);
+        cast::usize_to_ptr(p)
+    }
+
     /// Unpack integer when it is known to be not a pointer.
     pub(crate) unsafe fn unpack_int_unchecked(self) -> i32 {
         let p = self.pointer.get();

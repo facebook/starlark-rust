@@ -28,6 +28,7 @@ use crate::{
     gazebo::any::AnyLifetime,
     values::{
         layout::{arena::AValueRepr, avalue::AValue},
+        string::StarlarkStr,
         AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap, FrozenValue, Heap, PointerI32,
         StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
@@ -144,7 +145,28 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
     }
 
     pub fn as_ref(self) -> &'v T {
-        self.to_value_typed().as_ref()
+        if T::static_type_id() == PointerI32::static_type_id() {
+            unsafe {
+                transmute!(
+                    &PointerI32,
+                    &T,
+                    PointerI32::new(self.0.0.unpack_int_unchecked())
+                )
+            }
+        } else if T::static_type_id() == StarlarkStr::static_type_id() {
+            unsafe { &*(self.0.0.unpack_ptr_no_int_unchecked().payload_ptr() as *const T) }
+        } else {
+            // When a frozen pointer is not str and not int,
+            // unpack is does not need untagging.
+            // This generates slightly more efficient machine code.
+            unsafe {
+                &*(self
+                    .0
+                    .0
+                    .unpack_frozen_ptr_no_int_no_str_unchecked()
+                    .payload_ptr() as *const T)
+            }
+        }
     }
 }
 
