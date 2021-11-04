@@ -148,6 +148,8 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIter<'a, K, V> {
     def_iter!();
 }
 
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIter<'a, K, V> {}
+
 impl<'a, K: 'a, V: 'a> VMIter<'a, K, V> {
     fn map(b: &Bucket<K, V>) -> (&K, &V) {
         (&b.key, &b.value)
