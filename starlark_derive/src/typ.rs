@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-use proc_macro2::Span;
-use syn::{spanned::Spanned, *};
+use proc_macro2::{Ident, Span};
+use syn::{spanned::Spanned, Attribute, Block, Expr, NestedMeta, Pat, Type, Visibility};
 
 use crate::{parse::ModuleKind, util::*};
 
@@ -91,7 +91,10 @@ impl StarFun {
     /// Is this function a method? (I. e. has `this` as first parameter).
     pub(crate) fn is_method(&self) -> bool {
         match self.args.first() {
-            Some(first) => first.source == StarArgSource::This,
+            Some(first) => {
+                assert!(first.source != StarArgSource::Unknown, "not yet resolved");
+                first.source == StarArgSource::This
+            }
             None => false,
         }
     }
@@ -164,18 +167,19 @@ pub(crate) enum StarFunSource {
 }
 
 impl StarModule {
-    pub fn resolve(&mut self) {
+    pub fn resolve(&mut self) -> syn::Result<()> {
         for x in &mut self.stmts {
             if let StarStmt::Fun(x) = x {
-                x.resolve()
+                x.resolve(self.module_kind)?;
             }
         }
+        Ok(())
     }
 }
 
 impl StarFun {
     #[allow(clippy::branches_sharing_code)] // False positive
-    pub fn resolve(&mut self) {
+    pub fn resolve(&mut self, module_kind: ModuleKind) -> syn::Result<()> {
         fn requires_signature(x: &StarArg) -> bool {
             // We need to use a signature if something has a name
             // There are *args or **kwargs
@@ -226,6 +230,15 @@ impl StarFun {
                 self.source = StarFunSource::Positional(required, optional);
             }
         }
+
+        if self.is_method() && module_kind != ModuleKind::Methods {
+            return Err(syn::Error::new(
+                self.span(),
+                "Methods can only be defined in methods module",
+            ));
+        }
+
+        Ok(())
     }
 }
 

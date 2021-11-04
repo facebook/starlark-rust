@@ -24,14 +24,14 @@ use syn::{
 
 use crate::{typ::*, util::*};
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Dupe, PartialEq, Eq)]
 pub(crate) enum ModuleKind {
     Globals,
     Methods,
 }
 
 impl ModuleKind {
-    pub(crate) fn statics_type_name(&self) -> &'static str {
+    pub(crate) fn statics_type_name(self) -> &'static str {
         match self {
             ModuleKind::Globals => "GlobalsStatic",
             ModuleKind::Methods => "MethodsStatic",

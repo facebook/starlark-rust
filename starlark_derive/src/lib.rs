@@ -81,13 +81,18 @@ mod util;
 #[proc_macro_attribute]
 pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemFn);
-    assert!(attr.is_empty());
-    let mut x = match parse::parse(input) {
+
+    fn starlark_module_impl(attr: TokenStream, input: ItemFn) -> syn::Result<TokenStream> {
+        assert!(attr.is_empty());
+        let mut x = parse::parse(input)?;
+        x.resolve()?;
+        Ok(render::render(x).into())
+    }
+
+    match starlark_module_impl(attr, input) {
         Ok(x) => x,
-        Err(e) => return e.to_compile_error().into(),
-    };
-    x.resolve();
-    render::render(x).into()
+        Err(e) => e.to_compile_error().into(),
+    }
 }
 
 /// Stubs for Starlark bytecode interpreter.
