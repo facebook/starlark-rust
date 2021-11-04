@@ -16,7 +16,11 @@
  */
 
 use gazebo::prelude::*;
-use syn::{spanned::Spanned, *};
+use proc_macro2::Span;
+use syn::{
+    spanned::Spanned, Attribute, FnArg, Item, ItemConst, ItemFn, Meta, MetaList, NestedMeta, Pat,
+    PatType, ReturnType, Stmt, Type, TypeReference,
+};
 
 use crate::{typ::*, util::*};
 
@@ -35,32 +39,51 @@ impl ModuleKind {
     }
 }
 
-pub(crate) fn parse(mut input: ItemFn) -> StarModule {
+pub(crate) fn parse(mut input: ItemFn) -> syn::Result<StarModule> {
     let visibility = input.vis;
+    let sig_span = input.sig.span();
     let name = input.sig.ident;
-    let (ty, module_kind) = match input.sig.inputs.pop().map(|x| x.into_value()) {
-        Some(FnArg::Typed(PatType { ty, .. })) if is_mut_globals_builder(&ty) => {
+
+    if input.sig.inputs.len() != 1 {
+        return Err(syn::Error::new(
+            sig_span,
+            "function must have exactly one argument",
+        ));
+    }
+    let arg = input.sig.inputs.pop().unwrap();
+    let arg_span = arg.span();
+
+    let (ty, module_kind) = match arg.into_value() {
+        FnArg::Typed(PatType { ty, .. }) if is_mut_globals_builder(&ty) => {
             (ty, ModuleKind::Globals)
         }
-        Some(FnArg::Typed(PatType { ty, .. })) if is_mut_methods_builder(&ty) => {
+        FnArg::Typed(PatType { ty, .. }) if is_mut_methods_builder(&ty) => {
             (ty, ModuleKind::Methods)
         }
-        _ => panic!("Must take on argument of type `&mut GlobalsBuilder` or `&mut MethodsBuilder`"),
+        _ => {
+            return Err(syn::Error::new(
+                arg_span,
+                "Expected a mutable globals or methods builder",
+            ));
+        }
     };
-    StarModule {
+    Ok(StarModule {
         module_kind,
         visibility,
         globals_builder: *ty,
         name,
-        stmts: input.block.stmts.into_map(parse_stmt),
-    }
+        stmts: input.block.stmts.into_try_map(parse_stmt)?,
+    })
 }
 
-fn parse_stmt(stmt: Stmt) -> StarStmt {
+fn parse_stmt(stmt: Stmt) -> syn::Result<StarStmt> {
     match stmt {
         Stmt::Item(Item::Fn(x)) => parse_fun(x),
-        Stmt::Item(Item::Const(x)) => StarStmt::Const(parse_const(x)),
-        _ => panic!("Can only put constants and functions inside a #[starlark_module]"),
+        Stmt::Item(Item::Const(x)) => Ok(StarStmt::Const(parse_const(x))),
+        s => Err(syn::Error::new(
+            s.span(),
+            "Can only put constants and functions inside a #[starlark_module]",
+        )),
     }
 }
 
@@ -76,19 +99,19 @@ fn is_attribute_attribute(x: &Attribute) -> bool {
     x.path.is_ident("attribute")
 }
 
-fn is_attribute_type(x: &Attribute) -> Option<NestedMeta> {
+fn is_attribute_type(x: &Attribute) -> syn::Result<Option<NestedMeta>> {
     if x.path.is_ident("starlark_type") {
         if let Ok(Meta::List(MetaList { nested, .. })) = x.parse_meta() {
             if nested.len() == 1 {
-                return Some(nested.first().unwrap().clone());
+                return Ok(Some(nested.first().unwrap().clone()));
             }
         }
-        panic!(
+        Err(syn::Error::new(
+            x.span(),
             "Couldn't parse attribute `{:?}`. Expected `#[starlark_type(\"my_type\")]`",
-            x
-        )
+        ))
     } else {
-        None
+        Ok(None)
     }
 }
 
@@ -100,67 +123,82 @@ struct ProcessedAttributes {
 }
 
 /// (#[attribute], #[starlark_type(x)], rest)
-fn process_attributes(xs: Vec<Attribute>) -> ProcessedAttributes {
+fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAttributes> {
     let mut attrs = Vec::with_capacity(xs.len());
     let mut is_attribute = false;
     let mut type_attribute = None;
     for x in xs {
         if is_attribute_attribute(&x) {
             is_attribute = true;
-        } else if let Some(t) = is_attribute_type(&x) {
+        } else if let Some(t) = is_attribute_type(&x)? {
             type_attribute = Some(t);
         } else {
             attrs.push(x);
         }
     }
-    if is_attribute {
-        assert!(
-            type_attribute.is_none(),
-            "Can't be an attribute with a .type"
-        );
+    if is_attribute && type_attribute.is_some() {
+        return Err(syn::Error::new(span, "Can't be an attribute with a .type"));
     }
-    ProcessedAttributes {
+    Ok(ProcessedAttributes {
         is_attribute,
         type_attribute,
         attrs,
-    }
+    })
 }
 
 // Add a function to the `GlobalsModule` named `globals_builder`.
-fn parse_fun(func: ItemFn) -> StarStmt {
+fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
+    let span = func.span();
+    let sig_span = func.sig.span();
+
     let ProcessedAttributes {
         is_attribute,
         type_attribute,
         attrs,
-    } = process_attributes(func.attrs);
+    } = process_attributes(func.span(), func.attrs)?;
 
     let return_type = match func.sig.output {
-        ReturnType::Default => panic!(
-            "Function named '{}' must have a return type",
-            func.sig.ident
-        ),
+        ReturnType::Default => {
+            return Err(syn::Error::new(span, "Function must have a return type"));
+        }
         ReturnType::Type(_, x) => x,
     };
-    let mut args = func
+    let mut args: Vec<_> = func
         .sig
         .inputs
         .into_iter()
         .map(parse_arg)
-        .collect::<Vec<_>>();
+        .collect::<Result<_, _>>()?;
 
     if is_attribute {
-        assert_eq!(args.len(), 1);
+        if args.len() != 1 {
+            return Err(syn::Error::new(
+                sig_span,
+                "Attribute function must have single parameter",
+            ));
+        }
         let arg = args.pop().unwrap();
-        assert!(arg.is_this() && arg.default.is_none());
-        StarStmt::Attr(StarAttr {
+        if !arg.is_this() {
+            return Err(syn::Error::new(
+                sig_span,
+                "Attribute function must have `this` as the only parameter",
+            ));
+        }
+        if arg.default.is_some() {
+            return Err(syn::Error::new(
+                sig_span,
+                "Attribute function `this` parameter have no default value",
+            ));
+        }
+        Ok(StarStmt::Attr(StarAttr {
             name: func.sig.ident,
             arg: arg.ty,
             attrs,
             return_type: *return_type,
             body: *func.block,
-        })
+        }))
     } else {
-        StarStmt::Fun(StarFun {
+        Ok(StarStmt::Fun(StarFun {
             name: func.sig.ident,
             type_attribute,
             attrs,
@@ -168,11 +206,11 @@ fn parse_fun(func: ItemFn) -> StarStmt {
             return_type: *return_type,
             body: *func.block,
             source: StarFunSource::Unknown,
-        })
+        }))
     }
 }
 
-fn parse_arg(x: FnArg) -> StarArg {
+fn parse_arg(x: FnArg) -> syn::Result<StarArg> {
     let span = x.span();
     match x {
         FnArg::Typed(PatType {
@@ -180,7 +218,7 @@ fn parse_arg(x: FnArg) -> StarArg {
             pat: box Pat::Ident(ident),
             ty: box ty,
             ..
-        }) => StarArg {
+        }) => Ok(StarArg {
             span,
             attrs,
             mutable: ident.mutability.is_some(),
@@ -189,7 +227,7 @@ fn parse_arg(x: FnArg) -> StarArg {
             ty,
             default: ident.subpat.map(|x| *x.1),
             source: StarArgSource::Unknown,
-        },
+        }),
         arg => panic!("Unexpected argument, {:?}", arg),
     }
 }
