@@ -21,10 +21,13 @@
 //! Bytecode profiler.
 
 use std::{
+    collections::HashMap,
     fs,
     path::Path,
     time::{Duration, Instant},
 };
+
+use gazebo::prelude::*;
 
 use crate::eval::{
     bc::opcode::BcOpcode,
@@ -49,9 +52,22 @@ impl BcInstrStat {
     }
 }
 
+#[derive(Default, Clone, Copy, Dupe)]
+struct BcInstrPairsStat {
+    count: u64,
+    // We are not measuring time here, because even time for single opcode
+    // is not very accurate or helpful, and time for pairs is even less helpful.
+}
+
 struct BcProfileData {
     last: Option<(BcOpcode, Instant)>,
     by_instr: [BcInstrStat; BcOpcode::COUNT],
+}
+
+#[derive(Default)]
+struct BcPairsProfileData {
+    last: Option<BcOpcode>,
+    by_instr: HashMap<[BcOpcode; 2], BcInstrPairsStat>,
 }
 
 // Derive doesn't work here.
@@ -65,9 +81,14 @@ impl Default for BcProfileData {
 }
 
 impl BcProfileData {
-    fn write_csv(&self, path: &Path) -> anyhow::Result<()> {
-        fs::write(path, self.gen_csv().as_bytes())?;
-        Ok(())
+    fn before_instr(&mut self, opcode: BcOpcode) {
+        let now = Instant::now();
+        if let Some((last_opcode, last_time)) = self.last {
+            let last_duration = now.saturating_duration_since(last_time);
+            self.by_instr[last_opcode as usize].count += 1;
+            self.by_instr[last_opcode as usize].total_time += last_duration;
+        }
+        self.last = Some((opcode, now));
     }
 
     fn gen_csv(&self) -> String {
@@ -90,41 +111,95 @@ impl BcProfileData {
     }
 }
 
+impl BcPairsProfileData {
+    fn before_instr(&mut self, opcode: BcOpcode) {
+        if let Some(last_opcode) = self.last {
+            self.by_instr
+                .entry([last_opcode, opcode])
+                .or_default()
+                .count += 1;
+        }
+        self.last = Some(opcode);
+    }
+
+    fn gen_csv(&self) -> String {
+        let mut by_instr: Vec<_> = self
+            .by_instr
+            .iter()
+            .map(|(opcodes, stat)| (*opcodes, stat))
+            .collect();
+        by_instr.sort_by_key(|(opcodes, st)| (u64::MAX - st.count, *opcodes));
+        let count_total = by_instr.iter().map(|(_, st)| st.count).sum::<u64>();
+        let mut csv = CsvWriter::new(["Opcode[0]", "Opcode[1]", "Count", "Count / Total"]);
+        for ([o0, o1], instr_stats) in &by_instr {
+            csv.write_debug(o0);
+            csv.write_debug(o1);
+            csv.write_value(instr_stats.count);
+            csv.write_display(format!(
+                "{:.3}",
+                instr_stats.count as f64 / count_total as f64
+            ));
+            csv.finish_row();
+        }
+        csv.finish()
+    }
+}
+
+enum BcProfileDataMode {
+    Bc(Box<BcProfileData>),
+    BcPairs(Box<BcPairsProfileData>),
+    Disabled,
+}
+
 pub(crate) struct BcProfile {
-    data: Option<Box<BcProfileData>>,
+    data: BcProfileDataMode,
 }
 
 impl BcProfile {
     pub(crate) fn new() -> BcProfile {
-        BcProfile { data: None }
+        BcProfile {
+            data: BcProfileDataMode::Disabled,
+        }
     }
 
-    pub(crate) fn enable(&mut self) {
-        self.data = Some(Default::default());
+    pub(crate) fn enable_1(&mut self) {
+        self.data = BcProfileDataMode::Bc(Default::default());
+    }
+
+    pub(crate) fn enable_2(&mut self) {
+        self.data = BcProfileDataMode::BcPairs(Default::default());
     }
 
     pub(crate) fn enabled(&self) -> bool {
-        self.data.is_some()
+        match self.data {
+            BcProfileDataMode::Bc(..) => true,
+            BcProfileDataMode::BcPairs(..) => true,
+            BcProfileDataMode::Disabled => false,
+        }
+    }
+
+    fn gen_csv(&self) -> anyhow::Result<String> {
+        match &self.data {
+            BcProfileDataMode::Bc(data) => Ok(data.gen_csv()),
+            BcProfileDataMode::BcPairs(data) => Ok(data.gen_csv()),
+            BcProfileDataMode::Disabled => Err(EvaluatorError::BcProfilingNotEnabled.into()),
+        }
     }
 
     pub(crate) fn write_csv(&self, path: &Path) -> anyhow::Result<()> {
-        match self.data {
-            Some(ref data) => data.write_csv(path),
-            None => Err(EvaluatorError::BcProfilingNotEnabled.into()),
-        }
+        fs::write(path, self.gen_csv()?.as_bytes())?;
+        Ok(())
     }
 
     /// Called from bytecode.
     pub(crate) fn before_instr(&mut self, opcode: BcOpcode) {
-        let data = self.data.as_mut().expect("enabled but not enabled");
-
-        let now = Instant::now();
-        if let Some((last_opcode, last_time)) = data.last {
-            let last_duration = now.saturating_duration_since(last_time);
-            data.by_instr[last_opcode as usize].count += 1;
-            data.by_instr[last_opcode as usize].total_time += last_duration;
+        match &mut self.data {
+            BcProfileDataMode::Bc(data) => data.before_instr(opcode),
+            BcProfileDataMode::BcPairs(data) => data.before_instr(opcode),
+            BcProfileDataMode::Disabled => {
+                unreachable!("this code is unreachable when bytecode profiling is not enabled")
+            }
         }
-        data.last = Some((opcode, now));
     }
 }
 
@@ -147,9 +222,32 @@ mod test {
             &globals,
         )
         .unwrap();
-        let csv = eval.bc_profile.data.as_mut().unwrap().gen_csv();
+        let csv = eval.bc_profile.gen_csv().unwrap();
         assert!(
             csv.contains(&format!("\n{:?},1,", BcOpcode::CallFrozenNativePos)),
+            "{:?}",
+            csv
+        );
+    }
+
+    #[test]
+    fn test_smoke_2() {
+        let module = Module::new();
+        let globals = Globals::standard();
+        let mut eval = Evaluator::new(&module);
+        eval.enable_bytecode_pairs_profile();
+        eval.eval_module(
+            AstModule::parse("bc.star", "repr([1, 2])".to_owned(), &Dialect::Standard).unwrap(),
+            &globals,
+        )
+        .unwrap();
+        let csv = eval.bc_profile.gen_csv().unwrap();
+        assert!(
+            csv.contains(&format!(
+                "\n{:?},{:?},1",
+                BcOpcode::ListOfConsts,
+                BcOpcode::CallFrozenNativePos
+            )),
             "{:?}",
             csv
         );

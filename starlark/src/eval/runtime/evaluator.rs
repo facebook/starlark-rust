@@ -202,7 +202,16 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Enable bytecode profiling, allowing [`Evaluator::write_bytecode_profile`] to be used.
     pub fn enable_bytecode_profile(&mut self) {
-        self.bc_profile.enable();
+        self.bc_profile.enable_1();
+    }
+
+    /// Enable bytecode instruction pairs profiling,
+    /// allowing [`Evaluator::write_bytecode_profile`] to be used.
+    ///
+    /// This option is mutually exclusive with
+    /// [`enable_bytecode_profile`](Self::enable_bytecode_profile).
+    pub fn enable_bytecode_pairs_profile(&mut self) {
+        self.bc_profile.enable_2();
     }
 
     /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.

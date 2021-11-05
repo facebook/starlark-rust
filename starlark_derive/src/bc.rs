@@ -17,7 +17,7 @@
 
 //! Generate stubs for bytecode interpreter.
 
-use gazebo::prelude::SliceExt;
+use gazebo::prelude::*;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote_spanned};
 use syn::{parse_macro_input, spanned::Spanned, Fields, ItemEnum, Variant};
