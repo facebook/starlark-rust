@@ -291,7 +291,7 @@ impl<T: StarlarkValue<'static>> BcInstrArg for FrozenValueTyped<'static, T> {
 
 impl BcInstrArg for LocalSlotId {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
-        write!(f, " l{}", param.0)
+        write!(f, " &{}", param.0)
     }
 
     fn pops_stack(_: &Self) -> u32 {
