@@ -54,8 +54,8 @@ use crate::{
     collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator},
     values::{
-        function::FUNCTION_TYPE, index::convert_index, Freeze, Freezer, FrozenValue, Heap,
-        StarlarkValue, Trace, Value, ValueLike,
+        function::FUNCTION_TYPE, index::convert_index, Freeze, FrozenValue, Heap, StarlarkValue,
+        Trace, Value, ValueLike,
     },
 };
 
@@ -68,7 +68,7 @@ enum EnumError {
 }
 
 /// The type of an enumeration, created by `enum()`.
-#[derive(Clone, Debug, Trace, Coerce)]
+#[derive(Clone, Debug, Trace, Coerce, Freeze)]
 #[repr(C)]
 // Deliberately store fully populated values
 // for each entry, so we can produce enum values with zero allocation.
@@ -116,20 +116,6 @@ impl<V: Display> Display for EnumValueGen<V> {
 
 starlark_complex_values!(EnumType);
 starlark_complex_value!(pub EnumValue);
-
-impl<'v> Freeze for EnumType<'v> {
-    type Frozen = FrozenEnumType;
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let mut elements = SmallMap::with_capacity(self.elements.len());
-        for (k, t) in self.elements.into_iter_hashed() {
-            elements.insert_hashed(k.freeze(freezer)?, t.freeze(freezer)?);
-        }
-        Ok(FrozenEnumType {
-            typ: self.typ.into_inner(),
-            elements,
-        })
-    }
-}
 
 impl<'v> EnumType<'v> {
     pub(crate) fn new(elements: Vec<Value<'v>>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

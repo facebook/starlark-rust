@@ -19,7 +19,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Fields, GenericParam, LifetimeDef, TypeParam,
+    DeriveInput, Fields, GenericParam,
 };
 
 struct Input<'a> {
@@ -27,85 +27,46 @@ struct Input<'a> {
 }
 
 impl<'a> Input<'a> {
-    fn lifetime_param(&self) -> Option<&LifetimeDef> {
-        let mut lifetime_defs: Vec<_> = self
-            .input
-            .generics
-            .params
-            .iter()
-            .filter_map(|param| match param {
-                GenericParam::Lifetime(d) => {
-                    assert!(d.lifetime.ident == "v", "Lifetime param must be called 'v");
-                    Some(d)
+    fn angle_brankets(tokens: &[TokenStream]) -> TokenStream {
+        if tokens.is_empty() {
+            quote! {}
+        } else {
+            quote! { < #(#tokens,)* > }
+        }
+    }
+
+    fn format_impl_generics(&self) -> (TokenStream, TokenStream, TokenStream) {
+        let mut impl_params = Vec::new();
+        let mut input_params = Vec::new();
+        let mut output_params = Vec::new();
+        for param in &self.input.generics.params {
+            match param {
+                GenericParam::Type(t) => {
+                    let name = &t.ident;
+                    let bounds = t.bounds.iter();
+                    impl_params.push(quote! {
+                        #name: #(#bounds +)* starlark::values::Freeze
+                    });
+                    input_params.push(quote! {
+                        #name
+                    });
+                    output_params.push(quote! {
+                        #name::Frozen
+                    });
                 }
-                _ => None,
-            })
-            .collect();
-        assert!(lifetime_defs.len() <= 1, "More than one lifetime param");
-        lifetime_defs.pop()
-    }
-
-    fn type_params(&self) -> Vec<&TypeParam> {
-        self.input
-            .generics
-            .params
-            .iter()
-            .filter_map(|param| match param {
-                GenericParam::Type(t) => Some(t),
-                _ => None,
-            })
-            .collect()
-    }
-
-    fn make_input_params(&self) -> Vec<TokenStream> {
-        let mut params = Vec::new();
-        if let Some(p) = self.lifetime_param() {
-            let lt = GenericParam::Lifetime(p.clone());
-            params.push(quote! { #lt });
+                GenericParam::Lifetime(lt) => {
+                    impl_params.push(quote! { #lt });
+                    input_params.push(quote! { #lt });
+                    output_params.push(quote! { 'static });
+                }
+                GenericParam::Const(_) => panic!("const generics not supported"),
+            }
         }
-        for _ in 0..self.type_params().len() {
-            params.push(quote! { starlark::values::Value<'v> });
-        }
-        params
-    }
-
-    fn format_input_params(&self) -> TokenStream {
-        let params = self.make_input_params();
-        if params.is_empty() {
-            quote! {}
-        } else {
-            quote! { < #(#params,)* > }
-        }
-    }
-
-    fn make_output_params(&self) -> Vec<TokenStream> {
-        let mut params = Vec::new();
-        if self.lifetime_param().is_some() {
-            params.push(quote! { 'static })
-        }
-        for _ in 0..self.type_params().len() {
-            params.push(quote! { starlark::values::FrozenValue });
-        }
-        params
-    }
-
-    fn format_output_params(&self) -> TokenStream {
-        let params = self.make_output_params();
-        if params.is_empty() {
-            quote! {}
-        } else {
-            quote! { < #(#params,)* > }
-        }
-    }
-
-    fn format_impl_generics(&self) -> TokenStream {
-        if let Some(generics) = self.lifetime_param() {
-            quote! { < #generics > }
-        } else if !self.type_params().is_empty() {
-            quote! { < 'v > }
-        } else {
-            quote! {}
-        }
+        (
+            Self::angle_brankets(&impl_params),
+            Self::angle_brankets(&input_params),
+            Self::angle_brankets(&output_params),
+        )
     }
 }
 
@@ -115,13 +76,11 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
     let name = &input.input.ident;
 
-    let input_params = input.format_input_params();
-    let output_params = input.format_output_params();
-    let impl_generics = input.format_impl_generics();
+    let (impl_params, input_params, output_params) = input.format_impl_generics();
 
     let body = freeze_impl(name, &input.input.data);
     let gen = quote! {
-        impl #impl_generics starlark::values::Freeze for #name #input_params {
+        impl #impl_params starlark::values::Freeze for #name #input_params {
             type Frozen = #name #output_params;
             fn freeze(self, freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
                 #body

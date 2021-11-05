@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use std::{marker, marker::PhantomData};
+use std::{cell::RefCell, marker, marker::PhantomData};
 
 use gazebo::prelude::*;
 
@@ -106,6 +106,17 @@ where
     }
 }
 
+impl<T> Freeze for RefCell<T>
+where
+    T: Freeze,
+{
+    type Frozen = T::Frozen;
+
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<T::Frozen> {
+        self.into_inner().freeze(freezer)
+    }
+}
+
 impl<T> Freeze for Option<T>
 where
     T: Freeze,
@@ -139,8 +150,6 @@ impl<K, V> Freeze for SmallMap<K, V>
 where
     K: Freeze,
     V: Freeze,
-    K: Eq,
-    K::Frozen: Eq,
 {
     type Frozen = SmallMap<K::Frozen, V::Frozen>;
 
@@ -157,6 +166,14 @@ impl<'v> Freeze for Value<'v> {
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenValue> {
         freezer.freeze(self)
+    }
+}
+
+impl Freeze for FrozenValue {
+    type Frozen = FrozenValue;
+
+    fn freeze(self, _freezer: &Freezer) -> anyhow::Result<FrozenValue> {
+        Ok(self)
     }
 }
 

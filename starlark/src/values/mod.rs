@@ -141,7 +141,9 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// allowing implementations of [`ComplexValue`] to be agnostic of their contained type.
 /// For details about each function, see the documentation for [`Value`],
 /// which provides the same functions (and more).
-pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> {
+pub trait ValueLike<'v>:
+    Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> + Freeze<Frozen = FrozenValue>
+{
     // `StringValue` or `FrozenStringValue`.
     type String: StringValueLike<'v>;
 
@@ -185,16 +187,6 @@ pub trait ValueLike<'v>: Eq + Copy + Debug + Default + Display + CoerceKey<Value
     /// Get a reference to underlying data or [`None`]
     /// if contained object has different type than requested.
     fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T>;
-}
-
-impl<'v> Hashed<Value<'v>> {
-    pub(crate) fn freeze(&self, freezer: &Freezer) -> anyhow::Result<Hashed<FrozenValue>> {
-        // Safe because we know frozen values have the same hash as non-frozen ones
-        let key = self.key().freeze(freezer)?;
-        // But it's an easy mistake to make, so actually check it in debug
-        debug_assert_eq!(Some(self.hash()), key.get_hashed().ok().map(|x| x.hash()));
-        Ok(Hashed::new_unchecked(self.hash(), key))
-    }
 }
 
 impl Default for Value<'_> {
