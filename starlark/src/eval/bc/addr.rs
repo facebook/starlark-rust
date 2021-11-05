@@ -42,6 +42,10 @@ impl BcAddr {
         debug_assert!(self >= start);
         BcAddrOffset(self.0 - start.0)
     }
+
+    pub(crate) fn offset(self, offset: BcAddrOffset) -> BcAddr {
+        BcAddr(self.0 + offset.0)
+    }
 }
 
 impl Sub<u32> for BcAddr {

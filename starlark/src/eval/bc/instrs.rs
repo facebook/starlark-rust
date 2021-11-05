@@ -190,7 +190,7 @@ impl BcInstrs {
                 break;
             }
             write!(f, "{}: {:?}", ip.0, opcopde)?;
-            opcopde.fmt_append_arg(ptr, f)?;
+            opcopde.fmt_append_arg(ptr, ip, f)?;
             if newline {
                 writeln!(f)?;
             } else {
