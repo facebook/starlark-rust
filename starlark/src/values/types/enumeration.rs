@@ -273,6 +273,14 @@ fn enum_type_methods(builder: &mut MethodsBuilder) {
             Either::Right(x) => Ok(heap.alloc(x.typ.as_deref().unwrap_or(EnumValue::TYPE))),
         }
     }
+
+    fn values(this: Value) -> Value<'v> {
+        let this = EnumType::from_value(this).unwrap();
+        match this {
+            Either::Left(x) => Ok(heap.alloc_list_iter(x.elements.keys().copied())),
+            Either::Right(x) => Ok(heap.alloc_list_iter(x.elements.keys().map(|x| x.to_value()))),
+        }
+    }
 }
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for EnumValueGen<V>
