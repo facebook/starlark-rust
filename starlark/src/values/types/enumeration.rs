@@ -48,10 +48,11 @@ use gazebo::{
 };
 use thiserror::Error;
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     codemap::Span,
     collections::{SmallMap, StarlarkHasher},
+    environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::{Arguments, Evaluator},
     values::{
         function::FUNCTION_TYPE, index::convert_index, Freeze, FrozenValue, Heap, StarlarkValue,
@@ -221,20 +222,9 @@ where
         f(&mut self.elements.values().map(|x| x.to_value()))
     }
 
-    fn dir_attr(&self) -> Vec<String> {
-        vec!["type".to_owned()]
-    }
-
-    fn has_attr(&self, attribute: &str) -> bool {
-        attribute == "type"
-    }
-
-    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
-        if attribute == "type" {
-            Some(heap.alloc(self.typ.as_aref().as_deref().unwrap_or(EnumValue::TYPE)))
-        } else {
-            None
-        }
+    fn get_methods(&self) -> Option<&'static Methods> {
+        static RES: MethodsStatic = MethodsStatic::new();
+        RES.methods(enum_type_methods)
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -269,6 +259,18 @@ where
             if typ.is_none() {
                 *typ = Some(variable_name.to_owned())
             }
+        }
+    }
+}
+
+#[starlark_module]
+fn enum_type_methods(builder: &mut MethodsBuilder) {
+    #[starlark(attribute)]
+    fn r#type(this: Value) -> Value<'v> {
+        let this = EnumType::from_value(this).unwrap();
+        match this {
+            Either::Left(x) => Ok(heap.alloc(x.typ.borrow().as_deref().unwrap_or(EnumValue::TYPE))),
+            Either::Right(x) => Ok(heap.alloc(x.typ.as_deref().unwrap_or(EnumValue::TYPE))),
         }
     }
 }

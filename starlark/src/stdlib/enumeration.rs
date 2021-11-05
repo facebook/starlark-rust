@@ -42,6 +42,7 @@ enum_type = enum("option1", "option2", True)
 x = enum_type("option1")
 assert_eq(x.value, "option1")
 assert_eq(enum_type(True).value, True)
+assert_eq(enum_type.type, "enum_type")
 "#,
         );
         assert::fails(
