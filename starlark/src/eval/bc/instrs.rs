@@ -31,7 +31,7 @@ use crate::{
     eval::bc::{
         addr::{BcAddr, BcAddrOffset, BcPtrAddr},
         instr::BcInstr,
-        instr_impl::InstrEndOfBc,
+        instr_impl::{InstrEndOfBc, InstrForLoop},
         opcode::{BcOpcode, BcOpcodeHandler},
         repr::{BcInstrHeader, BcInstrRepr, BC_INSTR_ALIGN},
     },
@@ -180,14 +180,23 @@ impl BcInstrs {
     }
 
     pub(crate) fn fmt_impl(&self, f: &mut dyn Write, newline: bool) -> fmt::Result {
+        let mut loop_ends = Vec::new();
         let mut ptr = self.start_ptr();
         loop {
             assert!(ptr < self.end_ptr());
             let ip = ptr.offset_from(self.start_ptr());
+            if loop_ends.last() == Some(&ip) {
+                loop_ends.pop().unwrap();
+            }
             let opcopde = ptr.get_opcode();
             if opcopde == BcOpcode::EndOfBc {
                 // We are not printing `EndOfBc`.
                 break;
+            }
+            if newline {
+                for _ in &loop_ends {
+                    write!(f, "  ")?;
+                }
             }
             write!(f, "{}: {:?}", ip.0, opcopde)?;
             opcopde.fmt_append_arg(ptr, ip, f)?;
@@ -195,6 +204,10 @@ impl BcInstrs {
                 writeln!(f)?;
             } else {
                 write!(f, "; ")?;
+            }
+            if opcopde == BcOpcode::ForLoop {
+                let for_loop = ptr.get_instr::<InstrForLoop>();
+                loop_ends.push(ip.offset(for_loop.arg));
             }
             ptr = ptr.add(opcopde.size_of_repr());
         }
