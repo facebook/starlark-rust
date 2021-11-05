@@ -122,11 +122,18 @@ impl FrozenNames {
         self.0.get(name).copied()
     }
 
+    /// Symbols including private.
+    pub(crate) fn all_symbols(&self) -> impl Iterator<Item = (&str, ModuleSlotId)> {
+        self.0
+            .iter()
+            .map(|(name, (slot, _vis))| (name.as_str(), *slot))
+    }
+
     /// Exported symbols.
-    pub fn symbols(&self) -> impl Iterator<Item = (&String, ModuleSlotId)> {
+    pub fn symbols(&self) -> impl Iterator<Item = (&str, ModuleSlotId)> {
         self.0.iter().filter_map(|(name, (slot, vis))| match vis {
             Visibility::Private => None,
-            Visibility::Public => Some((name, *slot)),
+            Visibility::Public => Some((name.as_str(), *slot)),
         })
     }
 }

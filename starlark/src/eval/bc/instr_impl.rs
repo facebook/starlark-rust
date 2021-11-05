@@ -35,6 +35,7 @@ use crate::{
                 ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1, ArgPushesStack, BcInstrArg,
             },
             opcode::BcOpcode,
+            spans::BcInstrSpans,
             stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
         },
@@ -280,7 +281,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalImpl {
 fn load_local<'v, const N: usize>(
     eval: &mut Evaluator<'v, '_>,
     slots: &[LocalSlotId; N],
-    spans: FrozenRef<Vec<Span>>,
+    spans: FrozenRef<BcInstrSpans>,
 ) -> Result<[Value<'v>; N], EvalException> {
     #[cold]
     #[inline(never)]
@@ -288,7 +289,7 @@ fn load_local<'v, const N: usize>(
         eval: &mut Evaluator<'v, '_>,
         index: usize,
         slot: LocalSlotId,
-        spans: FrozenRef<Vec<Span>>,
+        spans: FrozenRef<BcInstrSpans>,
     ) -> EvalException {
         let err = eval.local_var_referenced_before_assignment(slot);
         let span = spans[index];
@@ -318,7 +319,7 @@ macro_rules! instr_local_local_n {
         impl InstrNoFlowImpl for $impl_name {
             type Pop<'v> = ();
             type Push<'v> = [Value<'v>; $n];
-            type Arg = ([LocalSlotId; $n], FrozenRef<Vec<Span>>);
+            type Arg = ([LocalSlotId; $n], FrozenRef<BcInstrSpans>);
 
             #[inline(always)]
             fn run_with_args<'v>(
@@ -1092,7 +1093,7 @@ impl InstrNoFlowImpl for InstrDictOfConstsImpl {
 impl InstrNoFlowImpl for InstrDictNPopImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, FrozenRef<Vec<Span>>);
+    type Arg = (ArgPopsStack, FrozenRef<BcInstrSpans>);
 
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,

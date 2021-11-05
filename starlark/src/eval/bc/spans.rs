@@ -15,19 +15,31 @@
  * limitations under the License.
  */
 
-//! Bytecode interpreter.
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+    ops::Deref,
+};
 
-pub(crate) mod addr;
-pub(crate) mod bytecode;
-pub(crate) mod compiler;
-pub(crate) mod if_debug;
-pub(crate) mod instr;
-pub(crate) mod instr_arg;
-pub(crate) mod instr_impl;
-pub(crate) mod instrs;
-pub(crate) mod opcode;
-pub(crate) mod repr;
-pub(crate) mod spans;
-pub(crate) mod stack_ptr;
-pub(crate) mod stack_values;
-pub(crate) mod writer;
+use crate::codemap::Span;
+
+/// Span arguments of instructions.
+///
+/// Newtype to implement `Display`.
+#[derive(Debug)]
+pub(crate) struct BcInstrSpans(pub(crate) Vec<Span>);
+
+impl Deref for BcInstrSpans {
+    type Target = [Span];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for BcInstrSpans {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "<{} spans>", self.0.len())?;
+        Ok(())
+    }
+}

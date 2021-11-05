@@ -17,9 +17,11 @@
 
 //! Bytecode writer.
 
-use std::{cmp, fmt::Debug, mem};
-
-use derive_more::Display;
+use std::{
+    cmp,
+    fmt::{Debug, Display},
+    mem,
+};
 
 use crate::{
     codemap::{Span, Spanned},
@@ -35,6 +37,7 @@ use crate::{
             },
             instrs::{BcInstrsWriter, PatchAddr},
             opcode::BcOpcode,
+            spans::BcInstrSpans,
         },
         runtime::slots::LocalSlotId,
     },
@@ -115,7 +118,7 @@ impl BcWriter {
         let mut consts_slice = queued_consts.as_slice();
 
         while let [l0, l1, l2, l3, rem @ ..] = locals_slice {
-            let slots = self.alloc_any(vec![l0.span, l1.span, l2.span, l3.span]);
+            let slots = self.alloc_any(BcInstrSpans(vec![l0.span, l1.span, l2.span, l3.span]));
             self.do_write_generic::<InstrLoadLocal4>(
                 l0.span.merge(l1.span).merge(l2.span).merge(l3.span),
                 ([l0.node, l1.node, l2.node, l3.node], slots),
@@ -132,14 +135,14 @@ impl BcWriter {
                 self.do_write_generic::<InstrLoadLocal>(l0.span, l0.node);
             }
             ([l0, l1], _) => {
-                let spans = self.alloc_any(vec![l0.span, l1.span]);
+                let spans = self.alloc_any(BcInstrSpans(vec![l0.span, l1.span]));
                 self.do_write_generic::<InstrLoadLocal2>(
                     l0.span.merge(l1.span),
                     ([l0.node, l1.node], spans),
                 );
             }
             ([l0, l1, l2], _) => {
-                let spans = self.alloc_any(vec![l0.span, l1.span, l2.span]);
+                let spans = self.alloc_any(BcInstrSpans(vec![l0.span, l1.span, l2.span]));
                 self.do_write_generic::<InstrLoadLocal3>(
                     l0.span.merge(l1.span).merge(l2.span),
                     ([l0.node, l1.node, l2.node], spans),
@@ -322,14 +325,7 @@ impl BcWriter {
     }
 
     /// Allocate any object which will be alive while bytecode is alive.
-    pub(crate) fn alloc_any<T: Debug + Send + Sync>(&mut self, value: T) -> FrozenRef<T> {
-        self.heap.alloc_any(AllocWrapper(value)).map(|v| &v.0)
+    pub(crate) fn alloc_any<T: Display + Debug + Send + Sync>(&mut self, value: T) -> FrozenRef<T> {
+        self.heap.alloc_any(value)
     }
 }
-
-/// Wrapper for any object which delegates `Display` to `Debug`.
-///
-/// Used to allocate objects which are not `Display`.
-#[derive(Display, Debug)]
-#[display(fmt = "{:?}", "_0")]
-struct AllocWrapper<T>(T);

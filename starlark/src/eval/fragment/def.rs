@@ -20,7 +20,7 @@
 use std::{
     cell::UnsafeCell,
     collections::HashMap,
-    fmt::{self, Display},
+    fmt::{self, Display, Write},
     mem, ptr,
 };
 
@@ -651,6 +651,16 @@ where
             }
         }
         Ok(ret)
+    }
+
+    pub(crate) fn dump_debug(&self) -> String {
+        let mut w = String::new();
+        writeln!(w, "Bytecode:").unwrap();
+        self.bc()
+            .dump_debug()
+            .lines()
+            .for_each(|l| writeln!(w, "  {}", l).unwrap());
+        w
     }
 }
 

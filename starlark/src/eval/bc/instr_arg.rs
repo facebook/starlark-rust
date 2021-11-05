@@ -19,7 +19,7 @@
 
 use std::{
     fmt,
-    fmt::{Debug, Formatter},
+    fmt::{Display, Formatter, Write},
 };
 
 use gazebo::dupe::Dupe;
@@ -41,10 +41,25 @@ use crate::{
     values::{typed::FrozenValueTyped, FrozenRef, FrozenStringValue, FrozenValue, StarlarkValue},
 };
 
+/// Truncate value if it is too long.
+struct TruncateValueRepr(FrozenValue);
+
+impl Display for TruncateValueRepr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let repr = self.0.to_value().to_repr();
+        // Truncate too long constants (like dicts with hundreds of elements).
+        if repr.len() > 100 {
+            write!(f, "<{}>", self.0.to_value().get_type())
+        } else {
+            write!(f, "{}", repr)
+        }
+    }
+}
+
 /// Instruction fixed argument.
 pub(crate) trait BcInstrArg {
     /// Append space then append the argument, or append nothing if the argument is empty.
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result;
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result;
     /// How many additional stack elements this instruction pops.
     fn pops_stack(param: &Self) -> u32;
     /// How many additional stack elements this instruction pushes.
@@ -52,7 +67,7 @@ pub(crate) trait BcInstrArg {
 }
 
 impl BcInstrArg for () {
-    fn fmt_append(_param: &Self, _f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(_param: &Self, _f: &mut dyn Write) -> fmt::Result {
         Ok(())
     }
 
@@ -66,7 +81,7 @@ impl BcInstrArg for () {
 }
 
 impl BcInstrArg for u32 {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param)
     }
 
@@ -80,7 +95,7 @@ impl BcInstrArg for u32 {
 }
 
 impl<A: BcInstrArg, B: BcInstrArg> BcInstrArg for (A, B) {
-    fn fmt_append((a, b): &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append((a, b): &Self, f: &mut dyn Write) -> fmt::Result {
         A::fmt_append(a, f)?;
         B::fmt_append(b, f)?;
         Ok(())
@@ -96,7 +111,7 @@ impl<A: BcInstrArg, B: BcInstrArg> BcInstrArg for (A, B) {
 }
 
 impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg> BcInstrArg for (A, B, C) {
-    fn fmt_append((a, b, c): &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append((a, b, c): &Self, f: &mut dyn Write) -> fmt::Result {
         A::fmt_append(a, f)?;
         B::fmt_append(b, f)?;
         C::fmt_append(c, f)?;
@@ -114,7 +129,7 @@ impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg> BcInstrArg for (A, B, C) {
 
 #[allow(clippy::many_single_char_names)]
 impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg, D: BcInstrArg> BcInstrArg for (A, B, C, D) {
-    fn fmt_append((a, b, c, d): &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append((a, b, c, d): &Self, f: &mut dyn Write) -> fmt::Result {
         A::fmt_append(a, f)?;
         B::fmt_append(b, f)?;
         C::fmt_append(c, f)?;
@@ -132,7 +147,7 @@ impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg, D: BcInstrArg> BcInstrArg for 
 }
 
 impl<A: BcInstrArg, const N: usize> BcInstrArg for [A; N] {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         for a in param {
             A::fmt_append(a, f)?;
         }
@@ -157,7 +172,7 @@ impl<A: BcInstrArg, const N: usize> BcInstrArg for [A; N] {
 }
 
 impl BcInstrArg for BcAddrOffset {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " +{}", param.0)
     }
 
@@ -171,7 +186,7 @@ impl BcInstrArg for BcAddrOffset {
 }
 
 impl BcInstrArg for BcAddr {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param.0)
     }
 
@@ -185,8 +200,8 @@ impl BcInstrArg for BcAddr {
 }
 
 impl BcInstrArg for FrozenValue {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, " {}", param)
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " {}", TruncateValueRepr(*param))
     }
 
     fn pops_stack(_: &Self) -> u32 {
@@ -199,10 +214,10 @@ impl BcInstrArg for FrozenValue {
 }
 
 impl BcInstrArg for Option<FrozenValue> {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         match param {
             None => write!(f, " ()"),
-            Some(v) => write!(f, " {}", v),
+            Some(v) => write!(f, " {}", TruncateValueRepr(*v)),
         }
     }
 
@@ -216,8 +231,8 @@ impl BcInstrArg for Option<FrozenValue> {
 }
 
 impl BcInstrArg for FrozenStringValue {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
-        FrozenValue::fmt_append(&param.unpack(), f)
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " {}", TruncateValueRepr(param.unpack()))
     }
 
     fn pops_stack(_: &Self) -> u32 {
@@ -230,7 +245,7 @@ impl BcInstrArg for FrozenStringValue {
 }
 
 impl BcInstrArg for String {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, "{:?}", param)
     }
 
@@ -243,12 +258,12 @@ impl BcInstrArg for String {
     }
 }
 
-impl<T: Debug> BcInstrArg for FrozenRef<T>
+impl<T: Display> BcInstrArg for FrozenRef<T>
 where
     FrozenRef<T>: Copy,
 {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, " {:?}", param)
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " {}", param.as_ref())
     }
 
     fn pops_stack(_: &Self) -> u32 {
@@ -261,8 +276,8 @@ where
 }
 
 impl<T: StarlarkValue<'static>> BcInstrArg for FrozenValueTyped<'static, T> {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
-        FrozenValue::fmt_append(&param.to_frozen_value(), f)
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " {}", TruncateValueRepr(param.to_frozen_value()))
     }
 
     fn pops_stack(_: &Self) -> u32 {
@@ -275,7 +290,7 @@ impl<T: StarlarkValue<'static>> BcInstrArg for FrozenValueTyped<'static, T> {
 }
 
 impl BcInstrArg for LocalSlotId {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " l{}", param.0)
     }
 
@@ -289,7 +304,7 @@ impl BcInstrArg for LocalSlotId {
 }
 
 impl BcInstrArg for ModuleSlotId {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " m{}", param.0)
     }
 
@@ -303,7 +318,7 @@ impl BcInstrArg for ModuleSlotId {
 }
 
 impl BcInstrArg for Span {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}:{}", param.begin().get(), param.end().get())
     }
 
@@ -318,7 +333,7 @@ impl BcInstrArg for Span {
 
 /// Opcode as instruction argument.
 impl BcInstrArg for BcOpcode {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {:?}", param)
     }
 
@@ -348,7 +363,7 @@ pub(crate) struct ArgPopsStack1;
 pub(crate) struct ArgPopsStackMaybe1(pub(crate) bool);
 
 impl BcInstrArg for ArgPushesStack {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         BcInstrArg::fmt_append(&param.0, f)
     }
 
@@ -362,7 +377,7 @@ impl BcInstrArg for ArgPushesStack {
 }
 
 impl BcInstrArg for ArgPopsStack {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         BcInstrArg::fmt_append(&param.0, f)
     }
 
@@ -376,7 +391,7 @@ impl BcInstrArg for ArgPopsStack {
 }
 
 impl BcInstrArg for ArgPopsStack1 {
-    fn fmt_append(_param: &Self, _f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(_param: &Self, _f: &mut dyn Write) -> fmt::Result {
         Ok(())
     }
 
@@ -390,7 +405,7 @@ impl BcInstrArg for ArgPopsStack1 {
 }
 
 impl BcInstrArg for ArgPopsStackMaybe1 {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, "{}", if param.0 { 1 } else { 0 })
     }
 
@@ -404,7 +419,7 @@ impl BcInstrArg for ArgPopsStackMaybe1 {
 }
 
 impl BcInstrArg for Vec<(BcAddr, Span)> {
-    fn fmt_append(_param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(_param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " spans")
     }
 
@@ -418,7 +433,7 @@ impl BcInstrArg for Vec<(BcAddr, Span)> {
 }
 
 impl BcInstrArg for Symbol {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param.as_str())
     }
 
@@ -432,13 +447,13 @@ impl BcInstrArg for Symbol {
 }
 
 impl BcInstrArg for Box<[FrozenValue]> {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " [")?;
         for (i, v) in param.iter().enumerate() {
             if i != 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}", v)?;
+            write!(f, "{}", TruncateValueRepr(*v))?;
         }
         write!(f, "]")?;
         Ok(())
@@ -454,13 +469,13 @@ impl BcInstrArg for Box<[FrozenValue]> {
 }
 
 impl BcInstrArg for Box<[Hashed<FrozenValue>]> {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " [")?;
         for (i, v) in param.iter().enumerate() {
             if i != 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}", v.key())?;
+            write!(f, "{}", TruncateValueRepr(*v.key()))?;
         }
         write!(f, "]")?;
         Ok(())
@@ -476,13 +491,13 @@ impl BcInstrArg for Box<[Hashed<FrozenValue>]> {
 }
 
 impl BcInstrArg for SmallMap<FrozenValue, FrozenValue> {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {{")?;
         for (i, (k, v)) in param.iter().enumerate() {
             if i != 0 {
                 write!(f, ", ")?;
             }
-            write!(f, "{}: {}", k, v)?;
+            write!(f, "{}: {}", TruncateValueRepr(*k), TruncateValueRepr(*v))?;
         }
         write!(f, "}}")?;
         Ok(())
@@ -498,7 +513,7 @@ impl BcInstrArg for SmallMap<FrozenValue, FrozenValue> {
 }
 
 impl BcInstrArg for InstrDefData {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {:?}", param)
     }
 
@@ -512,8 +527,8 @@ impl BcInstrArg for InstrDefData {
 }
 
 impl BcInstrArg for ArgsCompiledValueBc {
-    fn fmt_append(param: &Self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, " {:?}", param)
+    fn fmt_append(param: &Self, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " {{{}}}", param)
     }
 
     fn pops_stack(param: &Self) -> u32 {
@@ -527,13 +542,13 @@ impl BcInstrArg for ArgsCompiledValueBc {
 
 impl BcOpcode {
     /// Format instruction argument.
-    pub(crate) fn fmt_append_arg(self, ptr: BcPtrAddr, f: &mut Formatter) -> fmt::Result {
-        struct HandlerImpl<'b, 'f, 'g> {
+    pub(crate) fn fmt_append_arg(self, ptr: BcPtrAddr, f: &mut dyn Write) -> fmt::Result {
+        struct HandlerImpl<'b, 'g> {
             ptr: BcPtrAddr<'b>,
-            f: &'g mut Formatter<'f>,
+            f: &'g mut dyn Write,
         }
 
-        impl BcOpcodeHandler<fmt::Result> for HandlerImpl<'_, '_, '_> {
+        impl BcOpcodeHandler<fmt::Result> for HandlerImpl<'_, '_> {
             fn handle<I: BcInstr>(self) -> fmt::Result {
                 let HandlerImpl { ptr, f } = self;
                 let instr = ptr.get_instr::<I>();

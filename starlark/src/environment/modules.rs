@@ -137,6 +137,10 @@ impl FrozenModule {
         self.1.0.describe()
     }
 
+    pub(crate) fn all_items(&self) -> impl Iterator<Item = (&str, FrozenValue)> {
+        self.1.0.all_items()
+    }
+
     pub fn documentation(&self) -> Option<DocItem> {
         self.1.documentation()
     }
@@ -163,15 +167,25 @@ impl FrozenModule {
 
 impl FrozenModuleData {
     pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.names.symbols().map(|x| x.0.as_str())
+        self.names.symbols().map(|x| x.0)
     }
 
     pub fn describe(&self) -> String {
+        self.items()
+            .map(|(name, val)| val.to_value().describe(name))
+            .join("\n")
+    }
+
+    pub(crate) fn items(&self) -> impl Iterator<Item = (&str, FrozenValue)> {
         self.names
             .symbols()
             .filter_map(|(name, slot)| Some((name, self.slots.get_slot(slot)?)))
-            .map(|(name, val)| val.to_value().describe(name))
-            .join("\n")
+    }
+
+    pub(crate) fn all_items(&self) -> impl Iterator<Item = (&str, FrozenValue)> {
+        self.names
+            .all_symbols()
+            .filter_map(|(name, slot)| Some((name, self.slots.get_slot(slot)?)))
     }
 
     pub(crate) fn get_slot(&self, slot: ModuleSlotId) -> Option<FrozenValue> {
@@ -183,7 +197,7 @@ impl FrozenModuleData {
     pub(crate) fn get_slot_name(&self, slot: ModuleSlotId) -> Option<String> {
         for (s, i) in self.names.symbols() {
             if i == slot {
-                return Some(s.clone());
+                return Some(s.to_owned());
             }
         }
         None

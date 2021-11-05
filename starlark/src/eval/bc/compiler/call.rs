@@ -17,7 +17,11 @@
 
 //! Compile function calls.
 
-use std::convert::TryInto;
+use std::{
+    convert::TryInto,
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 use either::Either;
 
@@ -48,6 +52,47 @@ pub(crate) struct ArgsCompiledValueBc {
     pub(crate) names: Box<[(Symbol, FrozenStringValue)]>,
     pub(crate) args: bool,
     pub(crate) kwargs: bool,
+}
+
+impl ArgsCompiledValueBc {
+    fn pos(&self) -> u32 {
+        assert!(self.pos_named as usize >= self.names.len());
+        self.pos_named - (self.names.len() as u32)
+    }
+}
+
+impl Display for ArgsCompiledValueBc {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut first = true;
+        let mut write_sep = |f: &mut Formatter| {
+            if !first {
+                write!(f, " ")?;
+            }
+            first = false;
+            Ok(())
+        };
+        // Number of positional arguments.
+        if self.pos() != 0 {
+            write_sep(f)?;
+            write!(f, "{}", self.pos())?;
+        }
+        // Named arguments.
+        for (_, name) in &*self.names {
+            write_sep(f)?;
+            write!(f, "{}", name.as_str())?;
+        }
+        // Star argument?
+        if self.args {
+            write_sep(f)?;
+            write!(f, "*")?;
+        }
+        // Star-star argument?
+        if self.kwargs {
+            write_sep(f)?;
+            write!(f, "**")?;
+        }
+        Ok(())
+    }
 }
 
 impl ArgsCompiledValue {

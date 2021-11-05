@@ -17,6 +17,8 @@
 
 //! Unsorted/core interpreter stuff.
 
+use std::fmt::Write;
+
 use crate::{
     codemap::Span,
     eval::{
@@ -101,6 +103,17 @@ impl Bc {
             RunBlockResult::Break => unreachable!("break outside of loop"),
             RunBlockResult::Continue => unreachable!("continue outside of loop"),
         }
+    }
+
+    pub(crate) fn dump_debug(&self) -> String {
+        let mut w = String::new();
+        writeln!(w, "Max stack size: {}", self.max_stack_size).unwrap();
+        writeln!(w, "Instructions:").unwrap();
+        self.instrs
+            .dump_debug()
+            .lines()
+            .for_each(|line| writeln!(w, "  {}", line).unwrap());
+        w
     }
 }
 

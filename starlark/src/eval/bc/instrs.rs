@@ -20,7 +20,7 @@
 use std::{
     convert::TryInto,
     fmt,
-    fmt::{Display, Formatter},
+    fmt::{Display, Formatter, Write},
     mem, ptr, slice,
 };
 
@@ -178,10 +178,8 @@ impl BcInstrs {
         }
         opcodes
     }
-}
 
-impl Display for BcInstrs {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    pub(crate) fn fmt_impl(&self, f: &mut dyn Write, newline: bool) -> fmt::Result {
         let mut ptr = self.start_ptr();
         loop {
             assert!(ptr < self.end_ptr());
@@ -193,11 +191,30 @@ impl Display for BcInstrs {
             }
             write!(f, "{}: {:?}", ip.0, opcopde)?;
             opcopde.fmt_append_arg(ptr, f)?;
-            write!(f, "; ")?;
+            if newline {
+                writeln!(f)?;
+            } else {
+                write!(f, "; ")?;
+            }
             ptr = ptr.add(opcopde.size_of_repr());
         }
         write!(f, "{}: END", ptr.offset_from(self.start_ptr()).0)?;
+        if newline {
+            writeln!(f)?;
+        }
         Ok(())
+    }
+
+    pub(crate) fn dump_debug(&self) -> String {
+        let mut w = String::new();
+        self.fmt_impl(&mut w, true).unwrap();
+        w
+    }
+}
+
+impl Display for BcInstrs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.fmt_impl(f, false)
     }
 }
 
