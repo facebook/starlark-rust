@@ -23,6 +23,7 @@
 use std::{
     collections::HashMap,
     fs,
+    iter::Sum,
     path::Path,
     time::{Duration, Instant},
 };
@@ -40,6 +41,17 @@ use crate::eval::{
 struct BcInstrStat {
     count: u64,
     total_time: Duration,
+}
+
+impl<'a> Sum<&'a BcInstrStat> for BcInstrStat {
+    fn sum<I: Iterator<Item = &'a BcInstrStat>>(iter: I) -> Self {
+        let mut sum = BcInstrStat::default();
+        for BcInstrStat { count, total_time } in iter {
+            sum.count += *count;
+            sum.total_time += *total_time;
+        }
+        sum
+    }
 }
 
 impl BcInstrStat {
@@ -100,6 +112,14 @@ impl BcProfileData {
             .collect();
         by_instr.sort_by_key(|(_opcode, st)| u64::MAX - st.count);
         let mut csv = CsvWriter::new(["Opcode", "Count", "Total time (s)", "Avg time (ns)"]);
+        let total: BcInstrStat = by_instr.iter().map(|(_opcode, st)| *st).sum();
+        {
+            csv.write_display("TOTAL");
+            csv.write_value(total.count);
+            csv.write_value(total.total_time);
+            csv.write_value(total.avg_time().as_nanos());
+            csv.finish_row();
+        }
         for (opcode, instr_stats) in &by_instr {
             csv.write_debug(opcode);
             csv.write_value(instr_stats.count);
