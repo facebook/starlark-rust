@@ -32,7 +32,7 @@ use crate::{
     syntax::ast::{ClauseP, ForClauseP},
 };
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     pub fn list_comprehension(
         &mut self,
         x: CstExpr,

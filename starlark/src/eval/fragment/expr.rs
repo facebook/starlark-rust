@@ -612,7 +612,7 @@ pub(crate) fn get_attr_hashed_bind<'v>(
     }
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<Spanned<ExprCompiledValue>> {
         expr.map(|v| self.expr(*v))
     }
@@ -623,12 +623,13 @@ impl Compiler<'_> {
         attr: &Symbol,
     ) -> Option<FrozenValue> {
         // We assume `getattr` has no side effects.
-        let v = get_attr_hashed_raw(left.to_value(), attr, self.module_env.heap()).ok()?;
+        let v = get_attr_hashed_raw(left.to_value(), attr, self.eval.module_env.heap()).ok()?;
         match MaybeUnboundValue::new(v.unpack_frozen()?) {
             MaybeUnboundValue::Bound(v) => Some(v),
             MaybeUnboundValue::Attr(..) => None,
             MaybeUnboundValue::Method(m) => Some(
-                self.module_env
+                self.eval
+                    .module_env
                     .frozen_heap()
                     .alloc_simple(BoundMethodGen::new(left, m)),
             ),
@@ -659,7 +660,7 @@ impl Compiler<'_> {
                 // We can only inline variables if they were assigned once
                 // otherwise we might inline the wrong value.
                 if binding.assign_count == AssignCount::AtMostOnce {
-                    if let Some(v) = self.module_env.slots().get_slot(slot) {
+                    if let Some(v) = self.eval.module_env.slots().get_slot(slot) {
                         // We could inline non-frozen values, but these values
                         // can be garbage-collected, so it is somewhat harder to implement.
                         if let Some(v) = v.unpack_frozen() {
@@ -681,8 +682,16 @@ impl Compiler<'_> {
     ) -> ExprCompiledValue {
         if let Some(v) = l.as_string() {
             if let Some((before, after)) = parse_percent_s_one(&v) {
-                let before = self.module_env.frozen_heap().alloc_string_value(&before);
-                let after = self.module_env.frozen_heap().alloc_string_value(&after);
+                let before = self
+                    .eval
+                    .module_env
+                    .frozen_heap()
+                    .alloc_string_value(&before);
+                let after = self
+                    .eval
+                    .module_env
+                    .frozen_heap()
+                    .alloc_string_value(&after);
                 return ExprCompiledValue::PercentSOne(box (before, r, after));
             }
         }
@@ -705,7 +714,7 @@ impl Compiler<'_> {
                 let xs = exprs.into_map(|x| self.expr(x));
                 if xs.iter().all(|x| x.as_value().is_some()) {
                     let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self.module_env.frozen_heap().alloc_tuple(&content);
+                    let result = self.eval.module_env.frozen_heap().alloc_tuple(&content);
                     value!(result)
                 } else {
                     ExprCompiledValue::Tuple(xs)
@@ -774,7 +783,7 @@ impl Compiler<'_> {
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
-                    let val = self.module_env.frozen_heap().alloc(x);
+                    let val = self.eval.module_env.frozen_heap().alloc(x);
                     value!(val)
                 } else {
                     let right = if op == BinOp::In || op == BinOp::NotIn {
@@ -822,7 +831,7 @@ impl Compiler<'_> {
                 self.dict_comprehension(k, v, for_, clauses)
             }
             ExprP::Literal(x) => {
-                let val = x.compile(self.module_env.frozen_heap());
+                let val = x.compile(self.eval.module_env.frozen_heap());
                 value!(val)
             }
         };

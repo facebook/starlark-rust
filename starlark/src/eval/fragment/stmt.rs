@@ -315,7 +315,7 @@ impl Spanned<AssignCompiledValue> {
     }
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     pub fn assign(&mut self, expr: CstAssign) -> Spanned<AssignCompiledValue> {
         let span = expr.span;
         let assign = match expr.node {
@@ -530,7 +530,7 @@ pub(crate) fn add_assign<'v>(
     }
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     pub(crate) fn compile_context(&self) -> StmtCompileContext {
         StmtCompileContext {
             has_before_stmt: self.has_before_stmt,

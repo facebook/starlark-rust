@@ -122,15 +122,15 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let mut compiler = Compiler {
             scope_data,
             locals: Vec::new(),
-            module_env: self.module_env,
             globals,
             codemap: codemap.dupe(),
             constants: Constants::new(),
             has_before_stmt: !self.before_stmt.is_empty(),
             bc_profile: self.bc_profile.enabled(),
+            eval: self,
         };
 
-        let res = compiler.eval_module(statement, self);
+        let res = compiler.eval_module(statement);
 
         // Clean up the world, putting everything back
         self.call_stack.pop();

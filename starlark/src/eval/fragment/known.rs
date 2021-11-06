@@ -45,7 +45,7 @@ pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
     }
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     /// Compile the operation `type(expr)`, trying to produce a constant
     /// where possible.
     pub fn fn_type(&mut self, expr: CstExpr) -> ExprCompiledValue {

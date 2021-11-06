@@ -95,7 +95,7 @@ impl ArgsCompiledValue {
     }
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     fn args(&mut self, args: Vec<CstArgument>) -> ArgsCompiledValue {
         let mut res = ArgsCompiledValue::default();
         for x in args {
@@ -103,6 +103,7 @@ impl Compiler<'_> {
                 ArgumentP::Positional(x) => res.pos_named.push(self.expr(x)),
                 ArgumentP::Named(name, value) => {
                     let fv = self
+                        .eval
                         .module_env
                         .frozen_heap()
                         .alloc_string_value(name.node.as_str());
@@ -198,8 +199,16 @@ impl Compiler<'_> {
             if s.node == "format" && args.len() == 1 {
                 if let ArgumentP::Positional(..) = args[0].node {
                     if let Some((before, after)) = parse_format_one(&e) {
-                        let before = self.module_env.frozen_heap().alloc_string_value(&before);
-                        let after = self.module_env.frozen_heap().alloc_string_value(&after);
+                        let before = self
+                            .eval
+                            .module_env
+                            .frozen_heap()
+                            .alloc_string_value(&before);
+                        let after = self
+                            .eval
+                            .module_env
+                            .frozen_heap()
+                            .alloc_string_value(&after);
                         let arg = match args.pop().unwrap().node {
                             ArgumentP::Positional(arg) => arg,
                             _ => unreachable!(),

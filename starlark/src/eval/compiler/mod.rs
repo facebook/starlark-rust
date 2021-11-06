@@ -24,7 +24,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     codemap::{CodeMap, Span},
-    environment::{Globals, Module},
+    environment::Globals,
     errors::Diagnostic,
     eval::{
         compiler::scope::{ScopeData, ScopeId},
@@ -69,10 +69,10 @@ pub(crate) fn expr_throw<'v, T>(
     }
 }
 
-pub(crate) struct Compiler<'a> {
+pub(crate) struct Compiler<'v, 'a, 'e> {
+    pub(crate) eval: &'e mut Evaluator<'v, 'a>,
     pub(crate) scope_data: ScopeData,
     pub(crate) locals: Vec<ScopeId>,
-    pub(crate) module_env: &'a Module,
     pub(crate) globals: FrozenRef<Globals>,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
@@ -80,7 +80,7 @@ pub(crate) struct Compiler<'a> {
     pub(crate) bc_profile: bool,
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     pub(crate) fn enter_scope(&mut self, scope_id: ScopeId) {
         self.locals.push(scope_id);
     }

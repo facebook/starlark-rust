@@ -19,35 +19,28 @@
 
 use crate::{
     environment::EnvironmentError,
-    eval::{
-        compiler::{
-            add_span_to_expr_error, expr_throw,
-            scope::{CstLoad, CstStmt, ScopeId, Slot},
-            Compiler, EvalException,
-        },
-        Evaluator,
+    eval::compiler::{
+        add_span_to_expr_error, expr_throw,
+        scope::{CstLoad, CstStmt, ScopeId, Slot},
+        Compiler, EvalException,
     },
     syntax::ast::StmtP,
     values::Value,
 };
 
-impl Compiler<'_> {
-    fn eval_load<'v>(
-        &mut self,
-        load: CstLoad,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> Result<(), EvalException> {
+impl<'v> Compiler<'v, '_, '_> {
+    fn eval_load(&mut self, load: CstLoad) -> Result<(), EvalException> {
         let name = load.node.module.node;
 
-        let loadenv = match eval.loader.as_ref() {
+        let loadenv = match self.eval.loader.as_ref() {
             None => {
                 return Err(add_span_to_expr_error(
                     EnvironmentError::NoImportsAvailable(name).into(),
                     load.span,
-                    eval,
+                    self.eval,
                 ));
             }
-            Some(loader) => expr_throw(loader.load(&name), load.span, eval)?,
+            Some(loader) => expr_throw(loader.load(&name), load.span, self.eval)?,
         };
 
         for (our_name, their_name) in load.node.args {
@@ -57,48 +50,40 @@ impl Compiler<'_> {
                 Slot::Module(slot) => slot,
             };
             let value = expr_throw(
-                eval.module_env.load_symbol(&loadenv, &their_name.node),
+                self.eval.module_env.load_symbol(&loadenv, &their_name.node),
                 our_name.span.merge(their_name.span),
-                eval,
+                self.eval,
             )?;
-            eval.set_slot_module(slot, value)
+            self.eval.set_slot_module(slot, value)
         }
 
         Ok(())
     }
 
-    fn eval_top_level_stmt<'v>(
-        &mut self,
-        stmt: CstStmt,
-        evaluator: &mut Evaluator<'v, '_>,
-    ) -> Result<Value<'v>, EvalException> {
+    fn eval_top_level_stmt(&mut self, stmt: CstStmt) -> Result<Value<'v>, EvalException> {
         match stmt.node {
             StmtP::Statements(stmts) => {
                 let mut last = Value::new_none();
                 for stmt in stmts {
-                    last = self.eval_top_level_stmt(stmt, evaluator)?;
+                    last = self.eval_top_level_stmt(stmt)?;
                 }
                 Ok(last)
             }
             StmtP::Load(load) => {
-                self.eval_load(load, evaluator)?;
+                self.eval_load(load)?;
                 Ok(Value::new_none())
             }
             _ => {
                 let stmt = self.module_top_level_stmt(stmt);
                 let bc = stmt.as_bc(&self.compile_context());
-                bc.run(evaluator)
+                bc.run(self.eval)
             }
         }
     }
 
-    pub(crate) fn eval_module<'v>(
-        &mut self,
-        stmt: CstStmt,
-        evaluator: &mut Evaluator<'v, '_>,
-    ) -> Result<Value<'v>, EvalException> {
+    pub(crate) fn eval_module(&mut self, stmt: CstStmt) -> Result<Value<'v>, EvalException> {
         self.enter_scope(ScopeId::module());
-        let value = self.eval_top_level_stmt(stmt, evaluator)?;
+        let value = self.eval_top_level_stmt(stmt)?;
         self.exit_scope();
         assert!(self.locals.is_empty());
         Ok(value)

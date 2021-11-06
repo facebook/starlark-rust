@@ -225,7 +225,7 @@ pub(crate) struct DefCompiled {
     pub(crate) info: FrozenRef<DefInfo>,
 }
 
-impl Compiler<'_> {
+impl Compiler<'_, '_, '_> {
     fn parameter_name(&mut self, ident: CstAssignIdent) -> ParameterName {
         let binding_id = ident.1.expect("no binding for parameter");
         let binding = self.scope_data.get_binding(binding_id);
@@ -311,7 +311,7 @@ impl Compiler<'_> {
             None
         };
 
-        let info = self.module_env.frozen_heap().alloc_any(DefInfo {
+        let info = self.eval.module_env.frozen_heap().alloc_any(DefInfo {
             codemap: self.codemap.dupe(),
             docstring,
             scope_names,
