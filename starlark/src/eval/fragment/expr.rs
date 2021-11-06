@@ -38,9 +38,13 @@ use crate::{
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
-        function::BoundMethodGen, string::interpolation::parse_percent_s_one,
-        types::unbound::MaybeUnboundValue, FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value,
-        ValueError, ValueLike,
+        function::BoundMethodGen,
+        string::interpolation::parse_percent_s_one,
+        types::{
+            float::StarlarkFloat, list::List, range::Range, tuple::Tuple,
+            unbound::MaybeUnboundValue,
+        },
+        FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
     },
 };
 
@@ -408,6 +412,45 @@ impl ExprCompiledValue {
         {
             Some(i) => value!(FrozenValue::new_int(i)),
             _ => ExprCompiledValue::Minus(box expr),
+        }
+    }
+
+    fn try_values(
+        span: Span,
+        values: &[Value],
+        heap: &FrozenHeap,
+    ) -> Option<Vec<Spanned<ExprCompiledValue>>> {
+        values
+            .try_map(|v| {
+                Self::try_value(span, *v, heap)
+                    .map(|expr| Spanned { span, node: expr })
+                    .ok_or(())
+            })
+            .ok()
+    }
+
+    /// Try convert a maybe not frozen value to an expression, or discard it.
+    pub(crate) fn try_value(span: Span, v: Value, heap: &FrozenHeap) -> Option<ExprCompiledValue> {
+        if let Some(v) = v.unpack_frozen() {
+            // If frozen, we are lucky.
+            Some(ExprCompiledValue::Value(v))
+        } else if let Some(v) = v.unpack_str() {
+            // If string, copy it to frozen heap.
+            Some(ExprCompiledValue::Value(heap.alloc_str(v)))
+        } else if let Some(v) = v.downcast_ref::<StarlarkFloat>() {
+            Some(ExprCompiledValue::Value(heap.alloc_float(*v)))
+        } else if let Some(v) = v.downcast_ref::<Range>() {
+            Some(ExprCompiledValue::Value(heap.alloc(*v)))
+        } else if let Some(v) = List::from_value(v) {
+            // When spec-safe function returned a non-frozen list,
+            // we try to convert that list to a list of constants instruction.
+            let items = Self::try_values(span, v.content(), heap)?;
+            Some(ExprCompiledValue::List(items))
+        } else if let Some(v) = Tuple::from_value(v) {
+            let items = Self::try_values(span, v.content(), heap)?;
+            Some(ExprCompiledValue::Tuple(items))
+        } else {
+            None
         }
     }
 }

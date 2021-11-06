@@ -17,6 +17,8 @@
 
 //! Compile function calls.
 
+use gazebo::{coerce::coerce, prelude::*};
+
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
@@ -27,11 +29,14 @@ use crate::{
             Compiler,
         },
         fragment::expr::{ExprCompiledValue, MaybeNot},
-        FrozenDef,
+        Arguments, FrozenDef,
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
-    values::{string::interpolation::parse_format_one, FrozenStringValue, FrozenValue, ValueLike},
+    values::{
+        function::NativeFunction, string::interpolation::parse_format_one, FrozenStringValue,
+        FrozenValue, FrozenValueTyped, StarlarkValue, ValueLike,
+    },
 };
 
 #[derive(Default, Clone, Debug)]
@@ -79,6 +84,40 @@ impl ArgsCompiledValue {
         }
     }
 
+    fn split_pos_names(&self) -> (&[Spanned<ExprCompiledValue>], &[Spanned<ExprCompiledValue>]) {
+        self.pos_named
+            .as_slice()
+            .split_at(self.pos_named.len() - self.names.len())
+    }
+
+    /// Invoke a callback if all arguments are frozen values.
+    fn all_values<'v, R>(&self, handler: impl FnOnce(Arguments<'v, '_>) -> R) -> Option<R> {
+        let (pos, named) = self.split_pos_names();
+        let pos = pos
+            .try_map(|e| e.as_value().map(FrozenValue::to_value).ok_or(()))
+            .ok()?;
+        let named = named
+            .try_map(|e| e.as_value().map(FrozenValue::to_value).ok_or(()))
+            .ok()?;
+        let args = self
+            .args
+            .as_ref()
+            .try_map(|args| args.as_value().map(FrozenValue::to_value).ok_or(()))
+            .ok()?;
+        let kwargs = self
+            .kwargs
+            .as_ref()
+            .try_map(|kwargs| kwargs.as_value().map(FrozenValue::to_value).ok_or(()))
+            .ok()?;
+        Some(handler(Arguments {
+            pos: &pos,
+            named: &named,
+            names: coerce(&self.names),
+            args,
+            kwargs,
+        }))
+    }
+
     fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ArgsCompiledValue {
         let ArgsCompiledValue {
             ref pos_named,
@@ -124,6 +163,22 @@ impl Compiler<'_, '_, '_> {
         args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         let args = self.args(args);
+
+        if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
+            // Try execute the native function speculatively.
+            if fun.speculative_exec_safe {
+                // Only if all call arguments are frozen values.
+                if let Some(Some(v)) = args.all_values(|arguments| {
+                    let v = fun
+                        .invoke(fun.to_value(), None, arguments, self.eval)
+                        .ok()?;
+                    ExprCompiledValue::try_value(span, v, self.eval.module_env.frozen_heap())
+                }) {
+                    return v;
+                }
+            }
+        }
+
         ExprCompiledValue::Call(Spanned {
             span,
             node: CallCompiled::Call(box (

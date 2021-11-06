@@ -75,3 +75,12 @@ assert.eq(("<(1,)>", "<1>"), test((1,)))
 "#,
     );
 }
+
+#[test]
+fn test_spec_exec_list() {
+    // `list` function is const-evaluated and the resulting list is compiled as list instruction.
+    test_instrs(
+        &[BcOpcode::ListOfConsts, BcOpcode::Return],
+        "def test(): return list((10, 20))",
+    )
+}
