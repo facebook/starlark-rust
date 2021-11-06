@@ -294,7 +294,7 @@ impl Module {
         }));
         let frozen_module_ref = freezer.heap.alloc_simple_frozen_ref(rest.dupe());
         for frozen_def in freezer.frozen_defs.borrow().as_slice() {
-            frozen_def.post_freeze(frozen_module_ref);
+            frozen_def.post_freeze(frozen_module_ref, &freezer.heap);
         }
         // The values MUST be alive up until this point (as the above line uses them),
         // but can now be dropped

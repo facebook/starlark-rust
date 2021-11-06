@@ -44,7 +44,7 @@ use crate::{
         },
     },
     syntax::ast::{AssignOp, AssignP, StmtP},
-    values::{list::List, Heap, Value, ValueError},
+    values::{list::List, FrozenHeap, Heap, Value, ValueError},
 };
 
 #[derive(Clone, Debug)]
@@ -82,6 +82,8 @@ pub(crate) struct StmtCompileContext {
 
 pub(crate) struct OptimizeOnFreezeContext<'a> {
     pub(crate) module: &'a FrozenModuleRef,
+    #[allow(dead_code)] // TODO(nga): remove `allow` when used
+    pub(crate) heap: &'a FrozenHeap,
 }
 
 impl Spanned<StmtCompiledValue> {

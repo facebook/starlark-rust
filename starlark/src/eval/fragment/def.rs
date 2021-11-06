@@ -57,8 +57,8 @@ use crate::{
         docs::{DocItem, DocString},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        AtomicFrozenRefOption, Freeze, Freezer, FrozenRef, FrozenStringValue, FrozenValue,
-        StarlarkValue, Trace, Tracer, Value, ValueLike,
+        AtomicFrozenRefOption, Freeze, Freezer, FrozenHeap, FrozenRef, FrozenStringValue,
+        FrozenValue, StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 
@@ -665,7 +665,7 @@ where
 }
 
 impl FrozenDef {
-    pub(crate) fn post_freeze(&self, module: FrozenRef<FrozenModuleRef>) {
+    pub(crate) fn post_freeze(&self, module: FrozenRef<FrozenModuleRef>, heap: &FrozenHeap) {
         // Module passed to this function is not always module where the function is declared:
         // A function can be created in a frozen module and frozen later in another module.
         // `def_module` variable contains a module where this `def` is declared.
@@ -684,6 +684,7 @@ impl FrozenDef {
             .body_stmts
             .optimize_on_freeze(&OptimizeOnFreezeContext {
                 module: def_module.as_ref(),
+                heap,
             })
             .as_bc(&self.def_info.stmt_compile_context);
 
