@@ -98,6 +98,7 @@ fn parse_const(x: ItemConst) -> StarConst {
 struct ProcessedAttributes {
     is_attribute: bool,
     type_attribute: Option<NestedMeta>,
+    speculative_exec_safe: bool,
     /// Rest attributes
     attrs: Vec<Attribute>,
 }
@@ -105,11 +106,13 @@ struct ProcessedAttributes {
 /// Parse `#[starlark(...)]` attribute.
 fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAttributes> {
     const ERROR: &str = "Couldn't parse attribute. \
-        Expected `#[starlark(type(\"ty\")]` or `#[starlark(attribute)]`";
+        Expected `#[starlark(type(\"ty\")]`, \
+        `#[starlark(attribute)]` or `#[starlark(speculative_exec_safe)]`";
 
     let mut attrs = Vec::with_capacity(xs.len());
     let mut is_attribute = false;
     let mut type_attribute = None;
+    let mut speculative_exec_safe = false;
     for x in xs {
         if x.path.is_ident("starlark") {
             match x.parse_meta()? {
@@ -134,6 +137,8 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
                                     }
                                 } else if meta.path().is_ident("attribute") {
                                     is_attribute = true;
+                                } else if meta.path().is_ident("speculative_exec_safe") {
+                                    speculative_exec_safe = true;
                                 } else {
                                     return Err(syn::Error::new(meta.span(), ERROR));
                                 }
@@ -153,6 +158,7 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
     Ok(ProcessedAttributes {
         is_attribute,
         type_attribute,
+        speculative_exec_safe,
         attrs,
     })
 }
@@ -165,6 +171,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
     let ProcessedAttributes {
         is_attribute,
         type_attribute,
+        speculative_exec_safe,
         attrs,
     } = process_attributes(func.span(), func.attrs)?;
 
@@ -206,6 +213,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             arg: arg.ty,
             attrs,
             return_type: *return_type,
+            speculative_exec_safe,
             body: *func.block,
         }))
     } else {
@@ -215,6 +223,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             attrs,
             args,
             return_type: *return_type,
+            speculative_exec_safe,
             body: *func.block,
             source: StarFunSource::Unknown,
         }))

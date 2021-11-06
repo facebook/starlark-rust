@@ -18,7 +18,6 @@
 use gazebo::prelude::*;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote_spanned};
-use syn::spanned::Spanned;
 
 use crate::{typ::*, util::*};
 
@@ -72,9 +71,18 @@ fn render_attr(x: StarAttr) -> TokenStream {
         arg,
         attrs,
         return_type,
+        speculative_exec_safe,
         body,
     } = x;
     let name_str = ident_string(&name);
+    let set_speculative_exec_safe = if speculative_exec_safe {
+        Some(quote_spanned! {
+            span=>
+            attr.set_speculative_exec_safe();
+        })
+    } else {
+        None
+    };
     quote_spanned! {
         span=>
         #( #attrs )*
@@ -102,10 +110,10 @@ fn render_attr(x: StarAttr) -> TokenStream {
             }
             Ok(heap.alloc(inner(this, heap)?))
         }
-        globals_builder.set(
-            #name_str,
-            starlark::values::function::NativeAttribute::new(#name),
-        );
+        #[allow(unused_mut)]
+        let mut attr = starlark::values::function::NativeAttribute::new(#name);
+        #set_speculative_exec_safe
+        globals_builder.set(#name_str, attr);
     }
 }
 
@@ -123,12 +131,12 @@ fn render_fun(x: StarFun) -> TokenStream {
         attrs,
         args: _,
         return_type,
+        speculative_exec_safe,
         body,
         source: _,
     } = x;
 
     let set_type = type_attribute.map(|x| {
-        let span = x.span();
         quote_spanned! {
             span=>
             const TYPE_N: usize = #x.len();
@@ -137,6 +145,14 @@ fn render_fun(x: StarFun) -> TokenStream {
             func.set_type(TYPE.unpack());
         }
     });
+    let set_speculative_exec_safe = if speculative_exec_safe {
+        Some(quote_spanned! {
+            span=>
+            func.set_speculative_exec_safe();
+        })
+    } else {
+        None
+    };
 
     let signature_arg = signature.as_ref().map(
         |_| quote_spanned! {span=> __signature: &starlark::eval::ParametersSpec<starlark::values::FrozenValue>,},
@@ -198,6 +214,7 @@ fn render_fun(x: StarFun) -> TokenStream {
                 #name_str.to_owned(),
             );
             #set_type
+            #set_speculative_exec_safe
             globals_builder.set(#name_str, func);
         }
     }

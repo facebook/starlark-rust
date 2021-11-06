@@ -283,6 +283,7 @@ impl MethodsBuilder {
             name,
             NativeAttribute {
                 function: box move |_, _| Ok(value.to_value()),
+                speculative_exec_safe: false,
             },
         );
     }

@@ -74,6 +74,10 @@ mod util;
 ///   an attribute on the value. Such a function must take exactly one argument, namely a value
 ///   of the type you have attached it to.
 /// * The attribute `#[starlark(type("test"))]` causes `f.type` to return `"test"`.
+/// * If a member is annotated with `#[starlark(speculative_exec_safe)]`, then a function
+///   is considered safe to execute speculatively: the function should have
+///   no global side effects, should not panic, and should finish in reasonable time.
+///   The evaluator may invoke such functions early to generate more efficient code.
 ///
 /// All these functions interoperate properly with `dir()`, `getattr()` and `hasattr()`.
 ///

@@ -91,6 +91,8 @@ pub struct NativeFunction {
     function: Box<dyn NativeFunc>,
     name: String,
     typ: Option<FrozenValue>,
+    /// Safe to evaluate speculatively.
+    pub(crate) speculative_exec_safe: bool,
 }
 
 impl AllocFrozenValue for NativeFunction {
@@ -114,6 +116,7 @@ impl NativeFunction {
             function: box function,
             name,
             typ: None,
+            speculative_exec_safe: false,
         }
     }
 
@@ -134,12 +137,17 @@ impl NativeFunction {
             },
             name,
             typ: None,
+            speculative_exec_safe: false,
         }
     }
 
     /// A `.type` value, if one exists. Specified using `#[starlark(type("the_type"))]`.
     pub fn set_type(&mut self, typ: FrozenValue) {
         self.typ = Some(typ)
+    }
+
+    pub fn set_speculative_exec_safe(&mut self) {
+        self.speculative_exec_safe = true;
     }
 }
 
@@ -195,6 +203,8 @@ pub struct NativeMethod {
     function: Box<dyn NativeMeth>,
     name: String,
     typ: Option<FrozenValue>,
+    /// Safe to evaluate speculatively.
+    pub(crate) speculative_exec_safe: bool,
 }
 
 impl NativeMethod {
@@ -216,7 +226,12 @@ impl NativeMethod {
             function: box function,
             name,
             typ: None,
+            speculative_exec_safe: false,
         }
+    }
+
+    pub fn set_speculative_exec_safe(&mut self) {
+        self.speculative_exec_safe = true;
     }
 }
 
@@ -245,6 +260,8 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
 pub struct NativeAttribute {
     #[derivative(Debug = "ignore")]
     pub(crate) function: Box<dyn NativeAttr>,
+    /// Safe to evaluate speculatively.
+    pub(crate) speculative_exec_safe: bool,
 }
 
 starlark_simple_value!(NativeAttribute);
@@ -258,11 +275,16 @@ impl NativeAttribute {
     {
         NativeAttribute {
             function: box function,
+            speculative_exec_safe: false,
         }
     }
 
     pub(crate) fn call<'v>(&self, value: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         (self.function)(value, heap)
+    }
+
+    pub fn set_speculative_exec_safe(&mut self) {
+        self.speculative_exec_safe = true;
     }
 }
 

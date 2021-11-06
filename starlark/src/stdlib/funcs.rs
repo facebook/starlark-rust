@@ -95,6 +95,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// any([0, False]) == False
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn any(ref x: Value) -> bool {
         x.with_iterator(heap, |it| {
             for i in it {
@@ -125,6 +126,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// all([1, False]) == False
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn all(ref x: Value) -> bool {
         x.with_iterator(heap, |it| {
             for i in it {
@@ -162,6 +164,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(type(BOOL_TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn bool(ref x: Option<Value>) -> bool {
         match x {
             None => Ok(false),
@@ -186,6 +189,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// chr(0x1F63F) == '😿'
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn chr(ref i: Value) -> String {
         let cp = i.to_int()? as u32;
         match std::char::from_u32(cp) {
@@ -229,6 +233,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(type(Dict::TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn dict(args: Arguments<'v, '_>) -> Dict<'v> {
         // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
         // In particular, we don't generate the kwargs if there are no positional arguments.
@@ -281,6 +286,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// "capitalize" in dir("abc")
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn dir(ref x: Value) -> Vec<String> {
         Ok(x.dir_attr())
     }
@@ -304,6 +310,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// enumerate(["one", "two"], 1) == [(1, "one"), (2, "two")]
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn enumerate(ref it: Value, start @ 0: i32) -> Value<'v> {
         let v = it
             .iterate(heap)?
@@ -340,6 +347,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#, "argument must be a string, a number, or a boolean");
     /// ```
     #[starlark(type(StarlarkFloat::TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn float(ref a: Option<Value>) -> f64 {
         if a.is_none() {
             return Ok(0.0);
@@ -383,6 +391,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// getattr("banana", "split")("a") == ["b", "n", "n", ""] # equivalent to "banana".split("a")
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn getattr(ref a: Value, ref attr: &str, ref default: Option<Value>) -> Value<'v> {
         // Make sure we check if its a function first, to be consistent with `a.f`
         match a.get_attr(attr, heap)? {
@@ -419,6 +428,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// hash("hello") != hash("world")
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn hash(ref a: &str) -> i32 {
         // From the starlark spec:
         // > the hash function for strings is the same as that implemented by java.lang.String.hashCode,
@@ -497,6 +507,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#, "cannot convert float to integer");
     /// ```
     #[starlark(type(INT_TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn int(ref a: Option<Value>, base: Option<Value>) -> i32 {
         if a.is_none() {
             return Ok(0);
@@ -602,6 +613,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// len(True)    # error: not supported
     /// # "#, "not supported");
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn len(ref a: Value) -> i32 {
         a.length()
     }
@@ -625,6 +637,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#, "not supported");
     /// ```
     #[starlark(type(List::TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn list(ref a: Option<Value>) -> Value<'v> {
         Ok(if let Some(a) = a {
             if let Some(xs) = List::from_value(a) {
@@ -656,6 +669,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// max("two", "three", "four", key=len)  == "three"  # the longest
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn max(mut args: Vec<Value>, key: Option<Value>) -> Value<'v> {
         let args = if args.len() == 1 {
             args.swap_remove(0)
@@ -709,6 +723,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// min("two", "three", "four", key=len)    == "two"   # the shortest
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn min(mut args: Vec<Value>, key: Option<Value>) -> Value<'v> {
         let args = if args.len() == 1 {
             args.swap_remove(0)
@@ -766,6 +781,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ord("😿")                               == 0x1F63F
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn ord(ref a: Value) -> i32 {
         if let Some(s) = a.unpack_str() {
             let mut chars = s.chars();
@@ -814,6 +830,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(type(Range::TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn range(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> Range {
         let start = match a2 {
             None => 0,
@@ -842,6 +859,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// repr("x\"y😿 \\'")      == "\"x\\\"y😿 \\\\\\'\""
     /// "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn repr(ref a: Value) -> Value<'v> {
         let mut s = eval.string_pool.alloc();
         a.collect_repr(&mut s);
@@ -865,6 +883,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// reversed({"one": 1, "two": 2}.keys())  == ["two", "one"]
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn reversed(ref a: Value) -> Value<'v> {
         let mut v: Vec<Value> = a.iterate(heap)?.collect();
         v.reverse();
@@ -893,6 +912,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// sorted(["two", "three", "four"], key=len, reverse=True)  == ["three", "four", "two"] # longest to shortest
     /// # "#);
     /// ```
+    // This function is not spec-safe, because it may call `key` function
+    // which might be not spec-safe.
     fn sorted(ref x: Value, key: Option<Value>, reverse: Option<Value>) -> Value<'v> {
         let it = x.iterate(heap)?;
         let mut it = match key {
@@ -945,6 +966,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(type(STRING_TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn str(ref a: Value) -> Value<'v> {
         if a.unpack_str().is_some() {
             // Special case that can avoid reallocating, but is equivalent.
@@ -970,6 +992,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// tuple([1,2,3]) == (1, 2, 3)
     /// # "#);
     #[starlark(type(Tuple::TYPE))]
+    #[starlark(speculative_exec_safe)]
     fn tuple(ref a: Option<Value>) -> Value<'v> {
         let mut l = Vec::new();
         if let Some(a) = a {
@@ -993,6 +1016,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// type("hello")           == "string"
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn r#type(ref a: Value) -> Value<'v> {
         Ok(a.get_type_value().unpack().to_value())
     }
@@ -1015,6 +1039,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// zip(range(5), "abc".elems())    == [(0, "a"), (1, "b"), (2, "c")]
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn zip(args: Vec<Value>) -> Value<'v> {
         let mut v = Vec::new();
         let mut first = true;

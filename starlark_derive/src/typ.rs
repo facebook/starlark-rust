@@ -83,6 +83,7 @@ pub(crate) struct StarFun {
     pub attrs: Vec<Attribute>,
     pub args: Vec<StarArg>,
     pub return_type: Type,
+    pub speculative_exec_safe: bool,
     pub body: Block,
     pub source: StarFunSource,
 }
@@ -121,6 +122,7 @@ pub(crate) struct StarAttr {
     pub arg: Type,
     pub attrs: Vec<Attribute>,
     pub return_type: Type,
+    pub speculative_exec_safe: bool,
     pub body: Block,
 }
 
