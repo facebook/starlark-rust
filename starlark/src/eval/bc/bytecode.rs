@@ -25,7 +25,7 @@ use crate::{
         bc::{
             addr::BcPtrAddr,
             instr::{BcInstr, InstrControl},
-            instr_impl::InstrEndOfBc,
+            instr_impl::InstrEnd,
             instrs::BcInstrs,
             opcode::{BcOpcode, BcOpcodeHandler},
             stack_ptr::BcStackPtr,
@@ -55,8 +55,8 @@ impl Bc {
         let mut ptr = addr_ptr;
         loop {
             let opcode = ptr.get_opcode();
-            if opcode == BcOpcode::EndOfBc {
-                let end_of_bc = ptr.get_instr::<InstrEndOfBc>();
+            if opcode == BcOpcode::End {
+                let end_of_bc = ptr.get_instr::<InstrEnd>();
                 let (code_len, spans) = &end_of_bc.arg;
                 let code_start_ptr = ptr.sub(*code_len);
                 let addr = addr_ptr.offset_from(code_start_ptr);

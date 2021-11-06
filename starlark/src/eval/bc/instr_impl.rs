@@ -1782,9 +1782,9 @@ impl InstrNoFlowImpl for InstrProfileBcImpl {
 ///   through the instruction until we encounter this pseudo-instruction.
 /// * as a safety against memory overruns. Function block must terminate with return instruction,
 ///  but if return was missed, this instruction is executed and it panics.
-pub(crate) struct InstrEndOfBc;
+pub(crate) struct InstrEnd;
 
-impl BcInstr for InstrEndOfBc {
+impl BcInstr for InstrEnd {
     type Pop<'v> = ();
     type Push<'v> = ();
     /// Offset of current instruction and spans of all instructions.

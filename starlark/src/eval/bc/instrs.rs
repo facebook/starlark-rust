@@ -31,7 +31,7 @@ use crate::{
     eval::bc::{
         addr::{BcAddr, BcAddrOffset, BcPtrAddr},
         instr::BcInstr,
-        instr_impl::{InstrEndOfBc, InstrForLoop},
+        instr_impl::{InstrEnd, InstrForLoop},
         opcode::{BcOpcode, BcOpcodeHandler},
         repr::{BcInstrHeader, BcInstrRepr, BC_INSTR_ALIGN},
     },
@@ -85,9 +85,9 @@ unsafe fn drop_instrs(instrs: &[usize]) {
 /// allocated instructions, then both `BcInstrs::default` is free
 /// and evaluation start [is free](https://rust.godbolt.org/z/3nEhWGo4Y).
 fn empty_instrs() -> &'static [usize] {
-    static END_OF_BC: BcInstrRepr<InstrEndOfBc> = BcInstrRepr {
+    static END_OF_BC: BcInstrRepr<InstrEnd> = BcInstrRepr {
         header: BcInstrHeader {
-            opcode: BcOpcode::EndOfBc,
+            opcode: BcOpcode::End,
         },
         arg: (BcAddr(0), Vec::new()),
         _align: [],
@@ -182,38 +182,35 @@ impl BcInstrs {
     pub(crate) fn fmt_impl(&self, f: &mut dyn Write, newline: bool) -> fmt::Result {
         let mut loop_ends = Vec::new();
         let mut ptr = self.start_ptr();
-        loop {
+        while ptr != self.end_ptr() {
+            if ptr != self.start_ptr() && !newline {
+                write!(f, "; ")?;
+            }
+
             assert!(ptr < self.end_ptr());
             let ip = ptr.offset_from(self.start_ptr());
             if loop_ends.last() == Some(&ip) {
                 loop_ends.pop().unwrap();
             }
-            let opcopde = ptr.get_opcode();
-            if opcopde == BcOpcode::EndOfBc {
-                // We are not printing `EndOfBc`.
-                break;
-            }
+            let opcode = ptr.get_opcode();
             if newline {
                 for _ in &loop_ends {
                     write!(f, "  ")?;
                 }
             }
-            write!(f, "{}: {:?}", ip.0, opcopde)?;
-            opcopde.fmt_append_arg(ptr, ip, f)?;
+            write!(f, "{}: {:?}", ip.0, opcode)?;
+            if opcode != BcOpcode::End {
+                // `End` args are too verbose and not really instruction args.
+                opcode.fmt_append_arg(ptr, ip, f)?;
+            }
             if newline {
                 writeln!(f)?;
-            } else {
-                write!(f, "; ")?;
             }
-            if opcopde == BcOpcode::ForLoop {
+            if opcode == BcOpcode::ForLoop {
                 let for_loop = ptr.get_instr::<InstrForLoop>();
                 loop_ends.push(ip.offset(for_loop.arg));
             }
-            ptr = ptr.add(opcopde.size_of_repr());
-        }
-        write!(f, "{}: END", ptr.offset_from(self.start_ptr()).0)?;
-        if newline {
-            writeln!(f)?;
+            ptr = ptr.add(opcode.size_of_repr());
         }
         Ok(())
     }
@@ -293,7 +290,7 @@ impl BcInstrsWriter {
     }
 
     pub(crate) fn finish(mut self, spans: Vec<(BcAddr, Span)>) -> BcInstrs {
-        self.write::<InstrEndOfBc>((self.ip(), spans));
+        self.write::<InstrEnd>((self.ip(), spans));
         // We cannot destructure `self` to fetch `instrs` because `Self` has `drop,
         // so we `mem::take`.
         let instrs = mem::take(&mut self.instrs);
@@ -329,7 +326,7 @@ mod test {
     /// Test `BcInstrs::default()` produces something valid.
     #[test]
     fn default() {
-        assert_eq!("0: END", BcInstrs::default().to_string());
+        assert_eq!("0: End", BcInstrs::default().to_string());
     }
 
     #[test]
@@ -339,7 +336,7 @@ mod test {
         bc.write::<InstrReturn>(());
         let bc = bc.finish(Vec::new());
         if mem::size_of::<usize>() == 8 {
-            assert_eq!("0: Const True; 16: Return; 24: END", format!("{}", bc));
+            assert_eq!("0: Const True; 16: Return; 24: End", format!("{}", bc));
         } else if mem::size_of::<usize>() == 4 {
             // Starlark doesn't work now on 32-bit CPU
         } else {

@@ -115,7 +115,7 @@ pub(crate) enum BcOpcode {
     PossibleGc,
     BeforeStmt,
     ProfileBc,
-    EndOfBc,
+    End,
 }
 
 /// Callback for the `dispatch` function.
@@ -130,7 +130,7 @@ pub(crate) trait BcOpcodeAllHandler {
 
 impl BcOpcode {
     /// Opcode count.
-    pub(crate) const COUNT: usize = (BcOpcode::EndOfBc as usize) + 1;
+    pub(crate) const COUNT: usize = (BcOpcode::End as usize) + 1;
 
     /// Invoke a callback parameterized by instruction type depending on
     /// this opcode.

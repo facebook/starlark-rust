@@ -32,7 +32,7 @@ fn test_instrs(expected: &[BcOpcode], def_program: &str) {
         .downcast::<FrozenDef>()
         .unwrap();
     let mut opcodes = def.bc().instrs.opcodes();
-    assert_eq!(Some(BcOpcode::EndOfBc), opcodes.pop());
+    assert_eq!(Some(BcOpcode::End), opcodes.pop());
     assert_eq!(expected, opcodes);
 }
 
