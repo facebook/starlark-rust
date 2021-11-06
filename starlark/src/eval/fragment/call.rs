@@ -22,13 +22,15 @@ use gazebo::{coerce::coerce, prelude::*};
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
-    environment::FrozenModuleRef,
     eval::{
         compiler::{
             scope::{CstArgument, CstExpr},
             Compiler,
         },
-        fragment::expr::{ExprCompiledValue, MaybeNot},
+        fragment::{
+            expr::{ExprCompiledValue, MaybeNot},
+            stmt::OptimizeOnFreezeContext,
+        },
         Arguments, FrozenDef,
     },
     gazebo::prelude::SliceExt,
@@ -58,17 +60,17 @@ pub(crate) enum CallCompiled {
 }
 
 impl Spanned<CallCompiled> {
-    pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ExprCompiledValue {
+    pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiledValue {
         ExprCompiledValue::Call(self.map(|call| match *call {
             CallCompiled::Call(box (ref fun, ref args)) => {
-                let fun = fun.optimize_on_freeze(module);
-                let args = args.optimize_on_freeze(module);
+                let fun = fun.optimize_on_freeze(ctx);
+                let args = args.optimize_on_freeze(ctx);
                 CallCompiled::Call(box (fun, args))
             }
             CallCompiled::Method(box (ref this, ref field, ref args)) => {
-                let this = this.optimize_on_freeze(module);
+                let this = this.optimize_on_freeze(ctx);
                 let field = field.clone();
-                let args = args.optimize_on_freeze(module);
+                let args = args.optimize_on_freeze(ctx);
                 CallCompiled::Method(box (this, field, args))
             }
         }))
@@ -118,7 +120,7 @@ impl ArgsCompiledValue {
         }))
     }
 
-    fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ArgsCompiledValue {
+    fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ArgsCompiledValue {
         let ArgsCompiledValue {
             ref pos_named,
             ref names,
@@ -126,10 +128,10 @@ impl ArgsCompiledValue {
             ref kwargs,
         } = *self;
         ArgsCompiledValue {
-            pos_named: pos_named.map(|p| p.optimize_on_freeze(module)),
+            pos_named: pos_named.map(|p| p.optimize_on_freeze(ctx)),
             names: names.clone(),
-            args: args.as_ref().map(|a| a.optimize_on_freeze(module)),
-            kwargs: kwargs.as_ref().map(|a| a.optimize_on_freeze(module)),
+            args: args.as_ref().map(|a| a.optimize_on_freeze(ctx)),
+            kwargs: kwargs.as_ref().map(|a| a.optimize_on_freeze(ctx)),
         }
     }
 }

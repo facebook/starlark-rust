@@ -21,13 +21,16 @@ use gazebo::prelude::*;
 
 use crate::{
     codemap::{Span, Spanned},
-    environment::FrozenModuleRef,
     eval::{
         compiler::{
             scope::{CstExpr, CstPayload},
             Compiler,
         },
-        fragment::{expr::ExprCompiledValue, known::list_to_tuple, stmt::AssignCompiledValue},
+        fragment::{
+            expr::ExprCompiledValue,
+            known::list_to_tuple,
+            stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
+        },
     },
     syntax::ast::{ClauseP, ForClauseP},
 };
@@ -129,15 +132,15 @@ pub(crate) enum ComprCompiled {
 }
 
 impl ComprCompiled {
-    pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ExprCompiledValue {
+    pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiledValue {
         ExprCompiledValue::Compr(match self {
             ComprCompiled::List(box ref x, ref clauses) => ComprCompiled::List(
-                box x.optimize_on_freeze(module),
-                clauses.map(|c| c.optimize_on_freeze(module)),
+                box x.optimize_on_freeze(ctx),
+                clauses.map(|c| c.optimize_on_freeze(ctx)),
             ),
             ComprCompiled::Dict(box (ref k, ref v), ref clauses) => ComprCompiled::Dict(
-                box (k.optimize_on_freeze(module), v.optimize_on_freeze(module)),
-                clauses.map(|c| c.optimize_on_freeze(module)),
+                box (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx)),
+                clauses.map(|c| c.optimize_on_freeze(ctx)),
             ),
         })
     }
@@ -152,7 +155,7 @@ pub(crate) struct ClauseCompiled {
 }
 
 impl ClauseCompiled {
-    fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> ClauseCompiled {
+    fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ClauseCompiled {
         let ClauseCompiled {
             ref var,
             ref over,
@@ -160,10 +163,10 @@ impl ClauseCompiled {
             ref ifs,
         } = *self;
         ClauseCompiled {
-            var: var.optimize_on_freeze(module),
-            over: over.optimize_on_freeze(module),
+            var: var.optimize_on_freeze(ctx),
+            over: over.optimize_on_freeze(ctx),
             over_span,
-            ifs: ifs.map(|e| e.optimize_on_freeze(module)),
+            ifs: ifs.map(|e| e.optimize_on_freeze(ctx)),
         }
     }
 }

@@ -42,7 +42,7 @@ use crate::{
         },
         fragment::{
             expr::{ExprCompiledValue, MaybeNot},
-            stmt::{StmtCompileContext, StmtCompiledValue, StmtsCompiled},
+            stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -682,7 +682,9 @@ impl FrozenDef {
         let body_optimized = self
             .def_info
             .body_stmts
-            .optimize_on_freeze(def_module.as_ref())
+            .optimize_on_freeze(&OptimizeOnFreezeContext {
+                module: def_module.as_ref(),
+            })
             .as_bc(&self.def_info.stmt_compile_context);
 
         // Store the optimized body.

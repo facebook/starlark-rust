@@ -80,36 +80,40 @@ pub(crate) struct StmtCompileContext {
     pub(crate) bc_profile: bool,
 }
 
+pub(crate) struct OptimizeOnFreezeContext<'a> {
+    pub(crate) module: &'a FrozenModuleRef,
+}
+
 impl Spanned<StmtCompiledValue> {
-    fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
+    fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> StmtsCompiled {
         let span = self.span;
         match self.node {
             StmtCompiledValue::Return(Some(ref e)) => StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::Return(Some(e.optimize_on_freeze(module))),
+                node: StmtCompiledValue::Return(Some(e.optimize_on_freeze(ctx))),
             }),
             StmtCompiledValue::Expr(ref expr) => {
-                let expr = expr.optimize_on_freeze(module);
+                let expr = expr.optimize_on_freeze(ctx);
                 Self::expr(expr)
             }
             StmtCompiledValue::Assign(ref lhs, ref rhs) => {
-                let lhs = lhs.optimize_on_freeze(module);
-                let rhs = rhs.optimize_on_freeze(module);
+                let lhs = lhs.optimize_on_freeze(ctx);
+                let rhs = rhs.optimize_on_freeze(ctx);
                 StmtsCompiled::one(Spanned {
                     span,
                     node: StmtCompiledValue::Assign(lhs, rhs),
                 })
             }
             StmtCompiledValue::If(box (ref cond, ref t, ref f)) => {
-                let cond = cond.optimize_on_freeze(module);
-                let t = t.optimize_on_freeze(module);
-                let f = f.optimize_on_freeze(module);
+                let cond = cond.optimize_on_freeze(ctx);
+                let t = t.optimize_on_freeze(ctx);
+                let f = f.optimize_on_freeze(ctx);
                 Self::if_stmt(span, cond, t, f)
             }
             StmtCompiledValue::For(box (ref var, ref over, ref body)) => {
-                let var = var.optimize_on_freeze(module);
-                let over = over.optimize_on_freeze(module);
-                let body = body.optimize_on_freeze(module);
+                let var = var.optimize_on_freeze(ctx);
+                let over = over.optimize_on_freeze(ctx);
+                let body = body.optimize_on_freeze(ctx);
                 StmtsCompiled::one(Spanned {
                     span,
                     node: StmtCompiledValue::For(box (var, over, body)),
@@ -241,14 +245,14 @@ impl StmtsCompiled {
         self.0.extend(right.0);
     }
 
-    pub(crate) fn optimize_on_freeze(&self, module: &FrozenModuleRef) -> StmtsCompiled {
+    pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> StmtsCompiled {
         let mut stmts = StmtsCompiled::empty();
         match &self.0 {
             SmallVec1::Empty => {}
-            SmallVec1::One(s) => stmts.extend(s.optimize_on_freeze(module)),
+            SmallVec1::One(s) => stmts.extend(s.optimize_on_freeze(ctx)),
             SmallVec1::Many(ss) => {
                 for s in ss {
-                    stmts.extend(s.optimize_on_freeze(module));
+                    stmts.extend(s.optimize_on_freeze(ctx));
                 }
             }
         }
@@ -291,22 +295,22 @@ pub(crate) enum AssignCompiledValue {
 impl Spanned<AssignCompiledValue> {
     pub(crate) fn optimize_on_freeze(
         &self,
-        module: &FrozenModuleRef,
+        ctx: &OptimizeOnFreezeContext,
     ) -> Spanned<AssignCompiledValue> {
         let span = self.span;
         let assign = match self.node {
             AssignCompiledValue::Dot(ref object, ref field) => {
-                let object = object.optimize_on_freeze(module);
+                let object = object.optimize_on_freeze(ctx);
                 let field = field.clone();
                 AssignCompiledValue::Dot(object, field)
             }
             AssignCompiledValue::ArrayIndirection(ref array, ref index) => {
-                let array = array.optimize_on_freeze(module);
-                let index = index.optimize_on_freeze(module);
+                let array = array.optimize_on_freeze(ctx);
+                let index = index.optimize_on_freeze(ctx);
                 AssignCompiledValue::ArrayIndirection(array, index)
             }
             AssignCompiledValue::Tuple(ref xs) => {
-                let xs = xs.map(|x| x.optimize_on_freeze(module));
+                let xs = xs.map(|x| x.optimize_on_freeze(ctx));
                 AssignCompiledValue::Tuple(xs)
             }
             ref e @ (AssignCompiledValue::Local(..) | AssignCompiledValue::Module(..)) => e.clone(),

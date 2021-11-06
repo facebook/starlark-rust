@@ -24,7 +24,7 @@ use thiserror::Error;
 use crate::{
     codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
-    environment::{slots::ModuleSlotId, FrozenModuleRef},
+    environment::slots::ModuleSlotId,
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
@@ -33,6 +33,7 @@ use crate::{
         },
         fragment::{
             call::CallCompiled, compr::ComprCompiled, def::DefCompiled, known::list_to_tuple,
+            stmt::OptimizeOnFreezeContext,
         },
         runtime::slots::LocalSlotId,
     },
@@ -201,7 +202,7 @@ impl ExprCompiledValue {
 impl Spanned<ExprCompiledValue> {
     pub(crate) fn optimize_on_freeze(
         &self,
-        module: &FrozenModuleRef,
+        ctx: &OptimizeOnFreezeContext,
     ) -> Spanned<ExprCompiledValue> {
         let span = self.span;
         let expr = match self.node {
@@ -209,7 +210,7 @@ impl Spanned<ExprCompiledValue> {
             | ExprCompiledValue::Local(..)
             | ExprCompiledValue::LocalCaptured(..)) => e.clone(),
             ExprCompiledValue::Module(slot) => {
-                match module.get_module_data().get_slot(slot) {
+                match ctx.module.get_module_data().get_slot(slot) {
                     None => {
                         // Let if fail at runtime.
                         ExprCompiledValue::Module(slot)
@@ -218,94 +219,94 @@ impl Spanned<ExprCompiledValue> {
                 }
             }
             ExprCompiledValue::Equals(box (ref l, ref r), maybe_not) => {
-                let l = l.optimize_on_freeze(module);
-                let r = r.optimize_on_freeze(module);
+                let l = l.optimize_on_freeze(ctx);
+                let r = r.optimize_on_freeze(ctx);
                 eval_equals(l, r, maybe_not)
             }
             ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
-                let l = l.optimize_on_freeze(module);
-                let r = r.optimize_on_freeze(module);
+                let l = l.optimize_on_freeze(ctx);
+                let r = r.optimize_on_freeze(ctx);
                 ExprCompiledValue::Compare(box (l, r), cmp)
             }
             ExprCompiledValue::Type(box ref e) => {
-                ExprCompiledValue::Type(box e.optimize_on_freeze(module))
+                ExprCompiledValue::Type(box e.optimize_on_freeze(ctx))
             }
             ExprCompiledValue::Len(box ref e) => {
-                ExprCompiledValue::Len(box e.optimize_on_freeze(module))
+                ExprCompiledValue::Len(box e.optimize_on_freeze(ctx))
             }
             ExprCompiledValue::TypeIs(box ref e, t, maybe_not) => {
-                ExprCompiledValue::TypeIs(box e.optimize_on_freeze(module), t, maybe_not)
+                ExprCompiledValue::TypeIs(box e.optimize_on_freeze(ctx), t, maybe_not)
             }
             ExprCompiledValue::Tuple(ref xs) => {
-                ExprCompiledValue::Tuple(xs.map(|e| e.optimize_on_freeze(module)))
+                ExprCompiledValue::Tuple(xs.map(|e| e.optimize_on_freeze(ctx)))
             }
             ExprCompiledValue::List(ref xs) => {
-                ExprCompiledValue::List(xs.map(|e| e.optimize_on_freeze(module)))
+                ExprCompiledValue::List(xs.map(|e| e.optimize_on_freeze(ctx)))
             }
             ExprCompiledValue::Dict(ref kvs) => ExprCompiledValue::Dict(
-                kvs.map(|(k, v)| (k.optimize_on_freeze(module), v.optimize_on_freeze(module))),
+                kvs.map(|(k, v)| (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx))),
             ),
-            ExprCompiledValue::Compr(ref compr) => compr.optimize_on_freeze(module),
+            ExprCompiledValue::Compr(ref compr) => compr.optimize_on_freeze(ctx),
             ExprCompiledValue::Dot(box ref object, ref field) => {
-                ExprCompiledValue::Dot(box object.optimize_on_freeze(module), field.clone())
+                ExprCompiledValue::Dot(box object.optimize_on_freeze(ctx), field.clone())
             }
             ExprCompiledValue::ArrayIndirection(box (ref array, ref index)) => {
-                let array = array.optimize_on_freeze(module);
-                let index = index.optimize_on_freeze(module);
+                let array = array.optimize_on_freeze(ctx);
+                let index = index.optimize_on_freeze(ctx);
                 ExprCompiledValue::ArrayIndirection(box (array, index))
             }
             ExprCompiledValue::If(box (ref cond, ref t, ref f)) => {
-                let cond = cond.optimize_on_freeze(module);
-                let t = t.optimize_on_freeze(module);
-                let f = f.optimize_on_freeze(module);
+                let cond = cond.optimize_on_freeze(ctx);
+                let t = t.optimize_on_freeze(ctx);
+                let f = f.optimize_on_freeze(ctx);
                 return ExprCompiledValue::if_expr(cond, t, f);
             }
             ExprCompiledValue::Slice(box (ref v, ref start, ref stop, ref step)) => {
-                let v = v.optimize_on_freeze(module);
-                let start = start.as_ref().map(|x| x.optimize_on_freeze(module));
-                let stop = stop.as_ref().map(|x| x.optimize_on_freeze(module));
-                let step = step.as_ref().map(|x| x.optimize_on_freeze(module));
+                let v = v.optimize_on_freeze(ctx);
+                let start = start.as_ref().map(|x| x.optimize_on_freeze(ctx));
+                let stop = stop.as_ref().map(|x| x.optimize_on_freeze(ctx));
+                let step = step.as_ref().map(|x| x.optimize_on_freeze(ctx));
                 ExprCompiledValue::Slice(box (v, start, stop, step))
             }
             ExprCompiledValue::Not(box ref e) => {
-                let e = e.optimize_on_freeze(module);
+                let e = e.optimize_on_freeze(ctx);
                 return ExprCompiledValue::not(span, e);
             }
             ExprCompiledValue::Minus(box ref e) => {
-                let e = e.optimize_on_freeze(module);
+                let e = e.optimize_on_freeze(ctx);
                 ExprCompiledValue::minus(e)
             }
             ExprCompiledValue::Plus(box ref e) => {
-                ExprCompiledValue::Plus(box e.optimize_on_freeze(module))
+                ExprCompiledValue::Plus(box e.optimize_on_freeze(ctx))
             }
             ExprCompiledValue::BitNot(box ref e) => {
-                ExprCompiledValue::BitNot(box e.optimize_on_freeze(module))
+                ExprCompiledValue::BitNot(box e.optimize_on_freeze(ctx))
             }
             ExprCompiledValue::And(box (ref l, ref r)) => {
-                let l = l.optimize_on_freeze(module);
-                let r = r.optimize_on_freeze(module);
+                let l = l.optimize_on_freeze(ctx);
+                let r = r.optimize_on_freeze(ctx);
                 return ExprCompiledValue::and(l, r);
             }
             ExprCompiledValue::Or(box (ref l, ref r)) => {
-                let l = l.optimize_on_freeze(module);
-                let r = r.optimize_on_freeze(module);
+                let l = l.optimize_on_freeze(ctx);
+                let r = r.optimize_on_freeze(ctx);
                 return ExprCompiledValue::or(l, r);
             }
             ExprCompiledValue::Op(op, box (ref l, ref r)) => {
-                let l = l.optimize_on_freeze(module);
-                let r = r.optimize_on_freeze(module);
+                let l = l.optimize_on_freeze(ctx);
+                let r = r.optimize_on_freeze(ctx);
                 ExprCompiledValue::Op(op, box (l, r))
             }
             ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
-                let arg = arg.optimize_on_freeze(module);
+                let arg = arg.optimize_on_freeze(ctx);
                 ExprCompiledValue::PercentSOne(box (before, arg, after))
             }
             ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
-                let arg = arg.optimize_on_freeze(module);
+                let arg = arg.optimize_on_freeze(ctx);
                 ExprCompiledValue::FormatOne(box (before, arg, after))
             }
             ref d @ ExprCompiledValue::Def(..) => d.clone(),
-            ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(module),
+            ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(ctx),
         };
         Spanned { node: expr, span }
     }
