@@ -311,33 +311,27 @@ fn load_local<'v, const N: usize>(
     Ok(unsafe { values.assume_init() })
 }
 
-macro_rules! instr_local_local_n {
-    ($n:expr, $struct_name:ident, $impl_name:ident, $opcode:ident) => {
-        pub(crate) struct $impl_name;
-        pub(crate) type $struct_name = InstrNoFlow<$impl_name>;
+pub(crate) struct InstrLocalLocalNImpl<const N: usize>;
+pub(crate) type InstrLoadLocal2 = InstrNoFlow<InstrLocalLocalNImpl<2>>;
+pub(crate) type InstrLoadLocal3 = InstrNoFlow<InstrLocalLocalNImpl<3>>;
+pub(crate) type InstrLoadLocal4 = InstrNoFlow<InstrLocalLocalNImpl<4>>;
 
-        impl InstrNoFlowImpl for $impl_name {
-            type Pop<'v> = ();
-            type Push<'v> = [Value<'v>; $n];
-            type Arg = ([LocalSlotId; $n], FrozenRef<BcInstrSpans>);
+impl<const N: usize> InstrNoFlowImpl for InstrLocalLocalNImpl<N> {
+    type Pop<'v> = ();
+    type Push<'v> = [Value<'v>; N];
+    type Arg = ([LocalSlotId; N], FrozenRef<BcInstrSpans>);
 
-            #[inline(always)]
-            fn run_with_args<'v>(
-                eval: &mut Evaluator<'v, '_>,
-                _stack: &mut BcStackPtr<'v, '_>,
-                _ip: BcPtrAddr,
-                (slots, spans): &Self::Arg,
-                _pops: (),
-            ) -> Result<[Value<'v>; $n], EvalException> {
-                load_local(eval, slots, *spans)
-            }
-        }
-    };
+    #[inline(always)]
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
+        (slots, spans): &Self::Arg,
+        _pops: (),
+    ) -> Result<[Value<'v>; N], EvalException> {
+        load_local(eval, slots, *spans)
+    }
 }
-
-instr_local_local_n!(2, InstrLoadLocal2, InstrLoadLocal2Impl, LoadLocal2);
-instr_local_local_n!(3, InstrLoadLocal3, InstrLoadLocal3Impl, LoadLocal3);
-instr_local_local_n!(4, InstrLoadLocal4, InstrLoadLocal4Impl, LoadLocal4);
 
 impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
     type Pop<'v> = ();
