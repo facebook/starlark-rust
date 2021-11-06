@@ -33,7 +33,9 @@ use crate::eval::bc::{
 };
 
 /// Address relative to bytecode start.
-#[derive(Eq, PartialEq, Copy, Clone, Dupe, Debug, Ord, PartialOrd, Display)]
+#[derive(
+    Eq, PartialEq, Copy, Clone, Dupe, Debug, Ord, PartialOrd, Display, Hash
+)]
 #[display(fmt = "@{}", _0)]
 pub(crate) struct BcAddr(pub(crate) u32);
 

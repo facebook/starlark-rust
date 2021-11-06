@@ -60,6 +60,8 @@ impl Display for TruncateValueRepr {
 pub(crate) trait BcInstrArg {
     /// Append space then append the argument, or append nothing if the argument is empty.
     fn fmt_append(param: &Self, ip: BcAddr, f: &mut dyn Write) -> fmt::Result;
+    /// Collect instruction jump addresses.
+    fn visit_jump_addr(param: &Self, consumer: &mut dyn FnMut(BcAddrOffset));
     /// How many additional stack elements this instruction pops.
     fn pops_stack(param: &Self) -> u32;
     /// How many additional stack elements this instruction pushes.
@@ -70,6 +72,8 @@ impl BcInstrArg for () {
     fn fmt_append(_param: &Self, _ip: BcAddr, _f: &mut dyn Write) -> fmt::Result {
         Ok(())
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack((): &()) -> u32 {
         0
@@ -84,6 +88,8 @@ impl BcInstrArg for u32 {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param)
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_: &Self) -> u32 {
         0
@@ -101,6 +107,11 @@ impl<A: BcInstrArg, B: BcInstrArg> BcInstrArg for (A, B) {
         Ok(())
     }
 
+    fn visit_jump_addr((a, b): &Self, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        BcInstrArg::visit_jump_addr(a, consumer);
+        BcInstrArg::visit_jump_addr(b, consumer);
+    }
+
     fn pops_stack((a, b): &Self) -> u32 {
         A::pops_stack(a) + B::pops_stack(b)
     }
@@ -116,6 +127,12 @@ impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg> BcInstrArg for (A, B, C) {
         B::fmt_append(b, ip, f)?;
         C::fmt_append(c, ip, f)?;
         Ok(())
+    }
+
+    fn visit_jump_addr((a, b, c): &Self, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        BcInstrArg::visit_jump_addr(a, consumer);
+        BcInstrArg::visit_jump_addr(b, consumer);
+        BcInstrArg::visit_jump_addr(c, consumer);
     }
 
     fn pops_stack((a, b, c): &Self) -> u32 {
@@ -137,6 +154,13 @@ impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg, D: BcInstrArg> BcInstrArg for 
         Ok(())
     }
 
+    fn visit_jump_addr((a, b, c, d): &Self, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        BcInstrArg::visit_jump_addr(a, consumer);
+        BcInstrArg::visit_jump_addr(b, consumer);
+        BcInstrArg::visit_jump_addr(c, consumer);
+        BcInstrArg::visit_jump_addr(d, consumer);
+    }
+
     fn pops_stack((a, b, c, d): &Self) -> u32 {
         A::pops_stack(a) + B::pops_stack(b) + C::pops_stack(c) + D::pops_stack(d)
     }
@@ -152,6 +176,12 @@ impl<A: BcInstrArg, const N: usize> BcInstrArg for [A; N] {
             A::fmt_append(a, ip, f)?;
         }
         Ok(())
+    }
+
+    fn visit_jump_addr(param: &Self, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        for a in param {
+            BcInstrArg::visit_jump_addr(a, consumer);
+        }
     }
 
     fn pops_stack(param: &Self) -> u32 {
@@ -176,6 +206,10 @@ impl BcInstrArg for BcAddrOffset {
         write!(f, " {}", ip.offset(*param).0)
     }
 
+    fn visit_jump_addr(param: &Self, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        consumer(*param);
+    }
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -190,6 +224,8 @@ impl BcInstrArg for BcAddr {
         write!(f, " {}", param.0)
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -203,6 +239,8 @@ impl BcInstrArg for FrozenValue {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", TruncateValueRepr(*param))
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_: &Self) -> u32 {
         0
@@ -221,6 +259,8 @@ impl BcInstrArg for Option<FrozenValue> {
         }
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -235,6 +275,8 @@ impl BcInstrArg for FrozenStringValue {
         write!(f, " {}", TruncateValueRepr(param.unpack()))
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -248,6 +290,8 @@ impl BcInstrArg for String {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, "{:?}", param)
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_: &Self) -> u32 {
         0
@@ -266,6 +310,8 @@ where
         write!(f, " {}", param.as_ref())
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -279,6 +325,8 @@ impl<T: StarlarkValue<'static>> BcInstrArg for FrozenValueTyped<'static, T> {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", TruncateValueRepr(param.to_frozen_value()))
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_: &Self) -> u32 {
         0
@@ -294,6 +342,8 @@ impl BcInstrArg for LocalSlotId {
         write!(f, " &{}", param.0)
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -307,6 +357,8 @@ impl BcInstrArg for ModuleSlotId {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " m{}", param.0)
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_: &Self) -> u32 {
         0
@@ -322,6 +374,8 @@ impl BcInstrArg for Span {
         write!(f, " {}:{}", param.begin().get(), param.end().get())
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -336,6 +390,8 @@ impl BcInstrArg for BcOpcode {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {:?}", param)
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_: &Self) -> u32 {
         0
@@ -367,6 +423,8 @@ impl BcInstrArg for ArgPushesStack {
         BcInstrArg::fmt_append(&param.0, ip, f)
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_: &Self) -> u32 {
         0
     }
@@ -380,6 +438,8 @@ impl BcInstrArg for ArgPopsStack {
     fn fmt_append(param: &Self, ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         BcInstrArg::fmt_append(&param.0, ip, f)
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(pops: &Self) -> u32 {
         pops.0
@@ -395,6 +455,8 @@ impl BcInstrArg for ArgPopsStack1 {
         Ok(())
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_param: &Self) -> u32 {
         1
     }
@@ -408,6 +470,8 @@ impl BcInstrArg for ArgPopsStackMaybe1 {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, "{}", if param.0 { 1 } else { 0 })
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(param: &Self) -> u32 {
         if param.0 { 1 } else { 0 }
@@ -423,6 +487,8 @@ impl BcInstrArg for Vec<(BcAddr, Span)> {
         write!(f, " spans")
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_param: &Self) -> u32 {
         0
     }
@@ -436,6 +502,8 @@ impl BcInstrArg for Symbol {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param.as_str())
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_param: &Self) -> u32 {
         0
@@ -459,6 +527,8 @@ impl BcInstrArg for Box<[FrozenValue]> {
         Ok(())
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_param: &Self) -> u32 {
         0
     }
@@ -480,6 +550,8 @@ impl BcInstrArg for Box<[Hashed<FrozenValue>]> {
         write!(f, "]")?;
         Ok(())
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(_param: &Self) -> u32 {
         0
@@ -503,6 +575,8 @@ impl BcInstrArg for SmallMap<FrozenValue, FrozenValue> {
         Ok(())
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_param: &Self) -> u32 {
         0
     }
@@ -517,6 +591,8 @@ impl BcInstrArg for InstrDefData {
         write!(f, " {:?}", param)
     }
 
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
     fn pops_stack(_param: &Self) -> u32 {
         0
     }
@@ -530,6 +606,8 @@ impl BcInstrArg for ArgsCompiledValueBc {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {{{}}}", param)
     }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
 
     fn pops_stack(param: &Self) -> u32 {
         param.pos_named + if param.args { 1 } else { 0 } + if param.kwargs { 1 } else { 0 }
@@ -563,5 +641,22 @@ impl BcOpcode {
         }
 
         self.dispatch(HandlerImpl { ptr, ip, f })
+    }
+
+    pub(crate) fn visit_jump_addr(self, ptr: BcPtrAddr, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        struct HandlerImpl<'b, 'c> {
+            ptr: BcPtrAddr<'b>,
+            consumer: &'c mut dyn FnMut(BcAddrOffset),
+        }
+
+        impl BcOpcodeHandler<()> for HandlerImpl<'_, '_> {
+            fn handle<I: BcInstr>(self) {
+                let HandlerImpl { ptr, consumer } = self;
+                let instr = ptr.get_instr::<I>();
+                I::Arg::visit_jump_addr(&instr.arg, consumer);
+            }
+        }
+
+        self.dispatch(HandlerImpl { ptr, consumer });
     }
 }

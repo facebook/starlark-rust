@@ -18,10 +18,11 @@
 //! Instructions serialized in byte array.
 
 use std::{
+    collections::HashSet,
     convert::TryInto,
     fmt,
     fmt::{Display, Formatter, Write},
-    mem, ptr, slice,
+    iter, mem, ptr, slice,
 };
 
 use either::Either;
@@ -179,20 +180,45 @@ impl BcInstrs {
         opcodes
     }
 
+    fn iter(&self) -> impl Iterator<Item = (BcPtrAddr, BcAddr)> {
+        let mut next_ptr = self.start_ptr();
+        iter::from_fn(move || {
+            assert!(next_ptr <= self.end_ptr());
+            if next_ptr == self.end_ptr() {
+                None
+            } else {
+                let ptr = next_ptr;
+                let ip = ptr.offset_from(self.start_ptr());
+                next_ptr = next_ptr.add(ptr.get_opcode().size_of_repr());
+                Some((ptr, ip))
+            }
+        })
+    }
+
     pub(crate) fn fmt_impl(&self, f: &mut dyn Write, newline: bool) -> fmt::Result {
         let mut loop_ends = Vec::new();
-        let mut ptr = self.start_ptr();
-        while ptr != self.end_ptr() {
+        let mut jump_targets = HashSet::new();
+        for (ptr, ip) in self.iter() {
+            ptr.get_opcode().visit_jump_addr(ptr, &mut |offset| {
+                jump_targets.insert(ip.offset(offset));
+            });
+        }
+        for (ptr, ip) in self.iter() {
             if ptr != self.start_ptr() && !newline {
                 write!(f, "; ")?;
             }
 
-            assert!(ptr < self.end_ptr());
-            let ip = ptr.offset_from(self.start_ptr());
             if loop_ends.last() == Some(&ip) {
                 loop_ends.pop().unwrap();
             }
             let opcode = ptr.get_opcode();
+            if !jump_targets.is_empty() {
+                if jump_targets.contains(&ip) {
+                    write!(f, ">")?;
+                } else if newline {
+                    write!(f, " ")?;
+                }
+            }
             if newline {
                 for _ in &loop_ends {
                     write!(f, "  ")?;
@@ -210,7 +236,6 @@ impl BcInstrs {
                 let for_loop = ptr.get_instr::<InstrForLoop>();
                 loop_ends.push(ip.offset(for_loop.arg));
             }
-            ptr = ptr.add(opcode.size_of_repr());
         }
         Ok(())
     }
