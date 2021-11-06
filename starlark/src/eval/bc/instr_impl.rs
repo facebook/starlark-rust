@@ -197,33 +197,27 @@ impl InstrNoFlowImpl for InstrConstImpl {
     }
 }
 
-macro_rules! instr_const_n {
-    ($n:expr, $struct_name:ident, $impl_name:ident, $opcode:ident) => {
-        pub(crate) struct $impl_name;
-        pub(crate) type $struct_name = InstrNoFlow<$impl_name>;
+pub(crate) struct InstrConstNImpl<const N: usize>;
+pub(crate) type InstrConst2 = InstrNoFlow<InstrConstNImpl<2>>;
+pub(crate) type InstrConst3 = InstrNoFlow<InstrConstNImpl<3>>;
+pub(crate) type InstrConst4 = InstrNoFlow<InstrConstNImpl<4>>;
 
-        impl InstrNoFlowImpl for $impl_name {
-            type Pop<'v> = ();
-            type Push<'v> = [Value<'v>; $n];
-            type Arg = [FrozenValue; $n];
+impl<const N: usize> InstrNoFlowImpl for InstrConstNImpl<N> {
+    type Pop<'v> = ();
+    type Push<'v> = [Value<'v>; N];
+    type Arg = [FrozenValue; N];
 
-            #[inline(always)]
-            fn run_with_args<'v>(
-                _eval: &mut Evaluator<'v, '_>,
-                _stack: &mut BcStackPtr<'v, '_>,
-                _ip: BcPtrAddr,
-                vs: &Self::Arg,
-                _pops: (),
-            ) -> Result<[Value<'v>; $n], EvalException> {
-                Ok(coerce(*vs))
-            }
-        }
-    };
+    #[inline(always)]
+    fn run_with_args<'v>(
+        _eval: &mut Evaluator<'v, '_>,
+        _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
+        vs: &Self::Arg,
+        _pops: (),
+    ) -> Result<[Value<'v>; N], EvalException> {
+        Ok(coerce(*vs))
+    }
 }
-
-instr_const_n!(2, InstrConst2, InstrConst2Impl, Const2);
-instr_const_n!(3, InstrConst3, InstrConst3Impl, Const3);
-instr_const_n!(4, InstrConst4, InstrConst4Impl, Const4);
 
 pub(crate) struct InstrLoadLocalImpl;
 pub(crate) struct InstrLoadLocalAndConstImpl;
