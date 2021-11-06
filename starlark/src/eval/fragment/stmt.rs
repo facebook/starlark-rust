@@ -82,7 +82,6 @@ pub(crate) struct StmtCompileContext {
 
 pub(crate) struct OptimizeOnFreezeContext<'a> {
     pub(crate) module: &'a FrozenModuleRef,
-    #[allow(dead_code)] // TODO(nga): remove `allow` when used
     pub(crate) heap: &'a FrozenHeap,
 }
 

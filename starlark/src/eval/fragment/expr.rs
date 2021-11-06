@@ -238,7 +238,7 @@ impl Spanned<ExprCompiledValue> {
                 ExprCompiledValue::TypeIs(box e.optimize_on_freeze(ctx), t, maybe_not)
             }
             ExprCompiledValue::Tuple(ref xs) => {
-                ExprCompiledValue::Tuple(xs.map(|e| e.optimize_on_freeze(ctx)))
+                ExprCompiledValue::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.heap)
             }
             ExprCompiledValue::List(ref xs) => {
                 ExprCompiledValue::List(xs.map(|e| e.optimize_on_freeze(ctx)))
@@ -449,9 +449,21 @@ impl ExprCompiledValue {
             Some(ExprCompiledValue::List(items))
         } else if let Some(v) = Tuple::from_value(v) {
             let items = Self::try_values(span, v.content(), heap)?;
-            Some(ExprCompiledValue::Tuple(items))
+            Some(Self::tuple(items, heap))
         } else {
             None
+        }
+    }
+
+    /// Construct tuple expression from elements optimizing to frozen tuple value when possible.
+    pub(crate) fn tuple(
+        elems: Vec<Spanned<ExprCompiledValue>>,
+        heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        if let Ok(elems) = elems.try_map(|e| e.as_value().ok_or(())) {
+            ExprCompiledValue::Value(heap.alloc_tuple(&elems))
+        } else {
+            ExprCompiledValue::Tuple(elems)
         }
     }
 }
@@ -756,13 +768,7 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Tuple(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
-                if xs.iter().all(|x| x.as_value().is_some()) {
-                    let content = xs.map(|v| v.as_value().unwrap());
-                    let result = self.eval.module_env.frozen_heap().alloc_tuple(&content);
-                    value!(result)
-                } else {
-                    ExprCompiledValue::Tuple(xs)
-                }
+                ExprCompiledValue::tuple(xs, self.eval.module_env.frozen_heap())
             }
             ExprP::List(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
