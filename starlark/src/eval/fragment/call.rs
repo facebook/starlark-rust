@@ -33,8 +33,9 @@ use crate::{
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
     values::{
-        function::NativeFunction, string::interpolation::parse_format_one, FrozenStringValue,
-        FrozenValue, FrozenValueTyped, StarlarkValue,
+        function::{FrozenBoundMethod, NativeFunction},
+        string::interpolation::parse_format_one,
+        FrozenStringValue, FrozenValue, FrozenValueTyped,
     },
 };
 
@@ -172,6 +173,19 @@ impl Compiler<'_, '_, '_> {
         res
     }
 
+    fn try_spec_exec(
+        &mut self,
+        span: Span,
+        fun: FrozenValue,
+        args: &ArgsCompiledValue,
+    ) -> Option<ExprCompiledValue> {
+        // Only if all call arguments are frozen values.
+        args.all_values(|arguments| {
+            let v = fun.to_value().invoke(None, arguments, self.eval).ok()?;
+            ExprCompiledValue::try_value(span, v, self.eval.module_env.frozen_heap())
+        })?
+    }
+
     fn expr_call_fun_frozen_no_special(
         &mut self,
         span: Span,
@@ -183,14 +197,17 @@ impl Compiler<'_, '_, '_> {
         if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
             // Try execute the native function speculatively.
             if fun.speculative_exec_safe {
-                // Only if all call arguments are frozen values.
-                if let Some(Some(v)) = args.all_values(|arguments| {
-                    let v = fun
-                        .invoke(fun.to_value(), None, arguments, self.eval)
-                        .ok()?;
-                    ExprCompiledValue::try_value(span, v, self.eval.module_env.frozen_heap())
-                }) {
-                    return v;
+                if let Some(expr) = self.try_spec_exec(span, fun.to_frozen_value(), &args) {
+                    return expr;
+                }
+            }
+        }
+
+        if let Some(fun) = FrozenValueTyped::<FrozenBoundMethod>::new(fun) {
+            // Try execute the bound method speculatively.
+            if fun.method.speculative_exec_safe {
+                if let Some(expr) = self.try_spec_exec(span, fun.to_frozen_value(), &args) {
+                    return expr;
                 }
             }
         }

@@ -34,6 +34,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub(crate) fn struct_methods(builder: &mut MethodsBuilder) {
+    #[starlark(speculative_exec_safe)]
     fn to_json(this: Value) -> String {
         this.to_json()
     }

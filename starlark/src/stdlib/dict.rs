@@ -79,6 +79,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// x.get("three", 0) == 0
     /// # )"#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn get(this: ARef<Dict>, ref key: Value, ref default: Option<Value>) -> Value<'v> {
         match this.get(key)? {
             None => Ok(default.unwrap_or_else(Value::new_none)),
@@ -102,6 +103,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// x.items() == [("one", 1), ("two", 2)]
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn items(this: ARef<Dict>) -> Value<'v> {
         // We go straight to a List, not a Vec, so we can avoid one allocation
         Ok(heap.alloc_list_iter(this.iter().map(|(k, v)| heap.alloc((k, v)))))
@@ -122,6 +124,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// x.keys() == ["one", "two"]
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn keys(this: ARef<Dict>) -> Value<'v> {
         Ok(heap.alloc_list_iter(this.keys()))
     }
@@ -346,6 +349,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// x.values() == [1, 2]
     /// # "#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn values(this: ARef<Dict>) -> Value<'v> {
         Ok(heap.alloc_list_iter(this.values()))
     }

@@ -142,6 +142,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x.index("a", -2) == 5  # bananA
     /// # )"#);
     /// ```
+    #[starlark(speculative_exec_safe)]
     fn index(
         this: &ListRef,
         ref needle: Value,
