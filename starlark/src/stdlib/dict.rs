@@ -105,7 +105,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// ```
     #[starlark(speculative_exec_safe)]
     fn items(this: ARef<Dict>) -> Value<'v> {
-        // We go straight to a List, not a Vec, so we can avoid one allocation
         Ok(heap.alloc_list_iter(this.iter().map(|(k, v)| heap.alloc((k, v)))))
     }
 
