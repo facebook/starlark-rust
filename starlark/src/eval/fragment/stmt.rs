@@ -82,7 +82,7 @@ pub(crate) struct StmtCompileContext {
 
 pub(crate) struct OptimizeOnFreezeContext<'a> {
     pub(crate) module: &'a FrozenModuleRef,
-    pub(crate) heap: &'a FrozenHeap,
+    pub(crate) frozen_heap: &'a FrozenHeap,
 }
 
 impl AssignModifyLhs {

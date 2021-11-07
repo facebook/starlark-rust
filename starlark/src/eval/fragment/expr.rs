@@ -242,7 +242,7 @@ impl Spanned<ExprCompiledValue> {
                 ExprCompiledValue::TypeIs(box e.optimize_on_freeze(ctx), t)
             }
             ExprCompiledValue::Tuple(ref xs) => {
-                ExprCompiledValue::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.heap)
+                ExprCompiledValue::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.frozen_heap)
             }
             ExprCompiledValue::List(ref xs) => {
                 ExprCompiledValue::List(xs.map(|e| e.optimize_on_freeze(ctx)))
