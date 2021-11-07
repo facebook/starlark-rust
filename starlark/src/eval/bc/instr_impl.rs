@@ -891,7 +891,12 @@ impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
         (before, after): &Self::Arg,
         arg: Value<'v>,
     ) -> Result<Value<'v>, anyhow::Error> {
-        format_one(before.as_str(), arg, after.as_str(), eval.heap())
+        Ok(format_one(
+            before.as_str(),
+            arg,
+            after.as_str(),
+            eval.heap(),
+        ))
     }
 }
 

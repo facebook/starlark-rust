@@ -237,8 +237,8 @@ pub(crate) fn format_one<'v>(
     arg: Value<'v>,
     after: &str,
     heap: &'v Heap,
-) -> anyhow::Result<Value<'v>> {
-    Ok(match StringValue::new(arg) {
+) -> Value<'v> {
+    match StringValue::new(arg) {
         Some(arg) => heap.alloc_str_concat3(before, &arg, after),
         None => {
             let mut result = String::with_capacity(before.len() + after.len() + 10);
@@ -247,7 +247,7 @@ pub(crate) fn format_one<'v>(
             result.push_str(after);
             heap.alloc_str(&result)
         }
-    })
+    }
 }
 
 /// Evaluate `"<before>%s<after>" % arg`.
@@ -268,7 +268,7 @@ pub(crate) fn percent_s_one<'v>(
                 },
                 None => arg,
             };
-            format_one(before, one, after, heap)?
+            format_one(before, one, after, heap)
         }
     })
 }
