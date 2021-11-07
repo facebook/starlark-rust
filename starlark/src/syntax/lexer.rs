@@ -28,6 +28,7 @@ use crate::{
         cursors::{CursorBytes, CursorChars},
         dialect::Dialect,
     },
+    values::StarlarkValue,
 };
 
 #[derive(Error, Debug)]
@@ -670,7 +671,7 @@ impl Token {
                 // The Rust {:?} is unstable, so changes between versions,
                 // instead use the JSON standard for string escapes.
                 // Reuse the StarlarkValue implementation since it's close to hand.
-                crate::values::string::json_escape(x.as_str())
+                x.as_str().to_json().unwrap()
             }
             _ => {
                 let s = self.to_string();

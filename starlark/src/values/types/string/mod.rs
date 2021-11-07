@@ -194,7 +194,7 @@ pub(crate) fn hash_string_result(x: &str) -> SmallHashResult {
     SmallHashResult::new(x)
 }
 
-pub(crate) fn json_escape(x: &str) -> String {
+fn json_escape(x: &str) -> String {
     let mut escaped = Vec::with_capacity(x.len() + 2);
     escaped.push(b'\"');
     for c in x.bytes() {
