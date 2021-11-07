@@ -41,7 +41,7 @@ use crate::{
             Compiler, EvalException,
         },
         fragment::{
-            expr::{ExprCompiledValue, MaybeNot},
+            expr::ExprCompiledValue,
             stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
@@ -280,7 +280,6 @@ impl Compiler<'_, '_, '_> {
                             ..
                         },
                         t,
-                        MaybeNot::Id,
                     ),
                 ..
             }))) => Some(*t),

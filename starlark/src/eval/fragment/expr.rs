@@ -135,8 +135,8 @@ pub(crate) enum ExprCompiledValue {
     Type(Box<Spanned<ExprCompiledValue>>),
     /// `len(x)`
     Len(Box<Spanned<ExprCompiledValue>>),
-    /// `maybe_not(type(x) == "y")`
-    TypeIs(Box<Spanned<ExprCompiledValue>>, FrozenStringValue, MaybeNot),
+    /// `type(x) == "y"`
+    TypeIs(Box<Spanned<ExprCompiledValue>>, FrozenStringValue),
     Tuple(Vec<Spanned<ExprCompiledValue>>),
     List(Vec<Spanned<ExprCompiledValue>>),
     Dict(Vec<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
@@ -238,8 +238,8 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::Len(box ref e) => {
                 ExprCompiledValue::Len(box e.optimize_on_freeze(ctx))
             }
-            ExprCompiledValue::TypeIs(box ref e, t, maybe_not) => {
-                ExprCompiledValue::TypeIs(box e.optimize_on_freeze(ctx), t, maybe_not)
+            ExprCompiledValue::TypeIs(box ref e, t) => {
+                ExprCompiledValue::TypeIs(box e.optimize_on_freeze(ctx), t)
             }
             ExprCompiledValue::Tuple(ref xs) => {
                 ExprCompiledValue::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.heap)
@@ -330,6 +330,16 @@ impl ExprCompiledValue {
                 node: ExprCompiledValue::Not(box expr),
                 span,
             },
+        }
+    }
+
+    fn maybe_not(
+        expr: Spanned<ExprCompiledValue>,
+        maybe_not: MaybeNot,
+    ) -> Spanned<ExprCompiledValue> {
+        match maybe_not {
+            MaybeNot::Not => Self::not(expr.span, expr),
+            MaybeNot::Id => expr,
         }
     }
 
@@ -480,7 +490,7 @@ impl ExprCompiledValue {
             // Try to inline a function like `lambda x: type(x) == "y"`.
             if let Some(fun) = fun.downcast_ref::<FrozenDef>() {
                 if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
-                    return ExprCompiledValue::TypeIs(box pos.clone(), *t, MaybeNot::Id);
+                    return ExprCompiledValue::TypeIs(box pos.clone(), *t);
                 }
             }
         }
@@ -532,10 +542,11 @@ fn try_eval_type_is(
             },
         ) => {
             if let Some(r) = FrozenStringValue::new(r) {
-                Ok(Spanned {
-                    node: ExprCompiledValue::TypeIs(l, r, maybe_not),
+                let type_is = Spanned {
+                    node: ExprCompiledValue::TypeIs(l, r),
                     span: l_span.merge(r_span),
-                })
+                };
+                Ok(ExprCompiledValue::maybe_not(type_is, maybe_not))
             } else {
                 Err((
                     Spanned {

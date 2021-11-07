@@ -143,12 +143,9 @@ impl Spanned<ExprCompiledValue> {
                 expr.write_bc(bc);
                 bc.write_instr::<InstrLen>(span, ());
             }
-            ExprCompiledValue::TypeIs(box ref v, t, maybe_not) => {
+            ExprCompiledValue::TypeIs(box ref v, t) => {
                 v.write_bc(bc);
                 bc.write_instr::<InstrTypeIs>(Span::default(), t);
-                if maybe_not == MaybeNot::Not {
-                    bc.write_instr::<InstrNot>(Span::default(), ());
-                }
             }
             ExprCompiledValue::Tuple(ref xs) => {
                 write_exprs(xs, bc);
