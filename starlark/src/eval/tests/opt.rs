@@ -32,3 +32,17 @@ def test(x):
     "#,
     )
 }
+
+#[test]
+fn test_private_forward_mutable_module_vars_inlined() {
+    test_instrs(
+        &[BcOpcode::Const, BcOpcode::Return],
+        r#"
+def test():
+    # Reference to module variable should be replaced with constant
+    return _private_forward_mutable
+
+_private_forward_mutable = {1: 2}
+"#,
+    );
+}
