@@ -177,8 +177,8 @@ pub(crate) struct DefInfo {
     body_stmts: StmtsCompiled,
     /// How to compile the statement on freeze.
     stmt_compile_context: StmtCompileContext,
-    /// Function body is `type(x) == "y"`
-    pub(crate) returns_type_is: Option<FrozenStringValue>,
+    /// Function can be inlined.
+    pub(crate) inline_def_body: Option<InlineDefBody>,
     /// Globals captured during function or module creation.
     /// Only needed for debugger evaluation.
     pub(crate) globals: FrozenRef<Globals>,
@@ -193,7 +193,7 @@ impl DefInfo {
             stmt_compiled: Bc::default(),
             body_stmts: StmtsCompiled::empty(),
             stmt_compile_context: StmtCompileContext::default(),
-            returns_type_is: None,
+            inline_def_body: None,
             globals: FrozenRef::new(Globals::empty()),
         });
         FrozenRef::new(&EMPTY)
@@ -211,7 +211,7 @@ impl DefInfo {
             stmt_compiled: Bc::default(),
             body_stmts: StmtsCompiled::empty(),
             stmt_compile_context: StmtCompileContext::default(),
-            returns_type_is: None,
+            inline_def_body: None,
             globals,
         }
     }
@@ -223,6 +223,13 @@ pub(crate) struct DefCompiled {
     pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
     pub(crate) return_type: Option<Box<Spanned<ExprCompiledValue>>>,
     pub(crate) info: FrozenRef<DefInfo>,
+}
+
+/// Function body suitable for inlining.
+#[derive(Debug)]
+pub(crate) enum InlineDefBody {
+    /// Function body is `return type(x) == "y"`
+    ReturnTypeIs(FrozenStringValue),
 }
 
 impl Compiler<'_, '_, '_> {
@@ -281,6 +288,18 @@ impl Compiler<'_, '_, '_> {
         }
     }
 
+    fn inline_def_body(
+        params: &[Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>],
+        body: &StmtsCompiled,
+    ) -> Option<InlineDefBody> {
+        if params.len() == 1 && params[0].accepts_positional() {
+            if let Some(t) = Compiler::is_return_type_is(body) {
+                return Some(InlineDefBody::ReturnTypeIs(t));
+            }
+        }
+        None
+    }
+
     pub fn function(
         &mut self,
         name: &str,
@@ -305,11 +324,7 @@ impl Compiler<'_, '_, '_> {
 
         let scope_names = mem::take(scope_names);
 
-        let returns_type_is = if params.len() == 1 && params[0].accepts_positional() {
-            Self::is_return_type_is(&body)
-        } else {
-            None
-        };
+        let inline_def_body = Self::inline_def_body(&params, &body);
 
         let info = self.eval.module_env.frozen_heap().alloc_any(DefInfo {
             codemap: self.codemap.dupe(),
@@ -317,7 +332,7 @@ impl Compiler<'_, '_, '_> {
             scope_names,
             stmt_compiled: body.as_bc(&self.compile_context()),
             body_stmts: body,
-            returns_type_is,
+            inline_def_body,
             stmt_compile_context: self.compile_context(),
             globals: self.globals,
         });

@@ -28,6 +28,7 @@ use crate::{
             Compiler,
         },
         fragment::{
+            def::InlineDefBody,
             expr::{ExprCompiledValue, MaybeNot},
             stmt::OptimizeOnFreezeContext,
         },
@@ -209,7 +210,7 @@ impl Compiler<'_, '_, '_> {
             if one_positional {
                 // Try to inline a function like `lambda x: type(x) == "y"`.
                 if let Some(left) = left.downcast_ref::<FrozenDef>() {
-                    if let Some(t) = &left.def_info.returns_type_is {
+                    if let Some(InlineDefBody::ReturnTypeIs(t)) = &left.def_info.inline_def_body {
                         assert!(args.len() == 1);
                         let arg = args.pop().unwrap();
                         return match arg.node {
