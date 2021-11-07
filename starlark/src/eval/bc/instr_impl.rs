@@ -63,7 +63,9 @@ use crate::{
 /// and it returns error with span.
 pub(crate) trait InstrNoFlowImpl: 'static {
     type Pop<'v>: BcStackValues<'v>;
-    type Push<'v>: BcStackValues<'v>;
+    type Push<'v>: BcStackValues<'v>
+    where
+        Self: 'v;
     type Arg: BcInstrArg;
 
     fn run_with_args<'v>(
@@ -106,7 +108,9 @@ pub(crate) type InstrNoFlowAddSpan<I> = InstrNoFlow<InstrNoFlowAddSpanWrapper<I>
 /// Instructions which either fail or proceed to the following instruction.
 pub(crate) trait InstrNoFlowAddSpanImpl: 'static {
     type Pop<'v>: BcStackValues<'v>;
-    type Push<'v>: BcStackValues<'v>;
+    type Push<'v>: BcStackValues<'v>
+    where
+        Self: 'v;
     type Arg: BcInstrArg;
 
     fn run_with_args<'v>(
