@@ -57,7 +57,7 @@ impl Display for TruncateValueRepr {
 }
 
 /// Instruction fixed argument.
-pub(crate) trait BcInstrArg {
+pub(crate) trait BcInstrArg: 'static {
     /// Append space then append the argument, or append nothing if the argument is empty.
     fn fmt_append(param: &Self, ip: BcAddr, f: &mut dyn Write) -> fmt::Result;
     /// Collect instruction jump addresses.

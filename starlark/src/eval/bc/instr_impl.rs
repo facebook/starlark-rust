@@ -46,7 +46,7 @@ use crate::{
             stmt::{add_assign, before_stmt, possible_gc, AssignError},
         },
         runtime::slots::LocalSlotId,
-        Def, Evaluator, FrozenDef, ParametersSpec,
+        Arguments, Def, Evaluator, FrozenDef, ParametersSpec,
     },
     values::{
         dict::Dict,
@@ -55,7 +55,7 @@ use crate::{
         string::interpolation::{format_one, percent_s_one},
         typed::FrozenValueTyped,
         typing::TypeCompiled,
-        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value, ValueLike,
+        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value,
     },
 };
 
@@ -1494,25 +1494,73 @@ impl InstrNoFlowImpl for InstrDefImpl {
     }
 }
 
+/// A frozen function argument to a call instruction.
+pub(crate) trait BcFrozenCallable: BcInstrArg + Copy {
+    fn bc_invoke<'v>(
+        self,
+        location: Span,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>>;
+}
+
+impl BcFrozenCallable for FrozenValue {
+    #[inline(always)]
+    fn bc_invoke<'v>(
+        self,
+        location: Span,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.to_value().invoke(Some(location), args, eval)
+    }
+}
+
+impl BcFrozenCallable for FrozenValueTyped<'static, FrozenDef> {
+    #[inline(always)]
+    fn bc_invoke<'v>(
+        self,
+        location: Span,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.as_ref()
+            .invoke(self.to_value(), Some(location), args, eval)
+    }
+}
+
+impl BcFrozenCallable for FrozenValueTyped<'static, NativeFunction> {
+    #[inline(always)]
+    fn bc_invoke<'v>(
+        self,
+        location: Span,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.as_ref()
+            .invoke(self.to_value(), Some(location), args, eval)
+    }
+}
+
 pub(crate) struct InstrCallImpl;
 pub(crate) struct InstrCallPosImpl;
-pub(crate) struct InstrCallFrozenDefImpl;
-pub(crate) struct InstrCallFrozenDefPosImpl;
-pub(crate) struct InstrCallFrozenNativeImpl;
-pub(crate) struct InstrCallFrozenNativePosImpl;
-pub(crate) struct InstrCallFrozenImpl;
-pub(crate) struct InstrCallFrozenPosImpl;
+pub(crate) struct InstrCallFrozenGenericImpl<F: BcFrozenCallable>(marker::PhantomData<F>);
+pub(crate) struct InstrCallFrozenGenericPosImpl<F: BcFrozenCallable>(marker::PhantomData<F>);
 pub(crate) struct InstrCallMethodImpl;
 pub(crate) struct InstrCallMethodPosImpl;
 
 pub(crate) type InstrCall = InstrNoFlowAddSpan<InstrCallImpl>;
 pub(crate) type InstrCallPos = InstrNoFlowAddSpan<InstrCallPosImpl>;
-pub(crate) type InstrCallFrozenDef = InstrNoFlowAddSpan<InstrCallFrozenDefImpl>;
-pub(crate) type InstrCallFrozenDefPos = InstrNoFlowAddSpan<InstrCallFrozenDefPosImpl>;
-pub(crate) type InstrCallFrozenNative = InstrNoFlowAddSpan<InstrCallFrozenNativeImpl>;
-pub(crate) type InstrCallFrozenNativePos = InstrNoFlowAddSpan<InstrCallFrozenNativePosImpl>;
-pub(crate) type InstrCallFrozen = InstrNoFlowAddSpan<InstrCallFrozenImpl>;
-pub(crate) type InstrCallFrozenPos = InstrNoFlowAddSpan<InstrCallFrozenPosImpl>;
+pub(crate) type InstrCallFrozenDef =
+    InstrNoFlowAddSpan<InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>>>;
+pub(crate) type InstrCallFrozenDefPos =
+    InstrNoFlowAddSpan<InstrCallFrozenGenericPosImpl<FrozenValueTyped<'static, FrozenDef>>>;
+pub(crate) type InstrCallFrozenNative =
+    InstrNoFlowAddSpan<InstrCallFrozenGenericImpl<FrozenValueTyped<'static, NativeFunction>>>;
+pub(crate) type InstrCallFrozenNativePos =
+    InstrNoFlowAddSpan<InstrCallFrozenGenericPosImpl<FrozenValueTyped<'static, NativeFunction>>>;
+pub(crate) type InstrCallFrozen = InstrNoFlowAddSpan<InstrCallFrozenGenericImpl<FrozenValue>>;
+pub(crate) type InstrCallFrozenPos = InstrNoFlowAddSpan<InstrCallFrozenGenericPosImpl<FrozenValue>>;
 pub(crate) type InstrCallMethod = InstrNoFlowAddSpan<InstrCallMethodImpl>;
 pub(crate) type InstrCallMethodPos = InstrNoFlowAddSpan<InstrCallMethodPosImpl>;
 
@@ -1552,10 +1600,10 @@ impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefImpl {
+impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericImpl<F> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (FrozenValueTyped<'static, FrozenDef>, ArgsCompiledValueBc);
+    type Arg = (F, ArgsCompiledValueBc);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1565,15 +1613,14 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefImpl {
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args(args);
-        fun.as_ref()
-            .invoke(fun.to_value(), Some(args.span), arguments, eval)
+        fun.bc_invoke(args.span, arguments, eval)
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefPosImpl {
+impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericPosImpl<F> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, FrozenValueTyped<'static, FrozenDef>, Span);
+    type Arg = (ArgPopsStack, F, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1583,85 +1630,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallFrozenDefPosImpl {
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args_pos(*npops);
-        fun.as_ref()
-            .invoke(fun.to_value(), Some(*span), arguments, eval)
-    }
-}
-
-impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativeImpl {
-    type Pop<'v> = ();
-    type Push<'v> = Value<'v>;
-    type Arg = (
-        FrozenValueTyped<'static, NativeFunction>,
-        ArgsCompiledValueBc,
-    );
-
-    #[inline(always)]
-    fn run_with_args<'v>(
-        eval: &mut Evaluator<'v, '_>,
-        stack: &mut BcStackPtr<'v, '_>,
-        (fun, args): &Self::Arg,
-        _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args(args);
-        fun.as_ref()
-            .invoke(fun.to_value(), Some(args.span), arguments, eval)
-    }
-}
-
-impl InstrNoFlowAddSpanImpl for InstrCallFrozenNativePosImpl {
-    type Pop<'v> = ();
-    type Push<'v> = Value<'v>;
-    type Arg = (
-        ArgPopsStack,
-        FrozenValueTyped<'static, NativeFunction>,
-        Span,
-    );
-
-    #[inline(always)]
-    fn run_with_args<'v>(
-        eval: &mut Evaluator<'v, '_>,
-        stack: &mut BcStackPtr<'v, '_>,
-        (npops, fun, span): &Self::Arg,
-        _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args_pos(*npops);
-        fun.as_ref()
-            .invoke(fun.to_value(), Some(*span), arguments, eval)
-    }
-}
-
-impl InstrNoFlowAddSpanImpl for InstrCallFrozenImpl {
-    type Pop<'v> = ();
-    type Push<'v> = Value<'v>;
-    type Arg = (FrozenValue, ArgsCompiledValueBc);
-
-    #[inline(always)]
-    fn run_with_args<'v>(
-        eval: &mut Evaluator<'v, '_>,
-        stack: &mut BcStackPtr<'v, '_>,
-        (fun, args): &Self::Arg,
-        _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args(args);
-        fun.invoke(Some(args.span), arguments, eval)
-    }
-}
-
-impl InstrNoFlowAddSpanImpl for InstrCallFrozenPosImpl {
-    type Pop<'v> = ();
-    type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, FrozenValue, Span);
-
-    #[inline(always)]
-    fn run_with_args<'v>(
-        eval: &mut Evaluator<'v, '_>,
-        stack: &mut BcStackPtr<'v, '_>,
-        (npops, fun, span): &Self::Arg,
-        _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args_pos(*npops);
-        fun.invoke(Some(*span), arguments, eval)
+        fun.bc_invoke(*span, arguments, eval)
     }
 }
 
