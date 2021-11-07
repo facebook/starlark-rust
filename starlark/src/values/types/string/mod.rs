@@ -225,7 +225,9 @@ impl Display for StarlarkStr {
     }
 }
 
-impl<'v> StarlarkValue<'v> for StarlarkStr {
+// We don't actually use `str` on the heap, but it's helpful to have an instance
+// for people who want to get access to repr/json "like string"
+impl<'v> StarlarkValue<'v> for str {
     starlark_type!(STRING_TYPE);
 
     fn get_methods(&self) -> Option<&'static Methods> {
@@ -235,11 +237,11 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn collect_repr(&self, buffer: &mut String) {
         // String repr() is quite hot, so optimise it
-        string_repr(self.unpack(), buffer)
+        string_repr(self, buffer)
     }
 
     fn to_json(&self) -> anyhow::Result<String> {
-        Ok(json_escape(self.unpack()))
+        Ok(json_escape(self))
     }
 
     fn to_bool(&self) -> bool {
@@ -247,13 +249,16 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u32(self.get_small_hash_result().get());
+        let mut s = StarlarkHasher::new();
+        hash_string_value(self, &mut s);
+        let hash = s.finish_small();
+        hasher.write_u32(hash.get());
         Ok(())
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if let Some(other) = other.unpack_str() {
-            Ok(*self.unpack() == *other)
+            Ok(self == other)
         } else {
             Ok(false)
         }
@@ -261,7 +266,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other) = other.unpack_str() {
-            Ok(self.unpack().cmp(other))
+            Ok(self.cmp(other))
         } else {
             ValueError::unsupported_with(self, "cmp()", other)
         }
@@ -270,45 +275,36 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     fn at(&self, index: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         // This method is disturbingly hot. Use the logic from `convert_index`,
         // but modified to be UTF8 string friendly.
-        let s = self.unpack();
         let i = i32::unpack_param(index)?;
         if i >= 0 {
-            match fast_string::at(s, i as usize) {
+            match fast_string::at(self, i as usize) {
                 None => Err(ValueError::IndexOutOfBound(i).into()),
                 Some(c) => Ok(heap.alloc(c)),
             }
         } else {
-            let len_chars = fast_string::len(s);
+            let len_chars = fast_string::len(self);
             let ind = (-i) as usize; // Index from the end, minimum of 1
             if ind > len_chars {
                 Err(ValueError::IndexOutOfBound(i).into())
-            } else if len_chars == s.len() {
+            } else if len_chars == self.len() {
                 // We are a 7bit ASCII string, so take the fast-path
-                Ok(heap.alloc(s.as_bytes()[len_chars - ind] as char))
+                Ok(heap.alloc(self.as_bytes()[len_chars - ind] as char))
             } else {
-                Ok(heap.alloc(fast_string::at(s, len_chars - ind).unwrap()))
+                Ok(heap.alloc(fast_string::at(self, len_chars - ind).unwrap()))
             }
         }
     }
 
-    fn extra_memory(&self) -> usize {
-        // We don't include the extra_memory for the size because it is
-        // allocated inline in the Starlark heap (which knows about it),
-        // not on the malloc heap.
-        0
-    }
-
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(fast_string::len(self.unpack()) as i32)
+        Ok(fast_string::len(self) as i32)
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
         let s = <&str>::unpack_param(other)?;
-        let me = self.unpack();
         if s.len() == 1 {
-            Ok(me.as_bytes().contains(&s.as_bytes()[0]))
+            Ok(self.as_bytes().contains(&s.as_bytes()[0]))
         } else {
-            Ok(me.contains(s))
+            Ok(self.contains(s))
         }
     }
 
@@ -319,7 +315,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         stride: Option<Value>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        let s = self.unpack();
+        let s = self;
         if matches!(stride, Some(stride) if stride.unpack_int() != Some(1)) {
             // The stride case is super rare and super complex, so let's do something inefficient but safe
             let xs = s.chars().collect::<Vec<_>>();
@@ -377,7 +373,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
             if self.is_empty() {
                 Ok(other)
             } else {
-                Ok(heap.alloc_str_concat(self.unpack(), other_str))
+                Ok(heap.alloc_str_concat(self, other_str))
             }
         } else {
             ValueError::unsupported_with(self, "+", other)
@@ -386,16 +382,90 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let l = i32::unpack_param(other)?;
-        let s = self.unpack();
-        let mut result = String::with_capacity(s.len() * cmp::max(0, l) as usize);
+        let mut result = String::with_capacity(self.len() * cmp::max(0, l) as usize);
         for _i in 0..l {
-            result.push_str(s)
+            result.push_str(self)
         }
         Ok(heap.alloc(result))
     }
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(heap.alloc(interpolation::percent(self.unpack(), other)?))
+        Ok(heap.alloc(interpolation::percent(self, other)?))
+    }
+}
+
+impl<'v> StarlarkValue<'v> for StarlarkStr {
+    starlark_type!(STRING_TYPE);
+
+    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        // Don't defer to str because we cache the Hash in StarlarkStr
+        hasher.write_u32(self.get_small_hash_result().get());
+        Ok(())
+    }
+
+    fn extra_memory(&self) -> usize {
+        // We don't include the extra_memory for the size because it is
+        // allocated inline in the Starlark heap (which knows about it),
+        // not on the malloc heap.
+        0
+    }
+
+    fn get_methods(&self) -> Option<&'static Methods> {
+        self.unpack().get_methods()
+    }
+
+    fn collect_repr(&self, collector: &mut String) {
+        self.unpack().collect_repr(collector)
+    }
+
+    fn to_json(&self) -> anyhow::Result<String> {
+        self.unpack().to_json()
+    }
+
+    fn to_bool(&self) -> bool {
+        self.unpack().to_bool()
+    }
+
+    fn equals(&self, other: Value) -> anyhow::Result<bool> {
+        self.unpack().equals(other)
+    }
+
+    fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
+        self.unpack().compare(other)
+    }
+
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.unpack().at(index, heap)
+    }
+
+    fn length(&self) -> anyhow::Result<i32> {
+        self.unpack().length()
+    }
+
+    fn is_in(&self, other: Value) -> anyhow::Result<bool> {
+        self.unpack().is_in(other)
+    }
+
+    fn slice(
+        &self,
+        start: Option<Value<'v>>,
+        stop: Option<Value<'v>>,
+        stride: Option<Value<'v>>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Value<'v>> {
+        self.unpack().slice(start, stop, stride, heap)
+    }
+
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.unpack().add(other, heap)
+    }
+
+    fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.unpack().mul(other, heap)
+    }
+
+    fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.unpack().percent(other, heap)
     }
 }
 
