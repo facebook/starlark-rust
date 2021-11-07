@@ -85,6 +85,21 @@ pub(crate) struct OptimizeOnFreezeContext<'a> {
     pub(crate) heap: &'a FrozenHeap,
 }
 
+impl AssignModifyLhs {
+    fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> AssignModifyLhs {
+        match self {
+            AssignModifyLhs::Dot(expr, name) => {
+                AssignModifyLhs::Dot(expr.optimize_on_freeze(ctx), name.clone())
+            }
+            AssignModifyLhs::Array(expr, index) => {
+                AssignModifyLhs::Array(expr.optimize_on_freeze(ctx), index.optimize_on_freeze(ctx))
+            }
+            AssignModifyLhs::Local(slot) => AssignModifyLhs::Local(*slot),
+            AssignModifyLhs::Module(slot) => AssignModifyLhs::Module(*slot),
+        }
+    }
+}
+
 impl Spanned<StmtCompiledValue> {
     fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> StmtsCompiled {
         let span = self.span;
@@ -127,9 +142,13 @@ impl Spanned<StmtCompiledValue> {
                 span,
                 node: s.clone(),
             }),
-            ref s @ StmtCompiledValue::AssignModify(..) => StmtsCompiled::one(Spanned {
+            StmtCompiledValue::AssignModify(ref lhs, op, ref rhs) => StmtsCompiled::one(Spanned {
                 span,
-                node: s.clone(),
+                node: StmtCompiledValue::AssignModify(
+                    lhs.optimize_on_freeze(ctx),
+                    op,
+                    rhs.optimize_on_freeze(ctx),
+                ),
             }),
         }
     }
