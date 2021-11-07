@@ -32,10 +32,14 @@ use crate::{
             Compiler,
         },
         fragment::{
-            call::CallCompiled, compr::ComprCompiled, def::DefCompiled, known::list_to_tuple,
+            call::{ArgsCompiledValue, CallCompiled},
+            compr::ComprCompiled,
+            def::{DefCompiled, InlineDefBody},
+            known::list_to_tuple,
             stmt::OptimizeOnFreezeContext,
         },
         runtime::slots::LocalSlotId,
+        FrozenDef,
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
@@ -465,6 +469,26 @@ impl ExprCompiledValue {
         } else {
             ExprCompiledValue::Tuple(elems)
         }
+    }
+
+    pub(crate) fn call(
+        span: Span,
+        fun: ExprCompiledValue,
+        args: ArgsCompiledValue,
+    ) -> ExprCompiledValue {
+        if let (Some(fun), Some(pos)) = (fun.as_value(), args.one_pos()) {
+            // Try to inline a function like `lambda x: type(x) == "y"`.
+            if let Some(fun) = fun.downcast_ref::<FrozenDef>() {
+                if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
+                    return ExprCompiledValue::TypeIs(box pos.clone(), *t, MaybeNot::Id);
+                }
+            }
+        }
+
+        ExprCompiledValue::Call(Spanned {
+            span,
+            node: CallCompiled::Call(box (Spanned { span, node: fun }, args)),
+        })
     }
 }
 

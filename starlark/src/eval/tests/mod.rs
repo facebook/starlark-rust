@@ -40,6 +40,7 @@ mod def;
 mod docstring;
 mod go;
 mod interop;
+mod opt;
 mod runtime;
 mod type_is;
 

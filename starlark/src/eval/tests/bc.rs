@@ -23,7 +23,7 @@ use crate::{
     eval::{bc::opcode::BcOpcode, FrozenDef},
 };
 
-fn test_instrs(expected: &[BcOpcode], def_program: &str) {
+pub(crate) fn test_instrs(expected: &[BcOpcode], def_program: &str) {
     let mut a = Assert::new();
     let def = a
         .module("instrs.star", def_program)

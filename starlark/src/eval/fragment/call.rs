@@ -27,18 +27,14 @@ use crate::{
             scope::{CstArgument, CstExpr},
             Compiler,
         },
-        fragment::{
-            def::InlineDefBody,
-            expr::{ExprCompiledValue, MaybeNot},
-            stmt::OptimizeOnFreezeContext,
-        },
-        Arguments, FrozenDef,
+        fragment::{expr::ExprCompiledValue, stmt::OptimizeOnFreezeContext},
+        Arguments,
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
     values::{
         function::NativeFunction, string::interpolation::parse_format_one, FrozenStringValue,
-        FrozenValue, FrozenValueTyped, StarlarkValue, ValueLike,
+        FrozenValue, FrozenValueTyped, StarlarkValue,
     },
 };
 
@@ -62,23 +58,40 @@ pub(crate) enum CallCompiled {
 
 impl Spanned<CallCompiled> {
     pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiledValue {
-        ExprCompiledValue::Call(self.map(|call| match *call {
+        match self.node {
             CallCompiled::Call(box (ref fun, ref args)) => {
                 let fun = fun.optimize_on_freeze(ctx);
                 let args = args.optimize_on_freeze(ctx);
-                CallCompiled::Call(box (fun, args))
+                ExprCompiledValue::call(self.span, fun.node, args)
             }
             CallCompiled::Method(box (ref this, ref field, ref args)) => {
                 let this = this.optimize_on_freeze(ctx);
                 let field = field.clone();
                 let args = args.optimize_on_freeze(ctx);
-                CallCompiled::Method(box (this, field, args))
+                ExprCompiledValue::Call(Spanned {
+                    span: self.span,
+                    node: CallCompiled::Method(box (this, field, args)),
+                })
             }
-        }))
+        }
     }
 }
 
 impl ArgsCompiledValue {
+    /// Check if arguments is one positional argument.
+    pub(crate) fn one_pos(&self) -> Option<&Spanned<ExprCompiledValue>> {
+        let ArgsCompiledValue {
+            pos_named,
+            names,
+            args,
+            kwargs,
+        } = self;
+        match (pos_named.as_slice(), names.as_slice(), args, kwargs) {
+            ([pos], [], None, None) => Some(pos),
+            _ => None,
+        }
+    }
+
     pub(crate) fn pos_only(&self) -> Option<&[Spanned<ExprCompiledValue>]> {
         if self.names.is_empty() && self.args.is_none() && self.kwargs.is_none() {
             Some(&self.pos_named)
@@ -182,16 +195,7 @@ impl Compiler<'_, '_, '_> {
             }
         }
 
-        ExprCompiledValue::Call(Spanned {
-            span,
-            node: CallCompiled::Call(box (
-                Spanned {
-                    span,
-                    node: ExprCompiledValue::Value(fun),
-                },
-                args,
-            )),
-        })
+        ExprCompiledValue::call(span, ExprCompiledValue::Value(fun), args)
     }
 
     fn expr_call_fun_frozen(
@@ -207,21 +211,6 @@ impl Compiler<'_, '_, '_> {
             let x = self.expr(args.pop().unwrap().node.into_expr());
             ExprCompiledValue::Len(box x)
         } else {
-            if one_positional {
-                // Try to inline a function like `lambda x: type(x) == "y"`.
-                if let Some(left) = left.downcast_ref::<FrozenDef>() {
-                    if let Some(InlineDefBody::ReturnTypeIs(t)) = &left.def_info.inline_def_body {
-                        assert!(args.len() == 1);
-                        let arg = args.pop().unwrap();
-                        return match arg.node {
-                            ArgumentP::Positional(e) => {
-                                ExprCompiledValue::TypeIs(box self.expr(e), *t, MaybeNot::Id)
-                            }
-                            _ => unreachable!(),
-                        };
-                    }
-                }
-            }
             self.expr_call_fun_frozen_no_special(span, left, args)
         }
     }
