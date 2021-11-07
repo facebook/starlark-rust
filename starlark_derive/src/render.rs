@@ -75,14 +75,6 @@ fn render_attr(x: StarAttr) -> TokenStream {
         body,
     } = x;
     let name_str = ident_string(&name);
-    let set_speculative_exec_safe = if speculative_exec_safe {
-        Some(quote_spanned! {
-            span=>
-            attr.set_speculative_exec_safe();
-        })
-    } else {
-        None
-    };
     quote_spanned! {
         span=>
         #( #attrs )*
@@ -110,10 +102,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
             }
             Ok(heap.alloc(inner(this, heap)?))
         }
-        #[allow(unused_mut)]
-        let mut attr = starlark::values::function::NativeAttribute::new(#name);
-        #set_speculative_exec_safe
-        globals_builder.set(#name_str, attr);
+        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #name);
     }
 }
 
@@ -136,22 +125,22 @@ fn render_fun(x: StarFun) -> TokenStream {
         source: _,
     } = x;
 
-    let set_type = type_attribute.map(|x| {
-        quote_spanned! {
+    let typ = match type_attribute {
+        Some(x) => quote_spanned! {
             span=>
-            const TYPE_N: usize = #x.len();
-            static TYPE: starlark::values::StarlarkStrNRepr<TYPE_N> =
-                starlark::values::StarlarkStrNRepr::new(#x);
-            func.set_type(TYPE.unpack());
+            std::option::Option::Some({
+                const TYPE_N: usize = #x.len();
+                static TYPE: starlark::values::StarlarkStrNRepr<TYPE_N> =
+                    starlark::values::StarlarkStrNRepr::new(#x);
+                TYPE.unpack()
+            })
+        },
+        None => {
+            quote_spanned! {
+                span=>
+                std::option::Option::None
+            }
         }
-    });
-    let set_speculative_exec_safe = if speculative_exec_safe {
-        Some(quote_spanned! {
-            span=>
-            func.set_speculative_exec_safe();
-        })
-    } else {
-        None
     };
 
     let signature_arg = signature.as_ref().map(
@@ -164,17 +153,33 @@ fn render_fun(x: StarFun) -> TokenStream {
         .as_ref()
         .map(|_| quote_spanned! {span=> &__signature});
 
-    let (this_param, this_arg, new_function_or_method) = if is_method {
+    let (this_param, this_arg, builder_set) = if is_method {
         (
             quote_spanned! {span=> __this: starlark::values::Value<'v>, },
             quote_spanned! {span=> __this, },
-            quote_spanned! {span=> starlark::values::function::NativeMethod::new_direct },
+            quote_spanned! {span=>
+                #[allow(clippy::redundant_closure)]
+                globals_builder.set_method(
+                    #name_str,
+                    #speculative_exec_safe,
+                    #typ,
+                    move |eval, __this, parameters| {#name(eval, __this, parameters, #signature_val_ref)},
+                );
+            },
         )
     } else {
         (
             quote_spanned! {span=> },
             quote_spanned! {span=> },
-            quote_spanned! {span=> starlark::values::function::NativeFunction::new_direct },
+            quote_spanned! {span=>
+                #[allow(clippy::redundant_closure)]
+                globals_builder.set_function(
+                    #name_str,
+                    #speculative_exec_safe,
+                    #typ,
+                    move |eval, parameters| {#name(eval, parameters, #signature_val_ref)},
+                );
+            },
         )
     };
 
@@ -207,15 +212,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         }
         {
             #signature
-            #[allow(unused_mut)]
-            #[allow(clippy::redundant_closure)]
-            let mut func = #new_function_or_method (
-                move |eval, #this_arg parameters| #name(eval, #this_arg parameters, #signature_val_ref),
-                #name_str.to_owned(),
-            );
-            #set_type
-            #set_speculative_exec_safe
-            globals_builder.set(#name_str, func);
+            #builder_set
         }
     }
 }

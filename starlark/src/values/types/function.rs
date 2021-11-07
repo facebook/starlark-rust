@@ -88,9 +88,9 @@ impl<T> NativeAttr for T where
 #[display(fmt = "{}", name)]
 pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
-    function: Box<dyn NativeFunc>,
-    name: String,
-    typ: Option<FrozenValue>,
+    pub(crate) function: Box<dyn NativeFunc>,
+    pub(crate) name: String,
+    pub(crate) typ: Option<FrozenValue>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
 }
@@ -145,10 +145,6 @@ impl NativeFunction {
     pub fn set_type(&mut self, typ: FrozenValue) {
         self.typ = Some(typ)
     }
-
-    pub fn set_speculative_exec_safe(&mut self) {
-        self.speculative_exec_safe = true;
-    }
 }
 
 impl SimpleValue for NativeFunction {}
@@ -198,41 +194,13 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
 #[derive(Derivative, Display)]
 #[derivative(Debug)]
 #[display(fmt = "{}", name)]
-pub struct NativeMethod {
+pub(crate) struct NativeMethod {
     #[derivative(Debug = "ignore")]
-    function: Box<dyn NativeMeth>,
-    name: String,
-    typ: Option<FrozenValue>,
+    pub(crate) function: Box<dyn NativeMeth>,
+    pub(crate) name: String,
+    pub(crate) typ: Option<FrozenValue>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
-}
-
-impl NativeMethod {
-    /// Create a new [`NativeFunction`] from the Rust function which works directly on the parameters.
-    /// The called function is responsible for validating the parameters are correct.
-    pub fn new_direct<F>(function: F, name: String) -> Self
-    where
-        // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(
-                &mut Evaluator<'v, '_>,
-                Value<'v>,
-                Arguments<'v, '_>,
-            ) -> anyhow::Result<Value<'v>>
-            + Send
-            + Sync
-            + 'static,
-    {
-        NativeMethod {
-            function: box function,
-            name,
-            typ: None,
-            speculative_exec_safe: false,
-        }
-    }
-
-    pub fn set_speculative_exec_safe(&mut self) {
-        self.speculative_exec_safe = true;
-    }
 }
 
 starlark_simple_value!(NativeMethod);
@@ -257,7 +225,7 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
 #[derive(Derivative, Display)]
 #[display(fmt = "Attribute")]
 #[derivative(Debug)]
-pub struct NativeAttribute {
+pub(crate) struct NativeAttribute {
     #[derivative(Debug = "ignore")]
     pub(crate) function: Box<dyn NativeAttr>,
     /// Safe to evaluate speculatively.
@@ -267,24 +235,8 @@ pub struct NativeAttribute {
 starlark_simple_value!(NativeAttribute);
 
 impl NativeAttribute {
-    /// Create a new [`NativeFunction`] from the Rust function, plus the parameter specification.
-    pub fn new<F>(function: F) -> Self
-    where
-        // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(Value<'v>, &'v Heap) -> anyhow::Result<Value<'v>> + Send + Sync + 'static,
-    {
-        NativeAttribute {
-            function: box function,
-            speculative_exec_safe: false,
-        }
-    }
-
     pub(crate) fn call<'v>(&self, value: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         (self.function)(value, heap)
-    }
-
-    pub fn set_speculative_exec_safe(&mut self) {
-        self.speculative_exec_safe = true;
     }
 }
 
