@@ -298,17 +298,12 @@ impl MethodsBuilder {
         self
     }
 
-    /// Set a value in the [`MethodsBuilder`].
-    pub fn set<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
-        self.globals.set(name, value);
-    }
-
     /// Set a constant value in the [`MethodsBuilder`] that will be suitable for use with
     /// [`StarlarkValue::get_methods`](crate::values::StarlarkValue::get_methods).
     pub fn set_attribute<'v, V: AllocFrozenValue>(&'v mut self, name: &str, value: V) {
         // We want to build an attribute, that ignores its self argument, and does no subsequent allocation.
         let value = self.globals.alloc(value);
-        self.set(
+        self.globals.set(
             name,
             NativeAttribute {
                 function: box move |_, _| Ok(value.to_value()),
@@ -325,7 +320,7 @@ impl MethodsBuilder {
         speculative_exec_safe: bool,
         f: impl NativeAttr,
     ) {
-        self.set(
+        self.globals.set(
             name,
             NativeAttribute {
                 function: box f,
@@ -353,7 +348,7 @@ impl MethodsBuilder {
             + Sync
             + 'static,
     {
-        self.set(
+        self.globals.set(
             name,
             NativeMethod {
                 function: box f,
@@ -441,7 +436,7 @@ impl MethodsStatic {
     pub fn populate(&'static self, x: impl FnOnce(&mut MethodsBuilder), out: &mut MethodsBuilder) {
         let methods = self.methods(x).unwrap();
         for (name, value) in methods.0.0.variables.iter() {
-            out.set(name.as_str(), *value)
+            out.globals.set(name.as_str(), *value)
         }
     }
 }
