@@ -305,7 +305,7 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::Op(op, box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                ExprCompiledValue::Op(op, box (l, r))
+                ExprCompiledValue::bin_op(op, l, r, ctx.frozen_heap)
             }
             ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
@@ -397,6 +397,18 @@ impl ExprCompiledValue {
             }
         }
         ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
+    }
+
+    fn bin_op(
+        bin_op: ExprBinOp,
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        match bin_op {
+            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, frozen_heap),
+            bin_op => ExprCompiledValue::Op(bin_op, box (l, r)),
+        }
     }
 
     fn if_expr(
@@ -868,7 +880,6 @@ impl Compiler<'_, '_, '_> {
 
                     let l = self.expr(*left);
                     let r = self.expr(right);
-                    // ExprCompiledValue::Op(span, op, box(l, r))
                     match op {
                         BinOp::Or => return ExprCompiledValue::or(l, r),
                         BinOp::And => return ExprCompiledValue::and(l, r),
@@ -887,34 +898,93 @@ impl Compiler<'_, '_, '_> {
                         BinOp::Greater => eval_compare(l, r, CompareOp::Greater),
                         BinOp::LessOrEqual => eval_compare(l, r, CompareOp::LessOrEqual),
                         BinOp::GreaterOrEqual => eval_compare(l, r, CompareOp::GreaterOrEqual),
-                        BinOp::In => ExprCompiledValue::Op(ExprBinOp::In, box (l, r)),
+                        BinOp::In => ExprCompiledValue::bin_op(
+                            ExprBinOp::In,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
                         BinOp::NotIn => {
                             ExprCompiledValue::not(
                                 span,
                                 Spanned {
                                     span,
-                                    node: ExprCompiledValue::Op(ExprBinOp::In, box (l, r)),
+                                    node: ExprCompiledValue::bin_op(
+                                        ExprBinOp::In,
+                                        l,
+                                        r,
+                                        self.eval.module_env.frozen_heap(),
+                                    ),
                                 },
                             )
                             .node
                         }
-                        BinOp::Subtract => ExprCompiledValue::Op(ExprBinOp::Sub, box (l, r)),
-                        BinOp::Add => ExprCompiledValue::Op(ExprBinOp::Add, box (l, r)),
-                        BinOp::Multiply => ExprCompiledValue::Op(ExprBinOp::Multiply, box (l, r)),
-                        BinOp::Percent => {
-                            ExprCompiledValue::percent(l, r, self.eval.module_env.frozen_heap())
-                        }
-                        BinOp::Divide => ExprCompiledValue::Op(ExprBinOp::Divide, box (l, r)),
-                        BinOp::FloorDivide => {
-                            ExprCompiledValue::Op(ExprBinOp::FloorDivide, box (l, r))
-                        }
-                        BinOp::BitAnd => ExprCompiledValue::Op(ExprBinOp::BitAnd, box (l, r)),
-                        BinOp::BitOr => ExprCompiledValue::Op(ExprBinOp::BitOr, box (l, r)),
-                        BinOp::BitXor => ExprCompiledValue::Op(ExprBinOp::BitXor, box (l, r)),
-                        BinOp::LeftShift => ExprCompiledValue::Op(ExprBinOp::LeftShift, box (l, r)),
-                        BinOp::RightShift => {
-                            ExprCompiledValue::Op(ExprBinOp::RightShift, box (l, r))
-                        }
+                        BinOp::Subtract => ExprCompiledValue::bin_op(
+                            ExprBinOp::Sub,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::Add => ExprCompiledValue::bin_op(
+                            ExprBinOp::Add,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::Multiply => ExprCompiledValue::bin_op(
+                            ExprBinOp::Multiply,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::Percent => ExprCompiledValue::bin_op(
+                            ExprBinOp::Percent,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::Divide => ExprCompiledValue::bin_op(
+                            ExprBinOp::Divide,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::FloorDivide => ExprCompiledValue::bin_op(
+                            ExprBinOp::FloorDivide,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::BitAnd => ExprCompiledValue::bin_op(
+                            ExprBinOp::BitAnd,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::BitOr => ExprCompiledValue::bin_op(
+                            ExprBinOp::BitOr,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::BitXor => ExprCompiledValue::bin_op(
+                            ExprBinOp::BitXor,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::LeftShift => ExprCompiledValue::bin_op(
+                            ExprBinOp::LeftShift,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
+                        BinOp::RightShift => ExprCompiledValue::bin_op(
+                            ExprBinOp::RightShift,
+                            l,
+                            r,
+                            self.eval.module_env.frozen_heap(),
+                        ),
                     }
                 }
             }
