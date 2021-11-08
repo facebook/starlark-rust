@@ -31,7 +31,7 @@ use crate::{
             spans::BcInstrSpans,
             writer::BcWriter,
         },
-        fragment::expr::{CompareOp, ExprBinOp, ExprCompiledValue, MaybeNot},
+        fragment::expr::{CompareOp, ExprBinOp, ExprCompiledValue},
     },
     values::{FrozenValue, ValueLike},
 };
@@ -102,6 +102,20 @@ impl Spanned<ExprCompiledValue> {
         }
     }
 
+    fn write_not(expr: &Spanned<ExprCompiledValue>, bc: &mut BcWriter) {
+        match expr.node {
+            ExprCompiledValue::Equals(box (ref a, ref b)) => {
+                a.write_bc(bc);
+                b.write_bc(bc);
+                bc.write_instr::<InstrNotEq>(expr.span, ());
+            }
+            _ => {
+                expr.write_bc(bc);
+                bc.write_instr::<InstrNot>(expr.span, ());
+            }
+        }
+    }
+
     pub(crate) fn write_bc(&self, bc: &mut BcWriter) {
         let span = self.span;
         match self.node {
@@ -117,13 +131,10 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::Module(slot) => {
                 bc.write_instr::<InstrLoadModule>(span, slot);
             }
-            ExprCompiledValue::Equals(box (ref a, ref b), maybe_not) => {
+            ExprCompiledValue::Equals(box (ref a, ref b)) => {
                 a.write_bc(bc);
                 b.write_bc(bc);
-                match maybe_not {
-                    MaybeNot::Id => bc.write_instr::<InstrEq>(span, ()),
-                    MaybeNot::Not => bc.write_instr::<InstrNotEq>(span, ()),
-                }
+                bc.write_instr::<InstrEq>(span, ());
             }
             ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
                 l.write_bc(bc);
@@ -189,8 +200,7 @@ impl Spanned<ExprCompiledValue> {
                 );
             }
             ExprCompiledValue::Not(box ref expr) => {
-                expr.write_bc(bc);
-                bc.write_instr::<InstrNot>(span, ());
+                Self::write_not(expr, bc);
             }
             ExprCompiledValue::Minus(box ref expr) => {
                 expr.write_bc(bc);

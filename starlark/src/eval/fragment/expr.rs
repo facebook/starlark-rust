@@ -67,13 +67,6 @@ impl MaybeNot {
             MaybeNot::Not => MaybeNot::Id,
         }
     }
-
-    fn as_fn(self) -> fn(bool) -> bool {
-        match self {
-            MaybeNot::Id => |x| x,
-            MaybeNot::Not => |x| !x,
-        }
-    }
 }
 
 /// Map result of comparison to boolean.
@@ -121,11 +114,8 @@ pub(crate) enum ExprCompiledValue {
     /// Read local captured variable.
     LocalCaptured(LocalSlotId),
     Module(ModuleSlotId),
-    /// `cmp(x <=> y)`
-    Equals(
-        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
-        MaybeNot,
-    ),
+    /// `x == y`
+    Equals(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
     /// `cmp(x <=> y)`
     Compare(
         Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
@@ -222,10 +212,10 @@ impl Spanned<ExprCompiledValue> {
                     Some(v) => ExprCompiledValue::Value(v),
                 }
             }
-            ExprCompiledValue::Equals(box (ref l, ref r), maybe_not) => {
+            ExprCompiledValue::Equals(box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                eval_equals(l, r, maybe_not)
+                eval_equals(l, r)
             }
             ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
                 let l = l.optimize_on_freeze(ctx);
@@ -333,16 +323,6 @@ impl ExprCompiledValue {
                 node: ExprCompiledValue::Not(box expr),
                 span,
             },
-        }
-    }
-
-    fn maybe_not(
-        expr: Spanned<ExprCompiledValue>,
-        maybe_not: MaybeNot,
-    ) -> Spanned<ExprCompiledValue> {
-        match maybe_not {
-            MaybeNot::Not => Self::not(expr.span, expr),
-            MaybeNot::Id => expr,
         }
     }
 
@@ -563,7 +543,6 @@ fn eval_compare(
 fn try_eval_type_is(
     l: Spanned<ExprCompiledValue>,
     r: Spanned<ExprCompiledValue>,
-    maybe_not: MaybeNot,
 ) -> Result<Spanned<ExprCompiledValue>, (Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)> {
     match (l, r) {
         (
@@ -577,11 +556,10 @@ fn try_eval_type_is(
             },
         ) => {
             if let Some(r) = FrozenStringValue::new(r) {
-                let type_is = Spanned {
+                Ok(Spanned {
                     node: ExprCompiledValue::TypeIs(l, r),
                     span: l_span.merge(r_span),
-                };
-                Ok(ExprCompiledValue::maybe_not(type_is, maybe_not))
+                })
             } else {
                 Err((
                     Spanned {
@@ -599,30 +577,25 @@ fn try_eval_type_is(
     }
 }
 
-fn eval_equals(
-    l: Spanned<ExprCompiledValue>,
-    r: Spanned<ExprCompiledValue>,
-    maybe_not: MaybeNot,
-) -> ExprCompiledValue {
-    let cmp = maybe_not.as_fn();
+fn eval_equals(l: Spanned<ExprCompiledValue>, r: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
         // If comparison fails, let it fail in runtime.
         if let Ok(r) = l.equals(r.to_value()) {
-            return value!(FrozenValue::new_bool(cmp(r)));
+            return value!(FrozenValue::new_bool(r));
         }
     }
 
-    let (l, r) = match try_eval_type_is(l, r, maybe_not) {
+    let (l, r) = match try_eval_type_is(l, r) {
         Ok(e) => return e.node,
         Err((l, r)) => (l, r),
     };
 
-    let (r, l) = match try_eval_type_is(r, l, maybe_not) {
+    let (r, l) = match try_eval_type_is(r, l) {
         Ok(e) => return e.node,
         Err((r, l)) => (r, l),
     };
 
-    ExprCompiledValue::Equals(box (l, r), maybe_not)
+    ExprCompiledValue::Equals(box (l, r))
 }
 
 impl AstLiteral {
@@ -895,8 +868,17 @@ impl Compiler<'_, '_, '_> {
                     match op {
                         BinOp::Or => return ExprCompiledValue::or(l, r),
                         BinOp::And => return ExprCompiledValue::and(l, r),
-                        BinOp::Equal => eval_equals(l, r, MaybeNot::Id),
-                        BinOp::NotEqual => eval_equals(l, r, MaybeNot::Not),
+                        BinOp::Equal => eval_equals(l, r),
+                        BinOp::NotEqual => {
+                            ExprCompiledValue::not(
+                                span,
+                                Spanned {
+                                    span,
+                                    node: eval_equals(l, r),
+                                },
+                            )
+                            .node
+                        }
                         BinOp::Less => eval_compare(l, r, CompareOp::Less),
                         BinOp::Greater => eval_compare(l, r, CompareOp::Greater),
                         BinOp::LessOrEqual => eval_compare(l, r, CompareOp::LessOrEqual),
