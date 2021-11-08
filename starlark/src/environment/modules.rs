@@ -52,7 +52,10 @@ use crate::{
 // We store the two elements separately since the FrozenHeapRef contains
 // a copy of the FrozenModuleData inside it.
 // Two Arc's should still be plenty cheap enough to qualify for `Dupe`.
-pub struct FrozenModule(FrozenHeapRef, FrozenModuleRef);
+pub struct FrozenModule {
+    heap: FrozenHeapRef,
+    module: FrozenModuleRef,
+}
 
 #[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
 #[display(fmt = "{:?}", self)] // Type should not be user visible
@@ -103,13 +106,13 @@ impl FrozenModule {
     /// Get value, exported or private by name.
     #[doc(hidden)] // TODO(nga): Buck2 depends on this function
     pub fn get_any_visibility(&self, name: &str) -> Option<(OwnedFrozenValue, Visibility)> {
-        let (slot, vis) = self.1.0.names.get_name(name)?;
+        let (slot, vis) = self.module.0.names.get_name(name)?;
         // This code is safe because we know the frozen module ref keeps the values alive
-        self.1
+        self.module
             .0
             .slots
             .get_slot(slot)
-            .map(|x| (unsafe { OwnedFrozenValue::new(self.0.dupe(), x) }, vis))
+            .map(|x| (unsafe { OwnedFrozenValue::new(self.heap.dupe(), x) }, vis))
     }
 
     /// Get the value of the exported variable `name`.
@@ -124,25 +127,25 @@ impl FrozenModule {
 
     /// Iterate through all the names defined in this module.
     pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.1.0.names()
+        self.module.0.names()
     }
 
     /// Obtain the [`FrozenHeapRef`] which owns the storage of all values defined in this module.
     pub fn frozen_heap(&self) -> &FrozenHeapRef {
-        &self.0
+        &self.heap
     }
 
     /// Print out some approximation of the module definitions.
     pub fn describe(&self) -> String {
-        self.1.0.describe()
+        self.module.0.describe()
     }
 
     pub(crate) fn all_items(&self) -> impl Iterator<Item = (&str, FrozenValue)> {
-        self.1.0.all_items()
+        self.module.0.all_items()
     }
 
     pub fn documentation(&self) -> Option<DocItem> {
-        self.1.documentation()
+        self.module.documentation()
     }
 
     /// The documentation for the module, and all of its top level values
@@ -300,7 +303,10 @@ impl Module {
         // but can now be dropped
         mem::drop(heap);
 
-        Ok(FrozenModule(freezer.into_ref(), rest))
+        Ok(FrozenModule {
+            heap: freezer.into_ref(),
+            module: rest,
+        })
     }
 
     /// Set the value of a variable in the environment.
@@ -332,10 +338,10 @@ impl Module {
 
     /// Import symbols from a module, similar to what is done during `load()`.
     pub fn import_public_symbols(&self, module: &FrozenModule) {
-        self.frozen_heap.add_reference(&module.0);
-        for (k, slot) in module.1.0.names.symbols() {
+        self.frozen_heap.add_reference(&module.heap);
+        for (k, slot) in module.module.0.names.symbols() {
             if Self::default_visibility(k) == Visibility::Public {
-                if let Some(value) = module.1.0.slots.get_slot(slot) {
+                if let Some(value) = module.module.0.slots.get_slot(slot) {
                     self.set_private(k, Value::new_frozen(value))
                 }
             }
