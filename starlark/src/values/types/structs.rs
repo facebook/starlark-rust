@@ -149,9 +149,8 @@ where
             if i != 0 {
                 collector.push(',');
             }
-            collector.push('\"');
-            collector.push_str(k.to_string_value().as_str());
-            collector.push_str("\":");
+            k.to_string_value().as_str().collect_json(collector)?;
+            collector.push(':');
             v.collect_json(collector)?;
         }
         collector.push('}');

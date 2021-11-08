@@ -374,11 +374,10 @@ where
             .enumerate()
         {
             if i != 0 {
-                collector.push(',');
+                collector.push_str(", ");
             }
-            collector.push('\"');
-            collector.push_str(k);
-            collector.push_str("\":");
+            k.collect_json(collector)?;
+            collector.push(':');
             v.collect_json(collector)?;
         }
         collector.push('}');
