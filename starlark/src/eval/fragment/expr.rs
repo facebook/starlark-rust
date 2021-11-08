@@ -409,6 +409,23 @@ impl ExprCompiledValue {
         ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
     }
 
+    fn add(
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        let span = l.span.merge(r.span);
+        if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
+            if let Ok(v) = l.to_value().add(r.to_value(), heap) {
+                if let Some(v) = ExprCompiledValue::try_value(span, v, frozen_heap) {
+                    return v;
+                }
+            }
+        }
+        ExprCompiledValue::Op(ExprBinOp::Add, box (l, r))
+    }
+
     fn bin_op(
         bin_op: ExprBinOp,
         l: Spanned<ExprCompiledValue>,
@@ -418,6 +435,7 @@ impl ExprCompiledValue {
     ) -> ExprCompiledValue {
         match bin_op {
             ExprBinOp::Percent => ExprCompiledValue::percent(l, r, heap, frozen_heap),
+            ExprBinOp::Add => ExprCompiledValue::add(l, r, heap, frozen_heap),
             bin_op => ExprCompiledValue::Op(bin_op, box (l, r)),
         }
     }
@@ -880,6 +898,9 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
+                    // Note there's const propagation for `+` on compiled expressions,
+                    // but special handling of `+` on AST might be slightly more efficient
+                    // (no unnecessary allocations on the heap). So keep it.
                     let val = self.eval.module_env.frozen_heap().alloc(x);
                     value!(val)
                 } else {
