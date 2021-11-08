@@ -109,6 +109,11 @@ impl Spanned<ExprCompiledValue> {
                 b.write_bc(bc);
                 bc.write_instr::<InstrNotEq>(expr.span, ());
             }
+            ExprCompiledValue::Op(ExprBinOp::In, box (ref a, ref b)) => {
+                a.write_bc(bc);
+                b.write_bc(bc);
+                bc.write_instr::<InstrNotIn>(expr.span, ());
+            }
             _ => {
                 expr.write_bc(bc);
                 bc.write_instr::<InstrNot>(expr.span, ());
@@ -250,7 +255,6 @@ impl Spanned<ExprCompiledValue> {
                 r.write_bc(bc);
                 match op {
                     ExprBinOp::In => bc.write_instr::<InstrIn>(span, ()),
-                    ExprBinOp::NotIn => bc.write_instr::<InstrNotIn>(span, ()),
                     ExprBinOp::Sub => bc.write_instr::<InstrSub>(span, ()),
                     ExprBinOp::Add => bc.write_instr::<InstrAdd>(span, ()),
                     ExprBinOp::Multiply => bc.write_instr::<InstrMultiply>(span, ()),

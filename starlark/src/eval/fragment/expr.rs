@@ -92,7 +92,6 @@ impl CompareOp {
 #[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) enum ExprBinOp {
     In,
-    NotIn,
     Sub,
     Add,
     Multiply,
@@ -201,8 +200,7 @@ impl ExprCompiledValue {
             | Self::TypeIs(..)
             | Self::Not(..)
             | Self::Compare(..)
-            | Self::Op(ExprBinOp::In, ..)
-            | Self::Op(ExprBinOp::NotIn, ..) => true,
+            | Self::Op(ExprBinOp::In, ..) => true,
             _ => false,
         }
     }
@@ -898,7 +896,16 @@ impl Compiler<'_, '_, '_> {
                         BinOp::LessOrEqual => eval_compare(l, r, CompareOp::LessOrEqual),
                         BinOp::GreaterOrEqual => eval_compare(l, r, CompareOp::GreaterOrEqual),
                         BinOp::In => ExprCompiledValue::Op(ExprBinOp::In, box (l, r)),
-                        BinOp::NotIn => ExprCompiledValue::Op(ExprBinOp::NotIn, box (l, r)),
+                        BinOp::NotIn => {
+                            ExprCompiledValue::not(
+                                span,
+                                Spanned {
+                                    span,
+                                    node: ExprCompiledValue::Op(ExprBinOp::In, box (l, r)),
+                                },
+                            )
+                            .node
+                        }
                         BinOp::Subtract => ExprCompiledValue::Op(ExprBinOp::Sub, box (l, r)),
                         BinOp::Add => ExprCompiledValue::Op(ExprBinOp::Add, box (l, r)),
                         BinOp::Multiply => ExprCompiledValue::Op(ExprBinOp::Multiply, box (l, r)),
