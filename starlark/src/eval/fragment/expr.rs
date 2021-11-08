@@ -46,7 +46,10 @@ use crate::{
         function::BoundMethodGen,
         string::interpolation::parse_percent_s_one,
         types::{
-            float::StarlarkFloat, list::List, range::Range, tuple::Tuple,
+            float::StarlarkFloat,
+            list::{FrozenList, List},
+            range::Range,
+            tuple::Tuple,
             unbound::MaybeUnboundValue,
         },
         FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
@@ -189,6 +192,17 @@ impl ExprCompiledValue {
     /// Is expression a constant string?
     pub(crate) fn as_string(&self) -> Option<FrozenStringValue> {
         FrozenStringValue::new(self.as_value()?)
+    }
+
+    /// Try to extract `[c0, c1, ..., cn]` from this expression.
+    pub(crate) fn as_list_of_consts(&self) -> Option<Vec<FrozenValue>> {
+        match self {
+            ExprCompiledValue::List(xs) => xs.try_map(|x| x.as_value().ok_or(())).ok(),
+            ExprCompiledValue::Value(v) => {
+                Some(FrozenList::from_frozen_value(v)?.content().to_owned())
+            }
+            _ => None,
+        }
     }
 
     /// Result of this expression is definitely `bool`
@@ -422,6 +436,17 @@ impl ExprCompiledValue {
                     return v;
                 }
             }
+        }
+        if let (Some(l), Some(r)) = (l.as_list_of_consts(), r.as_list_of_consts()) {
+            let lr = l
+                .iter()
+                .chain(r.iter())
+                .map(|x| Spanned {
+                    node: ExprCompiledValue::Value(*x),
+                    span,
+                })
+                .collect();
+            return ExprCompiledValue::List(lr);
         }
         ExprCompiledValue::Op(ExprBinOp::Add, box (l, r))
     }

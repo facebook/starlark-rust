@@ -70,3 +70,16 @@ _s = struct(f = 1)
 "#,
     );
 }
+
+#[test]
+fn test_list_plus_list() {
+    test_instrs(
+        &[BcOpcode::ListOfConsts, BcOpcode::Return],
+        r#"
+L = [1, 2]
+
+def test():
+    return L + [1]
+"#,
+    );
+}
