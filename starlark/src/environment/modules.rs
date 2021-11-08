@@ -20,7 +20,13 @@
 //! is the list of variable in the current scope. It can be frozen, after which
 //! all values from this environment become immutable.
 
-use std::{cell::RefCell, collections::HashMap, mem, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    mem,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
@@ -55,6 +61,12 @@ use crate::{
 pub struct FrozenModule {
     heap: FrozenHeapRef,
     module: FrozenModuleRef,
+    /// Module evaluation duration:
+    /// * evaluation of the top-level statements
+    /// * optimizations during that evaluation
+    /// * freezing and optimizations during freezing
+    /// * does not include parsing time
+    pub(crate) eval_duration: Duration,
 }
 
 #[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
@@ -100,6 +112,12 @@ pub struct Module {
     // exported.
     slots: MutableSlots<'static>,
     docstring: RefCell<Option<String>>,
+    /// Module evaluation duration:
+    /// * evaluation of the top-level statements
+    /// * optimizations during that evaluation
+    /// * does not include freezing time
+    /// * does not include parsing time
+    eval_duration: Cell<Duration>,
 }
 
 impl FrozenModule {
@@ -236,6 +254,7 @@ impl Module {
             names: MutableNames::new(),
             slots: MutableSlots::new(),
             docstring: RefCell::new(None),
+            eval_duration: Cell::new(Duration::ZERO),
         }
     }
 
@@ -283,7 +302,9 @@ impl Module {
             frozen_heap,
             heap,
             docstring,
+            eval_duration,
         } = self;
+        let start = Instant::now();
         // This is when we do the GC/freeze, using the module slots as roots
         // Note that we even freeze anonymous slots, since they are accessed by
         // slot-index in the code, and we don't walk into them, so don't know if
@@ -306,6 +327,7 @@ impl Module {
         Ok(FrozenModule {
             heap: freezer.into_ref(),
             module: rest,
+            eval_duration: start.elapsed() + eval_duration.get(),
         })
     }
 
@@ -376,6 +398,10 @@ impl Module {
 
     pub(crate) fn set_docstring(&self, docstring: String) {
         self.docstring.replace(Some(docstring));
+    }
+
+    pub(crate) fn add_eval_duration(&self, duration: Duration) {
+        self.eval_duration.set(self.eval_duration.get() + duration);
     }
 }
 

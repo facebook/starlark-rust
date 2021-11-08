@@ -28,6 +28,7 @@ impl FrozenModule {
     pub fn dump_debug(&self) -> String {
         let mut w = String::new();
 
+        writeln!(w, "Eval duration: {:.3}s", self.eval_duration.as_secs_f64()).unwrap();
         writeln!(w, "Heap stats:").unwrap();
         w.push_str(&self.frozen_heap().dump_debug());
 

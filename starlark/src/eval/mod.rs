@@ -18,7 +18,7 @@
 //! Evaluate some code, typically done by creating an [`Evaluator`], then calling
 //! [`eval_module`](Evaluator::eval_module).
 
-use std::{convert::TryInto, intrinsics::unlikely, mem};
+use std::{convert::TryInto, intrinsics::unlikely, mem, time::Instant};
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
@@ -55,6 +55,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
     /// [`Module`](crate::environment::Module) as appropriate.
     pub fn eval_module(&mut self, ast: AstModule, globals: &Globals) -> anyhow::Result<Value<'v>> {
+        let start = Instant::now();
+
         let AstModule { codemap, statement } = ast;
 
         let globals = self.module_env.frozen_heap().alloc_any(globals.dupe());
@@ -140,6 +142,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
         self.local_variables.release(old_locals);
         self.def_info = old_def_info;
+
+        self.module_env.add_eval_duration(start.elapsed());
 
         // Return the result of evaluation
         res.map_err(|e| e.0)
