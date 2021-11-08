@@ -191,6 +191,21 @@ impl ExprCompiledValue {
     pub(crate) fn as_string(&self) -> Option<FrozenStringValue> {
         FrozenStringValue::new(self.as_value()?)
     }
+
+    /// Result of this expression is definitely `bool`
+    /// (if `false` it may also be `bool`).
+    fn is_definitely_bool(&self) -> bool {
+        match self {
+            Self::Value(v) => v.unpack_bool().is_some(),
+            Self::Equals(..)
+            | Self::TypeIs(..)
+            | Self::Not(..)
+            | Self::Compare(..)
+            | Self::Op(ExprBinOp::In, ..)
+            | Self::Op(ExprBinOp::NotIn, ..) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Spanned<ExprCompiledValue> {
@@ -311,15 +326,14 @@ impl Spanned<ExprCompiledValue> {
 
 impl ExprCompiledValue {
     fn not(span: Span, expr: Spanned<ExprCompiledValue>) -> Spanned<ExprCompiledValue> {
-        match expr {
-            Spanned {
-                node: ExprCompiledValue::Value(x),
-                ..
-            } => Spanned {
+        match expr.node {
+            ExprCompiledValue::Value(x) => Spanned {
                 node: value!(FrozenValue::new_bool(!x.to_value().to_bool())),
                 span,
             },
-            expr => Spanned {
+            // Collapse `not not e` to `e` only if `e` is known to produce a boolean.
+            ExprCompiledValue::Not(box ref e) if e.is_definitely_bool() => e.clone(),
+            _ => Spanned {
                 node: ExprCompiledValue::Not(box expr),
                 span,
             },
