@@ -88,12 +88,13 @@ impl StarlarkValue<'_> for StarlarkBool {
         }
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
         if self.0 {
-            Ok("true".to_owned())
+            collector.push_str("true");
         } else {
-            Ok("false".to_owned())
+            collector.push_str("false");
         }
+        Ok(())
     }
     fn to_int(&self) -> anyhow::Result<i32> {
         Ok(if self.0 { 1 } else { 0 })

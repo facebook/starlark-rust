@@ -147,17 +147,16 @@ where
         Ok(())
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        let mut res = String::new();
-        res.push('[');
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        collector.push('[');
         for (i, e) in self.content().iter().enumerate() {
             if i != 0 {
-                res.push_str(", ");
+                collector.push_str(", ");
             }
-            res.push_str(&e.to_json()?);
+            e.collect_json(collector)?;
         }
-        res.push(']');
-        Ok(res)
+        collector.push(']');
+        Ok(())
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

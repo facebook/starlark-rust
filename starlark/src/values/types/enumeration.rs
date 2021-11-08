@@ -299,8 +299,8 @@ where
         }
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        self.value.to_json()
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        self.value.collect_json(collector)
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

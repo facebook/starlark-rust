@@ -671,7 +671,9 @@ impl Token {
                 // The Rust {:?} is unstable, so changes between versions,
                 // instead use the JSON standard for string escapes.
                 // Reuse the StarlarkValue implementation since it's close to hand.
-                x.as_str().to_json().unwrap()
+                let mut res = String::new();
+                x.as_str().collect_json(&mut res).unwrap();
+                res
             }
             _ => {
                 let s = self.to_string();

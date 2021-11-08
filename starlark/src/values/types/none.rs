@@ -48,8 +48,9 @@ impl<'v> StarlarkValue<'v> for NoneType {
         Ok(other.is_none())
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        Ok("null".to_owned())
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        collector.push_str("null");
+        Ok(())
     }
     fn to_bool(&self) -> bool {
         false

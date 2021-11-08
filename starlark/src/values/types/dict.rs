@@ -380,19 +380,18 @@ where
         r.push('}');
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        let mut res = String::new();
-        res.push('{');
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        collector.push('{');
         for (i, (k, v)) in self.0.content().iter().enumerate() {
             if i != 0 {
-                res.push_str(", ");
+                collector.push_str(", ");
             }
-            res.push_str(&k.to_json()?);
-            res.push_str(": ");
-            res.push_str(&v.to_json()?);
+            k.collect_json(collector)?;
+            collector.push_str(": ");
+            v.collect_json(collector)?;
         }
-        res.push('}');
-        Ok(res)
+        collector.push('}');
+        Ok(())
     }
 
     fn to_bool(&self) -> bool {

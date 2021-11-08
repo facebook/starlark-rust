@@ -25,7 +25,7 @@
 
 use std::{
     cmp::Ordering,
-    fmt::{self, Display},
+    fmt::{self, Display, Write},
     hash::Hasher,
 };
 
@@ -95,9 +95,11 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         })
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        Ok(self.get().to_string())
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        write!(collector, "{}", self.get()).unwrap();
+        Ok(())
     }
+
     fn to_int(&self) -> anyhow::Result<i32> {
         Ok(self.get())
     }

@@ -178,7 +178,7 @@ pub trait ValueLike<'v>:
         }
     }
 
-    fn to_json(self) -> anyhow::Result<String>;
+    fn collect_json(self, collector: &mut String) -> anyhow::Result<()>;
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool>;
 
@@ -220,8 +220,8 @@ impl<'v> ValueLike<'v> for Value<'v> {
         self.get_ref().write_hash(hasher)
     }
 
-    fn to_json(self) -> anyhow::Result<String> {
-        self.get_ref().to_json()
+    fn collect_json(self, collector: &mut String) -> anyhow::Result<()> {
+        self.get_ref().collect_json(collector)
     }
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -262,8 +262,8 @@ impl<'v> ValueLike<'v> for FrozenValue {
         self.to_value().write_hash(hasher)
     }
 
-    fn to_json(self) -> anyhow::Result<String> {
-        self.to_value().to_json()
+    fn collect_json(self, collector: &mut String) -> anyhow::Result<()> {
+        self.to_value().collect_json(collector)
     }
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -317,6 +317,12 @@ impl<'v> Value<'v> {
         let mut s = String::new();
         self.collect_repr(&mut s);
         s
+    }
+
+    pub fn to_json(self) -> anyhow::Result<String> {
+        let mut s = String::new();
+        self.collect_json(&mut s)?;
+        Ok(s)
     }
 
     /// Forwards to [`StarlarkValue::set_attr`].

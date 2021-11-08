@@ -194,24 +194,25 @@ pub(crate) fn hash_string_result(x: &str) -> SmallHashResult {
     SmallHashResult::new(x)
 }
 
-fn json_escape(x: &str) -> String {
-    let mut escaped = Vec::with_capacity(x.len() + 2);
-    escaped.push(b'\"');
+fn json_escape(x: &str, collector: &mut String) {
+    collector.reserve(x.len() + 2);
+    // Safe because we only put valid UTF8 into it
+    let bytes = unsafe { collector.as_mut_vec() };
+    bytes.push(b'\"');
     for c in x.bytes() {
         // Escape as per ECMA-404 standard
         match c {
-            b'\\' => escaped.extend(b"\\\\".iter()),
-            b'"' => escaped.extend(b"\\\"".iter()),
-            0x08u8 => escaped.extend(b"\\b".iter()),
-            0x0Cu8 => escaped.extend(b"\\f".iter()),
-            b'\n' => escaped.extend(b"\\n".iter()),
-            b'\r' => escaped.extend(b"\\r".iter()),
-            b'\t' => escaped.extend(b"\\t".iter()),
-            x => escaped.push(x),
+            b'\\' => bytes.extend(b"\\\\".iter()),
+            b'"' => bytes.extend(b"\\\"".iter()),
+            0x08u8 => bytes.extend(b"\\b".iter()),
+            0x0Cu8 => bytes.extend(b"\\f".iter()),
+            b'\n' => bytes.extend(b"\\n".iter()),
+            b'\r' => bytes.extend(b"\\r".iter()),
+            b'\t' => bytes.extend(b"\\t".iter()),
+            x => bytes.push(x),
         }
     }
-    escaped.push(b'\"');
-    unsafe { String::from_utf8_unchecked(escaped) }
+    bytes.push(b'\"');
 }
 
 impl Display for StarlarkStr {
@@ -240,8 +241,9 @@ impl<'v> StarlarkValue<'v> for str {
         string_repr(self, buffer)
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        Ok(json_escape(self))
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        json_escape(self, collector);
+        Ok(())
     }
 
     fn to_bool(&self) -> bool {
@@ -418,8 +420,8 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         self.unpack().collect_repr(collector)
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        self.unpack().to_json()
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        self.unpack().collect_json(collector)
     }
 
     fn to_bool(&self) -> bool {

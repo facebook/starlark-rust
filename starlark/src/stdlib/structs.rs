@@ -20,7 +20,7 @@ use crate as starlark;
 use crate::{
     environment::{GlobalsBuilder, MethodsBuilder},
     eval::Arguments,
-    values::{structs::Struct, Value, ValueLike},
+    values::{structs::Struct, Value},
 };
 
 #[starlark_module]

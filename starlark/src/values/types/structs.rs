@@ -143,22 +143,19 @@ where
         self.fields.extra_memory()
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        let mut s = "{".to_owned();
-        s += &self
-            .fields
-            .iter()
-            .map(|(k, v)| {
-                Ok(format!(
-                    "\"{}\":{}",
-                    k.to_string_value().as_str(),
-                    v.to_json()?
-                ))
-            })
-            .collect::<anyhow::Result<Vec<String>>>()?
-            .join(",");
-        s += "}";
-        Ok(s)
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        collector.push('{');
+        for (i, (k, v)) in self.fields.iter().enumerate() {
+            if i != 0 {
+                collector.push(',');
+            }
+            collector.push('\"');
+            collector.push_str(k.to_string_value().as_str());
+            collector.push_str("\":");
+            v.collect_json(collector)?;
+        }
+        collector.push('}');
+        Ok(())
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {

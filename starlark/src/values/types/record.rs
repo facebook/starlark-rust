@@ -365,17 +365,24 @@ where
         }
     }
 
-    fn to_json(&self) -> anyhow::Result<String> {
-        let mut s = "{".to_owned();
-        s += &self
+    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
+        collector.push('{');
+        for (i, (k, v)) in self
             .get_record_fields()
             .keys()
             .zip(&self.values)
-            .map(|(k, v)| Ok(format!("\"{}\":{}", k, v.to_json()?)))
-            .collect::<anyhow::Result<Vec<String>>>()?
-            .join(",");
-        s += "}";
-        Ok(s)
+            .enumerate()
+        {
+            if i != 0 {
+                collector.push(',');
+            }
+            collector.push('\"');
+            collector.push_str(k);
+            collector.push_str("\":");
+            v.collect_json(collector)?;
+        }
+        collector.push('}');
+        Ok(())
     }
 
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
