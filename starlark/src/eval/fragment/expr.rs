@@ -251,9 +251,12 @@ impl Spanned<ExprCompiledValue> {
                 kvs.map(|(k, v)| (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx))),
             ),
             ExprCompiledValue::Compr(ref compr) => compr.optimize_on_freeze(ctx),
-            ExprCompiledValue::Dot(box ref object, ref field) => {
-                ExprCompiledValue::Dot(box object.optimize_on_freeze(ctx), field.clone())
-            }
+            ExprCompiledValue::Dot(box ref object, ref field) => ExprCompiledValue::dot(
+                object.optimize_on_freeze(ctx),
+                field,
+                ctx.heap,
+                ctx.frozen_heap,
+            ),
             ExprCompiledValue::ArrayIndirection(box (ref array, ref index)) => {
                 let array = array.optimize_on_freeze(ctx);
                 let index = index.optimize_on_freeze(ctx);
@@ -500,6 +503,38 @@ impl ExprCompiledValue {
             node: CallCompiled::Call(box (Spanned { span, node: fun }, args)),
         })
     }
+
+    pub(crate) fn compile_time_getattr(
+        left: FrozenValue,
+        attr: &Symbol,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> Option<FrozenValue> {
+        // We assume `getattr` has no side effects.
+        let v = get_attr_hashed_raw(left.to_value(), attr, heap).ok()?;
+        match MaybeUnboundValue::new(v.unpack_frozen()?) {
+            MaybeUnboundValue::Bound(v) => Some(v),
+            MaybeUnboundValue::Attr(..) => None,
+            MaybeUnboundValue::Method(m) => {
+                Some(frozen_heap.alloc_simple(BoundMethodGen::new(left, m)))
+            }
+        }
+    }
+
+    fn dot(
+        object: Spanned<ExprCompiledValue>,
+        field: &Symbol,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        if let Some(left) = object.as_value() {
+            if let Some(v) = Self::compile_time_getattr(left, field, heap, frozen_heap) {
+                return ExprCompiledValue::Value(v);
+            }
+        }
+
+        ExprCompiledValue::Dot(box object, field.clone())
+    }
 }
 
 #[derive(Debug, Clone, Error)]
@@ -708,25 +743,6 @@ impl Compiler<'_, '_, '_> {
         expr.map(|v| self.expr(*v))
     }
 
-    pub(crate) fn compile_time_getattr(
-        &mut self,
-        left: FrozenValue,
-        attr: &Symbol,
-    ) -> Option<FrozenValue> {
-        // We assume `getattr` has no side effects.
-        let v = get_attr_hashed_raw(left.to_value(), attr, self.eval.module_env.heap()).ok()?;
-        match MaybeUnboundValue::new(v.unpack_frozen()?) {
-            MaybeUnboundValue::Bound(v) => Some(v),
-            MaybeUnboundValue::Attr(..) => None,
-            MaybeUnboundValue::Method(m) => Some(
-                self.eval
-                    .module_env
-                    .frozen_heap()
-                    .alloc_simple(BoundMethodGen::new(left, m)),
-            ),
-        }
-    }
-
     fn expr_ident(
         &mut self,
         ident: AstString,
@@ -823,16 +839,12 @@ impl Compiler<'_, '_, '_> {
                 let left = self.expr(*left);
                 let s = Symbol::new(&right.node);
 
-                if let Some(left) = left.as_value() {
-                    if let Some(v) = self.compile_time_getattr(left, &s) {
-                        return Spanned {
-                            span,
-                            node: ExprCompiledValue::Value(v),
-                        };
-                    }
-                }
-
-                ExprCompiledValue::Dot(box left, s)
+                ExprCompiledValue::dot(
+                    left,
+                    &s,
+                    self.eval.module_env.heap(),
+                    self.eval.module_env.frozen_heap(),
+                )
             }
             ExprP::Call(box left, args) => self.expr_call(span, left, args),
             ExprP::ArrayIndirection(box (array, index)) => {

@@ -287,7 +287,12 @@ impl Compiler<'_, '_, '_> {
 
         let s = Symbol::new(&s.node);
         if let Some(e) = e.as_value() {
-            if let Some(v) = self.compile_time_getattr(e, &s) {
+            if let Some(v) = ExprCompiledValue::compile_time_getattr(
+                e,
+                &s,
+                self.eval.module_env.heap(),
+                self.eval.module_env.frozen_heap(),
+            ) {
                 return self.expr_call_fun_frozen_no_special(span, v, args);
             }
         }

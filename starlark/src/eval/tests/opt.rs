@@ -57,3 +57,16 @@ def test():
 "#,
     )
 }
+
+#[test]
+fn test_same_module_struct_getattr_inlined() {
+    test_instrs(
+        &[BcOpcode::Const, BcOpcode::Return],
+        r#"
+def test():
+    return _s.f
+
+_s = struct(f = 1)
+"#,
+    );
+}
