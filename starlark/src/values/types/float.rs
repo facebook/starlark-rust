@@ -208,17 +208,9 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
 
     fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
         // NaN/Infinity are not part of the JSON spec,
-        // but it's unclear what should go here.
-        // Perhaps strings with these values? null?
-        // Leave it with these values for now.
-        if self.0.is_nan() {
-            collector.push_str("NaN");
-        } else if self.0.is_infinite() {
-            if self.0.is_sign_positive() {
-                collector.push_str("Infinity");
-            } else {
-                collector.push_str("-Infinity");
-            }
+        // so use null, like JSON.stringify does.
+        if self.0.is_nan() || self.0.is_infinite() {
+            collector.push_str("null");
         } else {
             write!(collector, "{}", self).unwrap();
         }
