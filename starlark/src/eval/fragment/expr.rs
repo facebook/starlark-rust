@@ -384,6 +384,21 @@ impl ExprCompiledValue {
         }
     }
 
+    fn percent(
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        if let Some(v) = l.as_string() {
+            if let Some((before, after)) = parse_percent_s_one(&v) {
+                let before = frozen_heap.alloc_string_value(&before);
+                let after = frozen_heap.alloc_string_value(&after);
+                return ExprCompiledValue::PercentSOne(box (before, r, after));
+            }
+        }
+        ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
+    }
+
     fn if_expr(
         cond: Spanned<ExprCompiledValue>,
         t: Spanned<ExprCompiledValue>,
@@ -767,29 +782,6 @@ impl Compiler<'_, '_, '_> {
         }
     }
 
-    fn percent(
-        &mut self,
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
-    ) -> ExprCompiledValue {
-        if let Some(v) = l.as_string() {
-            if let Some((before, after)) = parse_percent_s_one(&v) {
-                let before = self
-                    .eval
-                    .module_env
-                    .frozen_heap()
-                    .alloc_string_value(&before);
-                let after = self
-                    .eval
-                    .module_env
-                    .frozen_heap()
-                    .alloc_string_value(&after);
-                return ExprCompiledValue::PercentSOne(box (before, r, after));
-            }
-        }
-        ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
-    }
-
     pub(crate) fn expr(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
         // println!("compile {}", expr.node);
         let span = expr.span;
@@ -909,7 +901,9 @@ impl Compiler<'_, '_, '_> {
                         BinOp::Subtract => ExprCompiledValue::Op(ExprBinOp::Sub, box (l, r)),
                         BinOp::Add => ExprCompiledValue::Op(ExprBinOp::Add, box (l, r)),
                         BinOp::Multiply => ExprCompiledValue::Op(ExprBinOp::Multiply, box (l, r)),
-                        BinOp::Percent => self.percent(l, r),
+                        BinOp::Percent => {
+                            ExprCompiledValue::percent(l, r, self.eval.module_env.frozen_heap())
+                        }
                         BinOp::Divide => ExprCompiledValue::Op(ExprBinOp::Divide, box (l, r)),
                         BinOp::FloorDivide => {
                             ExprCompiledValue::Op(ExprBinOp::FloorDivide, box (l, r))
