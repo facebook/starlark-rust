@@ -305,7 +305,7 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::Op(op, box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                ExprCompiledValue::bin_op(op, l, r, ctx.frozen_heap)
+                ExprCompiledValue::bin_op(op, l, r, ctx.heap, ctx.frozen_heap)
             }
             ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
@@ -387,8 +387,18 @@ impl ExprCompiledValue {
     fn percent(
         l: Spanned<ExprCompiledValue>,
         r: Spanned<ExprCompiledValue>,
+        heap: &Heap,
         frozen_heap: &FrozenHeap,
     ) -> ExprCompiledValue {
+        let span = l.span.merge(r.span);
+        if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
+            if let Ok(v) = l.to_value().percent(r.to_value(), heap) {
+                if let Some(v) = ExprCompiledValue::try_value(span, v, frozen_heap) {
+                    return v;
+                }
+            }
+        }
+
         if let Some(v) = l.as_string() {
             if let Some((before, after)) = parse_percent_s_one(&v) {
                 let before = frozen_heap.alloc_string_value(&before);
@@ -403,10 +413,11 @@ impl ExprCompiledValue {
         bin_op: ExprBinOp,
         l: Spanned<ExprCompiledValue>,
         r: Spanned<ExprCompiledValue>,
+        heap: &Heap,
         frozen_heap: &FrozenHeap,
     ) -> ExprCompiledValue {
         match bin_op {
-            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, frozen_heap),
+            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, heap, frozen_heap),
             bin_op => ExprCompiledValue::Op(bin_op, box (l, r)),
         }
     }
@@ -902,6 +913,7 @@ impl Compiler<'_, '_, '_> {
                             ExprBinOp::In,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::NotIn => {
@@ -913,6 +925,7 @@ impl Compiler<'_, '_, '_> {
                                         ExprBinOp::In,
                                         l,
                                         r,
+                                        self.eval.module_env.heap(),
                                         self.eval.module_env.frozen_heap(),
                                     ),
                                 },
@@ -923,66 +936,77 @@ impl Compiler<'_, '_, '_> {
                             ExprBinOp::Sub,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::Add => ExprCompiledValue::bin_op(
                             ExprBinOp::Add,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::Multiply => ExprCompiledValue::bin_op(
                             ExprBinOp::Multiply,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::Percent => ExprCompiledValue::bin_op(
                             ExprBinOp::Percent,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::Divide => ExprCompiledValue::bin_op(
                             ExprBinOp::Divide,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::FloorDivide => ExprCompiledValue::bin_op(
                             ExprBinOp::FloorDivide,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::BitAnd => ExprCompiledValue::bin_op(
                             ExprBinOp::BitAnd,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::BitOr => ExprCompiledValue::bin_op(
                             ExprBinOp::BitOr,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::BitXor => ExprCompiledValue::bin_op(
                             ExprBinOp::BitXor,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::LeftShift => ExprCompiledValue::bin_op(
                             ExprBinOp::LeftShift,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::RightShift => ExprCompiledValue::bin_op(
                             ExprBinOp::RightShift,
                             l,
                             r,
+                            self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
                     }
