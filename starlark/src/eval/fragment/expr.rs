@@ -585,12 +585,14 @@ impl ExprCompiledValue {
     ) -> Option<FrozenValue> {
         // We assume `getattr` has no side effects.
         let v = get_attr_hashed_raw(left.to_value(), attr, heap).ok()?;
-        match MaybeUnboundValue::new(v.unpack_frozen()?) {
-            MaybeUnboundValue::Bound(v) => Some(v),
-            MaybeUnboundValue::Attr(..) => None,
-            MaybeUnboundValue::Method(m) => {
-                Some(frozen_heap.alloc_simple(BoundMethodGen::new(left, m)))
-            }
+        match v {
+            MemberOrValue::Member(m) => match MaybeUnboundValue::new(m) {
+                MaybeUnboundValue::Method(m) => {
+                    Some(frozen_heap.alloc_simple(BoundMethodGen::new(left, m)))
+                }
+                MaybeUnboundValue::Attr(..) => None,
+            },
+            MemberOrValue::Value(v) => v.unpack_frozen(),
         }
     }
 
@@ -755,20 +757,26 @@ fn get_attr_no_attr_error<'v>(x: Value<'v>, attribute: &Symbol) -> anyhow::Error
     }
 }
 
+pub(crate) enum MemberOrValue<'v> {
+    Member(FrozenValue),
+    Value(Value<'v>),
+}
+
+#[inline(always)]
 pub(crate) fn get_attr_hashed_raw<'v>(
     x: Value<'v>,
     attribute: &Symbol,
     heap: &'v Heap,
-) -> anyhow::Result<Value<'v>> {
+) -> anyhow::Result<MemberOrValue<'v>> {
     let aref = x.get_ref();
     if let Some(methods) = aref.get_methods() {
         if let Some(v) = methods.get_frozen_symbol(attribute) {
-            return Ok(v.to_value());
+            return Ok(MemberOrValue::Member(v));
         }
     }
     match aref.get_attr(attribute.as_str(), heap) {
         None => Err(get_attr_no_attr_error(x, attribute)),
-        Some(x) => Ok(x),
+        Some(x) => Ok(MemberOrValue::Value(x)),
     }
 }
 
@@ -780,9 +788,7 @@ pub(crate) fn get_attr_hashed_bind<'v>(
     let aref = x.get_ref();
     if let Some(methods) = aref.get_methods() {
         if let Some(v) = methods.get_frozen_symbol(attribute) {
-            return MaybeUnboundValue::new(v)
-                .to_maybe_unbound_value()
-                .bind(x, heap);
+            return MaybeUnboundValue::new(v).bind(x, heap);
         }
     }
     match aref.get_attr(attribute.as_str(), heap) {

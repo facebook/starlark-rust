@@ -389,15 +389,13 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     #[doc(hidden)]
     fn invoke_method(
         &self,
-        me: Value<'v>,
+        _me: Value<'v>,
         _this: Value<'v>,
-        location: Option<Span>,
-        args: Arguments<'v, '_>,
-        eval: &mut Evaluator<'v, '_>,
+        _location: Option<Span>,
+        _args: Arguments<'v, '_>,
+        _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        // Call regular invoke by default, assuming this object is bound.
-        // Unbound objects (attribute or method) need to override this.
-        self.invoke(me, location, args, eval)
+        unreachable!("invoke_method should only be invoked for method or attribute");
     }
 
     /// Return the result of `a[index]` if `a` is indexable.

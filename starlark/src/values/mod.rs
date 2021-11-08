@@ -406,11 +406,7 @@ impl<'v> Value<'v> {
         let aref = self.get_ref();
         if let Some(methods) = aref.get_methods() {
             if let Some(v) = methods.get_frozen(attribute) {
-                return Ok(Some(
-                    MaybeUnboundValue::new(v)
-                        .to_maybe_unbound_value()
-                        .bind(self, heap)?,
-                ));
+                return Ok(Some(MaybeUnboundValue::new(v).bind(self, heap)?));
             }
         }
         Ok(aref.get_attr(attribute, heap))

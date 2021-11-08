@@ -42,7 +42,7 @@ use crate::{
         compiler::{add_span_to_expr_error, expr_throw, scope::Captured, EvalException},
         fragment::{
             def::{DefInfo, ParameterCompiled},
-            expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError},
+            expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError, MemberOrValue},
             stmt::{add_assign, before_stmt, possible_gc, AssignError},
         },
         runtime::slots::LocalSlotId,
@@ -1659,7 +1659,14 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
         let this = stack.pop();
         // TODO: wrong span: should be span of `object.method`, not of the whole expression
         let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
-        method.invoke_method(this, Some(args.span), arguments, eval)
+        match method {
+            MemberOrValue::Member(member) => {
+                member
+                    .to_value()
+                    .invoke_method(this, Some(args.span), arguments, eval)
+            }
+            MemberOrValue::Value(value) => value.invoke(Some(args.span), arguments, eval),
+        }
     }
 }
 
@@ -1679,7 +1686,14 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
         let this = stack.pop();
         // TODO: wrong span: should be span of `object.method`, not of the whole expression
         let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
-        method.invoke_method(this, Some(*span), arguments, eval)
+        match method {
+            MemberOrValue::Member(member) => {
+                member
+                    .to_value()
+                    .invoke_method(this, Some(*span), arguments, eval)
+            }
+            MemberOrValue::Value(value) => value.invoke(Some(*span), arguments, eval),
+        }
     }
 }
 

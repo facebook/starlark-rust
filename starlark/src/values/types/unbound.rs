@@ -23,20 +23,17 @@ use crate::values::{
 };
 
 /// A value or an unbound method or unbound attribute.
-pub(crate) enum MaybeUnboundValue<V> {
-    /// Fully bound value, `this` is not used for it.
-    Bound(V),
+pub(crate) enum MaybeUnboundValue {
     /// A method with `this` unbound.
     Method(FrozenValueTyped<'static, NativeMethod>),
     /// An attribute with `this` unbound.
     Attr(FrozenValueTyped<'static, NativeAttribute>),
 }
 
-impl<'v, V: ValueLike<'v>> MaybeUnboundValue<V> {
+impl MaybeUnboundValue {
     /// Bind this object to given `this` value.
-    pub(crate) fn bind(self, this: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    pub(crate) fn bind<'v>(self, this: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match self {
-            MaybeUnboundValue::Bound(v) => Ok(v.to_value()),
             MaybeUnboundValue::Method(m) => {
                 Ok(heap.alloc_complex(BoundMethodGen::new(this.to_value(), m)))
             }
@@ -45,25 +42,16 @@ impl<'v, V: ValueLike<'v>> MaybeUnboundValue<V> {
     }
 }
 
-impl MaybeUnboundValue<FrozenValue> {
+impl MaybeUnboundValue {
     /// Split into variants.
     #[allow(clippy::same_functions_in_if_condition)] // False positive
-    pub(crate) fn new(value: FrozenValue) -> MaybeUnboundValue<FrozenValue> {
+    pub(crate) fn new(value: FrozenValue) -> MaybeUnboundValue {
         if let Some(method) = FrozenValueTyped::new(value) {
             MaybeUnboundValue::Method(method)
         } else if let Some(attr) = FrozenValueTyped::new(value) {
             MaybeUnboundValue::Attr(attr)
         } else {
-            MaybeUnboundValue::Bound(value)
-        }
-    }
-
-    /// Convert to non-frozen version of this.
-    pub(crate) fn to_maybe_unbound_value<'v>(self) -> MaybeUnboundValue<Value<'v>> {
-        match self {
-            MaybeUnboundValue::Bound(value) => MaybeUnboundValue::Bound(value.to_value()),
-            MaybeUnboundValue::Method(method) => MaybeUnboundValue::Method(method),
-            MaybeUnboundValue::Attr(attr) => MaybeUnboundValue::Attr(attr),
+            unreachable!("not a member: {}", value);
         }
     }
 }
