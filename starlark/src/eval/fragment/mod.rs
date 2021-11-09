@@ -27,4 +27,5 @@ pub(crate) mod def;
 pub(crate) mod expr;
 pub(crate) mod known;
 pub(crate) mod module;
+pub(crate) mod small_vec_1;
 pub(crate) mod stmt;

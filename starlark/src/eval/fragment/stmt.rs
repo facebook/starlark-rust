@@ -23,7 +23,7 @@
 //! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 
-use std::{mem, slice};
+use std::mem;
 
 use anyhow::anyhow;
 use gazebo::prelude::*;
@@ -37,7 +37,7 @@ use crate::{
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
             Compiler,
         },
-        fragment::{expr::ExprCompiledValue, known::list_to_tuple},
+        fragment::{expr::ExprCompiledValue, known::list_to_tuple, small_vec_1::SmallVec1},
         runtime::{
             evaluator::{Evaluator, GC_THRESHOLD},
             slots::LocalSlotId,
@@ -206,35 +206,6 @@ impl Spanned<StmtCompiledValue> {
 }
 
 #[derive(Clone, Debug)]
-enum SmallVec1<T> {
-    Empty,
-    One(T),
-    Many(Vec<T>),
-}
-
-impl<T> SmallVec1<T> {
-    fn extend(&mut self, stmts: SmallVec1<T>) {
-        *self = match (mem::replace(self, SmallVec1::Empty), stmts) {
-            (SmallVec1::Empty, right) => right,
-            (left, SmallVec1::Empty) => left,
-            (SmallVec1::One(left), SmallVec1::One(right)) => SmallVec1::Many(vec![left, right]),
-            (SmallVec1::One(left), SmallVec1::Many(mut right)) => {
-                right.insert(0, left);
-                SmallVec1::Many(right)
-            }
-            (SmallVec1::Many(mut left), SmallVec1::One(right)) => {
-                left.push(right);
-                SmallVec1::Many(left)
-            }
-            (SmallVec1::Many(mut left), SmallVec1::Many(right)) => {
-                left.extend(right);
-                SmallVec1::Many(left)
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
 pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiledValue>>);
 
 impl StmtsCompiled {
@@ -258,11 +229,7 @@ impl StmtsCompiled {
     }
 
     pub(crate) fn stmts(&self) -> &[Spanned<StmtCompiledValue>] {
-        match &self.0 {
-            SmallVec1::Empty => &[],
-            SmallVec1::One(s) => slice::from_ref(s),
-            SmallVec1::Many(ss) => ss,
-        }
+        self.0.as_slice()
     }
 
     pub(crate) fn extend(&mut self, right: StmtsCompiled) {
