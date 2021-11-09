@@ -27,15 +27,15 @@ use crate::{
             scope::{CstArgument, CstExpr},
             Compiler,
         },
-        fragment::{expr::ExprCompiledValue, stmt::OptimizeOnFreezeContext},
-        Arguments,
+        fragment::{def::InlineDefBody, expr::ExprCompiledValue, stmt::OptimizeOnFreezeContext},
+        Arguments, FrozenDef,
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
     values::{
         function::{FrozenBoundMethod, NativeFunction},
         string::interpolation::parse_format_one,
-        FrozenStringValue, FrozenValue, FrozenValueTyped,
+        FrozenStringValue, FrozenValue, FrozenValueTyped, ValueLike,
     },
 };
 
@@ -57,13 +57,35 @@ pub(crate) enum CallCompiled {
     Method(Box<(Spanned<ExprCompiledValue>, Symbol, ArgsCompiledValue)>),
 }
 
+impl CallCompiled {
+    pub(crate) fn call(
+        span: Span,
+        fun: ExprCompiledValue,
+        args: ArgsCompiledValue,
+    ) -> ExprCompiledValue {
+        if let (Some(fun), Some(pos)) = (fun.as_value(), args.one_pos()) {
+            // Try to inline a function like `lambda x: type(x) == "y"`.
+            if let Some(fun) = fun.downcast_ref::<FrozenDef>() {
+                if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
+                    return ExprCompiledValue::TypeIs(box pos.clone(), *t);
+                }
+            }
+        }
+
+        ExprCompiledValue::Call(Spanned {
+            span,
+            node: CallCompiled::Call(box (Spanned { span, node: fun }, args)),
+        })
+    }
+}
+
 impl Spanned<CallCompiled> {
     pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiledValue {
         match self.node {
             CallCompiled::Call(box (ref fun, ref args)) => {
                 let fun = fun.optimize_on_freeze(ctx);
                 let args = args.optimize_on_freeze(ctx);
-                ExprCompiledValue::call(self.span, fun.node, args)
+                CallCompiled::call(self.span, fun.node, args)
             }
             CallCompiled::Method(box (ref this, ref field, ref args)) => {
                 let this = this.optimize_on_freeze(ctx);
@@ -212,7 +234,7 @@ impl Compiler<'_, '_, '_> {
             }
         }
 
-        ExprCompiledValue::call(span, ExprCompiledValue::Value(fun), args)
+        CallCompiled::call(span, ExprCompiledValue::Value(fun), args)
     }
 
     fn expr_call_fun_frozen(
