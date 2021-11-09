@@ -17,6 +17,8 @@
 
 //! Optimizer tests.
 
+mod speculative_exec;
+
 use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
 
 #[test]
@@ -45,17 +47,6 @@ def test():
 _private_forward_mutable = {1: 2}
 "#,
     );
-}
-
-#[test]
-fn test_methods_invoked_speculatively() {
-    test_instrs(
-        &[BcOpcode::Const, BcOpcode::Return],
-        r#"
-def test():
-    return "foo".startswith("f")
-"#,
-    )
 }
 
 #[test]
