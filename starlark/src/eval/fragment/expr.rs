@@ -45,6 +45,7 @@ use crate::{
             float::StarlarkFloat,
             list::{FrozenList, List},
             range::Range,
+            string::interpolation::format_one,
             tuple::Tuple,
             unbound::MaybeUnboundValue,
         },
@@ -323,7 +324,7 @@ impl Spanned<ExprCompiledValue> {
             }
             ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
-                ExprCompiledValue::FormatOne(box (before, arg, after))
+                ExprCompiledValue::format_one(before, arg, after, ctx.heap, ctx.frozen_heap)
             }
             ref d @ ExprCompiledValue::Def(..) => d.clone(),
             ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(ctx),
@@ -417,6 +418,21 @@ impl ExprCompiledValue {
             }
         }
         ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
+    }
+
+    pub(crate) fn format_one(
+        before: FrozenStringValue,
+        arg: Spanned<ExprCompiledValue>,
+        after: FrozenStringValue,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        if let Some(arg) = arg.as_value() {
+            let value = format_one(&before, arg.to_value(), &after, heap);
+            let value = frozen_heap.alloc_str(value.unpack_str().unwrap());
+            return ExprCompiledValue::Value(value);
+        }
+        ExprCompiledValue::FormatOne(box (before, arg, after))
     }
 
     fn add(

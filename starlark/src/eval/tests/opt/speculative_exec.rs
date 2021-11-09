@@ -27,3 +27,15 @@ def test():
 "#,
     )
 }
+
+#[test]
+fn test_format_speculatively_before_format_instr() {
+    test_instrs(
+        &[BcOpcode::Const, BcOpcode::Return],
+        r#"
+def test():
+    # Test this expression is compiled to constant, not to `FormatOne` instruction.
+    return "x{}y".format(1)
+"#,
+    );
+}

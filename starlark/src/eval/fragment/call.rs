@@ -287,7 +287,7 @@ impl Compiler<'_, '_, '_> {
 
         // Optimize `"aaa{}bbb".format(arg)`.
         if let (Some(e), Some(_arg)) = (e.as_string(), args.one_pos()) {
-            if s.node == "format" {
+            if &s.node == "format" {
                 if let Some((before, after)) = parse_format_one(&e) {
                     let before = self
                         .eval
@@ -300,7 +300,13 @@ impl Compiler<'_, '_, '_> {
                         .frozen_heap()
                         .alloc_string_value(&after);
                     let arg = args.into_one_pos().unwrap();
-                    return ExprCompiledValue::FormatOne(box (before, arg, after));
+                    return ExprCompiledValue::format_one(
+                        before,
+                        arg,
+                        after,
+                        self.eval.module_env.heap(),
+                        self.eval.module_env.frozen_heap(),
+                    );
                 }
             }
         }
@@ -316,6 +322,7 @@ impl Compiler<'_, '_, '_> {
                 return self.expr_call_fun_frozen_no_special(span, v, args);
             }
         }
+
         ExprCompiledValue::Call(Spanned {
             span,
             node: CallCompiled::Method(box (e, s, args)),
