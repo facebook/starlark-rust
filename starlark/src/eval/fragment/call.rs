@@ -115,6 +115,11 @@ impl ArgsCompiledValue {
         }
     }
 
+    pub(crate) fn into_one_pos(mut self) -> Option<Spanned<ExprCompiledValue>> {
+        self.one_pos()?;
+        self.pos_named.pop()
+    }
+
     pub(crate) fn pos_only(&self) -> Option<&[Spanned<ExprCompiledValue>]> {
         if self.names.is_empty() && self.args.is_none() && self.kwargs.is_none() {
             Some(&self.pos_named)
@@ -212,10 +217,8 @@ impl Compiler<'_, '_, '_> {
         &mut self,
         span: Span,
         fun: FrozenValue,
-        args: Vec<CstArgument>,
+        args: ArgsCompiledValue,
     ) -> ExprCompiledValue {
-        let args = self.args(args);
-
         if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
             // Try execute the native function speculatively.
             if fun.speculative_exec_safe {
@@ -250,6 +253,7 @@ impl Compiler<'_, '_, '_> {
             let x = self.expr(args.pop().unwrap().node.into_expr());
             ExprCompiledValue::Len(box x)
         } else {
+            let args = self.args(args);
             self.expr_call_fun_frozen_no_special(span, left, args)
         }
     }
@@ -276,33 +280,27 @@ impl Compiler<'_, '_, '_> {
         span: Span,
         e: CstExpr,
         s: AstString,
-        mut args: Vec<CstArgument>,
+        args: Vec<CstArgument>,
     ) -> ExprCompiledValue {
         let e = self.expr(e);
+        let args = self.args(args);
 
         // Optimize `"aaa{}bbb".format(arg)`.
-        if let Some(e) = e.as_string() {
-            if s.node == "format" && args.len() == 1 {
-                if let ArgumentP::Positional(..) = args[0].node {
-                    if let Some((before, after)) = parse_format_one(&e) {
-                        let before = self
-                            .eval
-                            .module_env
-                            .frozen_heap()
-                            .alloc_string_value(&before);
-                        let after = self
-                            .eval
-                            .module_env
-                            .frozen_heap()
-                            .alloc_string_value(&after);
-                        let arg = match args.pop().unwrap().node {
-                            ArgumentP::Positional(arg) => arg,
-                            _ => unreachable!(),
-                        };
-                        assert!(args.is_empty());
-                        let arg = self.expr(arg);
-                        return ExprCompiledValue::FormatOne(box (before, arg, after));
-                    }
+        if let (Some(e), Some(_arg)) = (e.as_string(), args.one_pos()) {
+            if s.node == "format" {
+                if let Some((before, after)) = parse_format_one(&e) {
+                    let before = self
+                        .eval
+                        .module_env
+                        .frozen_heap()
+                        .alloc_string_value(&before);
+                    let after = self
+                        .eval
+                        .module_env
+                        .frozen_heap()
+                        .alloc_string_value(&after);
+                    let arg = args.into_one_pos().unwrap();
+                    return ExprCompiledValue::FormatOne(box (before, arg, after));
                 }
             }
         }
@@ -318,7 +316,6 @@ impl Compiler<'_, '_, '_> {
                 return self.expr_call_fun_frozen_no_special(span, v, args);
             }
         }
-        let args = self.args(args);
         ExprCompiledValue::Call(Spanned {
             span,
             node: CallCompiled::Method(box (e, s, args)),
