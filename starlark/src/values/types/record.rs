@@ -374,7 +374,7 @@ where
             .enumerate()
         {
             if i != 0 {
-                collector.push_str(", ");
+                collector.push(',');
             }
             k.collect_json(collector)?;
             collector.push(':');

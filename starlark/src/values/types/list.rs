@@ -465,7 +465,7 @@ where
         collector.push('[');
         for (i, e) in self.0.content().iter().enumerate() {
             if i != 0 {
-                collector.push_str(", ");
+                collector.push(',');
             }
             e.collect_json(collector)?;
         }
