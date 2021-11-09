@@ -346,7 +346,7 @@ pub(crate) fn format<'v>(
                 capture.clear();
             }
             ('{', "}") => return Err(anyhow!("Standalone '}}' in format string `{}`", this)),
-            ('{', ..) => return Err(anyhow!("Unmatched '{' in format string")),
+            ('{', ..) => return Err(anyhow!("Unmatched '{{' in format string")),
             ('}', "}") => {
                 result.push('}');
                 capture.clear();
@@ -367,7 +367,7 @@ pub(crate) fn format<'v>(
             string_pool.release(capture);
             Ok(r)
         }
-        _ => Err(anyhow!("Unmatched '{' in format string")),
+        _ => Err(anyhow!("Unmatched '{{' in format string")),
     }
 }
 
