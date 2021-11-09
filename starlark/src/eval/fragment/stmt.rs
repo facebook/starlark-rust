@@ -134,10 +134,7 @@ impl Spanned<StmtCompiledValue> {
                 let var = var.optimize_on_freeze(ctx);
                 let over = over.optimize_on_freeze(ctx);
                 let body = body.optimize_on_freeze(ctx);
-                StmtsCompiled::one(Spanned {
-                    span,
-                    node: StmtCompiledValue::For(box (var, over, body)),
-                })
+                <Spanned<StmtCompiledValue>>::for_stmt(span, var, over, body)
             }
             ref s @ (StmtCompiledValue::PossibleGc
             | StmtCompiledValue::Break
@@ -202,6 +199,21 @@ impl Spanned<StmtCompiledValue> {
                 }
             }
         }
+    }
+
+    fn for_stmt(
+        span: Span,
+        var: Spanned<AssignCompiledValue>,
+        over: Spanned<ExprCompiledValue>,
+        body: StmtsCompiled,
+    ) -> StmtsCompiled {
+        if over.is_iterable_empty() {
+            return StmtsCompiled::empty();
+        }
+        StmtsCompiled::one(Spanned {
+            span,
+            node: StmtCompiledValue::For(box (var, over, body)),
+        })
     }
 }
 
@@ -624,10 +636,7 @@ impl Compiler<'_, '_, '_> {
                 let var = self.assign(var);
                 let over = self.expr(over);
                 let st = self.stmt(body, false);
-                StmtsCompiled::one(Spanned {
-                    span,
-                    node: StmtCompiledValue::For(box (var, over, st)),
-                })
+                <Spanned<StmtCompiledValue>>::for_stmt(span, var, over, st)
             }
             StmtP::Return(e) => StmtsCompiled::one(Spanned {
                 node: StmtCompiledValue::Return(e.map(|e| self.expr(e))),

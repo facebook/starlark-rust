@@ -48,8 +48,17 @@ pub use crate::values::{
 use crate::{
     codemap::Span,
     collections::{Hashed, StarlarkHasher},
-    eval::{Arguments, Evaluator},
-    values::function::FUNCTION_TYPE,
+    eval::{Arguments, Evaluator, FrozenDef},
+    values::{
+        dict::FrozenDict,
+        enumeration::{EnumType, FrozenEnumValue},
+        float::StarlarkFloat,
+        function::{NativeFunction, FUNCTION_TYPE},
+        record::FrozenRecord,
+        structs::FrozenStruct,
+        tuple::FrozenTuple,
+        types::{list::FrozenList, range::Range, record::RecordType},
+    },
 };
 
 #[macro_use]
@@ -283,6 +292,29 @@ impl FrozenValue {
     /// Convert a [`FrozenValue`] back to a [`Value`].
     pub fn to_value<'v>(self) -> Value<'v> {
         Value::new_frozen(self)
+    }
+
+    /// Is this type builtin? We perform certain optimizations only on builtin types
+    /// because we know they have well defined semantics.
+    pub(crate) fn is_builtin(self) -> bool {
+        // The list is not comprehensive, this is fine.
+        // If some type is not listed here, some optimizations won't work for this type.
+        self.is_none()
+            || self.is_str()
+            || self.unpack_bool().is_some()
+            || self.unpack_int().is_some()
+            || FrozenValueTyped::<StarlarkFloat>::new(self).is_some()
+            || FrozenList::from_frozen_value(&self).is_some()
+            || FrozenDict::from_frozen_value(&self).is_some()
+            || FrozenValueTyped::<FrozenTuple>::new(self).is_some()
+            || FrozenValueTyped::<Range>::new(self).is_some()
+            || FrozenValueTyped::<FrozenDef>::new(self).is_some()
+            || FrozenValueTyped::<NativeFunction>::new(self).is_some()
+            || FrozenValueTyped::<FrozenStruct>::new(self).is_some()
+            || FrozenValueTyped::<RecordType>::new(self).is_some()
+            || FrozenValueTyped::<FrozenRecord>::new(self).is_some()
+            || FrozenValueTyped::<EnumType>::new(self).is_some()
+            || FrozenValueTyped::<FrozenEnumValue>::new(self).is_some()
     }
 }
 

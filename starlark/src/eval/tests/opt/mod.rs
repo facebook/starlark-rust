@@ -74,3 +74,16 @@ def test():
 "#,
     );
 }
+
+#[test]
+fn test_empty_iterable_optimized_away() {
+    test_instrs(
+        &[BcOpcode::ReturnNone],
+        r#"
+L = []
+def test():
+    for x in L:
+        print(x)
+"#,
+    );
+}

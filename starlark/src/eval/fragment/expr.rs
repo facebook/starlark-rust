@@ -202,6 +202,19 @@ impl ExprCompiledValue {
         }
     }
 
+    /// Iterable produced by this expression results in empty.
+    pub(crate) fn is_iterable_empty(&self) -> bool {
+        match self {
+            ExprCompiledValue::List(xs) => xs.is_empty(),
+            ExprCompiledValue::Tuple(xs) => xs.is_empty(),
+            ExprCompiledValue::Dict(xs) => xs.is_empty(),
+            ExprCompiledValue::Value(v) if v.is_builtin() => {
+                v.to_value().length().map_or(false, |l| l == 0)
+            }
+            _ => false,
+        }
+    }
+
     /// Result of this expression is definitely `bool`
     /// (if `false` it may also be `bool`).
     fn is_definitely_bool(&self) -> bool {
