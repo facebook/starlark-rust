@@ -31,7 +31,7 @@ use crate::{
             spans::BcInstrSpans,
             writer::BcWriter,
         },
-        fragment::expr::{CompareOp, ExprBinOp, ExprCompiledValue},
+        fragment::expr::{CompareOp, ExprBinOp, ExprCompiledValue, ExprUnOp},
     },
     values::{FrozenValue, ValueLike},
 };
@@ -207,17 +207,13 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::Not(box ref expr) => {
                 Self::write_not(expr, bc);
             }
-            ExprCompiledValue::Minus(box ref expr) => {
+            ExprCompiledValue::UnOp(op, ref expr) => {
                 expr.write_bc(bc);
-                bc.write_instr::<InstrMinus>(span, ());
-            }
-            ExprCompiledValue::Plus(box ref expr) => {
-                expr.write_bc(bc);
-                bc.write_instr::<InstrPlus>(span, ());
-            }
-            ExprCompiledValue::BitNot(box ref expr) => {
-                expr.write_bc(bc);
-                bc.write_instr::<InstrBitNot>(span, ());
+                match op {
+                    ExprUnOp::Minus => bc.write_instr::<InstrMinus>(span, ()),
+                    ExprUnOp::Plus => bc.write_instr::<InstrPlus>(span, ()),
+                    ExprUnOp::BitNot => bc.write_instr::<InstrBitNot>(span, ()),
+                }
             }
             ExprCompiledValue::If(box (ref cond, ref t, ref f)) => {
                 cond.write_bc(bc);

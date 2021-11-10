@@ -90,6 +90,23 @@ impl CompareOp {
 }
 
 #[derive(Copy, Clone, Dupe, Debug)]
+pub(crate) enum ExprUnOp {
+    Minus,
+    Plus,
+    BitNot,
+}
+
+impl ExprUnOp {
+    fn eval<'v>(self, v: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match self {
+            ExprUnOp::Minus => v.minus(heap),
+            ExprUnOp::Plus => v.plus(heap),
+            ExprUnOp::BitNot => Ok(Value::new_int(!v.to_int()?)),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Dupe, Debug)]
 pub(crate) enum ExprBinOp {
     In,
     Sub,
@@ -168,9 +185,7 @@ pub(crate) enum ExprCompiledValue {
         )>,
     ),
     Not(Box<Spanned<ExprCompiledValue>>),
-    Minus(Box<Spanned<ExprCompiledValue>>),
-    Plus(Box<Spanned<ExprCompiledValue>>),
-    BitNot(Box<Spanned<ExprCompiledValue>>),
+    UnOp(ExprUnOp, Box<Spanned<ExprCompiledValue>>),
     And(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
     Or(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
     Op(
@@ -333,15 +348,9 @@ impl Spanned<ExprCompiledValue> {
                 let e = e.optimize_on_freeze(ctx);
                 return ExprCompiledValue::not(span, e);
             }
-            ExprCompiledValue::Minus(box ref e) => {
+            ExprCompiledValue::UnOp(op, ref e) => {
                 let e = e.optimize_on_freeze(ctx);
-                ExprCompiledValue::minus(e)
-            }
-            ExprCompiledValue::Plus(box ref e) => {
-                ExprCompiledValue::Plus(box e.optimize_on_freeze(ctx))
-            }
-            ExprCompiledValue::BitNot(box ref e) => {
-                ExprCompiledValue::BitNot(box e.optimize_on_freeze(ctx))
+                ExprCompiledValue::un_op(op, e, ctx.heap, ctx.frozen_heap)
             }
             ExprCompiledValue::And(box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
@@ -536,15 +545,20 @@ impl ExprCompiledValue {
         }
     }
 
-    fn minus(expr: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
-        match expr
-            .as_value()
-            .and_then(FrozenValue::unpack_int)
-            .and_then(i32::checked_neg)
-        {
-            Some(i) => value!(FrozenValue::new_int(i)),
-            _ => ExprCompiledValue::Minus(box expr),
+    fn un_op(
+        op: ExprUnOp,
+        expr: Spanned<ExprCompiledValue>,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        if let Some(v) = expr.as_builtin_value() {
+            if let Ok(v) = op.eval(v.to_value(), heap) {
+                if let Some(v) = ExprCompiledValue::try_value(expr.span, v, frozen_heap) {
+                    return v;
+                }
+            }
         }
+        ExprCompiledValue::UnOp(op, box expr)
     }
 
     fn try_values(
@@ -935,18 +949,30 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Minus(expr) => {
                 let expr = self.expr(*expr);
-                ExprCompiledValue::minus(expr)
+                ExprCompiledValue::un_op(
+                    ExprUnOp::Minus,
+                    expr,
+                    self.eval.module_env.heap(),
+                    self.eval.module_env.frozen_heap(),
+                )
             }
             ExprP::Plus(expr) => {
                 let expr = self.expr(*expr);
-                match expr.as_value() {
-                    Some(x) if x.unpack_int().is_some() => value!(x),
-                    _ => ExprCompiledValue::Plus(box expr),
-                }
+                ExprCompiledValue::un_op(
+                    ExprUnOp::Plus,
+                    expr,
+                    self.eval.module_env.heap(),
+                    self.eval.module_env.frozen_heap(),
+                )
             }
             ExprP::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                ExprCompiledValue::BitNot(box expr)
+                ExprCompiledValue::un_op(
+                    ExprUnOp::BitNot,
+                    expr,
+                    self.eval.module_env.heap(),
+                    self.eval.module_env.frozen_heap(),
+                )
             }
             ExprP::Op(left, op, right) => {
                 if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
