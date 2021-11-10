@@ -32,11 +32,7 @@ use crate::{
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
-    values::{
-        function::{FrozenBoundMethod, NativeFunction},
-        string::interpolation::parse_format_one,
-        FrozenStringValue, FrozenValue, FrozenValueTyped, ValueLike,
-    },
+    values::{string::interpolation::parse_format_one, FrozenStringValue, FrozenValue, ValueLike},
 };
 
 #[derive(Default, Clone, Debug)]
@@ -216,21 +212,9 @@ impl Compiler<'_, '_, '_> {
         fun: FrozenValue,
         args: ArgsCompiledValue,
     ) -> ExprCompiled {
-        if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
-            // Try execute the native function speculatively.
-            if fun.speculative_exec_safe {
-                if let Some(expr) = self.try_spec_exec(span, fun.to_frozen_value(), &args) {
-                    return expr;
-                }
-            }
-        }
-
-        if let Some(fun) = FrozenValueTyped::<FrozenBoundMethod>::new(fun) {
-            // Try execute the bound method speculatively.
-            if fun.method.speculative_exec_safe {
-                if let Some(expr) = self.try_spec_exec(span, fun.to_frozen_value(), &args) {
-                    return expr;
-                }
+        if fun.speculative_exec_safe() {
+            if let Some(expr) = self.try_spec_exec(span, fun, &args) {
+                return expr;
             }
         }
 

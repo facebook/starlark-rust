@@ -53,7 +53,7 @@ use crate::{
         dict::FrozenDict,
         enumeration::{EnumType, FrozenEnumValue},
         float::StarlarkFloat,
-        function::{NativeFunction, FUNCTION_TYPE},
+        function::{FrozenBoundMethod, NativeFunction, FUNCTION_TYPE},
         record::FrozenRecord,
         structs::FrozenStruct,
         tuple::FrozenTuple,
@@ -316,6 +316,18 @@ impl FrozenValue {
             || FrozenValueTyped::<FrozenRecord>::new(self).is_some()
             || FrozenValueTyped::<EnumType>::new(self).is_some()
             || FrozenValueTyped::<FrozenEnumValue>::new(self).is_some()
+    }
+
+    /// Can `invoke` be called on this object speculatively?
+    /// (E. g. at compiled time when all the arguments are known.)
+    pub(crate) fn speculative_exec_safe(self) -> bool {
+        if let Some(v) = FrozenValueTyped::<NativeFunction>::new(self) {
+            v.speculative_exec_safe
+        } else if let Some(v) = FrozenValueTyped::<FrozenBoundMethod>::new(self) {
+            v.method.speculative_exec_safe
+        } else {
+            false
+        }
     }
 }
 

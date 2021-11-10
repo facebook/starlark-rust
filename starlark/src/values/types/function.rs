@@ -16,6 +16,7 @@
  */
 
 //! Function types, including native functions and `object.member` functions.
+
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce};
