@@ -254,7 +254,7 @@ impl Compiler<'_, '_, '_> {
             ExprCompiledValue::typ(expr)
         } else if left == self.constants.fn_len && one_positional {
             let x = self.expr(args.pop().unwrap().node.into_expr());
-            ExprCompiledValue::Len(box x)
+            ExprCompiledValue::len(x)
         } else {
             let args = self.args(args);
             self.expr_call_fun_frozen_no_special(span, left, args)

@@ -326,9 +326,7 @@ impl Spanned<ExprCompiledValue> {
                 ExprCompiledValue::compare(l, r, cmp)
             }
             ExprCompiledValue::Type(box ref e) => ExprCompiledValue::typ(e.optimize_on_freeze(ctx)),
-            ExprCompiledValue::Len(box ref e) => {
-                ExprCompiledValue::Len(box e.optimize_on_freeze(ctx))
-            }
+            ExprCompiledValue::Len(box ref e) => ExprCompiledValue::len(e.optimize_on_freeze(ctx)),
             ExprCompiledValue::TypeIs(box ref e, t) => {
                 ExprCompiledValue::type_is(e.optimize_on_freeze(ctx), t)
             }
@@ -724,6 +722,15 @@ impl ExprCompiledValue {
             ));
         }
         ExprCompiledValue::TypeIs(box v, t)
+    }
+
+    pub(crate) fn len(arg: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+        if let Some(arg) = arg.as_value() {
+            if let Ok(len) = arg.to_value().length() {
+                return ExprCompiledValue::Value(FrozenValue::new_int(len));
+            }
+        }
+        ExprCompiledValue::Len(box arg)
     }
 
     fn compare(
