@@ -25,6 +25,8 @@ derivative = "2.1.1"
 derive_more = "0.99"
 lalrpop-util = "0.19.1"
 indexmap = { version = "1.6", features = ["serde-1"] }
+indenter = { version = "0.3.3", features = ["std"] }
+indoc = "1.0"
 itertools = "0.9"
 once_cell = "1.3"
 bumpalo = "3.8"

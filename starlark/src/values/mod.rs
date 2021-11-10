@@ -67,6 +67,7 @@ mod comparison;
 // Submodules
 mod alloc_value;
 pub(crate) mod basic;
+pub mod display;
 pub mod docs;
 mod error;
 mod freeze;
