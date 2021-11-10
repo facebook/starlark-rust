@@ -105,6 +105,25 @@ pub(crate) enum ExprBinOp {
     RightShift,
 }
 
+impl ExprBinOp {
+    fn eval<'v>(self, a: Value<'v>, b: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match self {
+            ExprBinOp::In => b.is_in(a).map(Value::new_bool),
+            ExprBinOp::Sub => a.sub(b, heap),
+            ExprBinOp::Add => a.add(b, heap),
+            ExprBinOp::Multiply => a.mul(b, heap),
+            ExprBinOp::Percent => a.percent(b, heap),
+            ExprBinOp::Divide => a.div(b, heap),
+            ExprBinOp::FloorDivide => a.floor_div(b, heap),
+            ExprBinOp::BitAnd => a.bit_and(b),
+            ExprBinOp::BitOr => a.bit_or(b),
+            ExprBinOp::BitXor => a.bit_xor(b),
+            ExprBinOp::LeftShift => a.left_shift(b),
+            ExprBinOp::RightShift => a.right_shift(b),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum ExprCompiledValue {
     Value(FrozenValue),
@@ -182,6 +201,14 @@ impl ExprCompiledValue {
     pub fn as_value(&self) -> Option<FrozenValue> {
         match self {
             Self::Value(x) => Some(*x),
+            _ => None,
+        }
+    }
+
+    /// Expression is a frozen value which is builtin.
+    pub(crate) fn as_builtin_value(&self) -> Option<FrozenValue> {
+        match self {
+            Self::Value(x) if x.is_builtin() => Some(*x),
             _ => None,
         }
     }
@@ -411,18 +438,8 @@ impl ExprCompiledValue {
     fn percent(
         l: Spanned<ExprCompiledValue>,
         r: Spanned<ExprCompiledValue>,
-        heap: &Heap,
         frozen_heap: &FrozenHeap,
     ) -> ExprCompiledValue {
-        let span = l.span.merge(r.span);
-        if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
-            if let Ok(v) = l.to_value().percent(r.to_value(), heap) {
-                if let Some(v) = ExprCompiledValue::try_value(span, v, frozen_heap) {
-                    return v;
-                }
-            }
-        }
-
         if let Some(v) = l.as_string() {
             if let Some((before, after)) = parse_percent_s_one(&v) {
                 let before = frozen_heap.alloc_string_value(&before);
@@ -448,20 +465,8 @@ impl ExprCompiledValue {
         ExprCompiledValue::FormatOne(box (before, arg, after))
     }
 
-    fn add(
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
-        heap: &Heap,
-        frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    fn add(l: Spanned<ExprCompiledValue>, r: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
         let span = l.span.merge(r.span);
-        if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
-            if let Ok(v) = l.to_value().add(r.to_value(), heap) {
-                if let Some(v) = ExprCompiledValue::try_value(span, v, frozen_heap) {
-                    return v;
-                }
-            }
-        }
         if let (Some(l), Some(r)) = (l.as_list_of_consts(), r.as_list_of_consts()) {
             let lr = l
                 .iter()
@@ -483,9 +488,20 @@ impl ExprCompiledValue {
         heap: &Heap,
         frozen_heap: &FrozenHeap,
     ) -> ExprCompiledValue {
+        let span = l.span.merge(r.span);
+        // Binary operators should have no side effects,
+        // but to avoid possible problems, we only fold binary operators on builtin types.
+        if let (Some(l), Some(r)) = (l.as_builtin_value(), r.as_builtin_value()) {
+            if let Ok(v) = bin_op.eval(l.to_value(), r.to_value(), heap) {
+                if let Some(v) = ExprCompiledValue::try_value(span, v, frozen_heap) {
+                    return v;
+                }
+            }
+        }
+
         match bin_op {
-            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, heap, frozen_heap),
-            ExprBinOp::Add => ExprCompiledValue::add(l, r, heap, frozen_heap),
+            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, frozen_heap),
+            ExprBinOp::Add => ExprCompiledValue::add(l, r),
             bin_op => ExprCompiledValue::Op(bin_op, box (l, r)),
         }
     }
