@@ -299,7 +299,7 @@ impl Spanned<ExprCompiledValue> {
             ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                ExprCompiledValue::Compare(box (l, r), cmp)
+                ExprCompiledValue::compare(l, r, cmp)
             }
             ExprCompiledValue::Type(box ref e) => {
                 ExprCompiledValue::Type(box e.optimize_on_freeze(ctx))
@@ -676,27 +676,27 @@ impl ExprCompiledValue {
         }
         ExprCompiledValue::TypeIs(box v, t)
     }
+
+    fn compare(
+        l: Spanned<ExprCompiledValue>,
+        r: Spanned<ExprCompiledValue>,
+        cmp: CompareOp,
+    ) -> ExprCompiledValue {
+        if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
+            // If comparison fails, let it fail in runtime.
+            if let Ok(r) = l.compare(r.to_value()) {
+                return value!(FrozenValue::new_bool((cmp.as_fn())(r)));
+            }
+        }
+
+        ExprCompiledValue::Compare(box (l, r), cmp)
+    }
 }
 
 #[derive(Debug, Clone, Error)]
 pub(crate) enum EvalError {
     #[error("Dictionary key repeated for `{0}`")]
     DuplicateDictionaryKey(String),
-}
-
-fn eval_compare(
-    l: Spanned<ExprCompiledValue>,
-    r: Spanned<ExprCompiledValue>,
-    cmp: CompareOp,
-) -> ExprCompiledValue {
-    if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
-        // If comparison fails, let it fail in runtime.
-        if let Ok(r) = l.compare(r.to_value()) {
-            return value!(FrozenValue::new_bool((cmp.as_fn())(r)));
-        }
-    }
-
-    ExprCompiledValue::Compare(box (l, r), cmp)
 }
 
 /// Try fold expression `cmp(l == r)` into `cmp(type(x) == "y")`.
@@ -1035,10 +1035,14 @@ impl Compiler<'_, '_, '_> {
                             )
                             .node
                         }
-                        BinOp::Less => eval_compare(l, r, CompareOp::Less),
-                        BinOp::Greater => eval_compare(l, r, CompareOp::Greater),
-                        BinOp::LessOrEqual => eval_compare(l, r, CompareOp::LessOrEqual),
-                        BinOp::GreaterOrEqual => eval_compare(l, r, CompareOp::GreaterOrEqual),
+                        BinOp::Less => ExprCompiledValue::compare(l, r, CompareOp::Less),
+                        BinOp::Greater => ExprCompiledValue::compare(l, r, CompareOp::Greater),
+                        BinOp::LessOrEqual => {
+                            ExprCompiledValue::compare(l, r, CompareOp::LessOrEqual)
+                        }
+                        BinOp::GreaterOrEqual => {
+                            ExprCompiledValue::compare(l, r, CompareOp::GreaterOrEqual)
+                        }
                         BinOp::In => ExprCompiledValue::bin_op(
                             ExprBinOp::In,
                             l,
