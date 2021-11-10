@@ -17,6 +17,7 @@
 
 //! Optimizer tests.
 
+mod def_inline;
 mod speculative_exec;
 
 use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};

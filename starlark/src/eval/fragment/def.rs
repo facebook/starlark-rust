@@ -230,6 +230,11 @@ pub(crate) struct DefCompiled {
 pub(crate) enum InlineDefBody {
     /// Function body is `return type(x) == "y"`
     ReturnTypeIs(FrozenStringValue),
+    /// Any expression which can be safely inlined.
+    ///
+    /// See the function where this enum variant is computed for the definition
+    /// of safe to inline expression.
+    ReturnSafeToInlineExpr(Spanned<ExprCompiled>),
 }
 
 impl Compiler<'_, '_, '_> {
@@ -284,6 +289,112 @@ impl Compiler<'_, '_, '_> {
         }
     }
 
+    /// Expression which is:
+    /// * infallible
+    /// * no side effects
+    /// * no access to locals or globals
+    fn is_safe_to_inline_expr(expr: &ExprCompiled) -> Option<ExprCompiled> {
+        Some(match expr {
+            e @ ExprCompiled::Value(..) => e.clone(),
+            ExprCompiled::Local(..)
+            | ExprCompiled::LocalCaptured(..)
+            | ExprCompiled::Module(..)
+            | ExprCompiled::Equals(..)
+            | ExprCompiled::Compare(..)
+            | ExprCompiled::Len(..)
+            | ExprCompiled::Compr(..)
+            | ExprCompiled::Dot(..)
+            | ExprCompiled::ArrayIndirection(..)
+            | ExprCompiled::Slice(..)
+            | ExprCompiled::Op(..)
+            | ExprCompiled::UnOp(..)
+            | ExprCompiled::Call(..)
+            | ExprCompiled::Def(..) => return None,
+            ExprCompiled::Type(v) => {
+                ExprCompiled::Type(box Compiler::is_safe_to_inline_expr_spanned(v)?)
+            }
+            ExprCompiled::TypeIs(ref v, t) => {
+                ExprCompiled::TypeIs(box Compiler::is_safe_to_inline_expr_spanned(v)?, *t)
+            }
+            ExprCompiled::Tuple(xs) => ExprCompiled::Tuple(
+                xs.try_map(|x| Compiler::is_safe_to_inline_expr_spanned(x).ok_or(()))
+                    .ok()?,
+            ),
+            ExprCompiled::List(xs) => ExprCompiled::List(
+                xs.try_map(|x| Compiler::is_safe_to_inline_expr_spanned(x).ok_or(()))
+                    .ok()?,
+            ),
+            ExprCompiled::Dict(xs) if xs.is_empty() => ExprCompiled::Dict(Vec::new()),
+            ExprCompiled::Dict(..) => {
+                // Dict construction may fail if keys are not hashable.
+                return None;
+            }
+            ExprCompiled::If(box (ref c, ref t, ref f)) => {
+                let c = Compiler::is_safe_to_inline_expr_spanned(c)?;
+                let t = Compiler::is_safe_to_inline_expr_spanned(t)?;
+                let f = Compiler::is_safe_to_inline_expr_spanned(f)?;
+                ExprCompiled::If(box (c, t, f))
+            }
+            ExprCompiled::Not(ref x) => {
+                let x = Compiler::is_safe_to_inline_expr_spanned(x)?;
+                ExprCompiled::Not(box x)
+            }
+            ExprCompiled::And(box (ref x, ref y)) => {
+                let x = Compiler::is_safe_to_inline_expr_spanned(x)?;
+                let y = Compiler::is_safe_to_inline_expr_spanned(y)?;
+                ExprCompiled::And(box (x, y))
+            }
+            ExprCompiled::Or(box (ref x, ref y)) => {
+                let x = Compiler::is_safe_to_inline_expr_spanned(x)?;
+                let y = Compiler::is_safe_to_inline_expr_spanned(y)?;
+                ExprCompiled::Or(box (x, y))
+            }
+            ExprCompiled::PercentSOne(..) => return None,
+            ExprCompiled::FormatOne(box (before, ref v, after)) => {
+                // `FormatOne` is infallible, unlike `PercentSOne`.
+                let v = Compiler::is_safe_to_inline_expr_spanned(v)?;
+                ExprCompiled::FormatOne(box (*before, v, *after))
+            }
+        })
+    }
+
+    fn is_safe_to_inline_expr_spanned(
+        expr: &Spanned<ExprCompiled>,
+    ) -> Option<Spanned<ExprCompiled>> {
+        Some(Spanned {
+            node: Compiler::is_safe_to_inline_expr(&expr.node)?,
+            // We replace span with default because a function can be inlined
+            // into a different file where codemap is different.
+            // Empty span is OK because safe to inline expression is infallible.
+            // In the worst case, it will be a span for the first character in the call site file.
+            span: Span::default(),
+        })
+    }
+
+    /// Function body is a `return` safe to inline expression (as defined above).
+    fn is_return_safe_to_inline_expr(stmts: &StmtsCompiled) -> Option<Spanned<ExprCompiled>> {
+        match stmts.first() {
+            None => {
+                // Empty function is equivalent to `return None`.
+                Some(Spanned {
+                    span: Span::default(),
+                    node: ExprCompiled::Value(FrozenValue::new_none()),
+                })
+            }
+            Some(stmt) => match &stmt.node {
+                StmtCompiled::Return(None) => Some(Spanned {
+                    span: Span::default(),
+                    node: ExprCompiled::Value(FrozenValue::new_none()),
+                }),
+                StmtCompiled::Return(Some(expr)) => {
+                    let expr = Compiler::is_safe_to_inline_expr_spanned(expr)?;
+                    Some(expr)
+                }
+                _ => None,
+            },
+        }
+    }
+
     fn inline_def_body(
         params: &[Spanned<ParameterCompiled<Spanned<ExprCompiled>>>],
         body: &StmtsCompiled,
@@ -291,6 +402,11 @@ impl Compiler<'_, '_, '_> {
         if params.len() == 1 && params[0].accepts_positional() {
             if let Some(t) = Compiler::is_return_type_is(body) {
                 return Some(InlineDefBody::ReturnTypeIs(t));
+            }
+        }
+        if params.is_empty() {
+            if let Some(expr) = Compiler::is_return_safe_to_inline_expr(body) {
+                return Some(InlineDefBody::ReturnSafeToInlineExpr(expr));
             }
         }
         None

@@ -28,11 +28,11 @@ use crate::{
             Compiler,
         },
         fragment::{def::InlineDefBody, expr::ExprCompiled, stmt::OptimizeOnFreezeContext},
-        Arguments, FrozenDef,
+        Arguments,
     },
     gazebo::prelude::SliceExt,
     syntax::ast::{ArgumentP, AstString, ExprP},
-    values::{string::interpolation::parse_format_one, FrozenStringValue, FrozenValue, ValueLike},
+    values::{string::interpolation::parse_format_one, FrozenStringValue, FrozenValue},
 };
 
 #[derive(Default, Clone, Debug)]
@@ -55,13 +55,18 @@ pub(crate) enum CallCompiled {
 
 impl CallCompiled {
     pub(crate) fn call(span: Span, fun: ExprCompiled, args: ArgsCompiledValue) -> ExprCompiled {
-        if let (Some(fun), Some(_pos)) = (fun.as_value(), args.one_pos()) {
+        if let (Some(fun), Some(_pos)) = (fun.as_frozen_def(), args.one_pos()) {
             // Try to inline a function like `lambda x: type(x) == "y"`.
-            if let Some(fun) = fun.downcast_ref::<FrozenDef>() {
-                if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
-                    let pos = args.into_one_pos().unwrap();
-                    return ExprCompiled::type_is(pos, *t);
-                }
+            if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
+                let pos = args.into_one_pos().unwrap();
+                return ExprCompiled::type_is(pos, *t);
+            }
+        }
+
+        if let (Some(fun), true) = (fun.as_frozen_def(), args.is_no_args()) {
+            if let Some(InlineDefBody::ReturnSafeToInlineExpr(expr)) = &fun.def_info.inline_def_body
+            {
+                return expr.node.clone();
             }
         }
 
@@ -111,6 +116,20 @@ impl ArgsCompiledValue {
     pub(crate) fn into_one_pos(mut self) -> Option<Spanned<ExprCompiled>> {
         self.one_pos()?;
         self.pos_named.pop()
+    }
+
+    /// Check if arguments is empty (no positional, no named, no star-args, no kwargs).
+    pub(crate) fn is_no_args(&self) -> bool {
+        let ArgsCompiledValue {
+            pos_named,
+            names,
+            args,
+            kwargs,
+        } = self;
+        matches!(
+            (pos_named.as_slice(), names.as_slice(), args, kwargs),
+            ([], [], None, None)
+        )
     }
 
     pub(crate) fn pos_only(&self) -> Option<&[Spanned<ExprCompiled>]> {

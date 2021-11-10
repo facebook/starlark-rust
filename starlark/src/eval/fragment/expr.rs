@@ -36,6 +36,7 @@ use crate::{
             stmt::OptimizeOnFreezeContext,
         },
         runtime::slots::LocalSlotId,
+        FrozenDef,
     },
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
@@ -51,8 +52,8 @@ use crate::{
             tuple::Tuple,
             unbound::MaybeUnboundValue,
         },
-        FrozenHeap, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value, ValueError,
-        ValueLike,
+        FrozenHeap, FrozenStringValue, FrozenValue, FrozenValueTyped, Heap, StarlarkValue, Value,
+        ValueError, ValueLike,
     },
 };
 
@@ -209,6 +210,11 @@ impl ExprCompiled {
             Self::Value(x) => Some(*x),
             _ => None,
         }
+    }
+
+    /// Expression is known to be a constant which is a `def`.
+    pub(crate) fn as_frozen_def(&self) -> Option<FrozenValueTyped<FrozenDef>> {
+        FrozenValueTyped::new(self.as_value()?)
     }
 
     /// Expression is a frozen value which is builtin.
