@@ -268,7 +268,7 @@ impl Compiler<'_, '_, '_> {
     /// If a statement is `return type(x) == "y"` where `x` is a first slot.
     fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
         match stmt.first().map(|s| &s.node) {
-            Some(StmtCompiled::Return(Some(Spanned {
+            Some(StmtCompiled::Return(Spanned {
                 node:
                     ExprCompiled::TypeIs(
                         box Spanned {
@@ -279,7 +279,7 @@ impl Compiler<'_, '_, '_> {
                         t,
                     ),
                 ..
-            }))) => Some(*t),
+            })) => Some(*t),
             _ => None,
         }
     }

@@ -135,12 +135,13 @@ impl Spanned<StmtCompiled> {
         let span = self.span;
         match self.node {
             StmtCompiled::PossibleGc => bc.write_instr::<InstrPossibleGc>(span, ()),
-            StmtCompiled::Return(None) => {
-                bc.write_instr::<InstrReturnNone>(span, ());
-            }
-            StmtCompiled::Return(Some(ref expr)) => {
-                expr.write_bc(bc);
-                bc.write_instr::<InstrReturn>(span, ());
+            StmtCompiled::Return(ref expr) => {
+                if expr.is_none() {
+                    bc.write_instr::<InstrReturnNone>(span, ());
+                } else {
+                    expr.write_bc(bc);
+                    bc.write_instr::<InstrReturn>(span, ());
+                }
             }
             StmtCompiled::Expr(ref expr) => {
                 expr.write_bc_for_effect(bc);

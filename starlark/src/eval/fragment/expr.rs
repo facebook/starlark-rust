@@ -219,6 +219,11 @@ impl ExprCompiled {
         }
     }
 
+    /// Expression is constant `None`.
+    pub(crate) fn is_none(&self) -> bool {
+        self.as_value().map_or(false, |x| x.is_none())
+    }
+
     /// Is expression a constant string?
     pub(crate) fn as_string(&self) -> Option<FrozenStringValue> {
         FrozenStringValue::new(self.as_value()?)
