@@ -244,7 +244,25 @@ impl StmtsCompiled {
         self.0.as_slice()
     }
 
+    /// Last statement in this block is `break`, `continue` or `return`.
+    fn is_terminal(&self) -> bool {
+        if let Some(stmt) = self.last() {
+            match &stmt.node {
+                StmtCompiledValue::Break
+                | StmtCompiledValue::Continue
+                | StmtCompiledValue::Return(..) => true,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+
     pub(crate) fn extend(&mut self, right: StmtsCompiled) {
+        // Do not add any code after `break`, `continue` or `return`.
+        if self.is_terminal() {
+            return;
+        }
         self.0.extend(right.0);
     }
 
@@ -255,6 +273,9 @@ impl StmtsCompiled {
             SmallVec1::One(s) => stmts.extend(s.optimize_on_freeze(ctx)),
             SmallVec1::Many(ss) => {
                 for s in ss {
+                    if stmts.is_terminal() {
+                        break;
+                    }
                     stmts.extend(s.optimize_on_freeze(ctx));
                 }
             }
@@ -649,6 +670,9 @@ impl Compiler<'_, '_, '_> {
             StmtP::Statements(stmts) => {
                 let mut r = StmtsCompiled::empty();
                 for stmt in stmts {
+                    if r.is_terminal() {
+                        break;
+                    }
                     r.extend(self.stmt(stmt, allow_gc));
                 }
                 r

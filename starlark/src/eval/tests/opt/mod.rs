@@ -87,3 +87,16 @@ def test():
 "#,
     );
 }
+
+#[test]
+fn test_unreachable_code_optimized_away() {
+    test_instrs(
+        &[BcOpcode::ReturnNone],
+        r#"
+def test():
+    if True:
+        return
+    fail("unreachable")
+"#,
+    );
+}
