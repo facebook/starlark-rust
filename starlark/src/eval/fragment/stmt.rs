@@ -155,14 +155,19 @@ impl Spanned<StmtCompiledValue> {
     }
 
     fn expr(expr: Spanned<ExprCompiledValue>) -> StmtsCompiled {
-        match expr {
-            Spanned {
-                node: ExprCompiledValue::Value(..),
-                ..
-            } => StmtsCompiled::empty(),
+        let span = expr.span;
+        match expr.node {
+            ExprCompiledValue::Value(..) => StmtsCompiled::empty(),
+            ExprCompiledValue::List(xs) | ExprCompiledValue::Tuple(xs) => {
+                let mut stmts = StmtsCompiled::empty();
+                for x in xs {
+                    stmts.extend(Self::expr(x));
+                }
+                stmts
+            }
             expr => StmtsCompiled::one(Spanned {
-                span: expr.span,
-                node: StmtCompiledValue::Expr(expr),
+                span,
+                node: StmtCompiledValue::Expr(Spanned { span, node: expr }),
             }),
         }
     }
