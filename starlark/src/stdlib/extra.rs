@@ -123,11 +123,35 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
     }
 }
 
+struct PrintWrapper<'a, 'b>(&'a Vec<Value<'b>>);
+impl fmt::Display for PrintWrapper<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, v) in self.0.iter().enumerate() {
+            if i != 0 {
+                f.write_str(" ")?;
+            }
+            fmt::Display::fmt(v, f)?;
+        }
+        Ok(())
+    }
+}
+
 #[starlark_module]
 pub fn print(builder: &mut GlobalsBuilder) {
     fn print(args: Vec<Value>) -> NoneType {
         // In practice most users should want to put the print somewhere else, but this does for now
+        // Unfortunately, we can't use PrintWrapper because strings to_str() and Display are different.
+        // TODO(cjhopman): Resolve this, probably just by special casing str in PrintWrapper::fmt.
         eprintln!("{}", args.iter().map(|x| x.to_str()).join(" "));
+        Ok(NoneType)
+    }
+}
+
+#[starlark_module]
+pub fn pprint(builder: &mut GlobalsBuilder) {
+    fn pprint(args: Vec<Value>) -> NoneType {
+        // In practice most users may want to put the print somewhere else, but this does for now
+        eprintln!("{:#}", PrintWrapper(&args));
         Ok(NoneType)
     }
 }

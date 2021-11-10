@@ -65,6 +65,8 @@ pub enum LibraryExtension {
     Debug,
     /// Add a function `print(x)` which prints to stderr.
     Print,
+    /// Add a function `pprint(x)` which pretty-prints to stderr.
+    Pprint,
     /// Add a function `breakpoint()` which will drop into a console-module evaluation prompt.
     Breakpoint,
     /// Add a function `json()` which will generate JSON for a module.
@@ -79,7 +81,7 @@ impl LibraryExtension {
     pub fn all() -> &'static [Self] {
         use LibraryExtension::*;
         &[
-            StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Print,
+            StructType, RecordType, EnumType, Map, Filter, Partial, Dedupe, Debug, Print, Pprint,
             Breakpoint, Json, Abs,
         ]
     }
@@ -97,6 +99,7 @@ impl LibraryExtension {
             Dedupe => extra::dedupe(builder),
             Debug => extra::debug(builder),
             Print => extra::print(builder),
+            Pprint => extra::pprint(builder),
             Breakpoint => breakpoint::global(builder),
             Json => extra::json(builder),
             Abs => extra::abs(builder),
