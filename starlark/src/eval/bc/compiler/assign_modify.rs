@@ -32,7 +32,7 @@ use crate::{
             writer::BcWriter,
         },
         compiler::scope::Captured,
-        fragment::{expr::ExprCompiledValue, stmt::AssignModifyLhs},
+        fragment::{expr::ExprCompiled, stmt::AssignModifyLhs},
     },
     syntax::ast::AssignOp,
 };
@@ -60,7 +60,7 @@ impl AssignModifyLhs {
         &self,
         span: Span,
         op: AssignOp,
-        rhs: &Spanned<ExprCompiledValue>,
+        rhs: &Spanned<ExprCompiled>,
         bc: &mut BcWriter,
     ) {
         match *self {

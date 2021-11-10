@@ -41,7 +41,7 @@ use crate::{
             Compiler, EvalException,
         },
         fragment::{
-            expr::ExprCompiledValue,
+            expr::ExprCompiled,
             stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiledValue, StmtsCompiled},
         },
         runtime::{
@@ -220,8 +220,8 @@ impl DefInfo {
 #[derive(Clone, Debug)]
 pub(crate) struct DefCompiled {
     pub(crate) function_name: String,
-    pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>>,
-    pub(crate) return_type: Option<Box<Spanned<ExprCompiledValue>>>,
+    pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiled>>>>,
+    pub(crate) return_type: Option<Box<Spanned<ExprCompiled>>>,
     pub(crate) info: FrozenRef<DefInfo>,
 }
 
@@ -242,10 +242,7 @@ impl Compiler<'_, '_, '_> {
         }
     }
 
-    fn parameter(
-        &mut self,
-        x: CstParameter,
-    ) -> Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>> {
+    fn parameter(&mut self, x: CstParameter) -> Spanned<ParameterCompiled<Spanned<ExprCompiled>>> {
         Spanned {
             span: x.span,
             node: match x.node {
@@ -273,10 +270,10 @@ impl Compiler<'_, '_, '_> {
         match stmt.first().map(|s| &s.node) {
             Some(StmtCompiledValue::Return(Some(Spanned {
                 node:
-                    ExprCompiledValue::TypeIs(
+                    ExprCompiled::TypeIs(
                         box Spanned {
                             // Slot 0 is a slot for the first function argument.
-                            node: ExprCompiledValue::Local(LocalSlotId(0), ..),
+                            node: ExprCompiled::Local(LocalSlotId(0), ..),
                             ..
                         },
                         t,
@@ -288,7 +285,7 @@ impl Compiler<'_, '_, '_> {
     }
 
     fn inline_def_body(
-        params: &[Spanned<ParameterCompiled<Spanned<ExprCompiledValue>>>],
+        params: &[Spanned<ParameterCompiled<Spanned<ExprCompiled>>>],
         body: &StmtsCompiled,
     ) -> Option<InlineDefBody> {
         if params.len() == 1 && params[0].accepts_positional() {
@@ -306,7 +303,7 @@ impl Compiler<'_, '_, '_> {
         params: Vec<CstParameter>,
         return_type: Option<Box<CstExpr>>,
         suite: CstStmt,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         let file = self.codemap.file_span(suite.span);
         let function_name = format!("{}.{}", file.file.filename(), name);
 
@@ -336,7 +333,7 @@ impl Compiler<'_, '_, '_> {
             globals: self.globals,
         });
 
-        ExprCompiledValue::Def(DefCompiled {
+        ExprCompiled::Def(DefCompiled {
             function_name,
             params,
             return_type,

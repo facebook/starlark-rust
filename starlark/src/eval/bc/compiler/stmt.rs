@@ -27,7 +27,7 @@ use crate::{
             writer::BcWriter,
         },
         fragment::{
-            expr::{ExprCompiledValue, MaybeNot},
+            expr::{ExprCompiled, MaybeNot},
             stmt::{StmtCompileContext, StmtCompiledValue, StmtsCompiled},
         },
     },
@@ -62,24 +62,20 @@ impl Spanned<StmtCompiledValue> {
     fn write_if_then(
         compiler: &StmtCompileContext,
         bc: &mut BcWriter,
-        c: &Spanned<ExprCompiledValue>,
+        c: &Spanned<ExprCompiled>,
         maybe_not: MaybeNot,
         t: &dyn Fn(&StmtCompileContext, &mut BcWriter),
     ) {
-        if let ExprCompiledValue::Not(box ref c) = c.node {
+        if let ExprCompiled::Not(box ref c) = c.node {
             Self::write_if_then(compiler, bc, c, maybe_not.negate(), t);
-        } else if let (ExprCompiledValue::And(box (ref a, ref b)), MaybeNot::Id) =
-            (&c.node, maybe_not)
-        {
+        } else if let (ExprCompiled::And(box (ref a, ref b)), MaybeNot::Id) = (&c.node, maybe_not) {
             // `if a and b`
             //  |||
             // `if a: if b:
             Self::write_if_then(compiler, bc, a, MaybeNot::Id, &|compiler, bc| {
                 Self::write_if_then(compiler, bc, b, MaybeNot::Id, t);
             });
-        } else if let (ExprCompiledValue::Or(box (ref a, ref b)), MaybeNot::Not) =
-            (&c.node, maybe_not)
-        {
+        } else if let (ExprCompiled::Or(box (ref a, ref b)), MaybeNot::Not) = (&c.node, maybe_not) {
             // `if not (a or b)`
             //  |||
             // `if (not a) and (not b)`
@@ -106,7 +102,7 @@ impl Spanned<StmtCompiledValue> {
     }
 
     fn write_if_else(
-        c: &Spanned<ExprCompiledValue>,
+        c: &Spanned<ExprCompiled>,
         maybe_not: MaybeNot,
         t: &StmtsCompiled,
         f: &StmtsCompiled,
@@ -122,7 +118,7 @@ impl Spanned<StmtCompiledValue> {
             Self::write_if_then(compiler, bc, c, maybe_not.negate(), &|compiler, bc| {
                 f.write_bc(compiler, bc)
             });
-        } else if let ExprCompiledValue::Not(box ref c) = c.node {
+        } else if let ExprCompiled::Not(box ref c) = c.node {
             Self::write_if_else(c, maybe_not.negate(), f, t, compiler, bc);
         } else {
             // TODO: handle and and or

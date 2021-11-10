@@ -31,13 +31,13 @@ use crate::{
             spans::BcInstrSpans,
             writer::BcWriter,
         },
-        fragment::expr::{CompareOp, ExprBinOp, ExprCompiledValue, ExprUnOp},
+        fragment::expr::{CompareOp, ExprBinOp, ExprCompiled, ExprUnOp},
     },
     values::{FrozenValue, ValueLike},
 };
 
 pub(crate) fn write_exprs<'a>(
-    exprs: impl IntoIterator<Item = &'a Spanned<ExprCompiledValue>>,
+    exprs: impl IntoIterator<Item = &'a Spanned<ExprCompiled>>,
     bc: &mut BcWriter,
 ) {
     for expr in exprs {
@@ -45,9 +45,9 @@ pub(crate) fn write_exprs<'a>(
     }
 }
 
-impl Spanned<ExprCompiledValue> {
+impl Spanned<ExprCompiled> {
     fn try_dict_of_consts(
-        xs: &[(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)],
+        xs: &[(Spanned<ExprCompiled>, Spanned<ExprCompiled>)],
     ) -> Option<SmallMap<FrozenValue, FrozenValue>> {
         let mut res = SmallMap::new();
         for (k, v) in xs {
@@ -65,7 +65,7 @@ impl Spanned<ExprCompiledValue> {
     }
 
     fn try_dict_const_keys(
-        xs: &[(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)],
+        xs: &[(Spanned<ExprCompiled>, Spanned<ExprCompiled>)],
     ) -> Option<Box<[Hashed<FrozenValue>]>> {
         let mut keys = Vec::new();
         let mut keys_unique = HashSet::new();
@@ -83,7 +83,7 @@ impl Spanned<ExprCompiledValue> {
 
     fn write_dict(
         span: Span,
-        xs: &[(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)],
+        xs: &[(Spanned<ExprCompiled>, Spanned<ExprCompiled>)],
         bc: &mut BcWriter,
     ) {
         if xs.is_empty() {
@@ -102,14 +102,14 @@ impl Spanned<ExprCompiledValue> {
         }
     }
 
-    fn write_not(expr: &Spanned<ExprCompiledValue>, bc: &mut BcWriter) {
+    fn write_not(expr: &Spanned<ExprCompiled>, bc: &mut BcWriter) {
         match expr.node {
-            ExprCompiledValue::Equals(box (ref a, ref b)) => {
+            ExprCompiled::Equals(box (ref a, ref b)) => {
                 a.write_bc(bc);
                 b.write_bc(bc);
                 bc.write_instr::<InstrNotEq>(expr.span, ());
             }
-            ExprCompiledValue::Op(ExprBinOp::In, box (ref a, ref b)) => {
+            ExprCompiled::Op(ExprBinOp::In, box (ref a, ref b)) => {
                 a.write_bc(bc);
                 b.write_bc(bc);
                 bc.write_instr::<InstrNotIn>(expr.span, ());
@@ -124,24 +124,24 @@ impl Spanned<ExprCompiledValue> {
     pub(crate) fn write_bc(&self, bc: &mut BcWriter) {
         let span = self.span;
         match self.node {
-            ExprCompiledValue::Value(v) => {
+            ExprCompiled::Value(v) => {
                 bc.write_const(span, v);
             }
-            ExprCompiledValue::Local(slot) => {
+            ExprCompiled::Local(slot) => {
                 bc.write_load_local(span, slot);
             }
-            ExprCompiledValue::LocalCaptured(slot) => {
+            ExprCompiled::LocalCaptured(slot) => {
                 bc.write_instr::<InstrLoadLocalCaptured>(span, slot);
             }
-            ExprCompiledValue::Module(slot) => {
+            ExprCompiled::Module(slot) => {
                 bc.write_instr::<InstrLoadModule>(span, slot);
             }
-            ExprCompiledValue::Equals(box (ref a, ref b)) => {
+            ExprCompiled::Equals(box (ref a, ref b)) => {
                 a.write_bc(bc);
                 b.write_bc(bc);
                 bc.write_instr::<InstrEq>(span, ());
             }
-            ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
+            ExprCompiled::Compare(box (ref l, ref r), cmp) => {
                 l.write_bc(bc);
                 r.write_bc(bc);
                 match cmp {
@@ -151,23 +151,23 @@ impl Spanned<ExprCompiledValue> {
                     CompareOp::GreaterOrEqual => bc.write_instr::<InstrGreaterOrEqual>(span, ()),
                 }
             }
-            ExprCompiledValue::Type(box ref expr) => {
+            ExprCompiled::Type(box ref expr) => {
                 expr.write_bc(bc);
                 bc.write_instr::<InstrType>(span, ());
             }
-            ExprCompiledValue::Len(box ref expr) => {
+            ExprCompiled::Len(box ref expr) => {
                 expr.write_bc(bc);
                 bc.write_instr::<InstrLen>(span, ());
             }
-            ExprCompiledValue::TypeIs(box ref v, t) => {
+            ExprCompiled::TypeIs(box ref v, t) => {
                 v.write_bc(bc);
                 bc.write_instr::<InstrTypeIs>(Span::default(), t);
             }
-            ExprCompiledValue::Tuple(ref xs) => {
+            ExprCompiled::Tuple(ref xs) => {
                 write_exprs(xs, bc);
                 bc.write_instr::<InstrTupleNPop>(span, ArgPopsStack(xs.len() as u32));
             }
-            ExprCompiledValue::List(ref xs) => {
+            ExprCompiled::List(ref xs) => {
                 if xs.is_empty() {
                     bc.write_instr::<InstrListNew>(span, ());
                 } else if xs.iter().all(|x| x.as_value().is_some()) {
@@ -178,20 +178,20 @@ impl Spanned<ExprCompiledValue> {
                     bc.write_instr::<InstrListNPop>(span, ArgPopsStack(xs.len() as u32));
                 }
             }
-            ExprCompiledValue::Dict(ref xs) => Self::write_dict(span, xs, bc),
-            ExprCompiledValue::Compr(ref compr) => {
+            ExprCompiled::Dict(ref xs) => Self::write_dict(span, xs, bc),
+            ExprCompiled::Compr(ref compr) => {
                 compr.write_bc(span, bc);
             }
-            ExprCompiledValue::Dot(box ref object, ref field) => {
+            ExprCompiled::Dot(box ref object, ref field) => {
                 object.write_bc(bc);
                 bc.write_instr::<InstrObjectField>(span, field.clone());
             }
-            ExprCompiledValue::ArrayIndirection(box (ref array, ref index)) => {
+            ExprCompiled::ArrayIndirection(box (ref array, ref index)) => {
                 array.write_bc(bc);
                 index.write_bc(bc);
                 bc.write_instr::<InstrArrayIndex>(span, ());
             }
-            ExprCompiledValue::Slice(box (ref l, ref start, ref stop, ref step)) => {
+            ExprCompiled::Slice(box (ref l, ref start, ref stop, ref step)) => {
                 l.write_bc(bc);
                 write_exprs([start, stop, step].iter().copied().flatten(), bc);
                 bc.write_instr::<InstrSlice>(
@@ -204,10 +204,10 @@ impl Spanned<ExprCompiledValue> {
                     ),
                 );
             }
-            ExprCompiledValue::Not(box ref expr) => {
+            ExprCompiled::Not(box ref expr) => {
                 Self::write_not(expr, bc);
             }
-            ExprCompiledValue::UnOp(op, ref expr) => {
+            ExprCompiled::UnOp(op, ref expr) => {
                 expr.write_bc(bc);
                 match op {
                     ExprUnOp::Minus => bc.write_instr::<InstrMinus>(span, ()),
@@ -215,7 +215,7 @@ impl Spanned<ExprCompiledValue> {
                     ExprUnOp::BitNot => bc.write_instr::<InstrBitNot>(span, ()),
                 }
             }
-            ExprCompiledValue::If(box (ref cond, ref t, ref f)) => {
+            ExprCompiled::If(box (ref cond, ref t, ref f)) => {
                 cond.write_bc(bc);
                 let else_patch = bc.write_if_not_br(cond.span);
                 t.write_bc(bc);
@@ -230,7 +230,7 @@ impl Spanned<ExprCompiledValue> {
                 f.write_bc(bc);
                 bc.patch_addr(end_patch);
             }
-            ExprCompiledValue::And(box (ref l, ref r)) => {
+            ExprCompiled::And(box (ref l, ref r)) => {
                 l.write_bc(bc);
                 bc.write_instr::<InstrDup>(span, ());
                 bc.write_if(l.span, |bc| {
@@ -238,7 +238,7 @@ impl Spanned<ExprCompiledValue> {
                     r.write_bc(bc);
                 });
             }
-            ExprCompiledValue::Or(box (ref l, ref r)) => {
+            ExprCompiled::Or(box (ref l, ref r)) => {
                 l.write_bc(bc);
                 bc.write_instr::<InstrDup>(span, ());
                 bc.write_if_not(l.span, |bc| {
@@ -246,7 +246,7 @@ impl Spanned<ExprCompiledValue> {
                     r.write_bc(bc);
                 });
             }
-            ExprCompiledValue::Op(op, box (ref l, ref r)) => {
+            ExprCompiled::Op(op, box (ref l, ref r)) => {
                 l.write_bc(bc);
                 r.write_bc(bc);
                 match op {
@@ -264,16 +264,16 @@ impl Spanned<ExprCompiledValue> {
                     ExprBinOp::RightShift => bc.write_instr::<InstrRightShift>(span, ()),
                 }
             }
-            ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
+            ExprCompiled::PercentSOne(box (before, ref arg, after)) => {
                 arg.write_bc(bc);
                 bc.write_instr::<InstrPercentSOne>(span, (before, after));
             }
-            ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
+            ExprCompiled::FormatOne(box (before, ref arg, after)) => {
                 arg.write_bc(bc);
                 bc.write_instr::<InstrFormatOne>(span, (before, after));
             }
-            ExprCompiledValue::Call(ref call) => call.write_bc(bc),
-            ExprCompiledValue::Def(ref def) => def.write_bc(bc),
+            ExprCompiled::Call(ref call) => call.write_bc(bc),
+            ExprCompiled::Def(ref def) => def.write_bc(bc),
         }
     }
 

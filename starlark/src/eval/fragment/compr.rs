@@ -27,7 +27,7 @@ use crate::{
             Compiler,
         },
         fragment::{
-            expr::ExprCompiledValue,
+            expr::ExprCompiled,
             known::list_to_tuple,
             stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
         },
@@ -41,10 +41,10 @@ impl Compiler<'_, '_, '_> {
         x: CstExpr,
         for_: ForClauseP<CstPayload>,
         clauses: Vec<ClauseP<CstPayload>>,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         let clauses = compile_clauses(for_, clauses, self);
         let x = self.expr(x);
-        ExprCompiledValue::Compr(ComprCompiled::List(box x, clauses))
+        ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
     }
 
     pub fn dict_comprehension(
@@ -53,11 +53,11 @@ impl Compiler<'_, '_, '_> {
         v: CstExpr,
         for_: ForClauseP<CstPayload>,
         clauses: Vec<ClauseP<CstPayload>>,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         let clauses = compile_clauses(for_, clauses, self);
         let k = self.expr(k);
         let v = self.expr(v);
-        ExprCompiledValue::Compr(ComprCompiled::Dict(box (k, v), clauses))
+        ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
     }
 }
 
@@ -65,10 +65,7 @@ impl Compiler<'_, '_, '_> {
 fn compile_ifs(
     clauses: &mut Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
-) -> (
-    Option<ForClauseP<CstPayload>>,
-    Vec<Spanned<ExprCompiledValue>>,
-) {
+) -> (Option<ForClauseP<CstPayload>>, Vec<Spanned<ExprCompiled>>) {
     let mut ifs = Vec::new();
     while let Some(x) = clauses.pop() {
         match x {
@@ -124,16 +121,16 @@ fn compile_clauses(
 
 #[derive(Clone, Debug)]
 pub(crate) enum ComprCompiled {
-    List(Box<Spanned<ExprCompiledValue>>, Vec<ClauseCompiled>),
+    List(Box<Spanned<ExprCompiled>>, Vec<ClauseCompiled>),
     Dict(
-        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+        Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>,
         Vec<ClauseCompiled>,
     ),
 }
 
 impl ComprCompiled {
-    pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiledValue {
-        ExprCompiledValue::Compr(match self {
+    pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiled {
+        ExprCompiled::Compr(match self {
             ComprCompiled::List(box ref x, ref clauses) => ComprCompiled::List(
                 box x.optimize_on_freeze(ctx),
                 clauses.map(|c| c.optimize_on_freeze(ctx)),
@@ -149,9 +146,9 @@ impl ComprCompiled {
 #[derive(Clone, Debug)]
 pub(crate) struct ClauseCompiled {
     pub(crate) var: Spanned<AssignCompiledValue>,
-    pub(crate) over: Spanned<ExprCompiledValue>,
+    pub(crate) over: Spanned<ExprCompiled>,
     pub(crate) over_span: Span,
-    pub(crate) ifs: Vec<Spanned<ExprCompiledValue>>,
+    pub(crate) ifs: Vec<Spanned<ExprCompiled>>,
 }
 
 impl ClauseCompiled {

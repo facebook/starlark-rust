@@ -145,7 +145,7 @@ impl ExprBinOp {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum ExprCompiledValue {
+pub(crate) enum ExprCompiled {
     Value(FrozenValue),
     /// Read local non-captured variable.
     Local(LocalSlotId),
@@ -153,69 +153,57 @@ pub(crate) enum ExprCompiledValue {
     LocalCaptured(LocalSlotId),
     Module(ModuleSlotId),
     /// `x == y`
-    Equals(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    Equals(Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>),
     /// `cmp(x <=> y)`
     Compare(
-        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+        Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>,
         CompareOp,
     ),
     /// `type(x)`
-    Type(Box<Spanned<ExprCompiledValue>>),
+    Type(Box<Spanned<ExprCompiled>>),
     /// `len(x)`
-    Len(Box<Spanned<ExprCompiledValue>>),
+    Len(Box<Spanned<ExprCompiled>>),
     /// `type(x) == "y"`
-    TypeIs(Box<Spanned<ExprCompiledValue>>, FrozenStringValue),
-    Tuple(Vec<Spanned<ExprCompiledValue>>),
-    List(Vec<Spanned<ExprCompiledValue>>),
-    Dict(Vec<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    TypeIs(Box<Spanned<ExprCompiled>>, FrozenStringValue),
+    Tuple(Vec<Spanned<ExprCompiled>>),
+    List(Vec<Spanned<ExprCompiled>>),
+    Dict(Vec<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>),
     /// Comprehension.
     Compr(ComprCompiled),
-    Dot(Box<Spanned<ExprCompiledValue>>, Symbol),
-    ArrayIndirection(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    Dot(Box<Spanned<ExprCompiled>>, Symbol),
+    ArrayIndirection(Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>),
     If(
         Box<(
-            Spanned<ExprCompiledValue>,
-            Spanned<ExprCompiledValue>,
-            Spanned<ExprCompiledValue>,
+            Spanned<ExprCompiled>,
+            Spanned<ExprCompiled>,
+            Spanned<ExprCompiled>,
         )>,
     ),
     Slice(
         Box<(
-            Spanned<ExprCompiledValue>,
-            Option<Spanned<ExprCompiledValue>>,
-            Option<Spanned<ExprCompiledValue>>,
-            Option<Spanned<ExprCompiledValue>>,
+            Spanned<ExprCompiled>,
+            Option<Spanned<ExprCompiled>>,
+            Option<Spanned<ExprCompiled>>,
+            Option<Spanned<ExprCompiled>>,
         )>,
     ),
-    Not(Box<Spanned<ExprCompiledValue>>),
-    UnOp(ExprUnOp, Box<Spanned<ExprCompiledValue>>),
-    And(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
-    Or(Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>),
+    Not(Box<Spanned<ExprCompiled>>),
+    UnOp(ExprUnOp, Box<Spanned<ExprCompiled>>),
+    And(Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>),
+    Or(Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>),
     Op(
         ExprBinOp,
-        Box<(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)>,
+        Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>,
     ),
     /// `"aaa%sbbb" % arg`
-    PercentSOne(
-        Box<(
-            FrozenStringValue,
-            Spanned<ExprCompiledValue>,
-            FrozenStringValue,
-        )>,
-    ),
+    PercentSOne(Box<(FrozenStringValue, Spanned<ExprCompiled>, FrozenStringValue)>),
     /// `"aaa%sbbb".format(arg)`
-    FormatOne(
-        Box<(
-            FrozenStringValue,
-            Spanned<ExprCompiledValue>,
-            FrozenStringValue,
-        )>,
-    ),
+    FormatOne(Box<(FrozenStringValue, Spanned<ExprCompiled>, FrozenStringValue)>),
     Call(Spanned<CallCompiled>),
     Def(DefCompiled),
 }
 
-impl ExprCompiledValue {
+impl ExprCompiled {
     pub fn as_value(&self) -> Option<FrozenValue> {
         match self {
             Self::Value(x) => Some(*x),
@@ -239,10 +227,8 @@ impl ExprCompiledValue {
     /// Try to extract `[c0, c1, ..., cn]` from this expression.
     pub(crate) fn as_list_of_consts(&self) -> Option<Vec<FrozenValue>> {
         match self {
-            ExprCompiledValue::List(xs) => xs.try_map(|x| x.as_value().ok_or(())).ok(),
-            ExprCompiledValue::Value(v) => {
-                Some(FrozenList::from_frozen_value(v)?.content().to_owned())
-            }
+            ExprCompiled::List(xs) => xs.try_map(|x| x.as_value().ok_or(())).ok(),
+            ExprCompiled::Value(v) => Some(FrozenList::from_frozen_value(v)?.content().to_owned()),
             _ => None,
         }
     }
@@ -250,10 +236,10 @@ impl ExprCompiledValue {
     /// Iterable produced by this expression results in empty.
     pub(crate) fn is_iterable_empty(&self) -> bool {
         match self {
-            ExprCompiledValue::List(xs) => xs.is_empty(),
-            ExprCompiledValue::Tuple(xs) => xs.is_empty(),
-            ExprCompiledValue::Dict(xs) => xs.is_empty(),
-            ExprCompiledValue::Value(v) if v.is_builtin() => {
+            ExprCompiled::List(xs) => xs.is_empty(),
+            ExprCompiled::Tuple(xs) => xs.is_empty(),
+            ExprCompiled::Dict(xs) => xs.is_empty(),
+            ExprCompiled::Value(v) if v.is_builtin() => {
                 v.to_value().length().map_or(false, |l| l == 0)
             }
             _ => false,
@@ -296,137 +282,132 @@ impl ExprCompiledValue {
     }
 }
 
-impl Spanned<ExprCompiledValue> {
+impl Spanned<ExprCompiled> {
     pub(crate) fn optimize_on_freeze(
         &self,
         ctx: &OptimizeOnFreezeContext,
-    ) -> Spanned<ExprCompiledValue> {
+    ) -> Spanned<ExprCompiled> {
         let span = self.span;
         let expr = match self.node {
-            ref e @ (ExprCompiledValue::Value(..)
-            | ExprCompiledValue::Local(..)
-            | ExprCompiledValue::LocalCaptured(..)) => e.clone(),
-            ExprCompiledValue::Module(slot) => {
+            ref e @ (ExprCompiled::Value(..)
+            | ExprCompiled::Local(..)
+            | ExprCompiled::LocalCaptured(..)) => e.clone(),
+            ExprCompiled::Module(slot) => {
                 match ctx.module.get_module_data().get_slot(slot) {
                     None => {
                         // Let if fail at runtime.
-                        ExprCompiledValue::Module(slot)
+                        ExprCompiled::Module(slot)
                     }
-                    Some(v) => ExprCompiledValue::Value(v),
+                    Some(v) => ExprCompiled::Value(v),
                 }
             }
-            ExprCompiledValue::Equals(box (ref l, ref r)) => {
+            ExprCompiled::Equals(box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
                 eval_equals(l, r)
             }
-            ExprCompiledValue::Compare(box (ref l, ref r), cmp) => {
+            ExprCompiled::Compare(box (ref l, ref r), cmp) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                ExprCompiledValue::compare(l, r, cmp)
+                ExprCompiled::compare(l, r, cmp)
             }
-            ExprCompiledValue::Type(box ref e) => ExprCompiledValue::typ(e.optimize_on_freeze(ctx)),
-            ExprCompiledValue::Len(box ref e) => ExprCompiledValue::len(e.optimize_on_freeze(ctx)),
-            ExprCompiledValue::TypeIs(box ref e, t) => {
-                ExprCompiledValue::type_is(e.optimize_on_freeze(ctx), t)
+            ExprCompiled::Type(box ref e) => ExprCompiled::typ(e.optimize_on_freeze(ctx)),
+            ExprCompiled::Len(box ref e) => ExprCompiled::len(e.optimize_on_freeze(ctx)),
+            ExprCompiled::TypeIs(box ref e, t) => {
+                ExprCompiled::type_is(e.optimize_on_freeze(ctx), t)
             }
-            ExprCompiledValue::Tuple(ref xs) => {
-                ExprCompiledValue::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.frozen_heap)
+            ExprCompiled::Tuple(ref xs) => {
+                ExprCompiled::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.frozen_heap)
             }
-            ExprCompiledValue::List(ref xs) => {
-                ExprCompiledValue::List(xs.map(|e| e.optimize_on_freeze(ctx)))
-            }
-            ExprCompiledValue::Dict(ref kvs) => ExprCompiledValue::Dict(
+            ExprCompiled::List(ref xs) => ExprCompiled::List(xs.map(|e| e.optimize_on_freeze(ctx))),
+            ExprCompiled::Dict(ref kvs) => ExprCompiled::Dict(
                 kvs.map(|(k, v)| (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx))),
             ),
-            ExprCompiledValue::Compr(ref compr) => compr.optimize_on_freeze(ctx),
-            ExprCompiledValue::Dot(box ref object, ref field) => ExprCompiledValue::dot(
+            ExprCompiled::Compr(ref compr) => compr.optimize_on_freeze(ctx),
+            ExprCompiled::Dot(box ref object, ref field) => ExprCompiled::dot(
                 object.optimize_on_freeze(ctx),
                 field,
                 ctx.heap,
                 ctx.frozen_heap,
             ),
-            ExprCompiledValue::ArrayIndirection(box (ref array, ref index)) => {
+            ExprCompiled::ArrayIndirection(box (ref array, ref index)) => {
                 let array = array.optimize_on_freeze(ctx);
                 let index = index.optimize_on_freeze(ctx);
-                ExprCompiledValue::ArrayIndirection(box (array, index))
+                ExprCompiled::ArrayIndirection(box (array, index))
             }
-            ExprCompiledValue::If(box (ref cond, ref t, ref f)) => {
+            ExprCompiled::If(box (ref cond, ref t, ref f)) => {
                 let cond = cond.optimize_on_freeze(ctx);
                 let t = t.optimize_on_freeze(ctx);
                 let f = f.optimize_on_freeze(ctx);
-                return ExprCompiledValue::if_expr(cond, t, f);
+                return ExprCompiled::if_expr(cond, t, f);
             }
-            ExprCompiledValue::Slice(box (ref v, ref start, ref stop, ref step)) => {
+            ExprCompiled::Slice(box (ref v, ref start, ref stop, ref step)) => {
                 let v = v.optimize_on_freeze(ctx);
                 let start = start.as_ref().map(|x| x.optimize_on_freeze(ctx));
                 let stop = stop.as_ref().map(|x| x.optimize_on_freeze(ctx));
                 let step = step.as_ref().map(|x| x.optimize_on_freeze(ctx));
-                ExprCompiledValue::Slice(box (v, start, stop, step))
+                ExprCompiled::Slice(box (v, start, stop, step))
             }
-            ExprCompiledValue::Not(box ref e) => {
+            ExprCompiled::Not(box ref e) => {
                 let e = e.optimize_on_freeze(ctx);
-                return ExprCompiledValue::not(span, e);
+                return ExprCompiled::not(span, e);
             }
-            ExprCompiledValue::UnOp(op, ref e) => {
+            ExprCompiled::UnOp(op, ref e) => {
                 let e = e.optimize_on_freeze(ctx);
-                ExprCompiledValue::un_op(op, e, ctx.heap, ctx.frozen_heap)
+                ExprCompiled::un_op(op, e, ctx.heap, ctx.frozen_heap)
             }
-            ExprCompiledValue::And(box (ref l, ref r)) => {
+            ExprCompiled::And(box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                return ExprCompiledValue::and(l, r);
+                return ExprCompiled::and(l, r);
             }
-            ExprCompiledValue::Or(box (ref l, ref r)) => {
+            ExprCompiled::Or(box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                return ExprCompiledValue::or(l, r);
+                return ExprCompiled::or(l, r);
             }
-            ExprCompiledValue::Op(op, box (ref l, ref r)) => {
+            ExprCompiled::Op(op, box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
-                ExprCompiledValue::bin_op(op, l, r, ctx.heap, ctx.frozen_heap)
+                ExprCompiled::bin_op(op, l, r, ctx.heap, ctx.frozen_heap)
             }
-            ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
+            ExprCompiled::PercentSOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
-                ExprCompiledValue::percent_s_one(before, arg, after, ctx.heap, ctx.frozen_heap)
+                ExprCompiled::percent_s_one(before, arg, after, ctx.heap, ctx.frozen_heap)
             }
-            ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
+            ExprCompiled::FormatOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
-                ExprCompiledValue::format_one(before, arg, after, ctx.heap, ctx.frozen_heap)
+                ExprCompiled::format_one(before, arg, after, ctx.heap, ctx.frozen_heap)
             }
-            ref d @ ExprCompiledValue::Def(..) => d.clone(),
-            ExprCompiledValue::Call(ref call) => call.optimize_on_freeze(ctx),
+            ref d @ ExprCompiled::Def(..) => d.clone(),
+            ExprCompiled::Call(ref call) => call.optimize_on_freeze(ctx),
         };
         Spanned { node: expr, span }
     }
 }
 
-impl ExprCompiledValue {
-    fn not(span: Span, expr: Spanned<ExprCompiledValue>) -> Spanned<ExprCompiledValue> {
+impl ExprCompiled {
+    fn not(span: Span, expr: Spanned<ExprCompiled>) -> Spanned<ExprCompiled> {
         match expr.node {
-            ExprCompiledValue::Value(x) => Spanned {
-                node: ExprCompiledValue::Value(FrozenValue::new_bool(!x.to_value().to_bool())),
+            ExprCompiled::Value(x) => Spanned {
+                node: ExprCompiled::Value(FrozenValue::new_bool(!x.to_value().to_bool())),
                 span,
             },
             // Collapse `not not e` to `e` only if `e` is known to produce a boolean.
-            ExprCompiledValue::Not(box ref e) if e.is_definitely_bool() => e.clone(),
+            ExprCompiled::Not(box ref e) if e.is_definitely_bool() => e.clone(),
             _ => Spanned {
-                node: ExprCompiledValue::Not(box expr),
+                node: ExprCompiled::Not(box expr),
                 span,
             },
         }
     }
 
-    fn or(
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
-    ) -> Spanned<ExprCompiledValue> {
+    fn or(l: Spanned<ExprCompiled>, r: Spanned<ExprCompiled>) -> Spanned<ExprCompiled> {
         let l_span = l.span;
         if let Some(l) = l.as_value() {
             if l.to_value().to_bool() {
                 Spanned {
-                    node: ExprCompiledValue::Value(l),
+                    node: ExprCompiled::Value(l),
                     span: l_span,
                 }
             } else {
@@ -435,21 +416,18 @@ impl ExprCompiledValue {
         } else {
             let span = l.span.merge(r.span);
             Spanned {
-                node: ExprCompiledValue::Or(box (l, r)),
+                node: ExprCompiled::Or(box (l, r)),
                 span,
             }
         }
     }
 
-    fn and(
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
-    ) -> Spanned<ExprCompiledValue> {
+    fn and(l: Spanned<ExprCompiled>, r: Spanned<ExprCompiled>) -> Spanned<ExprCompiled> {
         let l_span = l.span;
         if let Some(l) = l.as_value() {
             if !l.to_value().to_bool() {
                 Spanned {
-                    node: ExprCompiledValue::Value(l),
+                    node: ExprCompiled::Value(l),
                     span: l_span,
                 }
             } else {
@@ -458,110 +436,110 @@ impl ExprCompiledValue {
         } else {
             let span = l.span.merge(r.span);
             Spanned {
-                node: ExprCompiledValue::And(box (l, r)),
+                node: ExprCompiled::And(box (l, r)),
                 span,
             }
         }
     }
 
     fn percent(
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
+        l: Spanned<ExprCompiled>,
+        r: Spanned<ExprCompiled>,
         heap: &Heap,
         frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         if let Some(v) = l.as_string() {
             if let Some((before, after)) = parse_percent_s_one(&v) {
                 let before = frozen_heap.alloc_string_value(&before);
                 let after = frozen_heap.alloc_string_value(&after);
-                return ExprCompiledValue::percent_s_one(before, r, after, heap, frozen_heap);
+                return ExprCompiled::percent_s_one(before, r, after, heap, frozen_heap);
             }
         }
-        ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
+        ExprCompiled::Op(ExprBinOp::Percent, box (l, r))
     }
 
     pub(crate) fn percent_s_one(
         before: FrozenStringValue,
-        arg: Spanned<ExprCompiledValue>,
+        arg: Spanned<ExprCompiled>,
         after: FrozenStringValue,
         heap: &Heap,
         frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         if let Some(arg) = arg.as_value() {
             if let Ok(value) = percent_s_one(before.as_str(), arg.to_value(), after.as_str(), heap)
             {
                 let value = frozen_heap.alloc_str(value.unpack_str().unwrap());
-                return ExprCompiledValue::Value(value);
+                return ExprCompiled::Value(value);
             }
         }
 
-        ExprCompiledValue::PercentSOne(box (before, arg, after))
+        ExprCompiled::PercentSOne(box (before, arg, after))
     }
 
     pub(crate) fn format_one(
         before: FrozenStringValue,
-        arg: Spanned<ExprCompiledValue>,
+        arg: Spanned<ExprCompiled>,
         after: FrozenStringValue,
         heap: &Heap,
         frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         if let Some(arg) = arg.as_value() {
             let value = format_one(&before, arg.to_value(), &after, heap);
             let value = frozen_heap.alloc_str(value.unpack_str().unwrap());
-            return ExprCompiledValue::Value(value);
+            return ExprCompiled::Value(value);
         }
-        ExprCompiledValue::FormatOne(box (before, arg, after))
+        ExprCompiled::FormatOne(box (before, arg, after))
     }
 
-    fn add(l: Spanned<ExprCompiledValue>, r: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+    fn add(l: Spanned<ExprCompiled>, r: Spanned<ExprCompiled>) -> ExprCompiled {
         let span = l.span.merge(r.span);
         if let (Some(l), Some(r)) = (l.as_list_of_consts(), r.as_list_of_consts()) {
             let lr = l
                 .iter()
                 .chain(r.iter())
                 .map(|x| Spanned {
-                    node: ExprCompiledValue::Value(*x),
+                    node: ExprCompiled::Value(*x),
                     span,
                 })
                 .collect();
-            return ExprCompiledValue::List(lr);
+            return ExprCompiled::List(lr);
         }
-        ExprCompiledValue::Op(ExprBinOp::Add, box (l, r))
+        ExprCompiled::Op(ExprBinOp::Add, box (l, r))
     }
 
     fn bin_op(
         bin_op: ExprBinOp,
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
+        l: Spanned<ExprCompiled>,
+        r: Spanned<ExprCompiled>,
         heap: &Heap,
         frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         let span = l.span.merge(r.span);
         // Binary operators should have no side effects,
         // but to avoid possible problems, we only fold binary operators on builtin types.
         if let (Some(l), Some(r)) = (l.as_builtin_value(), r.as_builtin_value()) {
             if let Ok(v) = bin_op.eval(l.to_value(), r.to_value(), heap) {
-                if let Some(v) = ExprCompiledValue::try_value(span, v, frozen_heap) {
+                if let Some(v) = ExprCompiled::try_value(span, v, frozen_heap) {
                     return v;
                 }
             }
         }
 
         match bin_op {
-            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, heap, frozen_heap),
-            ExprBinOp::Add => ExprCompiledValue::add(l, r),
-            bin_op => ExprCompiledValue::Op(bin_op, box (l, r)),
+            ExprBinOp::Percent => ExprCompiled::percent(l, r, heap, frozen_heap),
+            ExprBinOp::Add => ExprCompiled::add(l, r),
+            bin_op => ExprCompiled::Op(bin_op, box (l, r)),
         }
     }
 
     fn if_expr(
-        cond: Spanned<ExprCompiledValue>,
-        t: Spanned<ExprCompiledValue>,
-        f: Spanned<ExprCompiledValue>,
-    ) -> Spanned<ExprCompiledValue> {
+        cond: Spanned<ExprCompiled>,
+        t: Spanned<ExprCompiled>,
+        f: Spanned<ExprCompiled>,
+    ) -> Spanned<ExprCompiled> {
         match cond {
             Spanned {
-                node: ExprCompiledValue::Value(cond),
+                node: ExprCompiled::Value(cond),
                 ..
             } => {
                 if cond.to_value().to_bool() {
@@ -571,13 +549,13 @@ impl ExprCompiledValue {
                 }
             }
             Spanned {
-                node: ExprCompiledValue::Not(box cond),
+                node: ExprCompiled::Not(box cond),
                 ..
             } => Self::if_expr(cond, f, t),
             cond => {
                 let span = cond.span.merge(t.span).merge(f.span);
                 Spanned {
-                    node: ExprCompiledValue::If(box (cond, t, f)),
+                    node: ExprCompiled::If(box (cond, t, f)),
                     span,
                 }
             }
@@ -586,25 +564,25 @@ impl ExprCompiledValue {
 
     fn un_op(
         op: ExprUnOp,
-        expr: Spanned<ExprCompiledValue>,
+        expr: Spanned<ExprCompiled>,
         heap: &Heap,
         frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         if let Some(v) = expr.as_builtin_value() {
             if let Ok(v) = op.eval(v.to_value(), heap) {
-                if let Some(v) = ExprCompiledValue::try_value(expr.span, v, frozen_heap) {
+                if let Some(v) = ExprCompiled::try_value(expr.span, v, frozen_heap) {
                     return v;
                 }
             }
         }
-        ExprCompiledValue::UnOp(op, box expr)
+        ExprCompiled::UnOp(op, box expr)
     }
 
     fn try_values(
         span: Span,
         values: &[Value],
         heap: &FrozenHeap,
-    ) -> Option<Vec<Spanned<ExprCompiledValue>>> {
+    ) -> Option<Vec<Spanned<ExprCompiled>>> {
         values
             .try_map(|v| {
                 Self::try_value(span, *v, heap)
@@ -615,22 +593,22 @@ impl ExprCompiledValue {
     }
 
     /// Try convert a maybe not frozen value to an expression, or discard it.
-    pub(crate) fn try_value(span: Span, v: Value, heap: &FrozenHeap) -> Option<ExprCompiledValue> {
+    pub(crate) fn try_value(span: Span, v: Value, heap: &FrozenHeap) -> Option<ExprCompiled> {
         if let Some(v) = v.unpack_frozen() {
             // If frozen, we are lucky.
-            Some(ExprCompiledValue::Value(v))
+            Some(ExprCompiled::Value(v))
         } else if let Some(v) = v.unpack_str() {
             // If string, copy it to frozen heap.
-            Some(ExprCompiledValue::Value(heap.alloc_str(v)))
+            Some(ExprCompiled::Value(heap.alloc_str(v)))
         } else if let Some(v) = v.downcast_ref::<StarlarkFloat>() {
-            Some(ExprCompiledValue::Value(heap.alloc_float(*v)))
+            Some(ExprCompiled::Value(heap.alloc_float(*v)))
         } else if let Some(v) = v.downcast_ref::<Range>() {
-            Some(ExprCompiledValue::Value(heap.alloc(*v)))
+            Some(ExprCompiled::Value(heap.alloc(*v)))
         } else if let Some(v) = List::from_value(v) {
             // When spec-safe function returned a non-frozen list,
             // we try to convert that list to a list of constants instruction.
             let items = Self::try_values(span, v.content(), heap)?;
-            Some(ExprCompiledValue::List(items))
+            Some(ExprCompiled::List(items))
         } else if let Some(v) = Tuple::from_value(v) {
             let items = Self::try_values(span, v.content(), heap)?;
             Some(Self::tuple(items, heap))
@@ -640,14 +618,11 @@ impl ExprCompiledValue {
     }
 
     /// Construct tuple expression from elements optimizing to frozen tuple value when possible.
-    pub(crate) fn tuple(
-        elems: Vec<Spanned<ExprCompiledValue>>,
-        heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    pub(crate) fn tuple(elems: Vec<Spanned<ExprCompiled>>, heap: &FrozenHeap) -> ExprCompiled {
         if let Ok(elems) = elems.try_map(|e| e.as_value().ok_or(())) {
-            ExprCompiledValue::Value(heap.alloc_tuple(&elems))
+            ExprCompiled::Value(heap.alloc_tuple(&elems))
         } else {
-            ExprCompiledValue::Tuple(elems)
+            ExprCompiled::Tuple(elems)
         }
     }
 
@@ -671,81 +646,72 @@ impl ExprCompiledValue {
     }
 
     fn dot(
-        object: Spanned<ExprCompiledValue>,
+        object: Spanned<ExprCompiled>,
         field: &Symbol,
         heap: &Heap,
         frozen_heap: &FrozenHeap,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         if let Some(left) = object.as_value() {
             if let Some(v) = Self::compile_time_getattr(left, field, heap, frozen_heap) {
-                return ExprCompiledValue::Value(v);
+                return ExprCompiled::Value(v);
             }
         }
 
-        ExprCompiledValue::Dot(box object, field.clone())
+        ExprCompiled::Dot(box object, field.clone())
     }
 
-    pub(crate) fn typ(v: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+    pub(crate) fn typ(v: Spanned<ExprCompiled>) -> ExprCompiled {
         match &v.node {
-            ExprCompiledValue::Value(v) => {
-                ExprCompiledValue::Value(v.to_value().get_type_value().unpack())
+            ExprCompiled::Value(v) => ExprCompiled::Value(v.to_value().get_type_value().unpack()),
+            ExprCompiled::Tuple(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
+                ExprCompiled::Value(Tuple::get_type_value_static().unpack())
             }
-            ExprCompiledValue::Tuple(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
-                ExprCompiledValue::Value(Tuple::get_type_value_static().unpack())
+            ExprCompiled::List(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
+                ExprCompiled::Value(List::get_type_value_static().unpack())
             }
-            ExprCompiledValue::List(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
-                ExprCompiledValue::Value(List::get_type_value_static().unpack())
+            ExprCompiled::Dict(xs) if xs.is_empty() => {
+                ExprCompiled::Value(Dict::get_type_value_static().unpack())
             }
-            ExprCompiledValue::Dict(xs) if xs.is_empty() => {
-                ExprCompiledValue::Value(Dict::get_type_value_static().unpack())
+            ExprCompiled::Type(x) if x.is_pure_infallible() => {
+                ExprCompiled::Value(StarlarkStr::get_type_value_static().unpack())
             }
-            ExprCompiledValue::Type(x) if x.is_pure_infallible() => {
-                ExprCompiledValue::Value(StarlarkStr::get_type_value_static().unpack())
+            ExprCompiled::TypeIs(x, _t) if x.is_pure_infallible() => {
+                ExprCompiled::Value(StarlarkBool::get_type_value_static().unpack())
             }
-            ExprCompiledValue::TypeIs(x, _t) if x.is_pure_infallible() => {
-                ExprCompiledValue::Value(StarlarkBool::get_type_value_static().unpack())
+            ExprCompiled::Not(x) if x.is_pure_infallible() => {
+                ExprCompiled::Value(StarlarkBool::get_type_value_static().unpack())
             }
-            ExprCompiledValue::Not(x) if x.is_pure_infallible() => {
-                ExprCompiledValue::Value(StarlarkBool::get_type_value_static().unpack())
-            }
-            _ => ExprCompiledValue::Type(box v),
+            _ => ExprCompiled::Type(box v),
         }
     }
 
-    pub(crate) fn type_is(
-        v: Spanned<ExprCompiledValue>,
-        t: FrozenStringValue,
-    ) -> ExprCompiledValue {
+    pub(crate) fn type_is(v: Spanned<ExprCompiled>, t: FrozenStringValue) -> ExprCompiled {
         if let Some(v) = v.as_value() {
-            return ExprCompiledValue::Value(FrozenValue::new_bool(
+            return ExprCompiled::Value(FrozenValue::new_bool(
                 v.to_value().get_type() == t.as_str(),
             ));
         }
-        ExprCompiledValue::TypeIs(box v, t)
+        ExprCompiled::TypeIs(box v, t)
     }
 
-    pub(crate) fn len(arg: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+    pub(crate) fn len(arg: Spanned<ExprCompiled>) -> ExprCompiled {
         if let Some(arg) = arg.as_value() {
             if let Ok(len) = arg.to_value().length() {
-                return ExprCompiledValue::Value(FrozenValue::new_int(len));
+                return ExprCompiled::Value(FrozenValue::new_int(len));
             }
         }
-        ExprCompiledValue::Len(box arg)
+        ExprCompiled::Len(box arg)
     }
 
-    fn compare(
-        l: Spanned<ExprCompiledValue>,
-        r: Spanned<ExprCompiledValue>,
-        cmp: CompareOp,
-    ) -> ExprCompiledValue {
+    fn compare(l: Spanned<ExprCompiled>, r: Spanned<ExprCompiled>, cmp: CompareOp) -> ExprCompiled {
         if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
             // If comparison fails, let it fail in runtime.
             if let Ok(r) = l.compare(r.to_value()) {
-                return ExprCompiledValue::Value(FrozenValue::new_bool((cmp.as_fn())(r)));
+                return ExprCompiled::Value(FrozenValue::new_bool((cmp.as_fn())(r)));
             }
         }
 
-        ExprCompiledValue::Compare(box (l, r), cmp)
+        ExprCompiled::Compare(box (l, r), cmp)
     }
 }
 
@@ -758,33 +724,33 @@ pub(crate) enum EvalError {
 /// Try fold expression `cmp(l == r)` into `cmp(type(x) == "y")`.
 /// Return original `l` and `r` arguments if fold was unsuccessful.
 fn try_eval_type_is(
-    l: Spanned<ExprCompiledValue>,
-    r: Spanned<ExprCompiledValue>,
-) -> Result<Spanned<ExprCompiledValue>, (Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>)> {
+    l: Spanned<ExprCompiled>,
+    r: Spanned<ExprCompiled>,
+) -> Result<Spanned<ExprCompiled>, (Spanned<ExprCompiled>, Spanned<ExprCompiled>)> {
     match (l, r) {
         (
             Spanned {
-                node: ExprCompiledValue::Type(l),
+                node: ExprCompiled::Type(l),
                 span: l_span,
             },
             Spanned {
-                node: ExprCompiledValue::Value(r),
+                node: ExprCompiled::Value(r),
                 span: r_span,
             },
         ) => {
             if let Some(r) = FrozenStringValue::new(r) {
                 Ok(Spanned {
-                    node: ExprCompiledValue::type_is(*l, r),
+                    node: ExprCompiled::type_is(*l, r),
                     span: l_span.merge(r_span),
                 })
             } else {
                 Err((
                     Spanned {
-                        node: ExprCompiledValue::Type(l),
+                        node: ExprCompiled::Type(l),
                         span: l_span,
                     },
                     Spanned {
-                        node: ExprCompiledValue::Value(r),
+                        node: ExprCompiled::Value(r),
                         span: r_span,
                     },
                 ))
@@ -794,11 +760,11 @@ fn try_eval_type_is(
     }
 }
 
-fn eval_equals(l: Spanned<ExprCompiledValue>, r: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+fn eval_equals(l: Spanned<ExprCompiled>, r: Spanned<ExprCompiled>) -> ExprCompiled {
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
         // If comparison fails, let it fail in runtime.
         if let Ok(r) = l.equals(r.to_value()) {
-            return ExprCompiledValue::Value(FrozenValue::new_bool(r));
+            return ExprCompiled::Value(FrozenValue::new_bool(r));
         }
     }
 
@@ -812,7 +778,7 @@ fn eval_equals(l: Spanned<ExprCompiledValue>, r: Spanned<ExprCompiledValue>) -> 
         Err((r, l)) => (r, l),
     };
 
-    ExprCompiledValue::Equals(box (l, r))
+    ExprCompiled::Equals(box (l, r))
 }
 
 impl AstLiteral {
@@ -933,7 +899,7 @@ pub(crate) fn get_attr_hashed_bind<'v>(
 }
 
 impl Compiler<'_, '_, '_> {
-    pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<Spanned<ExprCompiledValue>> {
+    pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<Spanned<ExprCompiled>> {
         expr.map(|v| self.expr(*v))
     }
 
@@ -941,7 +907,7 @@ impl Compiler<'_, '_, '_> {
         &mut self,
         ident: AstString,
         resolved_ident: Option<ResolvedIdent>,
-    ) -> ExprCompiledValue {
+    ) -> ExprCompiled {
         let resolved_ident =
             resolved_ident.unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
         match resolved_ident {
@@ -951,8 +917,8 @@ impl Compiler<'_, '_, '_> {
                 // We can't look up the local variabless in advance, because they are different each time
                 // we go through a new function call.
                 match binding.captured {
-                    Captured::Yes => ExprCompiledValue::LocalCaptured(slot),
-                    Captured::No => ExprCompiledValue::Local(slot),
+                    Captured::Yes => ExprCompiled::LocalCaptured(slot),
+                    Captured::No => ExprCompiled::Local(slot),
                 }
             }
             ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
@@ -965,18 +931,18 @@ impl Compiler<'_, '_, '_> {
                         // We could inline non-frozen values, but these values
                         // can be garbage-collected, so it is somewhat harder to implement.
                         if let Some(v) = v.unpack_frozen() {
-                            return ExprCompiledValue::Value(v);
+                            return ExprCompiled::Value(v);
                         }
                     }
                 }
 
-                ExprCompiledValue::Module(slot)
+                ExprCompiled::Module(slot)
             }
-            ResolvedIdent::Global(v) => ExprCompiledValue::Value(v),
+            ResolvedIdent::Global(v) => ExprCompiled::Value(v),
         }
     }
 
-    pub(crate) fn expr(&mut self, expr: CstExpr) -> Spanned<ExprCompiledValue> {
+    pub(crate) fn expr(&mut self, expr: CstExpr) -> Spanned<ExprCompiled> {
         // println!("compile {}", expr.node);
         let span = expr.span;
         let expr = match expr.node {
@@ -990,27 +956,27 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Tuple(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
-                ExprCompiledValue::tuple(xs, self.eval.module_env.frozen_heap())
+                ExprCompiled::tuple(xs, self.eval.module_env.frozen_heap())
             }
             ExprP::List(exprs) => {
                 let xs = exprs.into_map(|x| self.expr(x));
-                ExprCompiledValue::List(xs)
+                ExprCompiled::List(xs)
             }
             ExprP::Dict(exprs) => {
                 let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
-                ExprCompiledValue::Dict(xs)
+                ExprCompiled::Dict(xs)
             }
             ExprP::If(box (cond, then_expr, else_expr)) => {
                 let cond = self.expr(cond);
                 let then_expr = self.expr(then_expr);
                 let else_expr = self.expr(else_expr);
-                return ExprCompiledValue::if_expr(cond, then_expr, else_expr);
+                return ExprCompiled::if_expr(cond, then_expr, else_expr);
             }
             ExprP::Dot(left, right) => {
                 let left = self.expr(*left);
                 let s = Symbol::new(&right.node);
 
-                ExprCompiledValue::dot(
+                ExprCompiled::dot(
                     left,
                     &s,
                     self.eval.module_env.heap(),
@@ -1021,22 +987,22 @@ impl Compiler<'_, '_, '_> {
             ExprP::ArrayIndirection(box (array, index)) => {
                 let array = self.expr(array);
                 let index = self.expr(index);
-                ExprCompiledValue::ArrayIndirection(box (array, index))
+                ExprCompiled::ArrayIndirection(box (array, index))
             }
             ExprP::Slice(collection, start, stop, stride) => {
                 let collection = self.expr(*collection);
                 let start = start.map(|x| self.expr(*x));
                 let stop = stop.map(|x| self.expr(*x));
                 let stride = stride.map(|x| self.expr(*x));
-                ExprCompiledValue::Slice(box (collection, start, stop, stride))
+                ExprCompiled::Slice(box (collection, start, stop, stride))
             }
             ExprP::Not(expr) => {
                 let expr = self.expr(*expr);
-                return ExprCompiledValue::not(span, expr);
+                return ExprCompiled::not(span, expr);
             }
             ExprP::Minus(expr) => {
                 let expr = self.expr(*expr);
-                ExprCompiledValue::un_op(
+                ExprCompiled::un_op(
                     ExprUnOp::Minus,
                     expr,
                     self.eval.module_env.heap(),
@@ -1045,7 +1011,7 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Plus(expr) => {
                 let expr = self.expr(*expr);
-                ExprCompiledValue::un_op(
+                ExprCompiled::un_op(
                     ExprUnOp::Plus,
                     expr,
                     self.eval.module_env.heap(),
@@ -1054,7 +1020,7 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::BitNot(expr) => {
                 let expr = self.expr(*expr);
-                ExprCompiledValue::un_op(
+                ExprCompiled::un_op(
                     ExprUnOp::BitNot,
                     expr,
                     self.eval.module_env.heap(),
@@ -1067,7 +1033,7 @@ impl Compiler<'_, '_, '_> {
                     // but special handling of `+` on AST might be slightly more efficient
                     // (no unnecessary allocations on the heap). So keep it.
                     let val = self.eval.module_env.frozen_heap().alloc(x);
-                    ExprCompiledValue::Value(val)
+                    ExprCompiled::Value(val)
                 } else {
                     let right = if op == BinOp::In || op == BinOp::NotIn {
                         list_to_tuple(*right)
@@ -1078,11 +1044,11 @@ impl Compiler<'_, '_, '_> {
                     let l = self.expr(*left);
                     let r = self.expr(right);
                     match op {
-                        BinOp::Or => return ExprCompiledValue::or(l, r),
-                        BinOp::And => return ExprCompiledValue::and(l, r),
+                        BinOp::Or => return ExprCompiled::or(l, r),
+                        BinOp::And => return ExprCompiled::and(l, r),
                         BinOp::Equal => eval_equals(l, r),
                         BinOp::NotEqual => {
-                            ExprCompiledValue::not(
+                            ExprCompiled::not(
                                 span,
                                 Spanned {
                                     span,
@@ -1091,15 +1057,13 @@ impl Compiler<'_, '_, '_> {
                             )
                             .node
                         }
-                        BinOp::Less => ExprCompiledValue::compare(l, r, CompareOp::Less),
-                        BinOp::Greater => ExprCompiledValue::compare(l, r, CompareOp::Greater),
-                        BinOp::LessOrEqual => {
-                            ExprCompiledValue::compare(l, r, CompareOp::LessOrEqual)
-                        }
+                        BinOp::Less => ExprCompiled::compare(l, r, CompareOp::Less),
+                        BinOp::Greater => ExprCompiled::compare(l, r, CompareOp::Greater),
+                        BinOp::LessOrEqual => ExprCompiled::compare(l, r, CompareOp::LessOrEqual),
                         BinOp::GreaterOrEqual => {
-                            ExprCompiledValue::compare(l, r, CompareOp::GreaterOrEqual)
+                            ExprCompiled::compare(l, r, CompareOp::GreaterOrEqual)
                         }
-                        BinOp::In => ExprCompiledValue::bin_op(
+                        BinOp::In => ExprCompiled::bin_op(
                             ExprBinOp::In,
                             l,
                             r,
@@ -1107,11 +1071,11 @@ impl Compiler<'_, '_, '_> {
                             self.eval.module_env.frozen_heap(),
                         ),
                         BinOp::NotIn => {
-                            ExprCompiledValue::not(
+                            ExprCompiled::not(
                                 span,
                                 Spanned {
                                     span,
-                                    node: ExprCompiledValue::bin_op(
+                                    node: ExprCompiled::bin_op(
                                         ExprBinOp::In,
                                         l,
                                         r,
@@ -1122,77 +1086,77 @@ impl Compiler<'_, '_, '_> {
                             )
                             .node
                         }
-                        BinOp::Subtract => ExprCompiledValue::bin_op(
+                        BinOp::Subtract => ExprCompiled::bin_op(
                             ExprBinOp::Sub,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::Add => ExprCompiledValue::bin_op(
+                        BinOp::Add => ExprCompiled::bin_op(
                             ExprBinOp::Add,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::Multiply => ExprCompiledValue::bin_op(
+                        BinOp::Multiply => ExprCompiled::bin_op(
                             ExprBinOp::Multiply,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::Percent => ExprCompiledValue::bin_op(
+                        BinOp::Percent => ExprCompiled::bin_op(
                             ExprBinOp::Percent,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::Divide => ExprCompiledValue::bin_op(
+                        BinOp::Divide => ExprCompiled::bin_op(
                             ExprBinOp::Divide,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::FloorDivide => ExprCompiledValue::bin_op(
+                        BinOp::FloorDivide => ExprCompiled::bin_op(
                             ExprBinOp::FloorDivide,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::BitAnd => ExprCompiledValue::bin_op(
+                        BinOp::BitAnd => ExprCompiled::bin_op(
                             ExprBinOp::BitAnd,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::BitOr => ExprCompiledValue::bin_op(
+                        BinOp::BitOr => ExprCompiled::bin_op(
                             ExprBinOp::BitOr,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::BitXor => ExprCompiledValue::bin_op(
+                        BinOp::BitXor => ExprCompiled::bin_op(
                             ExprBinOp::BitXor,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::LeftShift => ExprCompiledValue::bin_op(
+                        BinOp::LeftShift => ExprCompiled::bin_op(
                             ExprBinOp::LeftShift,
                             l,
                             r,
                             self.eval.module_env.heap(),
                             self.eval.module_env.frozen_heap(),
                         ),
-                        BinOp::RightShift => ExprCompiledValue::bin_op(
+                        BinOp::RightShift => ExprCompiled::bin_op(
                             ExprBinOp::RightShift,
                             l,
                             r,
@@ -1210,7 +1174,7 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Literal(x) => {
                 let val = x.compile(self.eval.module_env.frozen_heap());
-                ExprCompiledValue::Value(val)
+                ExprCompiled::Value(val)
             }
         };
         Spanned { node: expr, span }

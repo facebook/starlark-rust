@@ -37,7 +37,7 @@ use crate::{
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
             Compiler,
         },
-        fragment::{expr::ExprCompiledValue, known::list_to_tuple, small_vec_1::SmallVec1},
+        fragment::{expr::ExprCompiled, known::list_to_tuple, small_vec_1::SmallVec1},
         runtime::{
             evaluator::{Evaluator, GC_THRESHOLD},
             slots::LocalSlotId,
@@ -49,8 +49,8 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub(crate) enum AssignModifyLhs {
-    Dot(Spanned<ExprCompiledValue>, String),
-    Array(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
+    Dot(Spanned<ExprCompiled>, String),
+    Array(Spanned<ExprCompiled>, Spanned<ExprCompiled>),
     Local(Spanned<(LocalSlotId, Captured)>),
     Module(Spanned<ModuleSlotId>),
 }
@@ -58,15 +58,15 @@ pub(crate) enum AssignModifyLhs {
 #[derive(Clone, Debug)]
 pub(crate) enum StmtCompiledValue {
     PossibleGc,
-    Return(Option<Spanned<ExprCompiledValue>>),
-    Expr(Spanned<ExprCompiledValue>),
-    Assign(Spanned<AssignCompiledValue>, Spanned<ExprCompiledValue>),
-    AssignModify(AssignModifyLhs, AssignOp, Spanned<ExprCompiledValue>),
-    If(Box<(Spanned<ExprCompiledValue>, StmtsCompiled, StmtsCompiled)>),
+    Return(Option<Spanned<ExprCompiled>>),
+    Expr(Spanned<ExprCompiled>),
+    Assign(Spanned<AssignCompiledValue>, Spanned<ExprCompiled>),
+    AssignModify(AssignModifyLhs, AssignOp, Spanned<ExprCompiled>),
+    If(Box<(Spanned<ExprCompiled>, StmtsCompiled, StmtsCompiled)>),
     For(
         Box<(
             Spanned<AssignCompiledValue>,
-            Spanned<ExprCompiledValue>,
+            Spanned<ExprCompiled>,
             StmtsCompiled,
         )>,
     ),
@@ -154,11 +154,11 @@ impl Spanned<StmtCompiledValue> {
         }
     }
 
-    fn expr(expr: Spanned<ExprCompiledValue>) -> StmtsCompiled {
+    fn expr(expr: Spanned<ExprCompiled>) -> StmtsCompiled {
         let span = expr.span;
         match expr.node {
-            ExprCompiledValue::Value(..) => StmtsCompiled::empty(),
-            ExprCompiledValue::List(xs) | ExprCompiledValue::Tuple(xs) => {
+            ExprCompiled::Value(..) => StmtsCompiled::empty(),
+            ExprCompiled::List(xs) | ExprCompiled::Tuple(xs) => {
                 let mut stmts = StmtsCompiled::empty();
                 for x in xs {
                     stmts.extend(Self::expr(x));
@@ -174,13 +174,13 @@ impl Spanned<StmtCompiledValue> {
 
     fn if_stmt(
         span: Span,
-        cond: Spanned<ExprCompiledValue>,
+        cond: Spanned<ExprCompiled>,
         t: StmtsCompiled,
         f: StmtsCompiled,
     ) -> StmtsCompiled {
         match cond {
             Spanned {
-                node: ExprCompiledValue::Value(cond),
+                node: ExprCompiled::Value(cond),
                 ..
             } => {
                 if cond.to_value().to_bool() {
@@ -190,7 +190,7 @@ impl Spanned<StmtCompiledValue> {
                 }
             }
             Spanned {
-                node: ExprCompiledValue::Not(box cond),
+                node: ExprCompiled::Not(box cond),
                 ..
             } => Self::if_stmt(span, cond, f, t),
             cond => {
@@ -209,7 +209,7 @@ impl Spanned<StmtCompiledValue> {
     fn for_stmt(
         span: Span,
         var: Spanned<AssignCompiledValue>,
-        over: Spanned<ExprCompiledValue>,
+        over: Spanned<ExprCompiled>,
         body: StmtsCompiled,
     ) -> StmtsCompiled {
         if over.is_iterable_empty() {
@@ -314,8 +314,8 @@ pub(crate) enum AssignError {
 
 #[derive(Clone, Debug)]
 pub(crate) enum AssignCompiledValue {
-    Dot(Spanned<ExprCompiledValue>, String),
-    ArrayIndirection(Spanned<ExprCompiledValue>, Spanned<ExprCompiledValue>),
+    Dot(Spanned<ExprCompiled>, String),
+    ArrayIndirection(Spanned<ExprCompiled>, Spanned<ExprCompiled>),
     Tuple(Vec<Spanned<AssignCompiledValue>>),
     Local(LocalSlotId, Captured),
     Module(ModuleSlotId, String),
@@ -389,7 +389,7 @@ impl Compiler<'_, '_, '_> {
         &mut self,
         span_stmt: Span,
         lhs: CstAssign,
-        rhs: Spanned<ExprCompiledValue>,
+        rhs: Spanned<ExprCompiled>,
         op: AssignOp,
     ) -> StmtsCompiled {
         let span_lhs = lhs.span;
