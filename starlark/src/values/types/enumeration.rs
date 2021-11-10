@@ -55,8 +55,8 @@ use crate::{
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::{Arguments, Evaluator},
     values::{
-        function::FUNCTION_TYPE, index::convert_index, Freeze, FrozenValue, Heap, StarlarkValue,
-        Trace, Value, ValueLike,
+        display::display_container, function::FUNCTION_TYPE, index::convert_index, Freeze,
+        FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -83,14 +83,7 @@ pub struct EnumTypeGen<V, Typ> {
 
 impl<V: Display, Typ> Display for EnumTypeGen<V, Typ> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "enum(")?;
-        for (i, (v, _)) in self.elements.iter().enumerate() {
-            if i != 0 {
-                write!(f, ", ")?;
-            }
-            v.fmt(f)?;
-        }
-        write!(f, ")")
+        display_container(f, "enum(", ")", self.elements.iter().map(|(k, _v)| k))
     }
 }
 

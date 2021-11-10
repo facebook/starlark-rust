@@ -47,12 +47,13 @@ use gazebo::{
     coerce::{coerce_ref, Coerce},
 };
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     collections::{SmallMap, StarlarkHasher},
     environment::{Methods, MethodsStatic},
     values::{
         comparison::{compare_small_map, equals_small_map},
+        display::display_keyed_container,
         error::ValueError,
         AllocValue, Freeze, FrozenValue, Heap, StarlarkValue, StringValue, StringValueLike, Trace,
         UnpackValue, Value, ValueLike, ValueOf,
@@ -87,15 +88,15 @@ unsafe impl<'v> Coerce<StructGen<'v, Value<'v>>> for StructGen<'static, FrozenVa
 
 impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "struct(")?;
-        for (i, (name, value)) in self.fields.iter().enumerate() {
-            if i != 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}=", name.to_string_value().as_str())?;
-            Display::fmt(value, f)?;
-        }
-        write!(f, ")")
+        display_keyed_container(
+            f,
+            "struct(",
+            ")",
+            "=",
+            self.fields
+                .iter()
+                .map(|(name, value)| (name.to_string_value().as_str(), value)),
+        )
     }
 }
 

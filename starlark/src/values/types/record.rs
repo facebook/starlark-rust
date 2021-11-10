@@ -56,14 +56,15 @@ use gazebo::{
     prelude::*,
 };
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     codemap::Span,
     collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator, ParametersSpec},
     values::{
-        comparison::equals_slice, function::FUNCTION_TYPE, typing::TypeCompiled, Freeze, Freezer,
-        FrozenValue, Heap, StarlarkValue, Trace, Value, ValueLike,
+        comparison::equals_slice, display::display_keyed_container, function::FUNCTION_TYPE,
+        typing::TypeCompiled, Freeze, Freezer, FrozenValue, Heap, StarlarkValue, Trace, Value,
+        ValueLike,
     },
 };
 
@@ -104,15 +105,13 @@ pub struct RecordTypeGen<V, Typ> {
 
 impl<V: Display, Typ> Display for RecordTypeGen<V, Typ> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "record(")?;
-        for (i, (name, typ)) in self.fields.iter().enumerate() {
-            if i != 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}=", name)?;
-            typ.0.fmt(f)?;
-        }
-        write!(f, ")")
+        display_keyed_container(
+            f,
+            "record(",
+            ")",
+            "=",
+            self.fields.iter().map(|(name, typ)| (name, &typ.0)),
+        )
     }
 }
 

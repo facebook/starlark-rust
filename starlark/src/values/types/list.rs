@@ -35,12 +35,13 @@ use gazebo::{
     prelude::*,
 };
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     environment::{Methods, MethodsStatic},
     values::{
         array::Array,
         comparison::{compare_slice, equals_slice},
+        display::display_container,
         error::ValueError,
         index::{apply_slice, convert_index},
         AllocFrozenValue, AllocValue, FrozenHeap, FrozenStringValue, FrozenValue, Heap,
@@ -428,14 +429,7 @@ impl<T: Display> Display for ListGen<T> {
 }
 
 pub(crate) fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "[")?;
-    for (i, v) in xs.iter().enumerate() {
-        if i != 0 {
-            write!(f, ", ")?;
-        }
-        Display::fmt(v, f)?;
-    }
-    write!(f, "]")
+    display_container(f, "[", "]", xs.iter())
 }
 
 impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>

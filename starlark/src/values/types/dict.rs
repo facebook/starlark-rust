@@ -34,15 +34,15 @@ use gazebo::{
 };
 use indexmap::Equivalent;
 
-use crate as starlark;
 use crate::{
+    self as starlark,
     collections::{BorrowHashed, Hashed, SmallMap},
     environment::{Methods, MethodsStatic},
     values::{
-        comparison::equals_small_map, error::ValueError, iter::ARefIterator,
-        string::hash_string_value, AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap,
-        FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue, StringValue, Trace,
-        UnpackValue, Value, ValueLike,
+        comparison::equals_small_map, display::display_keyed_container, error::ValueError,
+        iter::ARefIterator, string::hash_string_value, AllocFrozenValue, AllocValue, Freeze,
+        Freezer, FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
+        StringValue, Trace, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -51,16 +51,7 @@ struct DictGen<T>(T);
 
 impl<'v, T: DictLike<'v>> Display for DictGen<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{")?;
-        for (i, (name, value)) in self.0.content().iter().enumerate() {
-            if i != 0 {
-                write!(f, ", ")?;
-            }
-            Display::fmt(name, f)?;
-            write!(f, ": ")?;
-            Display::fmt(value, f)?;
-        }
-        write!(f, "}}")
+        display_keyed_container(f, "{", "}", ": ", self.0.content().iter())
     }
 }
 
