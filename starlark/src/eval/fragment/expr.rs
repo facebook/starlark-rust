@@ -406,7 +406,7 @@ impl ExprCompiledValue {
     fn not(span: Span, expr: Spanned<ExprCompiledValue>) -> Spanned<ExprCompiledValue> {
         match expr.node {
             ExprCompiledValue::Value(x) => Spanned {
-                node: value!(FrozenValue::new_bool(!x.to_value().to_bool())),
+                node: ExprCompiledValue::Value(FrozenValue::new_bool(!x.to_value().to_bool())),
                 span,
             },
             // Collapse `not not e` to `e` only if `e` is known to produce a boolean.
@@ -426,7 +426,7 @@ impl ExprCompiledValue {
         if let Some(l) = l.as_value() {
             if l.to_value().to_bool() {
                 Spanned {
-                    node: value!(l),
+                    node: ExprCompiledValue::Value(l),
                     span: l_span,
                 }
             } else {
@@ -449,7 +449,7 @@ impl ExprCompiledValue {
         if let Some(l) = l.as_value() {
             if !l.to_value().to_bool() {
                 Spanned {
-                    node: value!(l),
+                    node: ExprCompiledValue::Value(l),
                     span: l_span,
                 }
             } else {
@@ -741,7 +741,7 @@ impl ExprCompiledValue {
         if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
             // If comparison fails, let it fail in runtime.
             if let Ok(r) = l.compare(r.to_value()) {
-                return value!(FrozenValue::new_bool((cmp.as_fn())(r)));
+                return ExprCompiledValue::Value(FrozenValue::new_bool((cmp.as_fn())(r)));
             }
         }
 
@@ -798,7 +798,7 @@ fn eval_equals(l: Spanned<ExprCompiledValue>, r: Spanned<ExprCompiledValue>) -> 
     if let (Some(l), Some(r)) = (l.as_value(), r.as_value()) {
         // If comparison fails, let it fail in runtime.
         if let Ok(r) = l.equals(r.to_value()) {
-            return value!(FrozenValue::new_bool(r));
+            return ExprCompiledValue::Value(FrozenValue::new_bool(r));
         }
     }
 
@@ -965,14 +965,14 @@ impl Compiler<'_, '_, '_> {
                         // We could inline non-frozen values, but these values
                         // can be garbage-collected, so it is somewhat harder to implement.
                         if let Some(v) = v.unpack_frozen() {
-                            return value!(v);
+                            return ExprCompiledValue::Value(v);
                         }
                     }
                 }
 
                 ExprCompiledValue::Module(slot)
             }
-            ResolvedIdent::Global(v) => value!(v),
+            ResolvedIdent::Global(v) => ExprCompiledValue::Value(v),
         }
     }
 
@@ -1067,7 +1067,7 @@ impl Compiler<'_, '_, '_> {
                     // but special handling of `+` on AST might be slightly more efficient
                     // (no unnecessary allocations on the heap). So keep it.
                     let val = self.eval.module_env.frozen_heap().alloc(x);
-                    value!(val)
+                    ExprCompiledValue::Value(val)
                 } else {
                     let right = if op == BinOp::In || op == BinOp::NotIn {
                         list_to_tuple(*right)
@@ -1210,7 +1210,7 @@ impl Compiler<'_, '_, '_> {
             }
             ExprP::Literal(x) => {
                 let val = x.compile(self.eval.module_env.frozen_heap());
-                value!(val)
+                ExprCompiledValue::Value(val)
             }
         };
         Spanned { node: expr, span }

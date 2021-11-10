@@ -15,12 +15,6 @@
  * limitations under the License.
  */
 
-macro_rules! value {
-    ($v:expr) => {
-        ExprCompiledValue::Value($v)
-    };
-}
-
 pub(crate) mod call;
 pub(crate) mod compr;
 pub(crate) mod def;
