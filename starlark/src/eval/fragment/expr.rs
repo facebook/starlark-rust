@@ -40,8 +40,10 @@ use crate::{
     syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
     values::{
         function::BoundMethodGen,
-        string::interpolation::parse_percent_s_one,
+        string::{interpolation::parse_percent_s_one, StarlarkStr},
         types::{
+            bool::StarlarkBool,
+            dict::Dict,
             float::StarlarkFloat,
             list::{FrozenList, List},
             range::Range,
@@ -49,7 +51,8 @@ use crate::{
             tuple::Tuple,
             unbound::MaybeUnboundValue,
         },
-        FrozenHeap, FrozenStringValue, FrozenValue, Heap, Value, ValueError, ValueLike,
+        FrozenHeap, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value, ValueError,
+        ValueLike,
     },
 };
 
@@ -270,6 +273,27 @@ impl ExprCompiledValue {
             _ => false,
         }
     }
+
+    /// This expression is definitely:
+    /// * infallible
+    /// * has no effects
+    fn is_pure_infallible(&self) -> bool {
+        match self {
+            Self::Value(..) => true,
+            Self::List(xs) | Self::Tuple(xs) => xs.iter().all(|x| x.is_pure_infallible()),
+            Self::Dict(xs) => xs.is_empty(),
+            Self::Type(x) => x.is_pure_infallible(),
+            Self::TypeIs(x, _t) => x.is_pure_infallible(),
+            Self::Not(x) => x.is_pure_infallible(),
+            Self::Or(box (x, y)) | Self::And(box (x, y)) => {
+                x.is_pure_infallible() && y.is_pure_infallible()
+            }
+            Self::If(box (cond, x, y)) => {
+                cond.is_pure_infallible() && x.is_pure_infallible() && y.is_pure_infallible()
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Spanned<ExprCompiledValue> {
@@ -301,9 +325,7 @@ impl Spanned<ExprCompiledValue> {
                 let r = r.optimize_on_freeze(ctx);
                 ExprCompiledValue::compare(l, r, cmp)
             }
-            ExprCompiledValue::Type(box ref e) => {
-                ExprCompiledValue::Type(box e.optimize_on_freeze(ctx))
-            }
+            ExprCompiledValue::Type(box ref e) => ExprCompiledValue::typ(e.optimize_on_freeze(ctx)),
             ExprCompiledValue::Len(box ref e) => {
                 ExprCompiledValue::Len(box e.optimize_on_freeze(ctx))
             }
@@ -663,6 +685,33 @@ impl ExprCompiledValue {
         }
 
         ExprCompiledValue::Dot(box object, field.clone())
+    }
+
+    pub(crate) fn typ(v: Spanned<ExprCompiledValue>) -> ExprCompiledValue {
+        match &v.node {
+            ExprCompiledValue::Value(v) => {
+                ExprCompiledValue::Value(v.to_value().get_type_value().unpack())
+            }
+            ExprCompiledValue::Tuple(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
+                ExprCompiledValue::Value(Tuple::get_type_value_static().unpack())
+            }
+            ExprCompiledValue::List(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
+                ExprCompiledValue::Value(List::get_type_value_static().unpack())
+            }
+            ExprCompiledValue::Dict(xs) if xs.is_empty() => {
+                ExprCompiledValue::Value(Dict::get_type_value_static().unpack())
+            }
+            ExprCompiledValue::Type(x) if x.is_pure_infallible() => {
+                ExprCompiledValue::Value(StarlarkStr::get_type_value_static().unpack())
+            }
+            ExprCompiledValue::TypeIs(x, _t) if x.is_pure_infallible() => {
+                ExprCompiledValue::Value(StarlarkBool::get_type_value_static().unpack())
+            }
+            ExprCompiledValue::Not(x) if x.is_pure_infallible() => {
+                ExprCompiledValue::Value(StarlarkBool::get_type_value_static().unpack())
+            }
+            _ => ExprCompiledValue::Type(box v),
+        }
     }
 
     pub(crate) fn type_is(

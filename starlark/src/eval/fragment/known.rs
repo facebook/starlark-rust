@@ -17,15 +17,7 @@
 
 //! Things that operate on known values where we know we can do better.
 
-use crate::{
-    codemap::Spanned,
-    eval::{
-        compiler::{scope::CstExpr, Compiler},
-        fragment::expr::ExprCompiledValue,
-    },
-    syntax::ast::ExprP,
-    values::{dict::Dict, list::List},
-};
+use crate::{codemap::Spanned, eval::compiler::scope::CstExpr, syntax::ast::ExprP};
 
 /// Convert a list into a tuple. In many cases (iteration, `in`) these types
 /// behave the same, but a list has identity and mutability, so much better to
@@ -42,28 +34,5 @@ pub(crate) fn list_to_tuple(x: CstExpr) -> CstExpr {
             span,
         },
         _ => x,
-    }
-}
-
-impl Compiler<'_, '_, '_> {
-    /// Compile the operation `type(expr)`, trying to produce a constant
-    /// where possible.
-    pub fn fn_type(&mut self, expr: CstExpr) -> ExprCompiledValue {
-        let span = expr.span;
-        match self.expr(expr).node {
-            ExprCompiledValue::Value(x) => {
-                ExprCompiledValue::Value(x.to_value().get_type_value().unpack())
-            }
-            ExprCompiledValue::List(xs) if xs.is_empty() => {
-                ExprCompiledValue::Value(List::get_type_value_static().unpack())
-            }
-            ExprCompiledValue::Dict(xs) if xs.is_empty() => {
-                ExprCompiledValue::Value(Dict::get_type_value_static().unpack())
-            }
-            ExprCompiledValue::Tuple(xs) if xs.is_empty() => {
-                unreachable!("empty tuple expression must have been compiled to value")
-            }
-            x => ExprCompiledValue::Type(box Spanned { node: x, span }),
-        }
     }
 }

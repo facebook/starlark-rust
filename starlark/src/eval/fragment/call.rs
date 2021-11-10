@@ -249,7 +249,9 @@ impl Compiler<'_, '_, '_> {
     ) -> ExprCompiledValue {
         let one_positional = args.len() == 1 && args[0].is_positional();
         if left == self.constants.fn_type && one_positional {
-            self.fn_type(args.pop().unwrap().node.into_expr())
+            let expr = args.pop().unwrap().node.into_expr();
+            let expr = self.expr(expr);
+            ExprCompiledValue::typ(expr)
         } else if left == self.constants.fn_len && one_positional {
             let x = self.expr(args.pop().unwrap().node.into_expr());
             ExprCompiledValue::Len(box x)
