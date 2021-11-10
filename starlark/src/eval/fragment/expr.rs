@@ -346,7 +346,7 @@ impl Spanned<ExprCompiled> {
                 let start = start.as_ref().map(|x| x.optimize_on_freeze(ctx));
                 let stop = stop.as_ref().map(|x| x.optimize_on_freeze(ctx));
                 let step = step.as_ref().map(|x| x.optimize_on_freeze(ctx));
-                ExprCompiled::Slice(box (v, start, stop, step))
+                ExprCompiled::slice(span, v, start, stop, step, ctx.heap, ctx.frozen_heap)
             }
             ExprCompiled::Not(box ref e) => {
                 let e = e.optimize_on_freeze(ctx);
@@ -658,6 +658,35 @@ impl ExprCompiled {
         }
 
         ExprCompiled::Dot(box object, field.clone())
+    }
+
+    fn slice(
+        span: Span,
+        array: Spanned<ExprCompiled>,
+        start: Option<Spanned<ExprCompiled>>,
+        stop: Option<Spanned<ExprCompiled>>,
+        step: Option<Spanned<ExprCompiled>>,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiled {
+        if let (Some(array), Some(start), Some(stop), Some(step)) = (
+            array.as_builtin_value(),
+            start.as_ref().map(|e| e.as_value()),
+            stop.as_ref().map(|e| e.as_value()),
+            step.as_ref().map(|e| e.as_value()),
+        ) {
+            if let Ok(v) = array.to_value().slice(
+                start.map(|v| v.to_value()),
+                stop.map(|v| v.to_value()),
+                step.map(|v| v.to_value()),
+                heap,
+            ) {
+                if let Some(v) = ExprCompiled::try_value(span, v, frozen_heap) {
+                    return v;
+                }
+            }
+        }
+        ExprCompiled::Slice(box (array, start, stop, step))
     }
 
     fn array_indirection(
@@ -1016,7 +1045,15 @@ impl Compiler<'_, '_, '_> {
                 let start = start.map(|x| self.expr(*x));
                 let stop = stop.map(|x| self.expr(*x));
                 let stride = stride.map(|x| self.expr(*x));
-                ExprCompiled::Slice(box (collection, start, stop, stride))
+                ExprCompiled::slice(
+                    span,
+                    collection,
+                    start,
+                    stop,
+                    stride,
+                    self.eval.module_env.heap(),
+                    self.eval.module_env.frozen_heap(),
+                )
             }
             ExprP::Not(expr) => {
                 let expr = self.expr(*expr);
