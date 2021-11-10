@@ -308,7 +308,7 @@ impl Spanned<ExprCompiledValue> {
                 ExprCompiledValue::Len(box e.optimize_on_freeze(ctx))
             }
             ExprCompiledValue::TypeIs(box ref e, t) => {
-                ExprCompiledValue::TypeIs(box e.optimize_on_freeze(ctx), t)
+                ExprCompiledValue::type_is(e.optimize_on_freeze(ctx), t)
             }
             ExprCompiledValue::Tuple(ref xs) => {
                 ExprCompiledValue::tuple(xs.map(|e| e.optimize_on_freeze(ctx)), ctx.frozen_heap)
@@ -664,6 +664,18 @@ impl ExprCompiledValue {
 
         ExprCompiledValue::Dot(box object, field.clone())
     }
+
+    pub(crate) fn type_is(
+        v: Spanned<ExprCompiledValue>,
+        t: FrozenStringValue,
+    ) -> ExprCompiledValue {
+        if let Some(v) = v.as_value() {
+            return ExprCompiledValue::Value(FrozenValue::new_bool(
+                v.to_value().get_type() == t.as_str(),
+            ));
+        }
+        ExprCompiledValue::TypeIs(box v, t)
+    }
 }
 
 #[derive(Debug, Clone, Error)]
@@ -706,7 +718,7 @@ fn try_eval_type_is(
         ) => {
             if let Some(r) = FrozenStringValue::new(r) {
                 Ok(Spanned {
-                    node: ExprCompiledValue::TypeIs(l, r),
+                    node: ExprCompiledValue::type_is(*l, r),
                     span: l_span.merge(r_span),
                 })
             } else {

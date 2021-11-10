@@ -63,11 +63,12 @@ impl CallCompiled {
         fun: ExprCompiledValue,
         args: ArgsCompiledValue,
     ) -> ExprCompiledValue {
-        if let (Some(fun), Some(pos)) = (fun.as_value(), args.one_pos()) {
+        if let (Some(fun), Some(_pos)) = (fun.as_value(), args.one_pos()) {
             // Try to inline a function like `lambda x: type(x) == "y"`.
             if let Some(fun) = fun.downcast_ref::<FrozenDef>() {
                 if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
-                    return ExprCompiledValue::TypeIs(box pos.clone(), *t);
+                    let pos = args.into_one_pos().unwrap();
+                    return ExprCompiledValue::type_is(pos, *t);
                 }
             }
         }
