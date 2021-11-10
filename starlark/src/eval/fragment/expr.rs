@@ -333,7 +333,7 @@ impl Spanned<ExprCompiled> {
             ExprCompiled::ArrayIndirection(box (ref array, ref index)) => {
                 let array = array.optimize_on_freeze(ctx);
                 let index = index.optimize_on_freeze(ctx);
-                ExprCompiled::ArrayIndirection(box (array, index))
+                ExprCompiled::array_indirection(array, index, ctx.heap, ctx.frozen_heap)
             }
             ExprCompiled::If(box (ref cond, ref t, ref f)) => {
                 let cond = cond.optimize_on_freeze(ctx);
@@ -658,6 +658,23 @@ impl ExprCompiled {
         }
 
         ExprCompiled::Dot(box object, field.clone())
+    }
+
+    fn array_indirection(
+        array: Spanned<ExprCompiled>,
+        index: Spanned<ExprCompiled>,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiled {
+        let span = array.span.merge(index.span);
+        if let (Some(array), Some(index)) = (array.as_builtin_value(), index.as_value()) {
+            if let Ok(v) = array.to_value().at(index.to_value(), heap) {
+                if let Some(expr) = ExprCompiled::try_value(span, v, frozen_heap) {
+                    return expr;
+                }
+            }
+        }
+        ExprCompiled::ArrayIndirection(box (array, index))
     }
 
     pub(crate) fn typ(v: Spanned<ExprCompiled>) -> ExprCompiled {
@@ -987,7 +1004,12 @@ impl Compiler<'_, '_, '_> {
             ExprP::ArrayIndirection(box (array, index)) => {
                 let array = self.expr(array);
                 let index = self.expr(index);
-                ExprCompiled::ArrayIndirection(box (array, index))
+                ExprCompiled::array_indirection(
+                    array,
+                    index,
+                    self.eval.module_env.heap(),
+                    self.eval.module_env.frozen_heap(),
+                )
             }
             ExprP::Slice(collection, start, stop, stride) => {
                 let collection = self.expr(*collection);
