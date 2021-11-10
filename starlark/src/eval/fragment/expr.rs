@@ -45,7 +45,7 @@ use crate::{
             float::StarlarkFloat,
             list::{FrozenList, List},
             range::Range,
-            string::interpolation::format_one,
+            string::interpolation::{format_one, percent_s_one},
             tuple::Tuple,
             unbound::MaybeUnboundValue,
         },
@@ -369,7 +369,7 @@ impl Spanned<ExprCompiledValue> {
             }
             ExprCompiledValue::PercentSOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
-                ExprCompiledValue::PercentSOne(box (before, arg, after))
+                ExprCompiledValue::percent_s_one(before, arg, after, ctx.heap, ctx.frozen_heap)
             }
             ExprCompiledValue::FormatOne(box (before, ref arg, after)) => {
                 let arg = arg.optimize_on_freeze(ctx);
@@ -447,16 +447,35 @@ impl ExprCompiledValue {
     fn percent(
         l: Spanned<ExprCompiledValue>,
         r: Spanned<ExprCompiledValue>,
+        heap: &Heap,
         frozen_heap: &FrozenHeap,
     ) -> ExprCompiledValue {
         if let Some(v) = l.as_string() {
             if let Some((before, after)) = parse_percent_s_one(&v) {
                 let before = frozen_heap.alloc_string_value(&before);
                 let after = frozen_heap.alloc_string_value(&after);
-                return ExprCompiledValue::PercentSOne(box (before, r, after));
+                return ExprCompiledValue::percent_s_one(before, r, after, heap, frozen_heap);
             }
         }
         ExprCompiledValue::Op(ExprBinOp::Percent, box (l, r))
+    }
+
+    pub(crate) fn percent_s_one(
+        before: FrozenStringValue,
+        arg: Spanned<ExprCompiledValue>,
+        after: FrozenStringValue,
+        heap: &Heap,
+        frozen_heap: &FrozenHeap,
+    ) -> ExprCompiledValue {
+        if let Some(arg) = arg.as_value() {
+            if let Ok(value) = percent_s_one(before.as_str(), arg.to_value(), after.as_str(), heap)
+            {
+                let value = frozen_heap.alloc_str(value.unpack_str().unwrap());
+                return ExprCompiledValue::Value(value);
+            }
+        }
+
+        ExprCompiledValue::PercentSOne(box (before, arg, after))
     }
 
     pub(crate) fn format_one(
@@ -509,7 +528,7 @@ impl ExprCompiledValue {
         }
 
         match bin_op {
-            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, frozen_heap),
+            ExprBinOp::Percent => ExprCompiledValue::percent(l, r, heap, frozen_heap),
             ExprBinOp::Add => ExprCompiledValue::add(l, r),
             bin_op => ExprCompiledValue::Op(bin_op, box (l, r)),
         }
