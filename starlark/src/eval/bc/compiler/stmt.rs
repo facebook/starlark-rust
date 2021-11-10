@@ -28,7 +28,7 @@ use crate::{
         },
         fragment::{
             expr::{ExprCompiled, MaybeNot},
-            stmt::{StmtCompileContext, StmtCompiledValue, StmtsCompiled},
+            stmt::{StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
     },
 };
@@ -41,12 +41,12 @@ impl StmtsCompiled {
     }
 }
 
-impl Spanned<StmtCompiledValue> {
+impl Spanned<StmtCompiled> {
     fn write_bc(&self, compiler: &StmtCompileContext, bc: &mut BcWriter) {
         assert_eq!(bc.stack_size(), 0);
         if compiler.has_before_stmt {
             match self.node {
-                StmtCompiledValue::PossibleGc => {}
+                StmtCompiled::PossibleGc => {}
                 _ => bc.write_instr::<InstrBeforeStmt>(self.span, self.span),
             }
         }
@@ -134,38 +134,38 @@ impl Spanned<StmtCompiledValue> {
     fn write_bc_inner(&self, compiler: &StmtCompileContext, bc: &mut BcWriter) {
         let span = self.span;
         match self.node {
-            StmtCompiledValue::PossibleGc => bc.write_instr::<InstrPossibleGc>(span, ()),
-            StmtCompiledValue::Return(None) => {
+            StmtCompiled::PossibleGc => bc.write_instr::<InstrPossibleGc>(span, ()),
+            StmtCompiled::Return(None) => {
                 bc.write_instr::<InstrReturnNone>(span, ());
             }
-            StmtCompiledValue::Return(Some(ref expr)) => {
+            StmtCompiled::Return(Some(ref expr)) => {
                 expr.write_bc(bc);
                 bc.write_instr::<InstrReturn>(span, ());
             }
-            StmtCompiledValue::Expr(ref expr) => {
+            StmtCompiled::Expr(ref expr) => {
                 expr.write_bc_for_effect(bc);
             }
-            StmtCompiledValue::Assign(ref lhs, ref rhs) => {
+            StmtCompiled::Assign(ref lhs, ref rhs) => {
                 rhs.write_bc(bc);
                 lhs.write_bc(bc);
             }
-            StmtCompiledValue::AssignModify(ref lhs, op, ref rhs) => {
+            StmtCompiled::AssignModify(ref lhs, op, ref rhs) => {
                 lhs.write_bc(span, op, rhs, bc);
             }
-            StmtCompiledValue::If(box (ref c, ref t, ref f)) => {
+            StmtCompiled::If(box (ref c, ref t, ref f)) => {
                 Self::write_if_else(c, MaybeNot::Id, t, f, compiler, bc);
             }
-            StmtCompiledValue::For(box (ref assign, ref over, ref body)) => {
+            StmtCompiled::For(box (ref assign, ref over, ref body)) => {
                 over.write_bc(bc);
                 bc.write_for(span, |bc| {
                     assign.write_bc(bc);
                     body.write_bc(compiler, bc);
                 });
             }
-            StmtCompiledValue::Break => {
+            StmtCompiled::Break => {
                 bc.write_instr::<InstrBreak>(span, ());
             }
-            StmtCompiledValue::Continue => {
+            StmtCompiled::Continue => {
                 bc.write_instr::<InstrContinue>(span, ());
             }
         }
@@ -179,10 +179,7 @@ impl StmtsCompiled {
 
         // Small optimization: if the last statement is return,
         // we do not need to write another return.
-        if !matches!(
-            self.last().map(|s| &s.node),
-            Some(StmtCompiledValue::Return(..))
-        ) {
+        if !matches!(self.last().map(|s| &s.node), Some(StmtCompiled::Return(..))) {
             bc.write_instr::<InstrReturnNone>(Span::default(), ());
         }
 

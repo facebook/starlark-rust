@@ -56,7 +56,7 @@ pub(crate) enum AssignModifyLhs {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum StmtCompiledValue {
+pub(crate) enum StmtCompiled {
     PossibleGc,
     Return(Option<Spanned<ExprCompiled>>),
     Expr(Spanned<ExprCompiled>),
@@ -104,48 +104,48 @@ impl AssignModifyLhs {
     }
 }
 
-impl Spanned<StmtCompiledValue> {
+impl Spanned<StmtCompiled> {
     fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> StmtsCompiled {
         let span = self.span;
         match self.node {
-            StmtCompiledValue::Return(Some(ref e)) => StmtsCompiled::one(Spanned {
+            StmtCompiled::Return(Some(ref e)) => StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::Return(Some(e.optimize_on_freeze(ctx))),
+                node: StmtCompiled::Return(Some(e.optimize_on_freeze(ctx))),
             }),
-            StmtCompiledValue::Expr(ref expr) => {
+            StmtCompiled::Expr(ref expr) => {
                 let expr = expr.optimize_on_freeze(ctx);
                 Self::expr(expr)
             }
-            StmtCompiledValue::Assign(ref lhs, ref rhs) => {
+            StmtCompiled::Assign(ref lhs, ref rhs) => {
                 let lhs = lhs.optimize_on_freeze(ctx);
                 let rhs = rhs.optimize_on_freeze(ctx);
                 StmtsCompiled::one(Spanned {
                     span,
-                    node: StmtCompiledValue::Assign(lhs, rhs),
+                    node: StmtCompiled::Assign(lhs, rhs),
                 })
             }
-            StmtCompiledValue::If(box (ref cond, ref t, ref f)) => {
+            StmtCompiled::If(box (ref cond, ref t, ref f)) => {
                 let cond = cond.optimize_on_freeze(ctx);
                 let t = t.optimize_on_freeze(ctx);
                 let f = f.optimize_on_freeze(ctx);
                 Self::if_stmt(span, cond, t, f)
             }
-            StmtCompiledValue::For(box (ref var, ref over, ref body)) => {
+            StmtCompiled::For(box (ref var, ref over, ref body)) => {
                 let var = var.optimize_on_freeze(ctx);
                 let over = over.optimize_on_freeze(ctx);
                 let body = body.optimize_on_freeze(ctx);
-                <Spanned<StmtCompiledValue>>::for_stmt(span, var, over, body)
+                <Spanned<StmtCompiled>>::for_stmt(span, var, over, body)
             }
-            ref s @ (StmtCompiledValue::PossibleGc
-            | StmtCompiledValue::Break
-            | StmtCompiledValue::Continue
-            | StmtCompiledValue::Return(None)) => StmtsCompiled::one(Spanned {
+            ref s @ (StmtCompiled::PossibleGc
+            | StmtCompiled::Break
+            | StmtCompiled::Continue
+            | StmtCompiled::Return(None)) => StmtsCompiled::one(Spanned {
                 span,
                 node: s.clone(),
             }),
-            StmtCompiledValue::AssignModify(ref lhs, op, ref rhs) => StmtsCompiled::one(Spanned {
+            StmtCompiled::AssignModify(ref lhs, op, ref rhs) => StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::AssignModify(
+                node: StmtCompiled::AssignModify(
                     lhs.optimize_on_freeze(ctx),
                     op,
                     rhs.optimize_on_freeze(ctx),
@@ -167,7 +167,7 @@ impl Spanned<StmtCompiledValue> {
             }
             expr => StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::Expr(Spanned { span, node: expr }),
+                node: StmtCompiled::Expr(Spanned { span, node: expr }),
             }),
         }
     }
@@ -199,7 +199,7 @@ impl Spanned<StmtCompiledValue> {
                 } else {
                     StmtsCompiled::one(Spanned {
                         span,
-                        node: StmtCompiledValue::If(box (cond, t, f)),
+                        node: StmtCompiled::If(box (cond, t, f)),
                     })
                 }
             }
@@ -217,20 +217,20 @@ impl Spanned<StmtCompiledValue> {
         }
         StmtsCompiled::one(Spanned {
             span,
-            node: StmtCompiledValue::For(box (var, over, body)),
+            node: StmtCompiled::For(box (var, over, body)),
         })
     }
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiledValue>>);
+pub(crate) struct StmtsCompiled(SmallVec1<Spanned<StmtCompiled>>);
 
 impl StmtsCompiled {
     pub(crate) fn empty() -> StmtsCompiled {
         StmtsCompiled(SmallVec1::Empty)
     }
 
-    pub(crate) fn one(stmt: Spanned<StmtCompiledValue>) -> StmtsCompiled {
+    pub(crate) fn one(stmt: Spanned<StmtCompiled>) -> StmtsCompiled {
         StmtsCompiled(SmallVec1::One(stmt))
     }
 
@@ -245,7 +245,7 @@ impl StmtsCompiled {
         }
     }
 
-    pub(crate) fn stmts(&self) -> &[Spanned<StmtCompiledValue>] {
+    pub(crate) fn stmts(&self) -> &[Spanned<StmtCompiled>] {
         self.0.as_slice()
     }
 
@@ -253,9 +253,7 @@ impl StmtsCompiled {
     fn is_terminal(&self) -> bool {
         if let Some(stmt) = self.last() {
             match &stmt.node {
-                StmtCompiledValue::Break
-                | StmtCompiledValue::Continue
-                | StmtCompiledValue::Return(..) => true,
+                StmtCompiled::Break | StmtCompiled::Continue | StmtCompiled::Return(..) => true,
                 _ => false,
             }
         } else {
@@ -288,7 +286,7 @@ impl StmtsCompiled {
         stmts
     }
 
-    pub(crate) fn first(&self) -> Option<&Spanned<StmtCompiledValue>> {
+    pub(crate) fn first(&self) -> Option<&Spanned<StmtCompiled>> {
         match &self.0 {
             SmallVec1::Empty => None,
             SmallVec1::One(s) => Some(s),
@@ -296,7 +294,7 @@ impl StmtsCompiled {
         }
     }
 
-    pub(crate) fn last(&self) -> Option<&Spanned<StmtCompiledValue>> {
+    pub(crate) fn last(&self) -> Option<&Spanned<StmtCompiled>> {
         match &self.0 {
             SmallVec1::Empty => None,
             SmallVec1::One(s) => Some(s),
@@ -398,7 +396,7 @@ impl Compiler<'_, '_, '_> {
                 let e = self.expr(*e);
                 StmtsCompiled::one(Spanned {
                     span: span_stmt,
-                    node: StmtCompiledValue::AssignModify(AssignModifyLhs::Dot(e, s.node), op, rhs),
+                    node: StmtCompiled::AssignModify(AssignModifyLhs::Dot(e, s.node), op, rhs),
                 })
             }
             AssignP::ArrayIndirection(box (e, idx)) => {
@@ -406,7 +404,7 @@ impl Compiler<'_, '_, '_> {
                 let idx = self.expr(idx);
                 StmtsCompiled::one(Spanned {
                     span: span_stmt,
-                    node: StmtCompiledValue::AssignModify(AssignModifyLhs::Array(e, idx), op, rhs),
+                    node: StmtCompiled::AssignModify(AssignModifyLhs::Array(e, idx), op, rhs),
                 })
             }
             AssignP::Identifier(ident) => {
@@ -419,11 +417,7 @@ impl Compiler<'_, '_, '_> {
                         };
                         StmtsCompiled::one(Spanned {
                             span: span_stmt,
-                            node: StmtCompiledValue::AssignModify(
-                                AssignModifyLhs::Local(lhs),
-                                op,
-                                rhs,
-                            ),
+                            node: StmtCompiled::AssignModify(AssignModifyLhs::Local(lhs), op, rhs),
                         })
                     }
                     Slot::Module(slot) => {
@@ -433,11 +427,7 @@ impl Compiler<'_, '_, '_> {
                         };
                         StmtsCompiled::one(Spanned {
                             span: span_stmt,
-                            node: StmtCompiledValue::AssignModify(
-                                AssignModifyLhs::Module(lhs),
-                                op,
-                                rhs,
-                            ),
+                            node: StmtCompiled::AssignModify(AssignModifyLhs::Module(lhs), op, rhs),
                         })
                     }
                 }
@@ -581,7 +571,7 @@ impl Compiler<'_, '_, '_> {
             // into the inner closure, but no real need - we insert allow_gc fairly rarely
             let mut with_gc = StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::PossibleGc,
+                node: StmtCompiled::PossibleGc,
             });
             with_gc.extend(res);
             with_gc
@@ -618,7 +608,7 @@ impl Compiler<'_, '_, '_> {
     ) -> StmtsCompiled {
         let cond = self.expr(cond);
         let then_block = self.stmt(then_block, allow_gc);
-        <Spanned<StmtCompiledValue>>::if_stmt(span, cond, then_block, StmtsCompiled::empty())
+        <Spanned<StmtCompiled>>::if_stmt(span, cond, then_block, StmtsCompiled::empty())
     }
 
     fn stmt_if_else(
@@ -632,12 +622,12 @@ impl Compiler<'_, '_, '_> {
         let cond = self.expr(cond);
         let then_block = self.stmt(then_block, allow_gc);
         let else_block = self.stmt(else_block, allow_gc);
-        <Spanned<StmtCompiledValue>>::if_stmt(span, cond, then_block, else_block)
+        <Spanned<StmtCompiled>>::if_stmt(span, cond, then_block, else_block)
     }
 
     fn stmt_expr(&mut self, expr: CstExpr) -> StmtsCompiled {
         let expr = self.expr(expr);
-        <Spanned<StmtCompiledValue>>::expr(expr)
+        <Spanned<StmtCompiled>>::expr(expr)
     }
 
     fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {
@@ -654,7 +644,7 @@ impl Compiler<'_, '_, '_> {
                 });
                 StmtsCompiled::one(Spanned {
                     span,
-                    node: StmtCompiledValue::Assign(lhs, rhs),
+                    node: StmtCompiled::Assign(lhs, rhs),
                 })
             }
             StmtP::For(var, box (over, body)) => {
@@ -662,10 +652,10 @@ impl Compiler<'_, '_, '_> {
                 let var = self.assign(var);
                 let over = self.expr(over);
                 let st = self.stmt(body, false);
-                <Spanned<StmtCompiledValue>>::for_stmt(span, var, over, st)
+                <Spanned<StmtCompiled>>::for_stmt(span, var, over, st)
             }
             StmtP::Return(e) => StmtsCompiled::one(Spanned {
-                node: StmtCompiledValue::Return(e.map(|e| self.expr(e))),
+                node: StmtCompiled::Return(e.map(|e| self.expr(e))),
                 span,
             }),
             StmtP::If(cond, box then_block) => self.stmt_if(span, cond, then_block, allow_gc),
@@ -688,7 +678,7 @@ impl Compiler<'_, '_, '_> {
                 let lhs = self.assign(lhs);
                 StmtsCompiled::one(Spanned {
                     span,
-                    node: StmtCompiledValue::Assign(lhs, rhs),
+                    node: StmtCompiled::Assign(lhs, rhs),
                 })
             }
             StmtP::AssignModify(lhs, op, rhs) => {
@@ -699,11 +689,11 @@ impl Compiler<'_, '_, '_> {
             StmtP::Pass => StmtsCompiled::empty(),
             StmtP::Break => StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::Break,
+                node: StmtCompiled::Break,
             }),
             StmtP::Continue => StmtsCompiled::one(Spanned {
                 span,
-                node: StmtCompiledValue::Continue,
+                node: StmtCompiled::Continue,
             }),
         }
     }

@@ -42,7 +42,7 @@ use crate::{
         },
         fragment::{
             expr::ExprCompiled,
-            stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiledValue, StmtsCompiled},
+            stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
         runtime::{
             arguments::{ParameterKind, ParametersSpec},
@@ -268,7 +268,7 @@ impl Compiler<'_, '_, '_> {
     /// If a statement is `return type(x) == "y"` where `x` is a first slot.
     fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
         match stmt.first().map(|s| &s.node) {
-            Some(StmtCompiledValue::Return(Some(Spanned {
+            Some(StmtCompiled::Return(Some(Spanned {
                 node:
                     ExprCompiled::TypeIs(
                         box Spanned {
