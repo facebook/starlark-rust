@@ -157,13 +157,17 @@ impl Spanned<StmtCompiled> {
     fn expr(expr: Spanned<ExprCompiled>) -> StmtsCompiled {
         let span = expr.span;
         match expr.node {
-            ExprCompiled::Value(..) => StmtsCompiled::empty(),
+            expr if expr.is_pure_infallible() => StmtsCompiled::empty(),
             ExprCompiled::List(xs) | ExprCompiled::Tuple(xs) => {
                 let mut stmts = StmtsCompiled::empty();
                 for x in xs {
                     stmts.extend(Self::expr(x));
                 }
                 stmts
+            }
+            // Unwrap infallible expressions.
+            ExprCompiled::Type(x) | ExprCompiled::TypeIs(x, _) | ExprCompiled::Not(x) => {
+                Self::expr(*x)
             }
             expr => StmtsCompiled::one(Spanned {
                 span,

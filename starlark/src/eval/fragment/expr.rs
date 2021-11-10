@@ -263,7 +263,7 @@ impl ExprCompiled {
     /// This expression is definitely:
     /// * infallible
     /// * has no effects
-    fn is_pure_infallible(&self) -> bool {
+    pub(crate) fn is_pure_infallible(&self) -> bool {
         match self {
             Self::Value(..) => true,
             Self::List(xs) | Self::Tuple(xs) => xs.iter().all(|x| x.is_pure_infallible()),
