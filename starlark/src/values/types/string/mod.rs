@@ -34,12 +34,12 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Methods, MethodsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, types::string::json::json_escape,
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
-        Value, ValueError,
+        index::apply_slice, string::repr::string_repr, types::string::json::json_escape, Heap,
+        StarlarkValue, UnpackValue, Value, ValueError,
     },
 };
 
+mod alloc_unpack;
 pub(crate) mod fast_string;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
@@ -137,50 +137,6 @@ impl StarlarkStr {
 
     pub fn offset_of_content() -> usize {
         memoffset::offset_of!(StarlarkStrN<0>, body)
-    }
-}
-
-impl<'v> AllocValue<'v> for String {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self.as_str())
-    }
-}
-
-impl<'v> AllocValue<'v> for char {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_char(self)
-    }
-}
-
-impl<'v> AllocValue<'v> for &'_ String {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self.as_str())
-    }
-}
-
-impl<'v> AllocValue<'v> for &'_ str {
-    fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self)
-    }
-}
-
-impl<'v> UnpackValue<'v> for &'v str {
-    fn expected() -> String {
-        "str".to_owned()
-    }
-
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        value.unpack_str()
-    }
-}
-
-impl<'v> UnpackValue<'v> for String {
-    fn expected() -> String {
-        "str".to_owned()
-    }
-
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        value.unpack_str().map(ToOwned::to_owned)
     }
 }
 
@@ -447,18 +403,6 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.unpack().percent(other, heap)
-    }
-}
-
-impl AllocFrozenValue for String {
-    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_str(self.as_str())
-    }
-}
-
-impl<'v, 'a> AllocFrozenValue for &'a str {
-    fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_str(self)
     }
 }
 
