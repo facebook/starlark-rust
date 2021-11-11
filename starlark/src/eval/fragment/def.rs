@@ -525,7 +525,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
         HashMap<String, Option<DocString>>,
         Option<DocString>,
     ) {
-        let docstring = self
+        let mut docstring = self
             .def_info
             .docstring
             .as_ref()
@@ -533,8 +533,10 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
         let mut param_docs = HashMap::new();
         let mut return_docs = None;
 
-        if let Some(ds) = &docstring {
-            let sections = ds.parse_sections();
+        if let Some(ds) = docstring {
+            let (new_docstring, sections) =
+                ds.parse_and_remove_sections(DocStringKind::Starlark, &["args", "returns"]);
+            docstring = Some(new_docstring);
             if let Some(args) = sections.get("args") {
                 param_docs = DocString::parse_params(args)
                     .into_iter()

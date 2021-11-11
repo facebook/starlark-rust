@@ -90,20 +90,7 @@ def f4(a: "string") -> "string":
         .documentation();
 
     let expected_f1 = Some(DocItem::Function(Function {
-        docs: DocString::from_docstring(
-            DocStringKind::Starlark,
-            r#"Summary line goes here
-
-    Args:
-        a: The docs for a
-        b: The docs for b
-        c: The docs for c, but these
-           go onto two lines
-        **kwargs: Docs for the keyword args
-
-    Returns:
-        A string repr of the args"#,
-        ),
+        docs: DocString::from_docstring(DocStringKind::Starlark, r#"Summary line goes here"#),
         params: vec![
             Param::Arg {
                 name: "a".to_owned(),
@@ -159,10 +146,7 @@ def f4(a: "string") -> "string":
     let expected_f2 = Some(DocItem::Function(Function {
         docs: DocString::from_docstring(
             DocStringKind::Starlark,
-            r#"This is a function with *args, and no return type
-
-    Args:
-        *args: Only doc this arg"#,
+            r#"This is a function with *args, and no return type"#,
         ),
         params: vec![
             Param::Arg {

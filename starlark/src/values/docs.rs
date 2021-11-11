@@ -223,47 +223,82 @@ impl DocString {
         ret
     }
 
-    /// Parse the various sections out of a doc string.
+    /// Parse the sections out of a docstring's `details` text, and remove the requested sections from the text.
     ///
     /// "sections" are the various things in doc strings like "Arguments:", "Returns:", etc
     ///
-    /// A string like:
-    ///
-    /// """
-    /// Some summary
-    ///
-    /// Details about the function go here
-    ///     Arguments:
-    ///         arg_foo: The foo for you
-    /// """
-    ///
-    /// would return a mapping of `{"arguments": "arg_foo: The foo for you"}`
-    pub fn parse_sections(&self) -> HashMap<String, String> {
-        let mut ret = HashMap::new();
+    /// # Returns
+    /// - A new instance of `DocString`, with the requested sections, if found, removed.
+    /// - A mapping of section name, converted to lower case, to the cleaned up section text
+    ///     i.e. dedented, section header not present, etc for any found sections.
+    pub fn parse_and_remove_sections(
+        self,
+        kind: DocStringKind,
+        requested_sections: &[&str],
+    ) -> (Self, HashMap<String, String>) {
+        let mut sections = HashMap::new();
 
-        if let Some(details) = &self.details {
-            static SECTION_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^([\w -]+):\s*$").unwrap());
-            static INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
+        let mut finish_section =
+            |current_section: &mut Option<String>, current_section_text: &mut Vec<String>| {
+                if let Some(s) = current_section.take() {
+                    sections.insert(s, DocString::join_and_dedent_lines(current_section_text));
+                    current_section_text.clear();
+                }
+            };
 
+        static STARLARK_SECTION_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^([\w -]+):\s*$").unwrap());
+        static STARLARK_INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
+        static RUST_SECTION_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^# ([\w -]+)\s*$").unwrap());
+        static RUST_INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^.*").unwrap());
+
+        let (section_re, indented_re) = match kind {
+            DocStringKind::Starlark => (&STARLARK_SECTION_RE, &STARLARK_INDENTED_RE),
+            DocStringKind::Rust => (&RUST_SECTION_RE, &RUST_INDENTED_RE),
+        };
+
+        if let Some(details) = self.details {
+            let mut new_details = vec![];
             let mut current_section = None;
             let mut current_section_text = vec![];
+
+
             for line in details.lines() {
-                if let Some(matches) = SECTION_RE.captures(line) {
-                    if let Some(s) = current_section.take() {
-                        ret.insert(s, Self::join_and_dedent_lines(&current_section_text));
+                if let Some(matches) = section_re.captures(line) {
+                    finish_section(&mut current_section, &mut current_section_text);
+
+                    let found_section = matches.get(1).unwrap().as_str().to_ascii_lowercase();
+                    if requested_sections.contains(&found_section.as_str()) {
+                        current_section = Some(found_section);
+                    } else {
+                        new_details.push(line.to_owned());
                     }
-                    current_section = Some(matches.get(1).unwrap().as_str().to_ascii_lowercase());
-                    current_section_text = vec![];
-                } else if current_section.is_some() && INDENTED_RE.is_match(line) {
+                } else if current_section.is_some() && indented_re.is_match(line) {
                     current_section_text.push(line.to_owned());
+                } else {
+                    new_details.push(line.to_owned());
+                    finish_section(&mut current_section, &mut current_section_text);
                 }
             }
 
-            if let Some(s) = current_section.take() {
-                ret.insert(s, Self::join_and_dedent_lines(&current_section_text));
-            }
+            finish_section(&mut current_section, &mut current_section_text);
+
+            let joined_details = new_details.join("\n");
+            let details = match joined_details.is_empty() {
+                true => None,
+                false => Some(joined_details),
+            };
+            (
+                Self {
+                    summary: self.summary,
+                    details,
+                },
+                sections,
+            )
+        } else {
+            (self, sections)
         }
-        ret
     }
 }
 
@@ -544,8 +579,8 @@ mod test {
     }
 
     #[test]
-    fn parses_sections_from_docstring() {
-        let docstring = r#"This is an example docstring
+    fn parses_and_removes_sections_from_starlark_docstring() {
+        let raw_docs = r#"This is an example docstring
 
         We have some details up here that should not be parsed
 
@@ -555,19 +590,27 @@ mod test {
 
             A newline with no space after it before the second one,
                 and a third that's indented further.
-        This is not in the arguments section
+        This is not in the example section
 
         Last:
             This is something in the last section
         "#;
+        let expected_docstring = DocString::from_docstring(
+            DocStringKind::Starlark,
+            r#"This is an example docstring
 
-        let mut expected = HashMap::new();
-        expected.insert("some empty section".to_owned(), "".to_owned());
-        expected.insert(
-            "last".to_owned(),
-            "This is something in the last section".to_owned(),
-        );
-        expected.insert(
+            We have some details up here that should not be parsed
+
+            Some empty section:
+            This is not in the example section
+
+            Last:
+                This is something in the last section
+            "#,
+        )
+        .unwrap();
+
+        let expected_sections = HashMap::from([(
             "example".to_owned(),
             concat!(
                 "First line of the section\n\n",
@@ -575,13 +618,75 @@ mod test {
                 "    and a third that's indented further."
             )
             .to_owned(),
-        );
+        )]);
 
-        let sections = DocString::from_docstring(DocStringKind::Starlark, docstring)
-            .unwrap()
-            .parse_sections();
+        let ds = DocString::from_docstring(DocStringKind::Starlark, raw_docs).unwrap();
+        let (new_ds, sections) =
+            ds.parse_and_remove_sections(DocStringKind::Starlark, &["example"]);
 
-        assert_eq!(sections, expected);
+        assert_eq!(new_ds, expected_docstring);
+        assert_eq!(sections, expected_sections);
+    }
+
+    #[test]
+    fn parses_and_removes_sections_from_rust_docstring() {
+        let raw_docs = r#"This is an example docstring
+
+        We have some details up here that should not be parsed
+
+        # Some Section
+
+        ```
+        # This is a commented out line in a codeblock
+        fn some_func() {}
+        ```
+
+        # Example
+        First line of the section
+
+        Note that, unlike starlark doc strings,
+        we don't require indentation. The end of a
+        section is either a new section appearing,
+        or the end of the string.
+
+        # Last
+        This is something in the last section
+        "#;
+        let expected_docstring = DocString::from_docstring(
+            DocStringKind::Rust,
+            r#"This is an example docstring
+
+        We have some details up here that should not be parsed
+
+        # Some Section
+
+        ```
+        fn some_func() {}
+        ```
+
+        # Last
+        This is something in the last section
+        "#,
+        )
+        .unwrap();
+
+        let expected_sections = HashMap::from([(
+            "example".to_owned(),
+            concat!(
+                "First line of the section\n\n",
+                "Note that, unlike starlark doc strings,\n",
+                "we don't require indentation. The end of a\n",
+                "section is either a new section appearing,\n",
+                "or the end of the string.",
+            )
+            .to_owned(),
+        )]);
+
+        let ds = DocString::from_docstring(DocStringKind::Rust, raw_docs).unwrap();
+        let (new_ds, sections) = ds.parse_and_remove_sections(DocStringKind::Rust, &["example"]);
+
+        assert_eq!(new_ds, expected_docstring);
+        assert_eq!(sections, expected_sections);
     }
 
     #[test]
@@ -613,7 +718,8 @@ mod test {
 
         let param_docs = DocString::from_docstring(DocStringKind::Starlark, docstring)
             .unwrap()
-            .parse_sections()
+            .parse_and_remove_sections(DocStringKind::Starlark, &["args"])
+            .1
             .get("args")
             .map(|s| DocString::parse_params(s))
             .unwrap();
