@@ -296,6 +296,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
+        // TODO(nga): this does not work correctly for non-ASCII strings
         let (start, end) = convert_indices(this.len() as i32, start, end);
         if let Some(substring) = this.get(start..end) {
             if let Some(offset) = substring.find(needle) {
@@ -1266,6 +1267,14 @@ mod tests {
         assert::fail(r#""bonbon".index("on", 2, 5)"#, "not found in");
         assert::fail(r#"("banana".replace("a", "o", -2))"#, "negative");
         assert::fail(r#""bonbon".rindex("on", 2, 5)"#, "not found in");
+    }
+
+    #[test]
+    fn test_find() {
+        // TODO(nga): this should evaluate to 10.
+        //   The same issue is with several other functions.
+        //   All of them using `convert_indices` function but maybe others.
+        assert::eq("'Троянская война окончена'.find('война')", "19");
     }
 
     #[test]
