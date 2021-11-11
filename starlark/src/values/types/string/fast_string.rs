@@ -21,6 +21,8 @@
 
 use std::{cmp::min, str};
 
+use crate::values::types::string::CharIndex;
+
 #[inline(always)]
 fn is_1byte(x: u8) -> bool {
     x & 0x80 == 0
@@ -91,37 +93,37 @@ fn skip_at_most_1byte(x: &str, n: usize) -> usize {
 }
 
 /// Find the character at position `i`.
-pub fn at(x: &str, i: usize) -> Option<char> {
-    if i >= x.len() {
+pub(crate) fn at(x: &str, i: CharIndex) -> Option<char> {
+    if i.0 as usize >= x.len() {
         // Important that skip_at_most_1byte gets called with all valid character.
         // If the index is outside the length even under the best assumptions,
         // can immediately return None.
         return None;
     }
-    let n = skip_at_most_1byte(x, i);
+    let n = skip_at_most_1byte(x, i.0 as usize);
     let s = unsafe { x.get_unchecked(n..) };
-    s.chars().nth(i - n)
+    s.chars().nth(i.0 as usize - n)
 }
 
-pub fn split_at(x: &str, i: usize) -> (&str, &str) {
-    if i >= x.len() {
+pub(crate) fn split_at(x: &str, i: CharIndex) -> (&str, &str) {
+    if i.0 >= x.len() {
         return (x, "");
     }
-    let n = skip_at_most_1byte(x, i);
+    let n = skip_at_most_1byte(x, i.0);
     let s = unsafe { x.get_unchecked(n..) };
     let mut c = s.chars();
-    let _ = c.advance_by(i - n); // Ignore if it advances by less than N
+    let _ = c.advance_by(i.0 - n); // Ignore if it advances by less than N
     x.split_at(x.len() - c.as_str().len())
 }
 
 /// Find the length of the string in characters.
 /// If the length matches the length in bytes, the string must be 7bit ASCII.
-pub fn len(x: &str) -> usize {
+pub(crate) fn len(x: &str) -> CharIndex {
     let n = skip_at_most_1byte(x, x.len());
     if n == x.len() {
-        n // All 1 byte
+        CharIndex(n) // All 1 byte
     } else {
-        unsafe { x.get_unchecked(n..) }.chars().count() + n
+        CharIndex(unsafe { x.get_unchecked(n..) }.chars().count() + n)
     }
 }
 

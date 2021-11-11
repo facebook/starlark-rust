@@ -23,7 +23,7 @@ use std::{
     fmt,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Sub},
     slice, str,
     sync::atomic,
 };
@@ -46,6 +46,19 @@ pub(crate) mod iter;
 mod json;
 mod repr;
 pub(crate) mod simd;
+
+/// Index of a char in a string.
+/// This is different from string byte offset.
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Dupe)]
+pub(crate) struct CharIndex(pub(crate) usize);
+
+impl Sub for CharIndex {
+    type Output = CharIndex;
+
+    fn sub(self, rhs: CharIndex) -> CharIndex {
+        CharIndex(self.0 - rhs.0)
+    }
+}
 
 /// The result of calling `type()` on strings.
 pub const STRING_TYPE: &str = "string";
@@ -214,18 +227,18 @@ impl<'v> StarlarkValue<'v> for str {
         // but modified to be UTF8 string friendly.
         let i = i32::unpack_param(index)?;
         if i >= 0 {
-            match fast_string::at(self, i as usize) {
+            match fast_string::at(self, CharIndex(i as usize)) {
                 None => Err(ValueError::IndexOutOfBound(i).into()),
                 Some(c) => Ok(heap.alloc(c)),
             }
         } else {
             let len_chars = fast_string::len(self);
-            let ind = (-i) as usize; // Index from the end, minimum of 1
+            let ind = CharIndex((-i) as usize); // Index from the end, minimum of 1
             if ind > len_chars {
                 Err(ValueError::IndexOutOfBound(i).into())
-            } else if len_chars == self.len() {
+            } else if len_chars.0 == self.len() {
                 // We are a 7bit ASCII string, so take the fast-path
-                Ok(heap.alloc(self.as_bytes()[len_chars - ind] as char))
+                Ok(heap.alloc(self.as_bytes()[(len_chars - ind).0] as char))
             } else {
                 Ok(heap.alloc(fast_string::at(self, len_chars - ind).unwrap()))
             }
@@ -233,7 +246,7 @@ impl<'v> StarlarkValue<'v> for str {
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        Ok(fast_string::len(self) as i32)
+        Ok(fast_string::len(self).0 as i32)
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
@@ -266,34 +279,39 @@ impl<'v> StarlarkValue<'v> for str {
 
         if start >= 0 {
             match stop {
-                None => return Ok(heap.alloc_str(fast_string::split_at(s, start as usize).1)),
+                None => {
+                    return Ok(
+                        heap.alloc_str(fast_string::split_at(s, CharIndex(start as usize)).1)
+                    );
+                }
                 Some(stop) if stop >= 0 => {
-                    let s = fast_string::split_at(s, start as usize).1;
-                    let s = fast_string::split_at(s, cmp::max(0, stop - start) as usize).0;
+                    let s = fast_string::split_at(s, CharIndex(start as usize)).1;
+                    let s =
+                        fast_string::split_at(s, CharIndex(cmp::max(0, stop - start) as usize)).0;
                     return Ok(heap.alloc_str(s));
                 }
                 _ => {}
             }
         }
         let len_chars = fast_string::len(s);
-        let adjust = |x| {
+        let adjust = |x: i32| {
             cmp::min(
                 if x < 0 {
-                    cmp::max(0, x + (len_chars as i32))
+                    CharIndex((cmp::max(0, x + len_chars.0 as i32)) as usize)
                 } else {
-                    x
+                    CharIndex(x as usize)
                 },
-                len_chars as i32,
-            ) as usize
+                len_chars,
+            )
         };
         let start = adjust(start);
-        let stop = adjust(stop.unwrap_or(len_chars as i32));
+        let stop = adjust(stop.unwrap_or(len_chars.0 as i32));
 
         if start >= stop {
             Ok(heap.alloc_str(""))
-        } else if s.len() == len_chars {
+        } else if s.len() == len_chars.0 {
             // ASCII fast-path
-            Ok(heap.alloc_str(s.get(start..stop).unwrap()))
+            Ok(heap.alloc_str(s.get(start.0..stop.0).unwrap()))
         } else {
             let s = fast_string::split_at(s, start).1;
             let s = if stop == len_chars {
