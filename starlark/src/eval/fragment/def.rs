@@ -54,7 +54,7 @@ use crate::{
     syntax::ast::ParameterP,
     values::{
         docs,
-        docs::{DocItem, DocString},
+        docs::{DocItem, DocString, DocStringKind},
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
         AtomicFrozenRefOption, Freeze, Freezer, FrozenHeap, FrozenRef, FrozenStringValue,
@@ -529,7 +529,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
             .def_info
             .docstring
             .as_ref()
-            .and_then(|s| DocString::from_docstring(s));
+            .and_then(|s| DocString::from_docstring(DocStringKind::Starlark, s));
         let mut param_docs = HashMap::new();
         let mut return_docs = None;
 
@@ -538,11 +538,16 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
             if let Some(args) = sections.get("args") {
                 param_docs = DocString::parse_params(args)
                     .into_iter()
-                    .map(|(name, docs)| (name, DocString::from_docstring(&docs)))
+                    .map(|(name, docs)| {
+                        (
+                            name,
+                            DocString::from_docstring(DocStringKind::Starlark, &docs),
+                        )
+                    })
                     .collect();
             }
             if let Some(docs) = sections.get("returns") {
-                return_docs = DocString::from_docstring(docs);
+                return_docs = DocString::from_docstring(DocStringKind::Starlark, docs);
             }
         };
         (docstring, param_docs, return_docs)

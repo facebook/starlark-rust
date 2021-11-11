@@ -21,7 +21,7 @@ use crate::{
     assert,
     assert::Assert,
     environment::{Module, ModuleDocs},
-    values::Value,
+    values::{docs::DocStringKind, Value},
 };
 
 #[test]
@@ -91,6 +91,7 @@ def f4(a: "string") -> "string":
 
     let expected_f1 = Some(DocItem::Function(Function {
         docs: DocString::from_docstring(
+            DocStringKind::Starlark,
             r#"Summary line goes here
 
     Args:
@@ -106,13 +107,13 @@ def f4(a: "string") -> "string":
         params: vec![
             Param::Arg {
                 name: "a".to_owned(),
-                docs: DocString::from_docstring("The docs for a"),
+                docs: DocString::from_docstring(DocStringKind::Starlark, "The docs for a"),
                 typ: None,
                 default_value: None,
             },
             Param::Arg {
                 name: "b".to_owned(),
-                docs: DocString::from_docstring("The docs for b"),
+                docs: DocString::from_docstring(DocStringKind::Starlark, "The docs for b"),
                 typ: Some(Type {
                     raw_type: "\"string\"".to_owned(),
                 }),
@@ -120,7 +121,10 @@ def f4(a: "string") -> "string":
             },
             Param::Arg {
                 name: "c".to_owned(),
-                docs: DocString::from_docstring("The docs for c, but these\ngo onto two lines"),
+                docs: DocString::from_docstring(
+                    DocStringKind::Starlark,
+                    "The docs for c, but these\ngo onto two lines",
+                ),
                 typ: Some(Type {
                     raw_type: "\"int\"".to_owned(),
                 }),
@@ -137,12 +141,15 @@ def f4(a: "string") -> "string":
             },
             Param::Kwargs {
                 name: "**kwargs".to_owned(),
-                docs: DocString::from_docstring("Docs for the keyword args"),
+                docs: DocString::from_docstring(
+                    DocStringKind::Starlark,
+                    "Docs for the keyword args",
+                ),
                 typ: None,
             },
         ],
         ret: Return {
-            docs: DocString::from_docstring("A string repr of the args"),
+            docs: DocString::from_docstring(DocStringKind::Starlark, "A string repr of the args"),
             typ: Some(Type {
                 raw_type: r#"["string"]"#.to_owned(),
             }),
@@ -151,6 +158,7 @@ def f4(a: "string") -> "string":
 
     let expected_f2 = Some(DocItem::Function(Function {
         docs: DocString::from_docstring(
+            DocStringKind::Starlark,
             r#"This is a function with *args, and no return type
 
     Args:
@@ -165,7 +173,7 @@ def f4(a: "string") -> "string":
             },
             Param::Args {
                 name: "*args".to_owned(),
-                docs: DocString::from_docstring("Only doc this arg"),
+                docs: DocString::from_docstring(DocStringKind::Starlark, "Only doc this arg"),
                 typ: Some(Type {
                     raw_type: "[\"string\"]".to_owned(),
                 }),
@@ -196,7 +204,10 @@ def f4(a: "string") -> "string":
     }));
 
     let expected_f4 = Some(DocItem::Function(Function {
-        docs: DocString::from_docstring("This is a docstring with no 'Args:' section"),
+        docs: DocString::from_docstring(
+            DocStringKind::Starlark,
+            "This is a docstring with no 'Args:' section",
+        ),
         params: vec![Param::Arg {
             name: "a".to_owned(),
             docs: None,
@@ -266,6 +277,7 @@ def f1():
 
     let expected_m1 = Some(DocItem::Module(Module {
         docs: DocString::from_docstring(
+            DocStringKind::Starlark,
             r"This is the summary of the module's docs
 
 Some extra details can go here,
@@ -345,6 +357,7 @@ def f1():
     let expected_m1 = ModuleDocs {
         module: Some(DocItem::Module(Module {
             docs: DocString::from_docstring(
+                DocStringKind::Starlark,
                 r"This is the summary of the module's docs
 
 Some extra details can go here,
@@ -353,7 +366,7 @@ Some extra details can go here,
         })),
         members: hashmap! {
             "f1".to_owned() => Some(DocItem::Function(Function {
-                docs: DocString::from_docstring("This is a function summary"),
+                docs: DocString::from_docstring(DocStringKind::Starlark, "This is a function summary"),
                 params: vec![],
                 ret: Return {
                     docs: None,

@@ -17,6 +17,7 @@
 
 use std::collections::HashMap;
 
+use gazebo::prelude::*;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -39,6 +40,31 @@ pub struct DocString {
     pub details: Option<String>,
 }
 
+/// Controls the formatting to use when parsing `DocString`s from raw docstrings
+#[derive(Copy, Clone, Dupe)]
+pub enum DocStringKind {
+    /// Docstrings provided by users in starlark files, following python-y documentation style.
+    ///
+    /// For functions, they are the piece in `"""` that come right after the `def foo():` line,
+    /// and they have sections for additional details. An example from a starlark file might be:
+    ///
+    /// ```starlark
+    /// """ Module level docs here """
+    ///
+    /// def some_function(val: "string") -> "string":
+    ///     """ This function takes a string and returns it.
+    ///
+    ///     This is where an explanation might go, but I have none
+    ///
+    ///     Args:
+    ///         val: This is the value that gets returned
+    ///
+    ///     Returns:
+    ///         The original value, because identity functions are fun.
+    /// ```
+    Starlark,
+}
+
 impl DocString {
     /// Extracts the docstring from a function or module body, iff the first
     /// statement is a string literal.
@@ -59,8 +85,8 @@ impl DocString {
         None
     }
 
-    /// Parse out a docstring from a user provided string, handling dedenting, trimming, etc.
-    pub fn from_docstring(user_docstring: &str) -> Option<DocString> {
+    /// Do common work to parse a docstring (dedenting, splitting summary and details, etc)
+    pub fn from_docstring(kind: DocStringKind, user_docstring: &str) -> Option<DocString> {
         let trimmed_docs = user_docstring.trim();
         if trimmed_docs.is_empty() {
             None
@@ -72,9 +98,12 @@ impl DocString {
                     // Dedent the details separately so that people can have the summary on the
                     // same line as the opening quotes, and the details indented on subsequent
                     // lines.
+                    let details = match kind {
+                        DocStringKind::Starlark => textwrap::dedent(details).trim().to_owned(),
+                    };
                     Some(DocString {
                         summary: summary.to_owned(),
-                        details: Some(textwrap::dedent(details).trim().to_owned()),
+                        details: Some(details),
                     })
                 }
                 _ => Some(DocString {
@@ -313,17 +342,16 @@ mod test {
     use super::*;
 
     #[test]
-    fn parses_docstring() {
-        assert_eq!(DocString::from_docstring(" "), None);
+    fn parses_starlark_docstring() {
         assert_eq!(
-            DocString::from_docstring(" \n\nThis should be the summary\n\n"),
-            Some(DocString {
-                summary: "This should be the summary".to_owned(),
-                details: None,
-            })
+            DocString::from_docstring(DocStringKind::Starlark, " "),
+            None
         );
         assert_eq!(
-            DocString::from_docstring(" \n\nThis should be the summary\n\n "),
+            DocString::from_docstring(
+                DocStringKind::Starlark,
+                " \n\nThis should be the summary\n\n"
+            ),
             Some(DocString {
                 summary: "This should be the summary".to_owned(),
                 details: None,
@@ -331,6 +359,17 @@ mod test {
         );
         assert_eq!(
             DocString::from_docstring(
+                DocStringKind::Starlark,
+                " \n\nThis should be the summary\n\n "
+            ),
+            Some(DocString {
+                summary: "This should be the summary".to_owned(),
+                details: None,
+            })
+        );
+        assert_eq!(
+            DocString::from_docstring(
+                DocStringKind::Starlark,
                 "Summary line here\n    \nDetails after some spaces\n\nand some more newlines"
             ),
             Some(DocString {
@@ -340,6 +379,7 @@ mod test {
         );
         assert_eq!(
             DocString::from_docstring(
+                DocStringKind::Starlark,
                 r#"
         This is the summary
 
@@ -366,7 +406,7 @@ mod test {
             })
         );
         assert_eq!(
-            DocString::from_docstring(
+            DocString::from_docstring(DocStringKind::Starlark,
                 r#"This is a summary line that is not dedented like the 'details'
 
         Typing the first line right after the """ in python docstrings is common,
@@ -423,7 +463,7 @@ mod test {
             .to_owned(),
         );
 
-        let sections = DocString::from_docstring(docstring)
+        let sections = DocString::from_docstring(DocStringKind::Starlark, docstring)
             .unwrap()
             .parse_sections();
 
@@ -431,7 +471,7 @@ mod test {
     }
 
     #[test]
-    fn parses_params_from_docstring() {
+    fn parses_params_from_starlark_docstring() {
         let docstring = r#"This is an example docstring
 
         Args:
@@ -457,7 +497,7 @@ mod test {
         expected.insert("*args".to_owned(), "Docs for args".to_owned());
         expected.insert("**kwargs".to_owned(), "Docs for kwargs".to_owned());
 
-        let param_docs = DocString::from_docstring(docstring)
+        let param_docs = DocString::from_docstring(DocStringKind::Starlark, docstring)
             .unwrap()
             .parse_sections()
             .get("args")

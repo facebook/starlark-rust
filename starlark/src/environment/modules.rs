@@ -42,7 +42,7 @@ use crate::{
     syntax::ast::Visibility,
     values::{
         docs,
-        docs::{DocItem, DocString},
+        docs::{DocItem, DocString, DocStringKind},
         Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
         StarlarkValue, Value,
     },
@@ -231,7 +231,7 @@ impl<'v> StarlarkValue<'v> for FrozenModuleRef {
     fn documentation(&self) -> Option<DocItem> {
         self.0.docstring.as_ref().map(|d| {
             DocItem::Module(docs::Module {
-                docs: DocString::from_docstring(d),
+                docs: DocString::from_docstring(DocStringKind::Starlark, d),
             })
         })
     }
