@@ -34,14 +34,16 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Methods, MethodsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, FrozenHeap,
-        FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError,
+        index::apply_slice, string::repr::string_repr, types::string::json::json_escape,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
+        Value, ValueError,
     },
 };
 
 pub(crate) mod fast_string;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
+mod json;
 mod repr;
 pub(crate) mod simd;
 
@@ -190,27 +192,6 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
 /// Hash a string in a way compatible with Value
 pub(crate) fn hash_string_result(x: &str) -> SmallHashResult {
     SmallHashResult::new(x)
-}
-
-fn json_escape(x: &str, collector: &mut String) {
-    collector.reserve(x.len() + 2);
-    // Safe because we only put valid UTF8 into it
-    let bytes = unsafe { collector.as_mut_vec() };
-    bytes.push(b'\"');
-    for c in x.bytes() {
-        // Escape as per ECMA-404 standard
-        match c {
-            b'\\' => bytes.extend(b"\\\\".iter()),
-            b'"' => bytes.extend(b"\\\"".iter()),
-            0x08u8 => bytes.extend(b"\\b".iter()),
-            0x0Cu8 => bytes.extend(b"\\f".iter()),
-            b'\n' => bytes.extend(b"\\n".iter()),
-            b'\r' => bytes.extend(b"\\r".iter()),
-            b'\t' => bytes.extend(b"\\t".iter()),
-            x => bytes.push(x),
-        }
-    }
-    bytes.push(b'\"');
 }
 
 impl Display for StarlarkStr {
