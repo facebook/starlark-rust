@@ -93,7 +93,7 @@ impl DocString {
         } else {
             static SPLIT_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n[ ]*\n").unwrap());
             let split: Option<(&str, &str)> = SPLIT_RE.splitn(trimmed_docs, 2).collect_tuple();
-            match split {
+            let (summary, details) = match split {
                 Some((summary, details)) if !summary.is_empty() && !details.is_empty() => {
                     // Dedent the details separately so that people can have the summary on the
                     // same line as the opening quotes, and the details indented on subsequent
@@ -101,16 +101,18 @@ impl DocString {
                     let details = match kind {
                         DocStringKind::Starlark => textwrap::dedent(details).trim().to_owned(),
                     };
-                    Some(DocString {
-                        summary: summary.to_owned(),
-                        details: Some(details),
-                    })
+                    (summary, Some(details))
                 }
-                _ => Some(DocString {
-                    summary: trimmed_docs.to_owned(),
-                    details: None,
-                }),
-            }
+                _ => (trimmed_docs, None),
+            };
+
+            // Remove any newlines (and surrounding whitespace) in the summary, and
+            // replace them with a single space.
+            static NEWLINES_RE: Lazy<Regex> =
+                Lazy::new(|| Regex::new(r"(\S)\s*\n\s*(\S)").unwrap());
+            let summary = NEWLINES_RE.replace_all(summary, r"$1 $2").to_string();
+
+            Some(DocString { summary, details })
         }
     }
 
@@ -381,7 +383,8 @@ mod test {
             DocString::from_docstring(
                 DocStringKind::Starlark,
                 r#"
-        This is the summary
+        This is the summary.
+          It has multiple lines and some spaces, and should be collapsed
 
         This should be a multiline set of details.
         It should be:
@@ -392,7 +395,7 @@ mod test {
 "#
             ),
             Some(DocString {
-                summary: "This is the summary".to_owned(),
+                summary: "This is the summary. It has multiple lines and some spaces, and should be collapsed".to_owned(),
                 details: Some(
                     concat!(
                         "This should be a multiline set of details.\n",
