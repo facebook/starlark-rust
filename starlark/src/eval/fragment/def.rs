@@ -382,11 +382,7 @@ impl Compiler<'_, '_, '_> {
                 })
             }
             Some(stmt) => match &stmt.node {
-                StmtCompiled::Return(None) => Some(Spanned {
-                    span: Span::default(),
-                    node: ExprCompiled::Value(FrozenValue::new_none()),
-                }),
-                StmtCompiled::Return(Some(expr)) => {
+                StmtCompiled::Return(expr) => {
                     let expr = Compiler::is_safe_to_inline_expr_spanned(expr)?;
                     Some(expr)
                 }
