@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use gazebo::prelude::*;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
 use crate as starlark;
@@ -63,6 +63,39 @@ pub enum DocStringKind {
     ///         The original value, because identity functions are fun.
     /// ```
     Starlark,
+    /// Docstrings used with `#[starlark_module]` in rust.
+    ///
+    /// These are the documentation strings prefixed by `///` (like these docs) on
+    /// `#[starlark_module]`, and the functions / attributes within it. It supports
+    /// a section `# Arguments`, and `# Returns`, and removes some lines from code
+    /// blocks that are valid for rustdoc, but not useful for people using these
+    /// functions via starlark. An example might be something like:
+    ///
+    /// ```ignore
+    /// /// These are where the module / object level docs go
+    /// #[starlark_module]
+    /// fn add_some_value(builder: &mut GlobalsBuilder) {
+    ///     /// attr1 is an attribute that does nothing interesting.
+    ///     #[attribute]
+    ///     fn attr1(_this: Value<'v>) -> String {
+    ///         Ok("attr1".to_owned())
+    ///     }
+    ///     /// Copies a string
+    ///     ///
+    ///     /// This is where details would be, if this were
+    ///     /// a more interesting function.
+    ///     ///
+    ///     /// # Arguments
+    ///     /// * `s`: This is string that is returned.
+    ///     ///
+    ///     /// # Returns
+    ///     /// The a copy of the original string.
+    ///     fn copy_string(s: &str) -> String {
+    ///         Ok(s.to_owned())
+    ///     }
+    /// }
+    /// ```
+    Rust,
 }
 
 impl DocString {
@@ -100,6 +133,9 @@ impl DocString {
                     // lines.
                     let details = match kind {
                         DocStringKind::Starlark => textwrap::dedent(details).trim().to_owned(),
+                        DocStringKind::Rust => {
+                            Self::remove_rust_comments(textwrap::dedent(details).trim())
+                        }
                     };
                     (summary, Some(details))
                 }
@@ -114,6 +150,32 @@ impl DocString {
 
             Some(DocString { summary, details })
         }
+    }
+
+    /// Removes rustdoc-style commented out lines from code blocks.
+    fn remove_rust_comments(details: &str) -> String {
+        static CODEBLOCK_RE: Lazy<Regex> = Lazy::new(|| {
+            RegexBuilder::new(r"```(\w*)\n.*?```")
+                .dot_matches_new_line(true)
+                .build()
+                .expect("regex to compile")
+        });
+        static COMMENT_RE: Lazy<Regex> = Lazy::new(|| {
+            RegexBuilder::new(r"^# .*$\n")
+                .multi_line(true)
+                .build()
+                .expect("regex to compile")
+        });
+        CODEBLOCK_RE
+            .replace_all(details, |caps: &regex::Captures| {
+                match caps.get(1).expect("language group").as_str() {
+                    "" | "rust" => COMMENT_RE
+                        .replace_all(caps.get(0).expect("$0 to exist").as_str(), "")
+                        .to_string(),
+                    _ => caps.get(0).expect("$0 to exist").as_str().to_owned(),
+                }
+            })
+            .to_string()
     }
 
     /// Join lines up, dedent them, and trim them
@@ -429,6 +491,55 @@ mod test {
                     .to_owned()
                 ),
             })
+        );
+    }
+
+    #[test]
+    fn parses_rust_docstring() {
+        let raw = r#"
+        This is the summary line
+          that sometimes is split on two lines
+
+        This is the second part. It has some code blocks
+
+        ```
+        # foo() {
+        "bar"
+        # }
+        ```
+
+        ```python
+        # This is a python comment. Leave it be
+        print(1)
+        ```
+
+        ```rust
+        # other_foo() {
+        "other_bar"
+        # }
+        ```
+        "#;
+
+        let parsed = DocString::from_docstring(DocStringKind::Rust, raw).unwrap();
+        assert_eq!(
+            "This is the summary line that sometimes is split on two lines",
+            parsed.summary
+        );
+        assert_eq!(
+            concat!(
+                "This is the second part. It has some code blocks\n\n",
+                "```\n",
+                "\"bar\"\n",
+                "```\n\n",
+                "```python\n",
+                "# This is a python comment. Leave it be\n",
+                "print(1)\n",
+                "```\n\n",
+                "```rust\n",
+                "\"other_bar\"",
+                "\n```"
+            ),
+            parsed.details.unwrap()
         );
     }
 
