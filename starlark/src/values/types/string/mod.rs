@@ -299,7 +299,8 @@ impl<'v> StarlarkValue<'v> for str {
             let s = if stop == len_chars {
                 s
             } else {
-                fast_string::split_at(s, cmp::max(0, stop - start)).0
+                assert!(stop > start);
+                fast_string::split_at(s, stop - start).0
             };
             return Ok(heap.alloc_str(s));
         }
