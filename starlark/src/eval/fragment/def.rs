@@ -538,7 +538,7 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
                 ds.parse_and_remove_sections(DocStringKind::Starlark, &["args", "returns"]);
             docstring = Some(new_docstring);
             if let Some(args) = sections.get("args") {
-                param_docs = DocString::parse_params(args)
+                param_docs = DocString::parse_params(DocStringKind::Starlark, args)
                     .into_iter()
                     .map(|(name, docs)| {
                         (

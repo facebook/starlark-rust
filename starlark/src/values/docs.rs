@@ -189,16 +189,25 @@ impl DocString {
     /// the `DocString::parse_params()` function call. This is done as a separate function
     /// to reduce the number of times that sections are parsed out of docstring (e.g. if
     /// a user wants both the `Args:` and `Returns:` sections)
-    pub fn parse_params(args_section: &str) -> HashMap<String, String> {
-        static ARG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\*{0,2}\w+):\s*(.*)").unwrap());
+    pub fn parse_params(kind: DocStringKind, args_section: &str) -> HashMap<String, String> {
+        static STARLARK_ARG_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(\*{0,2}\w+):\s*(.*)").unwrap());
+        static RUST_ARG_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(?:\* )?`(\w+)`:?\s*(.*)").unwrap());
+
         static INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
+
+        let arg_re = match kind {
+            DocStringKind::Starlark => &STARLARK_ARG_RE,
+            DocStringKind::Rust => &RUST_ARG_RE,
+        };
 
         let mut ret = HashMap::new();
         let mut current_arg = None;
         let mut current_text = vec![];
 
         for line in args_section.lines() {
-            if let Some(matches) = ARG_RE.captures(line) {
+            if let Some(matches) = arg_re.captures(line) {
                 if let Some(a) = current_arg.take() {
                     ret.insert(a, Self::join_and_dedent_lines(&current_text));
                 }
@@ -721,7 +730,41 @@ mod test {
             .parse_and_remove_sections(DocStringKind::Starlark, &["args"])
             .1
             .get("args")
-            .map(|s| DocString::parse_params(s))
+            .map(|s| DocString::parse_params(DocStringKind::Starlark, s))
+            .unwrap();
+
+        assert_eq!(param_docs, expected);
+    }
+
+    #[test]
+    fn parses_params_from_rust_docstring() {
+        let docstring = r#"This is an example docstring
+
+        # Arguments
+        * `arg_foo`: The argument named foo
+        `arg_bar`: The argument named bar. It has
+                   a longer doc string that spans
+                   over three lines
+        "#;
+
+        let mut expected = HashMap::new();
+        expected.insert("arg_foo".to_owned(), "The argument named foo".to_owned());
+        expected.insert(
+            "arg_bar".to_owned(),
+            concat!(
+                "The argument named bar. It has\n",
+                "a longer doc string that spans\n",
+                "over three lines"
+            )
+            .to_owned(),
+        );
+
+        let param_docs = DocString::from_docstring(DocStringKind::Rust, docstring)
+            .unwrap()
+            .parse_and_remove_sections(DocStringKind::Rust, &["arguments"])
+            .1
+            .get("arguments")
+            .map(|s| DocString::parse_params(DocStringKind::Rust, s))
             .unwrap();
 
         assert_eq!(param_docs, expected);
