@@ -28,22 +28,20 @@ use std::{
     sync::atomic,
 };
 
-use derive_more::Display;
-use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::OptionExt};
+use gazebo::{any::AnyLifetime, prelude::*};
 
-use crate as starlark;
 use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Methods, MethodsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, Freeze,
-        FrozenHeap, FrozenValue, Heap, StarlarkValue, Trace, UnpackValue, Value, ValueError,
-        ValueLike,
+        index::apply_slice, string::repr::string_repr, AllocFrozenValue, AllocValue, FrozenHeap,
+        FrozenValue, Heap, StarlarkValue, UnpackValue, Value, ValueError,
     },
 };
 
 pub(crate) mod fast_string;
 pub(crate) mod interpolation;
+pub(crate) mod iter;
 mod repr;
 pub(crate) mod simd;
 
@@ -480,66 +478,6 @@ impl AllocFrozenValue for String {
 impl<'v, 'a> AllocFrozenValue for &'a str {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
         heap.alloc_str(self)
-    }
-}
-
-/// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug, Trace, Coerce, Display, Freeze)]
-#[display(fmt = "iterator")]
-#[repr(C)]
-struct StringIteratorGen<V> {
-    string: V,
-    produce_char: bool, // if not char, then int
-}
-
-pub(crate) fn iterate_chars<'v>(string: Value<'v>, heap: &'v Heap) -> Value<'v> {
-    heap.alloc(StringIterator {
-        string,
-        produce_char: true,
-    })
-}
-
-pub(crate) fn iterate_codepoints<'v>(string: Value<'v>, heap: &'v Heap) -> Value<'v> {
-    heap.alloc(StringIterator {
-        string,
-        produce_char: false,
-    })
-}
-
-starlark_complex_value!(StringIterator);
-
-impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StringIteratorGen<T>
-where
-    Self: AnyLifetime<'v>,
-{
-    starlark_type!("iterator");
-
-    fn iterate<'a>(
-        &'a self,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
-    where
-        'v: 'a,
-    {
-        let s = self.string.to_value().unpack_str().unwrap().chars();
-        if self.produce_char {
-            Ok(box s.map(move |x| heap.alloc(x)))
-        } else {
-            Ok(box s.map(|x| Value::new_int(u32::from(x) as i32)))
-        }
-    }
-
-    fn with_iterator(
-        &self,
-        heap: &'v Heap,
-        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        let s = self.string.to_value().unpack_str().unwrap().chars();
-        if self.produce_char {
-            f(&mut s.map(|x| heap.alloc(x)))
-        } else {
-            f(&mut s.map(|x| Value::new_int(u32::from(x) as i32)))
-        }
     }
 }
 

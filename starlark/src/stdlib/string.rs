@@ -29,9 +29,9 @@ use crate::{
     stdlib::util::convert_indices,
     values::{
         none::NoneOr,
-        string,
         string::{fast_string, interpolation},
         tuple::Tuple,
+        types::string::iter::{iterate_chars, iterate_codepoints},
         StringValue, UnpackValue, Value, ValueOf,
     },
 };
@@ -138,7 +138,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn elems(this: Value<'v>) -> Value<'v> {
-        Ok(string::iterate_chars(this, heap))
+        Ok(iterate_chars(this, heap))
     }
 
     /// [string.capitalize](
@@ -201,7 +201,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn codepoints(this: Value<'v>) -> Value<'v> {
-        Ok(string::iterate_codepoints(this, heap))
+        Ok(iterate_codepoints(this, heap))
     }
 
     /// [string.count](
