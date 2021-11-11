@@ -991,6 +991,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// tuple() == ()
     /// tuple([1,2,3]) == (1, 2, 3)
     /// # "#);
+    /// ```
     #[starlark(type(Tuple::TYPE))]
     #[starlark(speculative_exec_safe)]
     fn tuple(ref a: Option<Value>) -> Value<'v> {
