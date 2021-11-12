@@ -21,7 +21,7 @@ use crate::{
     assert,
     assert::Assert,
     environment::{Module, ModuleDocs},
-    values::{docs::DocStringKind, Value},
+    values::{docs::DocStringKind, StarlarkValue, Value},
 };
 
 #[test]
@@ -363,8 +363,10 @@ Some extra details can go here,
 
     let expected_m2 = ModuleDocs {
         module: None,
+        // Note that the "x" value here is the documentation for the string type, not
+        // for a SPECIFIC string.
         members: hashmap! {
-            "x".to_owned() => None,
+            "x".to_owned() =>  "blah".documentation(),
             "f1".to_owned() => empty_function.clone(),
         },
     };

@@ -286,7 +286,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
 
     /// Return structured documentation for self, if available.
     fn documentation(&self) -> Option<DocItem> {
-        None
+        self.get_methods().map(|methods| methods.documentation())
     }
 
     /// Return a string representation of self, as returned by the `repr()` function.

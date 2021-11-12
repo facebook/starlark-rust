@@ -17,6 +17,8 @@
 
 //! Function types, including native functions and `object.member` functions.
 
+use std::collections::HashMap;
+
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, coerce::Coerce};
@@ -26,8 +28,10 @@ use crate::{
     codemap::Span,
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, FrozenValueTyped, Heap, SimpleValue,
-        StarlarkValue, Trace, Value, ValueLike,
+        docs,
+        docs::{DocItem, DocStringKind},
+        AllocFrozenValue, AllocValue, Freeze, FrozenHeap, FrozenValue, FrozenValueTyped, Heap,
+        SimpleValue, StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -81,6 +85,29 @@ impl<T> NativeAttr for T where
 {
 }
 
+/// Enough details to get the documentation for a callable ([`NativeFunction`] or [`NativeMethod`])
+#[doc(hidden)]
+pub struct NativeCallableRawDocs {
+    pub rust_docstring: Option<&'static str>,
+    pub signature: ParametersSpec<FrozenValue>,
+    pub parameter_types: HashMap<usize, docs::Type>,
+    pub return_type: Option<docs::Type>,
+}
+
+impl NativeCallableRawDocs {
+    pub fn documentation(&self) -> docs::Function {
+        docs::Function::from_docstring(
+            DocStringKind::Rust,
+            |param_docs| {
+                self.signature
+                    .documentation(self.parameter_types.clone(), param_docs)
+            },
+            self.return_type.clone(),
+            self.rust_docstring,
+        )
+    }
+}
+
 /// Starlark representation of native (Rust) functions.
 ///
 /// Almost always created with [`#[starlark_module]`](macro@starlark_module).
@@ -94,6 +121,8 @@ pub struct NativeFunction {
     pub(crate) typ: Option<FrozenValue>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
+    #[derivative(Debug = "ignore")]
+    pub(crate) raw_docs: Option<NativeCallableRawDocs>,
 }
 
 impl AllocFrozenValue for NativeFunction {
@@ -118,6 +147,7 @@ impl NativeFunction {
             name,
             typ: None,
             speculative_exec_safe: false,
+            raw_docs: None,
         }
     }
 
@@ -139,6 +169,7 @@ impl NativeFunction {
             name,
             typ: None,
             speculative_exec_safe: false,
+            raw_docs: None,
         }
     }
 
@@ -190,6 +221,12 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
             Vec::new()
         }
     }
+
+    fn documentation(&self) -> Option<DocItem> {
+        self.raw_docs
+            .as_ref()
+            .map(|raw_docs| DocItem::Function(raw_docs.documentation()))
+    }
 }
 
 #[derive(Derivative, Display)]
@@ -202,6 +239,8 @@ pub(crate) struct NativeMethod {
     pub(crate) typ: Option<FrozenValue>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
+    #[derivative(Debug = "ignore")]
+    pub(crate) raw_docs: NativeCallableRawDocs,
 }
 
 starlark_simple_value!(NativeMethod);
@@ -219,6 +258,10 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
     ) -> anyhow::Result<Value<'v>> {
         eval.with_call_stack(me, location, |eval| (self.function)(eval, this, args))
     }
+
+    fn documentation(&self) -> Option<DocItem> {
+        Some(DocItem::Function(self.raw_docs.documentation()))
+    }
 }
 
 /// Used by the `#[starlark(attribute)]` tag of [`#[starlark_module]`](macro@starlark_module)
@@ -231,6 +274,7 @@ pub(crate) struct NativeAttribute {
     pub(crate) function: Box<dyn NativeAttr>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
+    pub(crate) docstring: Option<String>,
 }
 
 starlark_simple_value!(NativeAttribute);

@@ -28,6 +28,7 @@ pub(crate) struct StarModule {
     // make sense
     pub globals_builder: Type,
     pub name: Ident,
+    pub docstring: Option<String>,
     pub stmts: Vec<StarStmt>,
 }
 
@@ -86,6 +87,7 @@ pub(crate) struct StarFun {
     pub speculative_exec_safe: bool,
     pub body: Block,
     pub source: StarFunSource,
+    pub docstring: Option<String>,
 }
 
 impl StarFun {
@@ -124,6 +126,7 @@ pub(crate) struct StarAttr {
     pub return_type: Type,
     pub speculative_exec_safe: bool,
     pub body: Block,
+    pub docstring: Option<String>,
 }
 
 impl StarAttr {

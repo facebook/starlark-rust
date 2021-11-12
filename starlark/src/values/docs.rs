@@ -556,7 +556,174 @@ pub struct Doc {
 
 #[cfg(test)]
 mod test {
+    use std::fmt::{Display, Formatter};
+
+    use starlark_derive::starlark_module;
+
     use super::*;
+    use crate as starlark;
+    use crate::{
+        environment::{GlobalsBuilder, GlobalsStatic, Methods, MethodsBuilder, MethodsStatic},
+        values::{StarlarkValue, Value},
+    };
+
+    /// These are where the module docs go
+    ///
+    /// This is what is passed to users for an object, so be careful
+    /// not to register two modules for a single object.
+    #[starlark_module]
+    fn add_some_value(builder: &mut MethodsBuilder) {
+        /// Docs for attr1
+        #[starlark(attribute)]
+        fn attr1(_this: Value<'v>) -> String {
+            Ok("attr1".to_owned())
+        }
+
+        #[starlark(attribute)]
+        fn attr2(_this: Value<'v>) -> String {
+            Ok("attr2".to_owned())
+        }
+
+        /// Docs for func1
+        fn func1(_this: Value<'v>) -> String {
+            Ok("func1".to_owned())
+        }
+
+        fn func2(_this: Value<'v>) -> String {
+            Ok("func2".to_owned())
+        }
+    }
+
+    /// These are where the module docs go
+    ///
+    /// This is what is passed to users for an object, so be careful
+    /// not to register two modules for a single object.
+    #[starlark_module]
+    fn add_some_global_value(builder: &mut GlobalsBuilder) {
+        /// Docs for func1
+        fn func1() -> String {
+            Ok("func1".to_owned())
+        }
+
+        fn func2() -> String {
+            Ok("func2".to_owned())
+        }
+    }
+
+    #[derive(Debug)]
+    struct SomeValue {}
+
+    impl Display for SomeValue {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.write_str("SomeValue()")
+        }
+    }
+
+    starlark_simple_value!(SomeValue);
+
+    impl<'v> StarlarkValue<'v> for SomeValue {
+        starlark_type!("some_value");
+
+        fn get_methods(&self) -> Option<&'static Methods> {
+            static RES: MethodsStatic = MethodsStatic::new();
+            RES.methods(add_some_value)
+        }
+    }
+
+    #[test]
+    fn globals_docs_work() {
+        let mut globals_builder = GlobalsBuilder::new();
+        static RES: GlobalsStatic = GlobalsStatic::new();
+        RES.populate(add_some_global_value, &mut globals_builder);
+        let globals = globals_builder.build();
+        let docs = globals.documentation();
+
+        let expected_object = super::Object {
+            docs: DocString::from_docstring(
+                DocStringKind::Rust,
+                "These are where the module docs go\n\nThis is what is passed to users for an object, so be careful\nnot to register two modules for a single object.",
+            ),
+            members: vec![
+                (
+                    "func1".to_owned(),
+                    super::Member::Function(super::Function {
+                        docs: DocString::from_docstring(DocStringKind::Rust, "Docs for func1"),
+                        params: vec![],
+                        ret: Return {
+                            docs: None,
+                            typ: None,
+                        },
+                    }),
+                ),
+                (
+                    "func2".to_owned(),
+                    super::Member::Function(super::Function {
+                        docs: None,
+                        params: vec![],
+                        ret: Return {
+                            docs: None,
+                            typ: None,
+                        },
+                    }),
+                ),
+            ],
+        };
+        let expected = DocItem::Object(expected_object);
+
+        assert_eq!(expected, docs);
+    }
+
+    #[test]
+    fn methods_docs_work() {
+        let docs = SomeValue {}.documentation();
+        let expected_object = super::Object {
+            docs: DocString::from_docstring(
+                DocStringKind::Rust,
+                "These are where the module docs go\n\nThis is what is passed to users for an object, so be careful\nnot to register two modules for a single object.",
+            ),
+            members: vec![
+                (
+                    "attr1".to_owned(),
+                    super::Member::Property(super::Property {
+                        docs: DocString::from_docstring(DocStringKind::Rust, "Docs for attr1"),
+                        typ: None,
+                    }),
+                ),
+                (
+                    "attr2".to_owned(),
+                    super::Member::Property(super::Property {
+                        docs: None,
+                        typ: None,
+                    }),
+                ),
+                (
+                    "func1".to_owned(),
+                    super::Member::Function(super::Function {
+                        docs: DocString::from_docstring(DocStringKind::Rust, "Docs for func1"),
+                        params: vec![],
+                        ret: Return {
+                            docs: None,
+                            typ: None,
+                        },
+                    }),
+                ),
+                (
+                    "func2".to_owned(),
+                    super::Member::Function(super::Function {
+                        docs: None,
+                        params: vec![],
+                        ret: Return {
+                            docs: None,
+                            typ: None,
+                        },
+                    }),
+                ),
+            ],
+        };
+        let expected = Some(DocItem::Object(expected_object));
+
+        assert_eq!(expected, docs);
+    }
 
     #[test]
     fn parses_starlark_docstring() {

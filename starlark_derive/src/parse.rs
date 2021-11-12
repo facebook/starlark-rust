@@ -18,8 +18,8 @@
 use gazebo::prelude::*;
 use proc_macro2::Span;
 use syn::{
-    spanned::Spanned, Attribute, FnArg, Item, ItemConst, ItemFn, Meta, NestedMeta, Pat, PatType,
-    ReturnType, Stmt, Type, TypeReference,
+    spanned::Spanned, Attribute, FnArg, Item, ItemConst, ItemFn, Meta, MetaNameValue, NestedMeta,
+    Pat, PatType, ReturnType, Stmt, Type, TypeReference,
 };
 
 use crate::{typ::*, util::*};
@@ -40,6 +40,7 @@ impl ModuleKind {
 }
 
 pub(crate) fn parse(mut input: ItemFn) -> syn::Result<StarModule> {
+    let module_docstring = parse_module_docstring(&input);
     let visibility = input.vis;
     let sig_span = input.sig.span();
     let name = input.sig.ident;
@@ -72,8 +73,23 @@ pub(crate) fn parse(mut input: ItemFn) -> syn::Result<StarModule> {
         visibility,
         globals_builder: *ty,
         name,
+        docstring: module_docstring,
         stmts: input.block.stmts.into_try_map(parse_stmt)?,
     })
+}
+
+fn parse_module_docstring(input: &ItemFn) -> Option<String> {
+    let mut doc_attrs = Vec::new();
+    for attr in &input.attrs {
+        if let Some(ds) = is_attribute_docstring(attr) {
+            doc_attrs.push(ds);
+        }
+    }
+    if doc_attrs.is_empty() {
+        None
+    } else {
+        Some(doc_attrs.join("\n"))
+    }
 }
 
 fn parse_stmt(stmt: Stmt) -> syn::Result<StarStmt> {
@@ -99,8 +115,22 @@ struct ProcessedAttributes {
     is_attribute: bool,
     type_attribute: Option<NestedMeta>,
     speculative_exec_safe: bool,
+    docstring: Option<String>,
     /// Rest attributes
     attrs: Vec<Attribute>,
+}
+
+fn is_attribute_docstring(x: &Attribute) -> Option<String> {
+    if x.path.is_ident("doc") {
+        if let Ok(Meta::NameValue(MetaNameValue {
+            lit: syn::Lit::Str(s),
+            ..
+        })) = x.parse_meta()
+        {
+            return Some(s.value());
+        }
+    }
+    None
 }
 
 /// Parse `#[starlark(...)]` attribute.
@@ -113,6 +143,7 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
     let mut is_attribute = false;
     let mut type_attribute = None;
     let mut speculative_exec_safe = false;
+    let mut doc_attrs = Vec::new();
     for x in xs {
         if x.path.is_ident("starlark") {
             match x.parse_meta()? {
@@ -148,6 +179,8 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
                 }
                 _ => return Err(syn::Error::new(x.span(), ERROR)),
             }
+        } else if let Some(ds) = is_attribute_docstring(&x) {
+            doc_attrs.push(ds);
         } else {
             attrs.push(x);
         }
@@ -155,10 +188,16 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
     if is_attribute && type_attribute.is_some() {
         return Err(syn::Error::new(span, "Can't be an attribute with a .type"));
     }
+    let docstring = if !doc_attrs.is_empty() {
+        Some(doc_attrs.join("\n"))
+    } else {
+        None
+    };
     Ok(ProcessedAttributes {
         is_attribute,
         type_attribute,
         speculative_exec_safe,
+        docstring,
         attrs,
     })
 }
@@ -172,6 +211,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
         is_attribute,
         type_attribute,
         speculative_exec_safe,
+        docstring,
         attrs,
     } = process_attributes(func.span(), func.attrs)?;
 
@@ -215,6 +255,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             return_type: *return_type,
             speculative_exec_safe,
             body: *func.block,
+            docstring,
         }))
     } else {
         Ok(StarStmt::Fun(StarFun {
@@ -226,6 +267,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             speculative_exec_safe,
             body: *func.block,
             source: StarFunSource::Unknown,
+            docstring,
         }))
     }
 }

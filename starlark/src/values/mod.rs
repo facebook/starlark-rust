@@ -51,6 +51,7 @@ use crate::{
     eval::{Arguments, Evaluator, FrozenDef},
     values::{
         dict::FrozenDict,
+        docs::DocItem,
         enumeration::{EnumType, FrozenEnumValue},
         float::StarlarkFloat,
         function::{FrozenBoundMethod, NativeFunction, FUNCTION_TYPE},
@@ -378,6 +379,11 @@ impl<'v> Value<'v> {
     /// Forwards to [`StarlarkValue::set_at`].
     pub fn set_at(self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {
         self.get_ref().set_at(index, alloc_value)
+    }
+
+    /// Forwards to [`StarlarkValue::documentation`].
+    pub fn documentation(self) -> Option<DocItem> {
+        self.get_ref().documentation()
     }
 
     /// Return the contents of an iterable collection, as an owned vector.

@@ -27,15 +27,19 @@ pub(crate) fn render(x: StarModule) -> TokenStream {
         name,
         globals_builder,
         visibility,
+        docstring,
         stmts,
         module_kind,
     } = x;
     let statics = format_ident!("{}", module_kind.statics_type_name());
     let stmts = stmts.into_map(render_stmt);
+    let set_docstring =
+        docstring.map(|ds| quote_spanned!(span=> globals_builder.set_docstring(#ds);));
     quote_spanned! {
         span=>
         #visibility fn #name(globals_builder: #globals_builder) {
             fn build(globals_builder: #globals_builder) {
+                #set_docstring
                 #( #stmts )*
                 // Mute warning if stmts is empty.
                 let _ = globals_builder;
@@ -73,8 +77,13 @@ fn render_attr(x: StarAttr) -> TokenStream {
         return_type,
         speculative_exec_safe,
         body,
+        docstring,
     } = x;
     let name_str = ident_string(&name);
+    let docstring = match docstring {
+        Some(d) => quote_spanned!(span=> Some(#d.to_owned())),
+        None => quote_spanned!(span=> None),
+    };
     quote_spanned! {
         span=>
         #( #attrs )*
@@ -102,7 +111,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
             }
             Ok(heap.alloc(inner(this, heap)?))
         }
-        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #name);
+        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #docstring, #name);
     }
 }
 
@@ -123,6 +132,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         speculative_exec_safe,
         body,
         source: _,
+        docstring,
     } = x;
 
     let typ = match type_attribute {
@@ -141,6 +151,34 @@ fn render_fun(x: StarFun) -> TokenStream {
                 std::option::Option::None
             }
         }
+    };
+    let doc_renderer = {
+        let docs = match docstring.as_ref() {
+            Some(d) => quote_spanned!(span=> Some(#d)),
+            None => quote_spanned!(span=> None),
+        };
+        let new_signature = match signature.as_ref() {
+            Some(_) => quote_spanned!(span=> __signature.clone()),
+            None => {
+                let name = ident_string(&name);
+                quote_spanned!(span=> starlark::eval::ParametersSpec::<starlark::values::FrozenValue>::new(#name.to_owned()))
+            }
+        };
+
+        quote_spanned!(span=>
+            let __documentation_renderer = {
+                let signature = #new_signature;
+                // TODO(nmj): Accumulate parameter types and return types here
+                let parameter_types = std::collections::HashMap::new();
+                let return_type = None;
+                starlark::values::function::NativeCallableRawDocs {
+                    rust_docstring: #docs,
+                    signature,
+                    parameter_types,
+                    return_type,
+                }
+            };
+        )
     };
 
     let signature_arg = signature.as_ref().map(
@@ -162,6 +200,7 @@ fn render_fun(x: StarFun) -> TokenStream {
                 globals_builder.set_method(
                     #name_str,
                     #speculative_exec_safe,
+                    __documentation_renderer,
                     #typ,
                     move |eval, __this, parameters| {#name(eval, __this, parameters, #signature_val_ref)},
                 );
@@ -176,6 +215,7 @@ fn render_fun(x: StarFun) -> TokenStream {
                 globals_builder.set_function(
                     #name_str,
                     #speculative_exec_safe,
+                    __documentation_renderer,
                     #typ,
                     move |eval, parameters| {#name(eval, parameters, #signature_val_ref)},
                 );
@@ -212,6 +252,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         }
         {
             #signature
+            #doc_renderer
             #builder_set
         }
     }
