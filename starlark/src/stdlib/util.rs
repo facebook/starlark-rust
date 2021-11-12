@@ -18,9 +18,9 @@
 use crate::values::none::NoneOr;
 
 fn bound(val: i32, limit: i32) -> usize {
-    if val < 0 {
+    if val <= 0 {
         0
-    } else if val > limit {
+    } else if val >= limit {
         limit as usize
     } else {
         val as usize
