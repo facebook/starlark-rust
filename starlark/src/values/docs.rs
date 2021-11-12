@@ -585,7 +585,14 @@ mod test {
         }
 
         /// Docs for func1
-        fn func1(_this: Value<'v>) -> String {
+        ///
+        /// # Arguments
+        ///     * `foo`: Docs for foo
+        ///
+        /// # Returns
+        /// The string 'func1'
+        fn func1(_this: Value<'v>, foo: String) -> String {
+            let _ignore = foo;
             Ok("func1".to_owned())
         }
 
@@ -601,12 +608,25 @@ mod test {
     #[starlark_module]
     fn add_some_global_value(builder: &mut GlobalsBuilder) {
         /// Docs for func1
-        fn func1() -> String {
+        ///
+        /// # Arguments
+        ///     * `foo`: Docs for foo
+        ///
+        /// # Returns
+        /// The string 'func1'
+        fn func1(foo: String) -> String {
+            let _ignore = foo;
             Ok("func1".to_owned())
         }
 
         fn func2() -> String {
             Ok("func2".to_owned())
+        }
+
+        /// A function with only positional arguments.
+        fn func3(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> String {
+            let _x = (a1, a2, step);
+            Ok("func3".to_owned())
         }
     }
 
@@ -648,9 +668,17 @@ mod test {
                     "func1".to_owned(),
                     super::Member::Function(super::Function {
                         docs: DocString::from_docstring(DocStringKind::Rust, "Docs for func1"),
-                        params: vec![],
+                        params: vec![Param::Arg {
+                            name: "foo".to_owned(),
+                            docs: DocString::from_docstring(DocStringKind::Rust, "Docs for foo"),
+                            typ: None,
+                            default_value: None,
+                        }],
                         ret: Return {
-                            docs: None,
+                            docs: DocString::from_docstring(
+                                DocStringKind::Rust,
+                                "The string 'func1'",
+                            ),
                             typ: None,
                         },
                     }),
@@ -660,6 +688,40 @@ mod test {
                     super::Member::Function(super::Function {
                         docs: None,
                         params: vec![],
+                        ret: Return {
+                            docs: None,
+                            typ: None,
+                        },
+                    }),
+                ),
+                (
+                    "func3".to_owned(),
+                    super::Member::Function(super::Function {
+                        docs: DocString::from_docstring(
+                            DocStringKind::Rust,
+                            "A function with only positional arguments.",
+                        ),
+                        params: vec![
+                            Param::Arg {
+                                name: "a1".to_owned(),
+                                docs: None,
+                                typ: None,
+                                default_value: None,
+                            },
+                            Param::Arg {
+                                name: "a2".to_owned(),
+                                docs: None,
+                                typ: None,
+                                default_value: Some("None".to_owned()),
+                            },
+                            Param::Arg {
+                                name: "step".to_owned(),
+                                docs: None,
+                                typ: None,
+                                // TODO: This should actually show '1'...
+                                default_value: Some("None".to_owned()),
+                            },
+                        ],
                         ret: Return {
                             docs: None,
                             typ: None,
@@ -700,9 +762,17 @@ mod test {
                     "func1".to_owned(),
                     super::Member::Function(super::Function {
                         docs: DocString::from_docstring(DocStringKind::Rust, "Docs for func1"),
-                        params: vec![],
+                        params: vec![Param::Arg {
+                            name: "foo".to_owned(),
+                            docs: DocString::from_docstring(DocStringKind::Rust, "Docs for foo"),
+                            typ: None,
+                            default_value: None,
+                        }],
                         ret: Return {
-                            docs: None,
+                            docs: DocString::from_docstring(
+                                DocStringKind::Rust,
+                                "The string 'func1'",
+                            ),
                             typ: None,
                         },
                     }),

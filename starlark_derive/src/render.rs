@@ -120,6 +120,7 @@ fn render_fun(x: StarFun) -> TokenStream {
 
     let name_str = ident_string(&x.name);
     let signature = render_signature(&x);
+    let documentation = render_documentation(&x);
     let binding = render_binding(&x);
     let is_method = x.is_method();
 
@@ -132,7 +133,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         speculative_exec_safe,
         body,
         source: _,
-        docstring,
+        docstring: _,
     } = x;
 
     let typ = match type_attribute {
@@ -152,34 +153,7 @@ fn render_fun(x: StarFun) -> TokenStream {
             }
         }
     };
-    let doc_renderer = {
-        let docs = match docstring.as_ref() {
-            Some(d) => quote_spanned!(span=> Some(#d)),
-            None => quote_spanned!(span=> None),
-        };
-        let new_signature = match signature.as_ref() {
-            Some(_) => quote_spanned!(span=> __signature.clone()),
-            None => {
-                let name = ident_string(&name);
-                quote_spanned!(span=> starlark::eval::ParametersSpec::<starlark::values::FrozenValue>::new(#name.to_owned()))
-            }
-        };
 
-        quote_spanned!(span=>
-            let __documentation_renderer = {
-                let signature = #new_signature;
-                // TODO(nmj): Accumulate parameter types and return types here
-                let parameter_types = std::collections::HashMap::new();
-                let return_type = None;
-                starlark::values::function::NativeCallableRawDocs {
-                    rust_docstring: #docs,
-                    signature,
-                    parameter_types,
-                    return_type,
-                }
-            };
-        )
-    };
 
     let signature_arg = signature.as_ref().map(
         |_| quote_spanned! {span=> __signature: &starlark::eval::ParametersSpec<starlark::values::FrozenValue>,},
@@ -252,7 +226,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         }
         {
             #signature
-            #doc_renderer
+            #documentation
             #builder_set
         }
     }
@@ -389,6 +363,55 @@ fn render_signature(x: &StarFun) -> Option<TokenStream> {
     } else {
         None
     }
+}
+
+fn render_documentation(x: &StarFun) -> TokenStream {
+    let span = x.args_span();
+
+    // A signature is not needed to invoke positional-only functions, but we still want
+    // information like names, order, type, etc to be available to call '.documentation()' on.
+    let args_count = match &x.source {
+        StarFunSource::Argument(args_count) => Some(*args_count),
+        StarFunSource::Positional(required, optional) => Some(required + optional),
+        StarFunSource::Unknown | StarFunSource::Parameters | StarFunSource::ThisParameters => None,
+    };
+    let name_str = ident_string(&x.name);
+    let documentation_signature = match args_count {
+        Some(args_count) => {
+            let sig_args = x.args.map(render_signature_arg);
+            quote_spanned! {
+                span=> {
+                #[allow(unused_mut)]
+                let mut __signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
+                #( #sig_args )*
+                __signature
+                }
+            }
+        }
+        None => {
+            quote_spanned!(span=> starlark::eval::ParametersSpec::<starlark::values::FrozenValue>::new(#name_str.to_owned()))
+        }
+    };
+
+    let docs = match x.docstring.as_ref() {
+        Some(d) => quote_spanned!(span=> Some(#d)),
+        None => quote_spanned!(span=> None),
+    };
+
+    quote_spanned!(span=>
+        let __documentation_renderer = {
+            let signature = #documentation_signature;
+            // TODO(nmj): Accumulate parameter types and return types here
+            let parameter_types = std::collections::HashMap::new();
+            let return_type = None;
+            starlark::values::function::NativeCallableRawDocs {
+                rust_docstring: #docs,
+                signature,
+                parameter_types,
+                return_type,
+            }
+        };
+    )
 }
 
 // Generate a statement that modifies signature to add a new argument in.
