@@ -302,12 +302,22 @@ impl<V> ParametersSpec<V> {
             .map(|(s, _)| s.as_str())
             .collect();
 
+        // Some functions have *args, then a single named arg. Make sure
+        // we handle this offset, otherwise, we look for the name in the
+        // wrong slot.
+        let mut offset = 0;
         self.kinds.iter().enumerate().map(move |(i, kind)| {
             let name = match kind {
-                ParameterKind::Args => "*args",
-                ParameterKind::KWargs => "**kwargs",
+                ParameterKind::Args => {
+                    offset += 1;
+                    "*args"
+                }
+                ParameterKind::KWargs => {
+                    offset += 1;
+                    "**kwargs"
+                }
                 _ => names
-                    .get(i)
+                    .get(i - offset)
                     .map(|s| s.trim_start_match('$'))
                     .expect("name in mapping"),
             };
@@ -1117,5 +1127,69 @@ mod test {
 
         assert_eq!(expected, params);
         assert_eq!(None, p.no_args_param_index());
+
+        let mut p = ParametersSpec::<FrozenValue>::new("f".to_owned());
+        p.args();
+        p.optional("a");
+        p.optional("b");
+
+        let params: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = p.iter_params().collect();
+
+        let expected: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = vec![
+            (0, "*args", &ParameterKind::Args),
+            (1, "a", &ParameterKind::Optional),
+            (2, "b", &ParameterKind::Optional),
+        ];
+
+        assert_eq!(expected, params);
+    }
+
+    #[test]
+    fn test_documentation() -> anyhow::Result<()> {
+        // Make sure that documentation for some odder parameter specs works properly.
+        let mut p = ParametersSpec::<FrozenValue>::new("f".to_owned());
+        p.args();
+        p.optional("a");
+        p.optional("b");
+
+        use crate::values::docs;
+        let expected = vec![
+            docs::Param::Args {
+                name: "*args".to_owned(),
+                docs: None,
+                typ: None,
+            },
+            docs::Param::Arg {
+                name: "a".to_owned(),
+                docs: None,
+                typ: Some(docs::Type {
+                    raw_type: "int".to_owned(),
+                }),
+                default_value: Some("None".to_owned()),
+            },
+            docs::Param::Arg {
+                name: "b".to_owned(),
+                docs: DocString::from_docstring(docs::DocStringKind::Rust, "param b docs"),
+                typ: None,
+                default_value: Some("None".to_owned()),
+            },
+        ];
+        let mut types = HashMap::new();
+        types.insert(
+            1,
+            docs::Type {
+                raw_type: "int".to_owned(),
+            },
+        );
+        let mut docs = HashMap::new();
+        docs.insert("a".to_owned(), None);
+        docs.insert(
+            "b".to_owned(),
+            DocString::from_docstring(docs::DocStringKind::Rust, "param b docs"),
+        );
+
+        let params = p.documentation(types, docs);
+        assert_eq!(expected, params);
+        Ok(())
     }
 }
