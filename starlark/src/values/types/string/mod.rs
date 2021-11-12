@@ -23,7 +23,7 @@ use std::{
     fmt,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
-    ops::{Deref, Sub},
+    ops::{Add, Deref, Sub},
     slice, str,
     sync::atomic,
 };
@@ -34,8 +34,13 @@ use crate::{
     collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
     environment::{Methods, MethodsStatic},
     values::{
-        index::apply_slice, string::repr::string_repr, types::string::json::json_escape, Heap,
-        StarlarkValue, UnpackValue, Value, ValueError,
+        index::apply_slice,
+        string::repr::string_repr,
+        types::{
+            none::NoneOr,
+            string::{fast_string::StrIndices, json::json_escape},
+        },
+        Heap, StarlarkValue, UnpackValue, Value, ValueError,
     },
 };
 
@@ -49,7 +54,7 @@ pub(crate) mod simd;
 
 /// Index of a char in a string.
 /// This is different from string byte offset.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Dupe)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Dupe, Debug)]
 pub(crate) struct CharIndex(pub(crate) usize);
 
 impl Sub for CharIndex {
@@ -57,6 +62,14 @@ impl Sub for CharIndex {
 
     fn sub(self, rhs: CharIndex) -> CharIndex {
         CharIndex(self.0 - rhs.0)
+    }
+}
+
+impl Add for CharIndex {
+    type Output = CharIndex;
+
+    fn add(self, rhs: CharIndex) -> CharIndex {
+        CharIndex(self.0 + rhs.0)
     }
 }
 
@@ -273,54 +286,19 @@ impl<'v> StarlarkValue<'v> for str {
             return Ok(heap.alloc(xs.into_iter().collect::<String>()));
         }
 
-        // We know stride == 1, so can ignore it
-        let start = start.map_or(Ok(0), |v| v.to_int())?;
-        let stop = stop.try_map(|v| v.to_int())?;
-
-        if start >= 0 {
-            match stop {
-                None => {
-                    return Ok(
-                        heap.alloc_str(fast_string::split_at(s, CharIndex(start as usize)).1)
-                    );
-                }
-                Some(stop) if stop >= 0 => {
-                    let s = fast_string::split_at(s, CharIndex(start as usize)).1;
-                    let s =
-                        fast_string::split_at(s, CharIndex(cmp::max(0, stop - start) as usize)).0;
-                    return Ok(heap.alloc_str(s));
-                }
-                _ => {}
+        #[inline(always)]
+        fn start_stop_to_none_or(v: Option<Value>) -> anyhow::Result<NoneOr<i32>> {
+            match v {
+                None => Ok(NoneOr::None),
+                Some(v) => Ok(NoneOr::Other(v.to_int()?)),
             }
         }
-        let len_chars = fast_string::len(s);
-        let adjust = |x: i32| {
-            cmp::min(
-                if x < 0 {
-                    CharIndex((cmp::max(0, x + len_chars.0 as i32)) as usize)
-                } else {
-                    CharIndex(x as usize)
-                },
-                len_chars,
-            )
-        };
-        let start = adjust(start);
-        let stop = adjust(stop.unwrap_or(len_chars.0 as i32));
 
-        if start >= stop {
-            Ok(heap.alloc_str(""))
-        } else if s.len() == len_chars.0 {
-            // ASCII fast-path
-            Ok(heap.alloc_str(s.get(start.0..stop.0).unwrap()))
-        } else {
-            let s = fast_string::split_at(s, start).1;
-            let s = if stop == len_chars {
-                s
-            } else {
-                assert!(stop > start);
-                fast_string::split_at(s, stop - start).0
-            };
-            return Ok(heap.alloc_str(s));
+        let (start, stop) = (start_stop_to_none_or(start)?, start_stop_to_none_or(stop)?);
+
+        match fast_string::convert_str_indices(self, start, stop) {
+            Some(StrIndices { haystack, .. }) => Ok(heap.alloc_str(haystack)),
+            None => Ok(heap.alloc_str("")),
         }
     }
 
@@ -512,8 +490,8 @@ len("😿") == 1
         let heap = Heap::new();
         for example in EXAMPLES {
             let s = heap.alloc_str(example);
-            for i in -5..6 {
-                for j in -5..6 {
+            for i in -5..=6 {
+                for j in -5..=6 {
                     let start = if i == 6 {
                         None
                     } else {
@@ -534,7 +512,14 @@ len("😿") == 1
                         .unwrap()
                         .unpack_str()
                         .unwrap();
-                    assert_eq!(&res1, res2);
+                    assert_eq!(
+                        &res1,
+                        res2,
+                        "{:?}[{}:{}]",
+                        example,
+                        start.map_or("".to_owned(), |x| x.to_string()),
+                        stop.map_or("".to_owned(), |x| x.to_string())
+                    );
                 }
             }
         }

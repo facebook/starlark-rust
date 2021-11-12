@@ -26,12 +26,15 @@ use crate as starlark;
 use crate::{
     environment::MethodsBuilder,
     eval::Arguments,
-    stdlib::util::convert_indices,
+    stdlib::string::fast_string::convert_str_indices,
     values::{
         none::NoneOr,
         string::{fast_string, interpolation},
         tuple::Tuple,
-        types::string::iter::{iterate_chars, iterate_codepoints},
+        types::string::{
+            fast_string::StrIndices,
+            iter::{iterate_chars, iterate_codepoints},
+        },
         StringValue, UnpackValue, Value, ValueOf,
     },
 };
@@ -236,8 +239,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.len() as i32, start, end);
-        if let Some(haystack) = this.get(start..end) {
+        if let Some(StrIndices { haystack, .. }) = convert_str_indices(this, start, end) {
             Ok(fast_string::count_matches(haystack, needle) as i32)
         } else {
             Ok(0)
@@ -296,11 +298,10 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        // TODO(nga): this does not work correctly for non-ASCII strings
-        let (start, end) = convert_indices(this.len() as i32, start, end);
-        if let Some(substring) = this.get(start..end) {
-            if let Some(offset) = substring.find(needle) {
-                return Ok((offset + start) as i32);
+        if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
+            if let Some(index) = haystack.find(needle) {
+                let index = fast_string::len(&haystack[..index]);
+                return Ok((start + index).0 as i32);
             }
         }
         Ok(-1)
@@ -395,10 +396,10 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.len() as i32, start, end);
-        if let Some(substring) = this.get(start..end) {
-            if let Some(offset) = substring.find(needle) {
-                return Ok((offset + start) as i32);
+        if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
+            if let Some(index) = haystack.find(needle) {
+                let index = fast_string::len(&haystack[..index]);
+                return Ok((start + index).0 as i32);
             }
         }
         Err(anyhow!("Substring '{}' not found in '{}'", needle, this))
@@ -815,10 +816,10 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.len() as i32, start, end);
-        if let Some(substring) = this.get(start..end) {
-            if let Some(offset) = substring.rfind(needle) {
-                return Ok((offset + start) as i32);
+        if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
+            if let Some(index) = haystack.rfind(needle) {
+                let index = fast_string::len(&haystack[..index]);
+                return Ok((start + index).0 as i32);
             }
         }
         Ok(-1)
@@ -850,10 +851,10 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        let (start, end) = convert_indices(this.len() as i32, start, end);
-        if let Some(substring) = this.get(start..end) {
-            if let Some(offset) = substring.rfind(needle) {
-                return Ok((offset + start) as i32);
+        if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
+            if let Some(index) = haystack.rfind(needle) {
+                let index = fast_string::len(&haystack[..index]);
+                return Ok((start + index).0 as i32);
             }
         }
         Err(anyhow!("Substring '{}' not found in '{}'", needle, this))
@@ -1276,10 +1277,7 @@ mod tests {
 
     #[test]
     fn test_find() {
-        // TODO(nga): this should evaluate to 10.
-        //   The same issue is with several other functions.
-        //   All of them using `convert_indices` function but maybe others.
-        assert::eq("'Троянская война окончена'.find('война')", "19");
+        assert::eq("'Троянская война окончена'.find('война')", "10");
     }
 
     #[test]

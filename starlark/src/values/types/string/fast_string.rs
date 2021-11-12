@@ -21,7 +21,10 @@
 
 use std::{cmp::min, str};
 
-use crate::values::types::string::CharIndex;
+use crate::{
+    stdlib::util::convert_indices,
+    values::types::{none::NoneOr, string::CharIndex},
+};
 
 #[inline(always)]
 fn is_1byte(x: u8) -> bool {
@@ -105,17 +108,6 @@ pub(crate) fn at(x: &str, i: CharIndex) -> Option<char> {
     s.chars().nth(i.0 as usize - n)
 }
 
-pub(crate) fn split_at(x: &str, i: CharIndex) -> (&str, &str) {
-    if i.0 >= x.len() {
-        return (x, "");
-    }
-    let n = skip_at_most_1byte(x, i.0);
-    let s = unsafe { x.get_unchecked(n..) };
-    let mut c = s.chars();
-    let _ = c.advance_by(i.0 - n); // Ignore if it advances by less than N
-    x.split_at(x.len() - c.as_str().len())
-}
-
 /// Find the length of the string in characters.
 /// If the length matches the length in bytes, the string must be 7bit ASCII.
 pub(crate) fn len(x: &str) -> CharIndex {
@@ -142,5 +134,215 @@ pub fn count_matches(x: &str, needle: &str) -> usize {
         count_matches_byte(x, needle.as_bytes()[0])
     } else {
         x.matches(needle).count()
+    }
+}
+
+/// Result of applying `start` and `end` to a string.
+#[derive(PartialEq, Debug)]
+pub(crate) struct StrIndices<'a> {
+    /// Computed start char index.
+    pub(crate) start: CharIndex,
+    /// Substring after applying the `start` and `end` arguments.
+    pub(crate) haystack: &'a str,
+}
+
+/// Split the string at given char offset. `None` if offset is out of bounds.
+fn split_at(x: &str, i: CharIndex) -> Option<(&str, &str)> {
+    if i.0 == 0 {
+        return Some(("", x));
+    }
+    if i.0 > x.len() {
+        return None;
+    }
+    let n = skip_at_most_1byte(x, i.0);
+    let s = unsafe { x.get_unchecked(n..) };
+    let mut c = s.chars();
+    for _ in 0..i.0 - n {
+        c.next()?;
+    }
+    Some(x.split_at(x.len() - c.as_str().len()))
+}
+
+/// Perform the Starlark operation `x[:i]` (`i` is an unsigned integer here).
+fn split_at_end(x: &str, i: CharIndex) -> &str {
+    match split_at(x, i) {
+        Some((before, _)) => before,
+        None => x,
+    }
+}
+
+fn convert_str_indices_slow(s: &str, start: NoneOr<i32>, end: NoneOr<i32>) -> Option<StrIndices> {
+    // Slow version when we need to compute full string length
+    // because at least one of the indices is negative.
+    debug_assert!(
+        matches!(start, NoneOr::Other(start) if start < 0)
+            || matches!(end, NoneOr::Other(end) if end < 0)
+    );
+    // If both indices are negative, we should have ruled `start > end` case before.
+    debug_assert!(
+        matches!((start, end), (NoneOr::Other(start), NoneOr::Other(end))
+                if start >= 0 || end >= 0 || (start <= end))
+            || matches!(start, NoneOr::None)
+            || matches!(end, NoneOr::None)
+    );
+    let len = len(s);
+    let (start, end) = convert_indices(len.0 as i32, start, end);
+    if start > end {
+        return None;
+    }
+    let (start, end) = (CharIndex(start), CharIndex(end));
+    debug_assert!(end <= len);
+    let s = if len.0 == s.len() {
+        // ASCII fast path: if char len is equal to byte len,
+        // we know the string is ASCII.
+        unsafe { s.get_unchecked(start.0..end.0) }
+    } else {
+        let (_, s) = split_at(s, start).unwrap();
+        let (s, _) = split_at(s, end - start).unwrap();
+        s
+    };
+    Some(StrIndices { start, haystack: s })
+}
+
+/// Convert common `start` and `end` arguments of `str` functions like `str.find`.
+#[inline(always)]
+pub(crate) fn convert_str_indices(
+    s: &str,
+    start: NoneOr<i32>,
+    end: NoneOr<i32>,
+) -> Option<StrIndices> {
+    match (start, end) {
+        // Following cases but last optimize index computation
+        // by avoiding computing the length of the string.
+        (NoneOr::None, NoneOr::None) => Some(StrIndices {
+            start: CharIndex(0),
+            haystack: s,
+        }),
+        (NoneOr::Other(start), NoneOr::None) if start >= 0 => {
+            let (_, s) = split_at(s, CharIndex(start as usize))?;
+            Some(StrIndices {
+                start: CharIndex(start as usize),
+                haystack: s,
+            })
+        }
+        (NoneOr::None, NoneOr::Other(end)) if end >= 0 => {
+            let s = split_at_end(s, CharIndex(end as usize));
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: s,
+            })
+        }
+        (NoneOr::Other(start), NoneOr::Other(end)) if start >= 0 && end >= start => {
+            let (_, s) = split_at(s, CharIndex(start as usize))?;
+            let s = split_at_end(s, CharIndex((end - start) as usize));
+            Some(StrIndices {
+                start: CharIndex(start as usize),
+                haystack: s,
+            })
+        }
+        (NoneOr::Other(start), NoneOr::Other(end))
+            if ((start >= 0) == (end >= 0)) && start > end =>
+        {
+            None
+        }
+        (start, end) => convert_str_indices_slow(s, start, end),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::iter;
+
+    use crate::values::{
+        string::fast_string::convert_str_indices,
+        types::{
+            none::NoneOr,
+            string::{fast_string::StrIndices, CharIndex},
+        },
+    };
+
+    #[test]
+    fn test_convert_str_indices() {
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: "abc",
+            }),
+            convert_str_indices("abc", NoneOr::None, NoneOr::None)
+        );
+        assert_eq!(
+            None,
+            convert_str_indices("abc", NoneOr::Other(2), NoneOr::Other(1))
+        );
+
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: "abc",
+            }),
+            convert_str_indices("abc", NoneOr::Other(-10), NoneOr::Other(10))
+        );
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(1),
+                haystack: "",
+            }),
+            convert_str_indices("abc", NoneOr::Other(1), NoneOr::Other(1))
+        );
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: "ab",
+            }),
+            convert_str_indices("abc", NoneOr::Other(-10), NoneOr::Other(2))
+        );
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: "ab",
+            }),
+            convert_str_indices("abc", NoneOr::Other(-10), NoneOr::Other(-1))
+        );
+
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: "s",
+            }),
+            convert_str_indices("short", NoneOr::Other(0), NoneOr::Other(-4))
+        );
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(0),
+                haystack: "fish",
+            }),
+            convert_str_indices("fish", NoneOr::None, NoneOr::Other(10))
+        );
+    }
+
+    #[test]
+    fn test_convert_str_indices_non_ascii() {
+        assert_eq!(
+            Some(StrIndices {
+                start: CharIndex(6),
+                haystack: "под",
+            }),
+            convert_str_indices("Город под подошвой", NoneOr::Other(6), NoneOr::Other(9))
+        )
+    }
+
+    #[test]
+    fn test_convert_str_indices_trigger_debug_assertions() {
+        fn none_ors() -> impl Iterator<Item = NoneOr<i32>> {
+            iter::once(NoneOr::None).chain((-30..30).map(NoneOr::Other))
+        }
+
+        for s in &["", "a", "abcde", "Телемак"] {
+            for start in none_ors() {
+                for end in none_ors() {
+                    let _ = convert_str_indices(s, start, end);
+                }
+            }
+        }
     }
 }
