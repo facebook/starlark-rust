@@ -150,9 +150,11 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
         let (start, end) = convert_indices(this.len() as i32, start, end);
-        for (i, x) in this[start..end].iter().enumerate() {
-            if x.equals(needle)? {
-                return Ok((i + start) as i32);
+        if let Some(haystack) = this.get(start..end) {
+            for (i, x) in haystack.iter().enumerate() {
+                if x.equals(needle)? {
+                    return Ok((i + start) as i32);
+                }
             }
         }
         Err(anyhow!("Element '{}' not found in '{}'", needle, this))
@@ -293,6 +295,12 @@ mod tests {
             "x = [1, 2, 3, 2]; x.remove(2); x.remove(2); x.remove(2)",
             "not found in list",
         );
+    }
+
+    #[test]
+    fn test_index() {
+        // Should fail, but should not panic.
+        assert::fail("[True].index(True, 1, 0)", "not found");
     }
 
     #[test]

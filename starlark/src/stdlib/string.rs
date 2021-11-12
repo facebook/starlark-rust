@@ -236,12 +236,12 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
     ) -> i32 {
-        if !start.is_none() || !end.is_none() {
-            let (start, end) = convert_indices(this.len() as i32, start, end);
-            // FIXME: This unwrap can be triggered by users, should bubble up an error
-            this = this.get(start..end).unwrap();
+        let (start, end) = convert_indices(this.len() as i32, start, end);
+        if let Some(haystack) = this.get(start..end) {
+            Ok(fast_string::count_matches(haystack, needle) as i32)
+        } else {
+            Ok(0)
         }
-        Ok(fast_string::count_matches(this, needle) as i32)
     }
 
     /// [string.endswith](
@@ -1267,6 +1267,11 @@ mod tests {
         assert::fail(r#""bonbon".index("on", 2, 5)"#, "not found in");
         assert::fail(r#"("banana".replace("a", "o", -2))"#, "negative");
         assert::fail(r#""bonbon".rindex("on", 2, 5)"#, "not found in");
+    }
+
+    #[test]
+    fn test_count() {
+        assert::eq("'abc'.count('a', 10, -10)", "0");
     }
 
     #[test]
