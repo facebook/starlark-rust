@@ -45,7 +45,7 @@ use crate::{
             stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
         runtime::{
-            arguments::{ParameterKind, ParametersSpec},
+            arguments::ParametersSpec,
             evaluator::Evaluator,
             slots::{LocalSlotBase, LocalSlotId},
         },
@@ -517,47 +517,7 @@ impl<'v> Def<'v> {
 }
 
 impl<'v, T1: ValueLike<'v>> DefGen<T1> {
-    /// Extract a few key things out of the main function docstring
-    fn parse_docstring(
-        &self,
-    ) -> (
-        Option<DocString>,
-        HashMap<String, Option<DocString>>,
-        Option<DocString>,
-    ) {
-        let mut docstring = self
-            .def_info
-            .docstring
-            .as_ref()
-            .and_then(|s| DocString::from_docstring(DocStringKind::Starlark, s));
-        let mut param_docs = HashMap::new();
-        let mut return_docs = None;
-
-        if let Some(ds) = docstring {
-            let (new_docstring, sections) =
-                ds.parse_and_remove_sections(DocStringKind::Starlark, &["args", "returns"]);
-            docstring = Some(new_docstring);
-            if let Some(args) = sections.get("args") {
-                param_docs = DocString::parse_params(DocStringKind::Starlark, args)
-                    .into_iter()
-                    .map(|(name, docs)| {
-                        (
-                            name,
-                            DocString::from_docstring(DocStringKind::Starlark, &docs),
-                        )
-                    })
-                    .collect();
-            }
-            if let Some(docs) = sections.get("returns") {
-                return_docs = DocString::from_docstring(DocStringKind::Starlark, docs);
-            }
-        };
-        (docstring, param_docs, return_docs)
-    }
-
     fn docs(&self) -> Option<DocItem> {
-        let (def_docstring, parameter_docs, return_docs) = self.parse_docstring();
-
         let parameter_types: HashMap<usize, docs::Type> = self
             .parameter_types
             .iter()
@@ -571,55 +531,19 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
             })
             .collect();
 
-        let mut parameters: Vec<docs::Param> = self
-            .parameters
-            .iter_params()
-            .map(|(i, name, kind)| {
-                let typ = parameter_types.get(&i).cloned();
-                let docs = parameter_docs.get(name).and_then(|x| x.clone());
-                let name = name.to_owned();
-                match kind {
-                    ParameterKind::Required => docs::Param::Arg {
-                        name,
-                        docs,
-                        typ,
-                        default_value: None,
-                    },
-                    ParameterKind::Optional => docs::Param::Arg {
-                        name,
-                        docs,
-                        typ,
-                        default_value: Some("None".to_owned()),
-                    },
-                    ParameterKind::Defaulted(v) => docs::Param::Arg {
-                        name,
-                        docs,
-                        typ,
-                        default_value: Some(v.to_value().to_repr()),
-                    },
-                    ParameterKind::Args => docs::Param::Args { name, docs, typ },
-                    ParameterKind::KWargs => docs::Param::Kwargs { name, docs, typ },
-                }
-            })
-            .collect();
+        let return_type = self.return_type.as_ref().map(|r| docs::Type {
+            raw_type: r.0.to_value().to_repr(),
+        });
 
-        // Go back and add the "*" arg if it's present
-        if let Some(i) = self.parameters.no_args_param_index() {
-            parameters.insert(i, docs::Param::NoArgs);
-        }
+        let function_docs = docs::Function::from_docstring(
+            DocStringKind::Starlark,
+            |param_docs| self.parameters.documentation(parameter_types, param_docs),
+            return_type,
+            self.def_info.docstring.as_ref().map(String::as_ref),
+        );
 
-        let return_details = docs::Return {
-            docs: return_docs,
-            typ: self.return_type.as_ref().map(|r| docs::Type {
-                raw_type: r.0.to_value().to_repr(),
-            }),
-        };
 
-        Some(DocItem::Function(docs::Function {
-            docs: def_docstring,
-            params: parameters,
-            ret: return_details,
-        }))
+        Some(DocItem::Function(function_docs))
     }
 }
 

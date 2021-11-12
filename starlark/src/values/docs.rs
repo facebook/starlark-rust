@@ -240,7 +240,7 @@ impl DocString {
     /// - A new instance of `DocString`, with the requested sections, if found, removed.
     /// - A mapping of section name, converted to lower case, to the cleaned up section text
     ///     i.e. dedented, section header not present, etc for any found sections.
-    pub fn parse_and_remove_sections(
+    fn parse_and_remove_sections(
         self,
         kind: DocStringKind,
         requested_sections: &[&str],
@@ -293,7 +293,7 @@ impl DocString {
 
             finish_section(&mut current_section, &mut current_section_text);
 
-            let joined_details = new_details.join("\n");
+            let joined_details = new_details.join("\n").trim().to_owned();
             let details = match joined_details.is_empty() {
                 true => None,
                 false => Some(joined_details),
@@ -364,6 +364,115 @@ pub struct Function {
     pub params: Vec<Param>,
     /// Details about what this function returns.
     pub ret: Return,
+}
+
+impl Function {
+    /// Parses function documentation out of a docstring
+    ///
+    /// # Arguments
+    /// * `kind`: The kind of docstring. This determines the formatting that is parsed.
+    /// * `params_producer`: A function that takes a mapping of parameter names -> docstrings,
+    ///                      and creates a vec of params. These are then returned in the
+    ///                      main `Function` object.
+    /// * `return_type`: The return type. This is pulled from typing info / directly from users,
+    ///                  so it cannot be inferred generically.
+    /// * `raw_docstring`: The raw docstring to be parsed and potentially modified,
+    ///                    removing the sections detailing arguments and return values.
+    ///                    The format is determined by `kind`.
+    pub fn from_docstring<F: FnOnce(HashMap<String, Option<DocString>>) -> Vec<Param>>(
+        kind: DocStringKind,
+        params_producer: F,
+        return_type: Option<Type>,
+        raw_docstring: Option<&str>,
+    ) -> Self {
+        match raw_docstring.and_then(|raw| DocString::from_docstring(kind, raw)) {
+            Some(ds) => {
+                let (function_docstring, sections) =
+                    ds.parse_and_remove_sections(kind, &["arguments", "args", "returns", "return"]);
+
+                let arg_docs = match sections.get("arguments").or_else(|| sections.get("args")) {
+                    Some(args) => Self::parse_params(kind, args)
+                        .into_iter()
+                        .map(|(name, raw)| (name, DocString::from_docstring(kind, &raw)))
+                        .collect(),
+                    None => HashMap::new(),
+                };
+                let params = params_producer(arg_docs);
+
+                let return_docs = sections
+                    .get("return")
+                    .or_else(|| sections.get("returns"))
+                    .and_then(|raw| DocString::from_docstring(kind, raw));
+
+                Function {
+                    docs: Some(function_docstring),
+                    params,
+                    ret: Return {
+                        docs: return_docs,
+                        typ: return_type,
+                    },
+                }
+            }
+            None => Function {
+                docs: None,
+                params: params_producer(HashMap::new()),
+                ret: Return {
+                    docs: None,
+                    typ: return_type,
+                },
+            },
+        }
+    }
+
+
+    /// Parse out parameter docs from an "Args:" section of a docstring
+    ///
+    /// `args_section` should be dedented, and generally should just be the `args` key of
+    /// the `DocString::parse_and_remove_sections()` function call. This is done as a
+    /// separate function to reduce the number of times that sections are parsed out of
+    /// docstring (e.g. if a user wants both the `Args:` and `Returns:` sections)
+    fn parse_params(kind: DocStringKind, args_section: &str) -> HashMap<String, String> {
+        static STARLARK_ARG_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(\*{0,2}\w+):\s*(.*)").unwrap());
+        static RUST_ARG_RE: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^(?:\* )?`(\w+)`:?\s*(.*)").unwrap());
+
+        static INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
+
+        let arg_re = match kind {
+            DocStringKind::Starlark => &STARLARK_ARG_RE,
+            DocStringKind::Rust => &RUST_ARG_RE,
+        };
+
+        let mut ret = HashMap::new();
+        let mut current_arg = None;
+        let mut current_text = vec![];
+
+        for line in args_section.lines() {
+            if let Some(matches) = arg_re.captures(line) {
+                if let Some(a) = current_arg.take() {
+                    ret.insert(a, DocString::join_and_dedent_lines(&current_text));
+                }
+
+                current_arg = Some(matches.get(1).unwrap().as_str().to_owned());
+
+                let doc_match = matches.get(2).unwrap();
+                current_text = vec![format!(
+                    "{}{}",
+                    " ".repeat(doc_match.start()),
+                    doc_match.as_str()
+                )];
+            } else if current_arg.is_some() && INDENTED_RE.is_match(line) {
+                current_text.push(line.to_owned());
+            }
+        }
+
+        if let Some(a) = current_arg.take() {
+            ret.insert(a, DocString::join_and_dedent_lines(&current_text));
+        }
+
+        ret
+    }
 }
 
 /// A single parameter of a function.
@@ -699,8 +808,10 @@ mod test {
     }
 
     #[test]
-    fn parses_params_from_starlark_docstring() {
+    fn parses_starlark_function_docstring() {
         let docstring = r#"This is an example docstring
+
+        Details here
 
         Args:
             arg_foo: The argument named foo
@@ -709,64 +820,144 @@ mod test {
                      over three lines
             *args: Docs for args
             **kwargs: Docs for kwargs
+
+        Returns:
+            A value
         "#;
 
-        let mut expected = HashMap::new();
-        expected.insert("arg_foo".to_owned(), "The argument named foo".to_owned());
-        expected.insert(
-            "arg_bar".to_owned(),
-            concat!(
-                "The argument named bar. It has\n",
-                "a longer doc string that spans\n",
-                "over three lines"
-            )
-            .to_owned(),
+        let kind = DocStringKind::Starlark;
+        let return_type = Some(Type {
+            raw_type: "int".to_owned(),
+        });
+        let expected = Function {
+            docs: DocString::from_docstring(kind, "This is an example docstring\n\nDetails here"),
+            params: vec![
+                Param::Arg {
+                    name: "**kwargs".to_owned(),
+                    docs: DocString::from_docstring(kind, "Docs for kwargs"),
+                    typ: None,
+                    default_value: None,
+                },
+                Param::Arg {
+                    name: "*args".to_owned(),
+                    docs: DocString::from_docstring(kind, "Docs for args"),
+                    typ: None,
+                    default_value: None,
+                },
+                Param::Arg {
+                    name: "arg_bar".to_owned(),
+                    docs: DocString::from_docstring(
+                        kind,
+                        concat!(
+                            "The argument named bar. It has\n",
+                            "a longer doc string that spans\n",
+                            "over three lines"
+                        ),
+                    ),
+                    typ: None,
+                    default_value: None,
+                },
+                Param::Arg {
+                    name: "arg_foo".to_owned(),
+                    docs: DocString::from_docstring(kind, "The argument named foo"),
+                    typ: None,
+                    default_value: None,
+                },
+            ],
+            ret: Return {
+                docs: DocString::from_docstring(kind, "A value"),
+                typ: return_type.clone(),
+            },
+        };
+
+        let function_docs = Function::from_docstring(
+            kind,
+            |param_docs| {
+                param_docs
+                    .into_iter()
+                    .sorted_by(|l, r| Ord::cmp(&l.0, &r.0))
+                    .map(|(name, docs)| Param::Arg {
+                        name,
+                        docs,
+                        typ: None,
+                        default_value: None,
+                    })
+                    .collect()
+            },
+            return_type,
+            Some(docstring),
         );
-        expected.insert("*args".to_owned(), "Docs for args".to_owned());
-        expected.insert("**kwargs".to_owned(), "Docs for kwargs".to_owned());
 
-        let param_docs = DocString::from_docstring(DocStringKind::Starlark, docstring)
-            .unwrap()
-            .parse_and_remove_sections(DocStringKind::Starlark, &["args"])
-            .1
-            .get("args")
-            .map(|s| DocString::parse_params(DocStringKind::Starlark, s))
-            .unwrap();
-
-        assert_eq!(param_docs, expected);
+        assert_eq!(expected, function_docs);
     }
 
     #[test]
-    fn parses_params_from_rust_docstring() {
+    fn parses_rust_function_docstring() {
         let docstring = r#"This is an example docstring
+
+        Details here
 
         # Arguments
         * `arg_foo`: The argument named foo
         `arg_bar`: The argument named bar. It has
                    a longer doc string that spans
                    over three lines
+
+        # Returns
+        A value
         "#;
 
-        let mut expected = HashMap::new();
-        expected.insert("arg_foo".to_owned(), "The argument named foo".to_owned());
-        expected.insert(
-            "arg_bar".to_owned(),
-            concat!(
-                "The argument named bar. It has\n",
-                "a longer doc string that spans\n",
-                "over three lines"
-            )
-            .to_owned(),
+        let kind = DocStringKind::Rust;
+        let return_type = Some(Type {
+            raw_type: "int".to_owned(),
+        });
+        let expected = Function {
+            docs: DocString::from_docstring(kind, "This is an example docstring\n\nDetails here"),
+            params: vec![
+                Param::Arg {
+                    name: "arg_bar".to_owned(),
+                    docs: DocString::from_docstring(
+                        kind,
+                        concat!(
+                            "The argument named bar. It has\n",
+                            "a longer doc string that spans\n",
+                            "over three lines"
+                        ),
+                    ),
+                    typ: None,
+                    default_value: None,
+                },
+                Param::Arg {
+                    name: "arg_foo".to_owned(),
+                    docs: DocString::from_docstring(kind, "The argument named foo"),
+                    typ: None,
+                    default_value: None,
+                },
+            ],
+            ret: Return {
+                docs: DocString::from_docstring(kind, "A value"),
+                typ: return_type.clone(),
+            },
+        };
+
+        let function_docs = Function::from_docstring(
+            kind,
+            |param_docs| {
+                param_docs
+                    .into_iter()
+                    .sorted_by(|l, r| Ord::cmp(&l.0, &r.0))
+                    .map(|(name, docs)| Param::Arg {
+                        name,
+                        docs,
+                        typ: None,
+                        default_value: None,
+                    })
+                    .collect()
+            },
+            return_type,
+            Some(docstring),
         );
 
-        let param_docs = DocString::from_docstring(DocStringKind::Rust, docstring)
-            .unwrap()
-            .parse_and_remove_sections(DocStringKind::Rust, &["arguments"])
-            .1
-            .get("arguments")
-            .map(|s| DocString::parse_params(DocStringKind::Rust, s))
-            .unwrap();
-
-        assert_eq!(param_docs, expected);
+        assert_eq!(expected, function_docs);
     }
 }

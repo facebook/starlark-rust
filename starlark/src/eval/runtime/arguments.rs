@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use std::{cell::Cell, cmp, convert::TryInto, intrinsics::unlikely, iter};
+use std::{cell::Cell, cmp, collections::HashMap, convert::TryInto, intrinsics::unlikely, iter};
 
 use either::Either;
 use gazebo::{
@@ -27,18 +27,15 @@ use itertools::Itertools;
 use thiserror::Error;
 
 use crate as starlark;
-use crate::{collections::BorrowHashed, eval::Evaluator, values::StringValue};
-/// Deal with all aspects of runtime parameter evaluation.
-/// First build a Parameters structure, then use collect to collect the
-/// parameters into slots.
 use crate::{
     collections::{
         symbol_map::{Symbol, SymbolMap},
-        Hashed, SmallMap,
+        BorrowHashed, Hashed, SmallMap,
     },
+    eval::Evaluator,
     values::{
-        dict::Dict, Freezer, FrozenValue, Heap, Trace, Tracer, UnpackValue, Value, ValueError,
-        ValueLike,
+        dict::Dict, docs, docs::DocString, Freezer, FrozenValue, Heap, StringValue, Trace, Tracer,
+        UnpackValue, Value, ValueError, ValueLike,
     },
 };
 
@@ -565,6 +562,56 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             .into());
         }
         Ok(())
+    }
+
+    /// Generate documentation for each of the parameters.
+    ///
+    /// # Arguments
+    /// * `parameter_types` should be a mapping of parameter index to type
+    /// * `parameter_docs` should be a mapping of parameter name to possible documentation for
+    ///                    that parameter
+    pub fn documentation(
+        &self,
+        mut parameter_types: HashMap<usize, docs::Type>,
+        mut parameter_docs: HashMap<String, Option<DocString>>,
+    ) -> Vec<docs::Param> {
+        let mut params: Vec<docs::Param> = self
+            .iter_params()
+            .map(|(i, name, kind)| {
+                let typ = parameter_types.remove(&i);
+                let docs = parameter_docs.remove(name).flatten();
+                let name = name.to_owned();
+                match kind {
+                    ParameterKind::Required => docs::Param::Arg {
+                        name,
+                        docs,
+                        typ,
+                        default_value: None,
+                    },
+                    ParameterKind::Optional => docs::Param::Arg {
+                        name,
+                        docs,
+                        typ,
+                        default_value: Some("None".to_owned()),
+                    },
+                    ParameterKind::Defaulted(v) => docs::Param::Arg {
+                        name,
+                        docs,
+                        typ,
+                        default_value: Some(v.to_value().to_repr()),
+                    },
+                    ParameterKind::Args => docs::Param::Args { name, docs, typ },
+                    ParameterKind::KWargs => docs::Param::Kwargs { name, docs, typ },
+                }
+            })
+            .collect();
+
+        // Go back and add the "*" arg if it's present
+        if let Some(i) = self.no_args_param_index() {
+            params.insert(i, docs::Param::NoArgs);
+        }
+
+        params
     }
 
     /// Create a [`ParametersParser`] for given arguments.
