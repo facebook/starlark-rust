@@ -658,6 +658,9 @@ mod test {
         let globals = globals_builder.build();
         let docs = globals.documentation();
 
+        let string_typ = Some(Type {
+            raw_type: "String".to_owned(),
+        });
         let expected_object = super::Object {
             docs: DocString::from_docstring(
                 DocStringKind::Rust,
@@ -679,7 +682,7 @@ mod test {
                                 DocStringKind::Rust,
                                 "The string 'func1'",
                             ),
-                            typ: None,
+                            typ: string_typ.clone(),
                         },
                     }),
                 ),
@@ -690,7 +693,7 @@ mod test {
                         params: vec![],
                         ret: Return {
                             docs: None,
-                            typ: None,
+                            typ: string_typ.clone(),
                         },
                     }),
                 ),
@@ -724,7 +727,7 @@ mod test {
                         ],
                         ret: Return {
                             docs: None,
-                            typ: None,
+                            typ: string_typ,
                         },
                     }),
                 ),
@@ -738,6 +741,9 @@ mod test {
     #[test]
     fn methods_docs_work() {
         let docs = SomeValue {}.documentation();
+        let string_typ = Some(Type {
+            raw_type: "String".to_owned(),
+        });
         let expected_object = super::Object {
             docs: DocString::from_docstring(
                 DocStringKind::Rust,
@@ -773,7 +779,7 @@ mod test {
                                 DocStringKind::Rust,
                                 "The string 'func1'",
                             ),
-                            typ: None,
+                            typ: string_typ.clone(),
                         },
                     }),
                 ),
@@ -784,7 +790,7 @@ mod test {
                         params: vec![],
                         ret: Return {
                             docs: None,
-                            typ: None,
+                            typ: string_typ,
                         },
                     }),
                 ),

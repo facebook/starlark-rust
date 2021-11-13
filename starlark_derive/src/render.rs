@@ -154,7 +154,6 @@ fn render_fun(x: StarFun) -> TokenStream {
         }
     };
 
-
     let signature_arg = signature.as_ref().map(
         |_| quote_spanned! {span=> __signature: &starlark::eval::ParametersSpec<starlark::values::FrozenValue>,},
     );
@@ -397,13 +396,18 @@ fn render_documentation(x: &StarFun) -> TokenStream {
         Some(d) => quote_spanned!(span=> Some(#d)),
         None => quote_spanned!(span=> None),
     };
+    let return_type = &x.return_type;
 
     quote_spanned!(span=>
         let __documentation_renderer = {
             let signature = #documentation_signature;
             // TODO(nmj): Accumulate parameter types and return types here
             let parameter_types = std::collections::HashMap::new();
-            let return_type = None;
+            let return_type = Some(
+                starlark::values::docs::Type {
+                    raw_type: stringify!(#return_type).to_owned()
+                }
+            );
             starlark::values::function::NativeCallableRawDocs {
                 rust_docstring: #docs,
                 signature,
