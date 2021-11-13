@@ -54,6 +54,8 @@ use crate::{
     values::{
         comparison::{compare_small_map, equals_small_map},
         display::display_keyed_container,
+        docs,
+        docs::DocItem,
         error::ValueError,
         AllocValue, Freeze, FrozenValue, Heap, StarlarkValue, StringValue, StringValueLike, Trace,
         UnpackValue, Value, ValueLike, ValueOf,
@@ -95,7 +97,7 @@ impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
             "=",
             self.fields
                 .iter()
-                .map(|(name, value)| (name.to_string_value().as_str(), value)),
+                .map(|(name, value)| (name.to_string(), value)),
         )
     }
 }
@@ -201,6 +203,34 @@ where
             .map(|x| x.to_string_value().as_str().to_owned())
             .collect()
     }
+
+    fn documentation(&self) -> Option<DocItem> {
+        let members = self
+            .fields
+            .iter()
+            .map(|(k, v)| {
+                let name = k
+                    .to_string_value()
+                    .unpack_starlark_str()
+                    .unpack()
+                    .to_owned();
+                match v.to_value().documentation() {
+                    Some(DocItem::Function(f)) => (name, docs::Member::Function(f)),
+                    _ => (
+                        name,
+                        docs::Member::Property(docs::Property {
+                            docs: None,
+                            typ: None,
+                        }),
+                    ),
+                }
+            })
+            .collect();
+        Some(DocItem::Object(docs::Object {
+            docs: None,
+            members,
+        }))
+    }
 }
 
 /// Like [`ValueOf`](crate::values::ValueOf), but only validates value types; does not construct
@@ -249,7 +279,13 @@ impl<'v, V: UnpackValue<'v>> StructOf<'v, V> {
 
 #[cfg(test)]
 mod tests {
-    use crate::assert;
+    use crate::{
+        assert,
+        values::{
+            docs,
+            docs::{DocItem, DocString, DocStringKind},
+        },
+    };
 
     #[test]
     fn test_to_json() {
@@ -274,5 +310,56 @@ struct(foo = ["bar/", "some"]).to_json() == '{"foo":["bar/","some"]}'
 struct(foo = [struct(bar = "some")]).to_json() == '{"foo":[{"bar":"some"}]}'
 "#,
         );
+    }
+
+    #[test]
+    fn test_docs() {
+        let expected = DocItem::Object(docs::Object {
+            docs: None,
+            members: vec![
+                (
+                    "member".to_owned(),
+                    docs::Member::Property(docs::Property {
+                        docs: None,
+                        typ: None,
+                    }),
+                ),
+                (
+                    "some_func".to_owned(),
+                    docs::Member::Function(docs::Function {
+                        docs: DocString::from_docstring(DocStringKind::Starlark, "some_func docs"),
+                        params: vec![docs::Param::Arg {
+                            name: "v".to_owned(),
+                            docs: None,
+                            typ: Some(docs::Type {
+                                raw_type: "\"\"".to_owned(),
+                            }),
+                            default_value: None,
+                        }],
+                        ret: docs::Return {
+                            docs: None,
+                            typ: Some(docs::Type {
+                                raw_type: "\"\"".to_owned(),
+                            }),
+                        },
+                    }),
+                ),
+            ],
+        });
+
+        let s = assert::pass(
+            r#"
+def some_func(v: "") -> "":
+    """ some_func docs """
+    return v
+
+struct(
+    member = "some string",
+    some_func = some_func,
+)"#,
+        );
+        let docs = s.value().documentation().expect("some docs");
+
+        assert_eq!(expected, docs);
     }
 }
