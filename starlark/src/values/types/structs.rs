@@ -146,6 +146,10 @@ where
         self.fields.extra_memory()
     }
 
+    fn collect_repr_cycle(&self, collector: &mut String) {
+        collector.push_str("struct(...)");
+    }
+
     fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
         collector.push('{');
         for (i, (k, v)) in self.fields.iter().enumerate() {
@@ -286,6 +290,19 @@ mod tests {
             docs::{DocItem, DocString, DocStringKind},
         },
     };
+
+    #[test]
+    fn test_repr_cycle() {
+        // TODO(nga): fix repr: field names should not be quoted.
+        assert::eq(
+            "l = []; s = struct(f=l); l.append(s); repr(s)",
+            "'struct(\"f\"=[struct(...)])'",
+        );
+        assert::eq(
+            "l = []; s = struct(f=l); l.append(s); str(s)",
+            "'struct(\"f\"=[struct(...)])'",
+        );
+    }
 
     #[test]
     fn test_to_json() {

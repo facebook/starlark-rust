@@ -371,6 +371,10 @@ where
         r.push('}');
     }
 
+    fn collect_repr_cycle(&self, collector: &mut String) {
+        collector.push_str("{...}");
+    }
+
     fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
         collector.push('{');
         for (i, (k, v)) in self.0.content().iter().enumerate() {
@@ -563,5 +567,11 @@ b1 and b2 and b3
         assert_eq!(d.get_str("hello").unwrap().unpack_int(), Some(12));
         assert_eq!(d.get_str("foo"), None);
         Ok(())
+    }
+
+    #[test]
+    fn test_repr_cycle() {
+        assert::eq("d = {}; d[17] = d; repr(d)", "'{17: {...}}'");
+        assert::eq("d = {}; d[17] = d; str(d)", "'{17: {...}}'");
     }
 }

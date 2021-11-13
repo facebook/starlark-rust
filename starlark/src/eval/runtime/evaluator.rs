@@ -44,8 +44,8 @@ use crate::{
     },
     stdlib::breakpoint::{BreakpointConsole, RealBreakpointConsole},
     values::{
-        value_captured_get, FrozenHeap, FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured,
-        ValueLike,
+        recursive_repr_guard::ReprStackReleaseMemoryOnDrop, value_captured_get, FrozenHeap,
+        FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured, ValueLike,
     },
 };
 
@@ -79,6 +79,8 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // `DefInfo` of currently executed function or module.
     pub(crate) def_info: FrozenRef<DefInfo>,
+    // Make leak sanitizer happy.
+    pub(crate) _repr_stack_release_memory_on_drop: ReprStackReleaseMemoryOnDrop,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
     // Should we enable flame profiling or not
@@ -139,6 +141,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             next_gc_level: GC_THRESHOLD,
             disable_gc: false,
             alloca: Alloca::new(),
+            _repr_stack_release_memory_on_drop: ReprStackReleaseMemoryOnDrop,
             heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
             bc_profile: BcProfile::new(),

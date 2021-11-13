@@ -242,6 +242,10 @@ where
         }
         Ok(heap.alloc_tuple(&result))
     }
+
+    fn collect_repr_cycle(&self, collector: &mut String) {
+        collector.push_str("(...)");
+    }
 }
 
 impl<'v, T1: AllocValue<'v>> AllocValue<'v> for (T1,) {
@@ -298,5 +302,11 @@ str((1, (2, 3))) == "(1, (2, 3))"
 str((1,)) == "(1,)"
 "#,
         );
+    }
+
+    #[test]
+    fn test_repr_cycle() {
+        assert::eq("l = []; t = (l,); l.append(t); repr(t)", "'([(...)],)'");
+        assert::eq("l = []; t = (l,); l.append(t); str(t)", "'([(...)],)'");
     }
 }

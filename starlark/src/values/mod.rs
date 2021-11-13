@@ -56,6 +56,7 @@ use crate::{
         float::StarlarkFloat,
         function::{FrozenBoundMethod, NativeFunction, FUNCTION_TYPE},
         record::FrozenRecord,
+        recursive_repr_guard::{repr_stack_push, ReprStackReleaseMemoryOnDrop},
         structs::FrozenStruct,
         tuple::FrozenTuple,
         types::{list::FrozenList, range::Range, record::RecordType},
@@ -78,6 +79,7 @@ pub(crate) mod iter;
 mod layout;
 pub(crate) mod num;
 mod owned;
+pub(crate) mod recursive_repr_guard;
 mod stack_guard;
 mod trace;
 mod traits;
@@ -90,9 +92,22 @@ unsafe impl<'v> CoerceKey<Value<'v>> for FrozenValue {}
 
 impl Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // We want to reuse Display for `repr`, so that means that
-        // strings must display "with quotes", so we get everything consistent.
-        self.get_ref().as_display().fmt(f)
+        // `Evaluator` releases memory on drop, but we don't know
+        // if we are called from evaluator on not, so release memory.
+        let _release_memory = ReprStackReleaseMemoryOnDrop;
+
+        match repr_stack_push(*self) {
+            Ok(_guard) => {
+                // We want to reuse Display for `repr`, so that means that
+                // strings must display "with quotes", so we get everything consistent.
+                self.get_ref().as_display().fmt(f)
+            }
+            Err(..) => {
+                let mut recursive = String::new();
+                self.get_ref().collect_repr_cycle(&mut recursive);
+                write!(f, "{}", recursive)
+            }
+        }
     }
 }
 
@@ -224,7 +239,14 @@ impl<'v> ValueLike<'v> for Value<'v> {
     }
 
     fn collect_repr(self, collector: &mut String) {
-        self.get_ref().collect_repr(collector);
+        match repr_stack_push(self) {
+            Ok(_guard) => {
+                self.get_ref().collect_repr(collector);
+            }
+            Err(..) => {
+                self.get_ref().collect_repr_cycle(collector);
+            }
+        }
     }
 
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
@@ -360,6 +382,10 @@ impl<'v> Value<'v> {
 
     /// Implement the `repr()` function.
     pub fn to_repr(self) -> String {
+        // `Evaluator` releases memory on drop, but we don't know
+        // if we are called from evaluator on not, so release memory.
+        let _release_memory = ReprStackReleaseMemoryOnDrop;
+
         let mut s = String::new();
         self.collect_repr(&mut s);
         s

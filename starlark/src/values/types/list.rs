@@ -455,6 +455,10 @@ where
         s.push(']');
     }
 
+    fn collect_repr_cycle(&self, collector: &mut String) {
+        collector.push_str("[...]");
+    }
+
     fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
         collector.push('[');
         for (i, e) in self.0.content().iter().enumerate() {
@@ -626,6 +630,12 @@ str([1, [2, 3]]) == "[1, [2, 3]]"
 str([]) == "[]"
 "#,
         );
+    }
+
+    #[test]
+    fn test_repr_cycle() {
+        assert::eq("l = []; l.append(l); repr(l)", "'[[...]]'");
+        assert::eq("l = []; l.append(l); str(l)", "'[[...]]'");
     }
 
     #[test]

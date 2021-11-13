@@ -309,6 +309,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         write!(collector, "{}", self).unwrap()
     }
 
+    /// Invoked to print `repr` when a cycle is the object stack is detected.
+    fn collect_repr_cycle(&self, collector: &mut String) {
+        write!(collector, "<{}...>", self.get_type()).unwrap()
+    }
+
     /// Convert the type to a JSON string.
     fn collect_json(&self, _collector: &mut String) -> anyhow::Result<()> {
         ValueError::unsupported(self, "collect_json()")
@@ -732,6 +737,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn get_methods(&self) -> Option<&'static Methods>;
     fn documentation(&self) -> Option<DocItem>;
     fn collect_repr(&self, _collector: &mut String);
+    fn collect_repr_cycle(&self, _collector: &mut String);
     fn collect_json(&self, _collector: &mut String) -> anyhow::Result<()>;
     fn to_bool(&self) -> bool;
     fn to_int(&self) -> anyhow::Result<i32>;
