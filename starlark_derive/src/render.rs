@@ -397,12 +397,19 @@ fn render_documentation(x: &StarFun) -> TokenStream {
         None => quote_spanned!(span=> None),
     };
     let return_type = &x.return_type;
+    let parameter_types: Vec<_> = x.args
+            .iter()
+            .filter(|a| !a.is_this()) // "this" gets ignored when creating the signature, so make sure the indexes match up.
+            .enumerate()
+            .map(|(i, arg)| {
+                let typ = &arg.ty;
+                quote_spanned!(span=> (#i, starlark::values::docs::Type { raw_type: stringify!(#typ).to_owned() }) )
+            }).collect();
 
     quote_spanned!(span=>
         let __documentation_renderer = {
             let signature = #documentation_signature;
-            // TODO(nmj): Accumulate parameter types and return types here
-            let parameter_types = std::collections::HashMap::new();
+            let parameter_types = std::collections::HashMap::from([#(#parameter_types),*]);
             let return_type = Some(
                 starlark::values::docs::Type {
                     raw_type: stringify!(#return_type).to_owned()

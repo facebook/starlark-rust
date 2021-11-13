@@ -674,7 +674,7 @@ mod test {
                         params: vec![Param::Arg {
                             name: "foo".to_owned(),
                             docs: DocString::from_docstring(DocStringKind::Rust, "Docs for foo"),
-                            typ: None,
+                            typ: string_typ.clone(),
                             default_value: None,
                         }],
                         ret: Return {
@@ -708,19 +708,25 @@ mod test {
                             Param::Arg {
                                 name: "a1".to_owned(),
                                 docs: None,
-                                typ: None,
+                                typ: Some(Type {
+                                    raw_type: "i32".to_owned(),
+                                }),
                                 default_value: None,
                             },
                             Param::Arg {
                                 name: "a2".to_owned(),
                                 docs: None,
-                                typ: None,
+                                typ: Some(Type {
+                                    raw_type: "Option < i32 >".to_owned(),
+                                }),
                                 default_value: Some("None".to_owned()),
                             },
                             Param::Arg {
                                 name: "step".to_owned(),
                                 docs: None,
-                                typ: None,
+                                typ: Some(Type {
+                                    raw_type: "i32".to_owned(),
+                                }),
                                 // TODO: This should actually show '1'...
                                 default_value: Some("None".to_owned()),
                             },
@@ -771,7 +777,7 @@ mod test {
                         params: vec![Param::Arg {
                             name: "foo".to_owned(),
                             docs: DocString::from_docstring(DocStringKind::Rust, "Docs for foo"),
-                            typ: None,
+                            typ: string_typ.clone(),
                             default_value: None,
                         }],
                         ret: Return {
