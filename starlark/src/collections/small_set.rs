@@ -87,8 +87,8 @@ where
 }
 
 impl<T> SmallSet<T> {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        SmallSet(SmallMap::new())
     }
 
     pub fn with_capacity(n: usize) -> Self {
@@ -145,6 +145,14 @@ impl<T> SmallSet<T> {
         T: Eq,
     {
         self.0.remove_entry(key).map(|(k, _)| k)
+    }
+
+    /// Remove the last element from the set.
+    pub fn pop(&mut self) -> Option<T>
+    where
+        T: Eq,
+    {
+        self.0.pop().map(|(k, ())| k)
     }
 
     pub fn is_empty(&self) -> bool {

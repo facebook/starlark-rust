@@ -19,7 +19,7 @@
 
 use std::{cell::Cell, intrinsics::unlikely};
 
-use crate::values::Value;
+use crate::{collections::SmallSet, values::Value};
 
 /// Pop the stack on drop.
 pub(crate) struct ReprStackGuard;
@@ -37,16 +37,15 @@ impl Drop for ReprStackGuard {
 pub(crate) struct ReprCycle;
 
 #[thread_local]
-static STACK: Cell<Vec<usize>> = Cell::new(Vec::new());
+static STACK: Cell<SmallSet<usize>> = Cell::new(SmallSet::new());
 
 /// Push a value to the stack, return error if it is already on the stack.
 pub(crate) fn repr_stack_push(value: Value) -> Result<ReprStackGuard, ReprCycle> {
     let mut stack = STACK.take();
-    if unlikely(stack.contains(&value.ptr_value())) {
+    if unlikely(!stack.insert(value.ptr_value())) {
         STACK.set(stack);
         Err(ReprCycle)
     } else {
-        stack.push(value.ptr_value());
         STACK.set(stack);
         Ok(ReprStackGuard)
     }

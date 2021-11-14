@@ -273,6 +273,12 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
 }
 
 impl<K, V> VecMap<K, V> {
+    pub const fn new() -> Self {
+        VecMap {
+            buckets: Vec::new(),
+        }
+    }
+
     pub fn with_capacity(n: usize) -> Self {
         VecMap {
             buckets: Vec::with_capacity(n),

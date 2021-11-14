@@ -82,8 +82,11 @@ impl<K: Debug, V: Debug> Debug for SmallMap<K, V> {
 }
 
 impl<K, V> SmallMap<K, V> {
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            entries: VecMap::new(),
+            index: None,
+        }
     }
 
     pub fn with_capacity(n: usize) -> Self {
@@ -423,6 +426,24 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    /// Remove the last element.
+    pub fn pop(&mut self) -> Option<(K, V)>
+    where
+        K: Eq,
+    {
+        match self.entries.buckets.pop() {
+            None => None,
+            Some(Bucket { key, value, hash }) => {
+                if let Some(index) = &mut self.index {
+                    let removed =
+                        index.remove_entry(mix_u32(hash.get()), |&i| i == self.entries.len());
+                    debug_assert!(removed.unwrap() == self.entries.len());
+                }
+                Some((key, value))
+            }
+        }
+    }
+
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
     where
         K: Eq + Hash,
@@ -446,6 +467,24 @@ impl<K, V> SmallMap<K, V> {
             // Which is probably suboptimal (hard to say),
             // but `clear` is rare operation anyway.
             index.clear();
+        }
+    }
+
+    /// Basic check the map invariants are hold.
+    #[cfg(test)]
+    fn state_check(&self) {
+        if let Some(index) = &self.index {
+            assert_eq!(self.entries.len(), index.len());
+            let mut set_fields = vec![false; self.entries.len()];
+            unsafe {
+                for bucket in index.iter() {
+                    let i = *bucket.as_ref();
+                    let prev = mem::replace(&mut set_fields[i], true);
+                    assert!(!prev);
+                }
+            }
+        } else {
+            assert!(self.entries.len() <= NO_INDEX_THRESHOLD);
         }
     }
 }
@@ -799,5 +838,33 @@ mod tests {
                 Entry::Vacant(..) => panic!(),
             }
         }
+    }
+
+    #[test]
+    fn test_pop_small() {
+        let mut map = SmallMap::new();
+        for i in 0..=5 {
+            map.insert(i, i * 10);
+        }
+        for i in (0..=5).rev() {
+            assert_eq!((i, i * 10), map.pop().unwrap());
+            map.state_check();
+        }
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn test_pop_large() {
+        let mut map = SmallMap::new();
+        for i in 0..=500 {
+            map.insert(i, i * 10);
+        }
+        for i in (0..=500).rev() {
+            assert_eq!((i, i * 10), map.pop().unwrap());
+            if i % 100 == 0 {
+                map.state_check();
+            }
+        }
+        assert!(map.is_empty());
     }
 }
