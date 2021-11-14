@@ -97,7 +97,7 @@ impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
             "=",
             self.fields
                 .iter()
-                .map(|(name, value)| (name.to_string(), value)),
+                .map(|(name, value)| (name.to_string_value().as_str(), value)),
         )
     }
 }
@@ -292,15 +292,20 @@ mod tests {
     };
 
     #[test]
+    fn test_repr() {
+        assert::eq("repr(struct(a=1, b=[]))", "'struct(a=1, b=[])'");
+        assert::eq("str(struct(a=1, b=[]))", "'struct(a=1, b=[])'");
+    }
+
+    #[test]
     fn test_repr_cycle() {
-        // TODO(nga): fix repr: field names should not be quoted.
         assert::eq(
             "l = []; s = struct(f=l); l.append(s); repr(s)",
-            "'struct(\"f\"=[struct(...)])'",
+            "'struct(f=[struct(...)])'",
         );
         assert::eq(
             "l = []; s = struct(f=l); l.append(s); str(s)",
-            "'struct(\"f\"=[struct(...)])'",
+            "'struct(f=[struct(...)])'",
         );
     }
 
