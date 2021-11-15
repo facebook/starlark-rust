@@ -543,4 +543,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
         alloca.alloca_init(len, init, |xs| k(xs, self))
     }
+
+    /// Concat two slices and invoke the callback with the result.
+    pub(crate) fn alloca_concat<T: Clone, R, F>(&mut self, x: &[T], y: &[T], k: F) -> R
+    where
+        F: FnOnce(&[T], &mut Self) -> R,
+    {
+        let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
+        alloca.alloca_concat(x, y, |xs| k(xs, self))
+    }
 }

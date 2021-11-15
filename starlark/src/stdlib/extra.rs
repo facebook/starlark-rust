@@ -244,14 +244,20 @@ where
         let self_named = coerce_ref(&self.named);
         let self_names = coerce_ref(&self.names);
 
-        let params = Arguments {
-            pos: &[self_pos, args.pos].concat(),
-            named: &[self_named, args.named].concat(),
-            names: &[self_names, args.names].concat(),
-            args: args.args,
-            kwargs: args.kwargs,
-        };
-        self.func.invoke(location, params, eval)
+        eval.alloca_concat(self_pos, args.pos, |pos, eval| {
+            eval.alloca_concat(self_named, args.named, |named, eval| {
+                eval.alloca_concat(self_names, args.names, |names, eval| {
+                    let params = Arguments {
+                        pos,
+                        named,
+                        names,
+                        args: args.args,
+                        kwargs: args.kwargs,
+                    };
+                    self.func.invoke(location, params, eval)
+                })
+            })
+        })
     }
 }
 

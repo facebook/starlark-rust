@@ -21,7 +21,7 @@ use std::{
     intrinsics::likely,
     mem,
     mem::MaybeUninit,
-    slice,
+    ptr, slice,
 };
 
 /// We'd love to use the real `alloca`, but don't want to blow through the stack space,
@@ -145,6 +145,49 @@ impl Alloca {
     pub fn alloca_fill<T: Copy, R>(&self, len: usize, fill: T, k: impl FnOnce(&mut [T]) -> R) -> R {
         self.alloca_init(len, || fill, k)
     }
+
+    fn alloca_concat_slow<T: Clone, R, F>(&self, x: &[T], y: &[T], k: F) -> R
+    where
+        F: FnOnce(&[T]) -> R,
+    {
+        // We clone the input into a slice allocated in `Alloca`,
+        // slice does not invoke `Drop`, so we do drop explicitly.
+        struct DropSliceGuard<A>(*mut [A]);
+        impl<A> Drop for DropSliceGuard<A> {
+            fn drop(&mut self) {
+                unsafe {
+                    ptr::drop_in_place(self.0);
+                }
+            }
+        }
+
+        self.alloca_uninit(x.len() + y.len(), |xy| {
+            let (x_uninit, y_uninit) = xy.split_at_mut(x.len());
+            let x = MaybeUninit::write_slice_cloned(x_uninit, x);
+            let _x_drop_guard = DropSliceGuard(x);
+            let y = MaybeUninit::write_slice_cloned(y_uninit, y);
+            let _y_drop_guard = DropSliceGuard(y);
+            let xy = unsafe { MaybeUninit::slice_assume_init_mut(xy) };
+            k(xy)
+        })
+    }
+
+    /// Concat two slices and invoke the callback with the result.
+    /// Use either slice as is if the other is empty,
+    /// otherwise clone the elements into a temporary slice.
+    #[inline(always)]
+    pub(crate) fn alloca_concat<T: Clone, R, F>(&self, x: &[T], y: &[T], k: F) -> R
+    where
+        F: FnOnce(&[T]) -> R,
+    {
+        if x.is_empty() {
+            k(y)
+        } else if y.is_empty() {
+            k(x)
+        } else {
+            self.alloca_concat_slow(x, y, k)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -178,5 +221,23 @@ mod tests {
         }
 
         assert_eq!(2, a.buffers.borrow().len());
+    }
+
+    #[test]
+    fn test_alloca_concat() {
+        let a = Alloca::new();
+        let x = vec!["ab".to_owned()];
+        let y = vec!["cd".to_owned()];
+        a.alloca_concat(&x, &[], |xy| {
+            // No copy here.
+            assert_eq!(xy.as_ptr(), x.as_ptr());
+        });
+        a.alloca_concat(&[], &x, |xy| {
+            // No copy here.
+            assert_eq!(xy.as_ptr(), x.as_ptr());
+        });
+        a.alloca_concat(&x, &y, |xy| {
+            assert_eq!(&["ab".to_owned(), "cd".to_owned()], xy);
+        });
     }
 }
