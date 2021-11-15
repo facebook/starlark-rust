@@ -726,7 +726,10 @@ pub struct Arguments<'v, 'a> {
 }
 
 impl<'v, 'a> Arguments<'v, 'a> {
-    pub(crate) fn names_map(&self) -> anyhow::Result<SmallMap<StringValue<'v>, Value<'v>>> {
+    /// Unwrap all named arguments (both explicit and in `**kwargs`) into a map.
+    ///
+    /// This operation fails if named argument names are not unique.
+    pub fn names_map(&self) -> anyhow::Result<SmallMap<StringValue<'v>, Value<'v>>> {
         match self.unpack_kwargs()? {
             None => {
                 let mut result = SmallMap::with_capacity(self.names.len());
