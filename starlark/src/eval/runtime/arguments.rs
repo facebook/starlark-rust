@@ -386,21 +386,33 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
-        // Return true if the value is a duplicate
-        #[inline(always)]
-        fn add_kwargs<'v>(
-            kwargs: &mut Option<Box<SmallMap<StringValue<'v>, Value<'v>>>>,
-            key: Hashed<StringValue<'v>>,
-            val: Value<'v>,
-        ) -> bool {
-            match kwargs {
-                None => {
-                    let mut mp = SmallMap::with_capacity_largest_vec();
-                    mp.insert_hashed(key, val);
-                    *kwargs = Some(box mp);
-                    false
+        /// Lazily initialized `kwargs` object.
+        #[derive(Default)]
+        struct LazyKwargs<'v> {
+            kwargs: Option<Box<SmallMap<StringValue<'v>, Value<'v>>>>,
+        }
+
+        impl<'v> LazyKwargs<'v> {
+            // Return true if the value is a duplicate
+            #[inline(always)]
+            fn insert(&mut self, key: Hashed<StringValue<'v>>, val: Value<'v>) -> bool {
+                match &mut self.kwargs {
+                    None => {
+                        let mut mp = SmallMap::with_capacity_largest_vec();
+                        mp.insert_hashed(key, val);
+                        self.kwargs = Some(box mp);
+                        false
+                    }
+                    Some(mp) => mp.insert_hashed(key, val).is_some(),
                 }
-                Some(mp) => mp.insert_hashed(key, val).is_some(),
+            }
+
+            fn alloc(self, heap: &'v Heap) -> Value<'v> {
+                let kwargs = match self.kwargs {
+                    Some(kwargs) => Dict::new(coerce(*kwargs)),
+                    None => Dict::default(),
+                };
+                heap.alloc(kwargs)
             }
         }
 
@@ -409,7 +421,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         assert!(slots.len() >= len);
 
         let mut star_args = Vec::new();
-        let mut kwargs = None;
+        let mut kwargs = LazyKwargs::default();
         let mut next_position = 0;
 
         // First deal with positional parameters
@@ -441,11 +453,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                 // Safe to use new_unchecked because hash for the Value and str are the same
                 match self.names.get(name) {
                     None => {
-                        add_kwargs(
-                            &mut kwargs,
-                            Hashed::new_unchecked(name.small_hash(), *name_value),
-                            *v,
-                        );
+                        kwargs.insert(Hashed::new_unchecked(name.small_hash(), *name_value), *v);
                     }
                     Some(i) => {
                         slots[*i].set(Some(*v));
@@ -490,11 +498,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                                 let repeat = match self.names.get_hashed_str(
                                     BorrowHashed::new_unchecked(k.hash(), s.as_str()),
                                 ) {
-                                    None => add_kwargs(
-                                        &mut kwargs,
-                                        Hashed::new_unchecked(k.hash(), s),
-                                        v,
-                                    ),
+                                    None => kwargs.insert(Hashed::new_unchecked(k.hash(), s), v),
                                     Some(i) => {
                                         let this_slot = &slots[*i];
                                         let repeat = this_slot.get().is_some();
@@ -559,12 +563,8 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         }
 
         if let Some(kwargs_pos) = self.kwargs {
-            let kwargs = match kwargs.take() {
-                Some(kwargs) => Dict::new(coerce(*kwargs)),
-                None => Dict::default(),
-            };
-            slots[kwargs_pos].set(Some(heap.alloc(kwargs)));
-        } else if let Some(kwargs) = kwargs {
+            slots[kwargs_pos].set(Some(kwargs.alloc(heap)));
+        } else if let Some(kwargs) = kwargs.kwargs {
             return Err(FunctionError::ExtraNamedParameters {
                 names: kwargs.keys().map(|x| x.as_str().to_owned()).collect(),
                 function: self.signature(),
