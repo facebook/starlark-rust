@@ -114,7 +114,7 @@ impl Spanned<StmtCompiled> {
             }),
             StmtCompiled::Expr(ref expr) => {
                 let expr = expr.optimize_on_freeze(ctx);
-                Self::expr(expr)
+                StmtsCompiled::expr(expr)
             }
             StmtCompiled::Assign(ref lhs, ref rhs) => {
                 let lhs = lhs.optimize_on_freeze(ctx);
@@ -128,13 +128,13 @@ impl Spanned<StmtCompiled> {
                 let cond = cond.optimize_on_freeze(ctx);
                 let t = t.optimize_on_freeze(ctx);
                 let f = f.optimize_on_freeze(ctx);
-                Self::if_stmt(span, cond, t, f)
+                StmtsCompiled::if_stmt(span, cond, t, f)
             }
             StmtCompiled::For(box (ref var, ref over, ref body)) => {
                 let var = var.optimize_on_freeze(ctx);
                 let over = over.optimize_on_freeze(ctx);
                 let body = body.optimize_on_freeze(ctx);
-                <Spanned<StmtCompiled>>::for_stmt(span, var, over, body)
+                StmtsCompiled::for_stmt(span, var, over, body)
             }
             ref s @ (StmtCompiled::PossibleGc | StmtCompiled::Break | StmtCompiled::Continue) => {
                 StmtsCompiled::one(Spanned {
@@ -151,77 +151,6 @@ impl Spanned<StmtCompiled> {
                 ),
             }),
         }
-    }
-
-    fn expr(expr: Spanned<ExprCompiled>) -> StmtsCompiled {
-        let span = expr.span;
-        match expr.node {
-            expr if expr.is_pure_infallible() => StmtsCompiled::empty(),
-            ExprCompiled::List(xs) | ExprCompiled::Tuple(xs) => {
-                let mut stmts = StmtsCompiled::empty();
-                for x in xs {
-                    stmts.extend(Self::expr(x));
-                }
-                stmts
-            }
-            // Unwrap infallible expressions.
-            ExprCompiled::Type(x) | ExprCompiled::TypeIs(x, _) | ExprCompiled::Not(x) => {
-                Self::expr(*x)
-            }
-            expr => StmtsCompiled::one(Spanned {
-                span,
-                node: StmtCompiled::Expr(Spanned { span, node: expr }),
-            }),
-        }
-    }
-
-    fn if_stmt(
-        span: Span,
-        cond: Spanned<ExprCompiled>,
-        t: StmtsCompiled,
-        f: StmtsCompiled,
-    ) -> StmtsCompiled {
-        match cond {
-            Spanned {
-                node: ExprCompiled::Value(cond),
-                ..
-            } => {
-                if cond.to_value().to_bool() {
-                    t
-                } else {
-                    f
-                }
-            }
-            Spanned {
-                node: ExprCompiled::Not(box cond),
-                ..
-            } => Self::if_stmt(span, cond, f, t),
-            cond => {
-                if t.is_empty() && f.is_empty() {
-                    Self::expr(cond)
-                } else {
-                    StmtsCompiled::one(Spanned {
-                        span,
-                        node: StmtCompiled::If(box (cond, t, f)),
-                    })
-                }
-            }
-        }
-    }
-
-    fn for_stmt(
-        span: Span,
-        var: Spanned<AssignCompiledValue>,
-        over: Spanned<ExprCompiled>,
-        body: StmtsCompiled,
-    ) -> StmtsCompiled {
-        if over.is_iterable_empty() {
-            return StmtsCompiled::empty();
-        }
-        StmtsCompiled::one(Spanned {
-            span,
-            node: StmtCompiled::For(box (var, over, body)),
-        })
     }
 }
 
@@ -303,6 +232,72 @@ impl StmtsCompiled {
             SmallVec1::One(s) => Some(s),
             SmallVec1::Many(ss) => ss.last(),
         }
+    }
+
+    fn expr(expr: Spanned<ExprCompiled>) -> StmtsCompiled {
+        let span = expr.span;
+        match expr.node {
+            expr if expr.is_pure_infallible() => StmtsCompiled::empty(),
+            ExprCompiled::List(xs) | ExprCompiled::Tuple(xs) => {
+                let mut stmts = StmtsCompiled::empty();
+                for x in xs {
+                    stmts.extend(Self::expr(x));
+                }
+                stmts
+            }
+            // Unwrap infallible expressions.
+            ExprCompiled::Type(x) | ExprCompiled::TypeIs(x, _) | ExprCompiled::Not(x) => {
+                Self::expr(*x)
+            }
+            expr => StmtsCompiled::one(Spanned {
+                span,
+                node: StmtCompiled::Expr(Spanned { span, node: expr }),
+            }),
+        }
+    }
+
+    fn if_stmt(
+        span: Span,
+        cond: Spanned<ExprCompiled>,
+        t: StmtsCompiled,
+        f: StmtsCompiled,
+    ) -> StmtsCompiled {
+        match cond.node {
+            ExprCompiled::Value(cond) => {
+                if cond.to_value().to_bool() {
+                    t
+                } else {
+                    f
+                }
+            }
+            ExprCompiled::Not(box cond) => Self::if_stmt(span, cond, f, t),
+            cond => {
+                let cond = Spanned { span, node: cond };
+                if t.is_empty() && f.is_empty() {
+                    Self::expr(cond)
+                } else {
+                    StmtsCompiled::one(Spanned {
+                        span,
+                        node: StmtCompiled::If(box (cond, t, f)),
+                    })
+                }
+            }
+        }
+    }
+
+    fn for_stmt(
+        span: Span,
+        var: Spanned<AssignCompiledValue>,
+        over: Spanned<ExprCompiled>,
+        body: StmtsCompiled,
+    ) -> StmtsCompiled {
+        if over.is_iterable_empty() {
+            return StmtsCompiled::empty();
+        }
+        StmtsCompiled::one(Spanned {
+            span,
+            node: StmtCompiled::For(box (var, over, body)),
+        })
     }
 }
 
@@ -611,7 +606,7 @@ impl Compiler<'_, '_, '_> {
     ) -> StmtsCompiled {
         let cond = self.expr(cond);
         let then_block = self.stmt(then_block, allow_gc);
-        <Spanned<StmtCompiled>>::if_stmt(span, cond, then_block, StmtsCompiled::empty())
+        StmtsCompiled::if_stmt(span, cond, then_block, StmtsCompiled::empty())
     }
 
     fn stmt_if_else(
@@ -625,12 +620,12 @@ impl Compiler<'_, '_, '_> {
         let cond = self.expr(cond);
         let then_block = self.stmt(then_block, allow_gc);
         let else_block = self.stmt(else_block, allow_gc);
-        <Spanned<StmtCompiled>>::if_stmt(span, cond, then_block, else_block)
+        StmtsCompiled::if_stmt(span, cond, then_block, else_block)
     }
 
     fn stmt_expr(&mut self, expr: CstExpr) -> StmtsCompiled {
         let expr = self.expr(expr);
-        <Spanned<StmtCompiled>>::expr(expr)
+        StmtsCompiled::expr(expr)
     }
 
     fn stmt_direct(&mut self, stmt: CstStmt, allow_gc: bool) -> StmtsCompiled {
@@ -655,7 +650,7 @@ impl Compiler<'_, '_, '_> {
                 let var = self.assign(var);
                 let over = self.expr(over);
                 let st = self.stmt(body, false);
-                <Spanned<StmtCompiled>>::for_stmt(span, var, over, st)
+                StmtsCompiled::for_stmt(span, var, over, st)
             }
             StmtP::Return(None) => StmtsCompiled::one(Spanned {
                 node: StmtCompiled::Return(Spanned {
