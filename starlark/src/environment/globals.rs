@@ -193,7 +193,7 @@ impl Methods {
             .collect()
     }
 
-    pub(crate) fn documentation(&self) -> DocItem {
+    pub fn documentation(&self) -> DocItem {
         common_documentation(&self.0.docstring, &self.0.members)
     }
 }
