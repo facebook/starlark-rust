@@ -354,7 +354,13 @@ impl MethodsBuilder {
     ) {
         // We want to build an attribute, that ignores its self argument, and does no subsequent allocation.
         let value = self.heap.alloc(value);
-        self.set_attribute_fn(name, true, docstring, move |_, _| Ok(value.to_value()));
+        self.set_attribute_fn(
+            name,
+            true,
+            docstring,
+            value.to_value().describe(name),
+            move |_, _| Ok(value.to_value()),
+        );
     }
 
     /// Set an attribute. This function is usually called from code
@@ -364,6 +370,7 @@ impl MethodsBuilder {
         name: &str,
         speculative_exec_safe: bool,
         docstring: Option<String>,
+        typ: String,
         f: F,
     ) where
         F: for<'v> Fn(Value<'v>, &'v Heap) -> anyhow::Result<Value<'v>> + Send + Sync + 'static,
@@ -374,6 +381,7 @@ impl MethodsBuilder {
                 function: box f,
                 speculative_exec_safe,
                 docstring,
+                typ,
             }),
         );
     }
@@ -507,11 +515,11 @@ fn common_documentation(docstring: &Option<String>, members: &SymbolMap<FrozenVa
                         .docstring
                         .as_ref()
                         .and_then(|ds| DocString::from_docstring(DocStringKind::Rust, ds));
+                    let typ = Some(docs::Type {
+                        raw_type: attr.typ.to_owned(),
+                    });
                     // TODO(nmj): Pull the starlark type up here
-                    Some(docs::Member::Property(docs::Property {
-                        docs: ds,
-                        typ: None,
-                    }))
+                    Some(docs::Member::Property(docs::Property { docs: ds, typ }))
                 }
                 None => val.to_value().documentation().and_then(|d| match d {
                     DocItem::Module(_) | DocItem::Object(_) => None,

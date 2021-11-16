@@ -760,14 +760,14 @@ mod test {
                     "attr1".to_owned(),
                     super::Member::Property(super::Property {
                         docs: DocString::from_docstring(DocStringKind::Rust, "Docs for attr1"),
-                        typ: None,
+                        typ: string_typ.clone(),
                     }),
                 ),
                 (
                     "attr2".to_owned(),
                     super::Member::Property(super::Property {
                         docs: None,
-                        typ: None,
+                        typ: string_typ.clone(),
                     }),
                 ),
                 (

@@ -244,7 +244,6 @@ pub(crate) struct NativeMethod {
 }
 
 starlark_simple_value!(NativeMethod);
-
 impl<'v> StarlarkValue<'v> for NativeMethod {
     starlark_type!("native_method");
 
@@ -275,6 +274,7 @@ pub(crate) struct NativeAttribute {
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
     pub(crate) docstring: Option<String>,
+    pub(crate) typ: String,
 }
 
 starlark_simple_value!(NativeAttribute);

@@ -111,7 +111,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
             }
             Ok(heap.alloc(inner(this, heap)?))
         }
-        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #docstring, #name);
+        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #docstring, stringify!(#return_type).to_owned(), #name);
     }
 }
 
