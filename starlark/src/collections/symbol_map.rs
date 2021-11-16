@@ -66,7 +66,7 @@ fn promote_hash(x: SmallHashResult) -> u64 {
 
 /// A pre-hashed string used for efficient dictionary lookup.
 #[derive(Clone, Trace)]
-pub struct Symbol {
+pub(crate) struct Symbol {
     hash: u64,
     len: usize,
     payload: Box<[u64]>,
