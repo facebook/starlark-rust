@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use std::{mem, sync::Arc};
+use std::{collections::HashMap, mem, sync::Arc};
 
 use derive_more::Display;
 use gazebo::prelude::*;
@@ -158,6 +158,17 @@ impl Globals {
     /// Get the documentation for both the object itself, and its members. Returned as an `Object`
     pub fn documentation(&self) -> DocItem {
         common_documentation(&self.0.docstring, &self.0.variables)
+    }
+
+    /// Get the documentation for each member. Useful when loading a number of objects into
+    /// a single [`Globals`] instance, but where the documentation for each member will be
+    /// split up later.
+    pub fn member_documentation(&self) -> HashMap<String, Option<DocItem>> {
+        self.0
+            .variables
+            .iter()
+            .map(|(symbol, value)| (symbol.as_str().to_owned(), value.to_value().documentation()))
+            .collect()
     }
 }
 
