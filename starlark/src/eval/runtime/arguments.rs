@@ -712,17 +712,17 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 #[derive(Default, Clone, Copy, Dupe)]
 pub struct Arguments<'v, 'a> {
     /// Positional arguments.
-    pub pos: &'a [Value<'v>],
+    pub(crate) pos: &'a [Value<'v>],
     /// Named arguments.
-    pub named: &'a [Value<'v>],
+    pub(crate) named: &'a [Value<'v>],
     /// Names of named arguments.
     ///
     /// `named` length must be equal to `names` length.
-    pub names: &'a [(Symbol, StringValue<'v>)],
+    pub(crate) names: &'a [(Symbol, StringValue<'v>)],
     /// `*args` argument.
-    pub args: Option<Value<'v>>,
+    pub(crate) args: Option<Value<'v>>,
     /// `**kwargs` argument.
-    pub kwargs: Option<Value<'v>>,
+    pub(crate) kwargs: Option<Value<'v>>,
 }
 
 impl<'v, 'a> Arguments<'v, 'a> {
