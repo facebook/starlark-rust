@@ -28,7 +28,7 @@ use itertools::Itertools;
 
 use crate::{assert::assert::Assert, errors::Diagnostic};
 
-impl Assert {
+impl<'a> Assert<'a> {
     /// Run a conformance test, e.g. the Go Starlark tests
     pub fn conformance(&self, code: &str) {
         self.conformance_except(code, &[])

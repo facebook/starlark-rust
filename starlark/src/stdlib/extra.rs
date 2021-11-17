@@ -136,13 +136,28 @@ impl fmt::Display for PrintWrapper<'_, '_> {
     }
 }
 
+/// Invoked from `print` or `pprint` to print a value.
+pub trait PrintHandler {
+    /// If this function returns error, evaluation fails with this error.
+    fn println(&self, text: &str) -> anyhow::Result<()>;
+}
+
+pub(crate) struct StderrPrintHandler;
+
+impl PrintHandler for StderrPrintHandler {
+    fn println(&self, text: &str) -> anyhow::Result<()> {
+        eprintln!("{}", text);
+        Ok(())
+    }
+}
+
 #[starlark_module]
 pub fn print(builder: &mut GlobalsBuilder) {
     fn print(args: Vec<Value>) -> NoneType {
         // In practice most users should want to put the print somewhere else, but this does for now
         // Unfortunately, we can't use PrintWrapper because strings to_str() and Display are different.
-        // TODO(cjhopman): Resolve this, probably just by special casing str in PrintWrapper::fmt.
-        eprintln!("{}", args.iter().map(|x| x.to_str()).join(" "));
+        eval.print_handler
+            .println(&args.iter().map(|x| x.to_str()).join(" "))?;
         Ok(NoneType)
     }
 }
@@ -151,7 +166,8 @@ pub fn print(builder: &mut GlobalsBuilder) {
 pub fn pprint(builder: &mut GlobalsBuilder) {
     fn pprint(args: Vec<Value>) -> NoneType {
         // In practice most users may want to put the print somewhere else, but this does for now
-        eprintln!("{:#}", PrintWrapper(&args));
+        eval.print_handler
+            .println(&format!("{:#}", PrintWrapper(&args)))?;
         Ok(NoneType)
     }
 }
@@ -263,7 +279,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::assert;
+    use std::{cell::RefCell, rc::Rc};
+
+    use gazebo::prelude::*;
+
+    use crate::{assert, assert::Assert, stdlib::PrintHandler};
 
     #[test]
     fn test_filter() {
@@ -354,5 +374,25 @@ b = [1]
 assert_eq(dedupe([a,b,a]), [a,b])
 "#,
         );
+    }
+
+    #[test]
+    fn test_print() {
+        let s = Rc::new(RefCell::new(String::new()));
+        let s_copy = s.dupe();
+        struct PrintHandlerImpl {
+            s: Rc<RefCell<String>>,
+        }
+        impl PrintHandler for PrintHandlerImpl {
+            fn println(&self, s: &str) -> anyhow::Result<()> {
+                *self.s.borrow_mut() = s.to_owned();
+                Ok(())
+            }
+        }
+        let print_handler = PrintHandlerImpl { s: s.dupe() };
+        let mut a = Assert::new();
+        a.set_print_handler(&print_handler);
+        a.pass("print('hw')");
+        assert_eq!("hw", s_copy.borrow().as_str());
     }
 }

@@ -35,6 +35,7 @@ use crate::{
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::Diagnostic,
     eval::{Evaluator, ReturnFileLoader},
+    stdlib::PrintHandler,
     syntax::{
         lexer::{Lexer, Token},
         AstModule, Dialect,
@@ -197,16 +198,19 @@ fn test_methods(builder: &mut GlobalsBuilder) {
 }
 
 /// Environment in which to run assertion tests.
-pub struct Assert {
+pub struct Assert<'a> {
     dialect: Dialect,
     modules: HashMap<String, FrozenModule>,
     globals: Globals,
     gc_strategy: Option<GcStrategy>,
     setup_eval: Option<Box<dyn Fn(&mut Evaluator)>>,
+    // Ideally `print_handler` should be set up in `setup_eval`
+    // but if you know how to do it, show me how.
+    print_handler: Option<&'a (dyn PrintHandler + 'a)>,
 }
 
 /// Construction and state management.
-impl Assert {
+impl<'a> Assert<'a> {
     /// Create a new assert object, which will by default use
     /// [`Dialect::Extended`] and [`Globals::extended()`],
     /// plus some additional global functions like `assert_eq`.
@@ -219,6 +223,7 @@ impl Assert {
             globals: Lazy::force(&GLOBALS).dupe(),
             gc_strategy: None,
             setup_eval: None,
+            print_handler: None,
         }
     }
 
@@ -229,6 +234,10 @@ impl Assert {
 
     pub fn setup_eval(&mut self, setup: impl Fn(&mut Evaluator) + 'static) {
         self.setup_eval = Some(box setup);
+    }
+
+    pub fn set_print_handler(&mut self, handler: &'a (dyn PrintHandler + 'a)) {
+        self.print_handler = Some(handler);
     }
 
     fn with_gc<A>(&self, f: impl Fn(GcStrategy) -> A) -> A {
@@ -244,13 +253,13 @@ impl Assert {
         }
     }
 
-    fn execute<'a>(
+    fn execute<'v>(
         &self,
         path: &str,
         program: &str,
-        module: &'a Module,
+        module: &'v Module,
         gc: GcStrategy,
-    ) -> anyhow::Result<Value<'a>> {
+    ) -> anyhow::Result<Value<'v>> {
         let mut modules = HashMap::with_capacity(self.modules.len());
         for (k, v) in &self.modules {
             modules.insert(k.as_str(), v);
@@ -260,6 +269,9 @@ impl Assert {
         let mut eval = Evaluator::new(module);
         if let Some(setup_eval) = &self.setup_eval {
             setup_eval(&mut eval);
+        }
+        if let Some(print_handler) = self.print_handler {
+            eval.set_print_handler(print_handler);
         }
 
         let gc_always = |_, eval: &mut Evaluator| {
@@ -275,11 +287,11 @@ impl Assert {
         eval.eval_module(ast, &self.globals)
     }
 
-    fn execute_fail<'a>(
+    fn execute_fail<'v>(
         &self,
         func: &str,
         program: &str,
-        module: &'a Module,
+        module: &'v Module,
         gc: GcStrategy,
     ) -> anyhow::Error {
         match self.execute("assert.bzl", program, module, gc) {
@@ -291,14 +303,14 @@ impl Assert {
         }
     }
 
-    fn execute_unwrap<'a>(
+    fn execute_unwrap<'v>(
         &self,
         func: &str,
         path: &str,
         program: &str,
-        module: &'a Module,
+        module: &'v Module,
         gc: GcStrategy,
-    ) -> Value<'a> {
+    ) -> Value<'v> {
         match self.execute(path, program, module, gc) {
             Ok(v) => v,
             Err(err) => {
@@ -311,11 +323,11 @@ impl Assert {
         }
     }
 
-    fn execute_unwrap_true<'a>(
+    fn execute_unwrap_true<'v>(
         &self,
         func: &str,
         program: &str,
-        module: &'a Module,
+        module: &'v Module,
         gc: GcStrategy,
     ) {
         let v = self.execute_unwrap(func, "assert.bzl", program, module, gc);
@@ -404,7 +416,7 @@ impl Assert {
 }
 
 /// Execution tests.
-impl Assert {
+impl<'a> Assert<'a> {
     /// A program that must fail with an error message that contains a specific
     /// string. Remember that the purpose of `fail` is to ensure you get
     /// the right error, not to fully specify the error - usually only one or

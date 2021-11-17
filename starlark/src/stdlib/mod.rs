@@ -23,7 +23,7 @@ use crate::environment::GlobalsBuilder;
 pub(crate) mod breakpoint;
 pub(crate) mod dict;
 pub(crate) mod enumeration;
-mod extra;
+pub(crate) mod extra;
 mod funcs;
 use gazebo::prelude::*;
 pub(crate) mod list;
@@ -31,6 +31,8 @@ pub(crate) mod record;
 pub(crate) mod string;
 pub(crate) mod structs;
 pub(crate) mod util;
+
+pub use extra::PrintHandler;
 
 /// Return the default global environment, it is not yet frozen so that a caller
 /// can refine it.

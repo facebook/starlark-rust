@@ -42,7 +42,10 @@ use crate::{
         },
         FileLoader,
     },
-    stdlib::breakpoint::{BreakpointConsole, RealBreakpointConsole},
+    stdlib::{
+        breakpoint::{BreakpointConsole, RealBreakpointConsole},
+        extra::{PrintHandler, StderrPrintHandler},
+    },
     values::{
         recursive_repr_guard::ReprStackReleaseMemoryOnDrop, value_captured_get, FrozenHeap,
         FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured, ValueLike,
@@ -112,6 +115,8 @@ pub struct Evaluator<'v, 'a> {
     pub extra_v: Option<&'a dyn AnyLifetime<'v>>,
     /// Called to perform console IO each time `breakpoint` function is called.
     pub(crate) breakpoint_handler: Option<Box<dyn Fn() -> Box<dyn BreakpointConsole>>>,
+    /// Use in implementation of `print` function.
+    pub(crate) print_handler: &'a (dyn PrintHandler + 'a),
     // The Starlark-level call-stack of functions.
     // Must go last because it's quite a big structure
     pub(crate) call_stack: CallStack<'v>,
@@ -154,6 +159,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             def_info: DefInfo::empty(), // Will be replaced before it is used
             string_pool: StringPool::default(),
             breakpoint_handler: None,
+            print_handler: &StderrPrintHandler,
             verbose_gc: false,
         }
     }
@@ -307,6 +313,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// This function may have no effect is called mid evaluation.
     pub fn before_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
         self.before_stmt.push(f)
+    }
+
+    /// Set the handler invoked when `print` function is used.
+    pub fn set_print_handler(&mut self, handler: &'a (dyn PrintHandler + 'a)) {
+        self.print_handler = handler;
     }
 
     /// Given a [`Span`] resolve it to a concrete [`FileSpan`] using
