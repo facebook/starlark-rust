@@ -89,6 +89,9 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) heap_or_flame_profile: bool,
     // Is GC disabled for some reason
     pub(crate) disable_gc: bool,
+    // If true, the interpreter prints to stderr on GC.
+    // This is used for debugging.
+    pub(crate) verbose_gc: bool,
     // Size of the heap when we should next perform a GC.
     pub(crate) next_gc_level: usize,
     // Extra functions to run on each statement, usually empty
@@ -151,6 +154,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             def_info: DefInfo::empty(), // Will be replaced before it is used
             string_pool: StringPool::default(),
             breakpoint_handler: None,
+            verbose_gc: false,
         }
     }
 
@@ -159,6 +163,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// global variables or the [`extra`](Evaluator::extra) field.
     pub fn disable_gc(&mut self) {
         self.disable_gc = true;
+    }
+
+    /// Enable GC logging.
+    pub fn verbose_gc(&mut self) {
+        self.verbose_gc = true;
     }
 
     /// Set the [`FileLoader`] used to resolve `load()` statements.
@@ -517,7 +526,19 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// and using them will lead to a segfault.
     /// Do not call during Starlark evaluation.
     pub unsafe fn garbage_collect(&mut self) {
-        self.heap().garbage_collect(|tracer| self.trace(tracer))
+        if self.verbose_gc {
+            eprintln!(
+                "Starlark: allocated bytes: {}, starting GC...",
+                self.heap().allocated_bytes()
+            );
+        }
+        self.heap().garbage_collect(|tracer| self.trace(tracer));
+        if self.verbose_gc {
+            eprintln!(
+                "Starlark: GC complete. Allocated bytes: {}.",
+                self.heap().allocated_bytes()
+            );
+        }
     }
 
     /// Note that the `Drop` for the `T` will not be called. That's safe if there is no `Drop`,
