@@ -94,7 +94,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
             heap: &'v starlark::values::Heap,
         ) -> anyhow::Result<starlark::values::Value<'v>> {
              fn inner<'v>(
-                this: Value<'v>,
+                this: starlark::values::Value<'v>,
                 #[allow(unused_variables)]
                 heap: &'v starlark::values::Heap,
             ) -> anyhow::Result<#return_type> {
