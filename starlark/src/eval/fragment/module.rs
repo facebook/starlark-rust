@@ -19,10 +19,13 @@
 
 use crate::{
     environment::EnvironmentError,
-    eval::compiler::{
-        add_span_to_expr_error, expr_throw,
-        scope::{CstLoad, CstStmt, ScopeId, Slot},
-        Compiler, EvalException,
+    eval::{
+        bc::frame::alloca_frame,
+        compiler::{
+            add_span_to_expr_error, expr_throw,
+            scope::{CstLoad, CstStmt, ScopeId, Slot},
+            Compiler, EvalException,
+        },
     },
     syntax::ast::StmtP,
     values::Value,
@@ -60,12 +63,16 @@ impl<'v> Compiler<'v, '_, '_> {
         Ok(())
     }
 
-    fn eval_top_level_stmt(&mut self, stmt: CstStmt) -> Result<Value<'v>, EvalException> {
+    fn eval_top_level_stmt(
+        &mut self,
+        stmt: CstStmt,
+        local_count: u32,
+    ) -> Result<Value<'v>, EvalException> {
         match stmt.node {
             StmtP::Statements(stmts) => {
                 let mut last = Value::new_none();
                 for stmt in stmts {
-                    last = self.eval_top_level_stmt(stmt)?;
+                    last = self.eval_top_level_stmt(stmt, local_count)?;
                 }
                 Ok(last)
             }
@@ -76,14 +83,23 @@ impl<'v> Compiler<'v, '_, '_> {
             _ => {
                 let stmt = self.module_top_level_stmt(stmt);
                 let bc = stmt.as_bc(&self.compile_context());
-                bc.run(self.eval)
+                // We don't preserve locals between top level statements.
+                // That is OK for now: the only locals used in module evaluation
+                // are comprehension bindings.
+                alloca_frame(self.eval, local_count, bc.max_stack_size, |eval| {
+                    bc.run(eval)
+                })
             }
         }
     }
 
-    pub(crate) fn eval_module(&mut self, stmt: CstStmt) -> Result<Value<'v>, EvalException> {
+    pub(crate) fn eval_module(
+        &mut self,
+        stmt: CstStmt,
+        local_count: u32,
+    ) -> Result<Value<'v>, EvalException> {
         self.enter_scope(ScopeId::module());
-        let value = self.eval_top_level_stmt(stmt)?;
+        let value = self.eval_top_level_stmt(stmt, local_count)?;
         self.exit_scope();
         assert!(self.locals.is_empty());
         Ok(value)

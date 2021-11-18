@@ -33,7 +33,7 @@ use crate::{
     codemap::{CodeMap, Span, Spanned},
     environment::{FrozenModuleRef, Globals},
     eval::{
-        bc::bytecode::Bc,
+        bc::{bytecode::Bc, frame::alloca_frame},
         compiler::{
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
@@ -44,11 +44,7 @@ use crate::{
             expr::ExprCompiled,
             stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
-        runtime::{
-            arguments::ParametersSpec,
-            evaluator::Evaluator,
-            slots::{LocalSlotBase, LocalSlotId},
-        },
+        runtime::{arguments::ParametersSpec, evaluator::Evaluator, slots::LocalSlotId},
         Arguments,
     },
     syntax::ast::ParameterP,
@@ -620,10 +616,11 @@ where
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let local_slots = self.def_info.scope_names.used.len() as u32;
-        let slot_base = eval.local_variables.reserve(local_slots);
-        let slots = eval.local_variables.get_slots_at(slot_base);
-        self.parameters.collect_inline(args, slots, eval.heap())?;
-        eval.with_call_stack(me, location, |eval| self.invoke_raw(slot_base, eval))
+        alloca_frame(eval, local_slots, self.bc().max_stack_size, |eval| {
+            let slots = eval.current_frame.locals();
+            self.parameters.collect_inline(args, slots, eval.heap())?;
+            eval.with_call_stack(me, location, |eval| self.invoke_raw(eval))
+        })
     }
 
     fn documentation(&self) -> Option<DocItem> {
@@ -643,17 +640,15 @@ where
         }
     }
 
-    fn invoke_raw(
-        &self,
-        locals: LocalSlotBase,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>> {
+    /// Invoke the function, assuming that:
+    /// * the frame has been allocated and stored in `eval.current_frame`
+    /// * the arguments have been collected into the frame
+    fn invoke_raw(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
-        let old_locals = eval.local_variables.utilise(locals);
 
         if eval.check_types() {
             for (i, arg_name, ty, ty2) in &self.parameter_types {
-                match eval.local_variables.get_slot(LocalSlotId::new(*i)) {
+                match eval.current_frame.get_slot(LocalSlotId::new(*i)) {
                     None => {
                         panic!("Not allowed optional unassigned with type annotations on them")
                     }
@@ -677,7 +672,7 @@ where
             .iter()
             .zip(self.captured.iter())
         {
-            eval.local_variables.set_slot(*me, captured.to_value());
+            eval.current_frame.set_slot(*me, captured.to_value());
         }
 
         if Self::FROZEN {
@@ -686,7 +681,6 @@ where
         let res = eval.with_function_context(self.module.load_relaxed(), self.def_info, |eval| {
             self.bc().run(eval)
         });
-        eval.local_variables.release(old_locals);
 
         let ret = match res {
             Err(EvalException(e)) => return Err(e),

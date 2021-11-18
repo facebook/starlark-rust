@@ -65,7 +65,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             .find_map(to_scope_names);
         if let Some(names) = &locals {
             for (name, (slot, _binding_id)) in &names.mp {
-                if let Some(value) = self.local_variables.get_slot(*slot) {
+                if let Some(value) = self.current_frame.get_slot(*slot) {
                     self.module_env.set(name, value)
                 }
             }
@@ -81,7 +81,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         if let Some(names) = &locals {
             for (name, (slot, _binding_id)) in &names.mp {
                 if let Some(value) = self.module_env.get(name) {
-                    self.local_variables.set_slot(*slot, value)
+                    self.current_frame.set_slot(*slot, value)
                 }
             }
             for (name, slot) in self.module_env.names().all_names() {

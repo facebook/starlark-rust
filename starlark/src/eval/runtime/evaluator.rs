@@ -31,13 +31,14 @@ use crate::{
     environment::{slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, Module},
     errors::{Diagnostic, Frame},
     eval::{
+        bc::frame::BcFrame,
         fragment::def::DefInfo,
         runtime::{
             bc_profile::BcProfile,
             call_stack::CallStack,
             flame_profile::FlameProfile,
             heap_profile::{HeapProfile, HeapProfileFormat},
-            slots::{LocalSlotId, LocalSlots},
+            slots::LocalSlotId,
             stmt_profile::StmtProfile,
         },
         FileLoader,
@@ -76,8 +77,8 @@ pub struct Evaluator<'v, 'a> {
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
     pub(crate) module_variables: Option<FrozenRef<FrozenModuleRef>>,
-    // Local variables for this function, and older stack frames too.
-    pub(crate) local_variables: LocalSlots<'v>,
+    /// Current function (`def` or `lambda`) frame: locals and bytecode stack.
+    pub(crate) current_frame: BcFrame<'v>,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // `DefInfo` of currently executed function or module.
@@ -126,7 +127,7 @@ unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         let mut roots = self.module_env.slots().get_slots_mut();
         roots.trace(tracer);
-        self.local_variables.trace(tracer);
+        self.current_frame.trace(tracer);
         self.call_stack.trace(tracer);
         self.flame_profile.trace(tracer);
     }
@@ -142,7 +143,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             call_stack: CallStack::default(),
             module_env: module,
             module_variables: None,
-            local_variables: LocalSlots::new(),
+            current_frame: BcFrame::default(),
             loader: None,
             extra: None,
             extra_v: None,
@@ -442,7 +443,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     #[inline(always)]
     pub(crate) fn get_slot_local(&self, slot: LocalSlotId) -> anyhow::Result<Value<'v>> {
-        self.local_variables
+        self.current_frame
             .get_slot(slot)
             .ok_or_else(|| self.local_var_referenced_before_assignment(slot))
     }
@@ -454,7 +455,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn clone_slot_capture(&self, slot: LocalSlotId) -> Value<'v> {
-        match self.local_variables.get_slot(slot) {
+        match self.current_frame.get_slot(slot) {
             Some(value_captured) => {
                 debug_assert!(
                     value_captured.downcast_ref::<ValueCaptured>().is_some(),
@@ -467,7 +468,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             }
             None => {
                 let value_captured = self.heap().alloc_complex(ValueCaptured(Cell::new(None)));
-                self.local_variables.set_slot(slot, value_captured);
+                self.current_frame.set_slot(slot, value_captured);
                 value_captured
             }
         }
@@ -496,11 +497,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     pub(crate) fn set_slot_local(&mut self, slot: LocalSlotId, value: Value<'v>) {
-        self.local_variables.set_slot(slot, value)
+        self.current_frame.set_slot(slot, value)
     }
 
     pub(crate) fn set_slot_local_captured(&mut self, slot: LocalSlotId, value: Value<'v>) {
-        match self.local_variables.get_slot(slot) {
+        match self.current_frame.get_slot(slot) {
             Some(value_captured) => {
                 let value_captured = value_captured
                     .downcast_ref::<ValueCaptured>()
@@ -511,19 +512,19 @@ impl<'v, 'a> Evaluator<'v, 'a> {
                 let value_captured = self
                     .heap()
                     .alloc_complex(ValueCaptured(Cell::new(Some(value))));
-                self.local_variables.set_slot(slot, value_captured);
+                self.current_frame.set_slot(slot, value_captured);
             }
         };
     }
 
     /// Take a value from the local slot and store it back wrapped in [`ValueCaptured`].
     pub(crate) fn wrap_local_slot_captured(&mut self, slot: LocalSlotId) {
-        let value = self.local_variables.get_slot(slot).expect("slot unset");
+        let value = self.current_frame.get_slot(slot).expect("slot unset");
         debug_assert!(value.downcast_ref::<ValueCaptured>().is_none());
         let value_captured = self
             .heap()
             .alloc_complex(ValueCaptured(Cell::new(Some(value))));
-        self.local_variables.set_slot(slot, value_captured);
+        self.current_frame.set_slot(slot, value_captured);
     }
 
     /// Cause a GC to be triggered next time it's possible.

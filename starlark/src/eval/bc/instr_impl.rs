@@ -299,7 +299,7 @@ fn load_local<'v, const N: usize>(
     for i in 0..N {
         let values: *mut [Value; N] = values.as_mut_ptr();
         let slot = slots[i];
-        match eval.local_variables.get_slot(slot) {
+        match eval.current_frame.get_slot(slot) {
             Some(v) => unsafe {
                 *(*values).get_unchecked_mut(i) = v;
             },

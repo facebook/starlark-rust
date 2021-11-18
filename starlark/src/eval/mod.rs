@@ -18,7 +18,7 @@
 //! Evaluate some code, typically done by creating an [`Evaluator`], then calling
 //! [`eval_module`](Evaluator::eval_module).
 
-use std::{convert::TryInto, intrinsics::unlikely, mem, time::Instant};
+use std::{intrinsics::unlikely, mem, time::Instant};
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
@@ -90,12 +90,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let span = statement.span;
 
         let (module_slots, scope_names, scope_data) = scope.exit_module();
+        let local_count = scope_names.used.len().try_into().unwrap();
 
         self.module_env.slots().ensure_slots(module_slots);
-        let new_locals = self
-            .local_variables
-            .reserve(scope_names.used.len().try_into().unwrap());
-        let old_locals = self.local_variables.utilise(new_locals);
         let old_def_info = mem::replace(
             &mut self.def_info,
             self.module_env.frozen_heap().alloc_any(DefInfo::for_module(
@@ -132,7 +129,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             eval: self,
         };
 
-        let res = compiler.eval_module(statement);
+        let res = compiler.eval_module(statement, local_count);
 
         // Clean up the world, putting everything back
         self.call_stack.pop();
@@ -140,7 +137,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             self.heap_profile.record_call_exit(self.heap());
             self.flame_profile.record_call_exit();
         }
-        self.local_variables.release(old_locals);
         self.def_info = old_def_info;
 
         self.module_env.add_eval_duration(start.elapsed());

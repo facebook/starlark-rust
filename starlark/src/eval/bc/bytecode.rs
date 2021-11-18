@@ -82,10 +82,15 @@ impl Bc {
         add_span_to_expr_error(e, span, eval)
     }
 
+    /// Run the bytecode in the current frame allocated in the evaluator.
+    ///
+    /// Frame must be allocated properly, otherwise it will likely result in memory corruption.
+    #[inline(always)]
     pub(crate) fn run<'v>(&self, eval: &mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException> {
-        BcStackPtr::alloca(eval, self.max_stack_size, |eval, stack_ptr| {
-            self.run_with_stack(eval, stack_ptr)
-        })
+        debug_assert!(eval.current_frame.is_inititalized());
+        debug_assert_eq!(self.max_stack_size, eval.current_frame.max_stack_size());
+        let stack_ptr = eval.current_frame.stack_bottom_ptr();
+        self.run_with_stack(eval, stack_ptr)
     }
 
     fn run_with_stack<'v>(
@@ -138,7 +143,9 @@ fn step<'v, 'b>(
         fn handle<I: BcInstr>(self) -> InstrControl<'v, 'b> {
             let HandlerImpl { eval, stack, ip } = self;
             let repr = ip.get_instr::<I>();
-            I::run(eval, stack, ip, &repr.arg)
+            let control = I::run(eval, stack, ip, &repr.arg);
+            eval.current_frame.set_stack_ptr_if_debug(stack);
+            control
         }
     }
 
