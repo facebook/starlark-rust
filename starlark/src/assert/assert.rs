@@ -203,7 +203,7 @@ pub struct Assert<'a> {
     modules: HashMap<String, FrozenModule>,
     globals: Globals,
     gc_strategy: Option<GcStrategy>,
-    setup_eval: Option<Box<dyn Fn(&mut Evaluator)>>,
+    setup_eval: Box<dyn Fn(&mut Evaluator)>,
     // Ideally `print_handler` should be set up in `setup_eval`
     // but if you know how to do it, show me how.
     print_handler: Option<&'a (dyn PrintHandler + 'a)>,
@@ -222,7 +222,7 @@ impl<'a> Assert<'a> {
             modules: hashmap!["assert.star".to_owned() => Lazy::force(&ASSERT_STAR).dupe()],
             globals: Lazy::force(&GLOBALS).dupe(),
             gc_strategy: None,
-            setup_eval: None,
+            setup_eval: box |_| (),
             print_handler: None,
         }
     }
@@ -233,7 +233,7 @@ impl<'a> Assert<'a> {
     }
 
     pub fn setup_eval(&mut self, setup: impl Fn(&mut Evaluator) + 'static) {
-        self.setup_eval = Some(box setup);
+        self.setup_eval = box setup;
     }
 
     pub fn set_print_handler(&mut self, handler: &'a (dyn PrintHandler + 'a)) {
@@ -267,9 +267,7 @@ impl<'a> Assert<'a> {
         let loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
         let mut eval = Evaluator::new(module);
-        if let Some(setup_eval) = &self.setup_eval {
-            setup_eval(&mut eval);
-        }
+        (self.setup_eval)(&mut eval);
         if let Some(print_handler) = self.print_handler {
             eval.set_print_handler(print_handler);
         }
