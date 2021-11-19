@@ -355,7 +355,6 @@
 #![feature(const_intrinsic_copy)]
 #![feature(const_mut_refs)]
 #![feature(const_ptr_offset)]
-#![feature(const_raw_ptr_deref)]
 #![feature(const_refs_to_cell)]
 #![feature(core_intrinsics)]
 #![feature(generic_associated_types)]
