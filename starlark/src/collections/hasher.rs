@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+use std::hash::Hasher;
+
+use fnv::FnvHasher;
 
 use crate::collections::SmallHashResult;
 
@@ -23,7 +25,7 @@ use crate::collections::SmallHashResult;
 ///
 /// Starlark relies on stable hashing, and this is the hasher.
 #[derive(Default)]
-pub struct StarlarkHasher(DefaultHasher);
+pub struct StarlarkHasher(FnvHasher);
 
 impl StarlarkHasher {
     pub fn new() -> StarlarkHasher {
