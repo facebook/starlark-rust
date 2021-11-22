@@ -1,5 +1,25 @@
 # Starlark
 
+## 0.6.0 (November 22, 2021)
+
+There have been many changes since the last release, focused on performance, documentation, type safety and profiling. These changes caused a number of API changes and behavioural changes, the most significant of which are listed below.
+
+* Support for newer versions of `anyhow`.
+* Some error messages contain "did you mean" suggestions.
+* Addition of a bytecode interpreter, with associated performance gains.
+* Constant propagation and speculative execution during compilation.
+* Removed mutability around the file loader and `set_loader`.
+* Several new forms of profiling, making use of the new `extra_memory` function.
+* Improved errors from derivations.
+* Changes around function invocation, in particular `Arguments` is now opaque.
+* Changes around `ConstFrozenString`, which is now `StarlarkStrN`.
+* Add `OwnedFrozenValue::owner`.
+* Add `derive` support for `Freeze`.
+* Add more Starlark typed wrappers, such as `StringValue` and `ValueTyped`.
+* Make tuples and lists opaque types, with new functions for allocating them (e.g. `alloc_tuple`).
+* Make all Starlark types implement `Display` in preference to `collect_repr`.
+* Support for documentation annotations on all types.
+
 ## 0.5.0 (August 26, 2021)
 
 There have been many changes since the last release, primarily focused on performance (up to 100x in some benchmarks). These changes caused a number of API changes, the most significant of which are listed below.
