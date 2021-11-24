@@ -310,6 +310,14 @@ mod tests {
     }
 
     #[test]
+    fn test_to_json_cycle() {
+        assert::fail(
+            "l = []; s = struct(f=l); l.append(s); s.to_json()",
+            "Cycle detected when serializing value of type `struct` to JSON",
+        );
+    }
+
+    #[test]
     fn test_to_json() {
         assert::pass(
             r#"

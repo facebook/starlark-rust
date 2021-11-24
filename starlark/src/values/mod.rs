@@ -56,7 +56,10 @@ use crate::{
         float::StarlarkFloat,
         function::{FrozenBoundMethod, NativeFunction, FUNCTION_TYPE},
         record::FrozenRecord,
-        recursive_repr_guard::{repr_stack_push, ReprStackReleaseMemoryOnDrop},
+        recursive_repr_or_json_guard::{
+            json_stack_push, repr_stack_push, JsonStackReleaseMemoryOnDrop,
+            ReprStackReleaseMemoryOnDrop,
+        },
         structs::FrozenStruct,
         tuple::FrozenTuple,
         types::{list::FrozenList, range::Range, record::RecordType},
@@ -79,7 +82,7 @@ pub(crate) mod iter;
 mod layout;
 pub(crate) mod num;
 mod owned;
-pub(crate) mod recursive_repr_guard;
+pub(crate) mod recursive_repr_or_json_guard;
 mod stack_guard;
 mod trace;
 mod traits;
@@ -227,6 +230,10 @@ impl Default for FrozenValue {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("Cycle detected when serializing value of type `{0}` to JSON")]
+struct ToJsonCycleError(&'static str);
+
 impl<'v> ValueLike<'v> for Value<'v> {
     type String = StringValue<'v>;
 
@@ -249,12 +256,15 @@ impl<'v> ValueLike<'v> for Value<'v> {
         }
     }
 
-    fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        self.get_ref().write_hash(hasher)
+    fn collect_json(self, collector: &mut String) -> anyhow::Result<()> {
+        match json_stack_push(self) {
+            Ok(_guard) => self.get_ref().collect_json(collector),
+            Err(..) => Err(ToJsonCycleError(self.get_type()).into()),
+        }
     }
 
-    fn collect_json(self, collector: &mut String) -> anyhow::Result<()> {
-        self.get_ref().collect_json(collector)
+    fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
+        self.get_ref().write_hash(hasher)
     }
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {
@@ -392,6 +402,8 @@ impl<'v> Value<'v> {
     }
 
     pub fn to_json(self) -> anyhow::Result<String> {
+        let _release_memory = JsonStackReleaseMemoryOnDrop;
+
         let mut s = String::new();
         self.collect_json(&mut s)?;
         Ok(s)

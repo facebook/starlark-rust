@@ -431,7 +431,7 @@ mod tests {
     use super::*;
     use crate::{
         collections::SmallMap,
-        values::{recursive_repr_guard::ReprStackReleaseMemoryOnDrop, Heap},
+        values::{recursive_repr_or_json_guard::ReprStackReleaseMemoryOnDrop, Heap},
     };
 
     fn format_capture_for_test<'v, T: Iterator<Item = Value<'v>>>(

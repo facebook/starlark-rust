@@ -48,8 +48,11 @@ use crate::{
         extra::{PrintHandler, StderrPrintHandler},
     },
     values::{
-        recursive_repr_guard::ReprStackReleaseMemoryOnDrop, value_captured_get, FrozenHeap,
-        FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured, ValueLike,
+        recursive_repr_or_json_guard::{
+            JsonStackReleaseMemoryOnDrop, ReprStackReleaseMemoryOnDrop,
+        },
+        value_captured_get, FrozenHeap, FrozenRef, Heap, Trace, Tracer, Value, ValueCaptured,
+        ValueLike,
     },
 };
 
@@ -85,6 +88,7 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) def_info: FrozenRef<DefInfo>,
     // Make leak sanitizer happy.
     pub(crate) _repr_stack_release_memory_on_drop: ReprStackReleaseMemoryOnDrop,
+    pub(crate) _json_stack_release_memory_on_drop: JsonStackReleaseMemoryOnDrop,
     // Should we enable heap profiling or not
     pub(crate) heap_profile: HeapProfile,
     // Should we enable flame profiling or not
@@ -151,6 +155,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             disable_gc: false,
             alloca: Alloca::new(),
             _repr_stack_release_memory_on_drop: ReprStackReleaseMemoryOnDrop,
+            _json_stack_release_memory_on_drop: JsonStackReleaseMemoryOnDrop,
             heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
             bc_profile: BcProfile::new(),
