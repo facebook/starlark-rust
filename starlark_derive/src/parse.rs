@@ -181,6 +181,9 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
             }
         } else if let Some(ds) = is_attribute_docstring(&x) {
             doc_attrs.push(ds);
+            // Important the attributes remain tagged to the function, so the test annotations
+            // are present, and thus the doc test works properly.
+            attrs.push(x);
         } else {
             attrs.push(x);
         }
