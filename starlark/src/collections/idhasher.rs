@@ -15,41 +15,10 @@
  * limitations under the License.
  */
 
-use std::hash::Hasher;
-
-use gazebo::prelude::*;
-
-/*
- * IdHasher is a simple hasher that computes
- * a minimal mix to get entropy into the upper 7 bits of a u64.
- *
- * This is important when used with HashBrown, HashMap and IndexMap,
- * which uses the upper 7 bits of the hash for a tag, then compares 16 tags in
- * parallel with a SIMD instruction. Without the mix, typical low-valued u32 ids
- * would all have tag 0.
- */
-
+// This is important when used with hashbrown, HashMap and IndexMap,
+// which uses the upper 7 bits of the hash for a tag, then compares 16 tags in
+// parallel with a SIMD instruction. Without the mix, typical low-valued u32 ids
+// would all have tag 0.
 pub(crate) fn mix_u32(n: u32) -> u64 {
     (n as u64).wrapping_mul(0x9e3779b97f4a7c15)
-}
-
-/// A Hasher, faster than `DefaultHasher`, but can only hash
-/// one single pre-hashed u32. That matches `SmallHashResult`.
-/// Don't use it for anything that isn't `SmallHashResult`.
-#[derive(Debug, Default, Clone, Dupe, Copy)]
-pub(crate) struct IdHasher(u64);
-
-impl Hasher for IdHasher {
-    fn write(&mut self, _: &[u8]) {
-        unimplemented!()
-    }
-
-    fn write_u32(&mut self, n: u32) {
-        debug_assert_eq!(self.0, 0); // Allow one write per Hasher instance.
-        self.0 = mix_u32(n);
-    }
-
-    fn finish(&self) -> u64 {
-        self.0
-    }
 }
