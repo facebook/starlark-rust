@@ -1643,6 +1643,27 @@ impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericPosIm
     }
 }
 
+/// Common of method invocation instructions.
+#[inline(always)]
+fn call_method_common<'v>(
+    eval: &mut Evaluator<'v, '_>,
+    this: Value<'v>,
+    symbol: &Symbol,
+    arguments: Arguments<'v, '_>,
+    span: Span,
+) -> anyhow::Result<Value<'v>> {
+    // TODO: wrong span: should be span of `object.method`, not of the whole expression
+    let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
+    match method {
+        MemberOrValue::Member(member) => {
+            member
+                .to_value()
+                .invoke_method(this, Some(span), arguments, eval)
+        }
+        MemberOrValue::Value(value) => value.invoke(Some(span), arguments, eval),
+    }
+}
+
 impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
@@ -1657,16 +1678,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args(args);
         let this = stack.pop();
-        // TODO: wrong span: should be span of `object.method`, not of the whole expression
-        let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
-        match method {
-            MemberOrValue::Member(member) => {
-                member
-                    .to_value()
-                    .invoke_method(this, Some(args.span), arguments, eval)
-            }
-            MemberOrValue::Value(value) => value.invoke(Some(args.span), arguments, eval),
-        }
+        call_method_common(eval, this, symbol, arguments, args.span)
     }
 }
 
@@ -1684,16 +1696,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args_pos(*npops);
         let this = stack.pop();
-        // TODO: wrong span: should be span of `object.method`, not of the whole expression
-        let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
-        match method {
-            MemberOrValue::Member(member) => {
-                member
-                    .to_value()
-                    .invoke_method(this, Some(*span), arguments, eval)
-            }
-            MemberOrValue::Value(value) => value.invoke(Some(*span), arguments, eval),
-        }
+        call_method_common(eval, this, symbol, arguments, *span)
     }
 }
 
