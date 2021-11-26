@@ -187,14 +187,18 @@ impl Display for StarlarkStr {
     }
 }
 
+pub(crate) fn str_methods() -> Option<&'static Methods> {
+    static RES: MethodsStatic = MethodsStatic::new();
+    RES.methods(crate::stdlib::string::string_methods)
+}
+
 // We don't actually use `str` on the heap, but it's helpful to have an instance
 // for people who want to get access to repr/json "like string"
 impl<'v> StarlarkValue<'v> for str {
     starlark_type!(STRING_TYPE);
 
     fn get_methods(&self) -> Option<&'static Methods> {
-        static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(crate::stdlib::string::string_methods)
+        str_methods()
     }
 
     fn collect_repr(&self, buffer: &mut String) {

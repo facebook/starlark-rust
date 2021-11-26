@@ -346,6 +346,11 @@ impl<'v> DictLike<'v> for FrozenDict {
     }
 }
 
+pub(crate) fn dict_methods() -> Option<&'static Methods> {
+    static RES: MethodsStatic = MethodsStatic::new();
+    RES.methods(crate::stdlib::dict::dict_methods)
+}
+
 impl<'v, T: DictLike<'v>> StarlarkValue<'v> for DictGen<T>
 where
     Self: AnyLifetime<'v>,
@@ -353,8 +358,7 @@ where
     starlark_type!(Dict::TYPE);
 
     fn get_methods(&self) -> Option<&'static Methods> {
-        static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(crate::stdlib::dict::dict_methods)
+        dict_methods()
     }
 
     fn collect_repr(&self, r: &mut String) {

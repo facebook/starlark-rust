@@ -432,6 +432,11 @@ pub(crate) fn display_list(xs: &[Value], f: &mut fmt::Formatter<'_>) -> fmt::Res
     display_container(f, "[", "]", xs.iter())
 }
 
+pub(crate) fn list_methods() -> Option<&'static Methods> {
+    static RES: MethodsStatic = MethodsStatic::new();
+    RES.methods(crate::stdlib::list::list_methods)
+}
+
 impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>
 where
     Self: AnyLifetime<'v> + Display,
@@ -439,8 +444,7 @@ where
     starlark_type!(List::TYPE);
 
     fn get_methods(&self) -> Option<&'static Methods> {
-        static RES: MethodsStatic = MethodsStatic::new();
-        RES.methods(crate::stdlib::list::list_methods)
+        list_methods()
     }
 
     fn collect_repr(&self, s: &mut String) {

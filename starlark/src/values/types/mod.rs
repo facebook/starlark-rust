@@ -23,6 +23,7 @@ pub mod enumeration;
 pub mod float;
 pub mod function;
 pub mod int;
+pub(crate) mod known_methods;
 pub mod list;
 pub mod none;
 pub mod range;

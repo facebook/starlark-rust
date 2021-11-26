@@ -193,6 +193,10 @@ impl Methods {
             .collect()
     }
 
+    pub(crate) fn members(&self) -> impl Iterator<Item = (&str, FrozenValue)> {
+        self.0.members.iter().map(|(k, v)| (k.as_str(), *v))
+    }
+
     pub fn documentation(&self) -> DocItem {
         common_documentation(&self.0.docstring, &self.0.members)
     }

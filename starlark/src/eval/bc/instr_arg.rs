@@ -38,7 +38,10 @@ use crate::{
         },
         runtime::slots::LocalSlotId,
     },
-    values::{typed::FrozenValueTyped, FrozenRef, FrozenStringValue, FrozenValue, StarlarkValue},
+    values::{
+        known_methods::KnownMethod, typed::FrozenValueTyped, FrozenRef, FrozenStringValue,
+        FrozenValue, StarlarkValue,
+    },
 };
 
 /// Truncate value if it is too long.
@@ -167,6 +170,40 @@ impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg, D: BcInstrArg> BcInstrArg for 
 
     fn pushes_stack((a, b, c, d): &Self) -> u32 {
         A::pushes_stack(a) + B::pushes_stack(b) + C::pushes_stack(c) + D::pushes_stack(d)
+    }
+}
+
+#[allow(clippy::many_single_char_names)]
+impl<A: BcInstrArg, B: BcInstrArg, C: BcInstrArg, D: BcInstrArg, E: BcInstrArg> BcInstrArg
+    for (A, B, C, D, E)
+{
+    fn fmt_append((a, b, c, d, e): &Self, ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
+        A::fmt_append(a, ip, f)?;
+        B::fmt_append(b, ip, f)?;
+        C::fmt_append(c, ip, f)?;
+        D::fmt_append(d, ip, f)?;
+        E::fmt_append(e, ip, f)?;
+        Ok(())
+    }
+
+    fn visit_jump_addr((a, b, c, d, e): &Self, consumer: &mut dyn FnMut(BcAddrOffset)) {
+        BcInstrArg::visit_jump_addr(a, consumer);
+        BcInstrArg::visit_jump_addr(b, consumer);
+        BcInstrArg::visit_jump_addr(c, consumer);
+        BcInstrArg::visit_jump_addr(d, consumer);
+        BcInstrArg::visit_jump_addr(e, consumer);
+    }
+
+    fn pops_stack((a, b, c, d, e): &Self) -> u32 {
+        A::pops_stack(a) + B::pops_stack(b) + C::pops_stack(c) + D::pops_stack(d) + E::pops_stack(e)
+    }
+
+    fn pushes_stack((a, b, c, d, e): &Self) -> u32 {
+        A::pushes_stack(a)
+            + B::pushes_stack(b)
+            + C::pushes_stack(c)
+            + D::pushes_stack(d)
+            + E::pushes_stack(e)
     }
 }
 
@@ -398,6 +435,22 @@ impl BcInstrArg for BcOpcode {
     }
 
     fn pushes_stack(_: &Self) -> u32 {
+        0
+    }
+}
+
+impl BcInstrArg for KnownMethod {
+    fn fmt_append(_param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " <m>")
+    }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
+    fn pops_stack(_param: &Self) -> u32 {
+        0
+    }
+
+    fn pushes_stack(_param: &Self) -> u32 {
         0
     }
 }

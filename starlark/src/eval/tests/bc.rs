@@ -84,3 +84,16 @@ fn test_spec_exec_list() {
         "def test(): return list((10, 20))",
     )
 }
+
+#[test]
+fn test_call_maybe_known_method() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocalAndConst,
+            BcOpcode::CallMaybeKnownMethodPos,
+            BcOpcode::Pop,
+            BcOpcode::ReturnNone,
+        ],
+        "def test(x): x.append(1)",
+    );
+}

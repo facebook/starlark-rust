@@ -35,14 +35,18 @@ use crate::{
             instr_impl::{
                 InstrCall, InstrCallFrozen, InstrCallFrozenDef, InstrCallFrozenDefPos,
                 InstrCallFrozenNative, InstrCallFrozenNativePos, InstrCallFrozenPos,
-                InstrCallMethod, InstrCallMethodPos, InstrCallPos,
+                InstrCallMaybeKnownMethod, InstrCallMaybeKnownMethodPos, InstrCallMethod,
+                InstrCallMethodPos, InstrCallPos,
             },
             writer::BcWriter,
         },
         fragment::call::{ArgsCompiledValue, CallCompiled},
         FrozenDef,
     },
-    values::{function::NativeFunction, typed::FrozenValueTyped, FrozenStringValue, FrozenValue},
+    values::{
+        function::NativeFunction, known_methods::get_known_method, typed::FrozenValueTyped,
+        FrozenStringValue, FrozenValue,
+    },
 };
 
 #[derive(Debug)]
@@ -180,16 +184,37 @@ impl Spanned<CallCompiled> {
             },
             CallCompiled::Method(box (ref this, ref symbol, ref args)) => {
                 this.write_bc(bc);
+                let symbol = symbol.clone();
+                let known_method = get_known_method(symbol.as_str());
                 if let Some(pos) = args.pos_only() {
                     write_exprs(pos, bc);
-                    let symbol = symbol.clone();
-                    bc.write_instr::<InstrCallMethodPos>(
-                        span,
-                        (ArgPopsStack1, ArgPopsStack(pos.len() as u32), symbol, span),
-                    );
+                    if let Some(known_method) = known_method {
+                        bc.write_instr::<InstrCallMaybeKnownMethodPos>(
+                            span,
+                            (
+                                ArgPopsStack1,
+                                ArgPopsStack(pos.len() as u32),
+                                symbol,
+                                known_method,
+                                span,
+                            ),
+                        );
+                    } else {
+                        bc.write_instr::<InstrCallMethodPos>(
+                            span,
+                            (ArgPopsStack1, ArgPopsStack(pos.len() as u32), symbol, span),
+                        );
+                    }
                 } else {
                     let args = args.write_bc(span, bc);
-                    bc.write_instr::<InstrCallMethod>(span, (ArgPopsStack1, symbol.clone(), args));
+                    if let Some(known_method) = known_method {
+                        bc.write_instr::<InstrCallMaybeKnownMethod>(
+                            span,
+                            (ArgPopsStack1, symbol, known_method, args),
+                        );
+                    } else {
+                        bc.write_instr::<InstrCallMethod>(span, (ArgPopsStack1, symbol, args));
+                    }
                 }
             }
         }

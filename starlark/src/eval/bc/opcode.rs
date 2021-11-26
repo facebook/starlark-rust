@@ -111,6 +111,8 @@ pub(crate) enum BcOpcode {
     CallFrozenPos,
     CallMethod,
     CallMethodPos,
+    CallMaybeKnownMethod,
+    CallMaybeKnownMethodPos,
     Def,
     PossibleGc,
     BeforeStmt,

@@ -17,7 +17,7 @@
 
 //! Instruction implementations.
 
-use std::{cmp::Ordering, marker, mem::MaybeUninit};
+use std::{cmp::Ordering, marker, mem::MaybeUninit, ptr};
 
 use gazebo::coerce::coerce;
 
@@ -51,6 +51,7 @@ use crate::{
     values::{
         dict::Dict,
         function::NativeFunction,
+        known_methods::KnownMethod,
         list::List,
         string::interpolation::{format_one, percent_s_one},
         typed::FrozenValueTyped,
@@ -1557,6 +1558,8 @@ pub(crate) struct InstrCallFrozenGenericImpl<F: BcFrozenCallable>(marker::Phanto
 pub(crate) struct InstrCallFrozenGenericPosImpl<F: BcFrozenCallable>(marker::PhantomData<F>);
 pub(crate) struct InstrCallMethodImpl;
 pub(crate) struct InstrCallMethodPosImpl;
+pub(crate) struct InstrCallMaybeKnownMethodImpl;
+pub(crate) struct InstrCallMaybeKnownMethodPosImpl;
 
 pub(crate) type InstrCall = InstrNoFlowAddSpan<InstrCallImpl>;
 pub(crate) type InstrCallPos = InstrNoFlowAddSpan<InstrCallPosImpl>;
@@ -1572,6 +1575,8 @@ pub(crate) type InstrCallFrozen = InstrNoFlowAddSpan<InstrCallFrozenGenericImpl<
 pub(crate) type InstrCallFrozenPos = InstrNoFlowAddSpan<InstrCallFrozenGenericPosImpl<FrozenValue>>;
 pub(crate) type InstrCallMethod = InstrNoFlowAddSpan<InstrCallMethodImpl>;
 pub(crate) type InstrCallMethodPos = InstrNoFlowAddSpan<InstrCallMethodPosImpl>;
+pub(crate) type InstrCallMaybeKnownMethod = InstrNoFlowAddSpan<InstrCallMaybeKnownMethodImpl>;
+pub(crate) type InstrCallMaybeKnownMethodPos = InstrNoFlowAddSpan<InstrCallMaybeKnownMethodPosImpl>;
 
 impl InstrNoFlowAddSpanImpl for InstrCallImpl {
     type Pop<'v> = ();
@@ -1664,6 +1669,34 @@ fn call_method_common<'v>(
     }
 }
 
+/// Common of method invocation instructions where a method is likely stdlib method.
+#[inline(always)]
+fn call_maybe_known_method_common<'v>(
+    eval: &mut Evaluator<'v, '_>,
+    this: Value<'v>,
+    symbol: &Symbol,
+    known_method: &KnownMethod,
+    arguments: Arguments<'v, '_>,
+    span: Span,
+) -> anyhow::Result<Value<'v>> {
+    if let Some(methods) = this.get_ref().get_methods() {
+        // Instead of method lookup by name, we compare `Methods` pointers.
+        // If pointers are equal, getattr would return the same method
+        // we already have.
+        if ptr::eq(methods, known_method.type_methods) {
+            return known_method.method.invoke_method(
+                known_method.method.to_value(),
+                this,
+                Some(span),
+                arguments,
+                eval,
+            );
+        }
+    }
+
+    call_method_common(eval, this, symbol, arguments, span)
+}
+
 impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
@@ -1697,6 +1730,42 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
         let arguments = stack.pop_args_pos(*npops);
         let this = stack.pop();
         call_method_common(eval, this, symbol, arguments, *span)
+    }
+}
+
+impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl {
+    type Pop<'v> = ();
+    type Push<'v> = Value<'v>;
+    type Arg = (ArgPopsStack1, Symbol, KnownMethod, ArgsCompiledValueBc);
+
+    #[inline(always)]
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        stack: &mut BcStackPtr<'v, '_>,
+        (_pop1, symbol, known_method, args): &Self::Arg,
+        _pops: (),
+    ) -> Result<Value<'v>, anyhow::Error> {
+        let arguments = stack.pop_args(args);
+        let this = stack.pop();
+        call_maybe_known_method_common(eval, this, symbol, known_method, arguments, args.span)
+    }
+}
+
+impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodPosImpl {
+    type Pop<'v> = ();
+    type Push<'v> = Value<'v>;
+    type Arg = (ArgPopsStack1, ArgPopsStack, Symbol, KnownMethod, Span);
+
+    #[inline(always)]
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        stack: &mut BcStackPtr<'v, '_>,
+        (_pop1, npops, symbol, known_method, span): &Self::Arg,
+        _pops: (),
+    ) -> Result<Value<'v>, anyhow::Error> {
+        let arguments = stack.pop_args_pos(*npops);
+        let this = stack.pop();
+        call_maybe_known_method_common(eval, this, symbol, known_method, arguments, *span)
     }
 }
 
