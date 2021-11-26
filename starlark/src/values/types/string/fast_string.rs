@@ -249,6 +249,30 @@ pub(crate) fn convert_str_indices(
     }
 }
 
+pub(crate) fn contains(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        true
+    } else if needle.len() == 1 {
+        haystack.as_bytes().contains(&needle.as_bytes()[0])
+    } else if haystack.len() < needle.len() {
+        false
+    } else {
+        assert!(haystack.len() >= needle.len());
+        // `str::contains` is very slow for short strings.
+        // So use basic quadratic algorithm instead.
+        let needle_0 = needle.as_bytes()[0];
+        for start in 0..=haystack.len() - needle.len() {
+            if haystack.as_bytes()[start] != needle_0 {
+                continue;
+            }
+            if haystack.as_bytes()[start..].starts_with(needle.as_bytes()) {
+                return true;
+            }
+        }
+        false
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::iter;

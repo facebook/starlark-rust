@@ -264,11 +264,7 @@ impl<'v> StarlarkValue<'v> for str {
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
         let s = <&str>::unpack_param(other)?;
-        if s.len() == 1 {
-            Ok(self.as_bytes().contains(&s.as_bytes()[0]))
-        } else {
-            Ok(self.contains(s))
-        }
+        Ok(fast_string::contains(self, s))
     }
 
     fn slice(
