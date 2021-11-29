@@ -235,7 +235,7 @@ impl<'v> Freeze for Partial<'v> {
             named: self.named.try_map(|x| x.freeze(freezer))?,
             names: self
                 .names
-                .into_try_map(|(s, x)| Ok::<_, anyhow::Error>((s, x.freeze(freezer)?)))?,
+                .into_try_map(|(s, x)| anyhow::Ok((s, x.freeze(freezer)?)))?,
         })
     }
 }

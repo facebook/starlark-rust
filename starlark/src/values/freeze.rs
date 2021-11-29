@@ -140,7 +140,7 @@ where
             let key = key.freeze(freezer)?;
             let value = value.freeze(freezer)?;
             // `freeze` must not change hash.
-            Ok::<_, anyhow::Error>(Bucket { hash, key, value })
+            anyhow::Ok(Bucket { hash, key, value })
         })?;
         Ok(VecMap { buckets })
     }

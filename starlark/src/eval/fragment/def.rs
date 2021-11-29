@@ -571,10 +571,10 @@ impl<'v> Freeze for Def<'v> {
         let parameters = self.parameters.freeze(freezer)?;
         let parameter_types = self
             .parameter_types
-            .into_try_map(|(i, s, v, t)| Ok::<_, anyhow::Error>((i, s, v.freeze(freezer)?, t)))?;
+            .into_try_map(|(i, s, v, t)| anyhow::Ok((i, s, v.freeze(freezer)?, t)))?;
         let return_type = self
             .return_type
-            .into_try_map(|(v, t)| Ok::<_, anyhow::Error>((v.freeze(freezer)?, t)))?;
+            .into_try_map(|(v, t)| anyhow::Ok((v.freeze(freezer)?, t)))?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
         let module = AtomicFrozenRefOption::new(self.module.load_relaxed());
         Ok(FrozenDef {
