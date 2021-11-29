@@ -18,19 +18,19 @@
 // Possible optimisations:
 // Encoding none, bool etc in the pointer of frozen value
 
-pub(crate) use constant::StringValueLike;
-pub use constant::{FrozenStringValue, StarlarkStrNRepr, StringValue};
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
+pub(crate) use string::StringValueLike;
+pub use string::{FrozenStringValue, StarlarkStrNRepr, StringValue};
 pub use value::{FrozenValue, Value, ValueIdentity};
 pub(crate) use value_captured::*;
 
 mod arena;
 mod avalue;
-mod constant;
 mod heap;
 mod pointer;
 mod pointer_i32;
+mod string;
 pub(crate) mod typed;
 mod value;
 mod value_captured;

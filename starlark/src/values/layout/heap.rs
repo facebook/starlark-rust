@@ -47,7 +47,7 @@ use crate::{
                 list_avalue, simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
                 VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
-            constant::constant_string,
+            string::constant_string,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
