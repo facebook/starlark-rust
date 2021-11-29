@@ -360,6 +360,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
 
     /// Compare `self` with `other` for equality.
     /// Should only return an error on excessive recursion.
+    ///
+    /// This function can only be called when it is known that self pointer
+    /// is not equal to the other pointer. Thus, an implementation may assume
+    /// that the pointers are not equal. Implementation of `equals` for some
+    /// builtin types and default implementation rely on this assumption.
     fn equals(&self, _other: Value<'v>) -> anyhow::Result<bool> {
         // Type is only equal via a pointer
         Ok(false)
