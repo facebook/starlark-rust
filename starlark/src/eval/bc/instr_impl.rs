@@ -697,6 +697,7 @@ impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
     type Push<'v> = Value<'v>;
     type Arg = ();
 
+    #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
@@ -712,6 +713,7 @@ impl<I: InstrUnOpImpl> InstrNoFlowAddSpanImpl for InstrUnOpWrapper<I> {
     type Push<'v> = Value<'v>;
     type Arg = ();
 
+    #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
