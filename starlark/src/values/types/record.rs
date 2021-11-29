@@ -58,7 +58,6 @@ use gazebo::{
 
 use crate::{
     self as starlark,
-    codemap::Span,
     collections::{SmallMap, StarlarkHasher},
     eval::{Arguments, Evaluator, ParametersSpec},
     values::{
@@ -251,7 +250,6 @@ where
     fn invoke(
         &self,
         me: Value<'v>,
-        _location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {

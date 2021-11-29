@@ -1536,8 +1536,9 @@ impl BcFrozenCallable for FrozenValueTyped<'static, FrozenDef> {
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.as_ref()
-            .invoke(self.to_value(), Some(location), args, eval)
+        eval.with_call_stack(self.to_value(), Some(location), |eval| {
+            self.as_ref().invoke(self.to_value(), args, eval)
+        })
     }
 }
 
@@ -1549,8 +1550,9 @@ impl BcFrozenCallable for FrozenValueTyped<'static, NativeFunction> {
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.as_ref()
-            .invoke(self.to_value(), Some(location), args, eval)
+        eval.with_call_stack(self.to_value(), Some(location), |eval| {
+            self.as_ref().invoke(self.to_value(), args, eval)
+        })
     }
 }
 
@@ -1686,13 +1688,14 @@ fn call_maybe_known_method_common<'v>(
         // If pointers are equal, getattr would return the same method
         // we already have.
         if ptr::eq(methods, known_method.type_methods) {
-            return known_method.method.invoke_method(
-                known_method.method.to_value(),
-                this,
-                Some(span),
-                arguments,
-                eval,
-            );
+            return eval.with_call_stack(known_method.method.to_value(), Some(span), |eval| {
+                known_method.method.invoke_method(
+                    known_method.method.to_value(),
+                    this,
+                    arguments,
+                    eval,
+                )
+            });
         }
     }
 

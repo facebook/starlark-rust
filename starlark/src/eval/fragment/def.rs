@@ -610,8 +610,7 @@ where
 
     fn invoke(
         &self,
-        me: Value<'v>,
-        location: Option<Span>,
+        _me: Value<'v>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -619,7 +618,7 @@ where
         alloca_frame(eval, local_slots, self.bc().max_stack_size, |eval| {
             let slots = eval.current_frame.locals();
             self.parameters.collect_inline(args, slots, eval.heap())?;
-            eval.with_call_stack(me, location, |eval| self.invoke_raw(eval))
+            self.invoke_raw(eval)
         })
     }
 

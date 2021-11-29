@@ -50,7 +50,6 @@ use thiserror::Error;
 
 use crate::{
     self as starlark,
-    codemap::Span,
     collections::{SmallMap, StarlarkHasher},
     environment::{Methods, MethodsBuilder, MethodsStatic},
     eval::{Arguments, Evaluator},
@@ -166,7 +165,6 @@ where
     fn invoke(
         &self,
         me: Value<'v>,
-        _location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {

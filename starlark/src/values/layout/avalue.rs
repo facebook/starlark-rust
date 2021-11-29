@@ -30,7 +30,6 @@ use derive_more::Display;
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 
 use crate::{
-    codemap::Span,
     collections::{SmallHashResult, StarlarkHasher},
     environment::Methods,
     eval::{Arguments, Evaluator, FrozenDef},
@@ -836,7 +835,6 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn invoke(
         &self,
         _me: Value<'v>,
-        _location: Option<Span>,
         _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -846,7 +844,6 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
         &self,
         _me: Value<'v>,
         _this: Value<'v>,
-        _location: Option<Span>,
         _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -1015,21 +1012,19 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     fn invoke(
         &self,
         me: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.1.invoke(me, location, args, eval)
+        self.1.invoke(me, args, eval)
     }
     fn invoke_method(
         &self,
         me: Value<'v>,
         this: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.1.invoke_method(me, this, location, args, eval)
+        self.1.invoke_method(me, this, args, eval)
     }
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.1.at(index, heap)

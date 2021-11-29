@@ -30,7 +30,6 @@ use itertools::Itertools;
 
 use crate::{
     self as starlark,
-    codemap::Span,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
     eval::{Arguments, Evaluator},
@@ -250,7 +249,6 @@ where
     fn invoke(
         &self,
         _me: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -270,7 +268,7 @@ where
                         args: args.args,
                         kwargs: args.kwargs,
                     };
-                    self.func.invoke(location, params, eval)
+                    self.func.invoke(None, params, eval)
                 })
             })
         })

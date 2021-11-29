@@ -25,7 +25,6 @@ use gazebo::{any::AnyLifetime, coerce::Coerce};
 
 use crate as starlark;
 use crate::{
-    codemap::Span,
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
     values::{
         docs,
@@ -193,12 +192,11 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
 
     fn invoke(
         &self,
-        me: Value<'v>,
-        location: Option<Span>,
+        _me: Value<'v>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        eval.with_call_stack(me, location, |eval| (self.function)(eval, args))
+        (self.function)(eval, args)
     }
 
     fn extra_memory(&self) -> usize {
@@ -249,13 +247,12 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
 
     fn invoke_method(
         &self,
-        me: Value<'v>,
+        _me: Value<'v>,
         this: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        eval.with_call_stack(me, location, |eval| (self.function)(eval, this, args))
+        (self.function)(eval, this, args)
     }
 
     fn documentation(&self) -> Option<DocItem> {
@@ -292,12 +289,11 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
         &self,
         _me: Value<'v>,
         this: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let method = self.call(this, eval.heap())?;
-        method.invoke(location, args, eval)
+        method.invoke(None, args, eval)
     }
 }
 
@@ -330,16 +326,10 @@ where
     fn invoke(
         &self,
         _me: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.method.invoke_method(
-            self.method.to_value(),
-            self.this.to_value(),
-            location,
-            args,
-            eval,
-        )
+        self.method
+            .invoke_method(self.method.to_value(), self.this.to_value(), args, eval)
     }
 }

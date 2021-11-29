@@ -184,11 +184,11 @@ pub trait ValueLike<'v>:
 
     fn invoke(
         self,
-        location: Option<Span>,
+        span: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.to_value().invoke(location, args, eval)
+        self.to_value().invoke(span, args, eval)
     }
 
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
@@ -632,7 +632,9 @@ impl<'v> Value<'v> {
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.get_ref().invoke(self, location, args, eval)
+        eval.with_call_stack(self, location, |eval| {
+            self.get_ref().invoke(self, args, eval)
+        })
     }
 
     pub(crate) fn invoke_method(
@@ -642,8 +644,9 @@ impl<'v> Value<'v> {
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.get_ref()
-            .invoke_method(self, this, location, args, eval)
+        eval.with_call_stack(self, location, |eval| {
+            self.get_ref().invoke_method(self, this, args, eval)
+        })
     }
 
     /// Invoke a function with only positional arguments.

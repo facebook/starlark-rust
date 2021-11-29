@@ -38,7 +38,6 @@ use derive_more::Display;
 use gazebo::any::AnyLifetime;
 
 use crate::{
-    codemap::Span,
     collections::StarlarkHasher,
     environment::Methods,
     eval::{Arguments, Evaluator},
@@ -380,7 +379,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     fn invoke(
         &self,
         _me: Value<'v>,
-        _location: Option<Span>,
         _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -396,7 +394,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         &self,
         _me: Value<'v>,
         _this: Value<'v>,
-        _location: Option<Span>,
         _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -748,7 +745,6 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn invoke(
         &self,
         _me: Value<'v>,
-        _location: Option<Span>,
         _args: Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
@@ -756,7 +752,6 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
         &self,
         me: Value<'v>,
         this: Value<'v>,
-        location: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
