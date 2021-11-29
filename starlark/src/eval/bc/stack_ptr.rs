@@ -24,7 +24,7 @@ use gazebo::coerce::coerce_ref;
 use crate::{
     eval::{
         bc::{
-            compiler::call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             if_debug::IfDebug,
             instr_arg::{ArgPopsStack, ArgPopsStackMaybe1, ArgPushesStack},
         },

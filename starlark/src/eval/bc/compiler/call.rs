@@ -17,19 +17,15 @@
 
 //! Compile function calls.
 
-use std::{
-    convert::TryInto,
-    fmt,
-    fmt::{Display, Formatter},
-};
+use std::convert::TryInto;
 
 use either::Either;
 
 use crate::{
     codemap::{Span, Spanned},
-    collections::symbol_map::Symbol,
     eval::{
         bc::{
+            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             compiler::expr::write_exprs,
             instr_arg::ArgPopsStack1,
             instr_impl::{
@@ -45,65 +41,9 @@ use crate::{
     },
     values::{
         function::NativeFunction, known_methods::get_known_method, typed::FrozenValueTyped,
-        FrozenStringValue, FrozenValue,
+        FrozenValue,
     },
 };
-
-#[derive(Debug)]
-pub(crate) struct ArgsCompiledValueBc {
-    pub(crate) pos_named: u32,
-    pub(crate) names: Box<[(Symbol, FrozenStringValue)]>,
-    pub(crate) args: bool,
-    pub(crate) kwargs: bool,
-}
-
-/// Positional-only call arguments, from stack.
-#[derive(Debug)]
-pub(crate) struct ArgsCompiledValueBcPos {
-    /// Number of positional arguments.
-    pub(crate) pos: u32,
-}
-
-impl ArgsCompiledValueBc {
-    fn pos(&self) -> u32 {
-        assert!(self.pos_named as usize >= self.names.len());
-        self.pos_named - (self.names.len() as u32)
-    }
-}
-
-impl Display for ArgsCompiledValueBc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut first = true;
-        let mut write_sep = |f: &mut Formatter| {
-            if !first {
-                write!(f, " ")?;
-            }
-            first = false;
-            Ok(())
-        };
-        // Number of positional arguments.
-        if self.pos() != 0 {
-            write_sep(f)?;
-            write!(f, "{}", self.pos())?;
-        }
-        // Named arguments.
-        for (_, name) in &*self.names {
-            write_sep(f)?;
-            write!(f, "{}", name.as_str())?;
-        }
-        // Star argument?
-        if self.args {
-            write_sep(f)?;
-            write!(f, "*")?;
-        }
-        // Star-star argument?
-        if self.kwargs {
-            write_sep(f)?;
-            write!(f, "**")?;
-        }
-        Ok(())
-    }
-}
 
 impl ArgsCompiledValue {
     fn write_bc(&self, bc: &mut BcWriter) -> ArgsCompiledValueBc {

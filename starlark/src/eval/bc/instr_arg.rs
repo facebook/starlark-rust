@@ -31,7 +31,7 @@ use crate::{
     eval::{
         bc::{
             addr::{BcAddr, BcAddrOffset, BcPtrAddr},
-            compiler::call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             instr::BcInstr,
             instr_impl::InstrDefData,
             opcode::{BcOpcode, BcOpcodeHandler},

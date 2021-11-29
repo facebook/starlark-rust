@@ -29,7 +29,7 @@ use crate::{
         bc::{
             addr::{BcAddr, BcAddrOffset, BcPtrAddr},
             bytecode::{run_block, Bc, RunBlockResult},
-            compiler::call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             instr::{BcInstr, InstrControl},
             instr_arg::{
                 ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1, ArgPushesStack, BcInstrArg,

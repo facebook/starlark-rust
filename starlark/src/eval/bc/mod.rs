@@ -19,6 +19,7 @@
 
 pub(crate) mod addr;
 pub(crate) mod bytecode;
+pub(crate) mod call;
 pub(crate) mod compiler;
 pub(crate) mod frame;
 pub(crate) mod if_debug;
