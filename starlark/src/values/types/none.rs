@@ -45,7 +45,10 @@ impl<'v> StarlarkValue<'v> for NoneType {
     starlark_type!(NoneType::TYPE);
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        Ok(other.is_none())
+        // We always compare pointers before calling `equals`,
+        // so if we are here, the other is definitely not `None`.
+        debug_assert!(!other.is_none());
+        Ok(false)
     }
 
     fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
