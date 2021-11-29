@@ -51,7 +51,6 @@ use crate::{
 
 #[derive(Debug)]
 pub(crate) struct ArgsCompiledValueBc {
-    pub(crate) span: Span,
     pub(crate) pos_named: u32,
     pub(crate) names: Box<[(Symbol, FrozenStringValue)]>,
     pub(crate) args: bool,
@@ -100,12 +99,11 @@ impl Display for ArgsCompiledValueBc {
 }
 
 impl ArgsCompiledValue {
-    fn write_bc(&self, span: Span, bc: &mut BcWriter) -> ArgsCompiledValueBc {
+    fn write_bc(&self, bc: &mut BcWriter) -> ArgsCompiledValueBc {
         write_exprs(&self.pos_named, bc);
         write_exprs(&self.args, bc);
         write_exprs(&self.kwargs, bc);
         ArgsCompiledValueBc {
-            span,
             pos_named: self.pos_named.len().try_into().unwrap(),
             names: self.names.clone().into_boxed_slice(),
             args: self.args.is_some(),
@@ -116,7 +114,6 @@ impl ArgsCompiledValue {
 
 impl Spanned<CallCompiled> {
     fn write_args(
-        span: Span,
         args: &ArgsCompiledValue,
         bc: &mut BcWriter,
     ) -> Either<ArgPopsStack, ArgsCompiledValueBc> {
@@ -124,7 +121,7 @@ impl Spanned<CallCompiled> {
             write_exprs(pos, bc);
             Either::Left(ArgPopsStack(pos.len() as u32))
         } else {
-            let args = args.write_bc(span, bc);
+            let args = args.write_bc(bc);
             Either::Right(args)
         }
     }
@@ -136,30 +133,30 @@ impl Spanned<CallCompiled> {
         bc: &mut BcWriter,
     ) {
         if let Some(fun) = FrozenValueTyped::<FrozenDef>::new(fun) {
-            match Self::write_args(span, args, bc) {
+            match Self::write_args(args, bc) {
                 Either::Left(npops) => {
                     bc.write_instr::<InstrCallFrozenDefPos>(span, (npops, fun, span));
                 }
                 Either::Right(args) => {
-                    bc.write_instr::<InstrCallFrozenDef>(span, (fun, args));
+                    bc.write_instr::<InstrCallFrozenDef>(span, (fun, args, span));
                 }
             }
         } else if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
-            match Self::write_args(span, args, bc) {
+            match Self::write_args(args, bc) {
                 Either::Left(npops) => {
                     bc.write_instr::<InstrCallFrozenNativePos>(span, (npops, fun, span));
                 }
                 Either::Right(args) => {
-                    bc.write_instr::<InstrCallFrozenNative>(span, (fun, args));
+                    bc.write_instr::<InstrCallFrozenNative>(span, (fun, args, span));
                 }
             }
         } else {
-            match Self::write_args(span, args, bc) {
+            match Self::write_args(args, bc) {
                 Either::Left(npops) => {
                     bc.write_instr::<InstrCallFrozenPos>(span, (npops, fun, span));
                 }
                 Either::Right(args) => {
-                    bc.write_instr::<InstrCallFrozen>(span, (fun, args));
+                    bc.write_instr::<InstrCallFrozen>(span, (fun, args, span));
                 }
             }
         }
@@ -172,12 +169,12 @@ impl Spanned<CallCompiled> {
                 Some(f) => Self::write_call_frozen(span, f, args, bc),
                 None => {
                     f.write_bc(bc);
-                    match Self::write_args(span, args, bc) {
+                    match Self::write_args(args, bc) {
                         Either::Left(npops) => {
                             bc.write_instr::<InstrCallPos>(span, (ArgPopsStack1, npops, span))
                         }
                         Either::Right(args) => {
-                            bc.write_instr::<InstrCall>(span, (ArgPopsStack1, args));
+                            bc.write_instr::<InstrCall>(span, (ArgPopsStack1, args, span));
                         }
                     }
                 }
@@ -206,14 +203,17 @@ impl Spanned<CallCompiled> {
                         );
                     }
                 } else {
-                    let args = args.write_bc(span, bc);
+                    let args = args.write_bc(bc);
                     if let Some(known_method) = known_method {
                         bc.write_instr::<InstrCallMaybeKnownMethod>(
                             span,
-                            (ArgPopsStack1, symbol, known_method, args),
+                            (ArgPopsStack1, symbol, known_method, args, span),
                         );
                     } else {
-                        bc.write_instr::<InstrCallMethod>(span, (ArgPopsStack1, symbol, args));
+                        bc.write_instr::<InstrCallMethod>(
+                            span,
+                            (ArgPopsStack1, symbol, args, span),
+                        );
                     }
                 }
             }

@@ -1585,18 +1585,18 @@ pub(crate) type InstrCallMaybeKnownMethodPos = InstrNoFlowAddSpan<InstrCallMaybe
 impl InstrNoFlowAddSpanImpl for InstrCallImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgsCompiledValueBc);
+    type Arg = (ArgPopsStack1, ArgsCompiledValueBc, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (_pop1, args): &Self::Arg,
+        (_pop1, args, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args(args);
         let f = stack.pop();
-        f.invoke(Some(args.span), arguments, eval)
+        f.invoke(Some(*span), arguments, eval)
     }
 }
 
@@ -1621,17 +1621,17 @@ impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
 impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericImpl<F> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (F, ArgsCompiledValueBc);
+    type Arg = (F, ArgsCompiledValueBc, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (fun, args): &Self::Arg,
+        (fun, args, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args(args);
-        fun.bc_invoke(args.span, arguments, eval)
+        fun.bc_invoke(*span, arguments, eval)
     }
 }
 
@@ -1705,18 +1705,18 @@ fn call_maybe_known_method_common<'v>(
 impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, Symbol, ArgsCompiledValueBc);
+    type Arg = (ArgPopsStack1, Symbol, ArgsCompiledValueBc, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (_pop1, symbol, args): &Self::Arg,
+        (_pop1, symbol, args, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args(args);
         let this = stack.pop();
-        call_method_common(eval, this, symbol, arguments, args.span)
+        call_method_common(eval, this, symbol, arguments, *span)
     }
 }
 
@@ -1741,18 +1741,24 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, Symbol, KnownMethod, ArgsCompiledValueBc);
+    type Arg = (
+        ArgPopsStack1,
+        Symbol,
+        KnownMethod,
+        ArgsCompiledValueBc,
+        Span,
+    );
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        (_pop1, symbol, known_method, args): &Self::Arg,
+        (_pop1, symbol, known_method, args, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = stack.pop_args(args);
         let this = stack.pop();
-        call_maybe_known_method_common(eval, this, symbol, known_method, arguments, args.span)
+        call_maybe_known_method_common(eval, this, symbol, known_method, arguments, *span)
     }
 }
 
