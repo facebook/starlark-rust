@@ -84,7 +84,7 @@ impl Spanned<CallCompiled> {
         if let Some(fun) = FrozenValueTyped::<FrozenDef>::new(fun) {
             match Self::write_args(args, bc) {
                 Either::Left(npops) => {
-                    bc.write_instr::<InstrCallFrozenDefPos>(span, (npops, fun, span));
+                    bc.write_instr::<InstrCallFrozenDefPos>(span, (fun, npops, span));
                 }
                 Either::Right(args) => {
                     bc.write_instr::<InstrCallFrozenDef>(span, (fun, args, span));
@@ -93,7 +93,7 @@ impl Spanned<CallCompiled> {
         } else if let Some(fun) = FrozenValueTyped::<NativeFunction>::new(fun) {
             match Self::write_args(args, bc) {
                 Either::Left(npops) => {
-                    bc.write_instr::<InstrCallFrozenNativePos>(span, (npops, fun, span));
+                    bc.write_instr::<InstrCallFrozenNativePos>(span, (fun, npops, span));
                 }
                 Either::Right(args) => {
                     bc.write_instr::<InstrCallFrozenNative>(span, (fun, args, span));
@@ -102,7 +102,7 @@ impl Spanned<CallCompiled> {
         } else {
             match Self::write_args(args, bc) {
                 Either::Left(npops) => {
-                    bc.write_instr::<InstrCallFrozenPos>(span, (npops, fun, span));
+                    bc.write_instr::<InstrCallFrozenPos>(span, (fun, npops, span));
                 }
                 Either::Right(args) => {
                     bc.write_instr::<InstrCallFrozen>(span, (fun, args, span));
@@ -139,11 +139,11 @@ impl Spanned<CallCompiled> {
                             span,
                             (
                                 ArgPopsStack1,
+                                symbol,
+                                known_method,
                                 BcCallArgsPos {
                                     pos: pos.len() as u32,
                                 },
-                                symbol,
-                                known_method,
                                 span,
                             ),
                         );
@@ -152,10 +152,10 @@ impl Spanned<CallCompiled> {
                             span,
                             (
                                 ArgPopsStack1,
+                                symbol,
                                 BcCallArgsPos {
                                     pos: pos.len() as u32,
                                 },
-                                symbol,
                                 span,
                             ),
                         );

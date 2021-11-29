@@ -22,7 +22,19 @@ use std::{
     fmt::{Display, Formatter},
 };
 
-use crate::{collections::symbol_map::Symbol, values::FrozenStringValue};
+use crate::{
+    collections::symbol_map::Symbol,
+    eval::{
+        bc::{instr_arg::BcInstrArg, stack_ptr::BcStackPtr},
+        Arguments,
+    },
+    values::FrozenStringValue,
+};
+
+/// Call arguments.
+pub(crate) trait BcCallArgs: BcInstrArg {
+    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> Arguments<'v, 'a>;
+}
 
 /// Full call arguments: positional, named, star and star-star. All taken from the stack.
 #[derive(Debug)]
@@ -78,5 +90,17 @@ impl Display for BcCallArgsFull {
             write!(f, "**")?;
         }
         Ok(())
+    }
+}
+
+impl BcCallArgs for BcCallArgsFull {
+    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> Arguments<'v, 'a> {
+        stack.pop_args(self)
+    }
+}
+
+impl BcCallArgs for BcCallArgsPos {
+    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> Arguments<'v, 'a> {
+        stack.pop_args_pos(self)
     }
 }
