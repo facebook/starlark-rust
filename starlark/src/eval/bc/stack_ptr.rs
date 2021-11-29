@@ -24,7 +24,7 @@ use gazebo::coerce::coerce_ref;
 use crate::{
     eval::{
         bc::{
-            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{BcCallArgsFull, BcCallArgsPos},
             if_debug::IfDebug,
             instr_arg::{ArgPopsStack, ArgPopsStackMaybe1, ArgPushesStack},
         },
@@ -135,7 +135,7 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         unsafe { ptr::read(self.ptr.get() as *const [Value; N]) }
     }
 
-    pub(crate) fn pop_args<'a>(&'a self, a: &'a ArgsCompiledValueBc) -> Arguments<'v, 'a> {
+    pub(crate) fn pop_args<'a>(&'a self, a: &'a BcCallArgsFull) -> Arguments<'v, 'a> {
         let kwargs = if a.kwargs { Some(self.pop()) } else { None };
         let args = if a.args { Some(self.pop()) } else { None };
         let pos_named = self.pop_slice(ArgPopsStack(a.pos_named));
@@ -149,7 +149,7 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         }
     }
 
-    pub(crate) fn pop_args_pos<'a>(&'a self, npos: &ArgsCompiledValueBcPos) -> Arguments<'v, 'a> {
+    pub(crate) fn pop_args_pos<'a>(&'a self, npos: &BcCallArgsPos) -> Arguments<'v, 'a> {
         let pos = self.pop_slice(ArgPopsStack(npos.pos));
         Arguments {
             pos,

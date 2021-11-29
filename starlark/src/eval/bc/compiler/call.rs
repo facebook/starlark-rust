@@ -25,7 +25,7 @@ use crate::{
     codemap::{Span, Spanned},
     eval::{
         bc::{
-            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{BcCallArgsFull, BcCallArgsPos},
             compiler::expr::write_exprs,
             instr_arg::ArgPopsStack1,
             instr_impl::{
@@ -46,11 +46,11 @@ use crate::{
 };
 
 impl ArgsCompiledValue {
-    fn write_bc(&self, bc: &mut BcWriter) -> ArgsCompiledValueBc {
+    fn write_bc(&self, bc: &mut BcWriter) -> BcCallArgsFull {
         write_exprs(&self.pos_named, bc);
         write_exprs(&self.args, bc);
         write_exprs(&self.kwargs, bc);
-        ArgsCompiledValueBc {
+        BcCallArgsFull {
             pos_named: self.pos_named.len().try_into().unwrap(),
             names: self.names.clone().into_boxed_slice(),
             args: self.args.is_some(),
@@ -63,10 +63,10 @@ impl Spanned<CallCompiled> {
     fn write_args(
         args: &ArgsCompiledValue,
         bc: &mut BcWriter,
-    ) -> Either<ArgsCompiledValueBcPos, ArgsCompiledValueBc> {
+    ) -> Either<BcCallArgsPos, BcCallArgsFull> {
         if let Some(pos) = args.pos_only() {
             write_exprs(pos, bc);
-            Either::Left(ArgsCompiledValueBcPos {
+            Either::Left(BcCallArgsPos {
                 pos: pos.len() as u32,
             })
         } else {
@@ -139,7 +139,7 @@ impl Spanned<CallCompiled> {
                             span,
                             (
                                 ArgPopsStack1,
-                                ArgsCompiledValueBcPos {
+                                BcCallArgsPos {
                                     pos: pos.len() as u32,
                                 },
                                 symbol,
@@ -152,7 +152,7 @@ impl Spanned<CallCompiled> {
                             span,
                             (
                                 ArgPopsStack1,
-                                ArgsCompiledValueBcPos {
+                                BcCallArgsPos {
                                     pos: pos.len() as u32,
                                 },
                                 symbol,

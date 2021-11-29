@@ -29,7 +29,7 @@ use crate::{
         bc::{
             addr::{BcAddr, BcAddrOffset, BcPtrAddr},
             bytecode::{run_block, Bc, RunBlockResult},
-            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{BcCallArgsFull, BcCallArgsPos},
             instr::{BcInstr, InstrControl},
             instr_arg::{
                 ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1, ArgPushesStack, BcInstrArg,
@@ -1585,7 +1585,7 @@ pub(crate) type InstrCallMaybeKnownMethodPos = InstrNoFlowAddSpan<InstrCallMaybe
 impl InstrNoFlowAddSpanImpl for InstrCallImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgsCompiledValueBc, Span);
+    type Arg = (ArgPopsStack1, BcCallArgsFull, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1603,7 +1603,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgsCompiledValueBcPos, Span);
+    type Arg = (ArgPopsStack1, BcCallArgsPos, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1621,7 +1621,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
 impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericImpl<F> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (F, ArgsCompiledValueBc, Span);
+    type Arg = (F, BcCallArgsFull, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1638,7 +1638,7 @@ impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericImpl<
 impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericPosImpl<F> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgsCompiledValueBcPos, F, Span);
+    type Arg = (BcCallArgsPos, F, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1705,7 +1705,7 @@ fn call_maybe_known_method_common<'v>(
 impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, Symbol, ArgsCompiledValueBc, Span);
+    type Arg = (ArgPopsStack1, Symbol, BcCallArgsFull, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1723,7 +1723,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgsCompiledValueBcPos, Symbol, Span);
+    type Arg = (ArgPopsStack1, BcCallArgsPos, Symbol, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1741,13 +1741,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (
-        ArgPopsStack1,
-        Symbol,
-        KnownMethod,
-        ArgsCompiledValueBc,
-        Span,
-    );
+    type Arg = (ArgPopsStack1, Symbol, KnownMethod, BcCallArgsFull, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1765,13 +1759,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (
-        ArgPopsStack1,
-        ArgsCompiledValueBcPos,
-        Symbol,
-        KnownMethod,
-        Span,
-    );
+    type Arg = (ArgPopsStack1, BcCallArgsPos, Symbol, KnownMethod, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(

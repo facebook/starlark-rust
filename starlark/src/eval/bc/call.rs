@@ -24,8 +24,9 @@ use std::{
 
 use crate::{collections::symbol_map::Symbol, values::FrozenStringValue};
 
+/// Full call arguments: positional, named, star and star-star. All taken from the stack.
 #[derive(Debug)]
-pub(crate) struct ArgsCompiledValueBc {
+pub(crate) struct BcCallArgsFull {
     pub(crate) pos_named: u32,
     pub(crate) names: Box<[(Symbol, FrozenStringValue)]>,
     pub(crate) args: bool,
@@ -34,19 +35,19 @@ pub(crate) struct ArgsCompiledValueBc {
 
 /// Positional-only call arguments, from stack.
 #[derive(Debug)]
-pub(crate) struct ArgsCompiledValueBcPos {
+pub(crate) struct BcCallArgsPos {
     /// Number of positional arguments.
     pub(crate) pos: u32,
 }
 
-impl ArgsCompiledValueBc {
+impl BcCallArgsFull {
     fn pos(&self) -> u32 {
         assert!(self.pos_named as usize >= self.names.len());
         self.pos_named - (self.names.len() as u32)
     }
 }
 
-impl Display for ArgsCompiledValueBc {
+impl Display for BcCallArgsFull {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut first = true;
         let mut write_sep = |f: &mut Formatter| {

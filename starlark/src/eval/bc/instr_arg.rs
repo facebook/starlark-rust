@@ -31,7 +31,7 @@ use crate::{
     eval::{
         bc::{
             addr::{BcAddr, BcAddrOffset, BcPtrAddr},
-            call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
+            call::{BcCallArgsFull, BcCallArgsPos},
             instr::BcInstr,
             instr_impl::InstrDefData,
             opcode::{BcOpcode, BcOpcodeHandler},
@@ -655,7 +655,7 @@ impl BcInstrArg for InstrDefData {
     }
 }
 
-impl BcInstrArg for ArgsCompiledValueBc {
+impl BcInstrArg for BcCallArgsFull {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {{{}}}", param)
     }
@@ -671,7 +671,7 @@ impl BcInstrArg for ArgsCompiledValueBc {
     }
 }
 
-impl BcInstrArg for ArgsCompiledValueBcPos {
+impl BcInstrArg for BcCallArgsPos {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param.pos)
     }
