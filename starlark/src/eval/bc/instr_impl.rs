@@ -29,7 +29,7 @@ use crate::{
         bc::{
             addr::{BcAddr, BcAddrOffset, BcPtrAddr},
             bytecode::{run_block, Bc, RunBlockResult},
-            compiler::call::ArgsCompiledValueBc,
+            compiler::call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             instr::{BcInstr, InstrControl},
             instr_arg::{
                 ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1, ArgPushesStack, BcInstrArg,
@@ -1603,7 +1603,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgPopsStack, Span);
+    type Arg = (ArgPopsStack1, ArgsCompiledValueBcPos, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1612,7 +1612,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallPosImpl {
         (_pop1, npops, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args_pos(*npops);
+        let arguments = stack.pop_args_pos(npops);
         let f = stack.pop();
         f.invoke(Some(*span), arguments, eval)
     }
@@ -1638,7 +1638,7 @@ impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericImpl<
 impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericPosImpl<F> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, F, Span);
+    type Arg = (ArgsCompiledValueBcPos, F, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1647,7 +1647,7 @@ impl<F: BcFrozenCallable> InstrNoFlowAddSpanImpl for InstrCallFrozenGenericPosIm
         (npops, fun, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args_pos(*npops);
+        let arguments = stack.pop_args_pos(npops);
         fun.bc_invoke(*span, arguments, eval)
     }
 }
@@ -1723,7 +1723,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgPopsStack, Symbol, Span);
+    type Arg = (ArgPopsStack1, ArgsCompiledValueBcPos, Symbol, Span);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1732,7 +1732,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMethodPosImpl {
         (_pop1, npops, symbol, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args_pos(*npops);
+        let arguments = stack.pop_args_pos(npops);
         let this = stack.pop();
         call_method_common(eval, this, symbol, arguments, *span)
     }
@@ -1765,7 +1765,13 @@ impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl {
 impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodPosImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, ArgPopsStack, Symbol, KnownMethod, Span);
+    type Arg = (
+        ArgPopsStack1,
+        ArgsCompiledValueBcPos,
+        Symbol,
+        KnownMethod,
+        Span,
+    );
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1774,7 +1780,7 @@ impl InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodPosImpl {
         (_pop1, npops, symbol, known_method, span): &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
-        let arguments = stack.pop_args_pos(*npops);
+        let arguments = stack.pop_args_pos(npops);
         let this = stack.pop();
         call_maybe_known_method_common(eval, this, symbol, known_method, arguments, *span)
     }

@@ -31,7 +31,7 @@ use crate::{
     eval::{
         bc::{
             addr::{BcAddr, BcAddrOffset, BcPtrAddr},
-            compiler::call::ArgsCompiledValueBc,
+            compiler::call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             instr::BcInstr,
             instr_impl::InstrDefData,
             opcode::{BcOpcode, BcOpcodeHandler},
@@ -664,6 +664,22 @@ impl BcInstrArg for ArgsCompiledValueBc {
 
     fn pops_stack(param: &Self) -> u32 {
         param.pos_named + if param.args { 1 } else { 0 } + if param.kwargs { 1 } else { 0 }
+    }
+
+    fn pushes_stack(_param: &Self) -> u32 {
+        0
+    }
+}
+
+impl BcInstrArg for ArgsCompiledValueBcPos {
+    fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
+        write!(f, " {}", param.pos)
+    }
+
+    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
+
+    fn pops_stack(param: &Self) -> u32 {
+        param.pos
     }
 
     fn pushes_stack(_param: &Self) -> u32 {

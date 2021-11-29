@@ -24,7 +24,7 @@ use gazebo::coerce::coerce_ref;
 use crate::{
     eval::{
         bc::{
-            compiler::call::ArgsCompiledValueBc,
+            compiler::call::{ArgsCompiledValueBc, ArgsCompiledValueBcPos},
             if_debug::IfDebug,
             instr_arg::{ArgPopsStack, ArgPopsStackMaybe1, ArgPushesStack},
         },
@@ -149,8 +149,8 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         }
     }
 
-    pub(crate) fn pop_args_pos<'a>(&'a self, npos: ArgPopsStack) -> Arguments<'v, 'a> {
-        let pos = self.pop_slice(npos);
+    pub(crate) fn pop_args_pos<'a>(&'a self, npos: &ArgsCompiledValueBcPos) -> Arguments<'v, 'a> {
+        let pos = self.pop_slice(ArgPopsStack(npos.pos));
         Arguments {
             pos,
             named: &[],

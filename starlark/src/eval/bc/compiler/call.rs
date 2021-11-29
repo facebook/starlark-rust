@@ -31,7 +31,7 @@ use crate::{
     eval::{
         bc::{
             compiler::expr::write_exprs,
-            instr_arg::{ArgPopsStack, ArgPopsStack1},
+            instr_arg::ArgPopsStack1,
             instr_impl::{
                 InstrCall, InstrCallFrozen, InstrCallFrozenDef, InstrCallFrozenDefPos,
                 InstrCallFrozenNative, InstrCallFrozenNativePos, InstrCallFrozenPos,
@@ -55,6 +55,13 @@ pub(crate) struct ArgsCompiledValueBc {
     pub(crate) names: Box<[(Symbol, FrozenStringValue)]>,
     pub(crate) args: bool,
     pub(crate) kwargs: bool,
+}
+
+/// Positional-only call arguments, from stack.
+#[derive(Debug)]
+pub(crate) struct ArgsCompiledValueBcPos {
+    /// Number of positional arguments.
+    pub(crate) pos: u32,
 }
 
 impl ArgsCompiledValueBc {
@@ -116,10 +123,12 @@ impl Spanned<CallCompiled> {
     fn write_args(
         args: &ArgsCompiledValue,
         bc: &mut BcWriter,
-    ) -> Either<ArgPopsStack, ArgsCompiledValueBc> {
+    ) -> Either<ArgsCompiledValueBcPos, ArgsCompiledValueBc> {
         if let Some(pos) = args.pos_only() {
             write_exprs(pos, bc);
-            Either::Left(ArgPopsStack(pos.len() as u32))
+            Either::Left(ArgsCompiledValueBcPos {
+                pos: pos.len() as u32,
+            })
         } else {
             let args = args.write_bc(bc);
             Either::Right(args)
@@ -190,7 +199,9 @@ impl Spanned<CallCompiled> {
                             span,
                             (
                                 ArgPopsStack1,
-                                ArgPopsStack(pos.len() as u32),
+                                ArgsCompiledValueBcPos {
+                                    pos: pos.len() as u32,
+                                },
                                 symbol,
                                 known_method,
                                 span,
@@ -199,7 +210,14 @@ impl Spanned<CallCompiled> {
                     } else {
                         bc.write_instr::<InstrCallMethodPos>(
                             span,
-                            (ArgPopsStack1, ArgPopsStack(pos.len() as u32), symbol, span),
+                            (
+                                ArgPopsStack1,
+                                ArgsCompiledValueBcPos {
+                                    pos: pos.len() as u32,
+                                },
+                                symbol,
+                                span,
+                            ),
                         );
                     }
                 } else {
