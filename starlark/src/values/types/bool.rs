@@ -109,11 +109,11 @@ impl StarlarkValue<'_> for StarlarkBool {
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        if let Some(other) = other.unpack_bool() {
-            Ok(self.0 == other)
-        } else {
-            Ok(false)
-        }
+        // We always compare values for pointer equality before calling `equals`,
+        // and there are only two instances of `StarlarkBool`.
+        // So if we are here, values are definitely not equal.
+        debug_assert!(!matches!(other.unpack_bool(), Some(other) if other == self.0));
+        Ok(false)
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
