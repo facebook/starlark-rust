@@ -49,11 +49,10 @@ use crate::{
             },
             pointer::Pointer,
             pointer_i32::PointerI32,
-            string::VALUE_EMPTY_STRING,
         },
         num::Num,
         string::StarlarkStr,
-        UnpackValue,
+        UnpackValue, VALUE_EMPTY_STRING,
     },
 };
 

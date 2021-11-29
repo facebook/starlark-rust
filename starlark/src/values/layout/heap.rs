@@ -40,6 +40,7 @@ use crate::{
     values::{
         any::StarlarkAny,
         array::Array,
+        constant_string,
         layout::{
             arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation},
             avalue::{
@@ -47,7 +48,6 @@ use crate::{
                 list_avalue, simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
                 VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
-            string::constant_string,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,

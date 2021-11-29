@@ -21,7 +21,7 @@
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
 pub(crate) use string::StringValueLike;
-pub use string::{FrozenStringValue, StarlarkStrNRepr, StringValue};
+pub use string::{static_string::*, FrozenStringValue, StringValue};
 pub use value::{FrozenValue, Value, ValueIdentity};
 pub(crate) use value_captured::*;
 
