@@ -305,17 +305,6 @@ impl<'v> AllocValue<'v> for StringValue<'v> {
     }
 }
 
-/// Create a [`FrozenStringValue`].
-#[macro_export]
-macro_rules! const_frozen_string {
-    ($s:expr) => {{
-        const N: usize = $s.len();
-        static X: starlark::values::StarlarkStrNRepr<N> =
-            starlark::values::StarlarkStrNRepr::new($s);
-        X.erase()
-    }};
-}
-
 #[cfg(test)]
 mod test {
     use crate::{
