@@ -19,6 +19,7 @@ pub(crate) mod static_string;
 
 use std::{
     borrow::Borrow,
+    cmp::Ordering,
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -179,6 +180,18 @@ impl<'v> Eq for StringValue<'v> {}
 impl<'v> Hash for StringValue<'v> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_str().hash(state)
+    }
+}
+
+impl<'v> PartialOrd for StringValue<'v> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
+    }
+}
+
+impl<'v> Ord for StringValue<'v> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_str().cmp(other.as_str())
     }
 }
 
