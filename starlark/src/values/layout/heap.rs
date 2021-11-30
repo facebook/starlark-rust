@@ -190,7 +190,7 @@ impl FrozenHeap {
     /// around [`FrozenValue`].
     pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
         if let Some(x) = constant_string(x) {
-            x
+            x.unpack()
         } else {
             let (v, extra) = self.arena.alloc_extra_non_drop(starlark_str(x.len()));
             MaybeUninit::write_slice(extra, x.as_bytes());
@@ -403,7 +403,7 @@ impl Heap {
     /// Allocate a string on the heap.
     pub fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
         if let Some(x) = constant_string(x) {
-            x.to_value()
+            x.unpack().to_value()
         } else {
             self.alloc_str_init(x.len(), |dest| unsafe {
                 copy_nonoverlapping(x.as_ptr(), dest, x.len())

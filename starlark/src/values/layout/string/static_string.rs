@@ -67,15 +67,15 @@ impl<const N: usize> StarlarkStrNRepr<N> {
 pub(crate) static VALUE_EMPTY_STRING: StarlarkStrNRepr<0> = StarlarkStrNRepr::new("");
 
 #[inline(always)]
-pub(crate) fn constant_string(x: &str) -> Option<FrozenValue> {
+pub(crate) fn constant_string(x: &str) -> Option<FrozenStringValue> {
     if x.len() > 1 {
         None
     } else if x.is_empty() {
-        Some(VALUE_EMPTY_STRING.unpack())
+        Some(VALUE_EMPTY_STRING.erase())
     } else {
         // If the string is 1 byte long there can only be up to the first 128 characters present
         // therefore this index will be total
-        Some(VALUE_BYTE_STRINGS[x.as_bytes()[0] as usize].unpack())
+        Some(VALUE_BYTE_STRINGS[x.as_bytes()[0] as usize].erase())
     }
 }
 
