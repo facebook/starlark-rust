@@ -173,6 +173,8 @@ impl HeapProfile {
         self.enabled = true;
     }
 
+    #[cold]
+    #[inline(never)]
     pub(crate) fn record_call_enter<'v>(&self, function: Value<'v>, heap: &'v Heap) {
         if self.enabled {
             let time = Instant::now();
@@ -191,6 +193,8 @@ impl HeapProfile {
         }
     }
 
+    #[cold]
+    #[inline(never)]
     pub(crate) fn record_call_exit<'v>(&self, heap: &'v Heap) {
         if self.enabled {
             let time = Instant::now();

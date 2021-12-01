@@ -156,6 +156,8 @@ impl<'v> FlameProfile<'v> {
         self.0 = Some(box FlameData::default());
     }
 
+    #[cold]
+    #[inline(never)]
     pub fn record_call_enter(&mut self, function: Value<'v>) {
         if let Some(box x) = &mut self.0 {
             let ind = match x.map.entry(ValuePtr::new(function)) {
@@ -171,6 +173,8 @@ impl<'v> FlameProfile<'v> {
         }
     }
 
+    #[cold]
+    #[inline(never)]
     pub fn record_call_exit(&mut self) {
         if let Some(box x) = &mut self.0 {
             x.frames.push((Frame::Pop, Instant::now()))
