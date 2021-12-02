@@ -79,13 +79,13 @@ pub struct Evaluator<'v, 'a> {
     // The module-level variables in scope at the moment.
     // If `None` then we're in the initial module, use variables from `module_env`.
     // If `Some` we've called a `def` in a loaded frozen module.
-    pub(crate) module_variables: Option<FrozenRef<FrozenModuleRef>>,
+    pub(crate) module_variables: Option<FrozenRef<'static, FrozenModuleRef>>,
     /// Current function (`def` or `lambda`) frame: locals and bytecode stack.
     pub(crate) current_frame: BcFrame<'v>,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // `DefInfo` of currently executed function or module.
-    pub(crate) def_info: FrozenRef<DefInfo>,
+    pub(crate) def_info: FrozenRef<'static, DefInfo>,
     // Make leak sanitizer happy.
     pub(crate) _repr_stack_release_memory_on_drop: ReprStackReleaseMemoryOnDrop,
     pub(crate) _json_stack_release_memory_on_drop: JsonStackReleaseMemoryOnDrop,
@@ -381,8 +381,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     #[inline(always)] // There is only one caller
     pub(crate) fn with_function_context<R>(
         &mut self,
-        module: Option<FrozenRef<FrozenModuleRef>>, // None == use module_env
-        def_info: FrozenRef<DefInfo>,
+        module: Option<FrozenRef<'static, FrozenModuleRef>>, // None == use module_env
+        def_info: FrozenRef<'static, DefInfo>,
         within: impl FnOnce(&mut Self) -> R,
     ) -> R {
         // Capture the variables we will be mutating

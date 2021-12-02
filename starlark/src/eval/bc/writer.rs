@@ -325,7 +325,10 @@ impl BcWriter {
     }
 
     /// Allocate any object which will be alive while bytecode is alive.
-    pub(crate) fn alloc_any<T: Display + Debug + Send + Sync>(&mut self, value: T) -> FrozenRef<T> {
+    pub(crate) fn alloc_any<T: Display + Debug + Send + Sync>(
+        &mut self,
+        value: T,
+    ) -> FrozenRef<'static, T> {
         self.heap.alloc_any(value)
     }
 }

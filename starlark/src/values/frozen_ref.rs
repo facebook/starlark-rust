@@ -32,21 +32,21 @@ use crate::values::{string::StarlarkStr, FrozenValue, StarlarkValue, ValueLike};
 /// as it. However, this keeps the type of the type `T` of the actual [`FrozenValue`] as a
 /// reference, allowing manipulation of the actual typed data.
 #[derive(Clone_, Dupe_, Copy_, Debug)]
-pub struct FrozenRef<T: 'static + ?Sized> {
-    value: &'static T,
+pub struct FrozenRef<'f, T: 'f + ?Sized> {
+    value: &'f T,
 }
 
-impl<T: 'static + ?Sized> FrozenRef<T> {
-    pub(crate) fn new(value: &'static T) -> FrozenRef<T> {
+impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
+    pub(crate) fn new(value: &'f T) -> FrozenRef<T> {
         FrozenRef { value }
     }
 
-    pub fn as_ref(self) -> &'static T {
+    pub fn as_ref(self) -> &'f T {
         self.value
     }
 
     /// Converts `self` into a new reference that points at something reachable from the previous.
-    pub fn map<F, U: 'static + ?Sized>(self, f: F) -> FrozenRef<U>
+    pub fn map<F, U: 'f + ?Sized>(self, f: F) -> FrozenRef<'f, U>
     where
         for<'v> F: FnOnce(&'v T) -> &'v U,
     {
@@ -57,25 +57,25 @@ impl<T: 'static + ?Sized> FrozenRef<T> {
 }
 
 impl FrozenValue {
-    pub fn downcast_frozen_ref<T: StarlarkValue<'static>>(self) -> Option<FrozenRef<T>> {
+    pub fn downcast_frozen_ref<T: StarlarkValue<'static>>(self) -> Option<FrozenRef<'static, T>> {
         self.downcast_ref::<T>().map(|value| FrozenRef { value })
     }
 
-    pub fn downcast_frozen_str(self) -> Option<FrozenRef<str>> {
+    pub fn downcast_frozen_str(self) -> Option<FrozenRef<'static, str>> {
         self.to_value()
             .unpack_str()
             .map(|value| FrozenRef { value })
     }
 
     /// Note: see docs about ['Value::unpack_box_str'] about instability
-    pub fn downcast_frozen_starlark_str(self) -> Option<FrozenRef<StarlarkStr>> {
+    pub fn downcast_frozen_starlark_str(self) -> Option<FrozenRef<'static, StarlarkStr>> {
         self.to_value()
             .unpack_starlark_str()
             .map(|value| FrozenRef { value })
     }
 }
 
-impl<T: ?Sized> Deref for FrozenRef<T> {
+impl<'f, T: ?Sized> Deref for FrozenRef<'f, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -83,19 +83,19 @@ impl<T: ?Sized> Deref for FrozenRef<T> {
     }
 }
 
-impl<T: ?Sized> Borrow<T> for FrozenRef<T> {
+impl<'f, T: 'f + ?Sized> Borrow<T> for FrozenRef<'f, T> {
     fn borrow(&self) -> &T {
         &*self
     }
 }
 
-impl<T: ?Sized> Borrow<T> for FrozenRef<Box<T>> {
+impl<'f, T: 'f + ?Sized> Borrow<T> for FrozenRef<'f, Box<T>> {
     fn borrow(&self) -> &T {
         &*self
     }
 }
 
-impl<T: ?Sized> PartialEq for FrozenRef<T>
+impl<'f, T: 'f + ?Sized> PartialEq for FrozenRef<'f, T>
 where
     T: PartialEq,
 {
@@ -104,9 +104,9 @@ where
     }
 }
 
-impl<T: ?Sized> Eq for FrozenRef<T> where T: Eq {}
+impl<'f, T: 'f + ?Sized> Eq for FrozenRef<'f, T> where T: Eq {}
 
-impl<T: ?Sized> PartialOrd for FrozenRef<T>
+impl<'f, T: 'f + ?Sized> PartialOrd for FrozenRef<'f, T>
 where
     T: PartialOrd,
 {
@@ -115,7 +115,7 @@ where
     }
 }
 
-impl<T: ?Sized> Ord for FrozenRef<T>
+impl<'f, T: 'f + ?Sized> Ord for FrozenRef<'f, T>
 where
     T: Ord,
 {
@@ -124,7 +124,7 @@ where
     }
 }
 
-impl<T: ?Sized> Hash for FrozenRef<T>
+impl<'f, T: 'f + ?Sized> Hash for FrozenRef<'f, T>
 where
     T: Hash,
 {
@@ -144,7 +144,7 @@ impl<T> AtomicFrozenRefOption<T> {
         }))
     }
 
-    pub(crate) fn load_relaxed(&self) -> Option<FrozenRef<T>> {
+    pub(crate) fn load_relaxed(&self) -> Option<FrozenRef<'static, T>> {
         // Note this is relaxed load which is cheap.
         let ptr = self.0.load(atomic::Ordering::Relaxed);
         if ptr.is_null() {

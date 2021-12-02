@@ -339,9 +339,9 @@ impl BcInstrArg for String {
     }
 }
 
-impl<T: Display> BcInstrArg for FrozenRef<T>
+impl<T: Display> BcInstrArg for FrozenRef<'static, T>
 where
-    FrozenRef<T>: Copy,
+    FrozenRef<'static, T>: Copy,
 {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {}", param.as_ref())

@@ -250,14 +250,17 @@ impl FrozenHeap {
     pub(crate) fn alloc_simple_frozen_ref<T: StarlarkValue<'static>>(
         &self,
         value: T,
-    ) -> FrozenRef<T> {
+    ) -> FrozenRef<'static, T> {
         let value = self.alloc_simple(value);
         // Here we could avoid dynamic cast, but this code is not executed frequently.
         value.downcast_frozen_ref().unwrap()
     }
 
     /// Allocate any value in the frozen heap.
-    pub(crate) fn alloc_any<T: Debug + Display + Send + Sync>(&self, value: T) -> FrozenRef<T> {
+    pub(crate) fn alloc_any<T: Debug + Display + Send + Sync>(
+        &self,
+        value: T,
+    ) -> FrozenRef<'static, T> {
         let value = self.alloc_simple_frozen_ref(StarlarkAny::new(value));
         value.map(|r| &r.0)
     }
@@ -287,7 +290,7 @@ pub struct Freezer {
     /// Freezing into this heap.
     pub(crate) heap: FrozenHeap,
     /// Defs frozen by this freezer.
-    pub(crate) frozen_defs: RefCell<Vec<FrozenRef<FrozenDef>>>,
+    pub(crate) frozen_defs: RefCell<Vec<FrozenRef<'static, FrozenDef>>>,
 }
 
 impl Freezer {

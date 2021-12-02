@@ -318,7 +318,7 @@ pub(crate) type InstrLoadLocal4 = InstrNoFlow<InstrLocalLocalNImpl<4>>;
 impl<const N: usize> InstrNoFlowImpl for InstrLocalLocalNImpl<N> {
     type Pop<'v> = ();
     type Push<'v> = [Value<'v>; N];
-    type Arg = ([LocalSlotId; N], FrozenRef<BcInstrSpans>);
+    type Arg = ([LocalSlotId; N], FrozenRef<'static, BcInstrSpans>);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1093,7 +1093,7 @@ impl InstrNoFlowImpl for InstrDictOfConstsImpl {
 impl InstrNoFlowImpl for InstrDictNPopImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, FrozenRef<BcInstrSpans>);
+    type Arg = (ArgPopsStack, FrozenRef<'static, BcInstrSpans>);
 
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
@@ -1413,7 +1413,7 @@ pub(crate) struct InstrDefData {
     pub(crate) function_name: String,
     pub(crate) params: Vec<Spanned<ParameterCompiled<u32>>>,
     pub(crate) return_type: Option<Spanned<u32>>,
-    pub(crate) info: FrozenRef<DefInfo>,
+    pub(crate) info: FrozenRef<'static, DefInfo>,
 }
 
 impl InstrNoFlowImpl for InstrDefImpl {
@@ -1556,7 +1556,7 @@ impl BcFrozenCallable for FrozenValueTyped<'static, NativeFunction> {
     }
 }
 
-pub(crate) struct InstrCallImpl<A: BcCallArgs>(marker::PhantomData<A>);
+pub(crate) struct InstrCallImpl<A: BcCallArgs>(marker::PhantomData<fn(A)>);
 pub(crate) struct InstrCallFrozenGenericImpl<F: BcFrozenCallable, A: BcCallArgs>(
     marker::PhantomData<(F, A)>,
 );

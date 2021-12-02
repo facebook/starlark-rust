@@ -41,7 +41,7 @@ use crate::{
 #[derive(Clone, Copy, Dupe)]
 struct CheapFrame<'v> {
     function: Value<'v>,
-    file: Option<FrozenRef<DefInfo>>,
+    file: Option<FrozenRef<'static, DefInfo>>,
     span: Span,
 }
 
@@ -116,7 +116,7 @@ impl<'v> CallStack<'v> {
         &mut self,
         function: Value<'v>,
         span: Span,
-        file: Option<FrozenRef<DefInfo>>,
+        file: Option<FrozenRef<'static, DefInfo>>,
     ) -> anyhow::Result<()> {
         if unlikely(self.count >= MAX_CALLSTACK_RECURSION) {
             return Err(ControlError::TooManyRecursionLevel.into());

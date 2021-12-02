@@ -177,11 +177,11 @@ pub(crate) struct DefInfo {
     pub(crate) inline_def_body: Option<InlineDefBody>,
     /// Globals captured during function or module creation.
     /// Only needed for debugger evaluation.
-    pub(crate) globals: FrozenRef<Globals>,
+    pub(crate) globals: FrozenRef<'static, Globals>,
 }
 
 impl DefInfo {
-    pub(crate) fn empty() -> FrozenRef<DefInfo> {
+    pub(crate) fn empty() -> FrozenRef<'static, DefInfo> {
         static EMPTY: Lazy<DefInfo> = Lazy::new(|| DefInfo {
             codemap: CodeMap::default(),
             docstring: None,
@@ -198,7 +198,7 @@ impl DefInfo {
     pub(crate) fn for_module(
         codemap: CodeMap,
         scope_names: ScopeNames,
-        globals: FrozenRef<Globals>,
+        globals: FrozenRef<'static, Globals>,
     ) -> DefInfo {
         DefInfo {
             codemap,
@@ -218,7 +218,7 @@ pub(crate) struct DefCompiled {
     pub(crate) function_name: String,
     pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiled>>>>,
     pub(crate) return_type: Option<Box<Spanned<ExprCompiled>>>,
-    pub(crate) info: FrozenRef<DefInfo>,
+    pub(crate) info: FrozenRef<'static, DefInfo>,
 }
 
 /// Function body suitable for inlining.
@@ -459,7 +459,7 @@ pub(crate) struct DefGen<V> {
     parameter_captures: Vec<u32>,  // Indices of parameters, which are captured in nested defs
     parameter_types: Vec<(u32, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
-    pub(crate) def_info: FrozenRef<DefInfo>, // The source code and metadata for this function
+    pub(crate) def_info: FrozenRef<'static, DefInfo>, // The source code and metadata for this function
     /// Any variables captured from the outer scope (nested def/lambda).
     /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
     /// [`ValueCaptured`] or [`FrozenValueCaptured`].
@@ -492,7 +492,7 @@ impl<'v> Def<'v> {
         parameter_captures: Vec<u32>,
         parameter_types: Vec<(u32, String, Value<'v>, TypeCompiled)>,
         return_type: Option<(Value<'v>, TypeCompiled)>,
-        stmt: FrozenRef<DefInfo>,
+        stmt: FrozenRef<'static, DefInfo>,
         eval: &mut Evaluator<'v, '_>,
     ) -> Value<'v> {
         let captured = stmt

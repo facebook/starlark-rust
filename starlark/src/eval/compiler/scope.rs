@@ -46,7 +46,7 @@ pub(crate) struct Scope<'a> {
     locals: Vec<ScopeId>,
     unscopes: Vec<Unscope>,
     codemap: CodeMap,
-    globals: FrozenRef<Globals>,
+    globals: FrozenRef<'static, Globals>,
     pub(crate) errors: Vec<anyhow::Error>,
 }
 
@@ -167,7 +167,7 @@ impl<'a> Scope<'a> {
         scope_id: ScopeId,
         mut scope_data: ScopeData,
         code: &mut CstStmt,
-        globals: FrozenRef<Globals>,
+        globals: FrozenRef<'static, Globals>,
         codemap: CodeMap,
     ) -> Self {
         // Not really important, sanity check

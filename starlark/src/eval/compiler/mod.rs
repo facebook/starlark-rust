@@ -73,7 +73,7 @@ pub(crate) struct Compiler<'v, 'a, 'e> {
     pub(crate) eval: &'e mut Evaluator<'v, 'a>,
     pub(crate) scope_data: ScopeData,
     pub(crate) locals: Vec<ScopeId>,
-    pub(crate) globals: FrozenRef<Globals>,
+    pub(crate) globals: FrozenRef<'static, Globals>,
     pub(crate) codemap: CodeMap,
     pub(crate) constants: Constants,
     pub(crate) has_before_stmt: bool,
