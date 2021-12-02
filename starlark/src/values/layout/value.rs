@@ -47,7 +47,7 @@ use crate::{
                 basic_ref, AValue, AValueDyn, StarlarkStrAValue, VALUE_FALSE, VALUE_NONE,
                 VALUE_TRUE,
             },
-            pointer::Pointer,
+            pointer::{FrozenPointer, Pointer},
             pointer_i32::PointerI32,
         },
         num::Num,
@@ -76,7 +76,7 @@ unsafe impl<'v> CoerceKey<Value<'v>> for Value<'v> {}
 /// for a little bit more safety.
 #[derive(Clone, Copy, Dupe)]
 // One possible change: moving from Blackhole during GC
-pub struct FrozenValue(pub(crate) Pointer<'static, AValueHeader>);
+pub struct FrozenValue(pub(crate) FrozenPointer<'static, AValueHeader>);
 
 // These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
 // it having variance.
@@ -126,7 +126,7 @@ impl<'v> Value<'v> {
     pub fn new_frozen(x: FrozenValue) -> Self {
         // Safe if every FrozenValue must have had a reference added to its heap first.
         // That property is NOT statically checked.
-        Self(unsafe { x.0.cast_lifetime() })
+        Self(x.0.to_pointer())
     }
 
     /// Obtain the underlying [`FrozenValue`] from inside the [`Value`], if it is one.
@@ -134,7 +134,9 @@ impl<'v> Value<'v> {
         if self.0.is_unfrozen() {
             None
         } else {
-            Some(FrozenValue(unsafe { self.0.cast_lifetime() }))
+            Some(FrozenValue(unsafe {
+                self.0.cast_lifetime().to_frozen_pointer()
+            }))
         }
     }
 
@@ -249,7 +251,7 @@ impl<'v> Value<'v> {
 
 impl FrozenValue {
     pub(crate) fn new_ptr(x: &'static AValueHeader, is_str: bool) -> Self {
-        Self(Pointer::new_frozen(x, is_str))
+        Self(FrozenPointer::new_frozen(x, is_str))
     }
 
     pub(crate) fn new_repr<'a, T: AValue<'a>>(x: &'static AValueRepr<T>) -> Self {
@@ -257,7 +259,7 @@ impl FrozenValue {
     }
 
     pub(crate) fn new_ptr_usize_with_str_tag(x: usize) -> Self {
-        Self(Pointer::new_frozen_usize_with_str_tag(x))
+        Self(FrozenPointer::new_frozen_usize_with_str_tag(x))
     }
 
     /// Create a new value representing `None` in Starlark.
@@ -276,7 +278,7 @@ impl FrozenValue {
 
     /// Create a new int in Starlark.
     pub fn new_int(x: i32) -> Self {
-        Self(Pointer::new_int(x))
+        Self(FrozenPointer::new_int(x))
     }
 
     /// Create a new empty string.

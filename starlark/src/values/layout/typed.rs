@@ -159,13 +159,7 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
             // When a frozen pointer is not str and not int,
             // unpack is does not need untagging.
             // This generates slightly more efficient machine code.
-            unsafe {
-                &*(self
-                    .0
-                    .0
-                    .unpack_frozen_ptr_no_int_no_str_unchecked()
-                    .payload_ptr() as *const T)
-            }
+            unsafe { &*(self.0.0.unpack_ptr_no_int_no_str_unchecked().payload_ptr() as *const T) }
         }
     }
 }
