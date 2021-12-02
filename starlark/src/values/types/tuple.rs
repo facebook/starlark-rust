@@ -136,6 +136,13 @@ where
 {
     starlark_type!(Tuple::TYPE);
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn to_bool(&self) -> bool {
         self.len() != 0
     }

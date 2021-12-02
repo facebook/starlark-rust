@@ -43,7 +43,7 @@ fn test_export_as() {
     use gazebo::any::AnyLifetime;
 
     use crate as starlark;
-    use crate::values::{AllocValue, Freezer, Heap, SimpleValue, StarlarkValue, Trace, Value};
+    use crate::values::{AllocValue, Freezer, Heap, StarlarkValue, Trace, Value};
 
     #[derive(Debug, Trace)]
     struct Exporter<T> {
@@ -88,8 +88,6 @@ fn test_export_as() {
             })
         }
     }
-
-    impl SimpleValue for Exporter<String> {}
 
     #[starlark_module]
     fn exporter(builder: &mut GlobalsBuilder) {

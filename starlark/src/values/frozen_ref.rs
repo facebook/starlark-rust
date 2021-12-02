@@ -26,7 +26,7 @@ use std::{
 
 use gazebo::prelude::*;
 
-use crate::values::{string::StarlarkStr, FrozenValue, SimpleValue, ValueLike};
+use crate::values::{string::StarlarkStr, FrozenValue, StarlarkValue, ValueLike};
 
 /// A [`FrozenRef`] is essentially a [`FrozenValue`], and has the same memory and access guarantees
 /// as it. However, this keeps the type of the type `T` of the actual [`FrozenValue`] as a
@@ -57,7 +57,7 @@ impl<T: 'static + ?Sized> FrozenRef<T> {
 }
 
 impl FrozenValue {
-    pub fn downcast_frozen_ref<T: SimpleValue>(self) -> Option<FrozenRef<T>> {
+    pub fn downcast_frozen_ref<T: StarlarkValue<'static>>(self) -> Option<FrozenRef<T>> {
         self.downcast_ref::<T>().map(|value| FrozenRef { value })
     }
 

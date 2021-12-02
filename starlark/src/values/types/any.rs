@@ -73,7 +73,7 @@ use std::fmt::{self, Debug, Display};
 
 use gazebo::any::AnyLifetime;
 
-use crate::values::{AllocValue, Heap, SimpleValue, StarlarkValue, Value, ValueLike};
+use crate::values::{AllocValue, Heap, StarlarkValue, Value, ValueLike};
 
 /// A type that can be passed around as a Starlark [`Value`], but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with
@@ -93,8 +93,6 @@ impl<'v, T: Debug + Display + Send + Sync + 'static> AllocValue<'v> for Starlark
         heap.alloc_simple(self)
     }
 }
-
-impl<T: Debug + Display + Send + Sync + 'static> SimpleValue for StarlarkAny<T> {}
 
 impl<T: Debug + Display + Send + Sync + 'static> Debug for StarlarkAny<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

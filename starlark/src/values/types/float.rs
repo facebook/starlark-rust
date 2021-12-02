@@ -194,6 +194,13 @@ impl Display for StarlarkFloat {
 impl<'v> StarlarkValue<'v> for StarlarkFloat {
     starlark_type!(StarlarkFloat::TYPE);
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         if other.unpack_num().is_some() {
             Ok(self.compare(other)? == Ordering::Equal)

@@ -39,7 +39,7 @@ enum FrozenValue {
     None(NoneType),
     Bool(bool),
     Int(i64),
-    Obj(Arc<dyn SimpleValue>),
+    Obj(Arc<dyn StarlarkValue>),
 }
 
 enum Value {
@@ -50,7 +50,7 @@ enum Value {
 
 enum Mutable {
     Mutable(Box<dyn ComplexValue>),
-    ThawOnWrite(Arc<dyn SimpleValue>),
+    ThawOnWrite(Arc<dyn StarlarkValue>),
 }
 ```
 

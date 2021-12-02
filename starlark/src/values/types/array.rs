@@ -290,6 +290,13 @@ impl<'a, 'v> Drop for ArrayIter<'a, 'v> {
 impl<'v> StarlarkValue<'v> for Array<'v> {
     starlark_type!("array");
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn length(&self) -> anyhow::Result<i32> {
         Ok(self.len() as i32)
     }

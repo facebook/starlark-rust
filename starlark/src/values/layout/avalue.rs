@@ -47,7 +47,7 @@ use crate::{
             array::Array,
             tuple::{FrozenTuple, Tuple},
         },
-        ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, StarlarkValue,
         StarlarkValueDyn, Trace, Tracer, Value, ValueTyped,
     },
 };
@@ -272,15 +272,17 @@ pub(crate) fn basic_ref<'v, T: StarlarkValueBasic<'v>>(x: &T) -> &dyn AValueDyn<
     x
 }
 
-pub(crate) fn simple(x: impl SimpleValue) -> impl AValue<'static, ExtraElem = ()> {
+pub(crate) fn simple<T: StarlarkValue<'static>>(x: T) -> impl AValue<'static, ExtraElem = ()> {
+    assert!(!T::is_special());
     AValueImpl(Simple, x)
 }
 
 pub(crate) fn complex<'v, C>(x: C) -> impl AValue<'v, ExtraElem = ()>
 where
     C: ComplexValue<'v>,
-    C::Frozen: SimpleValue,
+    C::Frozen: StarlarkValue<'static>,
 {
+    assert!(!C::is_special());
     AValueImpl(Complex, x)
 }
 
@@ -295,7 +297,7 @@ pub(crate) struct Direct;
 // in the heap (e.g. bool, None)
 pub(crate) struct Basic;
 
-// A type that implements SimpleValue.
+// A non-special type with no references to other Starlark values.
 pub(crate) struct Simple;
 
 // A type that implements ComplexValue.
@@ -633,8 +635,8 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Array<'v>> {
 }
 
 impl<Mode, C> AValueImpl<Mode, C> {
-    /// `heap_freeze` implementation for `SimpleValue` and `StarlarkFloat`
-    /// (`StarlarkFloat` is logically a simple type, but does not implement `SimpleValue` trait).
+    /// `heap_freeze` implementation for simple `StarlarkValue` and `StarlarkFloat`
+    /// (`StarlarkFloat` is logically a simple type, but it is not considered simple type).
     unsafe fn heap_freeze_simple_impl<'v>(
         me: *mut AValueRepr<Self>,
         freezer: &Freezer,
@@ -649,7 +651,7 @@ impl<Mode, C> AValueImpl<Mode, C> {
     }
 }
 
-impl<'v, T: SimpleValue> AValue<'v> for AValueImpl<Simple, T>
+impl<'v, T: StarlarkValue<'static>> AValue<'v> for AValueImpl<Simple, T>
 where
     'v: 'static,
 {
@@ -699,7 +701,7 @@ impl<Mode, C> AValueImpl<Mode, C> {
 impl<'v, T> AValue<'v> for AValueImpl<Complex, T>
 where
     T: ComplexValue<'v>,
-    T::Frozen: SimpleValue,
+    T::Frozen: StarlarkValue<'static>,
 {
     type StarlarkValue = T;
 

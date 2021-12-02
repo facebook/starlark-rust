@@ -30,7 +30,7 @@ use crate::{
         docs,
         docs::{DocItem, DocStringKind},
         AllocFrozenValue, AllocValue, Freeze, FrozenHeap, FrozenValue, FrozenValueTyped, Heap,
-        SimpleValue, StarlarkValue, Trace, Value, ValueLike,
+        StarlarkValue, Trace, Value, ValueLike,
     },
 };
 
@@ -177,8 +177,6 @@ impl NativeFunction {
         self.typ = Some(typ)
     }
 }
-
-impl SimpleValue for NativeFunction {}
 
 impl<'v> AllocValue<'v> for NativeFunction {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {

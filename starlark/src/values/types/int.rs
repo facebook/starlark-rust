@@ -87,6 +87,13 @@ impl Display for PointerI32 {
 impl<'v> StarlarkValue<'v> for PointerI32 {
     starlark_type!(INT_TYPE);
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         Ok(match other.unpack_num() {
             Some(Num::Int(other)) => self.get() == other,

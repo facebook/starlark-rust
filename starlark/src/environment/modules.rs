@@ -43,8 +43,8 @@ use crate::{
     values::{
         docs,
         docs::{DocItem, DocString, DocStringKind},
-        Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, SimpleValue,
-        StarlarkValue, Value,
+        Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, StarlarkValue,
+        Value,
     },
 };
 
@@ -236,8 +236,6 @@ impl<'v> StarlarkValue<'v> for FrozenModuleRef {
         })
     }
 }
-
-impl SimpleValue for FrozenModuleRef {}
 
 impl Default for Module {
     fn default() -> Self {

@@ -443,6 +443,13 @@ where
 {
     starlark_type!(List::TYPE);
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn get_methods(&self) -> Option<&'static Methods> {
         list_methods()
     }

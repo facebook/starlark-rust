@@ -16,7 +16,6 @@
  */
 
 //! The `None` type.
-
 use std::hash::Hasher;
 
 use derive_more::Display;
@@ -43,6 +42,13 @@ impl NoneType {
 /// Define the NoneType type
 impl<'v> StarlarkValue<'v> for NoneType {
     starlark_type!(NoneType::TYPE);
+
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
         // We always compare pointers before calling `equals`,

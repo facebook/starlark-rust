@@ -79,6 +79,13 @@ impl UnpackValue<'_> for bool {
 impl StarlarkValue<'_> for StarlarkBool {
     starlark_type!(BOOL_TYPE);
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn collect_repr(&self, s: &mut String) {
         // repr() for bool is quite hot, so optimise it
         if self.0 {

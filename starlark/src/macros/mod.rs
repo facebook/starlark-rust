@@ -55,8 +55,6 @@ macro_rules! starlark_complex_value {
                 }
             }
 
-            impl $crate::values::SimpleValue for [< Frozen $x >] {}
-
             impl<'v> $x<'v> {
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<&'v Self> {
                     if let Some(x) = x.unpack_frozen() {
@@ -117,8 +115,6 @@ macro_rules! starlark_complex_values {
                 }
             }
 
-            impl $crate::values::SimpleValue for [< Frozen $x >] {}
-
             impl<'v> $x<'v> {
                 #[allow(dead_code)]
                 fn from_value(
@@ -135,8 +131,48 @@ macro_rules! starlark_complex_values {
     };
 }
 
-/// Reduce boilerplate when making types instances of [`SimpleValue`](crate::values::SimpleValue)
-/// - see the [`SimpleValue`](crate::values::SimpleValue) docs for an example.
+/// A macro reducing boilerplace defining Starlark values which are simple - they
+/// aren't mutable and can't contain references to other Starlark values.
+///
+/// Let's define a simple object, where `+x` makes the string uppercase:
+///
+/// ```
+/// use starlark::values::{Heap, StarlarkValue, Value};
+/// use starlark::{starlark_simple_value, starlark_type};
+/// use derive_more::Display;
+///
+/// #[derive(Debug, Display)]
+/// struct MyObject(String);
+/// starlark_simple_value!(MyObject);
+/// impl<'v> StarlarkValue<'v> for MyObject {
+///     starlark_type!("my_object");
+///
+///     // We can choose to implement whichever methods we want.
+///     // All other operations will result in runtime errors.
+///     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+///         Ok(heap.alloc(MyObject(self.0.to_uppercase())))
+///     }
+/// }
+/// ```
+///
+/// The [`starlark_simple_value!`] macro defines instances of
+/// [`AnyLifetime`](crate::values::AnyLifetime),
+/// [`AllocValue`](crate::values::AllocValue),
+/// [`AllocFrozenValue`](crate::values::AllocFrozenValue) and
+/// [`UnpackValue`](crate::values::UnpackValue). It also defines a method:
+///
+/// ```
+/// # use crate::starlark::values::*;
+/// # struct MyObject;
+/// impl MyObject {
+///     pub fn from_value<'v>(x: Value<'v>) -> Option<ARef<'v, MyObject>> {
+/// # unimplemented!(
+/// # r#"
+///         ...
+/// # "#);
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! starlark_simple_value {
     ($x:ident) => {
@@ -154,8 +190,6 @@ macro_rules! starlark_simple_value {
                     heap.alloc_simple(self)
                 }
             }
-
-            impl $crate::values::SimpleValue for $x {}
 
             impl $x {
                 pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<&'v Self> {

@@ -28,7 +28,7 @@ use crate::{
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{Freeze, Freezer, Heap, SimpleValue, StarlarkValue, Trace, UnpackValue, Value},
+    values::{Freeze, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value},
 };
 
 mod basic;
@@ -688,8 +688,6 @@ fn test_label_assign() {
     impl<'v> StarlarkValue<'v> for FrozenWrapper {
         starlark_type!("wrapper");
     }
-
-    impl SimpleValue for FrozenWrapper {}
 
     impl<'v> Freeze for Wrapper<'v> {
         type Frozen = FrozenWrapper;

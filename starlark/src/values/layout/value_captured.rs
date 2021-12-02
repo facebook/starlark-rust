@@ -26,7 +26,7 @@ use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate as starlark;
-use crate::values::{Freeze, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike};
+use crate::values::{Freeze, Freezer, FrozenValue, StarlarkValue, Value, ValueLike};
 
 #[derive(Debug, Trace, AnyLifetime, Display)]
 #[display(fmt = "{:?}", self)] // This type should never be user visible
@@ -63,8 +63,6 @@ impl<'v> Freeze for ValueCaptured<'v> {
         ))
     }
 }
-
-impl SimpleValue for FrozenValueCaptured {}
 
 pub(crate) fn value_captured_get<'v>(value_captured: Value<'v>) -> Option<Value<'v>> {
     if let Some(value_captured) = value_captured.unpack_frozen() {

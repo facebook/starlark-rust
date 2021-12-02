@@ -52,7 +52,7 @@ use crate::{
         },
         string::hash_string_result,
         types::float::StarlarkFloat,
-        AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, SimpleValue, ValueTyped,
+        AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, StarlarkValue, ValueTyped,
     },
 };
 
@@ -237,14 +237,20 @@ impl FrozenHeap {
         self.alloc_raw(float_avalue(f))
     }
 
-    /// Allocate a [`SimpleValue`] on this heap. Be careful about the warnings
-    /// around [`FrozenValue`].
-    pub fn alloc_simple<T: SimpleValue>(&self, val: T) -> FrozenValue {
+    /// Allocate a simple [`StarlarkValue`] on this heap.
+    ///
+    /// Simple value is any starlark value which:
+    /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
+    /// * is not special builtin (e.g. `None`)
+    pub fn alloc_simple<T: StarlarkValue<'static>>(&self, val: T) -> FrozenValue {
         self.alloc_raw(simple(val))
     }
 
-    /// Allocate a [`SimpleValue`] and return `FrozenRef` to it.
-    pub(crate) fn alloc_simple_frozen_ref<T: SimpleValue>(&self, value: T) -> FrozenRef<T> {
+    /// Allocate a simple [`StarlarkValue`] and return `FrozenRef` to it.
+    pub(crate) fn alloc_simple_frozen_ref<T: StarlarkValue<'static>>(
+        &self,
+        value: T,
+    ) -> FrozenRef<T> {
         let value = self.alloc_simple(value);
         // Here we could avoid dynamic cast, but this code is not executed frequently.
         value.downcast_frozen_ref().unwrap()
@@ -507,8 +513,12 @@ impl Heap {
         self.alloc_raw(float_avalue(f))
     }
 
-    /// Allocate a [`SimpleValue`] on the [`Heap`].
-    pub fn alloc_simple<'v, T: SimpleValue>(&'v self, x: T) -> Value<'v> {
+    /// Allocate a simple [`StarlarkValue`] on this heap.
+    ///
+    /// Simple value is any starlark value which:
+    /// * bound by `'static` lifetime (in particular, it cannot contain references to other `Value`s)
+    /// * is not special builtin (e.g. `None`)
+    pub fn alloc_simple<'v, T: StarlarkValue<'static>>(&'v self, x: T) -> Value<'v> {
         self.alloc_raw(simple(x))
     }
 
@@ -516,7 +526,7 @@ impl Heap {
     pub fn alloc_complex<'v, T>(&'v self, x: T) -> Value<'v>
     where
         T: ComplexValue<'v>,
-        T::Frozen: SimpleValue,
+        T::Frozen: StarlarkValue<'static>,
     {
         self.alloc_raw(complex(x))
     }

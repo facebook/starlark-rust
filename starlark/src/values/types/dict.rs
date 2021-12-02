@@ -41,8 +41,8 @@ use crate::{
     values::{
         comparison::equals_small_map, display::display_keyed_container, error::ValueError,
         iter::ARefIterator, string::hash_string_value, AllocFrozenValue, AllocValue, Freeze,
-        Freezer, FrozenHeap, FrozenStringValue, FrozenValue, Heap, SimpleValue, StarlarkValue,
-        StringValue, Trace, UnpackValue, Value, ValueLike,
+        Freezer, FrozenHeap, FrozenStringValue, FrozenValue, Heap, StarlarkValue, StringValue,
+        Trace, UnpackValue, Value, ValueLike,
     },
 };
 
@@ -89,8 +89,6 @@ impl AllocFrozenValue for FrozenDict {
         heap.alloc_simple(DictGen(self))
     }
 }
-
-impl SimpleValue for DictGen<FrozenDict> {}
 
 impl<'v> Dict<'v> {
     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {

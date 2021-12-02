@@ -62,7 +62,7 @@ use crate::{
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
-/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, SimpleValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze};
+/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze};
 /// use starlark::{starlark_complex_value, starlark_type};
 /// use derive_more::Display;
 ///
@@ -104,8 +104,7 @@ use crate::{
 ///
 /// The macro also defines instances of [`AnyLifetime`] for both,
 /// [`AllocValue`](crate::values::AllocValue) for both,
-/// [`AllocFrozenValue`](crate::values::AllocFrozenValue) for the frozen one,
-/// [`SimpleValue`] for the frozen one and
+/// [`AllocFrozenValue`](crate::values::AllocFrozenValue) for the frozen one, and
 /// [`UnpackValue`](crate::values::UnpackValue) for the non-frozen one.
 /// It also defines the methods:
 ///
@@ -145,63 +144,18 @@ use crate::{
 ///   when non-frozen and a direct value when frozen.
 pub trait ComplexValue<'v>: StarlarkValue<'v> + Trace<'v> + Freeze
 where
-    <Self as Freeze>::Frozen: SimpleValue,
+    <Self as Freeze>::Frozen: StarlarkValue<'static>,
 {
 }
 
 impl<'v, V> ComplexValue<'v> for V
 where
     V: StarlarkValue<'v> + Trace<'v> + Freeze,
-    <V as Freeze>::Frozen: SimpleValue,
+    <V as Freeze>::Frozen: StarlarkValue<'static>,
 {
 }
 
-/// A trait representing Starlark values which are simple - they
-/// aren't mutable and can't contain other Starlark values.
-///
-/// Let's define a simple object, where `+x` makes the string uppercase:
-///
-/// ```
-/// use starlark::values::{Heap, StarlarkValue, Value};
-/// use starlark::{starlark_simple_value, starlark_type};
-/// use derive_more::Display;
-///
-/// #[derive(Debug, Display)]
-/// struct MyObject(String);
-/// starlark_simple_value!(MyObject);
-/// impl<'v> StarlarkValue<'v> for MyObject {
-///     starlark_type!("my_object");
-///
-///     // We can choose to implement whichever methods we want.
-///     // All other operations will result in runtime errors.
-///     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-///         Ok(heap.alloc(MyObject(self.0.to_uppercase())))
-///     }
-/// }
-/// ```
-///
-/// The [`starlark_simple_value!`] macro defines instances of [`AnyLifetime`],
-/// [`AllocValue`](crate::values::AllocValue),
-/// [`AllocFrozenValue`](crate::values::AllocFrozenValue), [`SimpleValue`] and
-/// [`UnpackValue`](crate::values::UnpackValue). It also defines a method:
-///
-/// ```
-/// # use crate::starlark::values::*;
-/// # struct MyObject;
-/// impl MyObject {
-///     pub fn from_value<'v>(x: Value<'v>) -> Option<ARef<'v, MyObject>> {
-/// # unimplemented!(
-/// # r#"
-///         ...
-/// # "#);
-///     }
-/// }
-/// ```
-///
-/// All users defining [`SimpleValue`] should use this macro.
-pub trait SimpleValue: StarlarkValue<'static> + Send + Sync {}
-
-/// Non-instantiatable type implementing [`SimpleValue`].
+/// Non-instantiatable type implementing a simple [`StarlarkValue`].
 ///
 /// Useful when implementing [`ComplexValue`], which is not meant to be frozen
 /// (e.g. when evaluating code which is never frozen or in tests).
@@ -212,18 +166,13 @@ impl<'v> StarlarkValue<'v> for NoSimpleValue {
     starlark_type!("no_simple_value");
 }
 
-impl SimpleValue for NoSimpleValue {}
-
 /// How to put a Rust values into [`Value`]s.
 ///
-/// Every Rust value stored in a [`Value`] must implement this trait, along with
-/// either [`SimpleValue`] or [`ComplexValue`]. You _must_ implement [`ComplexValue`] if:
+/// Every Rust value stored in a [`Value`] must implement this trait.
+/// You _must_ also implement [`ComplexValue`] if:
 ///
 /// * A type is _mutable_, if you ever need to get a `&mut self` reference to it.
 /// * A type _contains_ nested Starlark [`Value`]s.
-///
-/// Otherwise you should implement [`SimpleValue`].
-/// See those two traits for examples of how to implement them.
 ///
 /// There are only two required methods of [`StarlarkValue`], namely
 /// [`get_type`](StarlarkValue::get_type)
@@ -267,6 +216,18 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     fn get_type_value_static() -> FrozenStringValue
     where
         Self: Sized;
+
+    /// Type is special in Starlark, it is implemented differently than user defined types.
+    /// For example, some special types like `bool` cannon be heap allocated.
+    ///
+    /// This function must not be implemented outside of starlark crate.
+    #[doc(hidden)]
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
 
     /// Is this value a match for a named type. Usually returns `true` for
     /// values matching `get_type`, but might also work for subtypes it implements.

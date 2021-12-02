@@ -331,6 +331,13 @@ impl<'v> StarlarkValue<'v> for str {
 impl<'v> StarlarkValue<'v> for StarlarkStr {
     starlark_type!(STRING_TYPE);
 
+    fn is_special() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         // Don't defer to str because we cache the Hash in StarlarkStr
         hasher.write_u32(self.get_small_hash_result().get());

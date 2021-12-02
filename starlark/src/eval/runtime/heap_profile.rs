@@ -34,9 +34,7 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use crate as starlark;
 use crate::{
     eval::runtime::csv::CsvWriter,
-    values::{
-        Freeze, Freezer, Heap, NoSimpleValue, SimpleValue, StarlarkValue, Trace, Value, ValueLike,
-    },
+    values::{Freeze, Freezer, Heap, NoSimpleValue, StarlarkValue, Trace, Value, ValueLike},
 };
 
 #[derive(Copy, Clone, Dupe, Debug)]
@@ -99,8 +97,6 @@ struct CallExit<D: MaybeDrop> {
     time: Instant,
     maybe_drop: D,
 }
-
-impl<D: MaybeDrop + AnyLifetime<'static>> SimpleValue for CallExit<D> {}
 
 unsafe impl<'v, D: MaybeDrop> AnyLifetime<'v> for CallExit<D> {
     any_lifetime_body!(CallExit<D>);
