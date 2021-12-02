@@ -855,8 +855,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// repr(1)                 == '1'
     /// repr("x")               == "\"x\""
     /// repr([1, "x"])          == "[1, \"x\"]"
-    /// repr("test \"'")        == "\"test \\\"\\'\""
-    /// repr("x\"y😿 \\'")      == "\"x\\\"y😿 \\\\\\'\""
+    /// repr("test \"'")        == "\"test \\\"'\""
+    /// repr("x\"y😿 \\'")      == "\"x\\\"y\\U0001f63f \\\\'\""
     /// "#);
     /// ```
     #[starlark(speculative_exec_safe)]

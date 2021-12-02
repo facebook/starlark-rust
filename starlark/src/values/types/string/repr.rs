@@ -17,36 +17,71 @@
 
 //! Implementation of `repr()`.
 
-use std::mem;
+use std::{intrinsics::unlikely, mem};
 
 use crate::values::types::string::simd::{SwitchHaveSimd, Vector};
 
 /// Check if any byte in the buffer is non-ASCII or need escape.
 #[inline(always)]
-unsafe fn need_escape<V: Vector>(chunk: V) -> bool {
+unsafe fn chunk_non_ascii_or_need_escape<V: Vector>(chunk: V) -> bool {
     #[allow(clippy::many_single_char_names)]
-    unsafe fn or5<V: Vector>(a: V, b: V, c: V, d: V, e: V) -> V {
+    unsafe fn or4<V: Vector>(a: V, b: V, c: V, d: V) -> V {
         let ab = V::or(a, b);
         let cd = V::or(c, d);
-        let abcd = V::or(ab, cd);
-        V::or(abcd, e)
+        V::or(ab, cd)
     }
 
     // Note `cmplt` is signed comparison.
     let any_control_or_non_ascii = chunk.cmplt(V::splat(32));
     let any_7f = chunk.cmpeq(V::splat(0x7f));
-    let any_single_quote = chunk.cmpeq(V::splat(b'\''));
     let any_double_quote = chunk.cmpeq(V::splat(b'"'));
     let any_backslash = chunk.cmpeq(V::splat(b'\\'));
 
-    let need_escape = or5(
+    let need_escape = or4(
         any_control_or_non_ascii,
         any_7f,
-        any_single_quote,
         any_double_quote,
         any_backslash,
     );
     need_escape.movemask() != 0
+}
+
+#[inline(always)]
+fn push_escape(to_escape: char, buffer: &mut String) {
+    // Starlark behavior of `repr` is underspecified,
+    // so use mix of Starlark spec and PEP-3138.
+
+    use std::fmt::Write;
+
+    match to_escape {
+        '\n' => buffer.push_str("\\n"),
+        '\r' => buffer.push_str("\\r"),
+        '\t' => buffer.push_str("\\t"),
+        '\\' => buffer.push_str("\\\\"),
+        '"' => buffer.push_str("\\\""),
+        // `write!` is slow, but these branches are rare.
+        c if (c as u32) < 0x100 => write!(buffer, "\\x{:02x}", c as u32).unwrap(),
+        c if (c as u32) < 0x10000 => write!(buffer, "\\u{:04x}", c as u32).unwrap(),
+        c => write!(buffer, "\\U{:08x}", c as u32).unwrap(),
+    }
+}
+
+#[inline(always)]
+fn need_escape(c: char) -> bool {
+    match c {
+        c if (c as u32) < 0x20 => true,
+        '"' => true,
+        '\\' => true,
+        // Note 0x7f needs to be escaped.
+        c if (c as u32) < 0x7f => false,
+        // Now all 8bit characters are covered:
+        c if (c as u32) <= 0xff => true,
+        // Rust does not expose `is_printable`.
+        // PEP-3138 goes long way defining precisely the Unicode groups which need escaping.
+        // We could pick more character groups here,
+        // but `is_alphanumeric` is practically enough for now.
+        c => !c.is_alphanumeric(),
+    }
 }
 
 pub(crate) fn string_repr(str: &str, buffer: &mut String) {
@@ -56,8 +91,10 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
     // Simple but definitely correct version
     fn loop_unicode(val: &str, buffer: &mut String) {
         for x in val.chars() {
-            for c in x.escape_debug() {
-                buffer.push(c);
+            if need_escape(x) {
+                push_escape(x, buffer);
+            } else {
+                buffer.push(x);
             }
         }
     }
@@ -66,26 +103,19 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
     fn loop_ascii(val: &str, buffer: &mut String) {
         for (done, x) in val.as_bytes().iter().enumerate() {
             let x = *x;
-            if x >= 128 {
+            // Note 0x7f is ASCII, but it is rarely used, so handle it common case
+            // to do fewer branches in common case.
+            if unlikely(x >= 0x7f) {
                 // bail out into a unicode-aware version
                 loop_unicode(&val[done..], buffer);
                 return;
             }
-            // We enumerated all the bytes from 0..127.
-            // The ones '"\ prepend an escape.
-            // The ones below 31 or equal 127 print with a unicode escape.
-            // Make sure we perfectly match escape_debug so if we take the
-            // bailout its not a visible difference.
-            if x <= 31 || x == 127 {
-                for c in char::from(x).escape_debug() {
-                    buffer.push(c)
-                }
+
+            if unlikely(need_escape(x as char)) {
+                push_escape(x as char, buffer);
             } else {
                 // safe because we know the following values are all lower-ascii bytes
                 let byte_buffer = unsafe { buffer.as_mut_vec() };
-                if x == b'"' || x == b'\'' || x == b'\\' {
-                    byte_buffer.push(b'\\');
-                }
                 byte_buffer.push(x);
             }
         }
@@ -139,7 +169,7 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
         while val_offset + mem::size_of::<V>() <= val.len() {
             let chunk = V::load_unaligned(val.as_ptr().add(val_offset) as *const _);
 
-            if need_escape(chunk) {
+            if chunk_non_ascii_or_need_escape(chunk) {
                 // NOTE(nga): two possible optimizations here:
                 // * instead of `need_escape` flag, fetch position
                 //   of the first character which need to be escaped, and write good prefix.
@@ -167,7 +197,7 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
             // and before `0..=chunk_len` of vec is data we have already written as is to `buffer`.
             let chunk = V::load_unaligned(val.as_ptr().add(val.len()).sub(mem::size_of::<V>()));
 
-            if need_escape(chunk) {
+            if chunk_non_ascii_or_need_escape(chunk) {
                 return loop_ascii(&val[val_offset..], buffer);
             }
 
@@ -202,14 +232,14 @@ mod test {
 
     use crate::{
         assert,
-        values::types::string::repr::{need_escape, string_repr},
+        values::types::string::repr::{chunk_non_ascii_or_need_escape, string_repr},
     };
 
     #[test]
     fn test_to_repr() {
         assert::all_true(
             r#"
-"\"\\t\\n\\'\\\"\"" == repr("\t\n'\"")
+"\"\\t\\n'\\\"\"" == repr("\t\n'\"")
 "\"Hello, 世界\"" == repr("Hello, 世界")
 "#,
         );
@@ -222,9 +252,18 @@ mod test {
             string_repr(input, &mut repr);
             assert_eq!(expected, &repr);
         }
-        // TODO(nga): should use \x escapes according to Starlark spec.
-        test(r#""\u{12}""#, "\x12");
-        test(r#""\u{7f}""#, "\x7f");
+        test(r#""\x12""#, "\x12");
+        test(r#""\x7f""#, "\x7f");
+        test(r#""\n""#, "\n");
+        // Do not escape single quotes because repr in Starlark uses double quotes.
+        test(r#""'""#, "'");
+        test(r#""\"""#, "\"");
+        test(r#""\\""#, "\\");
+        // Non-printable whitespace.
+        test(r#""\u200b""#, "\u{200b}");
+        test(r#""Hello, 世界""#, "Hello, 世界");
+        // Largest unicode number.
+        test(r#""\U0010ffff""#, "\u{10ffff}");
     }
 
     #[test]
@@ -286,7 +325,7 @@ mod test {
     // Test SSE version of `need_escape` works correctly.
     #[cfg(target_feature = "sse2")]
     #[test]
-    fn test_need_escape() {
+    fn test_chunk_non_ascii_or_need_escape() {
         use std::arch::x86_64::*;
 
         use crate::values::types::string::simd::Vector;
@@ -297,15 +336,17 @@ mod test {
         }
 
         unsafe {
-            assert!(!need_escape(load("0123456789abcdef")));
-            assert!(!need_escape(load("0123456789abcde ")));
-            assert!(need_escape(load("0123456789ab\x19def")));
-            assert!(need_escape(load("0123456789abcde\n")));
-            assert!(need_escape(load("0123456789ab\x7fdef")));
-            assert!(need_escape(load("0123\x0456789ab\x02def")));
-            assert!(need_escape(load("'123456789abcdef")));
-            assert!(need_escape(load("0\"23456789abcdef")));
-            assert!(need_escape(load("0123456 Я bcdef")));
+            assert!(!chunk_non_ascii_or_need_escape(load("0123456789abcdef")));
+            assert!(!chunk_non_ascii_or_need_escape(load("0123456789abcde ")));
+            assert!(chunk_non_ascii_or_need_escape(load("0123456789ab\x19def")));
+            assert!(chunk_non_ascii_or_need_escape(load("0123456789abcde\n")));
+            assert!(chunk_non_ascii_or_need_escape(load("0123456789ab\x7fdef")));
+            assert!(chunk_non_ascii_or_need_escape(load(
+                "0123\x0456789ab\x02def"
+            )));
+            assert!(!chunk_non_ascii_or_need_escape(load("'123456789abcdef")));
+            assert!(chunk_non_ascii_or_need_escape(load("0\"23456789abcdef")));
+            assert!(chunk_non_ascii_or_need_escape(load("0123456 Я bcdef")));
         }
     }
 }
