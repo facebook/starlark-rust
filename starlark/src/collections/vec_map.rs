@@ -65,12 +65,12 @@ pub(crate) struct Bucket<K, V> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default_)]
-pub struct VecMap<K, V> {
+pub(crate) struct VecMap<K, V> {
     pub(crate) buckets: Vec<Bucket<K, V>>,
 }
 
 #[derive(Clone_)]
-pub struct VMKeys<'a, K: 'a, V: 'a> {
+pub(crate) struct VMKeys<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
@@ -93,7 +93,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMKeys<'a, K, V> {
 }
 
 #[derive(Clone_)]
-pub struct VMValues<'a, K: 'a, V: 'a> {
+pub(crate) struct VMValues<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
@@ -115,7 +115,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValues<'a, K, V> {
     }
 }
 
-pub struct VMValuesMut<'a, K: 'a, V: 'a> {
+pub(crate) struct VMValuesMut<'a, K: 'a, V: 'a> {
     iter: std::slice::IterMut<'a, Bucket<K, V>>,
 }
 
@@ -156,7 +156,7 @@ impl<'a, K: 'a, V: 'a> VMIter<'a, K, V> {
     }
 }
 
-pub struct VMIterHash<'a, K: 'a, V: 'a> {
+pub(crate) struct VMIterHash<'a, K: 'a, V: 'a> {
     iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
@@ -200,7 +200,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterMut<'a, K, V> {
     }
 }
 
-pub struct VMIntoIterHash<K, V> {
+pub(crate) struct VMIntoIterHash<K, V> {
     iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
@@ -273,23 +273,23 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
 }
 
 impl<K, V> VecMap<K, V> {
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         VecMap {
             buckets: Vec::new(),
         }
     }
 
-    pub fn with_capacity(n: usize) -> Self {
+    pub(crate) fn with_capacity(n: usize) -> Self {
         VecMap {
             buckets: Vec::with_capacity(n),
         }
     }
 
-    pub fn reserve(&mut self, additional: usize) {
+    pub(crate) fn reserve(&mut self, additional: usize) {
         self.buckets.reserve(additional);
     }
 
-    pub fn capacity(&self) -> usize {
+    pub(crate) fn capacity(&self) -> usize {
         self.buckets.capacity()
     }
 
@@ -297,7 +297,7 @@ impl<K, V> VecMap<K, V> {
         self.buckets.capacity() * mem::size_of::<Bucket<K, V>>()
     }
 
-    pub fn get_full<Q>(&self, key: BorrowHashed<Q>) -> Option<(usize, &K, &V)>
+    pub(crate) fn get_full<Q>(&self, key: BorrowHashed<Q>) -> Option<(usize, &K, &V)>
     where
         Q: ?Sized + Equivalent<K>,
     {
@@ -319,14 +319,14 @@ impl<K, V> VecMap<K, V> {
         None
     }
 
-    pub fn get_index_of_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<usize>
+    pub(crate) fn get_index_of_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<usize>
     where
         Q: ?Sized + Equivalent<K>,
     {
         self.get_full(key).map(|(i, _, _)| i)
     }
 
-    pub fn get_index(&self, index: usize) -> Option<(&K, &V)> {
+    pub(crate) fn get_index(&self, index: usize) -> Option<(&K, &V)> {
         self.buckets.get(index).map(|x| (&x.key, &x.value))
     }
 
@@ -348,7 +348,7 @@ impl<K, V> VecMap<K, V> {
         });
     }
 
-    pub fn remove_hashed_entry<Q>(&mut self, key: BorrowHashed<Q>) -> Option<(K, V)>
+    pub(crate) fn remove_hashed_entry<Q>(&mut self, key: BorrowHashed<Q>) -> Option<(K, V)>
     where
         Q: ?Sized + Equivalent<K>,
     {
@@ -366,63 +366,63 @@ impl<K, V> VecMap<K, V> {
         None
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.buckets.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.buckets.is_empty()
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.buckets.clear();
     }
 
-    pub fn values(&self) -> VMValues<K, V> {
+    pub(crate) fn values(&self) -> VMValues<K, V> {
         VMValues {
             iter: self.buckets.iter(),
         }
     }
 
-    pub fn values_mut(&mut self) -> VMValuesMut<K, V> {
+    pub(crate) fn values_mut(&mut self) -> VMValuesMut<K, V> {
         VMValuesMut {
             iter: self.buckets.iter_mut(),
         }
     }
 
-    pub fn keys(&self) -> VMKeys<K, V> {
+    pub(crate) fn keys(&self) -> VMKeys<K, V> {
         VMKeys {
             iter: self.buckets.iter(),
         }
     }
 
-    pub fn into_iter(self) -> VMIntoIter<K, V> {
+    pub(crate) fn into_iter(self) -> VMIntoIter<K, V> {
         VMIntoIter {
             iter: self.buckets.into_iter(),
         }
     }
 
-    pub fn iter(&self) -> VMIter<K, V> {
+    pub(crate) fn iter(&self) -> VMIter<K, V> {
         VMIter {
             iter: self.buckets.iter(),
         }
     }
 
-    pub fn iter_hashed(&self) -> VMIterHash<K, V> {
+    pub(crate) fn iter_hashed(&self) -> VMIterHash<K, V> {
         VMIterHash {
             // Values go first since they terminate first and we can short-circuit
             iter: self.buckets.iter(),
         }
     }
 
-    pub fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
+    pub(crate) fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
         VMIntoIterHash {
             iter: self.buckets.into_iter(),
         }
     }
 
-    pub fn iter_mut(&mut self) -> VMIterMut<K, V> {
+    pub(crate) fn iter_mut(&mut self) -> VMIterMut<K, V> {
         VMIterMut {
             iter: self.buckets.iter_mut(),
         }
