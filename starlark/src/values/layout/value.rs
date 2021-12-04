@@ -339,8 +339,7 @@ pub struct ValueIdentity<'v> {
     phantom: PhantomData<&'v ()>,
 }
 
-#[test]
-fn test_send_sync()
+fn _test_send_sync()
 where
     FrozenValue: Send + Sync,
 {
