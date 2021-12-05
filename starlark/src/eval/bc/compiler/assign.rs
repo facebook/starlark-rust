@@ -24,8 +24,7 @@ use crate::{
         bc::{
             instr_arg::ArgPushesStack,
             instr_impl::{
-                InstrSetArrayIndex, InstrSetObjectField, InstrStoreLocal, InstrStoreLocalCaptured,
-                InstrStoreModuleAndExport, InstrUnpack,
+                InstrSetArrayIndex, InstrSetObjectField, InstrStoreModuleAndExport, InstrUnpack,
             },
             writer::BcWriter,
         },
@@ -55,10 +54,10 @@ impl Spanned<AssignCompiledValue> {
                 }
             }
             AssignCompiledValue::Local(slot, Captured::No) => {
-                bc.write_instr::<InstrStoreLocal>(span, slot);
+                bc.write_store_local(span, slot);
             }
             AssignCompiledValue::Local(slot, Captured::Yes) => {
-                bc.write_instr::<InstrStoreLocalCaptured>(span, slot);
+                bc.write_store_local_captured(span, slot);
             }
             AssignCompiledValue::Module(slot, ref name) => {
                 bc.write_instr::<InstrStoreModuleAndExport>(span, (slot, name.clone()));

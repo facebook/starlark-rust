@@ -33,7 +33,8 @@ use crate::{
             instr_impl::{
                 InstrBr, InstrConst, InstrConst2, InstrConst3, InstrConst4, InstrContinue,
                 InstrForLoop, InstrIfBr, InstrIfNotBr, InstrLoadLocal, InstrLoadLocal2,
-                InstrLoadLocal3, InstrLoadLocal4, InstrLoadLocalAndConst, InstrProfileBc,
+                InstrLoadLocal3, InstrLoadLocal4, InstrLoadLocalAndConst, InstrLoadLocalCaptured,
+                InstrProfileBc, InstrStoreLocal, InstrStoreLocalCaptured,
             },
             instrs::{BcInstrsWriter, PatchAddr},
             opcode::BcOpcode,
@@ -221,6 +222,11 @@ impl BcWriter {
 
     /// Write an instruction.
     pub(crate) fn write_instr<I: BcInstr>(&mut self, span: Span, arg: I::Arg) {
+        // Load and store local instructions need be written with custom functions.
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocalCaptured);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::StoreLocal);
+        assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::StoreLocalCaptured);
+
         self.write_instr_ret_arg::<I>(span, arg);
     }
 
@@ -240,6 +246,18 @@ impl BcWriter {
         // Do not write it yet, queue it, so we could batch it.
         self.queued_locals.push(Spanned { node: slot, span });
         self.stack_add(1);
+    }
+
+    pub(crate) fn write_load_local_captured(&mut self, span: Span, slot: LocalSlotId) {
+        self.write_instr_ret_arg::<InstrLoadLocalCaptured>(span, slot);
+    }
+
+    pub(crate) fn write_store_local(&mut self, span: Span, slot: LocalSlotId) {
+        self.write_instr_ret_arg::<InstrStoreLocal>(span, slot);
+    }
+
+    pub(crate) fn write_store_local_captured(&mut self, span: Span, slot: LocalSlotId) {
+        self.write_instr_ret_arg::<InstrStoreLocalCaptured>(span, slot);
     }
 
     /// Patch previously writted address with current IP.

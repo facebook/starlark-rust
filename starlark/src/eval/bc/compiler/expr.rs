@@ -131,7 +131,7 @@ impl Spanned<ExprCompiled> {
                 bc.write_load_local(span, slot);
             }
             ExprCompiled::LocalCaptured(slot) => {
-                bc.write_instr::<InstrLoadLocalCaptured>(span, slot);
+                bc.write_load_local_captured(span, slot);
             }
             ExprCompiled::Module(slot) => {
                 bc.write_instr::<InstrLoadModule>(span, slot);

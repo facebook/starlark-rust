@@ -25,9 +25,8 @@ use crate::{
             instr_impl::{
                 InstrAddAssign, InstrArrayIndexNoPop, InstrArrayIndexSet, InstrBitAnd, InstrBitOr,
                 InstrBitXor, InstrDivide, InstrDup, InstrFloorDivide, InstrLeftShift,
-                InstrLoadLocalCaptured, InstrLoadModule, InstrMultiply, InstrObjectField,
-                InstrObjectSetField, InstrPercent, InstrRightShift, InstrStoreLocal,
-                InstrStoreLocalCaptured, InstrStoreModule, InstrSub,
+                InstrLoadModule, InstrMultiply, InstrObjectField, InstrObjectSetField,
+                InstrPercent, InstrRightShift, InstrStoreModule, InstrSub,
             },
             writer::BcWriter,
         },
@@ -84,14 +83,14 @@ impl AssignModifyLhs {
             AssignModifyLhs::Local(s) => {
                 let (slot, captured) = s.node;
                 match captured {
-                    Captured::Yes => bc.write_instr::<InstrLoadLocalCaptured>(span, slot),
+                    Captured::Yes => bc.write_load_local_captured(span, slot),
                     Captured::No => bc.write_load_local(span, slot),
                 }
                 rhs.write_bc(bc);
                 op.write_bc(span, bc);
                 match captured {
-                    Captured::Yes => bc.write_instr::<InstrStoreLocalCaptured>(span, slot),
-                    Captured::No => bc.write_instr::<InstrStoreLocal>(span, slot),
+                    Captured::Yes => bc.write_store_local_captured(span, slot),
+                    Captured::No => bc.write_store_local(span, slot),
                 }
             }
             AssignModifyLhs::Module(m) => {
