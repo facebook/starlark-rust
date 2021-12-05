@@ -60,11 +60,11 @@ assert_eq_size!(Option<FrozenPointer<'static, String>>, usize);
 
 const TAG_BITS: usize = 0b111;
 
-const TAG_INT: usize = 0b10;
+const TAG_INT: usize = 0b010;
 const TAG_STR: usize = 0b100;
 // Pointer to an object, which is not frozen.
 // Note, an object can be changed from unfrozen to frozen, not vice versa.
-const TAG_UNFROZEN: usize = 0b01;
+const TAG_UNFROZEN: usize = 0b001;
 
 unsafe fn untag_pointer<'a, T>(x: usize) -> &'a T {
     cast::usize_to_ptr(x & !TAG_BITS)
