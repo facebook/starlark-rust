@@ -15,23 +15,25 @@
  * limitations under the License.
  */
 
-// Possible optimisations:
-// Encoding none, bool etc in the pointer of frozen value
+use std::marker::PhantomData;
 
-pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
-pub(crate) use pointer_i32::PointerI32;
-pub(crate) use string::StringValueLike;
-pub use string::{static_string::*, FrozenStringValue, StringValue};
-pub use value::{FrozenValue, Value};
-pub(crate) use value_captured::*;
+use gazebo::dupe::Dupe;
 
-mod arena;
-mod avalue;
-mod heap;
-pub(crate) mod identity;
-mod pointer;
-mod pointer_i32;
-mod string;
-pub(crate) mod typed;
-mod value;
-mod value_captured;
+use crate::values::Value;
+
+/// An opaque value representing the identity of a given Value. Two values have the same identity
+/// if and only if [`Value::ptr_eq`] would return [`true`] on them.
+#[derive(Eq, PartialEq, Copy, Clone, Dupe, Hash)]
+pub struct ValueIdentity<'v> {
+    identity: usize,
+    phantom: PhantomData<&'v ()>,
+}
+
+impl<'v> ValueIdentity<'v> {
+    pub(crate) fn new(value: Value<'v>) -> ValueIdentity<'v> {
+        ValueIdentity {
+            identity: value.ptr_value(),
+            phantom: PhantomData,
+        }
+    }
+}

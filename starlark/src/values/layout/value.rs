@@ -29,8 +29,6 @@
 // our val_ref requires a pointer to the value. We need to put that pointer
 // somewhere. The solution is to have a separate value storage vs vtable.
 
-use std::marker::PhantomData;
-
 use either::Either;
 use gazebo::{
     cast,
@@ -41,6 +39,7 @@ use gazebo::{
 use crate::{
     collections::SmallHashResult,
     values::{
+        identity::ValueIdentity,
         layout::{
             arena::{AValueHeader, AValueRepr},
             avalue::{
@@ -233,10 +232,7 @@ impl<'v> Value<'v> {
     /// 2. If two [`Value]` have [`ValueIdentity`]  that compare equal, then [`Value::ptr_eq`] and
     ///    [`Value::equals`]  will also consider them to be equal.
     pub fn identity(self) -> ValueIdentity<'v> {
-        ValueIdentity {
-            identity: self.0.ptr_value(),
-            phantom: PhantomData,
-        }
+        ValueIdentity::new(self)
     }
 
     /// Get the underlying pointer.
@@ -329,14 +325,6 @@ impl FrozenValue {
             Either::Right(x) => basic_ref(PointerI32::new(x)),
         }
     }
-}
-
-/// An opaque value representing the identity of a given Value. Two values have the same identity
-/// if and only if [`Value::ptr_eq`] would return [`true`] on them.
-#[derive(Eq, PartialEq, Copy, Clone, Dupe, Hash)]
-pub struct ValueIdentity<'v> {
-    identity: usize,
-    phantom: PhantomData<&'v ()>,
 }
 
 fn _test_send_sync()

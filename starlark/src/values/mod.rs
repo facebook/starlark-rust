@@ -42,8 +42,8 @@ pub use starlark_derive::{starlark_attrs, Freeze, StarlarkAttrs, Trace};
 use types::unbound::MaybeUnboundValue;
 
 pub use crate::values::{
-    alloc_value::*, error::*, freeze::*, frozen_ref::*, layout::*, owned::*, trace::*, traits::*,
-    typed::*, types::*, unpack::*,
+    alloc_value::*, error::*, freeze::*, frozen_ref::*, identity::*, layout::*, owned::*, trace::*,
+    traits::*, typed::*, types::*, unpack::*,
 };
 use crate::{
     codemap::Span,
