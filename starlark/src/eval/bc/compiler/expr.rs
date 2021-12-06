@@ -28,7 +28,7 @@ use crate::{
         bc::{
             instr_arg::{ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1},
             instr_impl::*,
-            spans::BcInstrSpans,
+            slow_arg::BcInstrSlowArg,
             writer::BcWriter,
         },
         fragment::expr::{CompareOp, ExprBinOp, ExprCompiled, ExprUnOp},
@@ -96,9 +96,14 @@ impl Spanned<ExprCompiled> {
             bc.write_instr::<InstrDictConstKeys>(span, (ArgPopsStack(xs.len() as u32), keys));
         } else {
             let key_spans = xs.map(|(k, _v)| k.span);
-            let key_spans = bc.alloc_any(BcInstrSpans(key_spans));
             write_exprs(xs.iter().flat_map(|(k, v)| [k, v]), bc);
-            bc.write_instr::<InstrDictNPop>(span, (ArgPopsStack(xs.len() as u32 * 2), key_spans));
+            bc.write_instr_explicit::<InstrDictNPop>(
+                BcInstrSlowArg {
+                    span,
+                    spans: key_spans,
+                },
+                ArgPopsStack(xs.len() as u32 * 2),
+            );
         }
     }
 

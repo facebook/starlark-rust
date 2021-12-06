@@ -36,7 +36,6 @@ use crate::{
             },
             opcode::BcOpcode,
             slow_arg::BcInstrSlowArg,
-            spans::BcInstrSpans,
             stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
         },
@@ -1095,29 +1094,32 @@ impl InstrNoFlowImpl for InstrDictOfConstsImpl {
 impl InstrNoFlowImpl for InstrDictNPopImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack, FrozenRef<'static, BcInstrSpans>);
+    type Arg = ArgPopsStack;
 
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
-        _: BcPtrAddr,
-        (npops, spans): &Self::Arg,
+        ip: BcPtrAddr,
+        npops: &Self::Arg,
         _pops: (),
     ) -> Result<Value<'v>, EvalException> {
         let items = stack.pop_slice(*npops);
         debug_assert!(items.len() % 2 == 0);
-        debug_assert!(spans.len() == items.len() / 2);
         let mut dict = SmallMap::with_capacity(items.len() / 2);
         for i in 0..items.len() / 2 {
             let k = items[i * 2];
             let v = items[i * 2 + 1];
             let k = match k.get_hashed() {
                 Ok(k) => k,
-                Err(e) => return Err(add_span_to_expr_error(e, spans[i], eval)),
+                Err(e) => {
+                    let spans = &Bc::slow_arg_at_ptr(ip).spans;
+                    return Err(add_span_to_expr_error(e, spans[i], eval));
+                }
             };
             let prev = dict.insert_hashed(k, v);
             if prev.is_some() {
                 let e = EvalError::DuplicateDictionaryKey(k.key().to_string()).into();
+                let spans = &Bc::slow_arg_at_ptr(ip).spans;
                 return Err(add_span_to_expr_error(e, spans[i], eval));
             }
         }

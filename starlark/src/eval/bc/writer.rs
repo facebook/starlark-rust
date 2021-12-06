@@ -17,11 +17,7 @@
 
 //! Bytecode writer.
 
-use std::{
-    cmp,
-    fmt::{Debug, Display},
-    mem,
-};
+use std::{cmp, mem};
 
 use crate::{
     codemap::{Span, Spanned},
@@ -42,7 +38,7 @@ use crate::{
         },
         runtime::slots::LocalSlotId,
     },
-    values::{FrozenHeap, FrozenRef, FrozenValue},
+    values::{FrozenHeap, FrozenValue},
 };
 
 /// Write bytecode here.
@@ -226,9 +222,9 @@ impl<'f> BcWriter<'f> {
     }
 
     /// Write an instruction, return address and argument.
-    fn write_instr_ret_arg<I: BcInstr>(
+    fn write_instr_ret_arg_explicit<I: BcInstr>(
         &mut self,
-        span: Span,
+        slow_arg: BcInstrSlowArg,
         arg: I::Arg,
     ) -> (BcAddr, *const I::Arg) {
         // Local and const instructions must be queued.
@@ -243,17 +239,45 @@ impl<'f> BcWriter<'f> {
         assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocalAndConst);
         self.flush_instrs();
         self.update_stack_size::<I>(&arg);
-        self.do_write_generic::<I>(span, arg)
+        self.do_write_generic_explicit::<I>(slow_arg, arg)
     }
 
-    /// Write an instruction.
-    pub(crate) fn write_instr<I: BcInstr>(&mut self, span: Span, arg: I::Arg) {
+    fn write_instr_ret_arg<I: BcInstr>(
+        &mut self,
+        span: Span,
+        arg: I::Arg,
+    ) -> (BcAddr, *const I::Arg) {
+        self.write_instr_ret_arg_explicit::<I>(
+            BcInstrSlowArg {
+                span,
+                ..Default::default()
+            },
+            arg,
+        )
+    }
+
+    pub(crate) fn write_instr_explicit<I: BcInstr>(
+        &mut self,
+        slow_arg: BcInstrSlowArg,
+        arg: I::Arg,
+    ) {
         // Load and store local instructions need be written with custom functions.
         assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::LoadLocalCaptured);
         assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::StoreLocal);
         assert_ne!(BcOpcode::for_instr::<I>(), BcOpcode::StoreLocalCaptured);
 
-        self.write_instr_ret_arg::<I>(span, arg);
+        self.write_instr_ret_arg_explicit::<I>(slow_arg, arg);
+    }
+
+    /// Write an instruction.
+    pub(crate) fn write_instr<I: BcInstr>(&mut self, span: Span, arg: I::Arg) {
+        self.write_instr_explicit::<I>(
+            BcInstrSlowArg {
+                span,
+                ..Default::default()
+            },
+            arg,
+        );
     }
 
     /// Write load constant instruction.
@@ -371,13 +395,5 @@ impl<'f> BcWriter<'f> {
     /// Current stack size.
     pub(crate) fn stack_size(&self) -> u32 {
         self.stack_size
-    }
-
-    /// Allocate any object which will be alive while bytecode is alive.
-    pub(crate) fn alloc_any<T: Display + Debug + Send + Sync>(
-        &mut self,
-        value: T,
-    ) -> FrozenRef<'static, T> {
-        self.heap.alloc_any(value)
     }
 }
