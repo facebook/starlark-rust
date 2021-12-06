@@ -30,7 +30,6 @@ pub(crate) mod instrs;
 pub(crate) mod opcode;
 pub(crate) mod repr;
 pub(crate) mod slow_arg;
-pub(crate) mod spans;
 pub(crate) mod stack_ptr;
 pub(crate) mod stack_values;
 pub(crate) mod writer;
