@@ -335,7 +335,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Called to add an entry to the call stack, by the function being invoked.
     /// Called for all types of function, including those written in Rust.
     #[inline(always)]
-    pub fn with_call_stack<R>(
+    pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
         span: Option<Span>,

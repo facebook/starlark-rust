@@ -86,7 +86,11 @@ impl Diagnostic {
     /// Create a new [`Diagnostic`] containing an underlying error and span.
     /// If the given `message` is already a [`Diagnostic`] with a [`Span`],
     /// the new span will be ignored and the original `message` returned.
-    pub fn new(message: impl Into<anyhow::Error>, span: Span, codemap: CodeMap) -> anyhow::Error {
+    pub(crate) fn new(
+        message: impl Into<anyhow::Error>,
+        span: Span,
+        codemap: CodeMap,
+    ) -> anyhow::Error {
         Self::modify(message.into(), |d| d.set_span(span, codemap))
     }
 
@@ -112,7 +116,7 @@ impl Diagnostic {
     }
 
     /// Set the [`Diagnostic::span`] field, unless it's already been set.
-    pub fn set_span(&mut self, span: Span, codemap: CodeMap) {
+    pub(crate) fn set_span(&mut self, span: Span, codemap: CodeMap) {
         if self.span.is_none() {
             // We want the best span, which is likely the first person to set it
             self.span = Some(codemap.file_span(span));

@@ -57,7 +57,7 @@ impl Add<u32> for Pos {
 
 /// A range of text within a CodeMap.
 #[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug, Default)]
-pub struct Span {
+pub(crate) struct Span {
     /// The position in the codemap representing the first byte of the span.
     begin: Pos,
 
@@ -70,23 +70,6 @@ impl Span {
     pub fn new(begin: Pos, end: Pos) -> Self {
         assert!(begin <= end);
         Span { begin, end }
-    }
-
-    /// Makes a span from offsets relative to the start of this span.
-    ///
-    /// Panics if `end < begin` or if `end` is beyond the length of the span.
-    pub fn subspan(self, begin: u32, end: u32) -> Span {
-        assert!(end >= begin);
-        assert!(self.begin + end <= self.end);
-        Span {
-            begin: self.begin + begin,
-            end: self.begin + end,
-        }
-    }
-
-    /// Checks if a span is contained within this span.
-    pub fn contains(self, other: Span) -> bool {
-        self.begin <= other.begin && self.end >= other.end
     }
 
     /// The position in the codemap representing the first byte of the span.
@@ -117,7 +100,7 @@ impl Span {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy)]
 pub struct Spanned<T> {
     pub node: T,
-    pub span: Span,
+    pub(crate) span: Span,
 }
 
 impl<T> Spanned<T> {
@@ -217,7 +200,7 @@ impl CodeMap {
     }
 
     /// Gets the file and its line and column ranges represented by a `Span`.
-    pub fn file_span(&self, span: Span) -> FileSpan {
+    pub(crate) fn file_span(&self, span: Span) -> FileSpan {
         FileSpan {
             file: self.dupe(),
             span,
@@ -265,7 +248,7 @@ impl CodeMap {
     /// Gets the source text of a Span.
     ///
     /// Panics if `span` is not entirely within this file.
-    pub fn source_span(&self, span: Span) -> &str {
+    pub(crate) fn source_span(&self, span: Span) -> &str {
         &self.0.source[(span.begin.0 as usize)..(span.end.0 as usize)]
     }
 
@@ -275,7 +258,7 @@ impl CodeMap {
     /// line terminator.
     ///
     /// Panics if the line number is out of range.
-    pub fn line_span(&self, line: usize) -> Span {
+    pub(crate) fn line_span(&self, line: usize) -> Span {
         assert!(line < self.0.lines.len());
         Span {
             begin: self.0.lines[line],
@@ -283,7 +266,7 @@ impl CodeMap {
         }
     }
 
-    pub fn resolve_span(&self, span: Span) -> ResolvedSpan {
+    pub(crate) fn resolve_span(&self, span: Span) -> ResolvedSpan {
         let begin = self.find_line_col(span.begin);
         let end = self.find_line_col(span.end);
         ResolvedSpan::from_span(begin, end)
@@ -318,15 +301,15 @@ struct LineCol {
 /// A file, and a line and column range within it.
 #[derive(Clone, Copy, Dupe, Eq, PartialEq, Debug)]
 pub struct FileSpanRef<'a> {
-    pub file: &'a CodeMap,
-    pub span: Span,
+    pub(crate) file: &'a CodeMap,
+    pub(crate) span: Span,
 }
 
 /// A file, and a line and column range within it.
 #[derive(Clone, Dupe, Eq, PartialEq, Debug, Hash)]
 pub struct FileSpan {
-    pub file: CodeMap,
-    pub span: Span,
+    pub(crate) file: CodeMap,
+    pub(crate) span: Span,
 }
 
 impl<'a> fmt::Display for FileSpanRef<'a> {
@@ -346,6 +329,10 @@ impl fmt::Display for FileSpan {
 }
 
 impl<'a> FileSpanRef<'a> {
+    pub fn file(self) -> &'a CodeMap {
+        self.file
+    }
+
     pub fn to_file_span(self) -> FileSpan {
         FileSpan {
             file: self.file.dupe(),
@@ -359,6 +346,14 @@ impl<'a> FileSpanRef<'a> {
 }
 
 impl FileSpan {
+    pub fn file(&self) -> &CodeMap {
+        &self.file
+    }
+
+    pub fn source_span(&self) -> &str {
+        self.file.source_span(self.span)
+    }
+
     pub fn as_ref(&self) -> FileSpanRef {
         FileSpanRef {
             file: &self.file,
@@ -498,27 +493,6 @@ mod test {
                 }
             );
         }
-    }
-
-    #[test]
-    fn test_issue2() {
-        let content = "a \nxyz\r\n";
-        let codemap = CodeMap::new("<test>".to_owned(), content.to_owned());
-
-        let span = codemap.full_span().subspan(2, 3);
-        assert_eq!(
-            codemap.resolve_span(span),
-            ResolvedSpan {
-                begin_line: 0,
-                begin_column: 2,
-                end_line: 1,
-                end_column: 0
-            }
-        );
-
-        assert_eq!(codemap.source_line(0), "a ");
-        assert_eq!(codemap.source_line(1), "xyz");
-        assert_eq!(codemap.source_line(2), "");
     }
 
     #[test]

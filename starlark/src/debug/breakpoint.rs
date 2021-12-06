@@ -15,28 +15,34 @@
  * limitations under the License.
  */
 
+use gazebo::dupe::Dupe;
+
 use crate::{
-    codemap::Span,
+    codemap::{CodeMap, FileSpan},
     syntax::{
         ast::{AstStmt, Stmt},
         AstModule,
     },
 };
 
-fn go(x: &AstStmt, res: &mut Vec<Span>) {
+fn go(x: &AstStmt, codemap: &CodeMap, res: &mut Vec<FileSpan>) {
     match &**x {
         Stmt::Statements(_) => {} // These are not interesting statements that come up
-        _ => res.push(x.span),
+        _ => res.push(FileSpan {
+            span: x.span,
+            file: codemap.dupe(),
+        }),
     }
-    x.visit_stmt(|x| go(x, res))
+    x.visit_stmt(|x| go(x, codemap, res))
 }
 
 impl AstModule {
     /// Locations where statements occur, likely to be passed as the positions
     /// to [`before_stmt`](crate::eval::Evaluator::before_stmt).
-    pub fn stmt_locations(&self) -> Vec<Span> {
+    pub fn stmt_locations(&self) -> Vec<FileSpan> {
         let mut res = Vec::new();
-        self.statement.visit_stmt(|x| go(x, &mut res));
+        self.statement
+            .visit_stmt(|x| go(x, &self.codemap, &mut res));
         res
     }
 }

@@ -340,8 +340,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
 
     /// Directly invoke a function.
     /// The number of `named` and `names` arguments are guaranteed to be equal.
-    /// A direct implementation is responsible for calling [`Evaluator::with_call_stack`] to ensure
-    /// the call stack is properly updated.
     fn invoke(
         &self,
         _me: Value<'v>,

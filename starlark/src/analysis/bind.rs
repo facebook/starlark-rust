@@ -48,8 +48,8 @@ pub enum Bind {
 #[derive(Debug)]
 pub struct Scope {
     pub inner: Vec<Bind>,
-    pub free: HashMap<String, Span>, // Things referred to in this scope, or inner scopes, that we don't define
-    pub bound: HashMap<String, (Assigner, Span)>, // Things bound in this scope, doesn't include inner scope bindings
+    pub(crate) free: HashMap<String, Span>, // Things referred to in this scope, or inner scopes, that we don't define
+    pub(crate) bound: HashMap<String, (Assigner, Span)>, // Things bound in this scope, doesn't include inner scope bindings
 }
 
 impl Scope {

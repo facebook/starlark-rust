@@ -79,10 +79,10 @@ impl Message {
                     ..
                 },
             ) => {
-                let original = span.file.source_span(span.span).to_owned();
+                let original = span.source_span().to_owned();
                 let resolved_span = span.resolve_span();
                 Self {
-                    path: span.file.filename().to_owned(),
+                    path: span.file().filename().to_owned(),
                     span: Some(resolved_span),
                     severity: Severity::Error,
                     name: "error".to_owned(),
@@ -105,7 +105,7 @@ impl Message {
 
     pub fn from_lint(x: Lint) -> Self {
         Self {
-            path: x.location.file.filename().to_owned(),
+            path: x.location.file().filename().to_owned(),
             span: Some(x.location.resolve_span()),
             severity: if x.serious {
                 Severity::Warning
