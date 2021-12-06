@@ -31,7 +31,7 @@ use crate::{
     environment::{slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, Module},
     errors::{Diagnostic, Frame},
     eval::{
-        bc::frame::BcFrame,
+        bc::frame::BcFramePtr,
         fragment::def::DefInfo,
         runtime::{
             bc_profile::BcProfile,
@@ -81,7 +81,7 @@ pub struct Evaluator<'v, 'a> {
     // If `Some` we've called a `def` in a loaded frozen module.
     pub(crate) module_variables: Option<FrozenRef<'static, FrozenModuleRef>>,
     /// Current function (`def` or `lambda`) frame: locals and bytecode stack.
-    pub(crate) current_frame: BcFrame<'v>,
+    pub(crate) current_frame: BcFramePtr<'v>,
     // How we deal with a `load` function.
     pub(crate) loader: Option<&'a dyn FileLoader>,
     // `DefInfo` of currently executed function or module.
@@ -147,7 +147,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             call_stack: CallStack::default(),
             module_env: module,
             module_variables: None,
-            current_frame: BcFrame::default(),
+            current_frame: BcFramePtr::null(),
             loader: None,
             extra: None,
             extra_v: None,
