@@ -35,6 +35,7 @@ use crate::{
             instr::BcInstr,
             instr_impl::InstrDefData,
             opcode::{BcOpcode, BcOpcodeHandler},
+            slow_arg::BcInstrSlowArg,
         },
         runtime::slots::LocalSlotId,
     },
@@ -535,9 +536,9 @@ impl BcInstrArg for ArgPopsStackMaybe1 {
     }
 }
 
-impl BcInstrArg for Vec<(BcAddr, Span)> {
+impl BcInstrArg for Vec<(BcAddr, BcInstrSlowArg)> {
     fn fmt_append(_param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
-        write!(f, " spans")
+        write!(f, " args")
     }
 
     fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}

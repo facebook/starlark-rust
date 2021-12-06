@@ -27,15 +27,13 @@ use std::{
 
 use either::Either;
 
-use crate::{
-    codemap::Span,
-    eval::bc::{
-        addr::{BcAddr, BcAddrOffset, BcPtrAddr},
-        instr::BcInstr,
-        instr_impl::{InstrEnd, InstrForLoop},
-        opcode::{BcOpcode, BcOpcodeHandler},
-        repr::{BcInstrHeader, BcInstrRepr, BC_INSTR_ALIGN},
-    },
+use crate::eval::bc::{
+    addr::{BcAddr, BcAddrOffset, BcPtrAddr},
+    instr::BcInstr,
+    instr_impl::{InstrEnd, InstrForLoop},
+    opcode::{BcOpcode, BcOpcodeHandler},
+    repr::{BcInstrHeader, BcInstrRepr, BC_INSTR_ALIGN},
+    slow_arg::BcInstrSlowArg,
 };
 
 impl BcOpcode {
@@ -314,8 +312,8 @@ impl BcInstrsWriter {
         }
     }
 
-    pub(crate) fn finish(mut self, spans: Vec<(BcAddr, Span)>) -> BcInstrs {
-        self.write::<InstrEnd>((self.ip(), spans));
+    pub(crate) fn finish(mut self, slow_args: Vec<(BcAddr, BcInstrSlowArg)>) -> BcInstrs {
+        self.write::<InstrEnd>((self.ip(), slow_args));
         // We cannot destructure `self` to fetch `instrs` because `Self` has `drop,
         // so we `mem::take`.
         let instrs = mem::take(&mut self.instrs);

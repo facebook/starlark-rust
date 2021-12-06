@@ -35,6 +35,7 @@ use crate::{
                 ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1, ArgPushesStack, BcInstrArg,
             },
             opcode::BcOpcode,
+            slow_arg::BcInstrSlowArg,
             spans::BcInstrSpans,
             stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
@@ -1782,7 +1783,7 @@ impl BcInstr for InstrEnd {
     type Pop<'v> = ();
     type Push<'v> = ();
     /// Offset of current instruction and spans of all instructions.
-    type Arg = (BcAddr, Vec<(BcAddr, Span)>);
+    type Arg = (BcAddr, Vec<(BcAddr, BcInstrSlowArg)>);
 
     fn run<'v, 'b>(
         _eval: &mut Evaluator<'v, '_>,

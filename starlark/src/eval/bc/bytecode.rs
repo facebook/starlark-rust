@@ -20,7 +20,6 @@
 use std::fmt::Write;
 
 use crate::{
-    codemap::Span,
     eval::{
         bc::{
             addr::BcPtrAddr,
@@ -28,6 +27,7 @@ use crate::{
             instr_impl::InstrEnd,
             instrs::BcInstrs,
             opcode::{BcOpcode, BcOpcodeHandler},
+            slow_arg::BcInstrSlowArg,
             stack_ptr::BcStackPtr,
         },
         compiler::{add_span_to_expr_error, EvalException},
@@ -50,7 +50,7 @@ impl Bc {
     /// Find span for instruction.
     #[cold]
     #[inline(never)]
-    fn span_at_ptr(addr_ptr: BcPtrAddr) -> Span {
+    fn slow_arg_at_ptr(addr_ptr: BcPtrAddr) -> &BcInstrSlowArg {
         let mut ptr = addr_ptr;
         loop {
             let opcode = ptr.get_opcode();
@@ -61,7 +61,7 @@ impl Bc {
                 let addr = addr_ptr.offset_from(code_start_ptr);
                 for (next_addr, next_span) in spans {
                     if *next_addr == addr {
-                        return *next_span;
+                        return next_span;
                     }
                 }
                 panic!("span not found for addr: {}", addr);
@@ -77,7 +77,7 @@ impl Bc {
         e: anyhow::Error,
         eval: &Evaluator,
     ) -> EvalException {
-        let span = Self::span_at_ptr(ptr);
+        let span = Self::slow_arg_at_ptr(ptr).span;
         add_span_to_expr_error(e, span, eval)
     }
 

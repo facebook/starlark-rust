@@ -15,22 +15,11 @@
  * limitations under the License.
  */
 
-//! Bytecode interpreter.
+use crate::codemap::Span;
 
-pub(crate) mod addr;
-pub(crate) mod bytecode;
-pub(crate) mod call;
-pub(crate) mod compiler;
-pub(crate) mod frame;
-pub(crate) mod if_debug;
-pub(crate) mod instr;
-pub(crate) mod instr_arg;
-pub(crate) mod instr_impl;
-pub(crate) mod instrs;
-pub(crate) mod opcode;
-pub(crate) mod repr;
-pub(crate) mod slow_arg;
-pub(crate) mod spans;
-pub(crate) mod stack_ptr;
-pub(crate) mod stack_values;
-pub(crate) mod writer;
+/// Slow instruction arg: stored in the end of bytecode,
+/// expensive to access. Used to implement errors.
+pub(crate) struct BcInstrSlowArg {
+    /// Instruction code span.
+    pub(crate) span: Span,
+}

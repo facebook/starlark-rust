@@ -38,6 +38,7 @@ use crate::{
             },
             instrs::{BcInstrsWriter, PatchAddr},
             opcode::BcOpcode,
+            slow_arg::BcInstrSlowArg,
             spans::BcInstrSpans,
         },
         runtime::slots::LocalSlotId,
@@ -53,7 +54,7 @@ pub(crate) struct BcWriter<'f> {
     /// Serialized instructions.
     instrs: BcInstrsWriter,
     /// Instruction spans, used for errors.
-    spans: Vec<(BcAddr, Span)>,
+    slow_args: Vec<(BcAddr, BcInstrSlowArg)>,
     /// Current stack size.
     stack_size: u32,
     /// Local slot count.
@@ -75,7 +76,7 @@ impl<'f> BcWriter<'f> {
         BcWriter {
             profile,
             instrs: BcInstrsWriter::new(),
-            spans: Vec::new(),
+            slow_args: Vec::new(),
             stack_size: 0,
             local_count,
             max_stack_size: 0,
@@ -90,7 +91,7 @@ impl<'f> BcWriter<'f> {
         let BcWriter {
             profile: has_before_instr,
             instrs,
-            spans,
+            slow_args: spans,
             stack_size,
             local_count,
             max_stack_size,
@@ -200,7 +201,7 @@ impl<'f> BcWriter<'f> {
             self.instrs
                 .write::<InstrProfileBc>(BcOpcode::for_instr::<I>());
         }
-        self.spans.push((self.ip(), span));
+        self.slow_args.push((self.ip(), BcInstrSlowArg { span }));
         self.instrs.write::<I>(arg)
     }
 
