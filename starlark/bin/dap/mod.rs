@@ -31,7 +31,7 @@ use gazebo::prelude::*;
 pub use library::*;
 use serde_json::{Map, Value};
 use starlark::{
-    codemap::{FileSpan, FileSpanRef, Span},
+    codemap::{FileSpan, FileSpanRef},
     environment::Module,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
@@ -48,7 +48,7 @@ struct Backend {
 
     // These breakpoints must all match statements as per before_stmt.
     // Those values for which we abort the execution.
-    breakpoints: Arc<Mutex<HashMap<String, HashSet<Span>>>>,
+    breakpoints: Arc<Mutex<HashMap<String, HashSet<FileSpan>>>>,
     // Set while we are doing evaluate calls (>= 1 means disable)
     disable_breakpoints: Arc<AtomicUsize>,
 
@@ -109,7 +109,7 @@ impl Backend {
                     let breaks = breakpoints.lock().unwrap();
                     breaks
                         .get(span_loc.file.filename())
-                        .map(|set| set.contains(&span_loc.span))
+                        .map(|set| set.contains(&span_loc.to_file_span()))
                         .unwrap_or_default()
                 };
                 if stop {
@@ -208,19 +208,19 @@ impl DebugServer for Backend {
                     })
                 }
                 Ok(ast) => {
-                    let poss: HashMap<usize, Span> = ast
+                    let poss: HashMap<usize, FileSpan> = ast
                         .stmt_locations()
                         .iter()
                         .map(|x| {
                             let span = ast.file_span(*x);
-                            (span.resolve_span().begin_line, *x)
+                            (span.resolve_span().begin_line, span)
                         })
                         .collect();
                     let list = breakpoints.map(|x| poss.get(&(x.line as usize - 1)));
                     self.breakpoints
                         .lock()
                         .unwrap()
-                        .insert(source, list.iter().filter_map(|x| x.copied()).collect());
+                        .insert(source, list.iter().filter_map(|x| x.duped()).collect());
                     Ok(SetBreakpointsResponseBody {
                         breakpoints: list.map(|x| breakpoint(x.is_some())),
                     })

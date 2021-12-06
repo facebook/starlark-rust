@@ -24,8 +24,9 @@
 use std::{
     cmp,
     fmt::{self, Display},
-    hash::Hash,
+    hash::{Hash, Hasher},
     ops::{Add, Deref, DerefMut},
+    ptr,
     sync::Arc,
 };
 
@@ -184,6 +185,12 @@ impl PartialEq for CodeMap {
 
 impl Eq for CodeMap {}
 
+impl Hash for CodeMap {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ptr::hash::<CodeMapData, H>(&*self.0, state);
+    }
+}
+
 impl CodeMap {
     /// Creates an new `CodeMap`.
     pub(crate) fn new(filename: String, source: String) -> CodeMap {
@@ -316,7 +323,7 @@ pub struct FileSpanRef<'a> {
 }
 
 /// A file, and a line and column range within it.
-#[derive(Clone, Dupe, Eq, PartialEq, Debug)]
+#[derive(Clone, Dupe, Eq, PartialEq, Debug, Hash)]
 pub struct FileSpan {
     pub file: CodeMap,
     pub span: Span,
