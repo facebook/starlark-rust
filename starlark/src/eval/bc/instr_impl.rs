@@ -280,18 +280,19 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalImpl {
 #[inline(always)]
 fn load_local<'v, const N: usize>(
     eval: &mut Evaluator<'v, '_>,
+    ip: BcPtrAddr,
     slots: &[LocalSlotId; N],
-    spans: FrozenRef<BcInstrSpans>,
 ) -> Result<[Value<'v>; N], EvalException> {
     #[cold]
     #[inline(never)]
     fn fail<'v>(
         eval: &mut Evaluator<'v, '_>,
+        ip: BcPtrAddr,
         index: usize,
         slot: LocalSlotId,
-        spans: FrozenRef<BcInstrSpans>,
     ) -> EvalException {
         let err = eval.local_var_referenced_before_assignment(slot);
+        let spans = &Bc::slow_arg_at_ptr(ip).spans;
         let span = spans[index];
         add_span_to_expr_error(err, span, eval)
     }
@@ -305,7 +306,7 @@ fn load_local<'v, const N: usize>(
             Some(v) => unsafe {
                 *(*values).get_unchecked_mut(i) = v;
             },
-            None => return Err(fail(eval, i, slot, spans)),
+            None => return Err(fail(eval, ip, i, slot)),
         }
     }
     Ok(unsafe { values.assume_init() })
@@ -319,17 +320,17 @@ pub(crate) type InstrLoadLocal4 = InstrNoFlow<InstrLocalLocalNImpl<4>>;
 impl<const N: usize> InstrNoFlowImpl for InstrLocalLocalNImpl<N> {
     type Pop<'v> = ();
     type Push<'v> = [Value<'v>; N];
-    type Arg = ([LocalSlotId; N], FrozenRef<'static, BcInstrSpans>);
+    type Arg = [LocalSlotId; N];
 
     #[inline(always)]
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
-        _ip: BcPtrAddr,
-        (slots, spans): &Self::Arg,
+        ip: BcPtrAddr,
+        slots: &Self::Arg,
         _pops: (),
     ) -> Result<[Value<'v>; N], EvalException> {
-        load_local(eval, slots, *spans)
+        load_local(eval, ip, slots)
     }
 }
 

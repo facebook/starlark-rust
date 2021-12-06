@@ -39,7 +39,6 @@ use crate::{
             instrs::{BcInstrsWriter, PatchAddr},
             opcode::BcOpcode,
             slow_arg::BcInstrSlowArg,
-            spans::BcInstrSpans,
         },
         runtime::slots::LocalSlotId,
     },
@@ -125,10 +124,12 @@ impl<'f> BcWriter<'f> {
         let mut consts_slice = queued_consts.as_slice();
 
         while let [l0, l1, l2, l3, rem @ ..] = locals_slice {
-            let slots = self.alloc_any(BcInstrSpans(vec![l0.span, l1.span, l2.span, l3.span]));
-            self.do_write_generic::<InstrLoadLocal4>(
-                l0.span.merge(l1.span).merge(l2.span).merge(l3.span),
-                ([l0.node, l1.node, l2.node, l3.node], slots),
+            self.do_write_generic_explicit::<InstrLoadLocal4>(
+                BcInstrSlowArg {
+                    span: l0.span.merge(l1.span).merge(l2.span).merge(l3.span),
+                    spans: vec![l0.span, l1.span, l2.span, l3.span],
+                },
+                [l0.node, l1.node, l2.node, l3.node],
             );
             locals_slice = rem;
         }
@@ -142,17 +143,21 @@ impl<'f> BcWriter<'f> {
                 self.do_write_generic::<InstrLoadLocal>(l0.span, l0.node);
             }
             ([l0, l1], _) => {
-                let spans = self.alloc_any(BcInstrSpans(vec![l0.span, l1.span]));
-                self.do_write_generic::<InstrLoadLocal2>(
-                    l0.span.merge(l1.span),
-                    ([l0.node, l1.node], spans),
+                self.do_write_generic_explicit::<InstrLoadLocal2>(
+                    BcInstrSlowArg {
+                        span: l0.span.merge(l1.span),
+                        spans: vec![l0.span, l1.span],
+                    },
+                    [l0.node, l1.node],
                 );
             }
             ([l0, l1, l2], _) => {
-                let spans = self.alloc_any(BcInstrSpans(vec![l0.span, l1.span, l2.span]));
-                self.do_write_generic::<InstrLoadLocal3>(
-                    l0.span.merge(l1.span).merge(l2.span),
-                    ([l0.node, l1.node, l2.node], spans),
+                self.do_write_generic_explicit::<InstrLoadLocal3>(
+                    BcInstrSlowArg {
+                        span: l0.span.merge(l1.span).merge(l2.span),
+                        spans: vec![l0.span, l1.span, l2.span],
+                    },
+                    [l0.node, l1.node, l2.node],
                 );
             }
             _ => unreachable!(),
@@ -194,15 +199,30 @@ impl<'f> BcWriter<'f> {
         self.stack_add(I::npushs(arg));
     }
 
-    /// Actually write the instruction.
-    fn do_write_generic<I: BcInstr>(&mut self, span: Span, arg: I::Arg) -> (BcAddr, *const I::Arg) {
+    /// Version of instruction write with explicit slow arg arg.
+    fn do_write_generic_explicit<I: BcInstr>(
+        &mut self,
+        slow_arg: BcInstrSlowArg,
+        arg: I::Arg,
+    ) -> (BcAddr, *const I::Arg) {
         if self.profile {
             // This instruction does not fail, so do not write span for it.
             self.instrs
                 .write::<InstrProfileBc>(BcOpcode::for_instr::<I>());
         }
-        self.slow_args.push((self.ip(), BcInstrSlowArg { span }));
+        self.slow_args.push((self.ip(), slow_arg));
         self.instrs.write::<I>(arg)
+    }
+
+    /// Actually write the instruction.
+    fn do_write_generic<I: BcInstr>(&mut self, span: Span, arg: I::Arg) -> (BcAddr, *const I::Arg) {
+        self.do_write_generic_explicit::<I>(
+            BcInstrSlowArg {
+                span,
+                ..Default::default()
+            },
+            arg,
+        )
     }
 
     /// Write an instruction, return address and argument.

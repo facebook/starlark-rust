@@ -50,7 +50,7 @@ impl Bc {
     /// Find span for instruction.
     #[cold]
     #[inline(never)]
-    fn slow_arg_at_ptr(addr_ptr: BcPtrAddr) -> &BcInstrSlowArg {
+    pub(crate) fn slow_arg_at_ptr(addr_ptr: BcPtrAddr) -> &BcInstrSlowArg {
         let mut ptr = addr_ptr;
         loop {
             let opcode = ptr.get_opcode();

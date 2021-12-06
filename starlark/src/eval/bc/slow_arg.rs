@@ -19,7 +19,10 @@ use crate::codemap::Span;
 
 /// Slow instruction arg: stored in the end of bytecode,
 /// expensive to access. Used to implement errors.
+#[derive(Default)]
 pub(crate) struct BcInstrSlowArg {
     /// Instruction code span.
     pub(crate) span: Span,
+    /// Spans when an instruction needs multiple spans.
+    pub(crate) spans: Vec<Span>,
 }
