@@ -56,6 +56,8 @@ pub(crate) struct BcWriter {
     spans: Vec<(BcAddr, Span)>,
     /// Current stack size.
     stack_size: u32,
+    /// Local slot count.
+    local_count: u32,
     /// Max observed stack size.
     max_stack_size: u32,
 
@@ -69,12 +71,13 @@ pub(crate) struct BcWriter {
 
 impl BcWriter {
     /// Empty.
-    pub(crate) fn new(profile: bool) -> BcWriter {
+    pub(crate) fn new(profile: bool, local_count: u32) -> BcWriter {
         BcWriter {
             profile,
             instrs: BcInstrsWriter::new(),
             spans: Vec::new(),
             stack_size: 0,
+            local_count,
             max_stack_size: 0,
             queued_consts: Vec::new(),
             queued_locals: Vec::new(),
@@ -89,6 +92,7 @@ impl BcWriter {
             instrs,
             spans,
             stack_size,
+            local_count,
             max_stack_size,
             queued_consts,
             queued_locals,
@@ -100,6 +104,7 @@ impl BcWriter {
         assert_eq!(stack_size, 0);
         Bc {
             instrs: instrs.finish(spans),
+            local_count,
             max_stack_size,
             _heap: Some(heap.into_ref()),
         }
@@ -239,6 +244,8 @@ impl BcWriter {
 
     /// Write load local instruction.
     pub(crate) fn write_load_local(&mut self, span: Span, slot: LocalSlotId) {
+        assert!(slot.0 < self.local_count);
+
         // Consts must be queued after locals, so if any consts are queued, flush them.
         if !self.queued_consts.is_empty() {
             self.flush_instrs();
@@ -249,14 +256,17 @@ impl BcWriter {
     }
 
     pub(crate) fn write_load_local_captured(&mut self, span: Span, slot: LocalSlotId) {
+        assert!(slot.0 < self.local_count);
         self.write_instr_ret_arg::<InstrLoadLocalCaptured>(span, slot);
     }
 
     pub(crate) fn write_store_local(&mut self, span: Span, slot: LocalSlotId) {
+        assert!(slot.0 < self.local_count);
         self.write_instr_ret_arg::<InstrStoreLocal>(span, slot);
     }
 
     pub(crate) fn write_store_local_captured(&mut self, span: Span, slot: LocalSlotId) {
+        assert!(slot.0 < self.local_count);
         self.write_instr_ret_arg::<InstrStoreLocalCaptured>(span, slot);
     }
 

@@ -137,7 +137,7 @@ pub(crate) fn alloca_frame<'v, R>(
     k: impl FnOnce(&mut Evaluator<'v, '_>) -> R,
 ) -> R {
     eval.alloca_uninit::<Option<Value>, _, _>(
-        (local_count + max_stack_size) as usize,
+        (local_count as usize) + (max_stack_size as usize),
         |locals_and_stack, eval| {
             let (locals, _stack) = locals_and_stack.split_at_mut(local_count as usize);
             // TODO(nga): no need to fill the slots for parameters.

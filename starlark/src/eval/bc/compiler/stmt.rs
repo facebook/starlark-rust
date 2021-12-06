@@ -174,8 +174,8 @@ impl Spanned<StmtCompiled> {
 }
 
 impl StmtsCompiled {
-    pub(crate) fn as_bc(&self, compiler: &StmtCompileContext) -> Bc {
-        let mut bc = BcWriter::new(compiler.bc_profile);
+    pub(crate) fn as_bc(&self, compiler: &StmtCompileContext, local_count: u32) -> Bc {
+        let mut bc = BcWriter::new(compiler.bc_profile, local_count);
         self.write_bc(compiler, &mut bc);
 
         // Small optimization: if the last statement is return,

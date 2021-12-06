@@ -427,6 +427,7 @@ impl Compiler<'_, '_, '_> {
         let scope_names = self.exit_scope();
 
         let scope_names = mem::take(scope_names);
+        let local_count = scope_names.used.len().try_into().unwrap();
 
         let inline_def_body = Self::inline_def_body(&params, &body);
 
@@ -434,7 +435,7 @@ impl Compiler<'_, '_, '_> {
             codemap: self.codemap.dupe(),
             docstring,
             scope_names,
-            stmt_compiled: body.as_bc(&self.compile_context()),
+            stmt_compiled: body.as_bc(&self.compile_context(), local_count),
             body_stmts: body,
             inline_def_body,
             stmt_compile_context: self.compile_context(),
@@ -614,8 +615,8 @@ where
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let local_slots = self.def_info.scope_names.used.len() as u32;
-        alloca_frame(eval, local_slots, self.bc().max_stack_size, |eval| {
+        let bc = self.bc();
+        alloca_frame(eval, bc.local_count, bc.max_stack_size, |eval| {
             let slots = eval.current_frame.locals();
             self.parameters.collect_inline(args, slots, eval.heap())?;
             self.invoke_raw(eval)
@@ -739,7 +740,10 @@ impl FrozenDef {
                 heap,
                 frozen_heap,
             })
-            .as_bc(&self.def_info.stmt_compile_context);
+            .as_bc(
+                &self.def_info.stmt_compile_context,
+                self.def_info.scope_names.used.len().try_into().unwrap(),
+            );
 
         // Store the optimized body.
         // This is (relatively) safe because we know that during freeze

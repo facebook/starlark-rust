@@ -40,6 +40,8 @@ use crate::{
 #[derive(Default)]
 pub(crate) struct Bc {
     pub(crate) instrs: BcInstrs,
+    /// Number of local variable slots.
+    pub(crate) local_count: u32,
     /// Max stack size in values (`Value`).
     pub(crate) max_stack_size: u32,
     /// Keep allocated objects alive.
