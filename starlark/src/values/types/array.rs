@@ -90,6 +90,10 @@ impl<'v> Array<'v> {
         self.capacity as usize
     }
 
+    fn is_statically_allocated(&self) -> bool {
+        self.capacity == 0
+    }
+
     /// Remaining capacity in the array.
     pub(crate) fn remaining_capacity(&self) -> usize {
         debug_assert!(self.capacity as usize >= self.len());
@@ -145,9 +149,9 @@ impl<'v> Array<'v> {
     /// Note this operation updates the iterator count of this object.
     /// It this is not desirable, use [Self::content()].
     pub(crate) fn iter<'a>(&'a self) -> ArrayIter<'a, 'v> {
-        // When `len` is zero, this is statically allocated empty array,
-        // `iter_count` variable is shared between threads.
-        if self.len() != 0 {
+        // When array is statically allocated, `iter_count` variable
+        // is shared between threads.
+        if !self.is_statically_allocated() {
             unsafe {
                 *self.iter_count.get() += 1;
             };
@@ -277,7 +281,7 @@ impl<'a, 'v> ExactSizeIterator for ArrayIter<'a, 'v> {
 impl<'a, 'v> Drop for ArrayIter<'a, 'v> {
     fn drop(&mut self) {
         unsafe {
-            if self.array.len() != 0 {
+            if !self.array.is_statically_allocated() {
                 debug_assert!(*self.array.iter_count.get() >= 1);
                 *self.array.iter_count.get() -= 1;
             } else {
