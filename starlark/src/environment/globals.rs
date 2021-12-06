@@ -34,10 +34,10 @@ use crate::{
         docs,
         docs::{DocItem, DocString, DocStringKind},
         function::{NativeAttribute, NativeCallableRawDocs},
+        layout::value::ValueLike,
         structs::FrozenStruct,
         types::function::{NativeFunction, NativeMethod},
         AllocFrozenValue, FrozenHeap, FrozenHeapRef, FrozenStringValue, FrozenValue, Heap, Value,
-        ValueLike,
     },
 };
 

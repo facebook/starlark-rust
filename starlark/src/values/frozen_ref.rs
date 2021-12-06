@@ -26,14 +26,14 @@ use std::{
 
 use gazebo::prelude::*;
 
-use crate::values::{string::StarlarkStr, FrozenValue, StarlarkValue, ValueLike};
-
-/// A [`FrozenRef`] is essentially a [`FrozenValue`], and has the same memory and access guarantees
-/// as it. However, this keeps the type of the type `T` of the actual [`FrozenValue`] as a
+/// A [`FrozenRef`] is essentially a [`FrozenValue`](crate::values::FrozenValue),
+/// and has the same memory and access guarantees as it.
+/// However, this keeps the type of the type `T` of the actual
+/// [`FrozenValue`](crate::values::FrozenValue) as a
 /// reference, allowing manipulation of the actual typed data.
 #[derive(Clone_, Dupe_, Copy_, Debug)]
 pub struct FrozenRef<'f, T: 'f + ?Sized> {
-    value: &'f T,
+    pub(crate) value: &'f T,
 }
 
 impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
@@ -53,25 +53,6 @@ impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
         FrozenRef {
             value: f(self.value),
         }
-    }
-}
-
-impl FrozenValue {
-    pub fn downcast_frozen_ref<T: StarlarkValue<'static>>(self) -> Option<FrozenRef<'static, T>> {
-        self.downcast_ref::<T>().map(|value| FrozenRef { value })
-    }
-
-    pub fn downcast_frozen_str(self) -> Option<FrozenRef<'static, str>> {
-        self.to_value()
-            .unpack_str()
-            .map(|value| FrozenRef { value })
-    }
-
-    /// Note: see docs about ['Value::unpack_box_str'] about instability
-    pub fn downcast_frozen_starlark_str(self) -> Option<FrozenRef<'static, StarlarkStr>> {
-        self.to_value()
-            .unpack_starlark_str()
-            .map(|value| FrozenRef { value })
     }
 }
 

@@ -18,8 +18,7 @@
 //! This mod defines utilities to easily create Rust values as Starlark values.
 
 use crate::values::{
-    layout::Value, FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue, UnpackValue,
-    ValueOf,
+    FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue, UnpackValue, Value, ValueOf,
 };
 
 /// Trait for things that can be created on a [`Heap`] producing a [`Value`].
