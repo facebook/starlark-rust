@@ -463,11 +463,11 @@ impl<'v> Value<'v> {
     pub(crate) fn invoke_method(
         self,
         this: Value<'v>,
-        location: Option<Span>,
+        location: Span,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        eval.with_call_stack(self, location, |eval| {
+        eval.with_call_stack(self, Some(location), |eval| {
             self.get_ref().invoke_method(self, this, args, eval)
         })
     }
