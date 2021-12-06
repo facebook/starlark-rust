@@ -291,7 +291,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let method = self.call(this, eval.heap())?;
-        method.invoke(None, args, eval)
+        method.invoke(args, eval)
     }
 }
 

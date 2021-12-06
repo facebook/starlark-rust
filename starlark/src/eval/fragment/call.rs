@@ -220,7 +220,7 @@ impl Compiler<'_, '_, '_> {
     ) -> Option<ExprCompiled> {
         // Only if all call arguments are frozen values.
         args.all_values(|arguments| {
-            let v = fun.to_value().invoke(None, arguments, self.eval).ok()?;
+            let v = fun.to_value().invoke(arguments, self.eval).ok()?;
             ExprCompiled::try_value(span, v, self.eval.module_env.frozen_heap())
         })?
     }

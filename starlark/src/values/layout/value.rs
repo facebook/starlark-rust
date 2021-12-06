@@ -441,7 +441,7 @@ impl<'v> Value<'v> {
         self.get_ref().right_shift(other)
     }
 
-    pub fn invoke(
+    pub(crate) fn invoke_with_loc(
         self,
         location: Option<Span>,
         args: Arguments<'v, '_>,
@@ -450,6 +450,14 @@ impl<'v> Value<'v> {
         eval.with_call_stack(self, location, |eval| {
             self.get_ref().invoke(self, args, eval)
         })
+    }
+
+    pub fn invoke(
+        self,
+        args: Arguments<'v, '_>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        self.invoke_with_loc(None, args, eval)
     }
 
     pub(crate) fn invoke_method(
@@ -467,7 +475,6 @@ impl<'v> Value<'v> {
     /// Invoke a function with only positional arguments.
     pub fn invoke_pos(
         self,
-        location: Option<Span>,
         pos: &[Value<'v>],
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -475,7 +482,7 @@ impl<'v> Value<'v> {
             pos,
             ..Arguments::default()
         };
-        self.invoke(location, params, eval)
+        self.invoke(params, eval)
     }
 
     pub fn get_type_value(self) -> FrozenStringValue {
@@ -816,11 +823,10 @@ pub trait ValueLike<'v>:
 
     fn invoke(
         self,
-        span: Option<Span>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.to_value().invoke(span, args, eval)
+        self.to_value().invoke(args, eval)
     }
 
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;

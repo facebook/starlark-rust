@@ -50,7 +50,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
                 if !v.is_none() {
                     res.push(v);
                 }
-            } else if func.invoke_pos(None, &[v], eval)?.to_bool() {
+            } else if func.invoke_pos(&[v], eval)?.to_bool() {
                 res.push(v);
             }
         }
@@ -64,7 +64,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
         let it = seq.iterate(heap)?;
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
-            res.push(func.invoke_pos(None, &[v], eval)?);
+            res.push(func.invoke_pos(&[v], eval)?);
         }
         Ok(heap.alloc_list(&res))
     }
@@ -268,7 +268,7 @@ where
                         args: args.args,
                         kwargs: args.kwargs,
                     };
-                    self.func.invoke(None, params, eval)
+                    self.func.invoke(params, eval)
                 })
             })
         })

@@ -1528,7 +1528,7 @@ impl BcFrozenCallable for FrozenValue {
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.to_value().invoke(Some(location), args, eval)
+        self.to_value().invoke_with_loc(Some(location), args, eval)
     }
 }
 
@@ -1606,7 +1606,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = args.pop_from_stack(stack);
         let f = stack.pop();
-        f.invoke(Some(*span), arguments, eval)
+        f.invoke_with_loc(Some(*span), arguments, eval)
     }
 }
 
@@ -1646,7 +1646,7 @@ fn call_method_common<'v>(
                 .to_value()
                 .invoke_method(this, Some(span), arguments, eval)
         }
-        MemberOrValue::Value(value) => value.invoke(Some(span), arguments, eval),
+        MemberOrValue::Value(value) => value.invoke_with_loc(Some(span), arguments, eval),
     }
 }
 

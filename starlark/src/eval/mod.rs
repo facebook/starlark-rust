@@ -161,6 +161,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             args: None,
             kwargs: None,
         };
-        function.invoke(None, params, self)
+        function.invoke(params, self)
     }
 }
