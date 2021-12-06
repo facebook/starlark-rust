@@ -108,12 +108,16 @@ impl<'v> BcFrame<'v> {
     /// Gets a local variable. Returns None to indicate the variable is not yet assigned.
     #[inline(always)]
     pub(crate) fn get_slot(&self, slot: LocalSlotId) -> Option<Value<'v>> {
-        self.locals()[slot.0 as usize].get()
+        debug_assert!(self.is_inititalized());
+        debug_assert!(slot.0 < self.local_count);
+        unsafe { self.ptr.add(slot.0 as usize).read() }
     }
 
     #[inline(always)]
     pub(crate) fn set_slot(&self, slot: LocalSlotId, value: Value<'v>) {
-        self.locals()[slot.0 as usize].set(Some(value));
+        debug_assert!(self.is_inititalized());
+        debug_assert!(slot.0 < self.local_count);
+        unsafe { self.ptr.add(slot.0 as usize).write(Some(value)) }
     }
 }
 
