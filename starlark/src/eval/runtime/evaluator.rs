@@ -26,7 +26,7 @@ use gazebo::{any::AnyLifetime, cast};
 use thiserror::Error;
 
 use crate::{
-    codemap::{FileSpan, Span},
+    codemap::{FileSpan, FileSpanRef, Span},
     collections::{alloca::Alloca, string_pool::StringPool},
     environment::{slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, Module},
     errors::{Diagnostic, Frame},
@@ -103,7 +103,7 @@ pub struct Evaluator<'v, 'a> {
     // Size of the heap when we should next perform a GC.
     pub(crate) next_gc_level: usize,
     // Extra functions to run on each statement, usually empty
-    pub(crate) before_stmt: Vec<&'a dyn Fn(Span, &mut Evaluator<'v, 'a>)>,
+    pub(crate) before_stmt: Vec<&'a dyn Fn(FileSpanRef, &mut Evaluator<'v, 'a>)>,
     // Used for line profiling
     stmt_profile: StmtProfile,
     // Bytecode profile.
@@ -221,7 +221,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
-        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span, &eval.def_info.codemap));
+        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
     }
 
     /// Enable bytecode profiling, allowing [`Evaluator::write_bytecode_profile`] to be used.
@@ -312,25 +312,18 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.call_stack.top_location()
     }
 
-    /// Called before every statement is run with the [`Span`] and a reference to the containing [`Evaluator`].
+    /// Called before every statement is run with the span and a reference to the containing [`Evaluator`].
     /// A list of all possible statements can be obtained in advance by
     /// [`AstModule::stmt_locations`](crate::syntax::AstModule::stmt_locations).
     ///
     /// This function may have no effect is called mid evaluation.
-    pub fn before_stmt(&mut self, f: &'a dyn Fn(Span, &mut Evaluator<'v, 'a>)) {
+    pub fn before_stmt(&mut self, f: &'a dyn Fn(FileSpanRef, &mut Evaluator<'v, 'a>)) {
         self.before_stmt.push(f)
     }
 
     /// Set the handler invoked when `print` function is used.
     pub fn set_print_handler(&mut self, handler: &'a (dyn PrintHandler + 'a)) {
         self.print_handler = handler;
-    }
-
-    /// Given a [`Span`] resolve it to a concrete [`FileSpan`] using
-    /// whatever module is currently at the top of the stack.
-    /// This function can be used in conjunction with [`before_stmt`](Evaluator::before_stmt).
-    pub fn file_span(&self, span: Span) -> FileSpan {
-        self.def_info.codemap.file_span(span)
     }
 
     pub(crate) fn check_types(&self) -> bool {

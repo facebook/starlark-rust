@@ -309,13 +309,20 @@ struct LineCol {
 }
 
 /// A file, and a line and column range within it.
+#[derive(Clone, Copy, Dupe, Eq, PartialEq, Debug)]
+pub struct FileSpanRef<'a> {
+    pub file: &'a CodeMap,
+    pub span: Span,
+}
+
+/// A file, and a line and column range within it.
 #[derive(Clone, Dupe, Eq, PartialEq, Debug)]
 pub struct FileSpan {
     pub file: CodeMap,
     pub span: Span,
 }
 
-impl fmt::Display for FileSpan {
+impl<'a> fmt::Display for FileSpanRef<'a> {
     /// Formats the span as `filename:start_line:start_column: end_line:end_column`,
     /// or if the span is zero-length, `filename:line:column`, with a 1-indexed line and column.
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -323,9 +330,37 @@ impl fmt::Display for FileSpan {
     }
 }
 
-impl FileSpan {
+impl fmt::Display for FileSpan {
+    /// Formats the span as `filename:start_line:start_column: end_line:end_column`,
+    /// or if the span is zero-length, `filename:line:column`, with a 1-indexed line and column.
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(&self.as_ref(), f)
+    }
+}
+
+impl<'a> FileSpanRef<'a> {
+    pub fn to_file_span(self) -> FileSpan {
+        FileSpan {
+            file: self.file.dupe(),
+            span: self.span,
+        }
+    }
+
     pub fn resolve_span(&self) -> ResolvedSpan {
         self.file.resolve_span(self.span)
+    }
+}
+
+impl FileSpan {
+    pub fn as_ref(&self) -> FileSpanRef {
+        FileSpanRef {
+            file: &self.file,
+            span: self.span,
+        }
+    }
+
+    pub fn resolve_span(&self) -> ResolvedSpan {
+        self.as_ref().resolve_span()
     }
 
     pub fn resolve(&self) -> ResolvedFileSpan {

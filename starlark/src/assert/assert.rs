@@ -30,7 +30,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     self as starlark,
-    codemap::{CodeMap, Pos, Span},
+    codemap::{CodeMap, FileSpanRef, Pos, Span},
     collections::SmallMap,
     environment::{FrozenModule, Globals, GlobalsBuilder, Module},
     errors::Diagnostic,
@@ -272,7 +272,7 @@ impl<'a> Assert<'a> {
             eval.set_print_handler(print_handler);
         }
 
-        let gc_always = |_, eval: &mut Evaluator| {
+        let gc_always = |_span: FileSpanRef, eval: &mut Evaluator| {
             eval.trigger_gc();
         };
 

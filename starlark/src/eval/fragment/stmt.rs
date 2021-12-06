@@ -30,7 +30,7 @@ use gazebo::prelude::*;
 use thiserror::Error;
 
 use crate::{
-    codemap::{Span, Spanned},
+    codemap::{FileSpanRef, Span, Spanned},
     environment::{slots::ModuleSlotId, FrozenModuleRef},
     eval::{
         compiler::{
@@ -448,7 +448,14 @@ pub(crate) fn before_stmt(span: Span, eval: &mut Evaluator) {
     );
     let fs = mem::take(&mut eval.before_stmt);
     for f in &fs {
-        f(span, eval)
+        let def_info = eval.def_info;
+        f(
+            FileSpanRef {
+                span,
+                file: &def_info.codemap,
+            },
+            eval,
+        )
     }
     let added = mem::replace(&mut eval.before_stmt, fs);
     assert!(

@@ -29,7 +29,7 @@ use anyhow::Context;
 use gazebo::prelude::*;
 
 use crate::{
-    codemap::{CodeMap, FileSpan, Span},
+    codemap::{CodeMap, FileSpan, FileSpanRef, Span},
     eval::runtime::csv::CsvWriter,
 };
 
@@ -185,9 +185,9 @@ impl StmtProfile {
         self.0 = Some(box StmtProfileData::new())
     }
 
-    pub fn before_stmt(&mut self, span: Span, codemap: &CodeMap) {
+    pub fn before_stmt(&mut self, span: FileSpanRef) {
         if let Some(box data) = &mut self.0 {
-            data.before_stmt(span, codemap)
+            data.before_stmt(span.span, span.file)
         }
     }
 

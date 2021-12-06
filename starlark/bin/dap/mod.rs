@@ -31,7 +31,7 @@ use gazebo::prelude::*;
 pub use library::*;
 use serde_json::{Map, Value};
 use starlark::{
-    codemap::{FileSpan, Span},
+    codemap::{FileSpan, FileSpanRef, Span},
     environment::Module,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
@@ -52,8 +52,8 @@ struct Backend {
     // Set while we are doing evaluate calls (>= 1 means disable)
     disable_breakpoints: Arc<AtomicUsize>,
 
-    sender: Sender<Box<dyn Fn(Span, &mut Evaluator) -> Next + Send>>,
-    receiver: Arc<Mutex<Receiver<Box<dyn Fn(Span, &mut Evaluator) -> Next + Send>>>>,
+    sender: Sender<Box<dyn Fn(FileSpanRef, &mut Evaluator) -> Next + Send>>,
+    receiver: Arc<Mutex<Receiver<Box<dyn Fn(FileSpanRef, &mut Evaluator) -> Next + Send>>>>,
 }
 
 enum Next {
@@ -64,7 +64,7 @@ enum Next {
 impl Backend {
     fn inject<T: 'static + Send>(
         &self,
-        f: Box<dyn Fn(Span, &mut Evaluator) -> (Next, T) + Send>,
+        f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> (Next, T) + Send>,
     ) -> T {
         let (sender, receiver) = channel();
         self.sender
@@ -81,7 +81,10 @@ impl Backend {
         self.inject(box |_, _| (Next::Continue, ()))
     }
 
-    fn with_ctx<T: 'static + Send>(&self, f: Box<dyn Fn(Span, &mut Evaluator) -> T + Send>) -> T {
+    fn with_ctx<T: 'static + Send>(
+        &self,
+        f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> T + Send>,
+    ) -> T {
         self.inject(box move |span, eval| (Next::RemainPaused, f(span, eval)))
     }
 
@@ -99,15 +102,14 @@ impl Backend {
             let module = Module::new();
             let globals = globals();
             let mut eval = Evaluator::new(&module);
-            let fun = |span, eval: &mut Evaluator| {
+            let fun = |span_loc: FileSpanRef, eval: &mut Evaluator| {
                 let stop = if disable_breakpoints.load(Ordering::SeqCst) > 0 {
                     false
                 } else {
                     let breaks = breakpoints.lock().unwrap();
-                    let span_loc = eval.file_span(span);
                     breaks
                         .get(span_loc.file.filename())
-                        .map(|set| set.contains(&span))
+                        .map(|set| set.contains(&span_loc.span))
                         .unwrap_or_default()
                 };
                 if stop {
@@ -121,7 +123,7 @@ impl Backend {
                     });
                     loop {
                         let msg = receiver.lock().unwrap().recv().unwrap();
-                        match msg(span, eval) {
+                        match msg(span_loc, eval) {
                             Next::Continue => break,
                             Next::RemainPaused => continue,
                         }
@@ -294,7 +296,7 @@ impl DebugServer for Backend {
         // We also have them in the wrong order
         self.with_ctx(box |span, eval| {
             let frames = eval.call_stack();
-            let mut next = Some(eval.file_span(span));
+            let mut next = Some(span.to_file_span());
             let mut res = Vec::with_capacity(frames.len() + 1);
             for (i, x) in frames.iter().rev().enumerate() {
                 res.push(convert_frame(i, x.name.clone(), next));
