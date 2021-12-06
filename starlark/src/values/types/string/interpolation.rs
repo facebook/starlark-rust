@@ -18,7 +18,7 @@
 //! String interpolation-related code.
 //! Based on <https://docs.python.org/3/library/stdtypes.html#printf-style-string-formatting>
 
-use std::{fmt::Write, str::FromStr};
+use std::{fmt::Write, mem, str::FromStr};
 
 use anyhow::anyhow;
 use gazebo::{cast, prelude::*};
@@ -169,37 +169,28 @@ pub(crate) fn percent(format: &str, value: Value) -> anyhow::Result<String> {
 
 /// Try parse `"aaa{}bbb"` and return `("aaa", "bbb")`.
 pub(crate) fn parse_format_one(s: &str) -> Option<(String, String)> {
+    let mut parser = FormatParser {
+        format_str: s,
+        rem_input: s,
+    };
     let mut before = String::with_capacity(s.len());
-    let mut chars = s.chars();
     loop {
-        match chars.next()? {
-            '{' => match chars.next()? {
-                '{' => before.push('{'),
-                '}' => break,
-                _ => return None,
-            },
-            '}' => match chars.next()? {
-                '}' => before.push('}'),
-                _ => return None,
-            },
-            c => before.push(c),
+        match parser.next().ok()?? {
+            FormatToken::Text(text) => before.push_str(text),
+            FormatToken::Capture("") => break,
+            FormatToken::Capture(_) => return None,
         }
     }
+
     let mut after = String::with_capacity(s.len() - before.len());
     loop {
-        match chars.next() {
-            Some('{') => match chars.next()? {
-                '{' => after.push('{'),
-                _ => return None,
-            },
-            Some('}') => match chars.next()? {
-                '}' => after.push('}'),
-                _ => return None,
-            },
-            Some(c) => after.push(c),
+        match parser.next().ok()? {
+            Some(FormatToken::Text(text)) => after.push_str(text),
+            Some(FormatToken::Capture(_)) => return None,
             None => break,
         }
     }
+
     Some((before, after))
 }
 
@@ -327,6 +318,84 @@ impl<'v, T: Iterator<Item = Value<'v>>> FormatArgs<'v, T> {
     }
 }
 
+/// Parser for `.format()` arguments.
+struct FormatParser<'a> {
+    /// The original format string.
+    format_str: &'a str,
+    /// Remaining part.
+    rem_input: &'a str,
+}
+
+/// Token in the format string.
+#[derive(Debug)]
+enum FormatToken<'a> {
+    /// Text to copy verbatim to the output.
+    Text(&'a str),
+    /// Format part inside curly braces.
+    Capture(&'a str),
+}
+
+impl<'a> FormatParser<'a> {
+    /// Parse the next token from the format string.
+    fn next(&mut self) -> anyhow::Result<Option<FormatToken<'a>>> {
+        let mut i = 0;
+
+        while i < self.rem_input.len() {
+            match self.rem_input.as_bytes()[i] {
+                b'{' | b'}' if i != 0 => {
+                    let (text, rem) = self.rem_input.split_at(i);
+                    self.rem_input = rem;
+                    return Ok(Some(FormatToken::Text(text)));
+                }
+                b'{' => {
+                    assert!(i == 0);
+                    if self.rem_input.starts_with("{{") {
+                        self.rem_input = &self.rem_input[2..];
+                        return Ok(Some(FormatToken::Text("{")));
+                    }
+                    i = 1;
+                    while i < self.rem_input.len() {
+                        match self.rem_input.as_bytes()[i] {
+                            b'}' => {
+                                let capture = &self.rem_input[1..i];
+                                self.rem_input = &self.rem_input[i + 1..];
+                                return Ok(Some(FormatToken::Capture(capture)));
+                            }
+                            b'{' => {
+                                break;
+                            }
+                            _ => i += 1,
+                        }
+                    }
+                    return Err(anyhow!(
+                        "Unmatched '{{' in format string `{}`",
+                        self.format_str
+                    ));
+                }
+                b'}' => {
+                    assert!(i == 0);
+                    if self.rem_input.starts_with("}}") {
+                        self.rem_input = &self.rem_input[2..];
+                        return Ok(Some(FormatToken::Text("}")));
+                    }
+                    return Err(anyhow!(
+                        "Standalone '}}' in format string `{}`",
+                        self.format_str
+                    ));
+                }
+                _ => i += 1,
+            }
+        }
+
+        if i == 0 {
+            Ok(None)
+        } else {
+            let text = mem::take(&mut self.rem_input);
+            Ok(Some(FormatToken::Text(text)))
+        }
+    }
+}
+
 pub(crate) fn format<'v>(
     this: &str,
     args: impl Iterator<Item = Value<'v>>,
@@ -334,41 +403,23 @@ pub(crate) fn format<'v>(
     string_pool: &mut StringPool,
     heap: &'v Heap,
 ) -> anyhow::Result<StringValue<'v>> {
-    let mut args = FormatArgs::new(args);
+    let mut parser = FormatParser {
+        format_str: this,
+        rem_input: this,
+    };
     let mut result = string_pool.alloc();
-    let mut capture = string_pool.alloc();
-    for c in this.chars() {
-        match (c, capture.as_str()) {
-            ('{', "") | ('}', "") => capture.push(c),
-            (.., "") => result.push(c),
-            ('{', "{") => {
-                result.push('{');
-                capture.clear();
+    let mut args = FormatArgs::new(args);
+    while let Some(token) = parser.next()? {
+        match token {
+            FormatToken::Text(text) => result.push_str(text),
+            FormatToken::Capture(capture) => {
+                format_capture(capture, &mut args, &kwargs, &mut result)?
             }
-            ('{', "}") => return Err(anyhow!("Standalone '}}' in format string `{}`", this)),
-            ('{', ..) => return Err(anyhow!("Unmatched '{{' in format string")),
-            ('}', "}") => {
-                result.push('}');
-                capture.clear();
-            }
-            ('}', ..) => {
-                format_capture(&capture, &mut args, &kwargs, &mut result)?;
-                capture.clear();
-            }
-            (.., "}") => return Err(anyhow!("Standalone '}}' in format string `{}`", this)),
-            _ => capture.push(c),
         }
     }
-    match capture.as_str() {
-        "}" => Err(anyhow!("Standalone '}}' in format string `{}`", this)),
-        "" => {
-            let r = heap.alloc_string_value(&result);
-            string_pool.release(result);
-            string_pool.release(capture);
-            Ok(r)
-        }
-        _ => Err(anyhow!("Unmatched '{{' in format string")),
-    }
+    let r = heap.alloc_string_value(&result);
+    string_pool.release(result);
+    Ok(r)
 }
 
 fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
@@ -379,9 +430,9 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
 ) -> anyhow::Result<()> {
     let (n, conv) = {
         if let Some(x) = capture.find('!') {
-            (capture.get(1..x).unwrap(), capture.get(x + 1..).unwrap())
+            (&capture[..x], &capture[x + 1..])
         } else {
-            (capture.get(1..).unwrap(), "s")
+            (capture, "s")
         }
     };
     let conv_s = |x: Value, result: &mut String| x.collect_str(result);
@@ -430,6 +481,7 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
 mod tests {
     use super::*;
     use crate::{
+        assert,
         collections::SmallMap,
         values::{recursive_repr_or_json_guard::ReprStackReleaseMemoryOnDrop, Heap},
     };
@@ -458,32 +510,37 @@ mod tests {
         kwargs.insert_hashed(heap.alloc_str_hashed("c"), heap.alloc("z"));
         let kwargs = Dict::new(kwargs);
         assert_eq!(
-            format_capture_for_test("{", &mut args, &kwargs).unwrap(),
+            format_capture_for_test("", &mut args, &kwargs).unwrap(),
             "1"
         );
         assert_eq!(
-            format_capture_for_test("{!s", &mut args, &kwargs).unwrap(),
+            format_capture_for_test("!s", &mut args, &kwargs).unwrap(),
             "2"
         );
         assert_eq!(
-            format_capture_for_test("{!r", &mut args, &kwargs).unwrap(),
+            format_capture_for_test("!r", &mut args, &kwargs).unwrap(),
             "\"3\""
         );
         assert_eq!(
-            format_capture_for_test("{a!r", &mut args, &kwargs).unwrap(),
+            format_capture_for_test("a!r", &mut args, &kwargs).unwrap(),
             "\"x\""
         );
         assert_eq!(
-            format_capture_for_test("{a!s", &mut args, &kwargs).unwrap(),
+            format_capture_for_test("a!s", &mut args, &kwargs).unwrap(),
             "x"
         );
-        assert!(format_capture_for_test("{1", &mut args, &kwargs).is_err());
+        assert!(format_capture_for_test("1", &mut args, &kwargs).is_err());
         let mut args = FormatArgs::new(original_args.iter().copied());
         assert_eq!(
-            format_capture_for_test("{1", &mut args, &kwargs).unwrap(),
+            format_capture_for_test("1", &mut args, &kwargs).unwrap(),
             "2"
         );
-        assert!(format_capture_for_test("{", &mut args, &kwargs).is_err());
+        assert!(format_capture_for_test("", &mut args, &kwargs).is_err());
+    }
+
+    #[test]
+    fn test_format() {
+        assert::eq("'a{x}b{y}c{}'.format(1, x=2, y=3)", "'a2b3c1'")
     }
 
     #[test]
