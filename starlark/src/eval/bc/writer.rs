@@ -20,7 +20,7 @@
 use std::{cmp, mem};
 
 use crate::{
-    codemap::{Span, Spanned},
+    codemap::{CodeMap, Span, Spanned},
     eval::{
         bc::{
             addr::{BcAddr, BcAddrOffset},
@@ -36,9 +36,9 @@ use crate::{
             opcode::BcOpcode,
             slow_arg::BcInstrSlowArg,
         },
-        runtime::slots::LocalSlotId,
+        runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
-    values::{FrozenHeap, FrozenValue},
+    values::{FrozenHeap, FrozenRef, FrozenValue},
 };
 
 /// Write bytecode here.
@@ -63,11 +63,20 @@ pub(crate) struct BcWriter<'f> {
 
     /// Allocate various objects here.
     heap: &'f FrozenHeap,
+
+    /// Codemap of file being compiled.
+    // TODO(nga): bytecode writer does not need to know about codemap.
+    codemap: FrozenRef<'static, CodeMap>,
 }
 
 impl<'f> BcWriter<'f> {
     /// Empty.
-    pub(crate) fn new(profile: bool, local_count: u32, heap: &'f FrozenHeap) -> BcWriter<'f> {
+    pub(crate) fn new(
+        profile: bool,
+        local_count: u32,
+        heap: &'f FrozenHeap,
+        codemap: FrozenRef<'static, CodeMap>,
+    ) -> BcWriter<'f> {
         BcWriter {
             profile,
             instrs: BcInstrsWriter::new(),
@@ -78,6 +87,7 @@ impl<'f> BcWriter<'f> {
             queued_consts: Vec::new(),
             queued_locals: Vec::new(),
             heap,
+            codemap,
         }
     }
 
@@ -93,9 +103,11 @@ impl<'f> BcWriter<'f> {
             queued_consts,
             queued_locals,
             heap,
+            codemap,
         } = self;
         let _ = has_before_instr;
         let _ = heap;
+        let _ = codemap;
         assert!(queued_locals.is_empty());
         assert!(queued_consts.is_empty());
         assert_eq!(stack_size, 0);
@@ -395,5 +407,12 @@ impl<'f> BcWriter<'f> {
     /// Current stack size.
     pub(crate) fn stack_size(&self) -> u32 {
         self.stack_size
+    }
+
+    pub(crate) fn alloc_file_span(&self, span: Span) -> FrozenRef<'static, FrozenFileSpan> {
+        self.heap.alloc_any(FrozenFileSpan {
+            file: self.codemap,
+            span,
+        })
     }
 }

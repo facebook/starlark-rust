@@ -265,6 +265,17 @@ impl FrozenHeap {
         value.map(|r| &r.0)
     }
 
+    /// Allocate any value, use `Debug` implementation for `Display`.
+    pub(crate) fn alloc_any_display_from_debug<T: Debug + Send + Sync>(
+        &self,
+        value: T,
+    ) -> FrozenRef<'static, T> {
+        #[derive(derive_more::Display, Debug)]
+        #[display(fmt = "{:?}", _0)]
+        struct Wrapper<T: Debug + Send + Sync>(T);
+        self.alloc_any(Wrapper(value)).map(|r| &r.0)
+    }
+
     /// Number of bytes allocated on this heap, not including any memory
     /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
     pub fn allocated_bytes(&self) -> usize {

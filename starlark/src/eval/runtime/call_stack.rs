@@ -24,16 +24,40 @@
 // * When an exception happens, decorate it with the call stack on the way back
 //   up, in eval_call.
 
-use std::{fmt, fmt::Debug, intrinsics::unlikely};
+use std::{
+    fmt,
+    fmt::{Debug, Display},
+    intrinsics::unlikely,
+};
 
 use gazebo::prelude::*;
 
 use crate::{
-    codemap::{FileSpan, Span},
+    codemap::{CodeMap, FileSpan, Span},
     errors::Frame,
-    eval::fragment::def::DefInfo,
     values::{ControlError, FrozenRef, Trace, Tracer, Value},
 };
+
+#[derive(Debug)]
+pub(crate) struct FrozenFileSpan {
+    pub(crate) file: FrozenRef<'static, CodeMap>,
+    pub(crate) span: Span,
+}
+
+impl Display for FrozenFileSpan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.to_file_span(), f)
+    }
+}
+
+impl FrozenFileSpan {
+    fn to_file_span(&self) -> FileSpan {
+        FileSpan {
+            file: (*self.file).dupe(),
+            span: self.span,
+        }
+    }
+}
 
 // A value akin to Frame, but can be created cheaply, since it doesn't resolve
 // anything in advance.
@@ -41,16 +65,12 @@ use crate::{
 #[derive(Clone, Copy, Dupe)]
 struct CheapFrame<'v> {
     function: Value<'v>,
-    file: Option<FrozenRef<'static, DefInfo>>,
-    span: Span,
+    span: Option<FrozenRef<'static, FrozenFileSpan>>,
 }
 
 impl CheapFrame<'_> {
     fn location(&self) -> Option<FileSpan> {
-        self.file.map(|file| FileSpan {
-            file: file.codemap.dupe(),
-            span: self.span,
-        })
+        self.span.map(|span| span.to_file_span())
     }
 
     fn to_frame(&self) -> Frame {
@@ -66,7 +86,6 @@ impl Debug for CheapFrame<'_> {
         let mut x = f.debug_struct("Frame");
         x.field("function", &self.function);
         x.field("span", &self.span);
-        x.field("file", &self.file);
         x.finish()
     }
 }
@@ -84,8 +103,7 @@ impl<'v> Default for CallStack<'v> {
             count: 0,
             stack: [CheapFrame {
                 function: Value::new_none(),
-                file: None,
-                span: Span::default(),
+                span: None,
             }; MAX_CALLSTACK_RECURSION],
         }
     }
@@ -104,7 +122,7 @@ unsafe impl<'v> Trace<'v> for CallStack<'v> {
         // the current stack depth, it's good practice to blank those values out
         for x in self.stack[self.count..].iter_mut() {
             x.function = Value::new_none();
-            x.file = None;
+            x.span = None;
         }
     }
 }
@@ -115,17 +133,12 @@ impl<'v> CallStack<'v> {
     pub(crate) fn push(
         &mut self,
         function: Value<'v>,
-        span: Span,
-        file: Option<FrozenRef<'static, DefInfo>>,
+        span: Option<FrozenRef<'static, FrozenFileSpan>>,
     ) -> anyhow::Result<()> {
         if unlikely(self.count >= MAX_CALLSTACK_RECURSION) {
             return Err(ControlError::TooManyRecursionLevel.into());
         }
-        self.stack[self.count] = CheapFrame {
-            function,
-            file,
-            span,
-        };
+        self.stack[self.count] = CheapFrame { function, span };
         self.count += 1;
         Ok(())
     }

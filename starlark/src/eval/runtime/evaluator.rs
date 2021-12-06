@@ -26,7 +26,7 @@ use gazebo::{any::AnyLifetime, cast};
 use thiserror::Error;
 
 use crate::{
-    codemap::{FileSpan, FileSpanRef, Span},
+    codemap::{FileSpan, FileSpanRef},
     collections::{alloca::Alloca, string_pool::StringPool},
     environment::{slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, Module},
     errors::{Diagnostic, Frame},
@@ -35,7 +35,7 @@ use crate::{
         fragment::def::DefInfo,
         runtime::{
             bc_profile::BcProfile,
-            call_stack::CallStack,
+            call_stack::{CallStack, FrozenFileSpan},
             flame_profile::FlameProfile,
             heap_profile::{HeapProfile, HeapProfileFormat},
             slots::LocalSlotId,
@@ -338,7 +338,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub(crate) fn with_call_stack<R>(
         &mut self,
         function: Value<'v>,
-        span: Option<Span>,
+        span: Option<FrozenRef<'static, FrozenFileSpan>>,
         within: impl FnOnce(&mut Self) -> anyhow::Result<R>,
     ) -> anyhow::Result<R> {
         #[cold]
@@ -350,11 +350,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             })
         }
 
-        self.call_stack.push(
-            function,
-            span.unwrap_or_default(),
-            span.map(|_| self.def_info),
-        )?;
+        self.call_stack.push(function, span)?;
         if unlikely(self.heap_or_flame_profile) {
             self.heap_profile.record_call_enter(function, self.heap());
             self.flame_profile.record_call_enter(function);

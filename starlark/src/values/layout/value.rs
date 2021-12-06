@@ -45,9 +45,8 @@ use gazebo::{
 use indexmap::Equivalent;
 
 use crate::{
-    codemap::Span,
     collections::{Hashed, SmallHashResult, StarlarkHasher},
-    eval::{Arguments, Evaluator, FrozenDef},
+    eval::{runtime::call_stack::FrozenFileSpan, Arguments, Evaluator, FrozenDef},
     values::{
         dict::FrozenDict,
         docs::DocItem,
@@ -443,7 +442,7 @@ impl<'v> Value<'v> {
 
     pub(crate) fn invoke_with_loc(
         self,
-        location: Option<Span>,
+        location: Option<FrozenRef<'static, FrozenFileSpan>>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -463,7 +462,7 @@ impl<'v> Value<'v> {
     pub(crate) fn invoke_method(
         self,
         this: Value<'v>,
-        location: Span,
+        location: FrozenRef<'static, FrozenFileSpan>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {

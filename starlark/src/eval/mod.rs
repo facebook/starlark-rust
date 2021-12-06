@@ -46,7 +46,7 @@ use crate::{
 pub(crate) mod bc;
 mod compiler;
 mod fragment;
-mod runtime;
+pub(crate) mod runtime;
 
 #[cfg(test)]
 mod tests;
@@ -87,8 +87,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             return Err(e);
         }
 
-        let span = statement.span;
-
         let (module_slots, scope_names, scope_data) = scope.exit_module();
         let local_count = scope_names.used.len().try_into().unwrap();
 
@@ -108,9 +106,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         // See with_function_context for more safety arguments.
         let codemap = unsafe { cast::ptr_lifetime(&codemap) };
 
-        self.call_stack
-            .push(Value::new_none(), span, Some(self.def_info))
-            .unwrap();
+        self.call_stack.push(Value::new_none(), None).unwrap();
         if unlikely(self.heap_or_flame_profile) {
             self.heap_profile
                 .record_call_enter(Value::new_none(), self.heap());
@@ -122,7 +118,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             scope_data,
             locals: Vec::new(),
             globals,
-            codemap: codemap.dupe(),
+            codemap: self
+                .module_env
+                .frozen_heap()
+                .alloc_any_display_from_debug(codemap.dupe()),
             constants: Constants::new(),
             has_before_stmt: !self.before_stmt.is_empty(),
             bc_profile: self.bc_profile.enabled(),

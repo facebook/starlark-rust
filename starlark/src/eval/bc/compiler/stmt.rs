@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    codemap::{Span, Spanned},
+    codemap::{CodeMap, Span, Spanned},
     eval::{
         bc::{
             bytecode::Bc,
@@ -31,7 +31,7 @@ use crate::{
             stmt::{StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
     },
-    values::FrozenHeap,
+    values::{FrozenHeap, FrozenRef},
 };
 
 impl StmtsCompiled {
@@ -180,8 +180,9 @@ impl StmtsCompiled {
         compiler: &StmtCompileContext,
         local_count: u32,
         heap: &FrozenHeap,
+        codemap: FrozenRef<'static, CodeMap>,
     ) -> Bc {
-        let mut bc = BcWriter::new(compiler.bc_profile, local_count, heap);
+        let mut bc = BcWriter::new(compiler.bc_profile, local_count, heap, codemap);
         self.write_bc(compiler, &mut bc);
 
         // Small optimization: if the last statement is return,

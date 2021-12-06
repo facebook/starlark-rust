@@ -432,13 +432,14 @@ impl Compiler<'_, '_, '_> {
         let inline_def_body = Self::inline_def_body(&params, &body);
 
         let info = self.eval.module_env.frozen_heap().alloc_any(DefInfo {
-            codemap: self.codemap.dupe(),
+            codemap: (*self.codemap).dupe(),
             docstring,
             scope_names,
             stmt_compiled: body.as_bc(
                 &self.compile_context(),
                 local_count,
                 self.eval.module_env.frozen_heap(),
+                self.codemap,
             ),
             body_stmts: body,
             inline_def_body,
@@ -748,6 +749,7 @@ impl FrozenDef {
                 &self.def_info.stmt_compile_context,
                 self.def_info.scope_names.used.len().try_into().unwrap(),
                 frozen_heap,
+                frozen_heap.alloc_any_display_from_debug(self.def_info.codemap.dupe()),
             );
 
         // Store the optimized body.

@@ -86,6 +86,7 @@ impl<'v> Compiler<'v, '_, '_> {
                     &self.compile_context(),
                     local_count,
                     self.eval.module_env.frozen_heap(),
+                    self.codemap,
                 );
                 // We don't preserve locals between top level statements.
                 // That is OK for now: the only locals used in module evaluation

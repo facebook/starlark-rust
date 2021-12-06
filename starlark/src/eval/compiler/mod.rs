@@ -74,7 +74,7 @@ pub(crate) struct Compiler<'v, 'a, 'e> {
     pub(crate) scope_data: ScopeData,
     pub(crate) locals: Vec<ScopeId>,
     pub(crate) globals: FrozenRef<'static, Globals>,
-    pub(crate) codemap: CodeMap,
+    pub(crate) codemap: FrozenRef<'static, CodeMap>,
     pub(crate) constants: Constants,
     pub(crate) has_before_stmt: bool,
     pub(crate) bc_profile: bool,

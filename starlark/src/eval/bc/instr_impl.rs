@@ -45,7 +45,7 @@ use crate::{
             expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError, MemberOrValue},
             stmt::{add_assign, before_stmt, possible_gc, AssignError},
         },
-        runtime::slots::LocalSlotId,
+        runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
         Arguments, Def, Evaluator, FrozenDef, ParametersSpec,
     },
     values::{
@@ -1514,7 +1514,7 @@ impl InstrNoFlowImpl for InstrDefImpl {
 pub(crate) trait BcFrozenCallable: BcInstrArg + Copy {
     fn bc_invoke<'v>(
         self,
-        location: Span,
+        location: FrozenRef<'static, FrozenFileSpan>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
@@ -1524,7 +1524,7 @@ impl BcFrozenCallable for FrozenValue {
     #[inline(always)]
     fn bc_invoke<'v>(
         self,
-        location: Span,
+        location: FrozenRef<'static, FrozenFileSpan>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -1536,7 +1536,7 @@ impl BcFrozenCallable for FrozenValueTyped<'static, FrozenDef> {
     #[inline(always)]
     fn bc_invoke<'v>(
         self,
-        location: Span,
+        location: FrozenRef<'static, FrozenFileSpan>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -1550,7 +1550,7 @@ impl BcFrozenCallable for FrozenValueTyped<'static, NativeFunction> {
     #[inline(always)]
     fn bc_invoke<'v>(
         self,
-        location: Span,
+        location: FrozenRef<'static, FrozenFileSpan>,
         args: Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
@@ -1595,7 +1595,7 @@ pub(crate) type InstrCallMaybeKnownMethodPos =
 impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, A, Span);
+    type Arg = (ArgPopsStack1, A, FrozenRef<'static, FrozenFileSpan>);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1615,7 +1615,7 @@ impl<F: BcFrozenCallable, A: BcCallArgs> InstrNoFlowAddSpanImpl
 {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (F, A, Span);
+    type Arg = (F, A, FrozenRef<'static, FrozenFileSpan>);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1636,7 +1636,7 @@ fn call_method_common<'v>(
     this: Value<'v>,
     symbol: &Symbol,
     arguments: Arguments<'v, '_>,
-    span: Span,
+    span: FrozenRef<'static, FrozenFileSpan>,
 ) -> anyhow::Result<Value<'v>> {
     // TODO: wrong span: should be span of `object.method`, not of the whole expression
     let method = get_attr_hashed_raw(this, symbol, eval.heap())?;
@@ -1656,7 +1656,7 @@ fn call_maybe_known_method_common<'v>(
     symbol: &Symbol,
     known_method: &KnownMethod,
     arguments: Arguments<'v, '_>,
-    span: Span,
+    span: FrozenRef<'static, FrozenFileSpan>,
 ) -> anyhow::Result<Value<'v>> {
     if let Some(methods) = this.get_ref().get_methods() {
         // Instead of method lookup by name, we compare `Methods` pointers.
@@ -1680,7 +1680,7 @@ fn call_maybe_known_method_common<'v>(
 impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, Symbol, A, Span);
+    type Arg = (ArgPopsStack1, Symbol, A, FrozenRef<'static, FrozenFileSpan>);
 
     #[inline(always)]
     fn run_with_args<'v>(
@@ -1698,7 +1698,13 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
 impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl<A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
-    type Arg = (ArgPopsStack1, Symbol, KnownMethod, A, Span);
+    type Arg = (
+        ArgPopsStack1,
+        Symbol,
+        KnownMethod,
+        A,
+        FrozenRef<'static, FrozenFileSpan>,
+    );
 
     #[inline(always)]
     fn run_with_args<'v>(
