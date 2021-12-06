@@ -435,7 +435,11 @@ impl Compiler<'_, '_, '_> {
             codemap: self.codemap.dupe(),
             docstring,
             scope_names,
-            stmt_compiled: body.as_bc(&self.compile_context(), local_count),
+            stmt_compiled: body.as_bc(
+                &self.compile_context(),
+                local_count,
+                self.eval.module_env.frozen_heap(),
+            ),
             body_stmts: body,
             inline_def_body,
             stmt_compile_context: self.compile_context(),
@@ -743,6 +747,7 @@ impl FrozenDef {
             .as_bc(
                 &self.def_info.stmt_compile_context,
                 self.def_info.scope_names.used.len().try_into().unwrap(),
+                frozen_heap,
             );
 
         // Store the optimized body.

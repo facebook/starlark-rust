@@ -82,7 +82,11 @@ impl<'v> Compiler<'v, '_, '_> {
             }
             _ => {
                 let stmt = self.module_top_level_stmt(stmt);
-                let bc = stmt.as_bc(&self.compile_context(), local_count);
+                let bc = stmt.as_bc(
+                    &self.compile_context(),
+                    local_count,
+                    self.eval.module_env.frozen_heap(),
+                );
                 // We don't preserve locals between top level statements.
                 // That is OK for now: the only locals used in module evaluation
                 // are comprehension bindings.

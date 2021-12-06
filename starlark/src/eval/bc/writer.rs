@@ -46,7 +46,7 @@ use crate::{
 };
 
 /// Write bytecode here.
-pub(crate) struct BcWriter {
+pub(crate) struct BcWriter<'f> {
     /// Insert bytecode profiling instructions.
     profile: bool,
 
@@ -66,12 +66,12 @@ pub(crate) struct BcWriter {
     queued_consts: Vec<Spanned<FrozenValue>>,
 
     /// Allocate various objects here.
-    heap: FrozenHeap,
+    heap: &'f FrozenHeap,
 }
 
-impl BcWriter {
+impl<'f> BcWriter<'f> {
     /// Empty.
-    pub(crate) fn new(profile: bool, local_count: u32) -> BcWriter {
+    pub(crate) fn new(profile: bool, local_count: u32, heap: &'f FrozenHeap) -> BcWriter<'f> {
         BcWriter {
             profile,
             instrs: BcInstrsWriter::new(),
@@ -81,7 +81,7 @@ impl BcWriter {
             max_stack_size: 0,
             queued_consts: Vec::new(),
             queued_locals: Vec::new(),
-            heap: FrozenHeap::new(),
+            heap,
         }
     }
 
@@ -99,6 +99,7 @@ impl BcWriter {
             heap,
         } = self;
         let _ = has_before_instr;
+        let _ = heap;
         assert!(queued_locals.is_empty());
         assert!(queued_consts.is_empty());
         assert_eq!(stack_size, 0);
@@ -106,7 +107,6 @@ impl BcWriter {
             instrs: instrs.finish(spans),
             local_count,
             max_stack_size,
-            _heap: Some(heap.into_ref()),
         }
     }
 

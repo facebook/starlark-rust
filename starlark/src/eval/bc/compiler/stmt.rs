@@ -31,6 +31,7 @@ use crate::{
             stmt::{StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
     },
+    values::FrozenHeap,
 };
 
 impl StmtsCompiled {
@@ -174,8 +175,13 @@ impl Spanned<StmtCompiled> {
 }
 
 impl StmtsCompiled {
-    pub(crate) fn as_bc(&self, compiler: &StmtCompileContext, local_count: u32) -> Bc {
-        let mut bc = BcWriter::new(compiler.bc_profile, local_count);
+    pub(crate) fn as_bc(
+        &self,
+        compiler: &StmtCompileContext,
+        local_count: u32,
+        heap: &FrozenHeap,
+    ) -> Bc {
+        let mut bc = BcWriter::new(compiler.bc_profile, local_count, heap);
         self.write_bc(compiler, &mut bc);
 
         // Small optimization: if the last statement is return,

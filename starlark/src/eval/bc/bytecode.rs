@@ -33,7 +33,7 @@ use crate::{
         compiler::{add_span_to_expr_error, EvalException},
         Evaluator,
     },
-    values::{FrozenHeapRef, Value},
+    values::Value,
 };
 
 /// Ready to execute bytecode.
@@ -44,9 +44,6 @@ pub(crate) struct Bc {
     pub(crate) local_count: u32,
     /// Max stack size in values (`Value`).
     pub(crate) max_stack_size: u32,
-    /// Keep allocated objects alive.
-    /// `None` is to make `Default` for `Bc` cheap.
-    pub(crate) _heap: Option<FrozenHeapRef>,
 }
 
 impl Bc {
