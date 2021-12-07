@@ -31,14 +31,14 @@ use crate::{
 };
 
 #[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq)]
-pub enum Assigner {
+pub(crate) enum Assigner {
     Load,     // Obtained from `load`
     Argument, // From a function argument
     Assign,   // From an assignment
 }
 
 #[derive(Debug)]
-pub enum Bind {
+pub(crate) enum Bind {
     Set(Assigner, AstAssignIdent), // Variable assigned to directly
     Get(AstString),                // Variable that is referenced
     Flow,         // Flow control occurs here (if, for etc) - can arrive or leave at this point
@@ -46,7 +46,7 @@ pub enum Bind {
 }
 
 #[derive(Debug)]
-pub struct Scope {
+pub(crate) struct Scope {
     pub inner: Vec<Bind>,
     pub(crate) free: HashMap<String, Span>, // Things referred to in this scope, or inner scopes, that we don't define
     pub(crate) bound: HashMap<String, (Assigner, Span)>, // Things bound in this scope, doesn't include inner scope bindings
@@ -214,7 +214,7 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
     }
 }
 
-pub fn scope(module: &AstModule) -> Scope {
+pub(crate) fn scope(module: &AstModule) -> Scope {
     let mut res = Vec::new();
     stmt(&module.statement, &mut res);
     Scope::new(res)
