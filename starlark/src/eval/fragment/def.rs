@@ -678,15 +678,19 @@ where
             eval.wrap_local_slot_captured(LocalSlotId::new(captured));
         }
 
-        // Copy over the parent slots
-        for ((_, me), captured) in self
-            .def_info
-            .scope_names
-            .parent
-            .iter()
-            .zip(self.captured.iter())
-        {
-            eval.current_frame.set_slot(*me, captured.to_value());
+        // Copy over the parent slots.
+        // Explicitly check `self.captured` is not empty to avoid accessing
+        // self.def_info.scope_names which is two indirections.
+        if !self.captured.is_empty() {
+            for ((_, me), captured) in self
+                .def_info
+                .scope_names
+                .parent
+                .iter()
+                .zip(self.captured.iter())
+            {
+                eval.current_frame.set_slot(*me, captured.to_value());
+            }
         }
 
         if Self::FROZEN {
