@@ -30,7 +30,7 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use once_cell::sync::Lazy;
 
 use crate::{
-    codemap::{CodeMap, Span, Spanned},
+    codemap::CodeMap,
     environment::{FrozenModuleRef, Globals},
     eval::{
         bc::{bytecode::Bc, frame::alloca_frame},
@@ -42,9 +42,13 @@ use crate::{
         },
         fragment::{
             expr::ExprCompiled,
+            span::IrSpanned,
             stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
-        runtime::{arguments::ParametersSpec, evaluator::Evaluator, slots::LocalSlotId},
+        runtime::{
+            arguments::ParametersSpec, call_stack::FrozenFileSpan, evaluator::Evaluator,
+            slots::LocalSlotId,
+        },
         Arguments,
     },
     syntax::ast::ParameterP,
@@ -217,8 +221,8 @@ impl DefInfo {
 #[derive(Clone, Debug)]
 pub(crate) struct DefCompiled {
     pub(crate) function_name: String,
-    pub(crate) params: Vec<Spanned<ParameterCompiled<Spanned<ExprCompiled>>>>,
-    pub(crate) return_type: Option<Box<Spanned<ExprCompiled>>>,
+    pub(crate) params: Vec<IrSpanned<ParameterCompiled<IrSpanned<ExprCompiled>>>>,
+    pub(crate) return_type: Option<Box<IrSpanned<ExprCompiled>>>,
     pub(crate) info: FrozenRef<'static, DefInfo>,
 }
 
@@ -231,7 +235,7 @@ pub(crate) enum InlineDefBody {
     ///
     /// See the function where this enum variant is computed for the definition
     /// of safe to inline expression.
-    ReturnSafeToInlineExpr(Spanned<ExprCompiled>),
+    ReturnSafeToInlineExpr(IrSpanned<ExprCompiled>),
 }
 
 impl Compiler<'_, '_, '_> {
@@ -244,9 +248,16 @@ impl Compiler<'_, '_, '_> {
         }
     }
 
-    fn parameter(&mut self, x: CstParameter) -> Spanned<ParameterCompiled<Spanned<ExprCompiled>>> {
-        Spanned {
+    fn parameter(
+        &mut self,
+        x: CstParameter,
+    ) -> IrSpanned<ParameterCompiled<IrSpanned<ExprCompiled>>> {
+        let span = FrozenFileSpan {
+            file: self.codemap,
             span: x.span,
+        };
+        IrSpanned {
+            span,
             node: match x.node {
                 ParameterP::Normal(x, t) => {
                     ParameterCompiled::Normal(self.parameter_name(x), self.expr_opt(t))
@@ -270,10 +281,10 @@ impl Compiler<'_, '_, '_> {
     /// If a statement is `return type(x) == "y"` where `x` is a first slot.
     fn is_return_type_is(stmt: &StmtsCompiled) -> Option<FrozenStringValue> {
         match stmt.first().map(|s| &s.node) {
-            Some(StmtCompiled::Return(Spanned {
+            Some(StmtCompiled::Return(IrSpanned {
                 node:
                     ExprCompiled::TypeIs(
-                        box Spanned {
+                        box IrSpanned {
                             // Slot 0 is a slot for the first function argument.
                             node: ExprCompiled::Local(LocalSlotId(0), ..),
                             ..
@@ -356,25 +367,23 @@ impl Compiler<'_, '_, '_> {
     }
 
     fn is_safe_to_inline_expr_spanned(
-        expr: &Spanned<ExprCompiled>,
-    ) -> Option<Spanned<ExprCompiled>> {
-        Some(Spanned {
+        expr: &IrSpanned<ExprCompiled>,
+    ) -> Option<IrSpanned<ExprCompiled>> {
+        Some(IrSpanned {
             node: Compiler::is_safe_to_inline_expr(&expr.node)?,
-            // We replace span with default because a function can be inlined
-            // into a different file where codemap is different.
-            // Empty span is OK because safe to inline expression is infallible.
-            // In the worst case, it will be a span for the first character in the call site file.
-            span: Span::default(),
+            // Note we are losing the stack trace here.
+            // This is file because inlined expressions are infallible.
+            span: expr.span,
         })
     }
 
     /// Function body is a `return` safe to inline expression (as defined above).
-    fn is_return_safe_to_inline_expr(stmts: &StmtsCompiled) -> Option<Spanned<ExprCompiled>> {
+    fn is_return_safe_to_inline_expr(stmts: &StmtsCompiled) -> Option<IrSpanned<ExprCompiled>> {
         match stmts.first() {
             None => {
                 // Empty function is equivalent to `return None`.
-                Some(Spanned {
-                    span: Span::default(),
+                Some(IrSpanned {
+                    span: FrozenFileSpan::default(),
                     node: ExprCompiled::Value(FrozenValue::new_none()),
                 })
             }
@@ -389,7 +398,7 @@ impl Compiler<'_, '_, '_> {
     }
 
     fn inline_def_body(
-        params: &[Spanned<ParameterCompiled<Spanned<ExprCompiled>>>],
+        params: &[IrSpanned<ParameterCompiled<IrSpanned<ExprCompiled>>>],
         body: &StmtsCompiled,
     ) -> Option<InlineDefBody> {
         if params.len() == 1 && params[0].accepts_positional() {
@@ -440,7 +449,6 @@ impl Compiler<'_, '_, '_> {
                 &self.compile_context(),
                 local_count,
                 self.eval.module_env.frozen_heap(),
-                self.codemap,
             ),
             body_stmts: body,
             inline_def_body,
@@ -750,7 +758,6 @@ impl FrozenDef {
                 &self.def_info.stmt_compile_context,
                 self.def_info.scope_names.used.len().try_into().unwrap(),
                 frozen_heap,
-                self.def_info.codemap,
             );
 
         // Store the optimized body.

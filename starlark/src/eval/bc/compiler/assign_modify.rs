@@ -18,7 +18,6 @@
 //! Write operators like `+=`.
 
 use crate::{
-    codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
     eval::{
         bc::{
@@ -31,13 +30,14 @@ use crate::{
             writer::BcWriter,
         },
         compiler::scope::Captured,
-        fragment::{expr::ExprCompiled, stmt::AssignModifyLhs},
+        fragment::{expr::ExprCompiled, span::IrSpanned, stmt::AssignModifyLhs},
+        runtime::call_stack::FrozenFileSpan,
     },
     syntax::ast::AssignOp,
 };
 
 impl AssignOp {
-    fn write_bc(self, span: Span, bc: &mut BcWriter) {
+    fn write_bc(self, span: FrozenFileSpan, bc: &mut BcWriter) {
         match self {
             AssignOp::Add => bc.write_instr::<InstrAddAssign>(span, ()),
             AssignOp::Subtract => bc.write_instr::<InstrSub>(span, ()),
@@ -57,9 +57,9 @@ impl AssignOp {
 impl AssignModifyLhs {
     pub(crate) fn write_bc(
         &self,
-        span: Span,
+        span: FrozenFileSpan,
         op: AssignOp,
-        rhs: &Spanned<ExprCompiled>,
+        rhs: &IrSpanned<ExprCompiled>,
         bc: &mut BcWriter,
     ) {
         match *self {

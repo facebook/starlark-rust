@@ -19,20 +19,18 @@
 
 use gazebo::prelude::*;
 
-use crate::{
-    codemap::{Span, Spanned},
-    eval::{
-        bc::{
-            instr_arg::ArgPopsStack,
-            instr_impl::{InstrDef, InstrDefData},
-            writer::BcWriter,
-        },
-        fragment::def::DefCompiled,
+use crate::eval::{
+    bc::{
+        instr_arg::ArgPopsStack,
+        instr_impl::{InstrDef, InstrDefData},
+        writer::BcWriter,
     },
+    fragment::{def::DefCompiled, span::IrSpanned},
+    runtime::call_stack::FrozenFileSpan,
 };
 
 impl DefCompiled {
-    pub(crate) fn write_bc(&self, bc: &mut BcWriter) {
+    pub(crate) fn write_bc(&self, span: FrozenFileSpan, bc: &mut BcWriter) {
         let DefCompiled {
             ref function_name,
             ref params,
@@ -53,7 +51,7 @@ impl DefCompiled {
         let return_type = return_type.as_ref().map(|t| {
             t.write_bc(bc);
             value_count += 1;
-            Spanned {
+            IrSpanned {
                 node: value_count - 1,
                 span: t.span,
             }
@@ -66,6 +64,6 @@ impl DefCompiled {
             info,
         };
 
-        bc.write_instr::<InstrDef>(Span::default(), (ArgPopsStack(value_count), instr_def_data));
+        bc.write_instr::<InstrDef>(span, (ArgPopsStack(value_count), instr_def_data));
     }
 }

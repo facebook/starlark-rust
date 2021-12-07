@@ -20,7 +20,6 @@
 use gazebo::prelude::*;
 
 use crate::{
-    codemap::{Span, Spanned},
     eval::{
         compiler::{
             scope::{CstExpr, CstPayload},
@@ -29,8 +28,10 @@ use crate::{
         fragment::{
             expr::ExprCompiled,
             known::list_to_tuple,
+            span::IrSpanned,
             stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
         },
+        runtime::call_stack::FrozenFileSpan,
     },
     syntax::ast::{ClauseP, ForClauseP},
 };
@@ -65,7 +66,7 @@ impl Compiler<'_, '_, '_> {
 fn compile_ifs(
     clauses: &mut Vec<ClauseP<CstPayload>>,
     compiler: &mut Compiler,
-) -> (Option<ForClauseP<CstPayload>>, Vec<Spanned<ExprCompiled>>) {
+) -> (Option<ForClauseP<CstPayload>>, Vec<IrSpanned<ExprCompiled>>) {
     let mut ifs = Vec::new();
     while let Some(x) = clauses.pop() {
         match x {
@@ -88,7 +89,10 @@ fn compile_clauses(
     compiler: &mut Compiler,
 ) -> Vec<ClauseCompiled> {
     // The first for.over is scoped before we enter the list comp
-    let over_span = for_.over.span;
+    let over_span = FrozenFileSpan {
+        span: for_.over.span,
+        file: compiler.codemap,
+    };
     let over = compiler.expr(list_to_tuple(for_.over));
 
     // Now we want to group them into a `for`, followed by any number of `if`.
@@ -107,7 +111,10 @@ fn compile_clauses(
                 return res;
             }
             Some(f) => {
-                let over_span = f.over.span;
+                let over_span = FrozenFileSpan {
+                    span: f.over.span,
+                    file: compiler.codemap,
+                };
                 res.push(ClauseCompiled {
                     over: compiler.expr(f.over),
                     var: compiler.assign(f.var),
@@ -121,9 +128,9 @@ fn compile_clauses(
 
 #[derive(Clone, Debug)]
 pub(crate) enum ComprCompiled {
-    List(Box<Spanned<ExprCompiled>>, Vec<ClauseCompiled>),
+    List(Box<IrSpanned<ExprCompiled>>, Vec<ClauseCompiled>),
     Dict(
-        Box<(Spanned<ExprCompiled>, Spanned<ExprCompiled>)>,
+        Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>,
         Vec<ClauseCompiled>,
     ),
 }
@@ -145,10 +152,10 @@ impl ComprCompiled {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ClauseCompiled {
-    pub(crate) var: Spanned<AssignCompiledValue>,
-    pub(crate) over: Spanned<ExprCompiled>,
-    pub(crate) over_span: Span,
-    pub(crate) ifs: Vec<Spanned<ExprCompiled>>,
+    pub(crate) var: IrSpanned<AssignCompiledValue>,
+    pub(crate) over: IrSpanned<ExprCompiled>,
+    pub(crate) over_span: FrozenFileSpan,
+    pub(crate) ifs: Vec<IrSpanned<ExprCompiled>>,
 }
 
 impl ClauseCompiled {

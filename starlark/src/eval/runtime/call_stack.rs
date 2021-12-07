@@ -31,6 +31,7 @@ use std::{
 };
 
 use gazebo::prelude::*;
+use once_cell::sync::Lazy;
 
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
@@ -38,10 +39,20 @@ use crate::{
     values::{ControlError, FrozenRef, Trace, Tracer, Value},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Dupe)]
 pub(crate) struct FrozenFileSpan {
     pub(crate) file: FrozenRef<'static, CodeMap>,
     pub(crate) span: Span,
+}
+
+impl Default for FrozenFileSpan {
+    fn default() -> Self {
+        static EMPTY_FILE: Lazy<CodeMap> = Lazy::new(CodeMap::default);
+        FrozenFileSpan {
+            file: FrozenRef::new(&EMPTY_FILE),
+            span: Span::default(),
+        }
+    }
 }
 
 impl Display for FrozenFileSpan {
@@ -55,6 +66,18 @@ impl FrozenFileSpan {
         FileSpan {
             file: (*self.file).dupe(),
             span: self.span,
+        }
+    }
+
+    pub(crate) fn merge(&self, other: &FrozenFileSpan) -> FrozenFileSpan {
+        if self.file == other.file {
+            FrozenFileSpan {
+                file: self.file,
+                span: self.span.merge(other.span),
+            }
+        } else {
+            // We need to pick something if we merge two spans from different files.
+            *self
         }
     }
 }

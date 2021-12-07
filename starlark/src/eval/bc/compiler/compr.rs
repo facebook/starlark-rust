@@ -17,18 +17,15 @@
 
 //! Compile comprehensions.
 
-use crate::{
-    codemap::Span,
-    eval::{
-        bc::{
-            instr_impl::{
-                InstrComprDictInsert, InstrComprListAppend, InstrContinue, InstrDictNew,
-                InstrListNew,
-            },
-            writer::BcWriter,
+use crate::eval::{
+    bc::{
+        instr_impl::{
+            InstrComprDictInsert, InstrComprListAppend, InstrContinue, InstrDictNew, InstrListNew,
         },
-        fragment::compr::{ClauseCompiled, ComprCompiled},
+        writer::BcWriter,
     },
+    fragment::compr::{ClauseCompiled, ComprCompiled},
+    runtime::call_stack::FrozenFileSpan,
 };
 
 impl ClauseCompiled {
@@ -61,7 +58,7 @@ impl ClauseCompiled {
 }
 
 impl ComprCompiled {
-    pub(crate) fn write_bc(&self, span: Span, bc: &mut BcWriter) {
+    pub(crate) fn write_bc(&self, span: FrozenFileSpan, bc: &mut BcWriter) {
         let ss = bc.stack_size();
         match *self {
             ComprCompiled::List(box ref expr, ref clauses) => {

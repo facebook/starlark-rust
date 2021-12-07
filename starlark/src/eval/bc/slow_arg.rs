@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-use crate::codemap::Span;
+use crate::eval::runtime::call_stack::FrozenFileSpan;
 
 /// Slow instruction arg: stored in the end of bytecode,
 /// expensive to access. Used to implement errors.
 #[derive(Default)]
 pub(crate) struct BcInstrSlowArg {
     /// Instruction code span.
-    pub(crate) span: Span,
+    pub(crate) span: FrozenFileSpan,
     /// Spans when an instruction needs multiple spans.
-    pub(crate) spans: Vec<Span>,
+    pub(crate) spans: Vec<FrozenFileSpan>,
 }

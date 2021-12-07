@@ -20,7 +20,6 @@
 use std::{cmp, mem};
 
 use crate::{
-    codemap::{CodeMap, Span, Spanned},
     eval::{
         bc::{
             addr::{BcAddr, BcAddrOffset},
@@ -36,6 +35,7 @@ use crate::{
             opcode::BcOpcode,
             slow_arg::BcInstrSlowArg,
         },
+        fragment::span::IrSpanned,
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
     values::{FrozenHeap, FrozenRef, FrozenValue},
@@ -58,25 +58,16 @@ pub(crate) struct BcWriter<'f> {
     max_stack_size: u32,
 
     // Consts are queued after locals
-    queued_locals: Vec<Spanned<LocalSlotId>>,
-    queued_consts: Vec<Spanned<FrozenValue>>,
+    queued_locals: Vec<IrSpanned<LocalSlotId>>,
+    queued_consts: Vec<IrSpanned<FrozenValue>>,
 
     /// Allocate various objects here.
     heap: &'f FrozenHeap,
-
-    /// Codemap of file being compiled.
-    // TODO(nga): bytecode writer does not need to know about codemap.
-    codemap: FrozenRef<'static, CodeMap>,
 }
 
 impl<'f> BcWriter<'f> {
     /// Empty.
-    pub(crate) fn new(
-        profile: bool,
-        local_count: u32,
-        heap: &'f FrozenHeap,
-        codemap: FrozenRef<'static, CodeMap>,
-    ) -> BcWriter<'f> {
+    pub(crate) fn new(profile: bool, local_count: u32, heap: &'f FrozenHeap) -> BcWriter<'f> {
         BcWriter {
             profile,
             instrs: BcInstrsWriter::new(),
@@ -87,7 +78,6 @@ impl<'f> BcWriter<'f> {
             queued_consts: Vec::new(),
             queued_locals: Vec::new(),
             heap,
-            codemap,
         }
     }
 
@@ -103,11 +93,9 @@ impl<'f> BcWriter<'f> {
             queued_consts,
             queued_locals,
             heap,
-            codemap,
         } = self;
         let _ = has_before_instr;
         let _ = heap;
-        let _ = codemap;
         assert!(queued_locals.is_empty());
         assert!(queued_consts.is_empty());
         assert_eq!(stack_size, 0);
@@ -134,7 +122,7 @@ impl<'f> BcWriter<'f> {
         while let [l0, l1, l2, l3, rem @ ..] = locals_slice {
             self.do_write_generic_explicit::<InstrLoadLocal4>(
                 BcInstrSlowArg {
-                    span: l0.span.merge(l1.span).merge(l2.span).merge(l3.span),
+                    span: l0.span.merge(&l1.span).merge(&l2.span).merge(&l3.span),
                     spans: vec![l0.span, l1.span, l2.span, l3.span],
                 },
                 [l0.node, l1.node, l2.node, l3.node],
@@ -153,7 +141,7 @@ impl<'f> BcWriter<'f> {
             ([l0, l1], _) => {
                 self.do_write_generic_explicit::<InstrLoadLocal2>(
                     BcInstrSlowArg {
-                        span: l0.span.merge(l1.span),
+                        span: l0.span.merge(&l1.span),
                         spans: vec![l0.span, l1.span],
                     },
                     [l0.node, l1.node],
@@ -162,7 +150,7 @@ impl<'f> BcWriter<'f> {
             ([l0, l1, l2], _) => {
                 self.do_write_generic_explicit::<InstrLoadLocal3>(
                     BcInstrSlowArg {
-                        span: l0.span.merge(l1.span).merge(l2.span),
+                        span: l0.span.merge(&l1.span).merge(&l2.span),
                         spans: vec![l0.span, l1.span, l2.span],
                     },
                     [l0.node, l1.node, l2.node],
@@ -173,7 +161,7 @@ impl<'f> BcWriter<'f> {
 
         while let [v0, v1, v2, v3, rem @ ..] = consts_slice {
             self.do_write_generic::<InstrConst4>(
-                v0.span.merge(v1.span).merge(v2.span).merge(v3.span),
+                v0.span.merge(&v1.span).merge(&v2.span).merge(&v3.span),
                 [v0.node, v1.node, v2.node, v3.node],
             );
             consts_slice = rem;
@@ -184,11 +172,11 @@ impl<'f> BcWriter<'f> {
                 self.do_write_generic::<InstrConst>(v0.span, v0.node);
             }
             [v0, v1] => {
-                self.do_write_generic::<InstrConst2>(v0.span.merge(v1.span), [v0.node, v1.node]);
+                self.do_write_generic::<InstrConst2>(v0.span.merge(&v1.span), [v0.node, v1.node]);
             }
             [v0, v1, v2] => {
                 self.do_write_generic::<InstrConst3>(
-                    v0.span.merge(v1.span).merge(v2.span),
+                    v0.span.merge(&v1.span).merge(&v2.span),
                     [v0.node, v1.node, v2.node],
                 );
             }
@@ -223,7 +211,11 @@ impl<'f> BcWriter<'f> {
     }
 
     /// Actually write the instruction.
-    fn do_write_generic<I: BcInstr>(&mut self, span: Span, arg: I::Arg) -> (BcAddr, *const I::Arg) {
+    fn do_write_generic<I: BcInstr>(
+        &mut self,
+        span: FrozenFileSpan,
+        arg: I::Arg,
+    ) -> (BcAddr, *const I::Arg) {
         self.do_write_generic_explicit::<I>(
             BcInstrSlowArg {
                 span,
@@ -256,7 +248,7 @@ impl<'f> BcWriter<'f> {
 
     fn write_instr_ret_arg<I: BcInstr>(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         arg: I::Arg,
     ) -> (BcAddr, *const I::Arg) {
         self.write_instr_ret_arg_explicit::<I>(
@@ -282,7 +274,7 @@ impl<'f> BcWriter<'f> {
     }
 
     /// Write an instruction.
-    pub(crate) fn write_instr<I: BcInstr>(&mut self, span: Span, arg: I::Arg) {
+    pub(crate) fn write_instr<I: BcInstr>(&mut self, span: FrozenFileSpan, arg: I::Arg) {
         self.write_instr_explicit::<I>(
             BcInstrSlowArg {
                 span,
@@ -293,14 +285,14 @@ impl<'f> BcWriter<'f> {
     }
 
     /// Write load constant instruction.
-    pub(crate) fn write_const(&mut self, span: Span, value: FrozenValue) {
+    pub(crate) fn write_const(&mut self, span: FrozenFileSpan, value: FrozenValue) {
         // Do not write it yet, queue it, so we could batch it.
-        self.queued_consts.push(Spanned { node: value, span });
+        self.queued_consts.push(IrSpanned { node: value, span });
         self.stack_add(1);
     }
 
     /// Write load local instruction.
-    pub(crate) fn write_load_local(&mut self, span: Span, slot: LocalSlotId) {
+    pub(crate) fn write_load_local(&mut self, span: FrozenFileSpan, slot: LocalSlotId) {
         assert!(slot.0 < self.local_count);
 
         // Consts must be queued after locals, so if any consts are queued, flush them.
@@ -308,21 +300,21 @@ impl<'f> BcWriter<'f> {
             self.flush_instrs();
         }
         // Do not write it yet, queue it, so we could batch it.
-        self.queued_locals.push(Spanned { node: slot, span });
+        self.queued_locals.push(IrSpanned { node: slot, span });
         self.stack_add(1);
     }
 
-    pub(crate) fn write_load_local_captured(&mut self, span: Span, slot: LocalSlotId) {
+    pub(crate) fn write_load_local_captured(&mut self, span: FrozenFileSpan, slot: LocalSlotId) {
         assert!(slot.0 < self.local_count);
         self.write_instr_ret_arg::<InstrLoadLocalCaptured>(span, slot);
     }
 
-    pub(crate) fn write_store_local(&mut self, span: Span, slot: LocalSlotId) {
+    pub(crate) fn write_store_local(&mut self, span: FrozenFileSpan, slot: LocalSlotId) {
         assert!(slot.0 < self.local_count);
         self.write_instr_ret_arg::<InstrStoreLocal>(span, slot);
     }
 
-    pub(crate) fn write_store_local_captured(&mut self, span: Span, slot: LocalSlotId) {
+    pub(crate) fn write_store_local_captured(&mut self, span: FrozenFileSpan, slot: LocalSlotId) {
         assert!(slot.0 < self.local_count);
         self.write_instr_ret_arg::<InstrStoreLocalCaptured>(span, slot);
     }
@@ -334,32 +326,36 @@ impl<'f> BcWriter<'f> {
     }
 
     /// Write branch.
-    pub(crate) fn write_br(&mut self, span: Span) -> PatchAddr {
+    pub(crate) fn write_br(&mut self, span: FrozenFileSpan) -> PatchAddr {
         let arg = self.write_instr_ret_arg::<InstrBr>(span, BcAddrOffset::FORWARD);
         self.instrs.addr_to_patch(arg)
     }
 
     /// Write conditional branch.
-    pub(crate) fn write_if_not_br(&mut self, span: Span) -> PatchAddr {
+    pub(crate) fn write_if_not_br(&mut self, span: FrozenFileSpan) -> PatchAddr {
         let arg = self.write_instr_ret_arg::<InstrIfNotBr>(span, BcAddrOffset::FORWARD);
         self.instrs.addr_to_patch(arg)
     }
 
     /// Write conditional branch.
-    pub(crate) fn write_if_br(&mut self, span: Span) -> PatchAddr {
+    pub(crate) fn write_if_br(&mut self, span: FrozenFileSpan) -> PatchAddr {
         let arg = self.write_instr_ret_arg::<InstrIfBr>(span, BcAddrOffset::FORWARD);
         self.instrs.addr_to_patch(arg)
     }
 
     /// Write if block.
-    pub(crate) fn write_if(&mut self, span: Span, then_block: impl FnOnce(&mut Self)) {
+    pub(crate) fn write_if(&mut self, span: FrozenFileSpan, then_block: impl FnOnce(&mut Self)) {
         let patch_addr = self.write_if_not_br(span);
         then_block(self);
         self.patch_addr(patch_addr);
     }
 
     /// Write if block.
-    pub(crate) fn write_if_not(&mut self, span: Span, then_block: impl FnOnce(&mut Self)) {
+    pub(crate) fn write_if_not(
+        &mut self,
+        span: FrozenFileSpan,
+        then_block: impl FnOnce(&mut Self),
+    ) {
         let patch_addr = self.write_if_br(span);
         then_block(self);
         self.patch_addr(patch_addr);
@@ -368,7 +364,7 @@ impl<'f> BcWriter<'f> {
     /// Write if-then-else block.
     pub(crate) fn write_if_else(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         then_block: impl FnOnce(&mut Self),
         else_block: impl FnOnce(&mut Self),
     ) {
@@ -381,7 +377,7 @@ impl<'f> BcWriter<'f> {
     }
 
     /// Write for loop.
-    pub(crate) fn write_for(&mut self, span: Span, body: impl FnOnce(&mut Self)) {
+    pub(crate) fn write_for(&mut self, span: FrozenFileSpan, body: impl FnOnce(&mut Self)) {
         let arg = self.write_instr_ret_arg::<InstrForLoop>(span, BcAddrOffset::FORWARD);
         let end_patch = self.instrs.addr_to_patch(arg);
         let ss = self.stack_size();
@@ -409,10 +405,10 @@ impl<'f> BcWriter<'f> {
         self.stack_size
     }
 
-    pub(crate) fn alloc_file_span(&self, span: Span) -> FrozenRef<'static, FrozenFileSpan> {
-        self.heap.alloc_any(FrozenFileSpan {
-            file: self.codemap,
-            span,
-        })
+    pub(crate) fn alloc_file_span(
+        &self,
+        span: FrozenFileSpan,
+    ) -> FrozenRef<'static, FrozenFileSpan> {
+        self.heap.alloc_any(span)
     }
 }

@@ -26,6 +26,7 @@ use crate::{
             scope::{CstLoad, CstStmt, ScopeId, Slot},
             Compiler, EvalException,
         },
+        runtime::call_stack::FrozenFileSpan,
     },
     syntax::ast::StmtP,
     values::Value,
@@ -35,15 +36,20 @@ impl<'v> Compiler<'v, '_, '_> {
     fn eval_load(&mut self, load: CstLoad) -> Result<(), EvalException> {
         let name = load.node.module.node;
 
+        let span = FrozenFileSpan {
+            file: self.codemap,
+            span: load.span,
+        };
+
         let loadenv = match self.eval.loader.as_ref() {
             None => {
                 return Err(add_span_to_expr_error(
                     EnvironmentError::NoImportsAvailable(name).into(),
-                    load.span,
+                    span,
                     self.eval,
                 ));
             }
-            Some(loader) => expr_throw(loader.load(&name), load.span, self.eval)?,
+            Some(loader) => expr_throw(loader.load(&name), span, self.eval)?,
         };
 
         for (our_name, their_name) in load.node.args {
@@ -54,7 +60,10 @@ impl<'v> Compiler<'v, '_, '_> {
             };
             let value = expr_throw(
                 self.eval.module_env.load_symbol(&loadenv, &their_name.node),
-                our_name.span.merge(their_name.span),
+                FrozenFileSpan {
+                    file: self.codemap,
+                    span: our_name.span.merge(their_name.span),
+                },
                 self.eval,
             )?;
             self.eval.set_slot_module(slot, value)
@@ -86,7 +95,6 @@ impl<'v> Compiler<'v, '_, '_> {
                     &self.compile_context(),
                     local_count,
                     self.eval.module_env.frozen_heap(),
-                    self.codemap,
                 );
                 // We don't preserve locals between top level statements.
                 // That is OK for now: the only locals used in module evaluation

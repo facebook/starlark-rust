@@ -23,11 +23,12 @@ use gazebo::prelude::*;
 use once_cell::sync::Lazy;
 
 use crate::{
-    codemap::{CodeMap, Span},
+    codemap::CodeMap,
     environment::Globals,
     errors::Diagnostic,
     eval::{
         compiler::scope::{ScopeData, ScopeId},
+        runtime::call_stack::FrozenFileSpan,
         Evaluator, ScopeNames,
     },
     values::{FrozenRef, FrozenValue},
@@ -39,9 +40,9 @@ pub(crate) struct EvalException(pub(crate) anyhow::Error);
 
 #[cold]
 #[inline(never)]
-fn add_span_to_error(e: anyhow::Error, span: Span, eval: &Evaluator) -> anyhow::Error {
+fn add_span_to_error(e: anyhow::Error, span: FrozenFileSpan, eval: &Evaluator) -> anyhow::Error {
     Diagnostic::modify(e, |d: &mut Diagnostic| {
-        d.set_span(span, &eval.def_info.codemap);
+        d.set_span(span.span, &span.file);
         d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
     })
 }
@@ -50,7 +51,7 @@ fn add_span_to_error(e: anyhow::Error, span: Span, eval: &Evaluator) -> anyhow::
 #[inline(never)]
 pub(crate) fn add_span_to_expr_error(
     e: anyhow::Error,
-    span: Span,
+    span: FrozenFileSpan,
     eval: &Evaluator,
 ) -> EvalException {
     EvalException(add_span_to_error(e, span, eval))
@@ -60,7 +61,7 @@ pub(crate) fn add_span_to_expr_error(
 #[inline(always)]
 pub(crate) fn expr_throw<'v, T>(
     r: anyhow::Result<T>,
-    span: Span,
+    span: FrozenFileSpan,
     eval: &Evaluator<'v, '_>,
 ) -> Result<T, EvalException> {
     match r {

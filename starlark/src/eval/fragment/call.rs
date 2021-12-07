@@ -20,14 +20,16 @@
 use gazebo::{coerce::coerce, prelude::*};
 
 use crate::{
-    codemap::{Span, Spanned},
     collections::symbol_map::Symbol,
     eval::{
         compiler::{
             scope::{CstArgument, CstExpr},
             Compiler,
         },
-        fragment::{def::InlineDefBody, expr::ExprCompiled, stmt::OptimizeOnFreezeContext},
+        fragment::{
+            def::InlineDefBody, expr::ExprCompiled, span::IrSpanned, stmt::OptimizeOnFreezeContext,
+        },
+        runtime::call_stack::FrozenFileSpan,
         Arguments,
     },
     gazebo::prelude::SliceExt,
@@ -37,24 +39,28 @@ use crate::{
 
 #[derive(Default, Clone, Debug)]
 pub(crate) struct ArgsCompiledValue {
-    pub(crate) pos_named: Vec<Spanned<ExprCompiled>>,
+    pub(crate) pos_named: Vec<IrSpanned<ExprCompiled>>,
     /// Named arguments compiled.
     ///
     /// Note names are guaranteed to be unique here because names are validated in AST:
     /// named arguments in [`Expr::Call`] are unique.
     pub(crate) names: Vec<(Symbol, FrozenStringValue)>,
-    pub(crate) args: Option<Spanned<ExprCompiled>>,
-    pub(crate) kwargs: Option<Spanned<ExprCompiled>>,
+    pub(crate) args: Option<IrSpanned<ExprCompiled>>,
+    pub(crate) kwargs: Option<IrSpanned<ExprCompiled>>,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) enum CallCompiled {
-    Call(Box<(Spanned<ExprCompiled>, ArgsCompiledValue)>),
-    Method(Box<(Spanned<ExprCompiled>, Symbol, ArgsCompiledValue)>),
+    Call(Box<(IrSpanned<ExprCompiled>, ArgsCompiledValue)>),
+    Method(Box<(IrSpanned<ExprCompiled>, Symbol, ArgsCompiledValue)>),
 }
 
 impl CallCompiled {
-    pub(crate) fn call(span: Span, fun: ExprCompiled, args: ArgsCompiledValue) -> ExprCompiled {
+    pub(crate) fn call(
+        span: FrozenFileSpan,
+        fun: ExprCompiled,
+        args: ArgsCompiledValue,
+    ) -> ExprCompiled {
         if let (Some(fun), Some(_pos)) = (fun.as_frozen_def(), args.one_pos()) {
             // Try to inline a function like `lambda x: type(x) == "y"`.
             if let Some(InlineDefBody::ReturnTypeIs(t)) = &fun.def_info.inline_def_body {
@@ -70,14 +76,14 @@ impl CallCompiled {
             }
         }
 
-        ExprCompiled::Call(Spanned {
+        ExprCompiled::Call(IrSpanned {
             span,
-            node: CallCompiled::Call(box (Spanned { span, node: fun }, args)),
+            node: CallCompiled::Call(box (IrSpanned { span, node: fun }, args)),
         })
     }
 }
 
-impl Spanned<CallCompiled> {
+impl IrSpanned<CallCompiled> {
     pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiled {
         match self.node {
             CallCompiled::Call(box (ref fun, ref args)) => {
@@ -89,7 +95,7 @@ impl Spanned<CallCompiled> {
                 let this = this.optimize_on_freeze(ctx);
                 let field = field.clone();
                 let args = args.optimize_on_freeze(ctx);
-                ExprCompiled::Call(Spanned {
+                ExprCompiled::Call(IrSpanned {
                     span: self.span,
                     node: CallCompiled::Method(box (this, field, args)),
                 })
@@ -100,7 +106,7 @@ impl Spanned<CallCompiled> {
 
 impl ArgsCompiledValue {
     /// Check if arguments is one positional argument.
-    pub(crate) fn one_pos(&self) -> Option<&Spanned<ExprCompiled>> {
+    pub(crate) fn one_pos(&self) -> Option<&IrSpanned<ExprCompiled>> {
         let ArgsCompiledValue {
             pos_named,
             names,
@@ -113,7 +119,7 @@ impl ArgsCompiledValue {
         }
     }
 
-    pub(crate) fn into_one_pos(mut self) -> Option<Spanned<ExprCompiled>> {
+    pub(crate) fn into_one_pos(mut self) -> Option<IrSpanned<ExprCompiled>> {
         self.one_pos()?;
         self.pos_named.pop()
     }
@@ -132,7 +138,7 @@ impl ArgsCompiledValue {
         )
     }
 
-    pub(crate) fn pos_only(&self) -> Option<&[Spanned<ExprCompiled>]> {
+    pub(crate) fn pos_only(&self) -> Option<&[IrSpanned<ExprCompiled>]> {
         if self.names.is_empty() && self.args.is_none() && self.kwargs.is_none() {
             Some(&self.pos_named)
         } else {
@@ -140,7 +146,7 @@ impl ArgsCompiledValue {
         }
     }
 
-    fn split_pos_names(&self) -> (&[Spanned<ExprCompiled>], &[Spanned<ExprCompiled>]) {
+    fn split_pos_names(&self) -> (&[IrSpanned<ExprCompiled>], &[IrSpanned<ExprCompiled>]) {
         self.pos_named
             .as_slice()
             .split_at(self.pos_named.len() - self.names.len())
@@ -214,7 +220,7 @@ impl Compiler<'_, '_, '_> {
 
     fn try_spec_exec(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         fun: FrozenValue,
         args: &ArgsCompiledValue,
     ) -> Option<ExprCompiled> {
@@ -227,7 +233,7 @@ impl Compiler<'_, '_, '_> {
 
     fn expr_call_fun_frozen_no_special(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         fun: FrozenValue,
         args: ArgsCompiledValue,
     ) -> ExprCompiled {
@@ -242,7 +248,7 @@ impl Compiler<'_, '_, '_> {
 
     fn expr_call_fun_frozen(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         left: FrozenValue,
         mut args: Vec<CstArgument>,
     ) -> ExprCompiled {
@@ -262,15 +268,15 @@ impl Compiler<'_, '_, '_> {
 
     fn expr_call_fun_compiled(
         &mut self,
-        span: Span,
-        left: Spanned<ExprCompiled>,
+        span: FrozenFileSpan,
+        left: IrSpanned<ExprCompiled>,
         args: Vec<CstArgument>,
     ) -> ExprCompiled {
         if let Some(left) = left.as_value() {
             self.expr_call_fun_frozen(span, left, args)
         } else {
             let args = self.args(args);
-            ExprCompiled::Call(Spanned {
+            ExprCompiled::Call(IrSpanned {
                 span,
                 node: CallCompiled::Call(box (left, args)),
             })
@@ -279,7 +285,7 @@ impl Compiler<'_, '_, '_> {
 
     fn expr_call_method(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         e: CstExpr,
         s: AstString,
         args: Vec<CstArgument>,
@@ -325,7 +331,7 @@ impl Compiler<'_, '_, '_> {
             }
         }
 
-        ExprCompiled::Call(Spanned {
+        ExprCompiled::Call(IrSpanned {
             span,
             node: CallCompiled::Method(box (e, s, args)),
         })
@@ -333,7 +339,7 @@ impl Compiler<'_, '_, '_> {
 
     pub(crate) fn expr_call(
         &mut self,
-        span: Span,
+        span: FrozenFileSpan,
         left: CstExpr,
         args: Vec<CstArgument>,
     ) -> ExprCompiled {

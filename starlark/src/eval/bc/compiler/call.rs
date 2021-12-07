@@ -22,7 +22,6 @@ use std::convert::TryInto;
 use either::Either;
 
 use crate::{
-    codemap::{Span, Spanned},
     eval::{
         bc::{
             call::{BcCallArgsFull, BcCallArgsPos},
@@ -36,7 +35,11 @@ use crate::{
             },
             writer::BcWriter,
         },
-        fragment::call::{ArgsCompiledValue, CallCompiled},
+        fragment::{
+            call::{ArgsCompiledValue, CallCompiled},
+            span::IrSpanned,
+        },
+        runtime::call_stack::FrozenFileSpan,
         FrozenDef,
     },
     values::{
@@ -59,7 +62,7 @@ impl ArgsCompiledValue {
     }
 }
 
-impl Spanned<CallCompiled> {
+impl IrSpanned<CallCompiled> {
     fn write_args(
         args: &ArgsCompiledValue,
         bc: &mut BcWriter,
@@ -76,7 +79,7 @@ impl Spanned<CallCompiled> {
     }
 
     fn write_call_frozen(
-        span: Span,
+        span: FrozenFileSpan,
         fun: FrozenValue,
         args: &ArgsCompiledValue,
         bc: &mut BcWriter,

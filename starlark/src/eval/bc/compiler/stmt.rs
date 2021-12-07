@@ -16,7 +16,6 @@
  */
 
 use crate::{
-    codemap::{CodeMap, Span, Spanned},
     eval::{
         bc::{
             bytecode::Bc,
@@ -28,10 +27,12 @@ use crate::{
         },
         fragment::{
             expr::{ExprCompiled, MaybeNot},
+            span::IrSpanned,
             stmt::{StmtCompileContext, StmtCompiled, StmtsCompiled},
         },
+        runtime::call_stack::FrozenFileSpan,
     },
-    values::{FrozenHeap, FrozenRef},
+    values::FrozenHeap,
 };
 
 impl StmtsCompiled {
@@ -42,7 +43,7 @@ impl StmtsCompiled {
     }
 }
 
-impl Spanned<StmtCompiled> {
+impl IrSpanned<StmtCompiled> {
     fn write_bc(&self, compiler: &StmtCompileContext, bc: &mut BcWriter) {
         assert_eq!(bc.stack_size(), 0);
         if compiler.has_before_stmt {
@@ -63,7 +64,7 @@ impl Spanned<StmtCompiled> {
     fn write_if_then(
         compiler: &StmtCompileContext,
         bc: &mut BcWriter,
-        c: &Spanned<ExprCompiled>,
+        c: &IrSpanned<ExprCompiled>,
         maybe_not: MaybeNot,
         t: &dyn Fn(&StmtCompileContext, &mut BcWriter),
     ) {
@@ -103,7 +104,7 @@ impl Spanned<StmtCompiled> {
     }
 
     fn write_if_else(
-        c: &Spanned<ExprCompiled>,
+        c: &IrSpanned<ExprCompiled>,
         maybe_not: MaybeNot,
         t: &StmtsCompiled,
         f: &StmtsCompiled,
@@ -180,15 +181,14 @@ impl StmtsCompiled {
         compiler: &StmtCompileContext,
         local_count: u32,
         heap: &FrozenHeap,
-        codemap: FrozenRef<'static, CodeMap>,
     ) -> Bc {
-        let mut bc = BcWriter::new(compiler.bc_profile, local_count, heap, codemap);
+        let mut bc = BcWriter::new(compiler.bc_profile, local_count, heap);
         self.write_bc(compiler, &mut bc);
 
         // Small optimization: if the last statement is return,
         // we do not need to write another return.
         if !matches!(self.last().map(|s| &s.node), Some(StmtCompiled::Return(..))) {
-            bc.write_instr::<InstrReturnNone>(Span::default(), ());
+            bc.write_instr::<InstrReturnNone>(FrozenFileSpan::default(), ());
         }
 
         bc.finish()

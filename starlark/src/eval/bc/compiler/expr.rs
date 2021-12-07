@@ -22,7 +22,6 @@ use std::collections::HashSet;
 use gazebo::prelude::*;
 
 use crate::{
-    codemap::{Span, Spanned},
     collections::{Hashed, SmallMap},
     eval::{
         bc::{
@@ -31,13 +30,17 @@ use crate::{
             slow_arg::BcInstrSlowArg,
             writer::BcWriter,
         },
-        fragment::expr::{CompareOp, ExprBinOp, ExprCompiled, ExprUnOp},
+        fragment::{
+            expr::{CompareOp, ExprBinOp, ExprCompiled, ExprUnOp},
+            span::IrSpanned,
+        },
+        runtime::call_stack::FrozenFileSpan,
     },
     values::{FrozenValue, ValueLike},
 };
 
 pub(crate) fn write_exprs<'a>(
-    exprs: impl IntoIterator<Item = &'a Spanned<ExprCompiled>>,
+    exprs: impl IntoIterator<Item = &'a IrSpanned<ExprCompiled>>,
     bc: &mut BcWriter,
 ) {
     for expr in exprs {
@@ -45,9 +48,9 @@ pub(crate) fn write_exprs<'a>(
     }
 }
 
-impl Spanned<ExprCompiled> {
+impl IrSpanned<ExprCompiled> {
     fn try_dict_of_consts(
-        xs: &[(Spanned<ExprCompiled>, Spanned<ExprCompiled>)],
+        xs: &[(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)],
     ) -> Option<SmallMap<FrozenValue, FrozenValue>> {
         let mut res = SmallMap::new();
         for (k, v) in xs {
@@ -65,7 +68,7 @@ impl Spanned<ExprCompiled> {
     }
 
     fn try_dict_const_keys(
-        xs: &[(Spanned<ExprCompiled>, Spanned<ExprCompiled>)],
+        xs: &[(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)],
     ) -> Option<Box<[Hashed<FrozenValue>]>> {
         let mut keys = Vec::new();
         let mut keys_unique = HashSet::new();
@@ -82,8 +85,8 @@ impl Spanned<ExprCompiled> {
     }
 
     fn write_dict(
-        span: Span,
-        xs: &[(Spanned<ExprCompiled>, Spanned<ExprCompiled>)],
+        span: FrozenFileSpan,
+        xs: &[(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)],
         bc: &mut BcWriter,
     ) {
         if xs.is_empty() {
@@ -107,7 +110,7 @@ impl Spanned<ExprCompiled> {
         }
     }
 
-    fn write_not(expr: &Spanned<ExprCompiled>, bc: &mut BcWriter) {
+    fn write_not(expr: &IrSpanned<ExprCompiled>, bc: &mut BcWriter) {
         match expr.node {
             ExprCompiled::Equals(box (ref a, ref b)) => {
                 a.write_bc(bc);
@@ -166,7 +169,7 @@ impl Spanned<ExprCompiled> {
             }
             ExprCompiled::TypeIs(box ref v, t) => {
                 v.write_bc(bc);
-                bc.write_instr::<InstrTypeIs>(Span::default(), t);
+                bc.write_instr::<InstrTypeIs>(span, t);
             }
             ExprCompiled::Tuple(ref xs) => {
                 write_exprs(xs, bc);
@@ -230,7 +233,7 @@ impl Spanned<ExprCompiled> {
                 // So explicitly decrement stack size.
                 bc.stack_sub(1);
 
-                let end_patch = bc.write_br(Span::default());
+                let end_patch = bc.write_br(span);
                 bc.patch_addr(else_patch);
                 f.write_bc(bc);
                 bc.patch_addr(end_patch);
@@ -278,7 +281,7 @@ impl Spanned<ExprCompiled> {
                 bc.write_instr::<InstrFormatOne>(span, (before, after));
             }
             ExprCompiled::Call(ref call) => call.write_bc(bc),
-            ExprCompiled::Def(ref def) => def.write_bc(bc),
+            ExprCompiled::Def(ref def) => def.write_bc(span, bc),
         }
     }
 

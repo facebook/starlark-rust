@@ -18,7 +18,6 @@
 //! Compile assignment lhs.
 
 use crate::{
-    codemap::Spanned,
     collections::symbol_map::Symbol,
     eval::{
         bc::{
@@ -29,11 +28,11 @@ use crate::{
             writer::BcWriter,
         },
         compiler::scope::Captured,
-        fragment::stmt::AssignCompiledValue,
+        fragment::{span::IrSpanned, stmt::AssignCompiledValue},
     },
 };
 
-impl Spanned<AssignCompiledValue> {
+impl IrSpanned<AssignCompiledValue> {
     pub(crate) fn write_bc(&self, bc: &mut BcWriter) {
         let span = self.span;
         match self.node {

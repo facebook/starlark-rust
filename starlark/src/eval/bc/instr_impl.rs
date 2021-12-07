@@ -22,7 +22,6 @@ use std::{cmp::Ordering, marker, mem::MaybeUninit, ptr};
 use gazebo::coerce::coerce;
 
 use crate::{
-    codemap::{Span, Spanned},
     collections::{symbol_map::Symbol, Hashed, SmallMap},
     environment::slots::ModuleSlotId,
     eval::{
@@ -43,6 +42,7 @@ use crate::{
         fragment::{
             def::{DefInfo, ParameterCompiled},
             expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError, MemberOrValue},
+            span::IrSpanned,
             stmt::{add_assign, before_stmt, possible_gc, AssignError},
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
@@ -1415,8 +1415,8 @@ pub(crate) type InstrDef = InstrNoFlow<InstrDefImpl>;
 #[derive(Debug)]
 pub(crate) struct InstrDefData {
     pub(crate) function_name: String,
-    pub(crate) params: Vec<Spanned<ParameterCompiled<u32>>>,
-    pub(crate) return_type: Option<Spanned<u32>>,
+    pub(crate) params: Vec<IrSpanned<ParameterCompiled<u32>>>,
+    pub(crate) return_type: Option<IrSpanned<u32>>,
     pub(crate) info: FrozenRef<'static, DefInfo>,
 }
 
@@ -1747,13 +1747,13 @@ impl InstrNoFlowImpl for InstrPossibleGcImpl {
 impl InstrNoFlowImpl for InstrBeforeStmtImpl {
     type Pop<'v> = ();
     type Push<'v> = ();
-    type Arg = Span;
+    type Arg = FrozenFileSpan;
 
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
         _: BcPtrAddr,
-        span: &Span,
+        span: &Self::Arg,
         (): (),
     ) -> Result<(), EvalException> {
         before_stmt(*span, eval);

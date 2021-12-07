@@ -15,12 +15,32 @@
  * limitations under the License.
  */
 
-pub(crate) mod call;
-pub(crate) mod compr;
-pub(crate) mod def;
-pub(crate) mod expr;
-pub(crate) mod known;
-pub(crate) mod module;
-pub(crate) mod small_vec_1;
-pub(crate) mod span;
-pub(crate) mod stmt;
+use std::ops::Deref;
+
+use crate::eval::runtime::call_stack::FrozenFileSpan;
+
+/// Similar to `Spanned<T>` but with file span.
+///
+/// For intermediate representation.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct IrSpanned<T> {
+    pub(crate) span: FrozenFileSpan,
+    pub(crate) node: T,
+}
+
+impl<T> IrSpanned<T> {
+    pub fn map<U>(&self, f: impl FnOnce(&T) -> U) -> IrSpanned<U> {
+        IrSpanned {
+            node: f(&self.node),
+            span: self.span,
+        }
+    }
+}
+
+impl<T> Deref for IrSpanned<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.node
+    }
+}

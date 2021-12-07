@@ -25,7 +25,6 @@ use std::{
 use gazebo::dupe::Dupe;
 
 use crate::{
-    codemap::Span,
     collections::{symbol_map::Symbol, Hashed, SmallMap},
     environment::slots::ModuleSlotId,
     eval::{
@@ -37,7 +36,7 @@ use crate::{
             opcode::{BcOpcode, BcOpcodeHandler},
             slow_arg::BcInstrSlowArg,
         },
-        runtime::slots::LocalSlotId,
+        runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
     values::{
         known_methods::KnownMethod, typed::FrozenValueTyped, FrozenRef, FrozenStringValue,
@@ -407,9 +406,9 @@ impl BcInstrArg for ModuleSlotId {
     }
 }
 
-impl BcInstrArg for Span {
+impl BcInstrArg for FrozenFileSpan {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
-        write!(f, " {}:{}", param.begin().get(), param.end().get())
+        write!(f, " {}", param)
     }
 
     fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
