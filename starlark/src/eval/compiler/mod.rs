@@ -41,7 +41,7 @@ pub(crate) struct EvalException(pub(crate) anyhow::Error);
 #[inline(never)]
 fn add_span_to_error(e: anyhow::Error, span: Span, eval: &Evaluator) -> anyhow::Error {
     Diagnostic::modify(e, |d: &mut Diagnostic| {
-        d.set_span(span, eval.def_info.codemap.dupe());
+        d.set_span(span, &eval.def_info.codemap);
         d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
     })
 }

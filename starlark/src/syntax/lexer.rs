@@ -17,7 +17,6 @@
 
 use std::{char, collections::VecDeque, fmt, fmt::Display};
 
-use gazebo::dupe::Dupe;
 use logos::Logos;
 use thiserror::Error;
 
@@ -93,7 +92,7 @@ impl<'a> Lexer<'a> {
         Err(Diagnostic::new(
             msg,
             Span::new(Pos::new(start as u32), Pos::new(end as u32)),
-            self.codemap.dupe(),
+            &self.codemap,
         ))
     }
 

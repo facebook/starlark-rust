@@ -53,7 +53,7 @@ fn one_of(expected: &[String]) -> String {
 pub(crate) fn parse_error_add_span(
     err: lu::ParseError<usize, Token, anyhow::Error>,
     len: usize,
-    codemap: CodeMap,
+    codemap: &CodeMap,
 ) -> anyhow::Error {
     if let lu::ParseError::User { error } = err {
         return error;
@@ -129,7 +129,7 @@ impl AstModule {
         let lexer = Lexer::new(codemap.source(), dialect, codemap.dupe());
         match StarlarkParser::new().parse(&codemap, dialect, lexer) {
             Ok(v) => Ok(AstModule::create(codemap, v, dialect)?),
-            Err(p) => Err(parse_error_add_span(p, codemap.source().len(), codemap)),
+            Err(p) => Err(parse_error_add_span(p, codemap.source().len(), &codemap)),
         }
     }
 

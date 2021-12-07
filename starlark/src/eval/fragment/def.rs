@@ -160,7 +160,7 @@ impl<T> ParameterCompiled<T> {
 #[display(fmt = "DefInfo")]
 pub(crate) struct DefInfo {
     /// Codemap of the file where the function is declared.
-    pub(crate) codemap: CodeMap,
+    pub(crate) codemap: FrozenRef<'static, CodeMap>,
     /// The raw docstring pulled out of the AST.
     pub(crate) docstring: Option<String>,
     pub(crate) scope_names: ScopeNames,
@@ -182,8 +182,9 @@ pub(crate) struct DefInfo {
 
 impl DefInfo {
     pub(crate) fn empty() -> FrozenRef<'static, DefInfo> {
+        static EMPTY_CODEMAP: Lazy<CodeMap> = Lazy::new(CodeMap::default);
         static EMPTY: Lazy<DefInfo> = Lazy::new(|| DefInfo {
-            codemap: CodeMap::default(),
+            codemap: FrozenRef::new(&EMPTY_CODEMAP),
             docstring: None,
             scope_names: ScopeNames::default(),
             stmt_compiled: Bc::default(),
@@ -196,7 +197,7 @@ impl DefInfo {
     }
 
     pub(crate) fn for_module(
-        codemap: CodeMap,
+        codemap: FrozenRef<'static, CodeMap>,
         scope_names: ScopeNames,
         globals: FrozenRef<'static, Globals>,
     ) -> DefInfo {
@@ -432,7 +433,7 @@ impl Compiler<'_, '_, '_> {
         let inline_def_body = Self::inline_def_body(&params, &body);
 
         let info = self.eval.module_env.frozen_heap().alloc_any(DefInfo {
-            codemap: (*self.codemap).dupe(),
+            codemap: self.codemap,
             docstring,
             scope_names,
             stmt_compiled: body.as_bc(
@@ -749,7 +750,7 @@ impl FrozenDef {
                 &self.def_info.stmt_compile_context,
                 self.def_info.scope_names.used.len().try_into().unwrap(),
                 frozen_heap,
-                frozen_heap.alloc_any_display_from_debug(self.def_info.codemap.dupe()),
+                self.def_info.codemap,
             );
 
         // Store the optimized body.

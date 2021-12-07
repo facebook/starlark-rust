@@ -22,7 +22,7 @@ use std::{intrinsics::unlikely, mem, time::Instant};
 
 pub(crate) use compiler::scope::ScopeNames;
 pub(crate) use fragment::def::{Def, FrozenDef};
-use gazebo::{cast, prelude::*};
+use gazebo::prelude::*;
 pub use runtime::{
     arguments::{Arguments, ParametersParser, ParametersSpec},
     evaluator::Evaluator,
@@ -59,6 +59,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         let AstModule { codemap, statement } = ast;
 
+        let codemap = self
+            .module_env
+            .frozen_heap()
+            .alloc_any_display_from_debug(codemap.dupe());
+
         let globals = self.module_env.frozen_heap().alloc_any(globals.dupe());
 
         let mut scope_data = ScopeData::new();
@@ -77,7 +82,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             scope_data,
             &mut statement,
             globals,
-            codemap.dupe(),
+            codemap,
         );
 
         // We want to grab the first error only, with ownership, so drop all but the first
@@ -94,17 +99,13 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let old_def_info = mem::replace(
             &mut self.def_info,
             self.module_env.frozen_heap().alloc_any(DefInfo::for_module(
-                codemap.dupe(),
+                codemap,
                 scope_names,
                 globals,
             )),
         );
 
         // Set up the world to allow evaluation (do NOT use ? from now on)
-
-        // Safe because we promise to put codemap back to how it was before this function terminates.
-        // See with_function_context for more safety arguments.
-        let codemap = unsafe { cast::ptr_lifetime(&codemap) };
 
         self.call_stack.push(Value::new_none(), None).unwrap();
         if unlikely(self.heap_or_flame_profile) {
@@ -118,10 +119,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             scope_data,
             locals: Vec::new(),
             globals,
-            codemap: self
-                .module_env
-                .frozen_heap()
-                .alloc_any_display_from_debug(codemap.dupe()),
+            codemap,
             constants: Constants::new(),
             has_before_stmt: !self.before_stmt.is_empty(),
             bc_profile: self.bc_profile.enabled(),

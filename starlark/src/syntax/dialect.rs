@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-use gazebo::prelude::*;
 use thiserror::Error;
 
 use crate::{
@@ -98,7 +97,7 @@ impl Dialect {
 }
 
 fn err<T>(codemap: &CodeMap, span: Span, err: DialectError) -> anyhow::Result<T> {
-    Err(Diagnostic::new(err, span, codemap.dupe()))
+    Err(Diagnostic::new(err, span, codemap))
 }
 
 impl Dialect {

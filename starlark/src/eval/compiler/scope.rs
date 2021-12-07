@@ -45,7 +45,7 @@ pub(crate) struct Scope<'a> {
     // The rest are scopes for functions (which include their comprehensions).
     locals: Vec<ScopeId>,
     unscopes: Vec<Unscope>,
-    codemap: CodeMap,
+    codemap: FrozenRef<'static, CodeMap>,
     globals: FrozenRef<'static, Globals>,
     pub(crate) errors: Vec<anyhow::Error>,
 }
@@ -168,7 +168,7 @@ impl<'a> Scope<'a> {
         mut scope_data: ScopeData,
         code: &mut CstStmt,
         globals: FrozenRef<'static, Globals>,
-        codemap: CodeMap,
+        codemap: FrozenRef<'static, CodeMap>,
     ) -> Self {
         // Not really important, sanity check
         assert_eq!(scope_id, ScopeId::module());
@@ -361,7 +361,7 @@ impl<'a> Scope<'a> {
                 None => EnvironmentError::VariableNotFound(ident.node.clone()),
             },
             ident.span,
-            self.codemap.dupe(),
+            &self.codemap,
         )
     }
 
@@ -789,6 +789,8 @@ pub(crate) type CstLoad = AstLoadP<CstPayload>;
 mod test {
     use std::fmt::Write;
 
+    use gazebo::dupe::Dupe;
+
     use crate::{
         environment::{names::MutableNames, Globals},
         eval::compiler::scope::{
@@ -800,7 +802,7 @@ mod test {
             uniplate::Visit,
             AstModule, Dialect,
         },
-        values::FrozenRef,
+        values::{FrozenHeap, FrozenRef},
     };
 
     fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
@@ -810,13 +812,15 @@ mod test {
         let mut cst = ast
             .statement
             .into_map_payload(&mut CompilerAstMap(&mut scope_data));
+        let frozen_heap = FrozenHeap::new();
+        let codemap = frozen_heap.alloc_any_display_from_debug(ast.codemap.dupe());
         let scope = Scope::enter_module(
             module,
             root_scope_id,
             scope_data,
             &mut cst,
             FrozenRef::new(Globals::empty()),
-            ast.codemap,
+            codemap,
         );
         assert!(scope.errors.is_empty());
         let (.., scope_data) = scope.exit_module();

@@ -94,7 +94,7 @@ impl Expr {
         args: Vec<AstArgument>,
         codemap: &CodeMap,
     ) -> anyhow::Result<Expr> {
-        let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
+        let err = |span, msg| Err(Diagnostic::new(msg, span, codemap));
 
         let mut stage = ArgsStage::Positional;
         let mut named_args = HashSet::new();
@@ -154,7 +154,7 @@ fn test_param_name<'a, T>(
         return Err(Diagnostic::new(
             ArgumentUseOrderError::DuplicateParameterName,
             arg.span,
-            codemap.dupe(),
+            codemap,
         ));
     }
     argset.insert(&n.node.0);
@@ -176,7 +176,7 @@ enum ArgumentUseOrderError {
 }
 
 fn check_parameters(parameters: &[AstParameter], codemap: &CodeMap) -> anyhow::Result<()> {
-    let err = |span, msg| Err(Diagnostic::new(msg, span, codemap.dupe()));
+    let err = |span, msg| Err(Diagnostic::new(msg, span, codemap));
 
     // you can't repeat argument names
     let mut argset = HashSet::new();
@@ -262,11 +262,7 @@ impl Stmt {
                 Expr::ArrayIndirection(box (a, b)) => Assign::ArrayIndirection(box (a, b)),
                 Expr::Identifier(x, ()) => Assign::Identifier(x.into_map(|s| AssignIdentP(s, ()))),
                 _ => {
-                    return Err(Diagnostic::new(
-                        ValidateError::InvalidLhs,
-                        x.span,
-                        codemap.dupe(),
-                    ));
+                    return Err(Diagnostic::new(ValidateError::InvalidLhs, x.span, codemap));
                 }
             },
         })
@@ -285,7 +281,7 @@ impl Stmt {
                     return Err(Diagnostic::new(
                         ValidateError::InvalidModifyLhs,
                         lhs.span,
-                        codemap.dupe(),
+                        codemap,
                     ));
                 }
                 _ => {}
@@ -312,7 +308,7 @@ impl Stmt {
             inside_for: bool,
             inside_def: bool,
         ) -> anyhow::Result<()> {
-            let err = |x| Err(Diagnostic::new(x, stmt.span, codemap.dupe()));
+            let err = |x| Err(Diagnostic::new(x, stmt.span, codemap));
 
             match &stmt.node {
                 Stmt::Def(_, _, _, body, _payload) => f(codemap, dialect, body, false, false, true),
