@@ -87,10 +87,15 @@ pub struct FrozenHeap {
 /// `FrozenHeap` when it is no longer modified and can be share between threads.
 /// Although, `arena` is not safe to share between threads, but at least `refs` is.
 #[derive(Default)]
+#[allow(clippy::non_send_fields_in_send_ty)]
 struct FrozenFrozenHeap {
     arena: Arena,
     refs: HashSet<FrozenHeapRef>,
 }
+
+// Safe because we never mutate the Arena other than with &mut
+unsafe impl Sync for FrozenFrozenHeap {}
+unsafe impl Send for FrozenFrozenHeap {}
 
 impl Debug for FrozenHeap {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -110,10 +115,6 @@ impl Debug for FrozenFrozenHeap {
     }
 }
 
-// Safe because we never mutate the Arena other than with &mut
-unsafe impl Sync for FrozenHeapRef {}
-unsafe impl Send for FrozenHeapRef {}
-
 /// A reference to a [`FrozenHeap`] that keeps alive all values on the underlying heap.
 /// Note that the [`Hash`] is consistent for a single [`FrozenHeapRef`], but non-deterministic
 /// across executions and distinct but observably identical [`FrozenHeapRef`] values.
@@ -121,6 +122,12 @@ unsafe impl Send for FrozenHeapRef {}
 // The Eq/Hash are by pointer rather than value, since we produce unique values
 // given an underlying FrozenHeap.
 pub struct FrozenHeapRef(Arc<FrozenFrozenHeap>);
+
+fn _test_frozen_heap_ref_send_sync()
+where
+    FrozenHeapRef: Send + Sync,
+{
+}
 
 impl Hash for FrozenHeapRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
