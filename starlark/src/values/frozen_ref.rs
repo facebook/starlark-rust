@@ -18,6 +18,7 @@
 use std::{
     borrow::Borrow,
     cmp::Ordering,
+    fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
     ops::Deref,
     ptr,
@@ -53,6 +54,12 @@ impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
         FrozenRef {
             value: f(self.value),
         }
+    }
+}
+
+impl<'f, T: ?Sized + Display> Display for FrozenRef<'f, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.value.fmt(f)
     }
 }
 
