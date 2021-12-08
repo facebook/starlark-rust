@@ -48,6 +48,7 @@ use crate::{
                 list_avalue, simple, starlark_str, tuple_avalue, AValue, VALUE_EMPTY_ARRAY,
                 VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
+            fast_cell::FastCell,
             value::{FrozenValue, Value},
         },
         string::hash_string_result,
@@ -61,7 +62,7 @@ use crate::{
 pub struct Heap {
     /// Peak memory seen when a garbage collection takes place (may be lower than currently allocated)
     peak_allocated: Cell<usize>,
-    arena: RefCell<Arena>,
+    arena: FastCell<Arena>,
 }
 
 impl Debug for Heap {
@@ -384,7 +385,7 @@ impl Heap {
     }
 
     fn alloc_raw<'v, 'v2: 'v2>(&'v self, x: impl AValue<'v2, ExtraElem = ()>) -> Value<'v> {
-        let arena_ref = self.arena.borrow_mut();
+        let arena_ref = self.arena.borrow();
         let arena = &*arena_ref;
         let v: &AValueRepr<_> = arena.alloc(x);
 
@@ -409,7 +410,7 @@ impl Heap {
         len: usize,
         init: impl FnOnce(*mut u8),
     ) -> Value<'v> {
-        let arena_ref = self.arena.borrow_mut();
+        let arena_ref = self.arena.borrow();
         let arena = &*arena_ref;
         let (v, extra) = arena.alloc_extra_non_drop::<_>(starlark_str(len));
         init(extra.as_mut_ptr() as *mut u8);
@@ -545,7 +546,7 @@ impl Heap {
         self.alloc_raw(complex(x))
     }
 
-    pub(crate) fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
+    pub(crate) unsafe fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
         self.arena.borrow_mut().for_each_ordered(|x| {
             // Otherwise the Value is constrainted by the borrow_mut, when
             // we consider values to be kept alive permanently, other than
@@ -566,16 +567,18 @@ impl Heap {
         self.garbage_collect_internal(f)
     }
 
-    fn garbage_collect_internal<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
-        // Must rewrite all Value's so they point at the new heap
-        let mut arena = self.arena.borrow_mut();
+    unsafe fn garbage_collect_internal<'v>(&'v self, f: impl FnOnce(&Tracer<'v>)) {
+        // Must rewrite all Value's so they point at the new heap.
+        // Take the arena out of the heap to make sure nobody allocates in it,
+        // but hold the reference until the GC is done.
+        let _arena = self.arena.take();
 
         let tracer = Tracer::<'v> {
             arena: Arena::default(),
             phantom: PhantomData,
         };
         f(&tracer);
-        *arena = tracer.arena;
+        self.arena.set(tracer.arena);
     }
 
     /// Obtain a summary of how much memory is currently allocated by this heap.

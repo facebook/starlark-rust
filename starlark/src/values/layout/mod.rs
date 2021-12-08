@@ -26,6 +26,7 @@ pub(crate) use value_captured::*;
 
 mod arena;
 mod avalue;
+mod fast_cell;
 mod heap;
 pub(crate) mod identity;
 mod pointer;

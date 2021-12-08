@@ -244,7 +244,9 @@ impl HeapProfile {
 
     fn write_flame_heap_profile_to(mut file: impl Write, heap: &Heap) -> anyhow::Result<()> {
         let mut collector = flame::StackCollector::new();
-        heap.for_each_ordered(|x| collector.process(x));
+        unsafe {
+            heap.for_each_ordered(|x| collector.process(x));
+        }
         collector.write_to(&mut file)?;
         Ok(())
     }
@@ -262,7 +264,9 @@ impl HeapProfile {
             call_stack: vec![(root, Duration::default(), start)],
         };
         info.ensure(root);
-        heap.for_each_ordered(|x| info.process(x));
+        unsafe {
+            heap.for_each_ordered(|x| info.process(x));
+        }
         // Just has root left on it
         assert!(info.call_stack.len() == 1);
 
@@ -679,7 +683,9 @@ _ignore = str([1])     # allocate a string in non_drop
             call_stack: vec![(root, Duration::ZERO, Instant::now())],
         };
 
-        eval.heap().for_each_ordered(|v| info.process(v));
+        unsafe {
+            eval.heap().for_each_ordered(|v| info.process(v));
+        }
 
         let total = FuncInfo::merge(info.info.iter());
         // from non-drop heap
