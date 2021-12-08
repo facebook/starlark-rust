@@ -43,8 +43,8 @@ use hashbrown::raw::RawTable;
 
 use crate as starlark;
 use crate::{
-    collections::{idhasher::mix_u32, BorrowHashed, SmallHashResult},
-    values::Trace,
+    collections::{idhasher::mix_u32, BorrowHashed, Hashed, SmallHashResult},
+    values::{StringValue, Trace},
 };
 
 // We use a RawTable (the thing that underlies HashMap) so we can look up efficiently
@@ -169,6 +169,14 @@ impl<T> SymbolMap<T> {
     pub fn get_hashed_str(&self, key: BorrowHashed<str>) -> Option<&T> {
         self.0
             .get(promote_hash(key.hash()), |x| x.0.as_str() == key.key())
+            .map(|x| &x.1)
+    }
+
+    pub(crate) fn get_hashed_string_value(&self, key: Hashed<StringValue>) -> Option<&T> {
+        self.0
+            .get(promote_hash(key.hash()), |x| {
+                x.0.as_str() == key.key().as_str()
+            })
             .map(|x| &x.1)
     }
 

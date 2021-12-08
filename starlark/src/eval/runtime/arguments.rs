@@ -30,7 +30,7 @@ use crate as starlark;
 use crate::{
     collections::{
         symbol_map::{Symbol, SymbolMap},
-        BorrowHashed, Hashed, SmallMap,
+        Hashed, SmallMap,
     },
     eval::Evaluator,
     values::{
@@ -495,9 +495,10 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                         match StringValue::new(*k.key()) {
                             None => return Err(FunctionError::ArgsValueIsNotString.into()),
                             Some(s) => {
-                                let repeat = match self.names.get_hashed_str(
-                                    BorrowHashed::new_unchecked(k.hash(), s.as_str()),
-                                ) {
+                                let repeat = match self
+                                    .names
+                                    .get_hashed_string_value(Hashed::new_unchecked(k.hash(), s))
+                                {
                                     None => kwargs.insert(Hashed::new_unchecked(k.hash(), s), v),
                                     Some(i) => {
                                         let this_slot = &slots[*i];
