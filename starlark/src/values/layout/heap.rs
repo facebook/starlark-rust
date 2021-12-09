@@ -554,7 +554,7 @@ impl Heap {
     }
 
     pub(crate) unsafe fn for_each_ordered<'v>(&'v self, mut f: impl FnMut(Value<'v>)) {
-        self.arena.borrow_mut().for_each_ordered(|x| {
+        (*self.arena.get_mut()).for_each_ordered(|x| {
             // Otherwise the Value is constrainted by the borrow_mut, when
             // we consider values to be kept alive permanently, other than
             // when a GC happens

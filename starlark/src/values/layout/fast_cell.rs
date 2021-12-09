@@ -77,9 +77,9 @@ impl<T> FastCell<T> {
     /// This function is unsafe because it's caller responsibility to guarantee
     /// there are no other references to the value, and nobody is going
     /// to obtain references to value while mutable reference exists.
-    pub(crate) unsafe fn borrow_mut(&self) -> &mut T {
+    pub(crate) unsafe fn get_mut(&self) -> *mut T {
         debug_assert!(self.init.get());
-        (*self.value.get()).assume_init_mut()
+        (*self.value.get()).as_mut_ptr()
     }
 
     /// Take the value out of the cell.
