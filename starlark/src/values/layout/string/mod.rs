@@ -315,8 +315,8 @@ mod test {
     #[test]
     fn test_string_hashes() {
         let heap = Heap::new();
-        let s: StringValue = heap.alloc_string_value("xyz");
-        let v: Value = heap.alloc_string_value("xyz").to_value();
+        let s: StringValue = heap.alloc_str("xyz");
+        let v: Value = heap.alloc_str("xyz").to_value();
         assert_eq!(Hashed::new(s).hash(), v.get_hashed().unwrap().hash());
 
         let heap = FrozenHeap::new();

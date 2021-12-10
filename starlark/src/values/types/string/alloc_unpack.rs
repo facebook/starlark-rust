@@ -35,25 +35,25 @@ impl<'v, 'a> AllocFrozenValue for &'a str {
 
 impl<'v> AllocValue<'v> for String {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self.as_str())
+        heap.alloc_str(self.as_str()).to_value()
     }
 }
 
 impl<'v> AllocValue<'v> for char {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_char(self)
+        heap.alloc_char(self).to_value()
     }
 }
 
 impl<'v> AllocValue<'v> for &'_ String {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self.as_str())
+        heap.alloc_str(self.as_str()).to_value()
     }
 }
 
 impl<'v> AllocValue<'v> for &'_ str {
     fn alloc_value(self, heap: &'v Heap) -> Value<'v> {
-        heap.alloc_str(self)
+        heap.alloc_str(self).to_value()
     }
 }
 

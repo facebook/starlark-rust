@@ -491,7 +491,7 @@ impl ExprCompiled {
         if let Some(arg) = arg.as_value() {
             if let Ok(value) = percent_s_one(before.as_str(), arg.to_value(), after.as_str(), heap)
             {
-                let value = frozen_heap.alloc_str(value.unpack_str().unwrap());
+                let value = frozen_heap.alloc_str(value.as_str());
                 return ExprCompiled::Value(value);
             }
         }
@@ -508,7 +508,7 @@ impl ExprCompiled {
     ) -> ExprCompiled {
         if let Some(arg) = arg.as_value() {
             let value = format_one(&before, arg.to_value(), &after, heap);
-            let value = frozen_heap.alloc_str(value.unpack_str().unwrap());
+            let value = frozen_heap.alloc_str(value.as_str());
             return ExprCompiled::Value(value);
         }
         ExprCompiled::FormatOne(box (before, arg, after))

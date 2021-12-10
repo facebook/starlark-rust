@@ -297,8 +297,8 @@ impl<'v> StarlarkValue<'v> for str {
         let (start, stop) = (start_stop_to_none_or(start)?, start_stop_to_none_or(stop)?);
 
         match fast_string::convert_str_indices(self, start, stop) {
-            Some(StrIndices { haystack, .. }) => Ok(heap.alloc_str(haystack)),
-            None => Ok(heap.alloc_str("")),
+            Some(StrIndices { haystack, .. }) => Ok(heap.alloc_str(haystack).to_value()),
+            None => Ok(heap.alloc_str("").to_value()),
         }
     }
 
@@ -307,7 +307,7 @@ impl<'v> StarlarkValue<'v> for str {
             if self.is_empty() {
                 Ok(other)
             } else {
-                Ok(heap.alloc_str_concat(self, other_str))
+                Ok(heap.alloc_str_concat(self, other_str).to_value())
             }
         } else {
             ValueError::unsupported_with(self, "+", other)
@@ -496,7 +496,7 @@ len("😿") == 1
     fn test_slice_string() {
         let heap = Heap::new();
         for example in EXAMPLES {
-            let s = heap.alloc_str(example);
+            let s = heap.alloc_str(example).to_value();
             for i in -5..=6 {
                 for j in -5..=6 {
                     let start = if i == 6 {

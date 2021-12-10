@@ -29,8 +29,8 @@ use crate::{
     eval::Arguments,
     values::{
         bool::BOOL_TYPE, dict::Dict, float::StarlarkFloat, int::INT_TYPE, list::List,
-        none::NoneType, num::Num, range::Range, string::STRING_TYPE, tuple::Tuple, Heap, Value,
-        ValueError, ValueLike,
+        none::NoneType, num::Num, range::Range, string::STRING_TYPE, tuple::Tuple, Heap,
+        StringValue, Value, ValueError, ValueLike,
     },
 };
 
@@ -860,7 +860,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn repr(ref a: Value) -> Value<'v> {
+    fn repr(ref a: Value) -> StringValue<'v> {
         let mut s = eval.string_pool.alloc();
         a.collect_repr(&mut s);
         let r = eval.heap().alloc_str(&s);
@@ -967,8 +967,8 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(type(STRING_TYPE))]
     #[starlark(speculative_exec_safe)]
-    fn str(ref a: Value) -> Value<'v> {
-        if a.unpack_str().is_some() {
+    fn str(ref a: Value) -> StringValue<'v> {
+        if let Some(a) = StringValue::new(a) {
             // Special case that can avoid reallocating, but is equivalent.
             Ok(a)
         } else {

@@ -56,7 +56,7 @@ use crate::{
         string::interpolation::{format_one, percent_s_one},
         typed::FrozenValueTyped,
         typing::TypeCompiled,
-        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value,
+        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, StringValue, Value,
     },
 };
 
@@ -766,7 +766,7 @@ impl InstrBinOpImpl for InstrAddImpl {
                 } else if rs.is_empty() {
                     return Ok(l);
                 } else {
-                    return Ok(heap.alloc_str_concat(ls, rs));
+                    return Ok(heap.alloc_str_concat(ls, rs).to_value());
                 }
             }
         }
@@ -883,7 +883,7 @@ impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
         (before, after): &Self::Arg,
         arg: Value<'v>,
     ) -> Result<Value<'v>, anyhow::Error> {
-        percent_s_one(before.as_str(), arg, after.as_str(), eval.heap())
+        percent_s_one(before.as_str(), arg, after.as_str(), eval.heap()).map(StringValue::to_value)
     }
 }
 
@@ -899,12 +899,7 @@ impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
         (before, after): &Self::Arg,
         arg: Value<'v>,
     ) -> Result<Value<'v>, anyhow::Error> {
-        Ok(format_one(
-            before.as_str(),
-            arg,
-            after.as_str(),
-            eval.heap(),
-        ))
+        Ok(format_one(before.as_str(), arg, after.as_str(), eval.heap()).to_value())
     }
 }
 

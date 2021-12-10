@@ -228,7 +228,7 @@ pub(crate) fn format_one<'v>(
     arg: Value<'v>,
     after: &str,
     heap: &'v Heap,
-) -> Value<'v> {
+) -> StringValue<'v> {
     match StringValue::new(arg) {
         Some(arg) => heap.alloc_str_concat3(before, &arg, after),
         None => {
@@ -247,7 +247,7 @@ pub(crate) fn percent_s_one<'v>(
     arg: Value<'v>,
     after: &str,
     heap: &'v Heap,
-) -> anyhow::Result<Value<'v>> {
+) -> anyhow::Result<StringValue<'v>> {
     Ok(match StringValue::new(arg) {
         Some(arg) => heap.alloc_str_concat3(before, &arg, after),
         None => {
@@ -417,7 +417,7 @@ pub(crate) fn format<'v>(
             }
         }
     }
-    let r = heap.alloc_string_value(&result);
+    let r = heap.alloc_str(&result);
     string_pool.release(result);
     Ok(r)
 }
@@ -479,6 +479,8 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
 
 #[cfg(test)]
 mod tests {
+    use gazebo::coerce::coerce;
+
     use super::*;
     use crate::{
         assert,
@@ -508,7 +510,7 @@ mod tests {
         kwargs.insert_hashed(heap.alloc_str_hashed("a"), heap.alloc("x"));
         kwargs.insert_hashed(heap.alloc_str_hashed("b"), heap.alloc("y"));
         kwargs.insert_hashed(heap.alloc_str_hashed("c"), heap.alloc("z"));
-        let kwargs = Dict::new(kwargs);
+        let kwargs = Dict::new(coerce(kwargs));
         assert_eq!(
             format_capture_for_test("", &mut args, &kwargs).unwrap(),
             "1"

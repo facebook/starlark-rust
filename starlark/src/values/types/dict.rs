@@ -562,7 +562,7 @@ b1 and b2 and b3
         let mut sm = SmallMap::new();
         sm.insert_hashed(k1, Value::new_int(12));
         sm.insert_hashed(k2, Value::new_int(56));
-        let d = Dict::new(sm);
+        let d = Dict::new(coerce(sm));
 
         assert_eq!(d.get(heap.alloc("hello"))?.unwrap().unpack_int(), Some(12));
         assert_eq!(d.get(heap.alloc("foo"))?, None);

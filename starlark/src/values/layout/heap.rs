@@ -53,7 +53,8 @@ use crate::{
         },
         string::hash_string_result,
         types::float::StarlarkFloat,
-        AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, StarlarkValue, ValueTyped,
+        AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, StarlarkValue, StringValue,
+        StringValueLike, ValueTyped,
     },
 };
 
@@ -416,7 +417,7 @@ impl Heap {
         &'v self,
         len: usize,
         init: impl FnOnce(*mut u8),
-    ) -> Value<'v> {
+    ) -> StringValue<'v> {
         let arena_ref = self.arena.borrow();
         let arena = &*arena_ref;
         let (v, extra) = arena.alloc_extra_non_drop::<_>(starlark_str(len));
@@ -425,13 +426,16 @@ impl Heap {
         // We have an arena inside a RefCell which stores ValueMem<'v>
         // However, we promise not to clear the RefCell other than for GC
         // so we can make the `arena` available longer
-        unsafe { transmute!(Value, Value, Value::new_repr(&*v)) }
+        unsafe {
+            let value = transmute!(Value, Value, Value::new_repr(&*v));
+            StringValue::new_unchecked(value)
+        }
     }
 
     /// Allocate a string on the heap.
-    pub fn alloc_str<'v>(&'v self, x: &str) -> Value<'v> {
+    pub fn alloc_str<'v>(&'v self, x: &str) -> StringValue<'v> {
         if let Some(x) = constant_string(x) {
-            x.unpack().to_value()
+            x.to_string_value()
         } else {
             self.alloc_str_init(x.len(), |dest| unsafe {
                 copy_nonoverlapping(x.as_ptr(), dest, x.len())
@@ -440,12 +444,12 @@ impl Heap {
     }
 
     /// Allocate a string on this heap and hash it.
-    pub fn alloc_str_hashed<'v>(&'v self, x: &str) -> Hashed<Value<'v>> {
-        let h = hash_string_result(x);
-        Hashed::new_unchecked(h, self.alloc_str(x))
+    pub fn alloc_str_hashed<'v>(&'v self, x: &str) -> Hashed<StringValue<'v>> {
+        let x = self.alloc_str(x);
+        Hashed::new_unchecked(x.get_small_hash_result(), x)
     }
 
-    pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> Value<'v> {
+    pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> StringValue<'v> {
         if x.is_empty() {
             self.alloc_str(y)
         } else if y.is_empty() {
@@ -458,7 +462,7 @@ impl Heap {
         }
     }
 
-    pub(crate) fn alloc_str_concat3<'v>(&'v self, x: &str, y: &str, z: &str) -> Value<'v> {
+    pub(crate) fn alloc_str_concat3<'v>(&'v self, x: &str, y: &str, z: &str) -> StringValue<'v> {
         if x.is_empty() {
             self.alloc_str_concat(y, z)
         } else if y.is_empty() {
@@ -525,7 +529,7 @@ impl Heap {
         self.alloc_raw(list_avalue(array))
     }
 
-    pub(crate) fn alloc_char<'v>(&'v self, x: char) -> Value<'v> {
+    pub(crate) fn alloc_char<'v>(&'v self, x: char) -> StringValue<'v> {
         let mut dst = [0; 4];
         let res = x.encode_utf8(&mut dst);
         self.alloc_str(res)

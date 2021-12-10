@@ -535,7 +535,7 @@ pub(crate) fn add_assign<'v>(
             } else if rs.is_empty() {
                 return Ok(lhs);
             } else {
-                return Ok(heap.alloc_str_concat(ls, rs));
+                return Ok(heap.alloc_str_concat(ls, rs).to_value());
             }
         }
     }

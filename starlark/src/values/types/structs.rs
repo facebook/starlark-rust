@@ -118,8 +118,7 @@ impl<'v> StructBuilder<'v> {
 
     /// Add an element to the underlying [`Struct`].
     pub fn add(&mut self, key: &str, val: impl AllocValue<'v>) {
-        self.1
-            .insert(self.0.alloc_string_value(key), self.0.alloc(val));
+        self.1.insert(self.0.alloc_str(key), self.0.alloc(val));
     }
 
     /// Finish building and produce a [`Struct`].

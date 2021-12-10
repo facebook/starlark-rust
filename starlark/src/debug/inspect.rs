@@ -63,7 +63,7 @@ fn inspect_module_variables<'v>(eval: &Evaluator<'v, '_>) -> SmallMap<String, Va
 
 #[cfg(test)]
 mod tests {
-    use gazebo::prelude::*;
+    use gazebo::{coerce::coerce, prelude::*};
 
     use crate::{
         self as starlark, assert, collections::SmallMap, environment::GlobalsBuilder,
@@ -81,7 +81,7 @@ mod tests {
             for (k, v) in eval.local_variables() {
                 sm.insert_hashed(heap.alloc_str_hashed(&k), v);
             }
-            Ok(Dict::new(sm))
+            Ok(Dict::new(coerce(sm)))
         }
     }
 

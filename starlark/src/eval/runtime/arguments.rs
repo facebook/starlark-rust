@@ -1083,14 +1083,14 @@ mod test {
         assert!(p.no_named_args().is_ok());
         let mut sm = SmallMap::new();
         sm.insert_hashed(heap.alloc_str_hashed("test"), Value::new_none());
-        p.kwargs = Some(heap.alloc(Dict::new(sm)));
+        p.kwargs = Some(heap.alloc(Dict::new(coerce(sm))));
         assert!(p.no_named_args().is_err());
 
         // Test named arguments work properly
         p.kwargs = None;
         let named = [Value::new_none()];
         p.named = &named;
-        let names = [(Symbol::new("test"), heap.alloc_string_value("test"))];
+        let names = [(Symbol::new("test"), heap.alloc_str("test"))];
         p.names = &names;
         assert!(p.no_named_args().is_err());
     }
