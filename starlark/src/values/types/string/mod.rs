@@ -171,11 +171,6 @@ pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
     x.hash(state)
 }
 
-/// Hash a string in a way compatible with Value
-pub(crate) fn hash_string_result(x: &str) -> SmallHashResult {
-    SmallHashResult::new(x)
-}
-
 impl Display for StarlarkStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // We could either accumulate straight into the buffer (can't preallocate, virtual call on each character)

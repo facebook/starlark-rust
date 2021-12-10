@@ -23,13 +23,13 @@ use crate::values::{
 
 impl AllocFrozenValue for String {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_str(self.as_str())
+        heap.alloc_str(self.as_str()).unpack()
     }
 }
 
 impl<'v, 'a> AllocFrozenValue for &'a str {
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue {
-        heap.alloc_str(self)
+        heap.alloc_str(self).unpack()
     }
 }
 

@@ -473,8 +473,8 @@ impl ExprCompiled {
     ) -> ExprCompiled {
         if let Some(v) = l.as_string() {
             if let Some((before, after)) = parse_percent_s_one(&v) {
-                let before = frozen_heap.alloc_string_value(&before);
-                let after = frozen_heap.alloc_string_value(&after);
+                let before = frozen_heap.alloc_str(&before);
+                let after = frozen_heap.alloc_str(&after);
                 return ExprCompiled::percent_s_one(before, r, after, heap, frozen_heap);
             }
         }
@@ -492,7 +492,7 @@ impl ExprCompiled {
             if let Ok(value) = percent_s_one(before.as_str(), arg.to_value(), after.as_str(), heap)
             {
                 let value = frozen_heap.alloc_str(value.as_str());
-                return ExprCompiled::Value(value);
+                return ExprCompiled::Value(value.unpack());
             }
         }
 
@@ -509,7 +509,7 @@ impl ExprCompiled {
         if let Some(arg) = arg.as_value() {
             let value = format_one(&before, arg.to_value(), &after, heap);
             let value = frozen_heap.alloc_str(value.as_str());
-            return ExprCompiled::Value(value);
+            return ExprCompiled::Value(value.unpack());
         }
         ExprCompiled::FormatOne(box (before, arg, after))
     }
@@ -626,7 +626,7 @@ impl ExprCompiled {
             Some(ExprCompiled::Value(v))
         } else if let Some(v) = v.unpack_str() {
             // If string, copy it to frozen heap.
-            Some(ExprCompiled::Value(heap.alloc_str(v)))
+            Some(ExprCompiled::Value(heap.alloc_str(v).unpack()))
         } else if let Some(v) = v.downcast_ref::<StarlarkFloat>() {
             Some(ExprCompiled::Value(heap.alloc_float(*v)))
         } else if let Some(v) = v.downcast_ref::<Range>() {

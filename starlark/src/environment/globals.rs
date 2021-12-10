@@ -276,7 +276,7 @@ impl GlobalsBuilder {
         match &mut self.struct_fields {
             None => self.variables.insert(name, value),
             Some(fields) => {
-                let name = self.heap.alloc_string_value(name);
+                let name = self.heap.alloc_str(name);
                 fields.insert(name, value)
             }
         };

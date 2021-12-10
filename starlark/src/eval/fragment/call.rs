@@ -207,7 +207,7 @@ impl Compiler<'_, '_, '_> {
                         .eval
                         .module_env
                         .frozen_heap()
-                        .alloc_string_value(name.node.as_str());
+                        .alloc_str(name.node.as_str());
                     res.names.push((Symbol::new(&name.node), fv));
                     res.pos_named.push(self.expr(value));
                 }
@@ -297,16 +297,8 @@ impl Compiler<'_, '_, '_> {
         if let (Some(e), Some(_arg)) = (e.as_string(), args.one_pos()) {
             if &s.node == "format" {
                 if let Some((before, after)) = parse_format_one(&e) {
-                    let before = self
-                        .eval
-                        .module_env
-                        .frozen_heap()
-                        .alloc_string_value(&before);
-                    let after = self
-                        .eval
-                        .module_env
-                        .frozen_heap()
-                        .alloc_string_value(&after);
+                    let before = self.eval.module_env.frozen_heap().alloc_str(&before);
+                    let after = self.eval.module_env.frozen_heap().alloc_str(&after);
                     let arg = args.into_one_pos().unwrap();
                     return ExprCompiled::format_one(
                         before,

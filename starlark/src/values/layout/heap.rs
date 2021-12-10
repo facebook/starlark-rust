@@ -51,10 +51,9 @@ use crate::{
             fast_cell::FastCell,
             value::{FrozenValue, Value},
         },
-        string::hash_string_result,
         types::float::StarlarkFloat,
-        AllocFrozenValue, ComplexValue, FrozenRef, FrozenValueTyped, StarlarkValue, StringValue,
-        StringValueLike, ValueTyped,
+        AllocFrozenValue, ComplexValue, FrozenRef, FrozenStringValue, FrozenValueTyped,
+        StarlarkValue, StringValue, StringValueLike, ValueTyped,
     },
 };
 
@@ -197,21 +196,23 @@ impl FrozenHeap {
 
     /// Allocate a string on this heap. Be careful about the warnings
     /// around [`FrozenValue`].
-    pub(crate) fn alloc_str(&self, x: &str) -> FrozenValue {
+    pub fn alloc_str(&self, x: &str) -> FrozenStringValue {
         if let Some(x) = constant_string(x) {
-            x.unpack()
+            x
         } else {
             let (v, extra) = self.arena.alloc_extra_non_drop(starlark_str(x.len()));
             MaybeUninit::write_slice(extra, x.as_bytes());
-            FrozenValue::new_repr(unsafe { cast::ptr_lifetime(&*v) })
+            unsafe {
+                FrozenStringValue::new_unchecked(FrozenValue::new_repr(cast::ptr_lifetime(&*v)))
+            }
         }
     }
 
     /// Allocate a string on this heap and hash it. Be careful about the warnings
     /// around [`FrozenValue`].
-    pub fn alloc_str_hashed(&self, x: &str) -> Hashed<FrozenValue> {
-        let h = hash_string_result(x);
-        Hashed::new_unchecked(h, self.alloc_str(x))
+    pub fn alloc_str_hashed(&self, x: &str) -> Hashed<FrozenStringValue> {
+        let x = self.alloc_str(x);
+        Hashed::new_unchecked(x.get_small_hash_result(), x)
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {

@@ -320,8 +320,8 @@ mod test {
         assert_eq!(Hashed::new(s).hash(), v.get_hashed().unwrap().hash());
 
         let heap = FrozenHeap::new();
-        let fs: FrozenStringValue = heap.alloc_string_value("xyz");
-        let fv: FrozenValue = heap.alloc_string_value("xyz").unpack();
+        let fs: FrozenStringValue = heap.alloc_str("xyz");
+        let fv: FrozenValue = heap.alloc_str("xyz").unpack();
         assert_eq!(Hashed::new(fs).hash(), fv.get_hashed().unwrap().hash());
 
         assert_eq!(Hashed::new(s).hash(), Hashed::new(fs).hash());
