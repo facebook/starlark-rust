@@ -37,7 +37,6 @@ use indexmap::Equivalent;
 
 use crate::collections::{
     hash::{BorrowHashed, Hashed},
-    idhasher::mix_u32,
     vec_map::{Bucket, VMIntoIter, VMIter, VMIterMut, VecMap},
     StarlarkHasher,
 };
@@ -207,7 +206,7 @@ impl<K, V> SmallMap<K, V> {
         match &self.index {
             None => self.entries.get_index_of_hashed(key),
             Some(index) => index
-                .get(mix_u32(key.hash().get()), |&index| unsafe {
+                .get(key.hash().promote(), |&index| unsafe {
                     key.key().equivalent(&self.entries.get_unchecked(index).key)
                 })
                 .copied(),
@@ -300,7 +299,7 @@ impl<K, V> SmallMap<K, V> {
         debug_assert!(capacity >= self.entries.len());
         let mut index = RawTable::with_capacity(capacity);
         for (i, b) in self.entries.buckets.iter().enumerate() {
-            index.insert_no_grow(mix_u32(b.hash.get()), i);
+            index.insert_no_grow(b.hash.promote(), i);
         }
         self.index = Some(box index);
     }
@@ -309,7 +308,7 @@ impl<K, V> SmallMap<K, V> {
     fn hasher<'a>(entries: &'a VecMap<K, V>) -> impl Fn(&usize) -> u64 + 'a {
         move |&index| {
             debug_assert!(index < entries.len());
-            unsafe { mix_u32(entries.buckets.get_unchecked(index).hash.get()) }
+            unsafe { entries.buckets.get_unchecked(index).hash.promote() }
         }
     }
 
@@ -318,11 +317,7 @@ impl<K, V> SmallMap<K, V> {
         let entry_index = self.entries.len();
         self.entries.insert_unique_unchecked(key, val);
         if let Some(index) = &mut self.index {
-            index.insert(
-                mix_u32(hash.get()),
-                entry_index,
-                Self::hasher(&self.entries),
-            );
+            index.insert(hash.promote(), entry_index, Self::hasher(&self.entries));
         } else if self.entries.len() == NO_INDEX_THRESHOLD + 1 {
             self.create_index(self.entries.len());
         } else {
@@ -372,7 +367,7 @@ impl<K, V> SmallMap<K, V> {
         let hash = key.hash();
         if let Some(index) = &mut self.index {
             let entries = &self.entries;
-            let i = index.remove_entry(mix_u32(hash.get()), |&i| unsafe {
+            let i = index.remove_entry(hash.promote(), |&i| unsafe {
                 key.key().equivalent(&entries.get_unchecked(i).key)
             })?;
             unsafe {
@@ -435,8 +430,7 @@ impl<K, V> SmallMap<K, V> {
             None => None,
             Some(Bucket { key, value, hash }) => {
                 if let Some(index) = &mut self.index {
-                    let removed =
-                        index.remove_entry(mix_u32(hash.get()), |&i| i == self.entries.len());
+                    let removed = index.remove_entry(hash.promote(), |&i| i == self.entries.len());
                     debug_assert!(removed.unwrap() == self.entries.len());
                 }
                 Some((key, value))

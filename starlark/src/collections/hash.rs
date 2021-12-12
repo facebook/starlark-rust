@@ -21,7 +21,7 @@ use gazebo::{coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
 
 use crate as starlark;
-use crate::collections::StarlarkHasher;
+use crate::collections::{idhasher::mix_u32, StarlarkHasher};
 
 /// A hash value.
 ///
@@ -79,6 +79,10 @@ impl StarlarkHashValue {
 
     pub(crate) fn get(self) -> u32 {
         self.0
+    }
+
+    pub(crate) fn promote(self) -> u64 {
+        mix_u32(self.0)
     }
 }
 

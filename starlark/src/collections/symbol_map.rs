@@ -43,7 +43,7 @@ use hashbrown::raw::RawTable;
 
 use crate as starlark;
 use crate::{
-    collections::{idhasher::mix_u32, BorrowHashed, Hashed, StarlarkHashValue},
+    collections::{BorrowHashed, Hashed, StarlarkHashValue},
     values::{StringValue, Trace},
 };
 
@@ -58,10 +58,6 @@ impl<T: Debug> Debug for SymbolMap<T> {
             .entries(self.iter().map(|x| (&x.0, &x.1)))
             .finish()
     }
-}
-
-fn promote_hash(x: StarlarkHashValue) -> u64 {
-    mix_u32(x.get())
 }
 
 /// A pre-hashed string used for efficient dictionary lookup.
@@ -109,7 +105,7 @@ impl Symbol {
 
     pub fn new_hashed(x: BorrowHashed<str>) -> Self {
         let small_hash = x.hash();
-        let hash = promote_hash(small_hash);
+        let hash = small_hash.promote();
         let len = x.key().len();
         let len8 = (len + 7) / 8;
         let mut payload = vec![0; len8]; // 0 pad it at the end
@@ -168,15 +164,13 @@ impl<T> SymbolMap<T> {
 
     pub fn get_hashed_str(&self, key: BorrowHashed<str>) -> Option<&T> {
         self.0
-            .get(promote_hash(key.hash()), |x| x.0.as_str() == key.key())
+            .get(key.hash().promote(), |x| x.0.as_str() == key.key())
             .map(|x| &x.1)
     }
 
     pub(crate) fn get_hashed_string_value(&self, key: Hashed<StringValue>) -> Option<&T> {
         self.0
-            .get(promote_hash(key.hash()), |x| {
-                x.0.as_str() == key.key().as_str()
-            })
+            .get(key.hash().promote(), |x| x.0.as_str() == key.key().as_str())
             .map(|x| &x.1)
     }
 
