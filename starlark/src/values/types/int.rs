@@ -30,7 +30,7 @@ use std::{
 };
 
 use crate::{
-    collections::{SmallHashResult, StarlarkHasher},
+    collections::{StarlarkHashValue, StarlarkHasher},
     values::{
         basic::StarlarkValueBasic, error::ValueError, float::StarlarkFloat, layout::PointerI32,
         num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
@@ -262,7 +262,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
 }
 
 impl<'v> StarlarkValueBasic<'v> for PointerI32 {
-    fn get_hash(&self) -> SmallHashResult {
+    fn get_hash(&self) -> StarlarkHashValue {
         Num::from(self.get()).get_small_hash_result()
     }
 }

@@ -45,7 +45,7 @@ use gazebo::{
 use indexmap::Equivalent;
 
 use crate::{
-    collections::{Hashed, SmallHashResult, StarlarkHasher},
+    collections::{Hashed, StarlarkHashValue, StarlarkHasher},
     eval::{runtime::call_stack::FrozenFileSpan, Arguments, Evaluator, FrozenDef},
     values::{
         dict::FrozenDict,
@@ -318,7 +318,7 @@ impl<'v> Value<'v> {
         }
     }
 
-    pub(crate) fn get_hash(self) -> anyhow::Result<SmallHashResult> {
+    pub(crate) fn get_hash(self) -> anyhow::Result<StarlarkHashValue> {
         self.get_ref().get_hash()
     }
 

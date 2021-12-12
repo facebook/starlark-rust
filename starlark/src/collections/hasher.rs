@@ -19,7 +19,7 @@ use std::hash::Hasher;
 
 use fnv::FnvHasher;
 
-use crate::collections::SmallHashResult;
+use crate::collections::StarlarkHashValue;
 
 /// A hasher used by Starlark implementation.
 ///
@@ -32,11 +32,11 @@ impl StarlarkHasher {
         StarlarkHasher::default()
     }
 
-    pub(crate) fn finish_small(self) -> SmallHashResult {
+    pub(crate) fn finish_small(self) -> StarlarkHashValue {
         // NOTE: Here we throw away half the key material we are given,
         // taking only the lower 32 bits.
         // Not a problem because `DefaultHasher` produces well-swizzled bits.
-        SmallHashResult::new_unchecked(self.finish() as u32)
+        StarlarkHashValue::new_unchecked(self.finish() as u32)
     }
 }
 

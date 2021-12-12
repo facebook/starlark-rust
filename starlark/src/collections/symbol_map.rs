@@ -43,7 +43,7 @@ use hashbrown::raw::RawTable;
 
 use crate as starlark;
 use crate::{
-    collections::{idhasher::mix_u32, BorrowHashed, Hashed, SmallHashResult},
+    collections::{idhasher::mix_u32, BorrowHashed, Hashed, StarlarkHashValue},
     values::{StringValue, Trace},
 };
 
@@ -60,7 +60,7 @@ impl<T: Debug> Debug for SymbolMap<T> {
     }
 }
 
-fn promote_hash(x: SmallHashResult) -> u64 {
+fn promote_hash(x: StarlarkHashValue) -> u64 {
     mix_u32(x.get())
 }
 
@@ -70,7 +70,7 @@ pub(crate) struct Symbol {
     hash: u64,
     len: usize,
     payload: Box<[u64]>,
-    small_hash: SmallHashResult,
+    small_hash: StarlarkHashValue,
 }
 
 unsafe impl Coerce<Symbol> for Symbol {}
@@ -133,7 +133,7 @@ impl Symbol {
         }
     }
 
-    pub fn small_hash(&self) -> SmallHashResult {
+    pub fn small_hash(&self) -> StarlarkHashValue {
         self.small_hash
     }
 }

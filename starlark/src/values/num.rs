@@ -21,7 +21,7 @@ use either::Either;
 use gazebo::prelude::*;
 
 use crate::{
-    collections::SmallHashResult,
+    collections::StarlarkHashValue,
     values::{types::float::StarlarkFloat, UnpackValue, Value},
 };
 
@@ -105,8 +105,8 @@ impl Num {
         }
     }
 
-    pub(crate) fn get_small_hash_result(self) -> SmallHashResult {
-        SmallHashResult::hash_64(self.get_hash())
+    pub(crate) fn get_small_hash_result(self) -> StarlarkHashValue {
+        StarlarkHashValue::hash_64(self.get_hash())
     }
 }
 

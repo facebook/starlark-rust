@@ -22,7 +22,7 @@ use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate::{
-    collections::{SmallHashResult, StarlarkHasher},
+    collections::{StarlarkHashValue, StarlarkHasher},
     values::{
         basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
         StarlarkValue, UnpackValue, Value,
@@ -72,9 +72,9 @@ impl<'v> StarlarkValue<'v> for NoneType {
 }
 
 impl<'v> StarlarkValueBasic<'v> for NoneType {
-    fn get_hash(&self) -> SmallHashResult {
+    fn get_hash(&self) -> StarlarkHashValue {
         // Just a random number.
-        SmallHashResult::new_unchecked(0xf9c2263d)
+        StarlarkHashValue::new_unchecked(0xf9c2263d)
     }
 }
 

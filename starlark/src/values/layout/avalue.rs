@@ -30,7 +30,7 @@ use derive_more::Display;
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
 
 use crate::{
-    collections::{SmallHashResult, StarlarkHasher},
+    collections::{StarlarkHashValue, StarlarkHasher},
     environment::Methods,
     eval::{Arguments, Evaluator, FrozenDef},
     values::{
@@ -162,7 +162,7 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
 
     unsafe fn heap_copy(me: *mut AValueRepr<Self>, tracer: &Tracer<'v>) -> Value<'v>;
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
         let mut hasher = StarlarkHasher::new();
         self.write_hash(&mut hasher)?;
         Ok(hasher.finish_small())
@@ -188,7 +188,7 @@ pub(crate) trait AValueDyn<'v>: StarlarkValueDyn<'v> {
 
     fn is_str(&self) -> bool;
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult>;
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue>;
 }
 
 impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
@@ -212,7 +212,7 @@ impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
         A::is_str()
     }
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
         self.get_hash()
     }
 }
@@ -345,7 +345,7 @@ impl<'v, T: StarlarkValueBasic<'v>> AValue<'v> for AValueImpl<Basic, T> {
         unreachable!("Basic types don't appear in the heap")
     }
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
         Ok(self.1.get_hash())
     }
 }
@@ -374,7 +374,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkFloat> {
         Self::heap_copy_impl(me, tracer, |_v, _tracer| {})
     }
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
         Ok(Num::from(self.1.0).get_small_hash_result())
     }
 }
@@ -427,7 +427,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
         v
     }
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
         Ok(self.1.get_small_hash_result())
     }
 }
@@ -760,7 +760,7 @@ impl<'v> AValueDyn<'v> for BlackHole {
         false
     }
 
-    fn get_hash(&self) -> anyhow::Result<SmallHashResult> {
+    fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
         unreachable!()
     }
 }

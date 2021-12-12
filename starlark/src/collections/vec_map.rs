@@ -20,7 +20,7 @@ use std::mem;
 use gazebo::prelude::*;
 use indexmap::Equivalent;
 
-use crate::collections::hash::{BorrowHashed, Hashed, SmallHashResult};
+use crate::collections::hash::{BorrowHashed, Hashed, StarlarkHashValue};
 
 // We define a lot of iterators on top of other iterators
 // so define a helper macro for that
@@ -59,7 +59,7 @@ macro_rules! def_iter {
 /// Bucket in [`VecMap`].
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Bucket<K, V> {
-    pub(crate) hash: SmallHashResult,
+    pub(crate) hash: StarlarkHashValue,
     pub(crate) key: K,
     pub(crate) value: V,
 }

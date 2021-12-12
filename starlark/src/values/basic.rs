@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-use crate::{collections::SmallHashResult, values::StarlarkValue};
+use crate::{collections::StarlarkHashValue, values::StarlarkValue};
 
 /// Implemented by "basic" (non-heap allocated) types like `int` or `NoneType`.
 pub(crate) trait StarlarkValueBasic<'v>: StarlarkValue<'v> {
-    fn get_hash(&self) -> SmallHashResult;
+    fn get_hash(&self) -> StarlarkHashValue;
 }

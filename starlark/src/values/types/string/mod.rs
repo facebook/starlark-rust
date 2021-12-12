@@ -31,7 +31,7 @@ use std::{
 use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate::{
-    collections::{BorrowHashed, SmallHashResult, StarlarkHasher},
+    collections::{BorrowHashed, StarlarkHashValue, StarlarkHasher},
     environment::{Methods, MethodsStatic},
     values::{
         index::apply_slice,
@@ -134,11 +134,11 @@ impl StarlarkStr {
         }
     }
 
-    pub(crate) fn get_small_hash_result(&self) -> SmallHashResult {
+    pub(crate) fn get_small_hash_result(&self) -> StarlarkHashValue {
         // Note relaxed load and store are practically non-locking memory operations.
         let hash = self.str.hash.load(atomic::Ordering::Relaxed);
         if hash != 0 {
-            SmallHashResult::new_unchecked(hash)
+            StarlarkHashValue::new_unchecked(hash)
         } else {
             let mut s = StarlarkHasher::new();
             hash_string_value(self.unpack(), &mut s);

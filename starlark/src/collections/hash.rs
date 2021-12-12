@@ -23,28 +23,30 @@ use indexmap::Equivalent;
 use crate as starlark;
 use crate::collections::StarlarkHasher;
 
-/// A hash result.
+/// A hash value.
+///
+/// Contained value must be compatible with a value produced by `StarlarkHasher`
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Dupe, Debug, Default, Trace)]
 // Hash value must be well swizzled.
-pub struct SmallHashResult(u32);
+pub struct StarlarkHashValue(u32);
 
 /// A key and its hash.
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Trace, Coerce)]
 #[repr(C)]
 pub struct Hashed<K> {
-    hash: SmallHashResult,
+    hash: StarlarkHashValue,
     key: K,
 }
 
 /// A borrowed key and its hash.
 #[derive(Copy, Clone)]
 pub struct BorrowHashed<'a, Q: ?Sized> {
-    hash: SmallHashResult,
+    hash: StarlarkHashValue,
     key: &'a Q,
 }
 
-impl SmallHashResult {
-    /// Create a new [`SmallHashResult`] using the [`Hash`] trait
+impl StarlarkHashValue {
+    /// Create a new [`StarlarkHashValue`] using the [`Hash`] trait
     /// for given key.
     pub fn new<K: Hash + ?Sized>(key: &K) -> Self {
         let mut hasher = StarlarkHasher::new();
@@ -52,7 +54,7 @@ impl SmallHashResult {
         hasher.finish_small()
     }
 
-    /// Directly create a new [`SmallHashResult`] using a hash.
+    /// Directly create a new [`StarlarkHashValue`] using a hash.
     /// The expectation is that the key will be well-swizzled,
     /// or there may be many hash collisions.
     pub fn new_unchecked(hash: u32) -> Self {
@@ -72,7 +74,7 @@ impl SmallHashResult {
         let h = h.wrapping_mul(0xc4ceb9fe1a85ec53);
         let h = h ^ (h >> 33);
 
-        SmallHashResult(h as u32)
+        StarlarkHashValue(h as u32)
     }
 
     pub(crate) fn get(self) -> u32 {
@@ -87,17 +89,17 @@ impl<'a, Q: ?Sized> BorrowHashed<'a, Q> {
     where
         Q: Hash,
     {
-        Self::new_unchecked(SmallHashResult::new(key), key)
+        Self::new_unchecked(StarlarkHashValue::new(key), key)
     }
 
     /// Directly create a new [`BorrowHashed`] using a given hash value.
     /// If the hash does not correspond to the key, its will cause issues.
-    pub fn new_unchecked(hash: SmallHashResult, key: &'a Q) -> Self {
+    pub fn new_unchecked(hash: StarlarkHashValue, key: &'a Q) -> Self {
         Self { hash, key }
     }
 
     /// Get the underlying hash.
-    pub fn hash(&self) -> SmallHashResult {
+    pub fn hash(&self) -> StarlarkHashValue {
         self.hash
     }
 
@@ -150,12 +152,12 @@ impl<K> Hashed<K> {
     where
         K: Hash,
     {
-        Self::new_unchecked(SmallHashResult::new(&key), key)
+        Self::new_unchecked(StarlarkHashValue::new(&key), key)
     }
 
     /// Directly create a new [`Hashed`] using a given hash value.
     /// If the hash does not correspond to the key, its will cause issues.
-    pub fn new_unchecked(hash: SmallHashResult, key: K) -> Self {
+    pub fn new_unchecked(hash: StarlarkHashValue, key: K) -> Self {
         Self { hash, key }
     }
 
@@ -175,7 +177,7 @@ impl<K> Hashed<K> {
     }
 
     /// Get the underlying hash.
-    pub fn hash(&self) -> SmallHashResult {
+    pub fn hash(&self) -> StarlarkHashValue {
         self.hash
     }
 
