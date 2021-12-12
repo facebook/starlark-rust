@@ -507,9 +507,9 @@ mod tests {
         let mut args = FormatArgs::new(original_args.iter().copied());
         let mut kwargs = SmallMap::new();
 
-        kwargs.insert_hashed(heap.alloc_str_hashed("a"), heap.alloc("x"));
-        kwargs.insert_hashed(heap.alloc_str_hashed("b"), heap.alloc("y"));
-        kwargs.insert_hashed(heap.alloc_str_hashed("c"), heap.alloc("z"));
+        kwargs.insert_hashed(heap.alloc_str("a").get_hashed(), heap.alloc("x"));
+        kwargs.insert_hashed(heap.alloc_str("b").get_hashed(), heap.alloc("y"));
+        kwargs.insert_hashed(heap.alloc_str("c").get_hashed(), heap.alloc("z"));
         let kwargs = Dict::new(coerce(kwargs));
         assert_eq!(
             format_capture_for_test("", &mut args, &kwargs).unwrap(),

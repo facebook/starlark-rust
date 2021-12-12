@@ -35,7 +35,6 @@ use either::Either;
 use gazebo::{cast, prelude::*};
 
 use crate::{
-    collections::Hashed,
     eval::FrozenDef,
     values::{
         any::StarlarkAny,
@@ -206,13 +205,6 @@ impl FrozenHeap {
                 FrozenStringValue::new_unchecked(FrozenValue::new_repr(cast::ptr_lifetime(&*v)))
             }
         }
-    }
-
-    /// Allocate a string on this heap and hash it. Be careful about the warnings
-    /// around [`FrozenValue`].
-    pub fn alloc_str_hashed(&self, x: &str) -> Hashed<FrozenStringValue> {
-        let x = self.alloc_str(x);
-        Hashed::new_unchecked(x.get_small_hash_result(), x)
     }
 
     pub fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
@@ -442,12 +434,6 @@ impl Heap {
                 copy_nonoverlapping(x.as_ptr(), dest, x.len())
             })
         }
-    }
-
-    /// Allocate a string on this heap and hash it.
-    pub fn alloc_str_hashed<'v>(&'v self, x: &str) -> Hashed<StringValue<'v>> {
-        let x = self.alloc_str(x);
-        Hashed::new_unchecked(x.get_small_hash_result(), x)
     }
 
     pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> StringValue<'v> {

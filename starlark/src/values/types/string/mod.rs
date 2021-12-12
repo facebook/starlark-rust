@@ -455,7 +455,7 @@ mod tests {
         let heap = Heap::new();
         for x in EXAMPLES {
             assert_eq!(
-                heap.alloc_str_hashed(x).hash(),
+                heap.alloc_str(x).get_hashed().hash(),
                 heap.alloc(*x).get_hashed().unwrap().hash()
             );
         }

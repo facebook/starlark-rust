@@ -79,7 +79,7 @@ mod tests {
         fn debug_inspect_variables() -> Dict<'v> {
             let mut sm = SmallMap::new();
             for (k, v) in eval.local_variables() {
-                sm.insert_hashed(heap.alloc_str_hashed(&k), v);
+                sm.insert_hashed(heap.alloc_str(&k).get_hashed(), v);
             }
             Ok(Dict::new(coerce(sm)))
         }

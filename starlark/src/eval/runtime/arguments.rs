@@ -1082,7 +1082,7 @@ mod test {
         p.kwargs = Some(heap.alloc(Dict::default()));
         assert!(p.no_named_args().is_ok());
         let mut sm = SmallMap::new();
-        sm.insert_hashed(heap.alloc_str_hashed("test"), Value::new_none());
+        sm.insert_hashed(heap.alloc_str("test").get_hashed(), Value::new_none());
         p.kwargs = Some(heap.alloc(Dict::new(coerce(sm))));
         assert!(p.no_named_args().is_err());
 

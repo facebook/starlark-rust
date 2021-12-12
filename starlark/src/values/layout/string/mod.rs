@@ -33,10 +33,13 @@ use gazebo::{
 };
 use indexmap::Equivalent;
 
-use crate::values::{
-    layout::{avalue::StarlarkStrAValue, value::FrozenValue},
-    string::StarlarkStr,
-    AllocValue, Freeze, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
+use crate::{
+    collections::{BorrowHashed, Hashed},
+    values::{
+        layout::{avalue::StarlarkStrAValue, value::FrozenValue},
+        string::StarlarkStr,
+        AllocValue, Freeze, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
+    },
 };
 
 /// Define a `&'static` [`str`] that can be converted to a [`FrozenValue`].
@@ -167,6 +170,14 @@ impl FrozenStringValue {
     pub fn as_str(self) -> &'static str {
         self.as_starlark_str().unpack()
     }
+
+    pub fn get_hashed(self) -> Hashed<Self> {
+        Hashed::new_unchecked(self.get_small_hash_result(), self)
+    }
+
+    pub fn get_hashed_str(self) -> BorrowHashed<'static, str> {
+        BorrowHashed::new_unchecked(self.get_small_hash_result(), self.as_str())
+    }
 }
 
 impl<'v> PartialEq for StringValue<'v> {
@@ -237,6 +248,14 @@ impl<'v> StringValue<'v> {
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
     pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
         Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.0)?) })
+    }
+
+    pub fn get_hashed(self) -> Hashed<Self> {
+        Hashed::new_unchecked(self.get_small_hash_result(), self)
+    }
+
+    pub fn get_hashed_str(self) -> BorrowHashed<'v, str> {
+        BorrowHashed::new_unchecked(self.get_small_hash_result(), self.as_str())
     }
 }
 

@@ -557,8 +557,8 @@ b1 and b2 and b3
     #[test]
     fn test_get_str() -> anyhow::Result<()> {
         let heap = Heap::new();
-        let k1 = heap.alloc_str_hashed("hello");
-        let k2 = heap.alloc_str_hashed("world");
+        let k1 = heap.alloc_str("hello").get_hashed();
+        let k2 = heap.alloc_str("world").get_hashed();
         let mut sm = SmallMap::new();
         sm.insert_hashed(k1, Value::new_int(12));
         sm.insert_hashed(k2, Value::new_int(56));
