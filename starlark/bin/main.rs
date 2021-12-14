@@ -25,7 +25,7 @@
 // Disagree these are good hints
 #![allow(clippy::type_complexity)]
 
-use std::{ffi::OsStr, fmt, fmt::Display, fs, path::PathBuf, sync::Arc};
+use std::{ffi::OsStr, fmt, fmt::Display, path::PathBuf, sync::Arc};
 
 use anyhow::anyhow;
 use eval::Context;
@@ -97,27 +97,7 @@ pub struct Args {
     evaluate: Vec<String>,
 
     #[structopt(name = "FILE", help = "Files to evaluate.")]
-    // String instead of PathBuf so we can expand @file things
-    files: Vec<String>,
-}
-
-// We'd really like clap to deal with args-files, but it doesn't yet
-// Waiting on: https://github.com/clap-rs/clap/issues/1693.
-// This is a minimal version to make basic @file options work.
-fn expand_args(args: Vec<String>) -> anyhow::Result<Vec<PathBuf>> {
-    let mut res = Vec::with_capacity(args.len());
-    for x in args {
-        match x.strip_prefix('@') {
-            None => res.push(PathBuf::from(x)),
-            Some(x) => {
-                let src = fs::read_to_string(x)?;
-                for x in src.lines() {
-                    res.push(PathBuf::from(x));
-                }
-            }
-        }
-    }
-    Ok(res)
+    files: Vec<PathBuf>,
 }
 
 // Treat directories as things to recursively walk for .<extension> files,
@@ -206,7 +186,8 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Args::from_args();
+    let args = argfile::expand_args(argfile::parse_fromfile, argfile::PREFIX)?;
+    let args = Args::from_iter(args);
     let ext = args
         .extension
         .as_ref()
@@ -227,7 +208,7 @@ fn main() -> anyhow::Result<()> {
             drain(ctx.expression(e), args.json, &mut stats);
         }
 
-        for file in expand_dirs(ext, expand_args(args.files.clone())?) {
+        for file in expand_dirs(ext, args.files.clone()) {
             stats.increment_file();
             drain(ctx.file(&file), args.json, &mut stats);
         }
