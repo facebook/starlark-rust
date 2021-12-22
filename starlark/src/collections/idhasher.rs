@@ -19,6 +19,7 @@
 // which uses the upper 7 bits of the hash for a tag, then compares 16 tags in
 // parallel with a SIMD instruction. Without the mix, typical low-valued u32 ids
 // would all have tag 0.
+#[inline(always)]
 pub(crate) fn mix_u32(n: u32) -> u64 {
     (n as u64).wrapping_mul(0x9e3779b97f4a7c15)
 }

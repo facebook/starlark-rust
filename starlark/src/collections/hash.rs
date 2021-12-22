@@ -81,7 +81,11 @@ impl StarlarkHashValue {
         self.0
     }
 
-    pub(crate) fn promote(self) -> u64 {
+    /// Make u64 hash from this hash.
+    ///
+    /// The resulting hash should be good enough to be used in hashbrown hashtable.
+    #[inline(always)]
+    pub fn promote(self) -> u64 {
         mix_u32(self.0)
     }
 }
