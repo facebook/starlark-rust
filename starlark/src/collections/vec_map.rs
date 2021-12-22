@@ -26,6 +26,7 @@ use crate::collections::hash::{BorrowHashed, Hashed, StarlarkHashValue};
 // so define a helper macro for that
 macro_rules! def_iter {
     () => {
+        #[inline]
         fn next(&mut self) -> Option<Self::Item> {
             self.iter.next().map(Self::map)
         }
@@ -39,6 +40,7 @@ macro_rules! def_iter {
             self.iter.next_back().map(Self::map)
         }
 
+        #[inline]
         fn size_hint(&self) -> (usize, Option<usize>) {
             self.iter.size_hint()
         }
@@ -132,6 +134,7 @@ impl<'a, K: 'a, V: 'a> Iterator for VMValuesMut<'a, K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValuesMut<'a, K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -151,6 +154,7 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIter<'a, K, V> {
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIter<'a, K, V> {}
 
 impl<'a, K: 'a, V: 'a> VMIter<'a, K, V> {
+    #[inline]
     fn map(b: &Bucket<K, V>) -> (&K, &V) {
         (&b.key, &b.value)
     }
@@ -161,6 +165,7 @@ pub(crate) struct VMIterHash<'a, K: 'a, V: 'a> {
 }
 
 impl<'a, K: 'a, V: 'a> VMIterHash<'a, K, V> {
+    #[inline]
     fn map(b: &'a Bucket<K, V>) -> (BorrowHashed<'a, K>, &'a V) {
         (BorrowHashed::new_unchecked(b.hash, &b.key), &b.value)
     }
@@ -173,6 +178,7 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIterHash<'a, K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterHash<'a, K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -183,6 +189,7 @@ pub struct VMIterMut<'a, K: 'a, V: 'a> {
 }
 
 impl<'a, K: 'a, V: 'a> VMIterMut<'a, K, V> {
+    #[inline]
     fn map(b: &mut Bucket<K, V>) -> (&K, &mut V) {
         (&b.key, &mut b.value)
     }
@@ -195,6 +202,7 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIterMut<'a, K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterMut<'a, K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -207,6 +215,7 @@ pub(crate) struct VMIntoIterHash<K, V> {
 impl<K, V> Iterator for VMIntoIterHash<K, V> {
     type Item = (Hashed<K>, V);
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
@@ -226,6 +235,7 @@ impl<K, V> Iterator for VMIntoIterHash<K, V> {
             .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
     }
@@ -245,6 +255,7 @@ impl<K, V> Iterator for VMIntoIterHash<K, V> {
 }
 
 impl<K, V> ExactSizeIterator for VMIntoIterHash<K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -255,6 +266,7 @@ pub struct VMIntoIter<K, V> {
 }
 
 impl<K, V> VMIntoIter<K, V> {
+    #[inline]
     fn map(b: Bucket<K, V>) -> (K, V) {
         (b.key, b.value)
     }
@@ -267,18 +279,21 @@ impl<'a, K: 'a, V: 'a> Iterator for VMIntoIter<K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIntoIter<K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
 impl<K, V> VecMap<K, V> {
+    #[inline]
     pub(crate) const fn new() -> Self {
         VecMap {
             buckets: Vec::new(),
         }
     }
 
+    #[inline]
     pub(crate) fn with_capacity(n: usize) -> Self {
         VecMap {
             buckets: Vec::with_capacity(n),
@@ -289,6 +304,7 @@ impl<K, V> VecMap<K, V> {
         self.buckets.reserve(additional);
     }
 
+    #[inline]
     pub(crate) fn capacity(&self) -> usize {
         self.buckets.capacity()
     }
@@ -297,6 +313,7 @@ impl<K, V> VecMap<K, V> {
         self.buckets.capacity() * mem::size_of::<Bucket<K, V>>()
     }
 
+    #[inline]
     pub(crate) fn get_full<Q>(&self, key: BorrowHashed<Q>) -> Option<(usize, &K, &V)>
     where
         Q: ?Sized + Equivalent<K>,
@@ -319,6 +336,7 @@ impl<K, V> VecMap<K, V> {
         None
     }
 
+    #[inline]
     pub(crate) fn get_index_of_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<usize>
     where
         Q: ?Sized + Equivalent<K>,
@@ -326,20 +344,24 @@ impl<K, V> VecMap<K, V> {
         self.get_full(key).map(|(i, _, _)| i)
     }
 
+    #[inline]
     pub(crate) fn get_index(&self, index: usize) -> Option<(&K, &V)> {
         self.buckets.get(index).map(|x| (&x.key, &x.value))
     }
 
+    #[inline]
     pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &Bucket<K, V> {
         debug_assert!(index < self.buckets.len());
         self.buckets.get_unchecked(index)
     }
 
+    #[inline]
     pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Bucket<K, V> {
         debug_assert!(index < self.buckets.len());
         self.buckets.get_unchecked_mut(index)
     }
 
+    #[inline]
     pub(crate) fn insert_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
         self.buckets.push(Bucket {
             hash: key.hash(),
@@ -366,10 +388,12 @@ impl<K, V> VecMap<K, V> {
         None
     }
 
+    #[inline]
     pub(crate) fn len(&self) -> usize {
         self.buckets.len()
     }
 
+    #[inline]
     pub(crate) fn is_empty(&self) -> bool {
         self.buckets.is_empty()
     }
@@ -378,36 +402,42 @@ impl<K, V> VecMap<K, V> {
         self.buckets.clear();
     }
 
+    #[inline]
     pub(crate) fn values(&self) -> VMValues<K, V> {
         VMValues {
             iter: self.buckets.iter(),
         }
     }
 
+    #[inline]
     pub(crate) fn values_mut(&mut self) -> VMValuesMut<K, V> {
         VMValuesMut {
             iter: self.buckets.iter_mut(),
         }
     }
 
+    #[inline]
     pub(crate) fn keys(&self) -> VMKeys<K, V> {
         VMKeys {
             iter: self.buckets.iter(),
         }
     }
 
+    #[inline]
     pub(crate) fn into_iter(self) -> VMIntoIter<K, V> {
         VMIntoIter {
             iter: self.buckets.into_iter(),
         }
     }
 
+    #[inline]
     pub(crate) fn iter(&self) -> VMIter<K, V> {
         VMIter {
             iter: self.buckets.iter(),
         }
     }
 
+    #[inline]
     pub(crate) fn iter_hashed(&self) -> VMIterHash<K, V> {
         VMIterHash {
             // Values go first since they terminate first and we can short-circuit
@@ -415,6 +445,7 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
+    #[inline]
     pub(crate) fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
         VMIntoIterHash {
@@ -422,6 +453,7 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
+    #[inline]
     pub(crate) fn iter_mut(&mut self) -> VMIterMut<K, V> {
         VMIterMut {
             iter: self.buckets.iter_mut(),

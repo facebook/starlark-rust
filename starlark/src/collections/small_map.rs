@@ -81,6 +81,7 @@ impl<K: Debug, V: Debug> Debug for SmallMap<K, V> {
 }
 
 impl<K, V> SmallMap<K, V> {
+    #[inline]
     pub const fn new() -> Self {
         Self {
             entries: VecMap::new(),
@@ -88,6 +89,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub fn with_capacity(n: usize) -> Self {
         if n <= NO_INDEX_THRESHOLD {
             SmallMap {
@@ -103,6 +105,7 @@ impl<K, V> SmallMap<K, V> {
     }
 
     /// Create with largest capacity which is represented by `Vec`.
+    #[inline]
     pub(crate) fn with_capacity_largest_vec() -> Self {
         Self::with_capacity(NO_INDEX_THRESHOLD)
     }
@@ -119,10 +122,12 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub(crate) fn into_raw_parts(self) -> (VecMap<K, V>, Option<Box<RawTable<usize>>>) {
         (self.entries, self.index)
     }
 
+    #[inline]
     pub(crate) unsafe fn from_raw_parts(
         entries: VecMap<K, V>,
         index: Option<Box<RawTable<usize>>>,
@@ -137,38 +142,47 @@ impl<K, V> SmallMap<K, V> {
         SmallMap { entries, index }
     }
 
+    #[inline]
     pub fn keys(&self) -> impl ExactSizeIterator<Item = &K> + Clone {
         self.entries.keys()
     }
 
+    #[inline]
     pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + Clone {
         self.entries.values()
     }
 
+    #[inline]
     pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> {
         self.entries.values_mut()
     }
 
+    #[inline]
     pub fn iter(&self) -> MHIter<'_, K, V> {
         self.entries.iter()
     }
 
+    #[inline]
     pub fn iter_hashed(&self) -> impl ExactSizeIterator<Item = (BorrowHashed<K>, &V)> {
         self.entries.iter_hashed()
     }
 
+    #[inline]
     pub fn into_iter_hashed(self) -> impl ExactSizeIterator<Item = (Hashed<K>, V)> {
         self.entries.into_iter_hashed()
     }
 
+    #[inline]
     pub fn iter_mut(&mut self) -> MHIterMut<'_, K, V> {
         self.entries.iter_mut()
     }
 
+    #[inline]
     pub fn into_iter(self) -> MHIntoIter<K, V> {
         self.entries.into_iter()
     }
 
+    #[inline]
     pub fn get_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<&V>
     where
         Q: Equivalent<K> + ?Sized,
@@ -178,6 +192,7 @@ impl<K, V> SmallMap<K, V> {
             .map(|index| unsafe { &self.entries.get_unchecked(index).value })
     }
 
+    #[inline]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         Q: Hash + Equivalent<K> + ?Sized,
@@ -186,6 +201,7 @@ impl<K, V> SmallMap<K, V> {
         self.get_hashed(BorrowHashed::new(key))
     }
 
+    #[inline]
     pub fn get_full<Q>(&self, key: &Q) -> Option<(usize, &K, &V)>
     where
         Q: Hash + Equivalent<K> + ?Sized,
@@ -198,6 +214,7 @@ impl<K, V> SmallMap<K, V> {
             })
     }
 
+    #[inline]
     pub fn get_index_of_hashed<Q>(&self, key: BorrowHashed<Q>) -> Option<usize>
     where
         Q: Equivalent<K> + ?Sized,
@@ -213,10 +230,12 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub fn get_index(&self, index: usize) -> Option<(&K, &V)> {
         self.entries.get_index(index)
     }
 
+    #[inline]
     pub fn get_index_of<Q>(&self, key: &Q) -> Option<usize>
     where
         Q: Hash + Equivalent<K> + ?Sized,
@@ -225,6 +244,7 @@ impl<K, V> SmallMap<K, V> {
         self.get_index_of_hashed(BorrowHashed::new(key))
     }
 
+    #[inline]
     pub fn get_mut_hashed<Q>(&mut self, key: BorrowHashed<Q>) -> Option<&mut V>
     where
         Q: Equivalent<K> + ?Sized,
@@ -235,6 +255,7 @@ impl<K, V> SmallMap<K, V> {
         Some(unsafe { &mut self.entries.buckets.get_unchecked_mut(i).value })
     }
 
+    #[inline]
     pub fn get_mut<Q>(&mut self, key: &Q) -> Option<&mut V>
     where
         Q: Hash + Equivalent<K> + ?Sized,
@@ -243,6 +264,7 @@ impl<K, V> SmallMap<K, V> {
         self.get_mut_hashed(BorrowHashed::new(key))
     }
 
+    #[inline]
     pub fn contains_key_hashed<Q>(&self, key: BorrowHashed<Q>) -> bool
     where
         Q: Equivalent<K> + ?Sized,
@@ -251,6 +273,7 @@ impl<K, V> SmallMap<K, V> {
         self.get_index_of_hashed(key).is_some()
     }
 
+    #[inline]
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
         Q: Hash + Equivalent<K> + ?Sized,
@@ -259,6 +282,7 @@ impl<K, V> SmallMap<K, V> {
         self.contains_key_hashed(BorrowHashed::new(key))
     }
 
+    #[inline]
     pub fn reserve(&mut self, additional: usize)
     where
         K: Eq,
@@ -271,6 +295,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.entries.capacity()
     }
@@ -305,6 +330,7 @@ impl<K, V> SmallMap<K, V> {
     }
 
     /// Hasher for index resize.
+    #[inline(always)]
     fn hasher<'a>(entries: &'a VecMap<K, V>) -> impl Fn(&usize) -> u64 + 'a {
         move |&index| {
             debug_assert!(index < entries.len());
@@ -312,6 +338,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     fn insert_unique_unchecked(&mut self, key: Hashed<K>, val: V) {
         let hash = key.hash();
         let entry_index = self.entries.len();
@@ -325,6 +352,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub fn insert_hashed(&mut self, key: Hashed<K>, val: V) -> Option<V>
     where
         K: Eq,
@@ -344,6 +372,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub fn insert(&mut self, key: K, val: V) -> Option<V>
     where
         K: Hash + Eq,
@@ -405,6 +434,7 @@ impl<K, V> SmallMap<K, V> {
         self.remove_hashed_entry(BorrowHashed::new(key))
     }
 
+    #[inline]
     pub fn entry_hashed(&mut self, key: Hashed<K>) -> Entry<'_, K, V>
     where
         K: Eq,
@@ -438,6 +468,7 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    #[inline]
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V>
     where
         K: Eq + Hash,
@@ -445,14 +476,17 @@ impl<K, V> SmallMap<K, V> {
         self.entry_hashed(Hashed::new(key))
     }
 
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
+    #[inline]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.entries.clear();
         if let Some(index) = &mut self.index {
@@ -499,14 +533,17 @@ pub enum Entry<'a, K, V> {
 }
 
 impl<'a, K, V> OccupiedEntry<'a, K, V> {
+    #[inline]
     pub fn key(&self) -> &K {
         self.key
     }
 
+    #[inline]
     pub fn get(&self) -> &V {
         self.value
     }
 
+    #[inline]
     pub fn get_mut(&mut self) -> &mut V {
         self.value
     }
@@ -516,11 +553,13 @@ impl<'a, K, V> VacantEntry<'a, K, V>
 where
     K: Eq,
 {
+    #[inline]
     pub fn key(&self) -> &K {
         self.key.key()
     }
 
     // NOTE(nga): `VacantEntry::insert` is supposed to return `&'a mut V`
+    #[inline]
     pub fn insert(self, value: V) {
         self.map.insert_unique_unchecked(self.key, value);
     }
@@ -530,6 +569,7 @@ impl<'a, K, V> Entry<'a, K, V>
 where
     K: Eq,
 {
+    #[inline]
     pub fn key(&self) -> &K {
         match self {
             Entry::Occupied(e) => e.key(),
@@ -570,6 +610,7 @@ impl<K, V> IntoIterator for SmallMap<K, V> {
     type Item = (K, V);
     type IntoIter = MHIntoIter<K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.into_iter()
     }
@@ -579,6 +620,7 @@ impl<'a, K, V> IntoIterator for &'a SmallMap<K, V> {
     type Item = (&'a K, &'a V);
     type IntoIter = MHIter<'a, K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -588,6 +630,7 @@ impl<'a, K, V> IntoIterator for &'a mut SmallMap<K, V> {
     type Item = (&'a K, &'a mut V);
     type IntoIter = MHIterMut<'a, K, V>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
     }
