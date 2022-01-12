@@ -167,6 +167,7 @@ impl StarlarkStr {
 }
 
 /// How to hash a string in a way that is compatible with Value
+#[inline]
 pub(crate) fn hash_string_value<H: Hasher>(x: &str, state: &mut H) {
     x.hash(state)
 }

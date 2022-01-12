@@ -28,10 +28,12 @@ use crate::collections::StarlarkHashValue;
 pub struct StarlarkHasher(FnvHasher);
 
 impl StarlarkHasher {
+    #[inline]
     pub fn new() -> StarlarkHasher {
         StarlarkHasher::default()
     }
 
+    #[inline]
     pub(crate) fn finish_small(self) -> StarlarkHashValue {
         // NOTE: Here we throw away half the key material we are given,
         // taking only the lower 32 bits.
@@ -41,10 +43,12 @@ impl StarlarkHasher {
 }
 
 impl Hasher for StarlarkHasher {
+    #[inline]
     fn finish(&self) -> u64 {
         self.0.finish()
     }
 
+    #[inline]
     fn write(&mut self, bytes: &[u8]) {
         self.0.write(bytes)
     }
