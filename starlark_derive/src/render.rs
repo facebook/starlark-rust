@@ -203,14 +203,14 @@ fn render_fun(x: StarFun) -> TokenStream {
         fn #name<'v>(
             eval: &mut starlark::eval::Evaluator<'v, '_>,
             #this_param
-            parameters: starlark::eval::Arguments<'v, '_>,
+            parameters: &starlark::eval::Arguments<'v, '_>,
             #signature_arg
         ) -> anyhow::Result<starlark::values::Value<'v>> {
             fn inner<'v>(
                 #[allow(unused_variables)]
                 eval: &mut starlark::eval::Evaluator<'v, '_>,
                 #this_param
-                __args: starlark::eval::Arguments<'v, '_>,
+                __args: &starlark::eval::Arguments<'v, '_>,
                 #signature_arg
             ) -> anyhow::Result<#return_type> {
                 #[allow(unused_variables)]

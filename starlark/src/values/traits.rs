@@ -343,7 +343,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     fn invoke(
         &self,
         _me: Value<'v>,
-        _args: Arguments<'v, '_>,
+        _args: &Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported(self, "call()")
@@ -358,7 +358,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
         &self,
         _me: Value<'v>,
         _this: Value<'v>,
-        _args: Arguments<'v, '_>,
+        _args: &Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         unreachable!("invoke_method should only be invoked for method or attribute");
@@ -709,14 +709,14 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn invoke(
         &self,
         _me: Value<'v>,
-        _args: Arguments<'v, '_>,
+        _args: &Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
     fn invoke_method(
         &self,
         me: Value<'v>,
         this: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
     fn at(&self, _index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;

@@ -837,7 +837,7 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn invoke(
         &self,
         _me: Value<'v>,
-        _args: Arguments<'v, '_>,
+        _args: &Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         panic!()
@@ -846,7 +846,7 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
         &self,
         _me: Value<'v>,
         _this: Value<'v>,
-        _args: Arguments<'v, '_>,
+        _args: &Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         panic!()
@@ -1014,7 +1014,7 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     fn invoke(
         &self,
         me: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.1.invoke(me, args, eval)
@@ -1023,7 +1023,7 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
         &self,
         me: Value<'v>,
         this: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.1.invoke_method(me, this, args, eval)

@@ -359,7 +359,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn format(this: &str, args: Arguments<'v, '_>) -> StringValue<'v> {
+    fn format(this: &str, args: &Arguments<'v, '_>) -> StringValue<'v> {
         let iter = args.positions(heap)?;
         interpolation::format(
             this,

@@ -153,7 +153,7 @@ impl ArgsCompiledValue {
     }
 
     /// Invoke a callback if all arguments are frozen values.
-    fn all_values<'v, R>(&self, handler: impl FnOnce(Arguments<'v, '_>) -> R) -> Option<R> {
+    fn all_values<'v, R>(&self, handler: impl FnOnce(&Arguments<'v, '_>) -> R) -> Option<R> {
         let (pos, named) = self.split_pos_names();
         let pos = pos
             .try_map(|e| e.as_value().map(FrozenValue::to_value).ok_or(()))
@@ -171,7 +171,7 @@ impl ArgsCompiledValue {
             .as_ref()
             .try_map(|kwargs| kwargs.as_value().map(FrozenValue::to_value).ok_or(()))
             .ok()?;
-        Some(handler(Arguments {
+        Some(handler(&Arguments {
             pos: &pos,
             named: &named,
             names: coerce(&self.names),

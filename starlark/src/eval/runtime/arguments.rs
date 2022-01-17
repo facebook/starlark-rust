@@ -335,7 +335,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     /// using the supplied [`ParametersSpec`].
     pub fn collect(
         &self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -344,7 +344,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
     pub fn collect_into<const N: usize>(
         &self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         heap: &'v Heap,
     ) -> anyhow::Result<[Cell<Option<Value<'v>>>; N]> {
         let slots = [(); N].map(|_| Cell::new(None));
@@ -357,7 +357,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     #[inline(always)]
     pub(crate) fn collect_inline(
         &self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -382,7 +382,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
     fn collect_slow(
         &self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -628,7 +628,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     /// Create a [`ParametersParser`] for given arguments.
     pub fn parser<R, F>(
         &self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
         k: F,
     ) -> anyhow::Result<R>

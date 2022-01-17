@@ -249,7 +249,11 @@ impl StarFun {
 
 impl StarArg {
     pub fn is_arguments(&self) -> bool {
-        is_type_name(&self.ty, "Arguments")
+        if let Type::Reference(ty) = &self.ty {
+            is_type_name(&ty.elem, "Arguments")
+        } else {
+            false
+        }
     }
 
     pub fn is_option(&self) -> bool {

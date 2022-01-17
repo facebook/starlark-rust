@@ -443,7 +443,7 @@ impl<'v> Value<'v> {
     pub(crate) fn invoke_with_loc(
         self,
         location: Option<FrozenRef<'static, FrozenFileSpan>>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         eval.with_call_stack(self, location, |eval| {
@@ -453,7 +453,7 @@ impl<'v> Value<'v> {
 
     pub fn invoke(
         self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.invoke_with_loc(None, args, eval)
@@ -463,7 +463,7 @@ impl<'v> Value<'v> {
         self,
         this: Value<'v>,
         location: FrozenRef<'static, FrozenFileSpan>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         eval.with_call_stack(self, Some(location), |eval| {
@@ -481,7 +481,7 @@ impl<'v> Value<'v> {
             pos,
             ..Arguments::default()
         };
-        self.invoke(params, eval)
+        self.invoke(&params, eval)
     }
 
     pub fn get_type_value(self) -> FrozenStringValue {
@@ -822,7 +822,7 @@ pub trait ValueLike<'v>:
 
     fn invoke(
         self,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.to_value().invoke(args, eval)

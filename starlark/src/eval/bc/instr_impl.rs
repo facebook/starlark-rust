@@ -1510,7 +1510,7 @@ pub(crate) trait BcFrozenCallable: BcInstrArg + Copy {
     fn bc_invoke<'v>(
         self,
         location: FrozenRef<'static, FrozenFileSpan>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>>;
 }
@@ -1520,7 +1520,7 @@ impl BcFrozenCallable for FrozenValue {
     fn bc_invoke<'v>(
         self,
         location: FrozenRef<'static, FrozenFileSpan>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.to_value().invoke_with_loc(Some(location), args, eval)
@@ -1532,7 +1532,7 @@ impl BcFrozenCallable for FrozenValueTyped<'static, FrozenDef> {
     fn bc_invoke<'v>(
         self,
         location: FrozenRef<'static, FrozenFileSpan>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         eval.with_call_stack(self.to_value(), Some(location), |eval| {
@@ -1546,7 +1546,7 @@ impl BcFrozenCallable for FrozenValueTyped<'static, NativeFunction> {
     fn bc_invoke<'v>(
         self,
         location: FrozenRef<'static, FrozenFileSpan>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         eval.with_call_stack(self.to_value(), Some(location), |eval| {
@@ -1601,7 +1601,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = args.pop_from_stack(stack);
         let f = stack.pop();
-        f.invoke_with_loc(Some(*span), arguments, eval)
+        f.invoke_with_loc(Some(*span), &arguments, eval)
     }
 }
 
@@ -1620,7 +1620,7 @@ impl<F: BcFrozenCallable, A: BcCallArgs> InstrNoFlowAddSpanImpl
         _pops: (),
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = args.pop_from_stack(stack);
-        fun.bc_invoke(*span, arguments, eval)
+        fun.bc_invoke(*span, &arguments, eval)
     }
 }
 
@@ -1630,7 +1630,7 @@ fn call_method_common<'v>(
     eval: &mut Evaluator<'v, '_>,
     this: Value<'v>,
     symbol: &Symbol,
-    arguments: Arguments<'v, '_>,
+    arguments: &Arguments<'v, '_>,
     span: FrozenRef<'static, FrozenFileSpan>,
 ) -> anyhow::Result<Value<'v>> {
     // TODO: wrong span: should be span of `object.method`, not of the whole expression
@@ -1650,7 +1650,7 @@ fn call_maybe_known_method_common<'v>(
     this: Value<'v>,
     symbol: &Symbol,
     known_method: &KnownMethod,
-    arguments: Arguments<'v, '_>,
+    arguments: &Arguments<'v, '_>,
     span: FrozenRef<'static, FrozenFileSpan>,
 ) -> anyhow::Result<Value<'v>> {
     if let Some(methods) = this.get_ref().get_methods() {
@@ -1686,7 +1686,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = args.pop_from_stack(stack);
         let this = stack.pop();
-        call_method_common(eval, this, symbol, arguments, *span)
+        call_method_common(eval, this, symbol, &arguments, *span)
     }
 }
 
@@ -1710,7 +1710,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl<A> 
     ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = args.pop_from_stack(stack);
         let this = stack.pop();
-        call_maybe_known_method_common(eval, this, symbol, known_method, arguments, *span)
+        call_maybe_known_method_common(eval, this, symbol, known_method, &arguments, *span)
     }
 }
 

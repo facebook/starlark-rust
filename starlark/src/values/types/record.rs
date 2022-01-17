@@ -250,7 +250,7 @@ where
     fn invoke(
         &self,
         me: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let this = me;

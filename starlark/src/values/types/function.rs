@@ -38,7 +38,7 @@ pub const FUNCTION_TYPE: &str = "function";
 
 /// A native function that can be evaluated.
 pub trait NativeFunc:
-    for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -46,7 +46,7 @@ pub trait NativeFunc:
 }
 
 impl<T> NativeFunc for T where
-    T: for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+    T: for<'v> Fn(&mut Evaluator<'v, '_>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
         + 'static
@@ -54,7 +54,7 @@ impl<T> NativeFunc for T where
 }
 
 pub trait NativeMeth:
-    for<'v> Fn(&mut Evaluator<'v, '_>, Value<'v>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+    for<'v> Fn(&mut Evaluator<'v, '_>, Value<'v>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
     + Sync
     + 'static
@@ -65,7 +65,7 @@ impl<T> NativeMeth for T where
     T: for<'v> Fn(
             &mut Evaluator<'v, '_>,
             Value<'v>,
-            Arguments<'v, '_>,
+            &Arguments<'v, '_>,
         ) -> anyhow::Result<Value<'v>>
         + Send
         + Sync
@@ -136,7 +136,7 @@ impl NativeFunction {
     pub fn new_direct<F>(function: F, name: String) -> Self
     where
         // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+        F: for<'v> Fn(&mut Evaluator<'v, '_>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
             + Send
             + Sync
             + 'static,
@@ -191,7 +191,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     fn invoke(
         &self,
         _me: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         (self.function)(eval, args)
@@ -247,7 +247,7 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
         &self,
         _me: Value<'v>,
         this: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         (self.function)(eval, this, args)
@@ -287,7 +287,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
         &self,
         _me: Value<'v>,
         this: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         let method = self.call(this, eval.heap())?;
@@ -324,7 +324,7 @@ where
     fn invoke(
         &self,
         _me: Value<'v>,
-        args: Arguments<'v, '_>,
+        args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
         self.method

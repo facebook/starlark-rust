@@ -293,7 +293,7 @@ impl GlobalsBuilder {
         f: F,
     ) where
         // If I switch this to the trait alias then it fails to resolve the usages
-        F: for<'v> Fn(&mut Evaluator<'v, '_>, Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
+        F: for<'v> Fn(&mut Evaluator<'v, '_>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
             + Send
             + Sync
             + 'static,
@@ -415,7 +415,7 @@ impl MethodsBuilder {
         F: for<'v> Fn(
                 &mut Evaluator<'v, '_>,
                 Value<'v>,
-                Arguments<'v, '_>,
+                &Arguments<'v, '_>,
             ) -> anyhow::Result<Value<'v>>
             + Send
             + Sync

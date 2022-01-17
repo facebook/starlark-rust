@@ -234,7 +234,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(type(Dict::TYPE))]
     #[starlark(speculative_exec_safe)]
-    fn dict(args: Arguments<'v, '_>) -> Dict<'v> {
+    fn dict(args: &Arguments<'v, '_>) -> Dict<'v> {
         // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
         // In particular, we don't generate the kwargs if there are no positional arguments.
         // Therefore we make it take the raw Arguments.
