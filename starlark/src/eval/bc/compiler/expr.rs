@@ -225,18 +225,20 @@ impl IrSpanned<ExprCompiled> {
             }
             ExprCompiled::If(box (ref cond, ref t, ref f)) => {
                 cond.write_bc(bc);
-                let else_patch = bc.write_if_not_br(cond.span);
-                t.write_bc(bc);
+                bc.write_if_else(
+                    span,
+                    |bc| {
+                        t.write_bc(bc);
 
-                // Both then and else branches leave a value on the stack.
-                // But we execute either of them.
-                // So explicitly decrement stack size.
-                bc.stack_sub(1);
-
-                let end_patch = bc.write_br(span);
-                bc.patch_addr(else_patch);
-                f.write_bc(bc);
-                bc.patch_addr(end_patch);
+                        // Both then and else branches leave a value on the stack.
+                        // But we execute either of them.
+                        // So explicitly decrement stack size.
+                        bc.stack_sub(1);
+                    },
+                    |bc| {
+                        f.write_bc(bc);
+                    },
+                );
             }
             ExprCompiled::And(box (ref l, ref r)) => {
                 l.write_bc(bc);
