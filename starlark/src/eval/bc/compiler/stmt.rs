@@ -19,6 +19,7 @@ use crate::{
     eval::{
         bc::{
             bytecode::Bc,
+            compiler::if_compiler::write_if_else,
             instr_impl::{
                 InstrBeforeStmt, InstrBreak, InstrContinue, InstrPossibleGc, InstrReturn,
                 InstrReturnNone,
@@ -105,7 +106,6 @@ impl IrSpanned<StmtCompiled> {
 
     fn write_if_else(
         c: &IrSpanned<ExprCompiled>,
-        maybe_not: MaybeNot,
         t: &StmtsCompiled,
         f: &StmtsCompiled,
         compiler: &StmtCompileContext,
@@ -113,22 +113,19 @@ impl IrSpanned<StmtCompiled> {
     ) {
         assert!(!t.is_empty() || !f.is_empty());
         if f.is_empty() {
-            Self::write_if_then(compiler, bc, c, maybe_not, &|compiler, bc| {
+            Self::write_if_then(compiler, bc, c, MaybeNot::Id, &|compiler, bc| {
                 t.write_bc(compiler, bc)
             });
         } else if t.is_empty() {
-            Self::write_if_then(compiler, bc, c, maybe_not.negate(), &|compiler, bc| {
+            Self::write_if_then(compiler, bc, c, MaybeNot::Not, &|compiler, bc| {
                 f.write_bc(compiler, bc)
             });
-        } else if let ExprCompiled::Not(box ref c) = c.node {
-            Self::write_if_else(c, maybe_not.negate(), f, t, compiler, bc);
         } else {
-            // TODO: handle and and or
-            c.write_bc(bc);
-            bc.write_if_else(
-                c.span,
+            write_if_else(
+                c,
                 |bc| t.write_bc(compiler, bc),
                 |bc| f.write_bc(compiler, bc),
+                bc,
             );
         }
     }
@@ -156,7 +153,7 @@ impl IrSpanned<StmtCompiled> {
                 lhs.write_bc(span, op, rhs, bc);
             }
             StmtCompiled::If(box (ref c, ref t, ref f)) => {
-                Self::write_if_else(c, MaybeNot::Id, t, f, compiler, bc);
+                Self::write_if_else(c, t, f, compiler, bc);
             }
             StmtCompiled::For(box (ref assign, ref over, ref body)) => {
                 over.write_bc(bc);

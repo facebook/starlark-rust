@@ -15,13 +15,23 @@
  * limitations under the License.
  */
 
-//! Compile module or function to bytecode.
+use crate::eval::{
+    bc::writer::BcWriter,
+    fragment::{expr::ExprCompiled, span::IrSpanned},
+};
 
-pub(crate) mod assign;
-pub(crate) mod assign_modify;
-pub(crate) mod call;
-pub(crate) mod compr;
-pub(crate) mod def;
-pub(crate) mod expr;
-pub(crate) mod if_compiler;
-pub(crate) mod stmt;
+/// Common code for compiling if statements and if expressions.
+pub(crate) fn write_if_else(
+    c: &IrSpanned<ExprCompiled>,
+    t: impl FnOnce(&mut BcWriter),
+    f: impl FnOnce(&mut BcWriter),
+    bc: &mut BcWriter,
+) {
+    if let ExprCompiled::Not(box ref c) = c.node {
+        write_if_else(c, f, t, bc);
+    } else {
+        // TODO: handle and and or
+        c.write_bc(bc);
+        bc.write_if_else(c.span, t, f);
+    }
+}
