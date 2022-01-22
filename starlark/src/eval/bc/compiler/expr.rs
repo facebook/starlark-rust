@@ -25,6 +25,7 @@ use crate::{
     collections::{Hashed, SmallMap},
     eval::{
         bc::{
+            compiler::if_compiler::write_if_else,
             instr_arg::{ArgPopsStack, ArgPopsStack1, ArgPopsStackMaybe1},
             instr_impl::*,
             slow_arg::BcInstrSlowArg,
@@ -224,12 +225,10 @@ impl IrSpanned<ExprCompiled> {
                 }
             }
             ExprCompiled::If(box (ref cond, ref t, ref f)) => {
-                cond.write_bc(bc);
-                bc.write_if_else(
-                    span,
+                write_if_else(
+                    cond,
                     |bc| {
                         t.write_bc(bc);
-
                         // Both then and else branches leave a value on the stack.
                         // But we execute either of them.
                         // So explicitly decrement stack size.
@@ -237,8 +236,11 @@ impl IrSpanned<ExprCompiled> {
                     },
                     |bc| {
                         f.write_bc(bc);
+                        bc.stack_sub(1);
                     },
+                    bc,
                 );
+                bc.stack_add(1);
             }
             ExprCompiled::And(box (ref l, ref r)) => {
                 l.write_bc(bc);

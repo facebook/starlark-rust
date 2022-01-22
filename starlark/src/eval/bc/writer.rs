@@ -390,7 +390,7 @@ impl<'f> BcWriter<'f> {
         self.patch_addr(end_patch);
     }
 
-    fn stack_add(&mut self, add: u32) {
+    pub(crate) fn stack_add(&mut self, add: u32) {
         self.stack_size += add;
         self.max_stack_size = cmp::max(self.max_stack_size, self.stack_size);
     }
