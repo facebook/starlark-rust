@@ -31,7 +31,6 @@ use crate::{
             span::IrSpanned,
             stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
         },
-        runtime::call_stack::FrozenFileSpan,
     },
     syntax::ast::{ClauseP, ForClauseP},
 };
@@ -88,10 +87,6 @@ impl Compiler<'_, '_, '_> {
         mut clauses: Vec<ClauseP<CstPayload>>,
     ) -> Vec<ClauseCompiled> {
         // The first for.over is scoped before we enter the list comp
-        let over_span = FrozenFileSpan {
-            span: for_.over.span,
-            file: self.codemap,
-        };
         let over = self.expr(list_to_tuple(for_.over));
 
         // Now we want to group them into a `for`, followed by any number of `if`.
@@ -104,20 +99,14 @@ impl Compiler<'_, '_, '_> {
                     res.push(ClauseCompiled {
                         var: self.assign(for_.var),
                         over,
-                        over_span,
                         ifs,
                     });
                     return res;
                 }
                 Some(f) => {
-                    let over_span = FrozenFileSpan {
-                        span: f.over.span,
-                        file: self.codemap,
-                    };
                     res.push(ClauseCompiled {
                         over: self.expr(f.over),
                         var: self.assign(f.var),
-                        over_span,
                         ifs,
                     });
                 }
@@ -154,7 +143,6 @@ impl ComprCompiled {
 pub(crate) struct ClauseCompiled {
     pub(crate) var: IrSpanned<AssignCompiledValue>,
     pub(crate) over: IrSpanned<ExprCompiled>,
-    pub(crate) over_span: FrozenFileSpan,
     pub(crate) ifs: Vec<IrSpanned<ExprCompiled>>,
 }
 
@@ -163,13 +151,11 @@ impl ClauseCompiled {
         let ClauseCompiled {
             ref var,
             ref over,
-            over_span,
             ref ifs,
         } = *self;
         ClauseCompiled {
             var: var.optimize_on_freeze(ctx),
             over: over.optimize_on_freeze(ctx),
-            over_span,
             ifs: ifs.map(|e| e.optimize_on_freeze(ctx)),
         }
     }

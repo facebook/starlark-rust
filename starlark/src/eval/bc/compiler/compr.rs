@@ -40,7 +40,7 @@ impl ClauseCompiled {
         term: impl FnOnce(&mut BcWriter),
     ) {
         self.over.write_bc(bc);
-        bc.write_for(self.over_span, |bc| {
+        bc.write_for(self.over.span, |bc| {
             self.var.write_bc(bc);
             for c in &self.ifs {
                 write_if_then(
