@@ -19,7 +19,7 @@ use crate::{
     eval::{
         bc::{
             bytecode::Bc,
-            compiler::if_compiler::write_if_else,
+            compiler::if_compiler::{write_if_else, write_if_then},
             instr_impl::{
                 InstrBeforeStmt, InstrBreak, InstrContinue, InstrPossibleGc, InstrReturn,
                 InstrReturnNone,
@@ -69,39 +69,14 @@ impl IrSpanned<StmtCompiled> {
         maybe_not: MaybeNot,
         t: &dyn Fn(&StmtCompileContext, &mut BcWriter),
     ) {
-        if let ExprCompiled::Not(box ref c) = c.node {
-            Self::write_if_then(compiler, bc, c, maybe_not.negate(), t);
-        } else if let (ExprCompiled::And(box (ref a, ref b)), MaybeNot::Id) = (&c.node, maybe_not) {
-            // `if a and b`
-            //  |||
-            // `if a: if b:
-            Self::write_if_then(compiler, bc, a, MaybeNot::Id, &|compiler, bc| {
-                Self::write_if_then(compiler, bc, b, MaybeNot::Id, t);
-            });
-        } else if let (ExprCompiled::Or(box (ref a, ref b)), MaybeNot::Not) = (&c.node, maybe_not) {
-            // `if not (a or b)`
-            //  |||
-            // `if (not a) and (not b)`
-            Self::write_if_then(compiler, bc, a, MaybeNot::Not, &|compiler, bc| {
-                Self::write_if_then(compiler, bc, b, MaybeNot::Not, t);
-            });
-        } else {
-            // TODO: handle more and and or
-            match maybe_not {
-                MaybeNot::Id => {
-                    c.write_bc(bc);
-                    bc.write_if(c.span, |bc| {
-                        t(compiler, bc);
-                    })
-                }
-                MaybeNot::Not => {
-                    c.write_bc(bc);
-                    bc.write_if_not(c.span, |bc| {
-                        t(compiler, bc);
-                    })
-                }
-            }
-        }
+        write_if_then(
+            c,
+            maybe_not,
+            &|bc| {
+                t(compiler, bc);
+            },
+            bc,
+        );
     }
 
     fn write_if_else(
