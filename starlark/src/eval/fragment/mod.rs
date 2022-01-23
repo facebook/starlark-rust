@@ -19,6 +19,7 @@ pub(crate) mod call;
 pub(crate) mod compr;
 pub(crate) mod def;
 pub(crate) mod expr;
+pub(crate) mod expr_bool;
 pub(crate) mod known;
 pub(crate) mod module;
 pub(crate) mod small_vec_1;

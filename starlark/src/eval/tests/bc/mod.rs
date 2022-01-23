@@ -18,6 +18,7 @@
 //! Bytecode generation tests.
 
 mod expr;
+mod if_stmt;
 
 use crate::{
     assert::Assert,

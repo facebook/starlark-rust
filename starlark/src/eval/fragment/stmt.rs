@@ -38,7 +38,8 @@ use crate::{
             Compiler,
         },
         fragment::{
-            expr::ExprCompiled, known::list_to_tuple, small_vec_1::SmallVec1, span::IrSpanned,
+            expr::ExprCompiled, expr_bool::ExprCompiledBool, known::list_to_tuple,
+            small_vec_1::SmallVec1, span::IrSpanned,
         },
         runtime::{
             call_stack::FrozenFileSpan,
@@ -265,26 +266,24 @@ impl StmtsCompiled {
         t: StmtsCompiled,
         f: StmtsCompiled,
     ) -> StmtsCompiled {
+        let cond = ExprCompiledBool::new(cond);
         match cond.node {
-            ExprCompiled::Value(cond) => {
-                if cond.to_value().to_bool() {
-                    t
-                } else {
-                    f
+            ExprCompiledBool::Const(true) => t,
+            ExprCompiledBool::Const(false) => f,
+            ExprCompiledBool::Expr(cond) => match cond {
+                ExprCompiled::Not(box cond) => Self::if_stmt(span, cond, f, t),
+                cond => {
+                    let cond = IrSpanned { span, node: cond };
+                    if t.is_empty() && f.is_empty() {
+                        Self::expr(cond)
+                    } else {
+                        StmtsCompiled::one(IrSpanned {
+                            span,
+                            node: StmtCompiled::If(box (cond, t, f)),
+                        })
+                    }
                 }
-            }
-            ExprCompiled::Not(box cond) => Self::if_stmt(span, cond, f, t),
-            cond => {
-                let cond = IrSpanned { span, node: cond };
-                if t.is_empty() && f.is_empty() {
-                    Self::expr(cond)
-                } else {
-                    StmtsCompiled::one(IrSpanned {
-                        span,
-                        node: StmtCompiled::If(box (cond, t, f)),
-                    })
-                }
-            }
+            },
         }
     }
 

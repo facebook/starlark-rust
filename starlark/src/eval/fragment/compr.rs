@@ -75,7 +75,7 @@ fn compile_ifs(
                 return (Some(f), ifs);
             }
             ClauseP::If(x) => {
-                ifs.push(compiler.expr(x));
+                ifs.push(compiler.expr_truth(x).into_expr());
             }
         }
     }

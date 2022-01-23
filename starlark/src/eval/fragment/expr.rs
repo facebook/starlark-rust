@@ -32,8 +32,9 @@ use crate::{
             Compiler,
         },
         fragment::{
-            call::CallCompiled, compr::ComprCompiled, def::DefCompiled, known::list_to_tuple,
-            span::IrSpanned, stmt::OptimizeOnFreezeContext,
+            call::CallCompiled, compr::ComprCompiled, def::DefCompiled,
+            expr_bool::ExprCompiledBool, known::list_to_tuple, span::IrSpanned,
+            stmt::OptimizeOnFreezeContext,
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
         FrozenDef,
@@ -303,6 +304,43 @@ impl ExprCompiled {
             _ => false,
         }
     }
+
+    /// If this expression is pure, infallible, and known to produce a value,
+    /// return truth of that value.
+    pub(crate) fn is_pure_infallible_to_bool(&self) -> Option<bool> {
+        match self {
+            ExprCompiled::Value(v) => Some(v.to_value().to_bool()),
+            ExprCompiled::List(xs) | ExprCompiled::Tuple(xs)
+                if xs.iter().all(|x| x.is_pure_infallible()) =>
+            {
+                Some(!xs.is_empty())
+            }
+            // TODO(nga): if keys are unique hashable constants, we can fold this to constant too.
+            ExprCompiled::Dict(xs) if xs.is_empty() => Some(false),
+            ExprCompiled::Not(x) => x.is_pure_infallible_to_bool().map(|x| !x),
+            ExprCompiled::And(box (x, y)) => {
+                match (
+                    x.is_pure_infallible_to_bool(),
+                    y.is_pure_infallible_to_bool(),
+                ) {
+                    (Some(true), y) => y,
+                    (Some(false), _) => Some(false),
+                    (None, _) => None,
+                }
+            }
+            ExprCompiled::Or(box (x, y)) => {
+                match (
+                    x.is_pure_infallible_to_bool(),
+                    y.is_pure_infallible_to_bool(),
+                ) {
+                    (Some(false), y) => y,
+                    (Some(true), _) => Some(true),
+                    (None, _) => None,
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 impl IrSpanned<ExprCompiled> {
@@ -560,28 +598,25 @@ impl ExprCompiled {
         t: IrSpanned<ExprCompiled>,
         f: IrSpanned<ExprCompiled>,
     ) -> IrSpanned<ExprCompiled> {
-        match cond {
-            IrSpanned {
-                node: ExprCompiled::Value(cond),
-                ..
-            } => {
-                if cond.to_value().to_bool() {
-                    t
-                } else {
-                    f
+        let cond_span = cond.span;
+        let cond = ExprCompiledBool::new(cond);
+        match cond.node {
+            ExprCompiledBool::Const(true) => t,
+            ExprCompiledBool::Const(false) => f,
+            ExprCompiledBool::Expr(cond) => match cond {
+                ExprCompiled::Not(box cond) => ExprCompiled::if_expr(cond, f, t),
+                cond => {
+                    let cond = IrSpanned {
+                        node: cond,
+                        span: cond_span,
+                    };
+                    let span = cond.span.merge(&t.span).merge(&f.span);
+                    IrSpanned {
+                        node: ExprCompiled::If(box (cond, t, f)),
+                        span,
+                    }
                 }
-            }
-            IrSpanned {
-                node: ExprCompiled::Not(box cond),
-                ..
-            } => Self::if_expr(cond, f, t),
-            cond => {
-                let span = cond.span.merge(&t.span).merge(&f.span);
-                IrSpanned {
-                    node: ExprCompiled::If(box (cond, t, f)),
-                    span,
-                }
-            }
+            },
         }
     }
 
@@ -1271,5 +1306,12 @@ impl Compiler<'_, '_, '_> {
             }
         };
         IrSpanned { node: expr, span }
+    }
+
+    /// Like `expr` but returns an expression optimized assuming
+    /// only the truth of the result is needed.
+    pub(crate) fn expr_truth(&mut self, expr: CstExpr) -> IrSpanned<ExprCompiledBool> {
+        let expr = self.expr(expr);
+        ExprCompiledBool::new(expr)
     }
 }
