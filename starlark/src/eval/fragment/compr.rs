@@ -43,7 +43,7 @@ impl Compiler<'_, '_, '_> {
         for_: ForClauseP<CstPayload>,
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiled {
-        let clauses = compile_clauses(for_, clauses, self);
+        let clauses = self.compile_clauses(for_, clauses);
         let x = self.expr(x);
         ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
     }
@@ -55,72 +55,72 @@ impl Compiler<'_, '_, '_> {
         for_: ForClauseP<CstPayload>,
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiled {
-        let clauses = compile_clauses(for_, clauses, self);
+        let clauses = self.compile_clauses(for_, clauses);
         let k = self.expr(k);
         let v = self.expr(v);
         ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
     }
-}
 
-/// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
-fn compile_ifs(
-    clauses: &mut Vec<ClauseP<CstPayload>>,
-    compiler: &mut Compiler,
-) -> (Option<ForClauseP<CstPayload>>, Vec<IrSpanned<ExprCompiled>>) {
-    let mut ifs = Vec::new();
-    while let Some(x) = clauses.pop() {
-        match x {
-            ClauseP::For(f) => {
-                ifs.reverse();
-                return (Some(f), ifs);
-            }
-            ClauseP::If(x) => {
-                ifs.push(compiler.expr_truth(x).into_expr());
+    /// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
+    fn compile_ifs(
+        &mut self,
+        clauses: &mut Vec<ClauseP<CstPayload>>,
+    ) -> (Option<ForClauseP<CstPayload>>, Vec<IrSpanned<ExprCompiled>>) {
+        let mut ifs = Vec::new();
+        while let Some(x) = clauses.pop() {
+            match x {
+                ClauseP::For(f) => {
+                    ifs.reverse();
+                    return (Some(f), ifs);
+                }
+                ClauseP::If(x) => {
+                    ifs.push(self.expr_truth(x).into_expr());
+                }
             }
         }
+        ifs.reverse();
+        (None, ifs)
     }
-    ifs.reverse();
-    (None, ifs)
-}
 
-fn compile_clauses(
-    for_: ForClauseP<CstPayload>,
-    mut clauses: Vec<ClauseP<CstPayload>>,
-    compiler: &mut Compiler,
-) -> Vec<ClauseCompiled> {
-    // The first for.over is scoped before we enter the list comp
-    let over_span = FrozenFileSpan {
-        span: for_.over.span,
-        file: compiler.codemap,
-    };
-    let over = compiler.expr(list_to_tuple(for_.over));
+    fn compile_clauses(
+        &mut self,
+        for_: ForClauseP<CstPayload>,
+        mut clauses: Vec<ClauseP<CstPayload>>,
+    ) -> Vec<ClauseCompiled> {
+        // The first for.over is scoped before we enter the list comp
+        let over_span = FrozenFileSpan {
+            span: for_.over.span,
+            file: self.codemap,
+        };
+        let over = self.expr(list_to_tuple(for_.over));
 
-    // Now we want to group them into a `for`, followed by any number of `if`.
-    // The evaluator wants to use pop to consume them, so reverse the order.
-    let mut res = Vec::new();
-    loop {
-        let (next_for, ifs) = compile_ifs(&mut clauses, compiler);
-        match next_for {
-            None => {
-                res.push(ClauseCompiled {
-                    var: compiler.assign(for_.var),
-                    over,
-                    over_span,
-                    ifs,
-                });
-                return res;
-            }
-            Some(f) => {
-                let over_span = FrozenFileSpan {
-                    span: f.over.span,
-                    file: compiler.codemap,
-                };
-                res.push(ClauseCompiled {
-                    over: compiler.expr(f.over),
-                    var: compiler.assign(f.var),
-                    over_span,
-                    ifs,
-                });
+        // Now we want to group them into a `for`, followed by any number of `if`.
+        // The evaluator wants to use pop to consume them, so reverse the order.
+        let mut res = Vec::new();
+        loop {
+            let (next_for, ifs) = self.compile_ifs(&mut clauses);
+            match next_for {
+                None => {
+                    res.push(ClauseCompiled {
+                        var: self.assign(for_.var),
+                        over,
+                        over_span,
+                        ifs,
+                    });
+                    return res;
+                }
+                Some(f) => {
+                    let over_span = FrozenFileSpan {
+                        span: f.over.span,
+                        file: self.codemap,
+                    };
+                    res.push(ClauseCompiled {
+                        over: self.expr(f.over),
+                        var: self.assign(f.var),
+                        over_span,
+                        ifs,
+                    });
+                }
             }
         }
     }
