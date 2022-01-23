@@ -19,12 +19,16 @@
 
 use crate::eval::{
     bc::{
+        compiler::if_compiler::write_if_then,
         instr_impl::{
             InstrComprDictInsert, InstrComprListAppend, InstrContinue, InstrDictNew, InstrListNew,
         },
         writer::BcWriter,
     },
-    fragment::compr::{ClauseCompiled, ComprCompiled},
+    fragment::{
+        compr::{ClauseCompiled, ComprCompiled},
+        expr::MaybeNot,
+    },
     runtime::call_stack::FrozenFileSpan,
 };
 
@@ -39,10 +43,14 @@ impl ClauseCompiled {
         bc.write_for(self.over_span, |bc| {
             self.var.write_bc(bc);
             for c in &self.ifs {
-                c.write_bc(bc);
-                bc.write_if_not(c.span, |bc| {
-                    bc.write_instr::<InstrContinue>(c.span, ());
-                });
+                write_if_then(
+                    c,
+                    MaybeNot::Not,
+                    &|bc| {
+                        bc.write_instr::<InstrContinue>(c.span, ());
+                    },
+                    bc,
+                );
             }
 
             match rem.split_last() {
