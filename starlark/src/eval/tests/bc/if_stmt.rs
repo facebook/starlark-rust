@@ -130,3 +130,31 @@ fn test_if_false_or_x() {
         "def test(x):\n  if False or x: print()",
     )
 }
+
+#[test]
+fn test_and_stmt() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocal,
+            BcOpcode::IfNotBr,
+            BcOpcode::CallFrozenNativePos,
+            BcOpcode::Pop,
+            BcOpcode::ReturnNone,
+        ],
+        "def test(x):\n  x and print()",
+    )
+}
+
+#[test]
+fn test_or_stmt() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocal,
+            BcOpcode::IfBr,
+            BcOpcode::CallFrozenNativePos,
+            BcOpcode::Pop,
+            BcOpcode::ReturnNone,
+        ],
+        "def test(x):\n  x or print()",
+    )
+}

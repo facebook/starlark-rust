@@ -253,6 +253,13 @@ impl StmtsCompiled {
             ExprCompiled::Type(x) | ExprCompiled::TypeIs(x, _) | ExprCompiled::Not(x) => {
                 Self::expr(*x)
             }
+            // "And" and "or" for effect are equivalent to `if`.
+            ExprCompiled::And(box (x, y)) => {
+                Self::if_stmt(expr.span, x, Self::expr(y), StmtsCompiled::empty())
+            }
+            ExprCompiled::Or(box (x, y)) => {
+                Self::if_stmt(expr.span, x, StmtsCompiled::empty(), Self::expr(y))
+            }
             expr => StmtsCompiled::one(IrSpanned {
                 span,
                 node: StmtCompiled::Expr(IrSpanned { span, node: expr }),
