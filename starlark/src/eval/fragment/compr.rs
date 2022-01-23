@@ -85,7 +85,7 @@ impl Compiler<'_, '_, '_> {
         &mut self,
         for_: ForClauseP<CstPayload>,
         mut clauses: Vec<ClauseP<CstPayload>>,
-    ) -> Vec<ClauseCompiled> {
+    ) -> ClausesCompiled {
         // The first for.over is scoped before we enter the list comp
         let over = self.expr(list_to_tuple(for_.over));
 
@@ -96,12 +96,12 @@ impl Compiler<'_, '_, '_> {
             let (next_for, ifs) = self.compile_ifs(&mut clauses);
             match next_for {
                 None => {
-                    res.push(ClauseCompiled {
+                    let last = ClauseCompiled {
                         var: self.assign(for_.var),
                         over,
                         ifs,
-                    });
-                    return res;
+                    };
+                    return ClausesCompiled::new(res, last);
                 }
                 Some(f) => {
                     res.push(ClauseCompiled {
@@ -117,10 +117,10 @@ impl Compiler<'_, '_, '_> {
 
 #[derive(Clone, Debug)]
 pub(crate) enum ComprCompiled {
-    List(Box<IrSpanned<ExprCompiled>>, Vec<ClauseCompiled>),
+    List(Box<IrSpanned<ExprCompiled>>, ClausesCompiled),
     Dict(
         Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>,
-        Vec<ClauseCompiled>,
+        ClausesCompiled,
     ),
 }
 
@@ -129,11 +129,11 @@ impl ComprCompiled {
         ExprCompiled::Compr(match self {
             ComprCompiled::List(box ref x, ref clauses) => ComprCompiled::List(
                 box x.optimize_on_freeze(ctx),
-                clauses.map(|c| c.optimize_on_freeze(ctx)),
+                clauses.optimize_on_freeze(ctx),
             ),
             ComprCompiled::Dict(box (ref k, ref v), ref clauses) => ComprCompiled::Dict(
                 box (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx)),
-                clauses.map(|c| c.optimize_on_freeze(ctx)),
+                clauses.optimize_on_freeze(ctx),
             ),
         })
     }
@@ -157,6 +157,31 @@ impl ClauseCompiled {
             var: var.optimize_on_freeze(ctx),
             over: over.optimize_on_freeze(ctx),
             ifs: ifs.map(|e| e.optimize_on_freeze(ctx)),
+        }
+    }
+}
+
+/// All clauses in a comprehension. Never empty.
+#[derive(Clone, Debug)]
+pub(crate) struct ClausesCompiled {
+    /// Not empty.
+    clauses: Vec<ClauseCompiled>,
+}
+
+impl ClausesCompiled {
+    fn new(clauses: Vec<ClauseCompiled>, last: ClauseCompiled) -> ClausesCompiled {
+        let mut clauses = clauses;
+        clauses.push(last);
+        ClausesCompiled { clauses }
+    }
+
+    pub(crate) fn split_last(&self) -> (&ClauseCompiled, &[ClauseCompiled]) {
+        self.clauses.split_last().unwrap()
+    }
+
+    fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ClausesCompiled {
+        ClausesCompiled {
+            clauses: self.clauses.map(|c| c.optimize_on_freeze(ctx)),
         }
     }
 }

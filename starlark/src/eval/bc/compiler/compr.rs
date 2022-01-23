@@ -71,7 +71,7 @@ impl ComprCompiled {
         match *self {
             ComprCompiled::List(box ref expr, ref clauses) => {
                 bc.write_instr::<InstrListNew>(span, ());
-                let (first, rem) = clauses.split_last().unwrap();
+                let (first, rem) = clauses.split_last();
                 first.write_bc(bc, rem, |bc| {
                     expr.write_bc(bc);
                     bc.write_instr::<InstrComprListAppend>(expr.span, ());
@@ -79,7 +79,7 @@ impl ComprCompiled {
             }
             ComprCompiled::Dict(box (ref k, ref v), ref clauses) => {
                 bc.write_instr::<InstrDictNew>(span, ());
-                let (first, rem) = clauses.split_last().unwrap();
+                let (first, rem) = clauses.split_last();
                 first.write_bc(bc, rem, |bc| {
                     k.write_bc(bc);
                     v.write_bc(bc);
