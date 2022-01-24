@@ -17,6 +17,7 @@
 
 //! Bytecode generation tests.
 
+mod and_or;
 mod compr;
 mod expr;
 mod if_stmt;
