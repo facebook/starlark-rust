@@ -22,7 +22,7 @@ use crate::{
             compiler::if_compiler::{write_if_else, write_if_then},
             instr_impl::{
                 InstrBeforeStmt, InstrBreak, InstrContinue, InstrPossibleGc, InstrReturn,
-                InstrReturnNone,
+                InstrReturnConst,
             },
             writer::BcWriter,
         },
@@ -33,7 +33,7 @@ use crate::{
         },
         runtime::call_stack::FrozenFileSpan,
     },
-    values::FrozenHeap,
+    values::{FrozenHeap, FrozenValue},
 };
 
 impl StmtsCompiled {
@@ -110,8 +110,8 @@ impl IrSpanned<StmtCompiled> {
         match self.node {
             StmtCompiled::PossibleGc => bc.write_instr::<InstrPossibleGc>(span, ()),
             StmtCompiled::Return(ref expr) => {
-                if expr.is_none() {
-                    bc.write_instr::<InstrReturnNone>(span, ());
+                if let Some(value) = expr.as_value() {
+                    bc.write_instr::<InstrReturnConst>(span, value);
                 } else {
                     expr.write_bc(bc);
                     bc.write_instr::<InstrReturn>(span, ());
@@ -160,7 +160,7 @@ impl StmtsCompiled {
         // Small optimization: if the last statement is return,
         // we do not need to write another return.
         if !matches!(self.last().map(|s| &s.node), Some(StmtCompiled::Return(..))) {
-            bc.write_instr::<InstrReturnNone>(FrozenFileSpan::default(), ());
+            bc.write_instr::<InstrReturnConst>(FrozenFileSpan::default(), FrozenValue::new_none());
         }
 
         bc.finish()

@@ -20,7 +20,7 @@ use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
 #[test]
 fn test_methods_invoked_speculatively() {
     test_instrs(
-        &[BcOpcode::Const, BcOpcode::Return],
+        &[BcOpcode::ReturnConst],
         r#"
 def test():
     return "foo".startswith("f")
@@ -31,7 +31,7 @@ def test():
 #[test]
 fn test_format_speculatively_before_format_instr() {
     test_instrs(
-        &[BcOpcode::Const, BcOpcode::Return],
+        &[BcOpcode::ReturnConst],
         r#"
 def test():
     # Test this expression is compiled to constant, not to `FormatOne` instruction.

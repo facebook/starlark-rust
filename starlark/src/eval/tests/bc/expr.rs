@@ -76,7 +76,7 @@ fn test_call_maybe_known_method() {
             BcOpcode::LoadLocalAndConst,
             BcOpcode::CallMaybeKnownMethodPos,
             BcOpcode::Pop,
-            BcOpcode::ReturnNone,
+            BcOpcode::ReturnConst,
         ],
         "def test(x): x.append(1)",
     );

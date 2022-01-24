@@ -22,7 +22,7 @@ use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
 #[test]
 fn test_def_const_inlined() {
     test_instrs(
-        &[BcOpcode::Const, BcOpcode::Return],
+        &[BcOpcode::ReturnConst],
         r#"
 def trivial():
     return 10

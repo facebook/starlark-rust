@@ -1348,21 +1348,21 @@ impl BcInstr for InstrContinue {
     }
 }
 
-pub(crate) struct InstrReturnNone;
+pub(crate) struct InstrReturnConst;
 pub(crate) struct InstrReturn;
 
-impl BcInstr for InstrReturnNone {
+impl BcInstr for InstrReturnConst {
     type Pop<'v> = ();
     type Push<'v> = ();
-    type Arg = ();
+    type Arg = FrozenValue;
 
     fn run<'v, 'b>(
         _eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
         _ip: BcPtrAddr<'b>,
-        (): &(),
+        value: &FrozenValue,
     ) -> InstrControl<'v, 'b> {
-        InstrControl::Return(Value::new_none())
+        InstrControl::Return(value.to_value())
     }
 }
 

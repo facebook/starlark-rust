@@ -331,7 +331,7 @@ mod test {
 
     use crate::{
         eval::bc::{
-            instr_impl::{InstrConst, InstrPossibleGc, InstrReturn, InstrReturnNone},
+            instr_impl::{InstrBreak, InstrConst, InstrPossibleGc, InstrReturn},
             instrs::{BcInstrs, BcInstrsWriter},
         },
         values::FrozenValue,
@@ -340,7 +340,7 @@ mod test {
     #[test]
     fn write() {
         let mut bc = BcInstrsWriter::new();
-        bc.write::<InstrReturnNone>(());
+        bc.write::<InstrBreak>(());
         assert_eq!(1, bc.instrs.len());
         bc.write::<InstrPossibleGc>(());
         assert_eq!(2, bc.instrs.len());

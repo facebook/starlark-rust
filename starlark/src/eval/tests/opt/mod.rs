@@ -39,7 +39,7 @@ def test(x):
 #[test]
 fn test_private_forward_mutable_module_vars_inlined() {
     test_instrs(
-        &[BcOpcode::Const, BcOpcode::Return],
+        &[BcOpcode::ReturnConst],
         r#"
 def test():
     # Reference to module variable should be replaced with constant
@@ -53,7 +53,7 @@ _private_forward_mutable = {1: 2}
 #[test]
 fn test_same_module_struct_getattr_inlined() {
     test_instrs(
-        &[BcOpcode::Const, BcOpcode::Return],
+        &[BcOpcode::ReturnConst],
         r#"
 def test():
     return _s.f
@@ -79,7 +79,7 @@ def test():
 #[test]
 fn test_empty_iterable_optimized_away() {
     test_instrs(
-        &[BcOpcode::ReturnNone],
+        &[BcOpcode::ReturnConst],
         r#"
 L = []
 def test():
@@ -92,7 +92,7 @@ def test():
 #[test]
 fn test_unreachable_code_optimized_away() {
     test_instrs(
-        &[BcOpcode::ReturnNone],
+        &[BcOpcode::ReturnConst],
         r#"
 def test():
     if True:

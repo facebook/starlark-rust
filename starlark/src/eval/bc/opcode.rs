@@ -100,7 +100,7 @@ pub(crate) enum BcOpcode {
     Break,
     Continue,
     Return,
-    ReturnNone,
+    ReturnConst,
     Call,
     CallPos,
     CallFrozenDef,
