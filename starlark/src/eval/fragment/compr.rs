@@ -43,8 +43,12 @@ impl Compiler<'_, '_, '_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiled {
         let clauses = self.compile_clauses(for_, clauses);
-        let x = self.expr(x);
-        ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
+        if clauses.is_nop() {
+            ExprCompiled::List(Vec::new())
+        } else {
+            let x = self.expr(x);
+            ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
+        }
     }
 
     pub fn dict_comprehension(
@@ -55,9 +59,13 @@ impl Compiler<'_, '_, '_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiled {
         let clauses = self.compile_clauses(for_, clauses);
-        let k = self.expr(k);
-        let v = self.expr(v);
-        ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
+        if clauses.is_nop() {
+            ExprCompiled::Dict(Vec::new())
+        } else {
+            let k = self.expr(k);
+            let v = self.expr(v);
+            ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
+        }
     }
 
     /// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
@@ -73,6 +81,7 @@ impl Compiler<'_, '_, '_> {
                     return (Some(f), ifs);
                 }
                 ClauseP::If(x) => {
+                    // TODO(nga): if condition is const, do something better.
                     ifs.push(self.expr_truth(x).into_expr());
                 }
             }
@@ -173,6 +182,17 @@ impl ClausesCompiled {
         let mut clauses = clauses;
         clauses.push(last);
         ClausesCompiled { clauses }
+    }
+
+    /// Clauses are definitely no-op, i. e. zero iterations, and no side effects of iteration.
+    fn is_nop(&self) -> bool {
+        // NOTE(nga): if the first loop argument is empty collection, clauses are definitely no-op.
+        //   But this is not true for the rest of loops: if inner loop collection is empty,
+        //   clauses produce no iterations, but the outer loop may still has side effects.
+        //   There are missing optimizations here:
+        //   * we could separate effects and emit empty list/dict.
+        //   * or at least do not generate comprehension terminator.
+        self.split_last().0.over.is_iterable_empty()
     }
 
     pub(crate) fn split_last(&self) -> (&ClauseCompiled, &[ClauseCompiled]) {

@@ -15,26 +15,14 @@
  * limitations under the License.
  */
 
-//! Bytecode generation tests.
+//! Test compilation of comprehensions.
 
-mod compr;
-mod expr;
-mod if_stmt;
+use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
 
-use crate::{
-    assert::Assert,
-    eval::{bc::opcode::BcOpcode, FrozenDef},
-};
-
-pub(crate) fn test_instrs(expected: &[BcOpcode], def_program: &str) {
-    let mut a = Assert::new();
-    let def = a
-        .module("instrs.star", def_program)
-        .get("test")
-        .unwrap()
-        .downcast::<FrozenDef>()
-        .unwrap();
-    let mut opcodes = def.bc().instrs.opcodes();
-    assert_eq!(Some(BcOpcode::End), opcodes.pop());
-    assert_eq!(expected, opcodes);
+#[test]
+fn test_no_loop_if_top_collection_is_empty() {
+    test_instrs(
+        &[BcOpcode::ListNew, BcOpcode::Return],
+        "def test(): return [x for x in []]",
+    );
 }
