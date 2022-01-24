@@ -258,6 +258,10 @@ impl IrSpanned<ExprCompiled> {
                     r.write_bc(bc);
                 });
             }
+            ExprCompiled::Seq(box (ref l, ref r)) => {
+                l.write_bc_for_effect(bc);
+                r.write_bc(bc);
+            }
             ExprCompiled::Op(op, box (ref l, ref r)) => {
                 l.write_bc(bc);
                 r.write_bc(bc);

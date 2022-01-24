@@ -357,6 +357,11 @@ impl Compiler<'_, '_, '_> {
                 let y = Compiler::is_safe_to_inline_expr_spanned(y)?;
                 ExprCompiled::Or(box (x, y))
             }
+            ExprCompiled::Seq(box (ref x, ref y)) => {
+                let x = Compiler::is_safe_to_inline_expr_spanned(x)?;
+                let y = Compiler::is_safe_to_inline_expr_spanned(y)?;
+                ExprCompiled::Seq(box (x, y))
+            }
             ExprCompiled::PercentSOne(..) => return None,
             ExprCompiled::FormatOne(box (before, ref v, after)) => {
                 // `FormatOne` is infallible, unlike `PercentSOne`.

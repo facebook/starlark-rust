@@ -193,6 +193,9 @@ pub(crate) enum ExprCompiled {
     UnOp(ExprUnOp, Box<IrSpanned<ExprCompiled>>),
     And(Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>),
     Or(Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>),
+    /// Expression equivalent to `(x, y)[1]`: evaluate `x`, discard the result,
+    /// then evaluate `y` and use its result.
+    Seq(Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>),
     Op(
         ExprBinOp,
         Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>,
@@ -295,6 +298,7 @@ impl ExprCompiled {
             Self::Type(x) => x.is_pure_infallible(),
             Self::TypeIs(x, _t) => x.is_pure_infallible(),
             Self::Not(x) => x.is_pure_infallible(),
+            Self::Seq(box (x, y)) => x.is_pure_infallible() && y.is_pure_infallible(),
             Self::Or(box (x, y)) | Self::And(box (x, y)) => {
                 x.is_pure_infallible() && y.is_pure_infallible()
             }
@@ -427,6 +431,11 @@ impl IrSpanned<ExprCompiled> {
                 let r = r.optimize_on_freeze(ctx);
                 return ExprCompiled::or(l, r);
             }
+            ExprCompiled::Seq(box (ref l, ref r)) => {
+                let l = l.optimize_on_freeze(ctx);
+                let r = r.optimize_on_freeze(ctx);
+                return ExprCompiled::seq(l, r);
+            }
             ExprCompiled::Op(op, box (ref l, ref r)) => {
                 let l = l.optimize_on_freeze(ctx);
                 let r = r.optimize_on_freeze(ctx);
@@ -498,6 +507,18 @@ impl ExprCompiled {
             let span = l.span.merge(&r.span);
             IrSpanned {
                 node: ExprCompiled::And(box (l, r)),
+                span,
+            }
+        }
+    }
+
+    fn seq(l: IrSpanned<ExprCompiled>, r: IrSpanned<ExprCompiled>) -> IrSpanned<ExprCompiled> {
+        if l.is_pure_infallible() {
+            r
+        } else {
+            let span = l.span.merge(&r.span);
+            IrSpanned {
+                node: ExprCompiled::Seq(box (l, r)),
                 span,
             }
         }
