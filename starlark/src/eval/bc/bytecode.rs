@@ -181,7 +181,9 @@ pub(crate) fn run_block<'v>(
             InstrControl::Return(v) => return RunBlockResult::Return(v),
             InstrControl::LoopContinue => return RunBlockResult::Continue,
             InstrControl::LoopBreak => return RunBlockResult::Break,
-            InstrControl::Err(e) => return RunBlockResult::Err(e),
+            InstrControl::Err(e) => {
+                return RunBlockResult::Err(Bc::wrap_error_for_instr_ptr(ip, e, eval));
+            }
         }
     }
 }

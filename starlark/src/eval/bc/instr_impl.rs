@@ -75,7 +75,7 @@ pub(crate) trait InstrNoFlowImpl: 'static {
         ip: BcPtrAddr,
         arg: &Self::Arg,
         pops: Self::Pop<'v>,
-    ) -> Result<Self::Push<'v>, EvalException>;
+    ) -> anyhow::Result<Self::Push<'v>>;
 }
 
 pub(crate) struct InstrNoFlow<I: InstrNoFlowImpl>(marker::PhantomData<I>);
@@ -103,45 +103,6 @@ impl<I: InstrNoFlowImpl> BcInstr for InstrNoFlow<I> {
     }
 }
 
-pub(crate) struct InstrNoFlowAddSpanWrapper<I: InstrNoFlowAddSpanImpl>(marker::PhantomData<I>);
-pub(crate) type InstrNoFlowAddSpan<I> = InstrNoFlow<InstrNoFlowAddSpanWrapper<I>>;
-
-/// Instructions which either fail or proceed to the following instruction.
-pub(crate) trait InstrNoFlowAddSpanImpl: 'static {
-    type Pop<'v>: BcStackValues<'v>;
-    type Push<'v>: BcStackValues<'v>
-    where
-        Self: 'v;
-    type Arg: BcInstrArg;
-
-    fn run_with_args<'v>(
-        eval: &mut Evaluator<'v, '_>,
-        stack: &mut BcStackPtr<'v, '_>,
-        arg: &Self::Arg,
-        pops: Self::Pop<'v>,
-    ) -> anyhow::Result<Self::Push<'v>>;
-}
-
-impl<I: InstrNoFlowAddSpanImpl> InstrNoFlowImpl for InstrNoFlowAddSpanWrapper<I> {
-    type Pop<'v> = I::Pop<'v>;
-    type Push<'v> = I::Push<'v>;
-    type Arg = I::Arg;
-
-    #[inline(always)]
-    fn run_with_args<'v>(
-        eval: &mut Evaluator<'v, '_>,
-        stack: &mut BcStackPtr<'v, '_>,
-        ip: BcPtrAddr,
-        arg: &Self::Arg,
-        pops: Self::Pop<'v>,
-    ) -> Result<Self::Push<'v>, EvalException> {
-        match I::run_with_args(eval, stack, arg, pops) {
-            Ok(pushs) => Ok(pushs),
-            Err(e) => Err(Bc::wrap_error_for_instr_ptr(ip, e, eval)),
-        }
-    }
-}
-
 pub(crate) struct InstrDupImpl;
 pub(crate) struct InstrPopImpl;
 
@@ -160,7 +121,7 @@ impl InstrNoFlowImpl for InstrDupImpl {
         _ip: BcPtrAddr,
         (): &(),
         v: Value<'v>,
-    ) -> Result<[Value<'v>; 2], EvalException> {
+    ) -> anyhow::Result<[Value<'v>; 2]> {
         Ok([v, v])
     }
 }
@@ -177,7 +138,7 @@ impl InstrNoFlowImpl for InstrPopImpl {
         _ip: BcPtrAddr,
         (): &(),
         _v: Value<'v>,
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -197,7 +158,7 @@ impl InstrNoFlowImpl for InstrConstImpl {
         _ip: BcPtrAddr,
         arg: &FrozenValue,
         (): (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(arg.to_value())
     }
 }
@@ -219,7 +180,7 @@ impl<const N: usize> InstrNoFlowImpl for InstrConstNImpl<N> {
         _ip: BcPtrAddr,
         vs: &Self::Arg,
         _pops: (),
-    ) -> Result<[Value<'v>; N], EvalException> {
+    ) -> anyhow::Result<[Value<'v>; N]> {
         Ok(coerce(*vs))
     }
 }
@@ -242,25 +203,25 @@ pub(crate) struct InstrSetObjectFieldImpl;
 pub(crate) struct InstrObjectSetFieldImpl;
 pub(crate) struct InstrSliceImpl;
 
-pub(crate) type InstrLoadLocal = InstrNoFlowAddSpan<InstrLoadLocalImpl>;
-pub(crate) type InstrLoadLocalAndConst = InstrNoFlowAddSpan<InstrLoadLocalAndConstImpl>;
-pub(crate) type InstrLoadLocalCaptured = InstrNoFlowAddSpan<InstrLoadLocalCapturedImpl>;
-pub(crate) type InstrLoadModule = InstrNoFlowAddSpan<InstrLoadModuleImpl>;
+pub(crate) type InstrLoadLocal = InstrNoFlow<InstrLoadLocalImpl>;
+pub(crate) type InstrLoadLocalAndConst = InstrNoFlow<InstrLoadLocalAndConstImpl>;
+pub(crate) type InstrLoadLocalCaptured = InstrNoFlow<InstrLoadLocalCapturedImpl>;
+pub(crate) type InstrLoadModule = InstrNoFlow<InstrLoadModuleImpl>;
 pub(crate) type InstrStoreLocal = InstrNoFlow<InstrStoreLocalImpl>;
 pub(crate) type InstrStoreLocalCaptured = InstrNoFlow<InstrStoreLocalCapturedImpl>;
 pub(crate) type InstrStoreModule = InstrNoFlow<InstrStoreModuleImpl>;
 pub(crate) type InstrStoreModuleAndExport = InstrNoFlow<InstrStoreModuleAndExportImpl>;
-pub(crate) type InstrUnpack = InstrNoFlowAddSpan<InstrUnpackImpl>;
-pub(crate) type InstrArrayIndex = InstrNoFlowAddSpan<InstrArrayIndexImpl>;
-pub(crate) type InstrArrayIndexNoPop = InstrNoFlowAddSpan<InstrArrayIndexNoPopImpl>;
-pub(crate) type InstrSetArrayIndex = InstrNoFlowAddSpan<InstrSetArrayIndexImpl>;
-pub(crate) type InstrArrayIndexSet = InstrNoFlowAddSpan<InstrArrayIndexSetImpl>;
-pub(crate) type InstrObjectField = InstrNoFlowAddSpan<InstrObjectFieldImpl>;
-pub(crate) type InstrSetObjectField = InstrNoFlowAddSpan<InstrSetObjectFieldImpl>;
-pub(crate) type InstrObjectSetField = InstrNoFlowAddSpan<InstrObjectSetFieldImpl>;
-pub(crate) type InstrSlice = InstrNoFlowAddSpan<InstrSliceImpl>;
+pub(crate) type InstrUnpack = InstrNoFlow<InstrUnpackImpl>;
+pub(crate) type InstrArrayIndex = InstrNoFlow<InstrArrayIndexImpl>;
+pub(crate) type InstrArrayIndexNoPop = InstrNoFlow<InstrArrayIndexNoPopImpl>;
+pub(crate) type InstrSetArrayIndex = InstrNoFlow<InstrSetArrayIndexImpl>;
+pub(crate) type InstrArrayIndexSet = InstrNoFlow<InstrArrayIndexSetImpl>;
+pub(crate) type InstrObjectField = InstrNoFlow<InstrObjectFieldImpl>;
+pub(crate) type InstrSetObjectField = InstrNoFlow<InstrSetObjectFieldImpl>;
+pub(crate) type InstrObjectSetField = InstrNoFlow<InstrObjectSetFieldImpl>;
+pub(crate) type InstrSlice = InstrNoFlow<InstrSliceImpl>;
 
-impl InstrNoFlowAddSpanImpl for InstrLoadLocalImpl {
+impl InstrNoFlowImpl for InstrLoadLocalImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = LocalSlotId;
@@ -269,6 +230,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         arg: &LocalSlotId,
         (): (),
     ) -> anyhow::Result<Value<'v>> {
@@ -281,7 +243,7 @@ fn load_local<'v, const N: usize>(
     eval: &mut Evaluator<'v, '_>,
     ip: BcPtrAddr,
     slots: &[LocalSlotId; N],
-) -> Result<[Value<'v>; N], EvalException> {
+) -> anyhow::Result<[Value<'v>; N]> {
     #[cold]
     #[inline(never)]
     fn fail<'v>(
@@ -289,11 +251,11 @@ fn load_local<'v, const N: usize>(
         ip: BcPtrAddr,
         index: usize,
         slot: LocalSlotId,
-    ) -> EvalException {
+    ) -> anyhow::Error {
         let err = eval.local_var_referenced_before_assignment(slot);
         let spans = &Bc::slow_arg_at_ptr(ip).spans;
         let span = spans[index];
-        add_span_to_expr_error(err, span, eval)
+        add_span_to_expr_error(err, span, eval).0
     }
 
     let mut values = MaybeUninit::uninit();
@@ -328,12 +290,12 @@ impl<const N: usize> InstrNoFlowImpl for InstrLocalLocalNImpl<N> {
         ip: BcPtrAddr,
         slots: &Self::Arg,
         _pops: (),
-    ) -> Result<[Value<'v>; N], EvalException> {
+    ) -> anyhow::Result<[Value<'v>; N]> {
         load_local(eval, ip, slots)
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
+impl InstrNoFlowImpl for InstrLoadLocalAndConstImpl {
     type Pop<'v> = ();
     type Push<'v> = [Value<'v>; 2];
     type Arg = (LocalSlotId, FrozenValue);
@@ -342,6 +304,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (slot, value): &Self::Arg,
         (): (),
     ) -> anyhow::Result<[Value<'v>; 2]> {
@@ -349,7 +312,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrLoadLocalCapturedImpl {
+impl InstrNoFlowImpl for InstrLoadLocalCapturedImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = LocalSlotId;
@@ -358,6 +321,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalCapturedImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         arg: &LocalSlotId,
         (): (),
     ) -> anyhow::Result<Value<'v>> {
@@ -365,7 +329,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalCapturedImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrLoadModuleImpl {
+impl InstrNoFlowImpl for InstrLoadModuleImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = ModuleSlotId;
@@ -374,6 +338,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadModuleImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         arg: &ModuleSlotId,
         (): (),
     ) -> anyhow::Result<Value<'v>> {
@@ -393,7 +358,7 @@ impl InstrNoFlowImpl for InstrStoreLocalImpl {
         _ip: BcPtrAddr,
         arg: &LocalSlotId,
         v: Value<'v>,
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         eval.set_slot_local(*arg, v);
         Ok(())
     }
@@ -410,7 +375,7 @@ impl InstrNoFlowImpl for InstrStoreLocalCapturedImpl {
         _ip: BcPtrAddr,
         arg: &LocalSlotId,
         v: Value<'v>,
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         eval.set_slot_local_captured(*arg, v);
         Ok(())
     }
@@ -427,7 +392,7 @@ impl InstrNoFlowImpl for InstrStoreModuleAndExportImpl {
         _ip: BcPtrAddr,
         (slot, name): &(ModuleSlotId, String),
         v: Value<'v>,
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         v.export_as(name.as_str(), eval);
         eval.set_slot_module(*slot, v);
         Ok(())
@@ -445,13 +410,13 @@ impl InstrNoFlowImpl for InstrStoreModuleImpl {
         _ip: BcPtrAddr,
         slot: &ModuleSlotId,
         v: Value<'v>,
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         eval.set_slot_module(*slot, v);
         Ok(())
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrUnpackImpl {
+impl InstrNoFlowImpl for InstrUnpackImpl {
     type Pop<'v> = Value<'v>;
     type Push<'v> = ();
     type Arg = ArgPushesStack;
@@ -460,6 +425,7 @@ impl InstrNoFlowAddSpanImpl for InstrUnpackImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         arg: &Self::Arg,
         v: Value<'v>,
     ) -> anyhow::Result<()> {
@@ -485,7 +451,7 @@ impl InstrNoFlowAddSpanImpl for InstrUnpackImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrArrayIndexImpl {
+impl InstrNoFlowImpl for InstrArrayIndexImpl {
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -494,6 +460,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         [array, index]: [Value<'v>; 2],
     ) -> anyhow::Result<Value<'v>> {
@@ -501,7 +468,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrArrayIndexNoPopImpl {
+impl InstrNoFlowImpl for InstrArrayIndexNoPopImpl {
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = [Value<'v>; 3];
     type Arg = ();
@@ -510,6 +477,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexNoPopImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         [array, index]: [Value<'v>; 2],
     ) -> anyhow::Result<[Value<'v>; 3]> {
@@ -518,7 +486,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexNoPopImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrSetArrayIndexImpl {
+impl InstrNoFlowImpl for InstrSetArrayIndexImpl {
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = ();
     type Arg = ();
@@ -527,6 +495,7 @@ impl InstrNoFlowAddSpanImpl for InstrSetArrayIndexImpl {
     fn run_with_args<'v>(
         _eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         [value, array, index]: [Value<'v>; 3],
     ) -> anyhow::Result<()> {
@@ -534,7 +503,7 @@ impl InstrNoFlowAddSpanImpl for InstrSetArrayIndexImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrArrayIndexSetImpl {
+impl InstrNoFlowImpl for InstrArrayIndexSetImpl {
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = ();
     type Arg = ();
@@ -543,6 +512,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexSetImpl {
     fn run_with_args<'v>(
         _eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         [array, index, value]: [Value<'v>; 3],
     ) -> anyhow::Result<()> {
@@ -550,7 +520,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexSetImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
+impl InstrNoFlowImpl for InstrObjectFieldImpl {
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = Symbol;
@@ -559,6 +529,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         symbol: &Symbol,
         object: Value<'v>,
     ) -> anyhow::Result<Value<'v>> {
@@ -566,7 +537,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrSetObjectFieldImpl {
+impl InstrNoFlowImpl for InstrSetObjectFieldImpl {
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = ();
     type Arg = Symbol;
@@ -574,6 +545,7 @@ impl InstrNoFlowAddSpanImpl for InstrSetObjectFieldImpl {
     fn run_with_args<'v>(
         _eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         symbol: &Symbol,
         [v, o]: [Value<'v>; 2],
     ) -> anyhow::Result<()> {
@@ -581,7 +553,7 @@ impl InstrNoFlowAddSpanImpl for InstrSetObjectFieldImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrObjectSetFieldImpl {
+impl InstrNoFlowImpl for InstrObjectSetFieldImpl {
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = ();
     type Arg = Symbol;
@@ -589,6 +561,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectSetFieldImpl {
     fn run_with_args<'v>(
         _eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         symbol: &Symbol,
         [o, v]: [Value<'v>; 2],
     ) -> anyhow::Result<()> {
@@ -596,7 +569,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectSetFieldImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrSliceImpl {
+impl InstrNoFlowImpl for InstrSliceImpl {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (
@@ -610,6 +583,7 @@ impl InstrNoFlowAddSpanImpl for InstrSliceImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (_list, start, stop, step): &Self::Arg,
         (): (),
     ) -> anyhow::Result<Value<'v>> {
@@ -690,10 +664,10 @@ pub(crate) trait InstrUnOpImpl: 'static {
 
 pub(crate) struct InstrBinOpWrapper<I: InstrBinOpImpl>(marker::PhantomData<I>);
 pub(crate) struct InstrUnOpWrapper<I: InstrUnOpImpl>(marker::PhantomData<I>);
-pub(crate) type InstrBinOp<I> = InstrNoFlowAddSpan<InstrBinOpWrapper<I>>;
-pub(crate) type InstrUnOp<I> = InstrNoFlowAddSpan<InstrUnOpWrapper<I>>;
+pub(crate) type InstrBinOp<I> = InstrNoFlow<InstrBinOpWrapper<I>>;
+pub(crate) type InstrUnOp<I> = InstrNoFlow<InstrUnOpWrapper<I>>;
 
-impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
+impl<I: InstrBinOpImpl> InstrNoFlowImpl for InstrBinOpWrapper<I> {
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -702,6 +676,7 @@ impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         [v0, v1]: [Value<'v>; 2],
     ) -> anyhow::Result<Value<'v>> {
@@ -709,7 +684,7 @@ impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
     }
 }
 
-impl<I: InstrUnOpImpl> InstrNoFlowAddSpanImpl for InstrUnOpWrapper<I> {
+impl<I: InstrUnOpImpl> InstrNoFlowImpl for InstrUnOpWrapper<I> {
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -718,6 +693,7 @@ impl<I: InstrUnOpImpl> InstrNoFlowAddSpanImpl for InstrUnOpWrapper<I> {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         v: Value<'v>,
     ) -> anyhow::Result<Value<'v>> {
@@ -867,11 +843,11 @@ impl InstrBinOpImpl for InstrNotInImpl {
 }
 
 pub(crate) struct InstrPercentSOneImpl;
-pub(crate) type InstrPercentSOne = InstrNoFlowAddSpan<InstrPercentSOneImpl>;
+pub(crate) type InstrPercentSOne = InstrNoFlow<InstrPercentSOneImpl>;
 pub(crate) struct InstrFormatOneImpl;
-pub(crate) type InstrFormatOne = InstrNoFlowAddSpan<InstrFormatOneImpl>;
+pub(crate) type InstrFormatOne = InstrNoFlow<InstrFormatOneImpl>;
 
-impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
+impl InstrNoFlowImpl for InstrPercentSOneImpl {
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = (FrozenStringValue, FrozenStringValue);
@@ -880,6 +856,7 @@ impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (before, after): &Self::Arg,
         arg: Value<'v>,
     ) -> anyhow::Result<Value<'v>> {
@@ -887,7 +864,7 @@ impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
+impl InstrNoFlowImpl for InstrFormatOneImpl {
     type Pop<'v> = Value<'v>;
     type Push<'v> = Value<'v>;
     type Arg = (FrozenStringValue, FrozenStringValue);
@@ -896,6 +873,7 @@ impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (before, after): &Self::Arg,
         arg: Value<'v>,
     ) -> anyhow::Result<Value<'v>> {
@@ -979,7 +957,7 @@ impl InstrNoFlowImpl for InstrTypeIsImpl {
         _: BcPtrAddr,
         t: &FrozenStringValue,
         v: Value<'v>,
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_bool(v.get_type_value() == *t))
     }
 }
@@ -1014,7 +992,7 @@ pub(crate) type InstrDictOfConsts = InstrNoFlow<InstrDictOfConstsImpl>;
 pub(crate) type InstrDictConstKeys = InstrNoFlow<InstrDictConstKeysImpl>;
 pub(crate) type InstrDictNPop = InstrNoFlow<InstrDictNPopImpl>;
 pub(crate) type InstrComprListAppend = InstrNoFlow<InstrComprListAppendImpl>;
-pub(crate) type InstrComprDictInsert = InstrNoFlowAddSpan<InstrComprDictInsertImpl>;
+pub(crate) type InstrComprDictInsert = InstrNoFlow<InstrComprDictInsertImpl>;
 
 impl InstrNoFlowImpl for InstrTupleNPopImpl {
     type Pop<'v> = ();
@@ -1028,7 +1006,7 @@ impl InstrNoFlowImpl for InstrTupleNPopImpl {
         _: BcPtrAddr,
         npops: &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         let items = stack.pop_slice(*npops);
         Ok(eval.heap().alloc_tuple(items))
     }
@@ -1046,7 +1024,7 @@ impl InstrNoFlowImpl for InstrListNPopImpl {
         _: BcPtrAddr,
         npops: &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         let items = stack.pop_slice(*npops);
         Ok(eval.heap().alloc_list(items))
     }
@@ -1064,7 +1042,7 @@ impl InstrNoFlowImpl for InstrListOfConstsImpl {
         _: BcPtrAddr,
         values: &Self::Arg,
         (): (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(eval.heap().alloc_list(coerce(&values)))
     }
 }
@@ -1081,7 +1059,7 @@ impl InstrNoFlowImpl for InstrDictOfConstsImpl {
         _: BcPtrAddr,
         values: &Self::Arg,
         (): (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(eval.heap().alloc(Dict::new((*coerce(values)).clone())))
     }
 }
@@ -1097,7 +1075,7 @@ impl InstrNoFlowImpl for InstrDictNPopImpl {
         ip: BcPtrAddr,
         npops: &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         let items = stack.pop_slice(*npops);
         debug_assert!(items.len() % 2 == 0);
         let mut dict = SmallMap::with_capacity(items.len() / 2);
@@ -1108,14 +1086,14 @@ impl InstrNoFlowImpl for InstrDictNPopImpl {
                 Ok(k) => k,
                 Err(e) => {
                     let spans = &Bc::slow_arg_at_ptr(ip).spans;
-                    return Err(add_span_to_expr_error(e, spans[i], eval));
+                    return Err(add_span_to_expr_error(e, spans[i], eval).0);
                 }
             };
             let prev = dict.insert_hashed(k, v);
             if prev.is_some() {
                 let e = EvalError::DuplicateDictionaryKey(k.key().to_string()).into();
                 let spans = &Bc::slow_arg_at_ptr(ip).spans;
-                return Err(add_span_to_expr_error(e, spans[i], eval));
+                return Err(add_span_to_expr_error(e, spans[i], eval).0);
             }
         }
         Ok(eval.heap().alloc(Dict::new(dict)))
@@ -1133,7 +1111,7 @@ impl InstrNoFlowImpl for InstrDictConstKeysImpl {
         _: BcPtrAddr,
         (npops, keys): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         let values = stack.pop_slice(*npops);
         assert!(keys.len() == values.len());
         let mut dict = SmallMap::with_capacity(keys.len());
@@ -1157,7 +1135,7 @@ impl InstrNoFlowImpl for InstrListNewImpl {
         _: BcPtrAddr,
         (): &(),
         (): (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(eval.heap().alloc_list(&[]))
     }
 }
@@ -1174,7 +1152,7 @@ impl InstrNoFlowImpl for InstrDictNewImpl {
         _: BcPtrAddr,
         (): &(),
         (): (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(eval.heap().alloc(Dict::default()))
     }
 }
@@ -1191,7 +1169,7 @@ impl InstrNoFlowImpl for InstrComprListAppendImpl {
         _: BcPtrAddr,
         (): &(),
         [list, item]: [Value<'v>; 2],
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         List::from_value_mut(list)
             .unwrap()
             .unwrap()
@@ -1200,7 +1178,7 @@ impl InstrNoFlowImpl for InstrComprListAppendImpl {
     }
 }
 
-impl InstrNoFlowAddSpanImpl for InstrComprDictInsertImpl {
+impl InstrNoFlowImpl for InstrComprDictInsertImpl {
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = Value<'v>;
     type Arg = ();
@@ -1209,6 +1187,7 @@ impl InstrNoFlowAddSpanImpl for InstrComprDictInsertImpl {
     fn run_with_args<'v>(
         _eval: &mut Evaluator<'v, '_>,
         _stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (): &(),
         [dict, key, value]: [Value<'v>; 3],
     ) -> anyhow::Result<Value<'v>> {
@@ -1331,8 +1310,8 @@ impl BcInstr for InstrForLoop {
                 debug_assert!(stack.stack_offset() + 1 == ss);
                 InstrControl::Return(v)
             }
-            Ok(LoopResult::Err(e)) => InstrControl::Err(e),
-            Err(e) => InstrControl::Err(Bc::wrap_error_for_instr_ptr(ip, e, eval)),
+            Ok(LoopResult::Err(e)) => InstrControl::Err(e.0),
+            Err(e) => InstrControl::Err(e),
         }
     }
 }
@@ -1426,7 +1405,7 @@ impl InstrNoFlowImpl for InstrDefImpl {
         _ip: BcPtrAddr,
         (pops, def_data): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, EvalException> {
+    ) -> anyhow::Result<Value<'v>> {
         let pop = stack.pop_slice(*pops);
 
         let mut parameters =
@@ -1449,7 +1428,7 @@ impl InstrNoFlowImpl for InstrDefImpl {
                     i,
                     name,
                     v,
-                    expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval)?,
+                    expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval).map_err(|e| e.0)?,
                 ));
             }
             match &x.node {
@@ -1466,7 +1445,8 @@ impl InstrNoFlowImpl for InstrDefImpl {
                             value.check_type_compiled(*ty_value, ty_compiled, Some(&n.name)),
                             x.span,
                             eval,
-                        )?;
+                        )
+                        .map_err(|e| e.0)?;
                     }
                     parameters.defaulted(&n.name, value);
                 }
@@ -1489,7 +1469,8 @@ impl InstrNoFlowImpl for InstrDefImpl {
                 pop_index += 1;
                 Some((
                     value,
-                    expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)?,
+                    expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)
+                        .map_err(|e| e.0)?,
                 ))
             }
         };
@@ -1562,32 +1543,30 @@ pub(crate) struct InstrCallFrozenGenericImpl<F: BcFrozenCallable, A: BcCallArgs>
 pub(crate) struct InstrCallMethodImpl<A: BcCallArgs>(marker::PhantomData<A>);
 pub(crate) struct InstrCallMaybeKnownMethodImpl<A: BcCallArgs>(marker::PhantomData<A>);
 
-pub(crate) type InstrCall = InstrNoFlowAddSpan<InstrCallImpl<BcCallArgsFull>>;
-pub(crate) type InstrCallPos = InstrNoFlowAddSpan<InstrCallImpl<BcCallArgsPos>>;
-pub(crate) type InstrCallFrozenDef = InstrNoFlowAddSpan<
-    InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>, BcCallArgsFull>,
->;
-pub(crate) type InstrCallFrozenDefPos = InstrNoFlowAddSpan<
-    InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>, BcCallArgsPos>,
->;
-pub(crate) type InstrCallFrozenNative = InstrNoFlowAddSpan<
+pub(crate) type InstrCall = InstrNoFlow<InstrCallImpl<BcCallArgsFull>>;
+pub(crate) type InstrCallPos = InstrNoFlow<InstrCallImpl<BcCallArgsPos>>;
+pub(crate) type InstrCallFrozenDef =
+    InstrNoFlow<InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>, BcCallArgsFull>>;
+pub(crate) type InstrCallFrozenDefPos =
+    InstrNoFlow<InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>, BcCallArgsPos>>;
+pub(crate) type InstrCallFrozenNative = InstrNoFlow<
     InstrCallFrozenGenericImpl<FrozenValueTyped<'static, NativeFunction>, BcCallArgsFull>,
 >;
-pub(crate) type InstrCallFrozenNativePos = InstrNoFlowAddSpan<
+pub(crate) type InstrCallFrozenNativePos = InstrNoFlow<
     InstrCallFrozenGenericImpl<FrozenValueTyped<'static, NativeFunction>, BcCallArgsPos>,
 >;
 pub(crate) type InstrCallFrozen =
-    InstrNoFlowAddSpan<InstrCallFrozenGenericImpl<FrozenValue, BcCallArgsFull>>;
+    InstrNoFlow<InstrCallFrozenGenericImpl<FrozenValue, BcCallArgsFull>>;
 pub(crate) type InstrCallFrozenPos =
-    InstrNoFlowAddSpan<InstrCallFrozenGenericImpl<FrozenValue, BcCallArgsPos>>;
-pub(crate) type InstrCallMethod = InstrNoFlowAddSpan<InstrCallMethodImpl<BcCallArgsFull>>;
-pub(crate) type InstrCallMethodPos = InstrNoFlowAddSpan<InstrCallMethodImpl<BcCallArgsPos>>;
+    InstrNoFlow<InstrCallFrozenGenericImpl<FrozenValue, BcCallArgsPos>>;
+pub(crate) type InstrCallMethod = InstrNoFlow<InstrCallMethodImpl<BcCallArgsFull>>;
+pub(crate) type InstrCallMethodPos = InstrNoFlow<InstrCallMethodImpl<BcCallArgsPos>>;
 pub(crate) type InstrCallMaybeKnownMethod =
-    InstrNoFlowAddSpan<InstrCallMaybeKnownMethodImpl<BcCallArgsFull>>;
+    InstrNoFlow<InstrCallMaybeKnownMethodImpl<BcCallArgsFull>>;
 pub(crate) type InstrCallMaybeKnownMethodPos =
-    InstrNoFlowAddSpan<InstrCallMaybeKnownMethodImpl<BcCallArgsPos>>;
+    InstrNoFlow<InstrCallMaybeKnownMethodImpl<BcCallArgsPos>>;
 
-impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
+impl<A: BcCallArgs> InstrNoFlowImpl for InstrCallImpl<A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack1, A, FrozenRef<'static, FrozenFileSpan>);
@@ -1596,6 +1575,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (_pop1, args, span): &Self::Arg,
         _pops: (),
     ) -> anyhow::Result<Value<'v>> {
@@ -1605,9 +1585,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
     }
 }
 
-impl<F: BcFrozenCallable, A: BcCallArgs> InstrNoFlowAddSpanImpl
-    for InstrCallFrozenGenericImpl<F, A>
-{
+impl<F: BcFrozenCallable, A: BcCallArgs> InstrNoFlowImpl for InstrCallFrozenGenericImpl<F, A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (F, A, FrozenRef<'static, FrozenFileSpan>);
@@ -1616,6 +1594,7 @@ impl<F: BcFrozenCallable, A: BcCallArgs> InstrNoFlowAddSpanImpl
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (fun, args, span): &Self::Arg,
         _pops: (),
     ) -> anyhow::Result<Value<'v>> {
@@ -1672,7 +1651,7 @@ fn call_maybe_known_method_common<'v>(
     call_method_common(eval, this, symbol, arguments, span)
 }
 
-impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
+impl<A: BcCallArgs> InstrNoFlowImpl for InstrCallMethodImpl<A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (ArgPopsStack1, Symbol, A, FrozenRef<'static, FrozenFileSpan>);
@@ -1681,6 +1660,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (_pop1, symbol, args, span): &Self::Arg,
         _pops: (),
     ) -> anyhow::Result<Value<'v>> {
@@ -1690,7 +1670,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
     }
 }
 
-impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl<A> {
+impl<A: BcCallArgs> InstrNoFlowImpl for InstrCallMaybeKnownMethodImpl<A> {
     type Pop<'v> = ();
     type Push<'v> = Value<'v>;
     type Arg = (
@@ -1705,6 +1685,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl<A> 
     fn run_with_args<'v>(
         eval: &mut Evaluator<'v, '_>,
         stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
         (_pop1, symbol, known_method, args, span): &Self::Arg,
         _pops: (),
     ) -> anyhow::Result<Value<'v>> {
@@ -1733,7 +1714,7 @@ impl InstrNoFlowImpl for InstrPossibleGcImpl {
         _ip: BcPtrAddr,
         (): &(),
         (): (),
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         possible_gc(eval);
         Ok(())
     }
@@ -1750,7 +1731,7 @@ impl InstrNoFlowImpl for InstrBeforeStmtImpl {
         _: BcPtrAddr,
         span: &Self::Arg,
         (): (),
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         before_stmt(*span, eval);
         Ok(())
     }
@@ -1767,7 +1748,7 @@ impl InstrNoFlowImpl for InstrProfileBcImpl {
         _ip: BcPtrAddr,
         opcode: &BcOpcode,
         (): (),
-    ) -> Result<(), EvalException> {
+    ) -> anyhow::Result<()> {
         eval.bc_profile.before_instr(*opcode);
         Ok(())
     }

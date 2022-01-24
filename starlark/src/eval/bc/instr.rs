@@ -23,7 +23,6 @@ use crate::{
             addr::BcPtrAddr, instr_arg::BcInstrArg, stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
         },
-        compiler::EvalException,
         Evaluator,
     },
     values::Value,
@@ -45,7 +44,7 @@ pub(crate) enum InstrControl<'v, 'b> {
     /// Break from the loop.
     LoopBreak,
     /// Error.
-    Err(EvalException),
+    Err(anyhow::Error),
 }
 
 pub(crate) trait BcInstr: Sized + 'static {
