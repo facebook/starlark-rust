@@ -119,7 +119,7 @@ pub(crate) trait InstrNoFlowAddSpanImpl: 'static {
         stack: &mut BcStackPtr<'v, '_>,
         arg: &Self::Arg,
         pops: Self::Pop<'v>,
-    ) -> Result<Self::Push<'v>, anyhow::Error>;
+    ) -> anyhow::Result<Self::Push<'v>>;
 }
 
 impl<I: InstrNoFlowAddSpanImpl> InstrNoFlowImpl for InstrNoFlowAddSpanWrapper<I> {
@@ -271,7 +271,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         arg: &LocalSlotId,
         (): (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         eval.get_slot_local(*arg)
     }
 }
@@ -344,7 +344,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalAndConstImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (slot, value): &Self::Arg,
         (): (),
-    ) -> Result<[Value<'v>; 2], anyhow::Error> {
+    ) -> anyhow::Result<[Value<'v>; 2]> {
         Ok([eval.get_slot_local(*slot)?, value.to_value()])
     }
 }
@@ -360,7 +360,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadLocalCapturedImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         arg: &LocalSlotId,
         (): (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         eval.get_slot_local_captured(*arg)
     }
 }
@@ -376,7 +376,7 @@ impl InstrNoFlowAddSpanImpl for InstrLoadModuleImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         arg: &ModuleSlotId,
         (): (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         eval.get_slot_module(*arg)
     }
 }
@@ -462,7 +462,7 @@ impl InstrNoFlowAddSpanImpl for InstrUnpackImpl {
         stack: &mut BcStackPtr<'v, '_>,
         arg: &Self::Arg,
         v: Value<'v>,
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         let nvl = v.length()?;
         if nvl != arg.0 as i32 {
             return Err(AssignError::IncorrectNumberOfValueToUnpack(arg.0 as i32, nvl).into());
@@ -496,7 +496,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         [array, index]: [Value<'v>; 2],
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         array.at(index, eval.heap())
     }
 }
@@ -512,7 +512,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexNoPopImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         [array, index]: [Value<'v>; 2],
-    ) -> Result<[Value<'v>; 3], anyhow::Error> {
+    ) -> anyhow::Result<[Value<'v>; 3]> {
         let value = array.at(index, eval.heap())?;
         Ok([array, index, value])
     }
@@ -529,7 +529,7 @@ impl InstrNoFlowAddSpanImpl for InstrSetArrayIndexImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         [value, array, index]: [Value<'v>; 3],
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         array.set_at(index, value)
     }
 }
@@ -545,7 +545,7 @@ impl InstrNoFlowAddSpanImpl for InstrArrayIndexSetImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         [array, index, value]: [Value<'v>; 3],
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         array.set_at(index, value)
     }
 }
@@ -561,7 +561,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectFieldImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         symbol: &Symbol,
         object: Value<'v>,
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         get_attr_hashed_bind(object, symbol, eval.heap())
     }
 }
@@ -576,7 +576,7 @@ impl InstrNoFlowAddSpanImpl for InstrSetObjectFieldImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         symbol: &Symbol,
         [v, o]: [Value<'v>; 2],
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         o.set_attr(symbol.as_str(), v)
     }
 }
@@ -591,7 +591,7 @@ impl InstrNoFlowAddSpanImpl for InstrObjectSetFieldImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         symbol: &Symbol,
         [o, v]: [Value<'v>; 2],
-    ) -> Result<(), anyhow::Error> {
+    ) -> anyhow::Result<()> {
         o.set_attr(symbol.as_str(), v)
     }
 }
@@ -612,7 +612,7 @@ impl InstrNoFlowAddSpanImpl for InstrSliceImpl {
         stack: &mut BcStackPtr<'v, '_>,
         (_list, start, stop, step): &Self::Arg,
         (): (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         let step = stack.pop_maybe(*step);
         let stop = stack.pop_maybe(*stop);
         let start = stack.pop_maybe(*start);
@@ -630,14 +630,14 @@ pub(crate) type InstrNotEq = InstrBinOp<InstrNotEqImpl>;
 
 impl InstrBinOpImpl for InstrEqImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.equals(v1).map(Value::new_bool)
     }
 }
 
 impl InstrBinOpImpl for InstrNotEqImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.equals(v1).map(|v| Value::new_bool(!v))
     }
 }
@@ -654,38 +654,38 @@ pub(crate) type InstrBitNot = InstrUnOp<InstrBitNotImpl>;
 
 impl InstrUnOpImpl for InstrNotImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_bool(!v.to_bool()))
     }
 }
 
 impl InstrUnOpImpl for InstrPlusImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v.plus(heap)
     }
 }
 
 impl InstrUnOpImpl for InstrMinusImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v.minus(heap)
     }
 }
 
 impl InstrUnOpImpl for InstrBitNotImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_int(!v.to_int()?))
     }
 }
 
 pub(crate) trait InstrBinOpImpl: 'static {
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error>;
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
 }
 
 pub(crate) trait InstrUnOpImpl: 'static {
-    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error>;
+    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
 }
 
 pub(crate) struct InstrBinOpWrapper<I: InstrBinOpImpl>(marker::PhantomData<I>);
@@ -704,7 +704,7 @@ impl<I: InstrBinOpImpl> InstrNoFlowAddSpanImpl for InstrBinOpWrapper<I> {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         [v0, v1]: [Value<'v>; 2],
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         I::eval(v0, v1, eval.heap())
     }
 }
@@ -720,7 +720,7 @@ impl<I: InstrUnOpImpl> InstrNoFlowAddSpanImpl for InstrUnOpWrapper<I> {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         v: Value<'v>,
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         I::eval(v, eval.heap())
     }
 }
@@ -757,7 +757,7 @@ pub(crate) type InstrNotIn = InstrBinOp<InstrNotInImpl>;
 
 impl InstrBinOpImpl for InstrAddImpl {
     #[inline(always)]
-    fn eval<'v>(l: Value<'v>, r: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(l: Value<'v>, r: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         // Addition of string is super common and pretty cheap, so have a special case for it.
         if let Some(ls) = l.unpack_str() {
             if let Some(rs) = r.unpack_str() {
@@ -777,91 +777,91 @@ impl InstrBinOpImpl for InstrAddImpl {
 
 impl InstrBinOpImpl for InstrAddAssignImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         add_assign(v0, v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrSubImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.sub(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrMultiplyImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.mul(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrPercentImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.percent(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrFloorDivideImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.floor_div(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrDivideImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.div(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrBitAndImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.bit_and(v1)
     }
 }
 
 impl InstrBinOpImpl for InstrBitOrImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.bit_or(v1)
     }
 }
 
 impl InstrBinOpImpl for InstrBitXorImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.bit_xor(v1)
     }
 }
 
 impl InstrBinOpImpl for InstrLeftShiftImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.left_shift(v1)
     }
 }
 
 impl InstrBinOpImpl for InstrRightShiftImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.right_shift(v1)
     }
 }
 
 impl InstrBinOpImpl for InstrInImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_bool(v1.is_in(v0)?))
     }
 }
 
 impl InstrBinOpImpl for InstrNotInImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_bool(!v1.is_in(v0)?))
     }
 }
@@ -882,7 +882,7 @@ impl InstrNoFlowAddSpanImpl for InstrPercentSOneImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (before, after): &Self::Arg,
         arg: Value<'v>,
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         percent_s_one(before.as_str(), arg, after.as_str(), eval.heap()).map(StringValue::to_value)
     }
 }
@@ -898,7 +898,7 @@ impl InstrNoFlowAddSpanImpl for InstrFormatOneImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (before, after): &Self::Arg,
         arg: Value<'v>,
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         Ok(format_one(before.as_str(), arg, after.as_str(), eval.heap()).to_value())
     }
 }
@@ -911,7 +911,7 @@ pub(crate) struct InstrCompare<I: InstrCompareImpl>(marker::PhantomData<I>);
 
 impl<I: InstrCompareImpl> InstrBinOpImpl for InstrCompare<I> {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_bool(I::eval_compare(v0.compare(v1)?)))
     }
 }
@@ -959,7 +959,7 @@ pub(crate) type InstrType = InstrUnOp<InstrTypeImpl>;
 
 impl InstrUnOpImpl for InstrTypeImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(v.get_type_value().unpack().to_value())
     }
 }
@@ -989,7 +989,7 @@ pub(crate) type InstrLen = InstrUnOp<InstrLenImpl>;
 
 impl InstrUnOpImpl for InstrLenImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> Result<Value<'v>, anyhow::Error> {
+    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_int(v.length()?))
     }
 }
@@ -1211,7 +1211,7 @@ impl InstrNoFlowAddSpanImpl for InstrComprDictInsertImpl {
         _stack: &mut BcStackPtr<'v, '_>,
         (): &(),
         [dict, key, value]: [Value<'v>; 3],
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         let key = key.get_hashed()?;
         Dict::from_value_mut(dict)
             .unwrap()
@@ -1598,7 +1598,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallImpl<A> {
         stack: &mut BcStackPtr<'v, '_>,
         (_pop1, args, span): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         let arguments = args.pop_from_stack(stack);
         let f = stack.pop();
         f.invoke_with_loc(Some(*span), &arguments, eval)
@@ -1618,7 +1618,7 @@ impl<F: BcFrozenCallable, A: BcCallArgs> InstrNoFlowAddSpanImpl
         stack: &mut BcStackPtr<'v, '_>,
         (fun, args, span): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         let arguments = args.pop_from_stack(stack);
         fun.bc_invoke(*span, &arguments, eval)
     }
@@ -1683,7 +1683,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMethodImpl<A> {
         stack: &mut BcStackPtr<'v, '_>,
         (_pop1, symbol, args, span): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         let arguments = args.pop_from_stack(stack);
         let this = stack.pop();
         call_method_common(eval, this, symbol, &arguments, *span)
@@ -1707,7 +1707,7 @@ impl<A: BcCallArgs> InstrNoFlowAddSpanImpl for InstrCallMaybeKnownMethodImpl<A> 
         stack: &mut BcStackPtr<'v, '_>,
         (_pop1, symbol, known_method, args, span): &Self::Arg,
         _pops: (),
-    ) -> Result<Value<'v>, anyhow::Error> {
+    ) -> anyhow::Result<Value<'v>> {
         let arguments = args.pop_from_stack(stack);
         let this = stack.pop();
         call_maybe_known_method_common(eval, this, symbol, known_method, &arguments, *span)
