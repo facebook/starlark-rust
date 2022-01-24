@@ -26,3 +26,20 @@ fn test_no_loop_if_top_collection_is_empty() {
         "def test(): return [x for x in []]",
     );
 }
+
+#[test]
+fn test_if_true_clause() {
+    test_instrs(
+        &[
+            BcOpcode::ListNew,
+            BcOpcode::LoadLocal,
+            BcOpcode::ForLoop,
+            BcOpcode::StoreLocal,
+            BcOpcode::LoadLocal,
+            BcOpcode::ComprListAppend,
+            BcOpcode::Continue,
+            BcOpcode::Return,
+        ],
+        "def test(y): return [x for x in y if True]",
+    );
+}

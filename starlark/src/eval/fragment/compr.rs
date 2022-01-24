@@ -27,6 +27,7 @@ use crate::{
         },
         fragment::{
             expr::ExprCompiled,
+            expr_bool::ExprCompiledBool,
             known::list_to_tuple,
             span::IrSpanned,
             stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
@@ -81,8 +82,13 @@ impl Compiler<'_, '_, '_> {
                     return (Some(f), ifs);
                 }
                 ClauseP::If(x) => {
-                    // TODO(nga): if condition is const, do something better.
-                    ifs.push(self.expr_truth(x).into_expr());
+                    let x = self.expr_truth(x);
+                    if let ExprCompiledBool::Const(true) = &x.node {
+                        // If the condition is always true, skip the clause.
+                        continue;
+                    }
+                    // TODO(nga): if condition is false, do something better.
+                    ifs.push(x.into_expr());
                 }
             }
         }
