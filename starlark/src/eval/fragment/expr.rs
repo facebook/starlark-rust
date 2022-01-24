@@ -512,7 +512,10 @@ impl ExprCompiled {
         }
     }
 
-    fn seq(l: IrSpanned<ExprCompiled>, r: IrSpanned<ExprCompiled>) -> IrSpanned<ExprCompiled> {
+    pub(crate) fn seq(
+        l: IrSpanned<ExprCompiled>,
+        r: IrSpanned<ExprCompiled>,
+    ) -> IrSpanned<ExprCompiled> {
         if l.is_pure_infallible() {
             r
         } else {
@@ -626,6 +629,9 @@ impl ExprCompiled {
             ExprCompiledBool::Const(false) => f,
             ExprCompiledBool::Expr(cond) => match cond {
                 ExprCompiled::Not(box cond) => ExprCompiled::if_expr(cond, f, t),
+                ExprCompiled::Seq(box (x, cond)) => {
+                    ExprCompiled::seq(x, ExprCompiled::if_expr(cond, t, f))
+                }
                 cond => {
                     let cond = IrSpanned {
                         node: cond,

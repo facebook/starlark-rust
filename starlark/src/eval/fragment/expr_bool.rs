@@ -94,10 +94,13 @@ impl ExprCompiledBool {
                         // but we need to preserve LHS for the effect.
                         IrSpanned {
                             span,
-                            node: ExprCompiledBool::Expr(ExprCompiled::And(box (
-                                x.into_expr(),
-                                new_bool(y.span, false).into_expr(),
-                            ))),
+                            node: ExprCompiledBool::Expr(
+                                ExprCompiled::seq(
+                                    x.into_expr(),
+                                    new_bool(y.span, false).into_expr(),
+                                )
+                                .node,
+                            ),
                         }
                     }
                     (None, None) => IrSpanned {
@@ -123,10 +126,13 @@ impl ExprCompiledBool {
                         // but we need to preserve LHS for the effect.
                         IrSpanned {
                             span,
-                            node: ExprCompiledBool::Expr(ExprCompiled::Or(box (
-                                x.into_expr(),
-                                new_bool(y.span, true).into_expr(),
-                            ))),
+                            node: ExprCompiledBool::Expr(
+                                ExprCompiled::seq(
+                                    x.into_expr(),
+                                    new_bool(y.span, true).into_expr(),
+                                )
+                                .node,
+                            ),
                         }
                     }
                     (None, None) => IrSpanned {

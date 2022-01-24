@@ -279,6 +279,12 @@ impl StmtsCompiled {
             ExprCompiledBool::Const(false) => f,
             ExprCompiledBool::Expr(cond) => match cond {
                 ExprCompiled::Not(box cond) => Self::if_stmt(span, cond, f, t),
+                ExprCompiled::Seq(box (x, cond)) => {
+                    let mut stmt = StmtsCompiled::empty();
+                    stmt.extend(Self::expr(x));
+                    stmt.extend(Self::if_stmt(span, cond, t, f));
+                    stmt
+                }
                 cond => {
                     let cond = IrSpanned { span, node: cond };
                     if t.is_empty() && f.is_empty() {

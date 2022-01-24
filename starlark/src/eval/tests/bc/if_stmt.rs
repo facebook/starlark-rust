@@ -34,16 +34,7 @@ fn test_if_x_and_true() {
 #[test]
 fn test_if_x_and_false() {
     test_instrs(
-        &[
-            BcOpcode::LoadLocal,
-            BcOpcode::IfNotBr,
-            // TODO(nga): Missing optimization: we only need to evaluate `x` for effect.
-            BcOpcode::Const,
-            BcOpcode::IfNotBr,
-            BcOpcode::CallFrozenNativePos,
-            BcOpcode::Pop,
-            BcOpcode::ReturnNone,
-        ],
+        &[BcOpcode::LoadLocal, BcOpcode::Pop, BcOpcode::ReturnNone],
         "def test(x):\n  if x and False: print()",
     )
 }
@@ -53,14 +44,7 @@ fn test_if_x_or_true() {
     test_instrs(
         &[
             BcOpcode::LoadLocal,
-            // TODO(nga): Missing optimization:
-            //   we need to evaluate `x` for effect,
-            //   and then unconditionally evaluate `print()`.
-            BcOpcode::Dup,
-            BcOpcode::IfBr,
             BcOpcode::Pop,
-            BcOpcode::Const,
-            BcOpcode::IfNotBr,
             BcOpcode::CallFrozenNativePos,
             BcOpcode::Pop,
             BcOpcode::ReturnNone,
