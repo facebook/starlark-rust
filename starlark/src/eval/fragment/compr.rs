@@ -182,7 +182,17 @@ impl ClauseCompiled {
         ClauseCompiled {
             var: var.optimize_on_freeze(ctx),
             over: over.optimize_on_freeze(ctx),
-            ifs: ifs.map(|e| e.optimize_on_freeze(ctx)),
+            ifs: ifs
+                .iter()
+                .filter_map(|e| {
+                    let e = e.optimize_on_freeze(ctx);
+                    let e = ExprCompiledBool::new(e);
+                    match &e.node {
+                        ExprCompiledBool::Const(true) => None,
+                        _ => Some(e.into_expr()),
+                    }
+                })
+                .collect(),
         }
     }
 }

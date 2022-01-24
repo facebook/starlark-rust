@@ -54,3 +54,20 @@ fn test_if_true_clause() {
         "def test(y): return [x for x in y if True]",
     );
 }
+
+#[test]
+fn test_if_true_clause_on_freeze() {
+    test_instrs(
+        &[
+            BcOpcode::ListNew,
+            BcOpcode::LoadLocal,
+            BcOpcode::ForLoop,
+            BcOpcode::StoreLocal,
+            BcOpcode::LoadLocal,
+            BcOpcode::ComprListAppend,
+            BcOpcode::Continue,
+            BcOpcode::Return,
+        ],
+        "def test(y): return [x for x in y if C]\nC = False\nC = True",
+    );
+}
