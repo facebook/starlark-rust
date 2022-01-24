@@ -980,8 +980,6 @@ pub(crate) struct InstrDictConstKeysImpl;
 pub(crate) struct InstrDictNPopImpl;
 pub(crate) struct InstrListNewImpl;
 pub(crate) struct InstrDictNewImpl;
-pub(crate) struct InstrComprListAppendImpl;
-pub(crate) struct InstrComprDictInsertImpl;
 
 pub(crate) type InstrTupleNPop = InstrNoFlow<InstrTupleNPopImpl>;
 pub(crate) type InstrListNew = InstrNoFlow<InstrListNewImpl>;
@@ -991,8 +989,6 @@ pub(crate) type InstrDictNew = InstrNoFlow<InstrDictNewImpl>;
 pub(crate) type InstrDictOfConsts = InstrNoFlow<InstrDictOfConstsImpl>;
 pub(crate) type InstrDictConstKeys = InstrNoFlow<InstrDictConstKeysImpl>;
 pub(crate) type InstrDictNPop = InstrNoFlow<InstrDictNPopImpl>;
-pub(crate) type InstrComprListAppend = InstrNoFlow<InstrComprListAppendImpl>;
-pub(crate) type InstrComprDictInsert = InstrNoFlow<InstrComprDictInsertImpl>;
 
 impl InstrNoFlowImpl for InstrTupleNPopImpl {
     type Pop<'v> = ();
@@ -1157,46 +1153,54 @@ impl InstrNoFlowImpl for InstrDictNewImpl {
     }
 }
 
-impl InstrNoFlowImpl for InstrComprListAppendImpl {
+pub(crate) struct InstrComprListAppend;
+pub(crate) struct InstrComprDictInsert;
+
+impl BcInstr for InstrComprListAppend {
     type Pop<'v> = [Value<'v>; 2];
     type Push<'v> = Value<'v>;
     type Arg = ();
 
     #[inline(always)]
-    fn run_with_args<'v>(
+    fn run<'v, 'b>(
         eval: &mut Evaluator<'v, '_>,
-        _stack: &mut BcStackPtr<'v, '_>,
-        _: BcPtrAddr,
+        stack: &mut BcStackPtr<'v, '_>,
+        _: BcPtrAddr<'b>,
         (): &(),
-        [list, item]: [Value<'v>; 2],
-    ) -> anyhow::Result<Value<'v>> {
+    ) -> InstrControl<'v, 'b> {
+        let item = stack.pop();
+        let list = stack.top();
         List::from_value_mut(list)
             .unwrap()
             .unwrap()
             .push(item, eval.heap());
-        Ok(list)
+        InstrControl::LoopContinue
     }
 }
 
-impl InstrNoFlowImpl for InstrComprDictInsertImpl {
+impl BcInstr for InstrComprDictInsert {
     type Pop<'v> = [Value<'v>; 3];
     type Push<'v> = Value<'v>;
     type Arg = ();
 
     #[inline(always)]
-    fn run_with_args<'v>(
+    fn run<'v, 'b>(
         _eval: &mut Evaluator<'v, '_>,
-        _stack: &mut BcStackPtr<'v, '_>,
-        _ip: BcPtrAddr,
+        stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr<'b>,
         (): &(),
-        [dict, key, value]: [Value<'v>; 3],
-    ) -> anyhow::Result<Value<'v>> {
-        let key = key.get_hashed()?;
+    ) -> InstrControl<'v, 'b> {
+        let [key, value] = stack.pop_array();
+        let dict = stack.top();
+        let key = match key.get_hashed() {
+            Ok(key) => key,
+            Err(e) => return InstrControl::Err(e),
+        };
         Dict::from_value_mut(dict)
             .unwrap()
             .unwrap()
             .insert_hashed(key, value);
-        Ok(dict)
+        InstrControl::LoopContinue
     }
 }
 

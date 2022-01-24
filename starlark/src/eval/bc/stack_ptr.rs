@@ -114,6 +114,11 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         }
     }
 
+    pub(crate) fn top(&self) -> Value<'v> {
+        debug_assert!(self.remaining_if_debug() >= 1);
+        unsafe { ptr::read(self.ptr.get().sub(1)) }
+    }
+
     pub(crate) fn pop(&self) -> Value<'v> {
         unsafe {
             self.sub_assign(1);
