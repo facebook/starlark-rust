@@ -141,16 +141,27 @@ pub(crate) enum ComprCompiled {
 
 impl ComprCompiled {
     pub(crate) fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ExprCompiled {
-        ExprCompiled::Compr(match self {
-            ComprCompiled::List(box ref x, ref clauses) => ComprCompiled::List(
-                box x.optimize_on_freeze(ctx),
-                clauses.optimize_on_freeze(ctx),
-            ),
-            ComprCompiled::Dict(box (ref k, ref v), ref clauses) => ComprCompiled::Dict(
-                box (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx)),
-                clauses.optimize_on_freeze(ctx),
-            ),
-        })
+        match self {
+            ComprCompiled::List(box ref x, ref clauses) => {
+                let clauses = clauses.optimize_on_freeze(ctx);
+                if clauses.is_nop() {
+                    ExprCompiled::List(Vec::new())
+                } else {
+                    ExprCompiled::Compr(ComprCompiled::List(box x.optimize_on_freeze(ctx), clauses))
+                }
+            }
+            ComprCompiled::Dict(box (ref k, ref v), ref clauses) => {
+                let clauses = clauses.optimize_on_freeze(ctx);
+                if clauses.is_nop() {
+                    ExprCompiled::Dict(Vec::new())
+                } else {
+                    ExprCompiled::Compr(ComprCompiled::Dict(
+                        box (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx)),
+                        clauses.optimize_on_freeze(ctx),
+                    ))
+                }
+            }
+        }
     }
 }
 

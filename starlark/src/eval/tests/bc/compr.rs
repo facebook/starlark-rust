@@ -28,6 +28,17 @@ fn test_no_loop_if_top_collection_is_empty() {
 }
 
 #[test]
+fn test_no_loop_if_top_collection_is_empty_on_freeze() {
+    // This function is not optimized to return a list on compilation,
+    // because `L` is not evaluated yet.
+    // But it eliminates the loop on freeze.
+    test_instrs(
+        &[BcOpcode::ListNew, BcOpcode::Return],
+        "def test(): return [x for x in D]\nD = {}",
+    );
+}
+
+#[test]
 fn test_if_true_clause() {
     test_instrs(
         &[
