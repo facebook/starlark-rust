@@ -468,16 +468,8 @@ impl ExprCompiled {
     }
 
     fn or(l: IrSpanned<ExprCompiled>, r: IrSpanned<ExprCompiled>) -> IrSpanned<ExprCompiled> {
-        let l_span = l.span;
-        if let Some(l) = l.as_value() {
-            if l.to_value().to_bool() {
-                IrSpanned {
-                    node: ExprCompiled::Value(l),
-                    span: l_span,
-                }
-            } else {
-                r
-            }
+        if let Some(l_v) = l.is_pure_infallible_to_bool() {
+            if l_v { l } else { r }
         } else {
             let span = l.span.merge(&r.span);
             IrSpanned {
@@ -488,16 +480,8 @@ impl ExprCompiled {
     }
 
     fn and(l: IrSpanned<ExprCompiled>, r: IrSpanned<ExprCompiled>) -> IrSpanned<ExprCompiled> {
-        let l_span = l.span;
-        if let Some(l) = l.as_value() {
-            if !l.to_value().to_bool() {
-                IrSpanned {
-                    node: ExprCompiled::Value(l),
-                    span: l_span,
-                }
-            } else {
-                r
-            }
+        if let Some(l_v) = l.is_pure_infallible_to_bool() {
+            if l_v { r } else { l }
         } else {
             let span = l.span.merge(&r.span);
             IrSpanned {
