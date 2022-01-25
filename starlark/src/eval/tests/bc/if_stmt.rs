@@ -116,6 +116,46 @@ fn test_if_false_or_x() {
 }
 
 #[test]
+fn test_if_else_x_and_y() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocal,
+            // TODO(nga): optimize this: unnecessary dup/pop
+            BcOpcode::Dup,
+            BcOpcode::IfNotBr,
+            BcOpcode::Pop,
+            BcOpcode::LoadLocal,
+            BcOpcode::IfNotBr,
+            BcOpcode::ReturnConst,
+            BcOpcode::Br,
+            BcOpcode::ReturnConst,
+            BcOpcode::ReturnConst,
+        ],
+        "def test(x, y):\n  if x and y:\n    return 10\n  else:\n    return 20",
+    )
+}
+
+#[test]
+fn test_if_else_x_or_y() {
+    test_instrs(
+        &[
+            BcOpcode::LoadLocal,
+            // TODO(nga): optimize this: unnecessary dup/pop
+            BcOpcode::Dup,
+            BcOpcode::IfBr,
+            BcOpcode::Pop,
+            BcOpcode::LoadLocal,
+            BcOpcode::IfNotBr,
+            BcOpcode::ReturnConst,
+            BcOpcode::Br,
+            BcOpcode::ReturnConst,
+            BcOpcode::ReturnConst,
+        ],
+        "def test(x, y):\n  if x or y:\n    return 10\n  else:\n    return 20",
+    )
+}
+
+#[test]
 fn test_and_stmt() {
     test_instrs(
         &[
