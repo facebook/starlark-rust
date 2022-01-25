@@ -80,7 +80,7 @@ impl StarlarkHashValue {
         StarlarkHashValue(h as u32)
     }
 
-    pub(crate) fn get(self) -> u32 {
+    pub fn get(self) -> u32 {
         self.0
     }
 
