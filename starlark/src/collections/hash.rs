@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-use std::hash::{Hash, Hasher};
+use std::{
+    hash::{Hash, Hasher},
+    ops::Deref,
+};
 
 use gazebo::{coerce::Coerce, prelude::*};
 use indexmap::Equivalent;
@@ -143,6 +146,14 @@ where
 impl<'a, Q: ?Sized> Hash for BorrowHashed<'a, Q> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state)
+    }
+}
+
+impl<K> Deref for Hashed<K> {
+    type Target = K;
+
+    fn deref(&self) -> &Self::Target {
+        &self.key
     }
 }
 
