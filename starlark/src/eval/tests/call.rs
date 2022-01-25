@@ -123,6 +123,14 @@ fn test_extra_args_native() {
 }
 
 #[test]
+fn test_insufficient_args_native() {
+    assert::fails(
+        "filter([])",
+        &["Wrong number of positional", "expected 2", "got 1"],
+    );
+}
+
+#[test]
 fn test_parameter_defaults() {
     assert::is_true(
         "

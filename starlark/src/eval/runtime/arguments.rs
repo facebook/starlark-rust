@@ -58,8 +58,9 @@ pub(crate) enum FunctionError {
     ArgsArrayIsNotIterable,
     #[error("The argument provided for **kwargs is not a dictionary")]
     KwArgsIsNotDict,
-    #[error("Wrong number of positional parameters, expected between {0} and {0}, got {1}")]
-    WrongNumberOfParameters(usize, usize, usize),
+    #[error("Wrong number of positional parameters, expected {}, got {got}",
+        if min == max {min.to_string()} else {format!("between {} and {}", min, max)})]
+    WrongNumberOfParameters { min: usize, max: usize, got: usize },
 }
 
 #[derive(Debug, Clone, Coerce, PartialEq)]
@@ -875,15 +876,25 @@ impl<'v, 'a> Arguments<'v, 'a> {
                 .copied()
                 .chain(x.args.unwrap().iterate(heap)?)
                 .collect::<Vec<_>>();
-            xs.as_slice()
-                .try_into()
-                .map_err(|_| FunctionError::WrongNumberOfParameters(N, N, x.pos.len()).into())
+            xs.as_slice().try_into().map_err(|_| {
+                FunctionError::WrongNumberOfParameters {
+                    min: N,
+                    max: N,
+                    got: x.pos.len(),
+                }
+                .into()
+            })
         }
 
         if self.args.is_none() {
-            self.pos
-                .try_into()
-                .map_err(|_| FunctionError::WrongNumberOfParameters(N, N, self.pos.len()).into())
+            self.pos.try_into().map_err(|_| {
+                FunctionError::WrongNumberOfParameters {
+                    min: N,
+                    max: N,
+                    got: self.pos.len(),
+                }
+                .into()
+            })
         } else {
             rare(self, heap)
         }
@@ -918,10 +929,12 @@ impl<'v, 'a> Arguments<'v, 'a> {
                 }
                 Ok((required, optional))
             } else {
-                Err(
-                    FunctionError::WrongNumberOfParameters(REQUIRED, REQUIRED + OPTIONAL, xs.len())
-                        .into(),
-                )
+                Err(FunctionError::WrongNumberOfParameters {
+                    min: REQUIRED,
+                    max: REQUIRED + OPTIONAL,
+                    got: xs.len(),
+                }
+                .into())
             }
         }
 
