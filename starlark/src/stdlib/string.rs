@@ -140,7 +140,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///     "H", "e", "l", "l", "o", ",", " ", "世", "界"]
     /// # "#);
     /// ```
-    fn elems(this: Value<'v>) -> Value<'v> {
+    fn elems(this: Value<'v>) -> anyhow::Result<Value<'v>> {
         Ok(iterate_chars(this, heap))
     }
 
@@ -160,7 +160,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn capitalize(this: &str) -> String {
+    fn capitalize(this: &str) -> anyhow::Result<String> {
         let mut last_space = true;
         let mut result = String::new();
         for c in this.chars() {
@@ -203,7 +203,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// list("Hello, 世界".codepoints()) == [72, 101, 108, 108, 111, 44, 32, 19990, 30028]
     /// # "#);
     /// ```
-    fn codepoints(this: Value<'v>) -> Value<'v> {
+    fn codepoints(this: Value<'v>) -> anyhow::Result<Value<'v>> {
         Ok(iterate_codepoints(this, heap))
     }
 
@@ -238,7 +238,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref needle: &str,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
-    ) -> i32 {
+    ) -> anyhow::Result<i32> {
         if let Some(StrIndices { haystack, .. }) = convert_str_indices(this, start, end) {
             Ok(fast_string::count_matches(haystack, needle) as i32)
         } else {
@@ -261,7 +261,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn endswith(this: &str, ref suffix: StringOrTuple) -> bool {
+    fn endswith(this: &str, ref suffix: StringOrTuple) -> anyhow::Result<bool> {
         match suffix {
             StringOrTuple::String(x) => Ok(this.ends_with(x)),
             StringOrTuple::Tuple(xs) => Ok(xs.iter().any(|x| this.ends_with(x))),
@@ -297,7 +297,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref needle: &str,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
-    ) -> i32 {
+    ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.find(needle) {
                 let index = fast_string::len(&haystack[..index]);
@@ -359,7 +359,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn format(this: &str, args: &Arguments<'v, '_>) -> StringValue<'v> {
+    fn format(this: &str, args: &Arguments<'v, '_>) -> anyhow::Result<StringValue<'v>> {
         let iter = args.positions(heap)?;
         interpolation::format(
             this,
@@ -395,7 +395,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref needle: &str,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
-    ) -> i32 {
+    ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.find(needle) {
                 let index = fast_string::len(&haystack[..index]);
@@ -421,7 +421,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn isalnum(this: &str) -> bool {
+    fn isalnum(this: &str) -> anyhow::Result<bool> {
         if this.is_empty() {
             return Ok(false);
         }
@@ -450,7 +450,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn isalpha(this: &str) -> bool {
+    fn isalpha(this: &str) -> anyhow::Result<bool> {
         if this.is_empty() {
             return Ok(false);
         }
@@ -479,7 +479,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn isdigit(this: &str) -> bool {
+    fn isdigit(this: &str) -> anyhow::Result<bool> {
         if this.is_empty() {
             return Ok(false);
         }
@@ -508,7 +508,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn islower(this: &str) -> bool {
+    fn islower(this: &str) -> anyhow::Result<bool> {
         let mut result = false;
         for c in this.chars() {
             if c.is_uppercase() {
@@ -537,7 +537,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn isspace(this: &str) -> bool {
+    fn isspace(this: &str) -> anyhow::Result<bool> {
         if this.is_empty() {
             return Ok(false);
         }
@@ -568,7 +568,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn istitle(this: &str) -> bool {
+    fn istitle(this: &str) -> anyhow::Result<bool> {
         let mut last_space = true;
         let mut result = false;
 
@@ -609,7 +609,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn isupper(this: &str) -> bool {
+    fn isupper(this: &str) -> anyhow::Result<bool> {
         let mut result = false;
         for c in this.chars() {
             if c.is_lowercase() {
@@ -619,6 +619,25 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
             }
         }
         Ok(result)
+    }
+
+    /// [string.lower](
+    /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·lower
+    /// ): test if all letters of a string are lowercased.
+    ///
+    /// `S.lower()` returns a copy of the string S with letters converted to
+    /// lowercase.
+    ///
+    /// Examples:
+    ///
+    /// ```
+    /// # starlark::assert::all_true(r#"
+    /// "Hello, World!".lower() == "hello, world!"
+    /// # "#);
+    /// ```
+    #[starlark(speculative_exec_safe)]
+    fn lower(this: &str) -> anyhow::Result<String> {
+        Ok(this.to_lowercase())
     }
 
     /// [string.join](
@@ -641,7 +660,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn join(this: &str, ref to_join: Value) -> Value<'v> {
+    fn join(this: &str, ref to_join: Value) -> anyhow::Result<Value<'v>> {
         #[inline(always)]
         fn as_str<'v>(x: Value<'v>) -> anyhow::Result<&'v str> {
             <&str>::unpack_named_param(x, "to_join")
@@ -681,25 +700,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         })?
     }
 
-    /// [string.lower](
-    /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·lower
-    /// ): test if all letters of a string are lowercased.
-    ///
-    /// `S.lower()` returns a copy of the string S with letters converted to
-    /// lowercase.
-    ///
-    /// Examples:
-    ///
-    /// ```
-    /// # starlark::assert::all_true(r#"
-    /// "Hello, World!".lower() == "hello, world!"
-    /// # "#);
-    /// ```
-    #[starlark(speculative_exec_safe)]
-    fn lower(this: &str) -> String {
-        Ok(this.to_lowercase())
-    }
-
     /// [string.lstrip](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·lstrip
     /// ): trim leading whitespaces.
@@ -716,7 +716,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn lstrip(this: &'v str, ref chars: Option<&str>) -> &'v str {
+    fn lstrip(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
         match chars {
             None => Ok(this.trim_start()),
             Some(s) => Ok(this.trim_start_matches(|c| s.contains(c))),
@@ -746,7 +746,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn partition(
         this: ValueOf<'v, &str>,
         ref needle: ValueOf<'v, &str>,
-    ) -> (Value<'v>, Value<'v>, Value<'v>) {
+    ) -> anyhow::Result<(Value<'v>, Value<'v>, Value<'v>)> {
         if needle.typed.is_empty() {
             return Err(anyhow!("Empty separator cannot be used for partitioning"));
         }
@@ -784,7 +784,12 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// "#, "argument was negative");
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn replace(this: &str, ref old: &str, ref new: &str, ref count: Option<i32>) -> String {
+    fn replace(
+        this: &str,
+        ref old: &str,
+        ref new: &str,
+        ref count: Option<i32>,
+    ) -> anyhow::Result<String> {
         match count {
             Some(count) if count >= 0 => Ok(this.replacen(old, new, count as usize)),
             Some(count) => Err(anyhow!("Replace final argument was negative '{}'", count)),
@@ -815,7 +820,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref needle: &str,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
-    ) -> i32 {
+    ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.rfind(needle) {
                 let index = fast_string::len(&haystack[..index]);
@@ -850,7 +855,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         ref needle: &str,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
-    ) -> i32 {
+    ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.rfind(needle) {
                 let index = fast_string::len(&haystack[..index]);
@@ -879,7 +884,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn rpartition(
         this: ValueOf<'v, &str>,
         ref needle: ValueOf<'v, &str>,
-    ) -> (Value<'v>, Value<'v>, Value<'v>) {
+    ) -> anyhow::Result<(Value<'v>, Value<'v>, Value<'v>)> {
         if needle.typed.is_empty() {
             return Err(anyhow!("Empty separator cannot be used for partitioning"));
         }
@@ -918,7 +923,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
-    ) -> Value<'v> {
+    ) -> anyhow::Result<Value<'v>> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
             Some(v) => {
@@ -961,7 +966,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn rstrip(this: &'v str, ref chars: Option<&str>) -> &'v str {
+    fn rstrip(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
         match chars {
             None => Ok(this.trim_end()),
             Some(s) => Ok(this.trim_end_matches(|c| s.contains(c))),
@@ -1007,7 +1012,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
-    ) -> Value<'v> {
+    ) -> anyhow::Result<Value<'v>> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
             Some(v) => {
@@ -1067,7 +1072,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn splitlines(this: &str, ref keepends @ false: bool) -> Value<'v> {
+    fn splitlines(this: &str, ref keepends @ false: bool) -> anyhow::Result<Value<'v>> {
         let mut s = this;
         let mut lines = Vec::new();
         loop {
@@ -1114,7 +1119,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn startswith(this: &str, ref prefix: StringOrTuple) -> bool {
+    fn startswith(this: &str, ref prefix: StringOrTuple) -> anyhow::Result<bool> {
         match prefix {
             StringOrTuple::String(x) => Ok(this.starts_with(x)),
             StringOrTuple::Tuple(xs) => Ok(xs.iter().any(|x| this.starts_with(x))),
@@ -1137,7 +1142,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn strip(this: &'v str, ref chars: Option<&str>) -> &'v str {
+    fn strip(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
         match chars {
             None => Ok(this.trim()),
             Some(s) => Ok(this.trim_matches(|c| s.contains(c))),
@@ -1162,7 +1167,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn title(this: &str) -> String {
+    fn title(this: &str) -> anyhow::Result<String> {
         let mut last_space = true;
         let mut result = String::new();
         for c in this.chars() {
@@ -1202,7 +1207,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn upper(this: &str) -> String {
+    fn upper(this: &str) -> anyhow::Result<String> {
         Ok(this.to_uppercase())
     }
 
@@ -1223,7 +1228,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn removeprefix(this: Value<'v>, ref prefix: &str) -> Value<'v> {
+    fn removeprefix(this: Value<'v>, ref prefix: &str) -> anyhow::Result<Value<'v>> {
         let x = this.unpack_str().unwrap();
         if x.starts_with(prefix) && !prefix.is_empty() {
             Ok(heap.alloc(&x[prefix.len()..]))
@@ -1249,7 +1254,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn removesuffix(this: Value<'v>, ref suffix: &str) -> Value<'v> {
+    fn removesuffix(this: Value<'v>, ref suffix: &str) -> anyhow::Result<Value<'v>> {
         let x = this.unpack_str().unwrap();
         if x.ends_with(suffix) && !suffix.is_empty() {
             Ok(heap.alloc(&x[..x.len() - suffix.len()]))

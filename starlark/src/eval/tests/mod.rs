@@ -331,7 +331,7 @@ fn test_radd() {
 
     #[starlark_module]
     fn module(build: &mut GlobalsBuilder) {
-        fn select(xs: Vec<i32>) -> Select {
+        fn select(xs: Vec<i32>) -> anyhow::Result<Select> {
             Ok(Select(xs))
         }
     }
@@ -698,7 +698,7 @@ fn test_label_assign() {
 
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn wrapper() -> Value<'v> {
+        fn wrapper() -> anyhow::Result<Value<'v>> {
             Ok(heap.alloc_complex(Wrapper(RefCell::new(SmallMap::new()))))
         }
     }

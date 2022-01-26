@@ -72,11 +72,11 @@ mod tests {
 
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
-        fn debug_inspect_stack() -> Vec<String> {
+        fn debug_inspect_stack() -> anyhow::Result<Vec<String>> {
             Ok(eval.call_stack().map(ToString::to_string))
         }
 
-        fn debug_inspect_variables() -> Dict<'v> {
+        fn debug_inspect_variables() -> anyhow::Result<Dict<'v>> {
             let mut sm = SmallMap::new();
             for (k, v) in eval.local_variables() {
                 sm.insert_hashed(heap.alloc_str(&k).get_hashed(), v);

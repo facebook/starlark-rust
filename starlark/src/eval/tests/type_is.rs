@@ -27,7 +27,7 @@ use crate::{
 
 #[starlark_module]
 fn globals(builder: &mut GlobalsBuilder) {
-    fn returns_type_is(value: Value<'v>) -> bool {
+    fn returns_type_is(value: Value<'v>) -> anyhow::Result<bool> {
         Ok(if let Some(def) = value.downcast_ref::<FrozenDef>() {
             def.def_info.inline_def_body.is_some()
         } else if let Some(def) = value.downcast_ref::<Def>() {

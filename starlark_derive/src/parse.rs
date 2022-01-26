@@ -18,8 +18,8 @@
 use gazebo::prelude::*;
 use proc_macro2::Span;
 use syn::{
-    spanned::Spanned, Attribute, FnArg, Item, ItemConst, ItemFn, Meta, MetaNameValue, NestedMeta,
-    Pat, PatType, ReturnType, Stmt, Type, TypeReference,
+    spanned::Spanned, Attribute, FnArg, GenericArgument, Item, ItemConst, ItemFn, Meta,
+    MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType, Stmt, Type, TypeReference,
 };
 
 use crate::{typ::*, util::*};
@@ -205,6 +205,44 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
     })
 }
 
+/// Check if given type is `anyhow::Result<T>`, and if it is, return `T`.
+fn is_anyhow_result(t: &Type) -> Option<Type> {
+    let path = match t {
+        Type::Path(p) => p,
+        _ => return None,
+    };
+    if path.qself.is_some() {
+        return None;
+    }
+    let mut segments = path.path.segments.iter();
+    match segments.next() {
+        None => return None,
+        Some(s) if s.ident != "anyhow" => return None,
+        _ => {}
+    };
+    let result = match segments.next() {
+        None => return None,
+        Some(s) if s.ident != "Result" => return None,
+        Some(result) => result,
+    };
+    if segments.next().is_some() {
+        return None;
+    }
+    let result_arguments = match &result.arguments {
+        PathArguments::AngleBracketed(args) => args,
+        _ => return None,
+    };
+    let mut result_arguments = result_arguments.args.iter();
+    let t = match result_arguments.next() {
+        None => return None,
+        Some(t) => t,
+    };
+    match t {
+        GenericArgument::Type(t) => Some(t.clone()),
+        _ => None,
+    }
+}
+
 // Add a function to the `GlobalsModule` named `globals_builder`.
 fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
     let span = func.span();
@@ -218,11 +256,19 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
         attrs,
     } = process_attributes(func.span(), func.attrs)?;
 
-    let return_type = match func.sig.output {
+    let (return_type, return_type_arg) = match func.sig.output {
         ReturnType::Default => {
             return Err(syn::Error::new(span, "Function must have a return type"));
         }
-        ReturnType::Type(_, x) => x,
+        ReturnType::Type(_, x) => match is_anyhow_result(&x) {
+            Some(return_arg_type) => (x, return_arg_type),
+            None => {
+                return Err(syn::Error::new(
+                    span,
+                    "Function return type must be precisely `anyhow::Result<...>`",
+                ));
+            }
+        },
     };
     let mut args: Vec<_> = func
         .sig
@@ -256,6 +302,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             arg: arg.ty,
             attrs,
             return_type: *return_type,
+            return_type_arg,
             speculative_exec_safe,
             body: *func.block,
             docstring,
@@ -267,6 +314,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             attrs,
             args,
             return_type: *return_type,
+            return_type_arg,
             speculative_exec_safe,
             body: *func.block,
             source: StarFunSource::Unknown,

@@ -441,7 +441,7 @@ impl MethodsBuilder {
 ///
 /// ```ignore
 /// fn my_methods(builder: &mut GlobalsBuilder) {
-///     fn foo(me: ARef<Foo>) -> NoneType {
+///     fn foo(me: ARef<Foo>) -> anyhow::Result<NoneType> {
 ///         ...
 ///     }
 /// }

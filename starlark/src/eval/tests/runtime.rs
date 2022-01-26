@@ -61,7 +61,7 @@ fn test_deallocation() {
 
     #[starlark_module]
     fn globals(builder: &mut GlobalsBuilder) {
-        fn mk() -> StarlarkAny<Dealloc> {
+        fn mk() -> anyhow::Result<StarlarkAny<Dealloc>> {
             Ok(StarlarkAny::new(Dealloc))
         }
     }
@@ -90,7 +90,7 @@ r = [y(), mk()]
 fn test_stack_depth() {
     #[starlark_module]
     fn measure_stack(builder: &mut GlobalsBuilder) {
-        fn stack_depth() -> String {
+        fn stack_depth() -> anyhow::Result<String> {
             // Put a variable on the stack, and get a reference to it
             // Not entirely documented as to what this does, but hopefully
             // a mut pointer is harder to elide or optimise away
@@ -140,11 +140,11 @@ fn test_garbage_collect_happens() {
     // GC is meant to be "not observable", but if we break it, we want this test to fail
     #[starlark_module]
     fn helpers(builder: &mut GlobalsBuilder) {
-        fn current_usage() -> i32 {
+        fn current_usage() -> anyhow::Result<i32> {
             Ok(heap.allocated_bytes() as i32)
         }
 
-        fn is_gc_disabled() -> bool {
+        fn is_gc_disabled() -> anyhow::Result<bool> {
             Ok(eval.disable_gc)
         }
     }

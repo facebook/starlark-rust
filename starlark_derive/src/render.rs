@@ -75,6 +75,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
         arg,
         attrs,
         return_type,
+        return_type_arg,
         speculative_exec_safe,
         body,
         docstring,
@@ -97,7 +98,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
                 this: starlark::values::Value<'v>,
                 #[allow(unused_variables)]
                 heap: &'v starlark::values::Heap,
-            ) -> anyhow::Result<#return_type> {
+            ) -> #return_type {
                 #[allow(unused_variables)]
                 let this: #arg = match starlark::values::UnpackValue::unpack_value(this) {
                     None => return Err(starlark::values::ValueError::IncorrectParameterTypeNamedWithExpected(
@@ -111,7 +112,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
             }
             Ok(heap.alloc(inner(this, heap)?))
         }
-        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #docstring, stringify!(#return_type).to_owned(), #name);
+        globals_builder.set_attribute_fn(#name_str, #speculative_exec_safe, #docstring, stringify!(#return_type_arg).to_owned(), #name);
     }
 }
 
@@ -130,6 +131,7 @@ fn render_fun(x: StarFun) -> TokenStream {
         attrs,
         args: _,
         return_type,
+        return_type_arg: _,
         speculative_exec_safe,
         body,
         source: _,
@@ -212,7 +214,7 @@ fn render_fun(x: StarFun) -> TokenStream {
                 #this_param
                 __args: &starlark::eval::Arguments<'v, '_>,
                 #signature_arg
-            ) -> anyhow::Result<#return_type> {
+            ) -> #return_type {
                 #[allow(unused_variables)]
                 let heap = eval.heap();
                 #binding
@@ -396,7 +398,7 @@ fn render_documentation(x: &StarFun) -> TokenStream {
         Some(d) => quote_spanned!(span=> Some(#d)),
         None => quote_spanned!(span=> None),
     };
-    let return_type = &x.return_type;
+    let return_type_arg = &x.return_type_arg;
     let parameter_types: Vec<_> = x.args
             .iter()
             .filter(|a| !a.is_this()) // "this" gets ignored when creating the signature, so make sure the indexes match up.
@@ -412,7 +414,7 @@ fn render_documentation(x: &StarFun) -> TokenStream {
             let parameter_types = std::collections::HashMap::from([#(#parameter_types),*]);
             let return_type = Some(
                 starlark::values::docs::Type {
-                    raw_type: stringify!(#return_type).to_owned()
+                    raw_type: stringify!(#return_type_arg).to_owned()
                 }
             );
             starlark::values::function::NativeCallableRawDocs {

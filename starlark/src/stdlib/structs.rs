@@ -26,7 +26,7 @@ use crate::{
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
     #[starlark(type(Struct::TYPE))]
-    fn r#struct(args: &Arguments<'v, '_>) -> Struct<'v> {
+    fn r#struct(args: &Arguments<'v, '_>) -> anyhow::Result<Struct<'v>> {
         args.no_positional_args(heap)?;
         Ok(Struct::new(args.names_map()?))
     }
@@ -35,7 +35,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 #[starlark_module]
 pub(crate) fn struct_methods(builder: &mut MethodsBuilder) {
     #[starlark(speculative_exec_safe)]
-    fn to_json(this: Value) -> String {
+    fn to_json(this: Value) -> anyhow::Result<String> {
         this.to_json()
     }
 }

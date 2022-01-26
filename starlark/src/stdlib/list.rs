@@ -51,7 +51,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x == [1, 2, 3]
     /// # "#);
     /// ```
-    fn append(this: Value, ref el: Value) -> NoneType {
+    fn append(this: Value, ref el: Value) -> anyhow::Result<NoneType> {
         let this = List::from_value_mut(this)?.unwrap();
         this.push(el, heap);
         Ok(NoneType)
@@ -73,7 +73,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x == []
     /// # "#);
     /// ```
-    fn clear(this: Value) -> NoneType {
+    fn clear(this: Value) -> anyhow::Result<NoneType> {
         let this = List::from_value_mut(this)?.unwrap();
         this.clear();
         Ok(NoneType)
@@ -99,7 +99,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x == [1, 2, 3, "foo"]
     /// # "#);
     /// ```
-    fn extend(this: Value, ref other: Value) -> NoneType {
+    fn extend(this: Value, ref other: Value) -> anyhow::Result<NoneType> {
         let res = List::from_value_mut(this)?.unwrap();
         if this.ptr_eq(other) {
             // If the types alias, we can't borrow the `other` for iteration.
@@ -148,7 +148,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
         ref needle: Value,
         ref start @ NoneOr::None: NoneOr<i32>,
         ref end @ NoneOr::None: NoneOr<i32>,
-    ) -> i32 {
+    ) -> anyhow::Result<i32> {
         let (start, end) = convert_indices(this.len() as i32, start, end);
         if let Some(haystack) = this.get(start..end) {
             for (i, x) in haystack.iter().enumerate() {
@@ -183,7 +183,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x == ["a", "b", "c", "d", "e"]
     /// # "#);
     /// ```
-    fn insert(this: Value, ref index: i32, ref el: Value) -> NoneType {
+    fn insert(this: Value, ref index: i32, ref el: Value) -> anyhow::Result<NoneType> {
         let this = List::from_value_mut(this)?.unwrap();
         let index = convert_index(this.len() as i32, index);
         this.insert(index, el, heap);
@@ -213,7 +213,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x == [1]
     /// # )"#);
     /// ```
-    fn pop(this: Value, ref index: Option<Value>) -> Value<'v> {
+    fn pop(this: Value, ref index: Option<Value>) -> anyhow::Result<Value<'v>> {
         let index = match index {
             Some(index) => Some(index.to_int()?),
             None => None,
@@ -263,7 +263,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x.remove(2) # error: not found
     /// # "#, "not found");
     /// ```
-    fn remove(this: Value, ref needle: Value) -> NoneType {
+    fn remove(this: Value, ref needle: Value) -> anyhow::Result<NoneType> {
         // Written in two separate blocks so we ensure we give up the
         // immutable borrow before making the mutable borrow.
         let position = {

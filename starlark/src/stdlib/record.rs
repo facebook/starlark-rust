@@ -31,7 +31,7 @@ use crate::{
 
 #[starlark_module]
 pub fn global(builder: &mut GlobalsBuilder) {
-    fn record(kwargs: SmallMap<String, Value>) -> RecordType<'v> {
+    fn record(kwargs: SmallMap<String, Value>) -> anyhow::Result<RecordType<'v>> {
         // Every Value must either be a field or a value (the type)
         let mut mp = SmallMap::with_capacity(kwargs.len());
         for (k, v) in kwargs.into_iter_hashed() {
@@ -57,7 +57,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
     /// rec.mask == 255
     /// # "#);
     /// ```
-    fn field(ref typ: Value, default: Option<Value>) -> Field<'v> {
+    fn field(ref typ: Value, default: Option<Value>) -> anyhow::Result<Field<'v>> {
         // We compile the type even if we don't have a default to raise the error sooner
         let compiled = TypeCompiled::new(typ, heap)?;
         if let Some(d) = default {

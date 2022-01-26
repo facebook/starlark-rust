@@ -575,12 +575,12 @@ mod test {
     fn add_some_value(builder: &mut MethodsBuilder) {
         /// Docs for attr1
         #[starlark(attribute)]
-        fn attr1(_this: Value<'v>) -> String {
+        fn attr1(_this: Value<'v>) -> anyhow::Result<String> {
             Ok("attr1".to_owned())
         }
 
         #[starlark(attribute)]
-        fn attr2(_this: Value<'v>) -> String {
+        fn attr2(_this: Value<'v>) -> anyhow::Result<String> {
             Ok("attr2".to_owned())
         }
 
@@ -591,12 +591,12 @@ mod test {
         ///
         /// # Returns
         /// The string 'func1'
-        fn func1(_this: Value<'v>, foo: String) -> String {
+        fn func1(_this: Value<'v>, foo: String) -> anyhow::Result<String> {
             let _ignore = foo;
             Ok("func1".to_owned())
         }
 
-        fn func2(_this: Value<'v>) -> String {
+        fn func2(_this: Value<'v>) -> anyhow::Result<String> {
             Ok("func2".to_owned())
         }
     }
@@ -614,17 +614,17 @@ mod test {
         ///
         /// # Returns
         /// The string 'func1'
-        fn func1(foo: String) -> String {
+        fn func1(foo: String) -> anyhow::Result<String> {
             let _ignore = foo;
             Ok("func1".to_owned())
         }
 
-        fn func2() -> String {
+        fn func2() -> anyhow::Result<String> {
             Ok("func2".to_owned())
         }
 
         /// A function with only positional arguments.
-        fn func3(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> String {
+        fn func3(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> anyhow::Result<String> {
             let _x = (a1, a2, step);
             Ok("func3".to_owned())
         }

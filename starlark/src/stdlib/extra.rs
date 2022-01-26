@@ -42,7 +42,7 @@ use crate::{
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
-    fn filter(ref func: Value, ref seq: Value) -> Value<'v> {
+    fn filter(ref func: Value, ref seq: Value) -> anyhow::Result<Value<'v>> {
         let mut res = Vec::new();
 
         for v in seq.iterate(heap)? {
@@ -60,7 +60,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn map(builder: &mut GlobalsBuilder) {
-    fn map(ref func: Value, ref seq: Value) -> Value<'v> {
+    fn map(ref func: Value, ref seq: Value) -> anyhow::Result<Value<'v>> {
         let it = seq.iterate(heap)?;
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
@@ -72,7 +72,11 @@ pub fn map(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
-    fn partial(ref func: Value, args: Value<'v>, kwargs: ARef<Dict>) -> Partial<'v> {
+    fn partial(
+        ref func: Value,
+        args: Value<'v>,
+        kwargs: ARef<Dict>,
+    ) -> anyhow::Result<Partial<'v>> {
         debug_assert!(Tuple::from_value(args).is_some());
         let names = kwargs
             .keys()
@@ -99,7 +103,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
 pub fn debug(builder: &mut GlobalsBuilder) {
     /// Print the value with full debug formatting. The result may not be stable over time,
     /// mostly intended for debugging purposes.
-    fn debug(ref val: Value) -> String {
+    fn debug(ref val: Value) -> anyhow::Result<String> {
         Ok(format!("{:?}", val))
     }
 }
@@ -108,7 +112,7 @@ pub fn debug(builder: &mut GlobalsBuilder) {
 pub fn dedupe(builder: &mut GlobalsBuilder) {
     /// Remove duplicates in a list. Uses identity of value (pointer),
     /// rather than by equality.
-    fn dedupe(ref val: Value) -> Value<'v> {
+    fn dedupe(ref val: Value) -> anyhow::Result<Value<'v>> {
         let mut seen = HashSet::new();
         let mut res = Vec::new();
         for v in val.iterate(heap)? {
@@ -152,7 +156,7 @@ impl PrintHandler for StderrPrintHandler {
 
 #[starlark_module]
 pub fn print(builder: &mut GlobalsBuilder) {
-    fn print(args: Vec<Value>) -> NoneType {
+    fn print(args: Vec<Value>) -> anyhow::Result<NoneType> {
         // In practice most users should want to put the print somewhere else, but this does for now
         // Unfortunately, we can't use PrintWrapper because strings to_str() and Display are different.
         eval.print_handler
@@ -163,7 +167,7 @@ pub fn print(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn pprint(builder: &mut GlobalsBuilder) {
-    fn pprint(args: Vec<Value>) -> NoneType {
+    fn pprint(args: Vec<Value>) -> anyhow::Result<NoneType> {
         // In practice most users may want to put the print somewhere else, but this does for now
         eval.print_handler
             .println(&format!("{:#}", PrintWrapper(&args)))?;
@@ -173,14 +177,14 @@ pub fn pprint(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn json(builder: &mut GlobalsBuilder) {
-    fn json(ref x: Value) -> String {
+    fn json(ref x: Value) -> anyhow::Result<String> {
         x.to_json()
     }
 }
 
 #[starlark_module]
 pub fn abs(builder: &mut GlobalsBuilder) {
-    fn abs(ref x: i32) -> i32 {
+    fn abs(ref x: i32) -> anyhow::Result<i32> {
         Ok(x.abs())
     }
 }

@@ -101,19 +101,19 @@ enum GcStrategy {
 #[starlark_module]
 // Deliberately qualify the GlobalsBuild type to test that we can
 fn assert_star(builder: &mut crate::environment::GlobalsBuilder) {
-    fn eq(a: Value, b: Value) -> NoneType {
+    fn eq(a: Value, b: Value) -> anyhow::Result<NoneType> {
         assert_equals(a, b)
     }
 
-    fn ne(a: Value, b: Value) -> NoneType {
+    fn ne(a: Value, b: Value) -> anyhow::Result<NoneType> {
         assert_different(a, b)
     }
 
-    fn lt(a: Value, b: Value) -> NoneType {
+    fn lt(a: Value, b: Value) -> anyhow::Result<NoneType> {
         assert_less_than(a, b)
     }
 
-    fn contains(xs: Value, x: Value) -> NoneType {
+    fn contains(xs: Value, x: Value) -> anyhow::Result<NoneType> {
         if !xs.is_in(x)? {
             Err(anyhow!("assert.contains: expected {} to be in {}", x, xs))
         } else {
@@ -121,16 +121,16 @@ fn assert_star(builder: &mut crate::environment::GlobalsBuilder) {
         }
     }
 
-    fn r#true(x: Value) -> NoneType {
+    fn r#true(x: Value) -> anyhow::Result<NoneType> {
         assert_equals(Value::new_bool(x.to_bool()), Value::new_bool(true))
     }
 
     // We don't allow this at runtime - just to be compatible with the Go Starlark test suite
-    fn freeze(x: Value) -> Value<'v> {
+    fn freeze(x: Value) -> anyhow::Result<Value<'v>> {
         Ok(x)
     }
 
-    fn fails(f: Value, _msg: &str) -> NoneType {
+    fn fails(f: Value, _msg: &str) -> anyhow::Result<NoneType> {
         match f.invoke_pos(&[], eval) {
             Err(_e) => Ok(NoneType), // We don't actually check the message
             Ok(_) => Err(anyhow!("assert.fails: didn't fail")),
@@ -144,28 +144,28 @@ fn test_methods(builder: &mut GlobalsBuilder) {
     const fibonacci: Vec<i32> = vec![0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 
     // Approximate version of a method used by the Go test suite
-    fn hasfields() -> Struct<'v> {
+    fn hasfields() -> anyhow::Result<Struct<'v>> {
         Ok(Struct::new(SmallMap::new()))
     }
 
     // Approximate version of a method used by the Go test suite
-    fn set(xs: Value) -> Value<'v> {
+    fn set(xs: Value) -> anyhow::Result<Value<'v>> {
         Ok(xs)
     }
 
-    fn assert_eq(a: Value, b: Value) -> NoneType {
+    fn assert_eq(a: Value, b: Value) -> anyhow::Result<NoneType> {
         assert_equals(a, b)
     }
 
-    fn assert_ne(a: Value, b: Value) -> NoneType {
+    fn assert_ne(a: Value, b: Value) -> anyhow::Result<NoneType> {
         assert_different(a, b)
     }
 
-    fn assert_lt(a: Value, b: Value) -> NoneType {
+    fn assert_lt(a: Value, b: Value) -> anyhow::Result<NoneType> {
         assert_less_than(a, b)
     }
 
-    fn assert_true(a: Value) -> NoneType {
+    fn assert_true(a: Value) -> anyhow::Result<NoneType> {
         if !a.to_bool() {
             Err(anyhow!("assertion failed"))
         } else {
@@ -173,7 +173,7 @@ fn test_methods(builder: &mut GlobalsBuilder) {
         }
     }
 
-    fn assert_false(a: Value) -> NoneType {
+    fn assert_false(a: Value) -> anyhow::Result<NoneType> {
         if a.to_bool() {
             Err(anyhow!("assertion failed"))
         } else {
@@ -182,17 +182,17 @@ fn test_methods(builder: &mut GlobalsBuilder) {
     }
 
     // This is only safe to call at the top-level of a Starlark module
-    fn garbage_collect() -> NoneType {
+    fn garbage_collect() -> anyhow::Result<NoneType> {
         eval.trigger_gc();
         Ok(NoneType)
     }
 
-    fn assert_type(v: Value, ty: Value) -> NoneType {
+    fn assert_type(v: Value, ty: Value) -> anyhow::Result<NoneType> {
         v.check_type(ty, Some("v"), heap)?;
         Ok(NoneType)
     }
 
-    fn is_type(v: Value, ty: Value) -> bool {
+    fn is_type(v: Value, ty: Value) -> anyhow::Result<bool> {
         v.is_type(ty, heap)
     }
 }

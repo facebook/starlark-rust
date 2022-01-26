@@ -77,7 +77,7 @@
 //! // This defines the function that is visible to Starlark
 //! #[starlark_module]
 //! fn starlark_quadratic(builder: &mut GlobalsBuilder) {
-//!     fn quadratic(a: i32, b: i32, c: i32, x: i32) -> i32 {
+//!     fn quadratic(a: i32, b: i32, c: i32, x: i32) -> anyhow::Result<i32> {
 //!         Ok(a * x * x + b * x + c)
 //!     }
 //! }
@@ -135,7 +135,7 @@
 //!
 //! #[starlark_module]
 //! fn starlark_emit(builder: &mut GlobalsBuilder) {
-//!     fn emit(x: Value) -> NoneType {
+//!     fn emit(x: Value) -> anyhow::Result<NoneType> {
 //!         // We modify extra (which we know is a Store) and add the JSON of the
 //!         // value the user gave.
 //!         eval.extra

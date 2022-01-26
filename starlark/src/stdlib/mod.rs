@@ -125,7 +125,7 @@ mod tests {
     fn test_no_arg() {
         #[starlark_module]
         fn global(builder: &mut GlobalsBuilder) {
-            fn nop() -> NoneType {
+            fn nop() -> anyhow::Result<NoneType> {
                 Ok(NoneType)
             }
         }
@@ -176,11 +176,11 @@ mod tests {
         #[starlark_module]
         fn methods(builder: &mut MethodsBuilder) {
             #[starlark(attribute)]
-            fn invert1(this: Bool2) -> Bool2 {
+            fn invert1(this: Bool2) -> anyhow::Result<Bool2> {
                 Ok(Bool2(!this.0))
             }
 
-            fn invert2(this: Bool2) -> Bool2 {
+            fn invert2(this: Bool2) -> anyhow::Result<Bool2> {
                 Ok(Bool2(!this.0))
             }
         }

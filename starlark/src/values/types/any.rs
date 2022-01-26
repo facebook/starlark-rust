@@ -48,11 +48,11 @@
 //!
 //! #[starlark_module]
 //! fn globals(builder: &mut GlobalsBuilder) {
-//!     fn start() -> StarlarkAny<MyInstant> {
+//!     fn start() -> anyhow::Result<StarlarkAny<MyInstant>> {
 //!         Ok(StarlarkAny::new(MyInstant(Instant::now())))
 //!     }
 //!
-//!     fn elapsed(x: Value) -> String {
+//!     fn elapsed(x: Value) -> anyhow::Result<String> {
 //!         Ok(StarlarkAny::<MyInstant>::get(x).unwrap().0.elapsed().as_secs_f64().to_string())
 //!     }
 //! }

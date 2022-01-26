@@ -91,7 +91,7 @@ fn test_export_as() {
 
     #[starlark_module]
     fn exporter(builder: &mut GlobalsBuilder) {
-        fn exporter(value: i32) -> Exporter<RefCell<String>> {
+        fn exporter(value: i32) -> anyhow::Result<Exporter<RefCell<String>>> {
             Ok(Exporter {
                 named: RefCell::new("unnamed".to_owned()),
                 value,
@@ -124,7 +124,7 @@ v == '{}' or v == '{}'"#,
 fn test_load_symbols() {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
+        fn load_symbol(name: &str, value: Value<'v>) -> anyhow::Result<NoneType> {
             eval.set_module_variable_at_some_point(name, value)?;
             Ok(NoneType)
         }
@@ -155,7 +155,7 @@ fn test_load_public_symbols_does_not_reexport() -> anyhow::Result<()> {
 fn test_load_symbols_extra() -> anyhow::Result<()> {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn load_symbol(name: &str, value: Value<'v>) -> NoneType {
+        fn load_symbol(name: &str, value: Value<'v>) -> anyhow::Result<NoneType> {
             let extra = eval.extra_v.unwrap().downcast_ref::<Extra<'v>>().unwrap();
             extra.0.lock().unwrap().insert(name.to_owned(), value);
             Ok(NoneType)
@@ -193,7 +193,7 @@ fn test_repr_str() {
 
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn mk_foo() -> StarlarkAny<Foo> {
+        fn mk_foo() -> anyhow::Result<StarlarkAny<Foo>> {
             Ok(StarlarkAny::new(Foo(Some(42))))
         }
     }
@@ -208,7 +208,7 @@ fn test_repr_str() {
 fn test_starlark_module() {
     #[starlark_module]
     fn global(builder: &mut GlobalsBuilder) {
-        fn cc_binary(name: &str, srcs: Vec<&str>) -> String {
+        fn cc_binary(name: &str, srcs: Vec<&str>) -> anyhow::Result<String> {
             // real implementation may write it to a global variable
             Ok(format!("{:?} {:?}", name, srcs))
         }
@@ -238,14 +238,14 @@ mod value_of {
     // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
     #[starlark_module]
     fn validate_module(builder: &mut GlobalsBuilder) {
-        fn with_int(v: ValueOf<i32>) -> (Value<'v>, String) {
+        fn with_int(v: ValueOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
             Ok((*v, format!("{}", v.typed)))
         }
-        fn with_int_list(v: ListOf<i32>) -> (Value<'v>, String) {
+        fn with_int_list(v: ListOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v.to_vec().iter().join(", ");
             Ok((*v, repr))
         }
-        fn with_list_list(v: ListOf<ListOf<i32>>) -> (Value<'v>, String) {
+        fn with_list_list(v: ListOf<ListOf<i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_vec()
                 .iter()
@@ -253,7 +253,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_dict_list(v: ListOf<DictOf<i32, i32>>) -> (Value<'v>, String) {
+        fn with_dict_list(v: ListOf<DictOf<i32, i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_vec()
                 .iter()
@@ -266,7 +266,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_int_dict(v: DictOf<i32, i32>) -> (Value<'v>, String) {
+        fn with_int_dict(v: DictOf<i32, i32>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_dict()
                 .iter()
@@ -274,7 +274,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_list_dict(v: DictOf<i32, ListOf<i32>>) -> (Value<'v>, String) {
+        fn with_list_dict(v: DictOf<i32, ListOf<i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_dict()
                 .iter()
@@ -282,7 +282,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_dict_dict(v: DictOf<i32, DictOf<i32, i32>>) -> (Value<'v>, String) {
+        fn with_dict_dict(v: DictOf<i32, DictOf<i32, i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_dict()
                 .iter()
@@ -297,7 +297,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_struct_int(v: StructOf<i32>) -> (Value<'v>, String) {
+        fn with_struct_int(v: StructOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_map()
                 .iter()
@@ -305,7 +305,7 @@ mod value_of {
                 .join(" + ");
             Ok((v.to_value(), repr))
         }
-        fn with_either(v: Either<i32, Either<String, ListOf<i32>>>) -> String {
+        fn with_either(v: Either<i32, Either<String, ListOf<i32>>>) -> anyhow::Result<String> {
             match v {
                 Either::Left(i) => Ok(i.to_string()),
                 Either::Right(nested) => match nested {
