@@ -269,6 +269,12 @@ impl<'v> StringValue<'v> {
     pub fn get_hashed_str(self) -> BorrowHashed<'v, str> {
         BorrowHashed::new_unchecked(self.get_hash(), self.as_str())
     }
+
+    pub fn unpack_frozen(self) -> Option<FrozenStringValue> {
+        self.0
+            .unpack_frozen()
+            .map(|s| unsafe { FrozenStringValue::new_unchecked(s) })
+    }
 }
 
 impl<'v> Display for StringValue<'v> {
