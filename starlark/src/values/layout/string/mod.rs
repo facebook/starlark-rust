@@ -188,6 +188,18 @@ impl<'v> PartialEq for StringValue<'v> {
 
 impl<'v> Eq for StringValue<'v> {}
 
+impl<'v> PartialEq<FrozenStringValue> for StringValue<'v> {
+    fn eq(&self, other: &FrozenStringValue) -> bool {
+        *self == other.to_string_value()
+    }
+}
+
+impl<'v> PartialEq<StringValue<'v>> for FrozenStringValue {
+    fn eq(&self, other: &StringValue<'v>) -> bool {
+        self.to_string_value() == *other
+    }
+}
+
 impl<'v> Hash for StringValue<'v> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_str().hash(state)
