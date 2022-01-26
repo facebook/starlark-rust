@@ -105,7 +105,7 @@ impl Num {
         }
     }
 
-    pub(crate) fn get_small_hash_result(self) -> StarlarkHashValue {
+    pub(crate) fn get_hash(self) -> StarlarkHashValue {
         StarlarkHashValue::hash_64(self.get_hash_64())
     }
 }

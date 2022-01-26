@@ -375,7 +375,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkFloat> {
     }
 
     fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
-        Ok(Num::from(self.1.0).get_small_hash_result())
+        Ok(Num::from(self.1.0).get_hash())
     }
 }
 
@@ -428,7 +428,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
     }
 
     fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
-        Ok(self.1.get_small_hash_result())
+        Ok(self.1.get_hash())
     }
 }
 

@@ -134,7 +134,7 @@ impl StarlarkStr {
         }
     }
 
-    pub(crate) fn get_small_hash_result(&self) -> StarlarkHashValue {
+    pub(crate) fn get_hash(&self) -> StarlarkHashValue {
         // Note relaxed load and store are practically non-locking memory operations.
         let hash = self.str.hash.load(atomic::Ordering::Relaxed);
         if hash != 0 {
@@ -150,7 +150,7 @@ impl StarlarkStr {
     }
 
     pub fn as_str_hashed(&self) -> BorrowHashed<str> {
-        BorrowHashed::new_unchecked(self.get_small_hash_result(), self.unpack())
+        BorrowHashed::new_unchecked(self.get_hash(), self.unpack())
     }
 
     pub fn len(&self) -> usize {
@@ -336,7 +336,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         // Don't defer to str because we cache the Hash in StarlarkStr
-        hasher.write_u32(self.get_small_hash_result().get());
+        hasher.write_u32(self.get_hash().get());
         Ok(())
     }
 

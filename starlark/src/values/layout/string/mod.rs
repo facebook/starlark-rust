@@ -172,11 +172,11 @@ impl FrozenStringValue {
     }
 
     pub fn get_hashed(self) -> Hashed<Self> {
-        Hashed::new_unchecked(self.get_small_hash_result(), self)
+        Hashed::new_unchecked(self.get_hash(), self)
     }
 
     pub fn get_hashed_str(self) -> BorrowHashed<'static, str> {
-        BorrowHashed::new_unchecked(self.get_small_hash_result(), self.as_str())
+        BorrowHashed::new_unchecked(self.get_hash(), self.as_str())
     }
 }
 
@@ -251,11 +251,11 @@ impl<'v> StringValue<'v> {
     }
 
     pub fn get_hashed(self) -> Hashed<Self> {
-        Hashed::new_unchecked(self.get_small_hash_result(), self)
+        Hashed::new_unchecked(self.get_hash(), self)
     }
 
     pub fn get_hashed_str(self) -> BorrowHashed<'v, str> {
-        BorrowHashed::new_unchecked(self.get_small_hash_result(), self.as_str())
+        BorrowHashed::new_unchecked(self.get_hash(), self.as_str())
     }
 }
 

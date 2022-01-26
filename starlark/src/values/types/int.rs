@@ -263,7 +263,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
 
 impl<'v> StarlarkValueBasic<'v> for PointerI32 {
     fn get_hash(&self) -> StarlarkHashValue {
-        Num::from(self.get()).get_small_hash_result()
+        Num::from(self.get()).get_hash()
     }
 }
 
