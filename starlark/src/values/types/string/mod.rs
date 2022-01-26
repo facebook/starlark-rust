@@ -134,7 +134,7 @@ impl StarlarkStr {
         }
     }
 
-    pub(crate) fn get_hash(&self) -> StarlarkHashValue {
+    pub fn get_hash(&self) -> StarlarkHashValue {
         // Note relaxed load and store are practically non-locking memory operations.
         let hash = self.str.hash.load(atomic::Ordering::Relaxed);
         if hash != 0 {
