@@ -114,7 +114,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         self.get() != 0
     }
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u64(Num::from(self.get()).get_hash());
+        hasher.write_u64(Num::from(self.get()).get_hash_64());
         Ok(())
     }
     fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {

@@ -81,7 +81,7 @@ impl Num {
     }
 
     /// Get hash of the underlying number
-    pub fn get_hash(self) -> u64 {
+    pub(crate) fn get_hash_64(self) -> u64 {
         match (self.as_int(), self) {
             // equal ints and floats should have the same hash
             (Some(i), _) => i as u64,
@@ -106,7 +106,7 @@ impl Num {
     }
 
     pub(crate) fn get_small_hash_result(self) -> StarlarkHashValue {
-        StarlarkHashValue::hash_64(self.get_hash())
+        StarlarkHashValue::hash_64(self.get_hash_64())
     }
 }
 
@@ -179,16 +179,16 @@ mod tests {
 
     #[test]
     fn test_hashing() {
-        assert_eq!(Num::Int(0).get_hash(), Num::Float(0.0).get_hash());
-        assert_eq!(Num::Int(42).get_hash(), Num::Float(42.0).get_hash());
+        assert_eq!(Num::Int(0).get_hash_64(), Num::Float(0.0).get_hash_64());
+        assert_eq!(Num::Int(42).get_hash_64(), Num::Float(42.0).get_hash_64());
 
         assert_eq!(
-            Num::Float(f64::INFINITY + f64::NEG_INFINITY).get_hash(),
-            Num::Float(f64::NAN).get_hash()
+            Num::Float(f64::INFINITY + f64::NEG_INFINITY).get_hash_64(),
+            Num::Float(f64::NAN).get_hash_64()
         );
         assert_eq!(
-            Num::Float("0.25".parse().unwrap()).get_hash(),
-            Num::Float("25e-2".parse().unwrap()).get_hash()
+            Num::Float("0.25".parse().unwrap()).get_hash_64(),
+            Num::Float("25e-2".parse().unwrap()).get_hash_64()
         );
     }
 }

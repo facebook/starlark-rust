@@ -229,7 +229,7 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
     }
 
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        hasher.write_u64(Num::from(self.0).get_hash());
+        hasher.write_u64(Num::from(self.0).get_hash_64());
         Ok(())
     }
 
