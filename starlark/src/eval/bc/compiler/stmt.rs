@@ -72,7 +72,7 @@ impl IrSpanned<StmtCompiled> {
         write_if_then(
             c,
             maybe_not,
-            &|bc| {
+            |bc| {
                 t(compiler, bc);
             },
             bc,

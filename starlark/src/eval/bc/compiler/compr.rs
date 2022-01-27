@@ -46,7 +46,7 @@ impl ClauseCompiled {
                 write_if_then(
                     c,
                     MaybeNot::Not,
-                    &|bc| {
+                    |bc| {
                         bc.write_instr::<InstrContinue>(c.span, ());
                     },
                     bc,

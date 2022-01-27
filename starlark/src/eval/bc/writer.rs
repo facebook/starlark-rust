@@ -325,6 +325,12 @@ impl<'f> BcWriter<'f> {
         self.instrs.patch_addr(addr);
     }
 
+    pub(crate) fn patch_addrs(&mut self, addrs: Vec<PatchAddr>) {
+        for adds in addrs {
+            self.patch_addr(adds);
+        }
+    }
+
     /// Write branch.
     pub(crate) fn write_br(&mut self, span: FrozenFileSpan) -> PatchAddr {
         let arg = self.write_instr_ret_arg::<InstrBr>(span, BcAddrOffset::FORWARD);
@@ -359,21 +365,6 @@ impl<'f> BcWriter<'f> {
         let patch_addr = self.write_if_br(span);
         then_block(self);
         self.patch_addr(patch_addr);
-    }
-
-    /// Write if-then-else block.
-    pub(crate) fn write_if_else(
-        &mut self,
-        span: FrozenFileSpan,
-        then_block: impl FnOnce(&mut Self),
-        else_block: impl FnOnce(&mut Self),
-    ) {
-        let else_patch = self.write_if_not_br(span);
-        then_block(self);
-        let end_patch = self.write_br(span);
-        self.patch_addr(else_patch);
-        else_block(self);
-        self.patch_addr(end_patch);
     }
 
     /// Write for loop.

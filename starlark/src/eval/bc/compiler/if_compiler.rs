@@ -16,7 +16,7 @@
  */
 
 use crate::eval::{
-    bc::writer::BcWriter,
+    bc::{instrs::PatchAddr, writer::BcWriter},
     fragment::{
         expr::{ExprCompiled, MaybeNot},
         span::IrSpanned,
@@ -30,59 +30,143 @@ pub(crate) fn write_if_else(
     f: impl FnOnce(&mut BcWriter),
     bc: &mut BcWriter,
 ) {
-    if let ExprCompiled::Not(box ref c) = c.node {
-        write_if_else(c, f, t, bc);
-    } else {
-        // TODO: handle and and or
-        c.write_bc(bc);
-        bc.write_if_else(c.span, t, f);
-    }
+    write_if_else_impl(c, MaybeNot::Id, t, Some(f), bc);
 }
 
 /// Common code for compiling if statements and if conditions in comprehensions.
 pub(crate) fn write_if_then(
     c: &IrSpanned<ExprCompiled>,
     maybe_not: MaybeNot,
-    t: &dyn Fn(&mut BcWriter),
+    t: impl FnOnce(&mut BcWriter),
     bc: &mut BcWriter,
 ) {
-    if let ExprCompiled::Not(box ref c) = c.node {
-        write_if_then(c, maybe_not.negate(), t, bc);
-    } else if let (ExprCompiled::And(box (ref a, ref b)), MaybeNot::Id) = (&c.node, maybe_not) {
-        // `if a and b`
-        //  |||
-        // `if a: if b:
-        write_if_then(
-            a,
-            MaybeNot::Id,
-            &|bc| {
-                write_if_then(b, MaybeNot::Id, t, bc);
-            },
-            bc,
-        );
-    } else if let (ExprCompiled::Or(box (ref a, ref b)), MaybeNot::Not) = (&c.node, maybe_not) {
-        // `if not (a or b)`
-        //  |||
-        // `if (not a) and (not b)`
-        write_if_then(
-            a,
-            MaybeNot::Not,
-            &|bc| {
-                write_if_then(b, MaybeNot::Not, t, bc);
-            },
-            bc,
-        );
+    // Deal with some typechecker issue.
+    fn wr<T, F>(c: &IrSpanned<ExprCompiled>, maybe_not: MaybeNot, t: T, _f: F, bc: &mut BcWriter)
+    where
+        T: FnOnce(&mut BcWriter),
+        F: FnOnce(&mut BcWriter),
+    {
+        write_if_else_impl::<T, F>(c, maybe_not, t, None, bc);
+    }
+
+    wr(c, maybe_not, t, |_| unreachable!(), bc);
+}
+
+/// Common code for writing if-then or if-then-else expression or statement.
+fn write_if_else_impl<T, F>(
+    cond: &IrSpanned<ExprCompiled>,
+    maybe_not: MaybeNot,
+    t: T,
+    f: Option<F>,
+    bc: &mut BcWriter,
+) where
+    T: FnOnce(&mut BcWriter),
+    F: FnOnce(&mut BcWriter),
+{
+    let mut then_addrs = Vec::new();
+    let mut else_addrs = Vec::new();
+
+    write_cond(cond, maybe_not, &mut then_addrs, &mut else_addrs, bc);
+
+    bc.patch_addrs(then_addrs);
+    t(bc);
+    if let Some(f) = f {
+        let end_addr = bc.write_br(cond.span);
+
+        bc.patch_addrs(else_addrs);
+        f(bc);
+
+        bc.patch_addr(end_addr);
     } else {
-        // TODO: handle more and and or
-        match maybe_not {
-            MaybeNot::Id => {
-                c.write_bc(bc);
-                bc.write_if(c.span, |bc| t(bc))
-            }
-            MaybeNot::Not => {
-                c.write_bc(bc);
-                bc.write_if_not(c.span, |bc| t(bc))
-            }
+        bc.patch_addrs(else_addrs);
+    }
+}
+
+#[derive(PartialEq)]
+enum IfBinOp {
+    And,
+    Or,
+}
+
+/// Write boolean binary condition.
+///
+/// The condition is: `maybe_not(x bin_op y)`.
+///
+/// See `write_cond` for semantics of `t`, `f` parameters.
+fn write_cond_bin_op(
+    x: &IrSpanned<ExprCompiled>,
+    y: &IrSpanned<ExprCompiled>,
+    bin_op: IfBinOp,
+    maybe_not: MaybeNot,
+    t: &mut Vec<PatchAddr>,
+    f: &mut Vec<PatchAddr>,
+    bc: &mut BcWriter,
+) {
+    if (bin_op == IfBinOp::And) == (maybe_not == MaybeNot::Id) {
+        // This branch handles either of expressions:
+        // expression   | bin_op | maybe_not
+        // --------------+-------+----------
+        // x and y      | and    | id
+        // not (x or y) | or     | not
+
+        let mut x_skip = Vec::new();
+        write_cond(x, maybe_not, &mut x_skip, f, bc);
+        bc.patch_addrs(x_skip);
+
+        write_cond(y, maybe_not, t, f, bc);
+    } else {
+        // This branch handles either of expressions:
+        // expression    | bin_op | maybe_not
+        // --------------+-----+--+----------
+        // x or y        | or     | id
+        // not (x and y) | and    | not
+
+        let mut x_skip = Vec::new();
+        write_cond(x, maybe_not.negate(), &mut x_skip, t, bc);
+        bc.patch_addrs(x_skip);
+
+        write_cond(y, maybe_not, t, f, bc);
+    }
+}
+
+/// Write if condition bytecode.
+///
+/// The condition is `maybe_not(cond)`.
+///
+/// This function assumes there are two address:
+/// * address of then block
+/// * address of else block
+///
+/// Generated code will:
+/// * jump to else address if condition is false
+/// * jump to then address **or** fall through if condition is true
+///
+/// This function will populate `t` and `f` with addresses of instructions
+/// which jump to then or else block respectively. Caller needs to patch these.
+fn write_cond(
+    cond: &IrSpanned<ExprCompiled>,
+    maybe_not: MaybeNot,
+    t: &mut Vec<PatchAddr>,
+    f: &mut Vec<PatchAddr>,
+    bc: &mut BcWriter,
+) {
+    match &cond.node {
+        ExprCompiled::Not(cond) => {
+            write_cond(cond, maybe_not.negate(), t, f, bc);
+        }
+        ExprCompiled::And(box (x, y)) => {
+            write_cond_bin_op(x, y, IfBinOp::And, maybe_not, t, f, bc);
+        }
+        ExprCompiled::Or(box (x, y)) => {
+            write_cond_bin_op(x, y, IfBinOp::Or, maybe_not, t, f, bc);
+        }
+        _ => {
+            cond.write_bc(bc);
+            let addr = match maybe_not {
+                MaybeNot::Id => bc.write_if_not_br(cond.span),
+                MaybeNot::Not => bc.write_if_br(cond.span),
+            };
+            f.push(addr);
         }
     }
 }

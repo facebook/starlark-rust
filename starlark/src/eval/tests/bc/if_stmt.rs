@@ -120,10 +120,7 @@ fn test_if_else_x_and_y() {
     test_instrs(
         &[
             BcOpcode::LoadLocal,
-            // TODO(nga): optimize this: unnecessary dup/pop
-            BcOpcode::Dup,
             BcOpcode::IfNotBr,
-            BcOpcode::Pop,
             BcOpcode::LoadLocal,
             BcOpcode::IfNotBr,
             BcOpcode::ReturnConst,
@@ -140,10 +137,7 @@ fn test_if_else_x_or_y() {
     test_instrs(
         &[
             BcOpcode::LoadLocal,
-            // TODO(nga): optimize this: unnecessary dup/pop
-            BcOpcode::Dup,
             BcOpcode::IfBr,
-            BcOpcode::Pop,
             BcOpcode::LoadLocal,
             BcOpcode::IfNotBr,
             BcOpcode::ReturnConst,
