@@ -121,7 +121,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             globals,
             codemap,
             constants: Constants::new(),
-            has_before_stmt: !self.before_stmt.is_empty(),
+            has_before_stmt: self.before_stmt.enabled(),
             bc_profile: self.bc_profile.enabled(),
             eval: self,
         };

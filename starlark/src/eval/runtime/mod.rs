@@ -17,6 +17,7 @@
 
 pub(crate) mod arguments;
 pub(crate) mod bc_profile;
+pub(crate) mod before_stmt;
 pub(crate) mod call_stack;
 pub(crate) mod csv;
 pub(crate) mod evaluator;

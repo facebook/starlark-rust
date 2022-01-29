@@ -35,6 +35,7 @@ use crate::{
         fragment::def::DefInfo,
         runtime::{
             bc_profile::BcProfile,
+            before_stmt::BeforeStmt,
             call_stack::{CallStack, FrozenFileSpan},
             flame_profile::FlameProfile,
             heap_profile::{HeapProfile, HeapProfileFormat},
@@ -103,7 +104,7 @@ pub struct Evaluator<'v, 'a> {
     // Size of the heap when we should next perform a GC.
     pub(crate) next_gc_level: usize,
     // Extra functions to run on each statement, usually empty
-    pub(crate) before_stmt: Vec<&'a dyn Fn(FileSpanRef, &mut Evaluator<'v, 'a>)>,
+    pub(crate) before_stmt: BeforeStmt<'v, 'a>,
     // Used for line profiling
     stmt_profile: StmtProfile,
     // Bytecode profile.
@@ -161,7 +162,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             bc_profile: BcProfile::new(),
             flame_profile: FlameProfile::new(),
             heap_or_flame_profile: false,
-            before_stmt: Vec::new(),
+            before_stmt: BeforeStmt::default(),
             def_info: DefInfo::empty(), // Will be replaced before it is used
             string_pool: StringPool::default(),
             breakpoint_handler: None,
@@ -222,6 +223,18 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub fn enable_stmt_profile(&mut self) {
         self.stmt_profile.enable();
         self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+    }
+
+    /// Generate instructions to invoke before stmt callbacks when evaluating the module,
+    /// even if this module does not use any such callbacks.
+    ///
+    /// This function need to be called when evaluating a dependency of a module, if a dependency:
+    /// * registers `before_stmt` callback
+    /// * uses statement profiling
+    // TODO(nga): this API exposes too much interpreter internals.
+    //   Need to implement better abstraction for profiling/instrumentation.
+    pub fn enable_before_stmt_instrumentation(&mut self) {
+        self.before_stmt.instrument = true;
     }
 
     /// Enable bytecode profiling, allowing [`Evaluator::write_bytecode_profile`] to be used.
@@ -318,7 +331,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     ///
     /// This function may have no effect is called mid evaluation.
     pub fn before_stmt(&mut self, f: &'a dyn Fn(FileSpanRef, &mut Evaluator<'v, 'a>)) {
-        self.before_stmt.push(f)
+        self.before_stmt.before_stmt.push(f)
     }
 
     /// Set the handler invoked when `print` function is used.

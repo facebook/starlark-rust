@@ -468,10 +468,10 @@ impl Compiler<'_, '_, '_> {
 // This function is called only if `before_stmt` is set before compilation start.
 pub(crate) fn before_stmt(span: FrozenFileSpan, eval: &mut Evaluator) {
     assert!(
-        !eval.before_stmt.is_empty(),
+        eval.before_stmt.enabled(),
         "this code should not be called if `before_stmt` is set"
     );
-    let fs = mem::take(&mut eval.before_stmt);
+    let fs = mem::take(&mut eval.before_stmt.before_stmt);
     for f in &fs {
         f(
             FileSpanRef {
@@ -481,7 +481,7 @@ pub(crate) fn before_stmt(span: FrozenFileSpan, eval: &mut Evaluator) {
             eval,
         )
     }
-    let added = mem::replace(&mut eval.before_stmt, fs);
+    let added = mem::replace(&mut eval.before_stmt.before_stmt, fs);
     assert!(
         added.is_empty(),
         "`before_stmt` cannot be modified during evaluation"
