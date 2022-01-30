@@ -33,6 +33,7 @@ use std::{
 
 use either::Either;
 use gazebo::{cast, prelude::*};
+use once_cell::sync::Lazy;
 
 use crate::{
     eval::FrozenDef,
@@ -126,6 +127,14 @@ fn _test_frozen_heap_ref_send_sync()
 where
     FrozenHeapRef: Send + Sync,
 {
+}
+
+impl Default for FrozenHeapRef {
+    fn default() -> Self {
+        static EMPTY: Lazy<FrozenHeapRef> =
+            Lazy::new(|| FrozenHeapRef(Arc::new(FrozenFrozenHeap::default())));
+        Lazy::force(&EMPTY).dupe()
+    }
 }
 
 impl Hash for FrozenHeapRef {
