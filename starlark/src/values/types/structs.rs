@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_to_json() {
-        assert::pass(
+        assert::all_true(
             r#"
 struct(key = None).to_json() == '{"key":null}'
 struct(key = True).to_json() == '{"key":true}'
@@ -330,9 +330,9 @@ struct(key = 'value\\').to_json() == '{"key":"value\\\\"}'
 struct(key = 'value/').to_json() == '{"key":"value/"}'
 struct(key = 'value\u0008').to_json() == '{"key":"value\\b"}'
 struct(key = 'value\u000C').to_json() == '{"key":"value\\f"}'
-struct(key = 'value\\n').to_json() == '{"key":"value\\n"}'
-struct(key = 'value\\r').to_json() == '{"key":"value\\r"}'
-struct(key = 'value\\t').to_json() == '{"key":"value\\t"}'
+struct(key = 'value\n').to_json() == '{"key":"value\\n"}'
+struct(key = 'value\r').to_json() == '{"key":"value\\r"}'
+struct(key = 'value\t').to_json() == '{"key":"value\\t"}'
 struct(foo = 42, bar = "some").to_json() == '{"foo":42,"bar":"some"}'
 struct(foo = struct(bar = "some")).to_json() == '{"foo":{"bar":"some"}}'
 struct(foo = ["bar/", "some"]).to_json() == '{"foo":["bar/","some"]}'
