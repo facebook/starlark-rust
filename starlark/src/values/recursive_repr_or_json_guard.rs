@@ -45,6 +45,40 @@ impl Drop for JsonStackGuard {
     }
 }
 
+/// Release per-thread memory.
+///
+/// `#[thread_local]` is fast, but it [does not call destructor on thread exit][1].
+/// `thread_local!` is somewhat slower.
+///
+/// So we use `#[thread_local]` for fast access and `thread_local!` for releasing memory.
+///
+/// Note this is similar to how `thread_local!` actually implemented,
+/// but this is somewhat more efficient.
+///
+/// [1]: https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=874a250ed9642d3e1559a8ba7d26abfb
+struct ReleaseMemoryOnThreadExit;
+
+impl Drop for ReleaseMemoryOnThreadExit {
+    fn drop(&mut self) {
+        // We replace per-thread data with empty sets.
+        // So destructors for these fields won't be called,
+        // but that's fine because we don't need to release memory of empty sets.
+        REPR_STACK.take();
+        JSON_STACK.take();
+    }
+}
+
+thread_local! {
+    static RELEASE_MEMORY_ON_THREAD_EXIT: ReleaseMemoryOnThreadExit = ReleaseMemoryOnThreadExit;
+}
+
+/// Register a callback to release memory on thread exit.
+#[cold]
+#[inline(never)]
+fn init_release_memory_on_thread_exit() {
+    RELEASE_MEMORY_ON_THREAD_EXIT.with(|_| {});
+}
+
 /// Returned when `repr` is called recursively and a cycle is detected.
 pub(crate) struct ReprCycle;
 
@@ -60,6 +94,9 @@ static JSON_STACK: Cell<SmallSet<usize>> = Cell::new(SmallSet::new());
 /// Push a value to the stack, return error if it is already on the stack.
 pub(crate) fn repr_stack_push(value: Value) -> Result<ReprStackGuard, ReprCycle> {
     let mut stack = REPR_STACK.take();
+    if unlikely(stack.capacity() == 0) {
+        init_release_memory_on_thread_exit();
+    }
     if unlikely(!stack.insert(value.ptr_value())) {
         REPR_STACK.set(stack);
         Err(ReprCycle)
@@ -72,47 +109,14 @@ pub(crate) fn repr_stack_push(value: Value) -> Result<ReprStackGuard, ReprCycle>
 /// Push a value to the stack, return error if it is already on the stack.
 pub(crate) fn json_stack_push(value: Value) -> Result<JsonStackGuard, JsonCycle> {
     let mut stack = JSON_STACK.take();
+    if unlikely(stack.capacity() == 0) {
+        init_release_memory_on_thread_exit();
+    }
     if unlikely(!stack.insert(value.ptr_value())) {
         JSON_STACK.set(stack);
         Err(JsonCycle)
     } else {
         JSON_STACK.set(stack);
         Ok(JsonStackGuard)
-    }
-}
-
-/// Release excessive memory allocated for the stack.
-/// This is needed to make leak sanitizer happy.
-fn repr_stack_release_memory() {
-    let stack = REPR_STACK.take();
-    if !stack.is_empty() {
-        REPR_STACK.set(stack);
-    }
-}
-
-/// Release excessive memory allocated for the stack.
-/// This is needed to make leak sanitizer happy.
-fn json_stack_release_memory() {
-    let stack = JSON_STACK.take();
-    if !stack.is_empty() {
-        JSON_STACK.set(stack);
-    }
-}
-
-/// Release excessive memory allocated for the stack on drop.
-pub(crate) struct ReprStackReleaseMemoryOnDrop;
-
-/// Release excessive memory allocated for the stack on drop.
-pub(crate) struct JsonStackReleaseMemoryOnDrop;
-
-impl Drop for ReprStackReleaseMemoryOnDrop {
-    fn drop(&mut self) {
-        repr_stack_release_memory();
-    }
-}
-
-impl Drop for JsonStackReleaseMemoryOnDrop {
-    fn drop(&mut self) {
-        json_stack_release_memory();
     }
 }

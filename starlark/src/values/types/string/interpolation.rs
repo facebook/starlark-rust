@@ -482,11 +482,7 @@ mod tests {
     use gazebo::coerce::coerce;
 
     use super::*;
-    use crate::{
-        assert,
-        collections::SmallMap,
-        values::{recursive_repr_or_json_guard::ReprStackReleaseMemoryOnDrop, Heap},
-    };
+    use crate::{assert, collections::SmallMap, values::Heap};
 
     fn format_capture_for_test<'v, T: Iterator<Item = Value<'v>>>(
         capture: &str,
@@ -500,8 +496,6 @@ mod tests {
 
     #[test]
     fn test_format_capture() {
-        let _release_memory = ReprStackReleaseMemoryOnDrop;
-
         let heap = Heap::new();
         let original_args = vec![heap.alloc("1"), heap.alloc("2"), heap.alloc("3")];
         let mut args = FormatArgs::new(original_args.iter().copied());

@@ -67,10 +67,7 @@ use crate::{
         num::Num,
         range::Range,
         record::{FrozenRecord, RecordType},
-        recursive_repr_or_json_guard::{
-            json_stack_push, repr_stack_push, JsonStackReleaseMemoryOnDrop,
-            ReprStackReleaseMemoryOnDrop,
-        },
+        recursive_repr_or_json_guard::{json_stack_push, repr_stack_push},
         stack_guard,
         string::StarlarkStr,
         structs::FrozenStruct,
@@ -108,10 +105,6 @@ impl Default for FrozenValue {
 
 impl Display for Value<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // `Evaluator` releases memory on drop, but we don't know
-        // if we are called from evaluator on not, so release memory.
-        let _release_memory = ReprStackReleaseMemoryOnDrop;
-
         match repr_stack_push(*self) {
             Ok(_guard) => {
                 // We want to reuse Display for `repr`, so that means that
@@ -515,18 +508,12 @@ impl<'v> Value<'v> {
 
     /// Implement the `repr()` function.
     pub fn to_repr(self) -> String {
-        // `Evaluator` releases memory on drop, but we don't know
-        // if we are called from evaluator on not, so release memory.
-        let _release_memory = ReprStackReleaseMemoryOnDrop;
-
         let mut s = String::new();
         self.collect_repr(&mut s);
         s
     }
 
     pub fn to_json(self) -> anyhow::Result<String> {
-        let _release_memory = JsonStackReleaseMemoryOnDrop;
-
         let mut s = String::new();
         self.collect_json(&mut s)?;
         Ok(s)

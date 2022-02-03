@@ -95,6 +95,10 @@ impl<T> SmallSet<T> {
         Self(SmallMap::with_capacity(n))
     }
 
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + Clone {
         self.0.keys()
     }
