@@ -367,7 +367,6 @@
 #![feature(thread_local)]
 #![feature(try_blocks)]
 #![feature(iter_intersperse)]
-#![cfg_attr(fbcode_build, feature(const_panic))]
 //
 // Plugins
 #![cfg_attr(feature = "custom_linter", feature(plugin))]
