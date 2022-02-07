@@ -186,6 +186,8 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
+    gazebo::terminate_on_panic();
+
     let args = argfile::expand_args(argfile::parse_fromfile, argfile::PREFIX)?;
     let args = Args::from_iter(args);
     let ext = args
