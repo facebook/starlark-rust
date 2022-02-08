@@ -55,6 +55,12 @@ impl<'v, T: DictLike<'v>> Display for DictGen<T> {
     }
 }
 
+impl<'v> Display for Dict<'v> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        display_keyed_container(f, "{", "}", ": ", self.iter())
+    }
+}
+
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
 #[derive(Clone, Default, Trace, Debug)]
 #[repr(transparent)]
@@ -179,7 +185,7 @@ impl<'v> Dict<'v> {
     }
 
     /// Iterate through the key/value pairs in the dictionary.
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Value<'v>, Value<'v>)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = (Value<'v>, Value<'v>)> + 'a {
         self.content.iter().map(|(l, r)| (*l, *r))
     }
 

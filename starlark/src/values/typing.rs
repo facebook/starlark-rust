@@ -17,12 +17,17 @@
 
 use std::fmt::{self, Debug};
 
-use gazebo::{coerce::Coerce, prelude::*};
+use gazebo::{cell::ARef, coerce::Coerce, prelude::*};
 use thiserror::Error;
 
 use crate::{
     collections::Hashed,
-    values::{dict::Dict, list::List, tuple::Tuple, Heap, Trace, Tracer, Value},
+    values::{
+        dict::Dict,
+        list::{List, ListRef},
+        tuple::Tuple,
+        Heap, Trace, Tracer, Value,
+    },
 };
 
 #[derive(Debug, Error)]
@@ -56,134 +61,183 @@ impl Debug for TypeCompiled {
 }
 
 impl TypeCompiled {
-    pub(crate) fn new<'h>(ty: Value<'h>, heap: &'h Heap) -> anyhow::Result<Self> {
-        // Types that are "" are start with "_" are wildcard - they match everything
-        fn is_wildcard(x: &str) -> bool {
-            x == "" || x.starts_with('_')
-        }
+    /// Types that are `""` or start with `"_"` are wildcard - they match everything.
+    fn is_wildcard(x: &str) -> bool {
+        x == "" || x.starts_with('_')
+    }
 
+    fn is_string() -> TypeCompiled {
+        TypeCompiled(box |v| v.unpack_str().is_some() || v.get_ref().matches_type("string"))
+    }
+
+    fn is_int() -> TypeCompiled {
+        TypeCompiled(box |v| v.unpack_int().is_some() || v.get_ref().matches_type("int"))
+    }
+
+    fn is_bool() -> TypeCompiled {
+        TypeCompiled(box |v| v.unpack_bool().is_some() || v.get_ref().matches_type("bool"))
+    }
+
+    fn is_anything() -> TypeCompiled {
+        TypeCompiled(box |_| true)
+    }
+
+    fn matches_type(t: &str) -> TypeCompiled {
+        let t = t.to_owned();
+        TypeCompiled(box move |v| v.get_ref().matches_type(&t))
+    }
+
+    /// For `p: "xxx"`, parse that `"xxx"` as type.
+    fn from_str(t: &str) -> TypeCompiled {
+        if TypeCompiled::is_wildcard(t) {
+            TypeCompiled::is_anything()
+        } else {
+            match t {
+                "string" => TypeCompiled::is_string(),
+                "int" => TypeCompiled::is_int(),
+                "bool" => TypeCompiled::is_bool(),
+                t => TypeCompiled::matches_type(t),
+            }
+        }
+    }
+
+    fn is_none() -> TypeCompiled {
+        TypeCompiled(box |v| v.is_none())
+    }
+
+    fn is_tuple_elems(ts: Vec<TypeCompiled>) -> TypeCompiled {
+        TypeCompiled(box move |v| match Tuple::from_value(v) {
+            Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| (t.0)(v)),
+            _ => false,
+        })
+    }
+
+    fn is_list() -> TypeCompiled {
+        TypeCompiled(box |v| List::from_value(v).is_some())
+    }
+
+    fn is_list_of(t: TypeCompiled) -> TypeCompiled {
+        TypeCompiled(box move |v| match List::from_value(v) {
+            None => false,
+            Some(v) => v.iter().all(|v| (t.0)(v)),
+        })
+    }
+
+    fn is_any_of_two(t1: TypeCompiled, t2: TypeCompiled) -> TypeCompiled {
+        TypeCompiled(box move |v| (t1.0)(v) || (t2.0)(v))
+    }
+
+    fn is_any_of(ts: Vec<TypeCompiled>) -> TypeCompiled {
+        TypeCompiled(box move |v| ts.iter().any(|t| (t.0)(v)))
+    }
+
+    /// Parse `[t1, t2, ...]` as type.
+    fn from_list<'v>(t: &ListRef<'v>, heap: &'v Heap) -> anyhow::Result<TypeCompiled> {
+        match t.len() {
+            0 => Err(TypingError::InvalidTypeAnnotation(t.to_string()).into()),
+            1 => {
+                // Must be a list with all elements of this type
+                let t = *t.first().unwrap();
+                let wildcard = t.unpack_str().map(TypeCompiled::is_wildcard) == Some(true);
+                if wildcard {
+                    // Any type - so avoid the inner iteration
+                    Ok(TypeCompiled::is_list())
+                } else {
+                    let t = TypeCompiled::new(t, heap)?;
+                    Ok(TypeCompiled::is_list_of(t))
+                }
+            }
+            2 => {
+                // A union type, can match either - special case of the arbitrary choice to go slightly faster
+                let t1 = TypeCompiled::new(t[0], heap)?;
+                let t2 = TypeCompiled::new(t[1], heap)?;
+                Ok(TypeCompiled::is_any_of_two(t1, t2))
+            }
+            _ => {
+                // A union type, can match any
+                let ts = t[..].try_map(|t| TypeCompiled::new(*t, heap))?;
+                Ok(TypeCompiled::is_any_of(ts))
+            }
+        }
+    }
+
+    fn is_dict() -> TypeCompiled {
+        TypeCompiled(box |v| Dict::from_value(v).is_some())
+    }
+
+    fn is_dict_of(kt: TypeCompiled, vt: TypeCompiled) -> TypeCompiled {
+        TypeCompiled(box move |v| match Dict::from_value(v) {
+            None => false,
+            Some(v) => v.iter().all(|(k, v)| (kt.0)(k) && (vt.0)(v)),
+        })
+    }
+
+    fn from_dict<'v>(t: ARef<'v, Dict<'v>>, heap: &'v Heap) -> anyhow::Result<TypeCompiled> {
         // Dictionary with a single element
         fn unpack_singleton_dictionary<'v>(x: &Dict<'v>) -> Option<(Value<'v>, Value<'v>)> {
             if x.len() == 1 { x.iter().next() } else { None }
         }
 
-        fn f<'h>(
-            ty: Value<'h>,
-            heap: &'h Heap,
-        ) -> anyhow::Result<Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>> {
-            if let Some(s) = ty.unpack_str() {
-                if is_wildcard(s) {
-                    Ok(box |_| true)
-                } else {
-                    match s {
-                        "string" => Ok(box |v| {
-                            v.unpack_str().is_some() || v.get_ref().matches_type("string")
-                        }),
-                        "int" => {
-                            Ok(box |v| v.unpack_int().is_some() || v.get_ref().matches_type("int"))
+        if t.is_empty() {
+            Ok(TypeCompiled::is_dict())
+        } else if let Some((tk, tv)) = unpack_singleton_dictionary(&t) {
+            // Dict of the form {k: v} must all match the k/v types
+            let tk = TypeCompiled::new(tk, heap)?;
+            let tv = TypeCompiled::new(tv, heap)?;
+            Ok(TypeCompiled::is_dict_of(tk, tv))
+        } else {
+            // Dict type, allowed to have more keys that aren't used.
+            // All specified must be type String.
+            let ts = t
+                .iter_hashed()
+                .map(|(k, kt)| {
+                    let k_str = match k.key().unpack_str() {
+                        None => {
+                            return Err(TypingError::InvalidTypeAnnotation(t.to_string()).into());
                         }
-                        "bool" => Ok(box |v| {
-                            v.unpack_bool().is_some() || v.get_ref().matches_type("bool")
-                        }),
-                        _ => {
-                            let s = s.to_owned();
-                            Ok(box move |v| v.get_ref().matches_type(&s))
-                        }
-                    }
-                }
-            } else if ty.is_none() {
-                Ok(box |v| v.is_none())
-            } else if let Some(t) = Tuple::from_value(ty) {
-                let ts = t.content().try_map(|t| f(*t, heap))?;
-                Ok(box move |v| match Tuple::from_value(v) {
-                    Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| t(v)),
-                    _ => false,
+                        Some(s) => Hashed::new_unchecked(k.hash(), s.to_owned()),
+                    };
+                    let kt = TypeCompiled::new(kt, heap)?;
+                    Ok((k_str, kt))
                 })
-            } else if let Some(t) = List::from_value(ty) {
-                match t.len() {
-                    0 => Err(TypingError::InvalidTypeAnnotation(ty.to_str()).into()),
-                    1 => {
-                        // Must be a list with all elements of this type
-                        let t = *t.first().unwrap();
-                        let wildcard = t.unpack_str().map(is_wildcard) == Some(true);
-                        if wildcard {
-                            // Any type - so avoid the inner iteration
-                            Ok(box |v| List::from_value(v).is_some())
-                        } else {
-                            let t = f(t, heap)?;
-                            Ok(box move |v| match List::from_value(v) {
-                                None => false,
-                                Some(v) => v.iter().all(|v| t(v)),
-                            })
-                        }
-                    }
-                    2 => {
-                        // A union type, can match either - special case of the arbitrary choice to go slightly faster
-                        let t1 = f(t[0], heap)?;
-                        let t2 = f(t[1], heap)?;
-                        Ok(box move |v| t1(v) || t2(v))
-                    }
-                    _ => {
-                        // A union type, can match any
-                        let ts = t[..].try_map(|t| f(*t, heap))?;
-                        Ok(box move |v| ts.iter().any(|t| t(v)))
-                    }
-                }
-            } else if let Some(t) = Dict::from_value(ty) {
-                if t.is_empty() {
-                    Ok(box |v| Dict::from_value(v).is_some())
-                } else if let Some((tk, tv)) = unpack_singleton_dictionary(&t) {
-                    // Dict of the form {k: v} must all match the k/v types
-                    let tk = f(tk, heap)?;
-                    let tv = f(tv, heap)?;
-                    Ok(box move |v| match Dict::from_value(v) {
-                        None => false,
-                        Some(v) => v.iter().all(|(k, v)| tk(k) && tv(v)),
-                    })
-                } else {
-                    // Dict type, allowed to have more keys that aren't used.
-                    // All specified must be type String.
-                    let ts = t
-                        .iter_hashed()
-                        .map(|(k, kt)| {
-                            let k_str = match k.key().unpack_str() {
-                                None => {
-                                    return Err(
-                                        TypingError::InvalidTypeAnnotation(ty.to_str()).into()
-                                    );
-                                }
-                                Some(s) => Hashed::new_unchecked(k.hash(), s.to_owned()),
-                            };
-                            let kt = f(kt, heap)?;
-                            Ok((k_str, kt))
-                        })
-                        .collect::<anyhow::Result<Vec<_>>>()?;
+                .collect::<anyhow::Result<Vec<_>>>()?;
 
-                    Ok(box move |v| match Dict::from_value(v) {
-                        None => false,
-                        Some(v) => {
-                            for (k, kt) in &ts {
-                                let ks = k.key().as_str();
-                                let ks = Hashed::new_unchecked(k.hash(), ks);
-                                match v.get_str_hashed(ks) {
-                                    None => return false,
-                                    Some(kv) => {
-                                        if !kt(kv) {
-                                            return false;
-                                        }
-                                    }
+            Ok(TypeCompiled(box move |v| match Dict::from_value(v) {
+                None => false,
+                Some(v) => {
+                    for (k, kt) in &ts {
+                        let ks = k.key().as_str();
+                        let ks = Hashed::new_unchecked(k.hash(), ks);
+                        match v.get_str_hashed(ks) {
+                            None => return false,
+                            Some(kv) => {
+                                if !(kt.0)(kv) {
+                                    return false;
                                 }
                             }
-                            true
                         }
-                    })
+                    }
+                    true
                 }
-            } else {
-                Err(invalid_type_annotation(ty, heap).into())
-            }
+            }))
         }
+    }
 
-        Ok(Self(f(ty, heap)?))
+    pub(crate) fn new<'h>(ty: Value<'h>, heap: &'h Heap) -> anyhow::Result<Self> {
+        if let Some(s) = ty.unpack_str() {
+            Ok(TypeCompiled::from_str(s))
+        } else if ty.is_none() {
+            Ok(TypeCompiled::is_none())
+        } else if let Some(t) = Tuple::from_value(ty) {
+            let ts = t.content().try_map(|t| TypeCompiled::new(*t, heap))?;
+            Ok(TypeCompiled::is_tuple_elems(ts))
+        } else if let Some(t) = List::from_value(ty) {
+            TypeCompiled::from_list(t, heap)
+        } else if let Some(t) = Dict::from_value(ty) {
+            TypeCompiled::from_dict(t, heap)
+        } else {
+            Err(invalid_type_annotation(ty, heap).into())
+        }
     }
 }
 
