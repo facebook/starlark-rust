@@ -19,7 +19,6 @@ use std::{cell::Cell, cmp, collections::HashMap, convert::TryInto, intrinsics::u
 
 use either::Either;
 use gazebo::{
-    cell::ARef,
     coerce::{coerce, Coerce},
     prelude::*,
 };
@@ -34,8 +33,11 @@ use crate::{
     },
     eval::Evaluator,
     values::{
-        dict::Dict, docs, docs::DocString, Freezer, FrozenValue, Heap, StringValue, Trace, Tracer,
-        UnpackValue, Value, ValueError, ValueLike,
+        dict::{Dict, DictRef},
+        docs,
+        docs::DocString,
+        Freezer, FrozenValue, Heap, StringValue, Trace, Tracer, UnpackValue, Value, ValueError,
+        ValueLike,
     },
 };
 
@@ -793,7 +795,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
     /// will _not_ have been validated to be strings (as they must be).
     /// The arguments may also overlap with named, which would be an error.
     #[inline(always)]
-    pub fn unpack_kwargs(&self) -> anyhow::Result<Option<ARef<'v, Dict<'v>>>> {
+    pub fn unpack_kwargs(&self) -> anyhow::Result<Option<DictRef<'v>>> {
         match self.kwargs {
             None => Ok(None),
             Some(kwargs) => match Dict::from_value(kwargs) {

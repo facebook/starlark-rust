@@ -22,7 +22,6 @@ use std::{
 
 use gazebo::{
     any::AnyLifetime,
-    cell::ARef,
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
@@ -34,7 +33,7 @@ use crate::{
     environment::GlobalsBuilder,
     eval::{Arguments, Evaluator},
     values::{
-        dict::Dict, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, Freeze, Freezer,
+        dict::DictRef, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, Freeze, Freezer,
         FrozenStringValue, FrozenValue, StarlarkValue, StringValue, StringValueLike, Trace, Value,
         ValueLike,
     },
@@ -75,7 +74,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
     fn partial(
         ref func: Value,
         args: Value<'v>,
-        kwargs: ARef<Dict>,
+        kwargs: DictRef<'v>,
     ) -> anyhow::Result<Partial<'v>> {
         debug_assert!(Tuple::from_value(args).is_some());
         let names = kwargs

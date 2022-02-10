@@ -24,7 +24,7 @@ use std::{
     hash::{Hash, Hasher},
     intrinsics::unlikely,
     marker::PhantomData,
-    ops::Deref,
+    ops::{Deref, DerefMut},
 };
 
 use gazebo::{
@@ -96,18 +96,53 @@ impl AllocFrozenValue for FrozenDict {
     }
 }
 
+/// Borrowed `Dict`.
+pub struct DictRef<'v> {
+    aref: ARef<'v, Dict<'v>>,
+}
+
+/// Mutably borrowed `Dict`.
+pub struct DictMut<'v> {
+    aref: RefMut<'v, Dict<'v>>,
+}
+
+impl<'v> Deref for DictRef<'v> {
+    type Target = Dict<'v>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.aref
+    }
+}
+
+impl<'v> Deref for DictMut<'v> {
+    type Target = Dict<'v>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.aref
+    }
+}
+
+impl<'v> DerefMut for DictMut<'v> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.aref
+    }
+}
+
 impl<'v> Dict<'v> {
-    pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+    pub fn from_value(x: Value<'v>) -> Option<DictRef<'v>> {
         if x.unpack_frozen().is_some() {
-            x.downcast_ref::<DictGen<FrozenDict>>()
-                .map(|x| ARef::new_ptr(coerce_ref(&x.0)))
+            x.downcast_ref::<DictGen<FrozenDict>>().map(|x| DictRef {
+                aref: ARef::new_ptr(coerce_ref(&x.0)),
+            })
         } else {
             let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>()?;
-            Some(ARef::new_ref(ptr.0.borrow()))
+            Some(DictRef {
+                aref: ARef::new_ref(ptr.0.borrow()),
+            })
         }
     }
 
-    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<RefMut<'v, Self>>> {
+    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<DictMut>> {
         if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
         }
@@ -115,19 +150,19 @@ impl<'v> Dict<'v> {
         match ptr {
             None => Ok(None),
             Some(ptr) => match ptr.0.try_borrow_mut() {
-                Ok(x) => Ok(Some(x)),
+                Ok(x) => Ok(Some(DictMut { aref: x })),
                 Err(_) => Err(ValueError::MutationDuringIteration.into()),
             },
         }
     }
 }
 
-impl<'v> UnpackValue<'v> for ARef<'v, Dict<'v>> {
+impl<'v> UnpackValue<'v> for DictRef<'v> {
     fn expected() -> String {
         "dict".to_owned()
     }
 
-    fn unpack_value(value: Value<'v>) -> Option<ARef<'v, Dict<'v>>> {
+    fn unpack_value(value: Value<'v>) -> Option<DictRef<'v>> {
         Dict::from_value(value)
     }
 }

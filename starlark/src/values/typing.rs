@@ -17,13 +17,13 @@
 
 use std::fmt::{self, Debug};
 
-use gazebo::{cell::ARef, coerce::Coerce, prelude::*};
+use gazebo::{coerce::Coerce, prelude::*};
 use thiserror::Error;
 
 use crate::{
     collections::Hashed,
     values::{
-        dict::Dict,
+        dict::{Dict, DictRef},
         list::{List, ListRef},
         tuple::Tuple,
         Heap, Trace, Tracer, Value,
@@ -172,7 +172,7 @@ impl TypeCompiled {
         })
     }
 
-    fn from_dict<'v>(t: ARef<'v, Dict<'v>>, heap: &'v Heap) -> anyhow::Result<TypeCompiled> {
+    fn from_dict<'v>(t: DictRef<'v>, heap: &'v Heap) -> anyhow::Result<TypeCompiled> {
         // Dictionary with a single element
         fn unpack_singleton_dictionary<'v>(x: &Dict<'v>) -> Option<(Value<'v>, Value<'v>)> {
             if x.len() == 1 { x.iter().next() } else { None }
