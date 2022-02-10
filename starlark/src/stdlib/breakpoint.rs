@@ -183,7 +183,7 @@ fn breakpoint_loop(
                         }
                         Ok(v) => {
                             if !v.is_none() {
-                                rl.println(&format!("{}", v))
+                                rl.println(&v.to_string())
                             }
                         }
                     }

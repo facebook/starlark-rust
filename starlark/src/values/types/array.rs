@@ -316,7 +316,7 @@ mod test {
         let array = heap.alloc_array(10);
         array.push(Value::new_int(23));
         // Just check it does not crash.
-        drop(format!("{}", array));
+        drop(array.to_string());
     }
 
     #[test]

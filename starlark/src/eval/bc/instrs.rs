@@ -359,7 +359,7 @@ mod test {
         bc.write::<InstrReturn>(());
         let bc = bc.finish(Vec::new());
         if mem::size_of::<usize>() == 8 {
-            assert_eq!("0: Const True; 16: Return; 24: End", format!("{}", bc));
+            assert_eq!("0: Const True; 16: Return; 24: End", bc.to_string());
             assert_eq!("0: Const True\n16: Return\n24: End\n", bc.dump_debug());
         } else if mem::size_of::<usize>() == 4 {
             // Starlark doesn't work now on 32-bit CPU

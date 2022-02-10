@@ -66,7 +66,7 @@ impl CsvWriter {
         impl<V: Display> CsvValue for Impl<V> {
             fn format_for_csv(&self) -> String {
                 // TODO(nga): escape
-                format!("{}", &self.0)
+                self.0.to_string()
             }
         }
 
@@ -123,25 +123,25 @@ impl CsvValue for str {
 
 impl CsvValue for usize {
     fn format_for_csv(&self) -> String {
-        format!("{}", self)
+        self.to_string()
     }
 }
 
 impl CsvValue for u64 {
     fn format_for_csv(&self) -> String {
-        format!("{}", self)
+        self.to_string()
     }
 }
 
 impl CsvValue for i32 {
     fn format_for_csv(&self) -> String {
-        format!("{}", self)
+        self.to_string()
     }
 }
 
 impl CsvValue for u128 {
     fn format_for_csv(&self) -> String {
-        format!("{}", self)
+        self.to_string()
     }
 }
 

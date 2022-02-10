@@ -854,7 +854,7 @@ mod test {
             fn visit_expr(&mut self, expr: &CstExpr) {
                 if let ExprP::Identifier(ident, resolved) = &expr.node {
                     let resolved = match resolved.as_ref().unwrap() {
-                        ResolvedIdent::Slot((_slot, binding_id)) => format!("{}", binding_id.0),
+                        ResolvedIdent::Slot((_slot, binding_id)) => binding_id.0.to_string(),
                         ResolvedIdent::Global(_) => "G".to_owned(),
                     };
                     write!(&mut self.r, " {}:{}", ident.node, resolved).unwrap();
