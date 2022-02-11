@@ -161,7 +161,7 @@ impl StarlarkStr {
         self.str.len == 0
     }
 
-    pub fn offset_of_content() -> usize {
+    pub(crate) fn offset_of_content() -> usize {
         memoffset::offset_of!(StarlarkStrN<0>, body)
     }
 }

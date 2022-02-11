@@ -78,7 +78,7 @@ impl<'v> Debug for FrozenList {
 }
 
 impl ListGen<FrozenList> {
-    pub fn offset_of_content() -> usize {
+    pub(crate) fn offset_of_content() -> usize {
         memoffset::offset_of!(FrozenList, content)
     }
 }
