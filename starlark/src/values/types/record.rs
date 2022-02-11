@@ -288,7 +288,7 @@ where
     fn extra_memory(&self) -> usize {
         // We don't capture the memory beneath the TypeCompiled, since we don't know how big
         // those closures are.
-        let typ = self.typ.as_aref();
+        let typ = AsARef::as_aref(&self.typ);
         typ.as_ref().map_or(0, |s| s.capacity()) + self.fields.extra_memory()
     }
 
@@ -302,7 +302,13 @@ where
 
     fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
         if attribute == "type" {
-            Some(heap.alloc(self.typ.as_aref().as_deref().unwrap_or(Record::TYPE)))
+            Some(
+                heap.alloc(
+                    AsARef::as_aref(&self.typ)
+                        .as_deref()
+                        .unwrap_or(Record::TYPE),
+                ),
+            )
         } else {
             None
         }
@@ -313,7 +319,7 @@ where
             a: &RecordTypeGen<impl ValueLike<'v>, impl AsARef<Option<String>>>,
             b: &RecordTypeGen<impl ValueLike<'v>, impl AsARef<Option<String>>>,
         ) -> anyhow::Result<bool> {
-            if a.typ.as_aref() != b.typ.as_aref() {
+            if AsARef::as_aref(&a.typ) != AsARef::as_aref(&b.typ) {
                 return Ok(false);
             };
             if a.fields.len() != b.fields.len() {
@@ -340,7 +346,7 @@ where
     }
 
     fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
-        if let Some(typ) = self.typ.as_ref_cell() {
+        if let Some(typ) = AsARef::as_ref_cell(&self.typ) {
             let mut typ = typ.borrow_mut();
             if typ.is_none() {
                 *typ = Some(variable_name.to_owned())

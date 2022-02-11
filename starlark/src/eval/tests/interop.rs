@@ -56,7 +56,7 @@ fn test_export_as() {
 
     impl<T: AsARef<String>> Display for Exporter<T> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}={}", self.named.as_aref(), self.value)
+            write!(f, "{}={}", AsARef::as_aref(&self.named), self.value)
         }
     }
 
@@ -67,7 +67,7 @@ fn test_export_as() {
         starlark_type!("exporter");
 
         fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
-            if let Some(named) = self.named.as_ref_cell() {
+            if let Some(named) = AsARef::as_ref_cell(&self.named) {
                 *named.borrow_mut() = variable_name.to_owned();
             }
         }
