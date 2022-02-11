@@ -39,6 +39,7 @@ use gazebo::prelude::*;
 pub struct Pos(u32);
 
 impl Pos {
+    /// Constructor.
     pub fn new(x: u32) -> Self {
         Self(x)
     }
@@ -90,11 +91,13 @@ impl Span {
 /// Associate a Span with a value of arbitrary type (e.g. an AST node).
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Copy)]
 pub struct Spanned<T> {
+    /// Data in the node.
     pub node: T,
     pub(crate) span: Span,
 }
 
 impl<T> Spanned<T> {
+    /// Apply the function to the node, keep the span.
     pub fn into_map<U>(self, f: impl FnOnce(T) -> U) -> Spanned<U> {
         Spanned {
             node: f(self.node),
@@ -102,6 +105,7 @@ impl<T> Spanned<T> {
         }
     }
 
+    /// Apply the function to the node, keep the span.
     pub fn map<U>(&self, f: impl FnOnce(&T) -> U) -> Spanned<U> {
         Spanned {
             node: f(&self.node),
@@ -320,10 +324,12 @@ impl fmt::Display for FileSpan {
 }
 
 impl<'a> FileSpanRef<'a> {
+    /// File of this reference.
     pub fn file(self) -> &'a CodeMap {
         self.file
     }
 
+    /// Convert to the owned span.
     pub fn to_file_span(self) -> FileSpan {
         FileSpan {
             file: self.file.dupe(),
@@ -331,20 +337,24 @@ impl<'a> FileSpanRef<'a> {
         }
     }
 
+    /// Resolve span offsets to lines and columns.
     pub fn resolve_span(&self) -> ResolvedSpan {
         self.file.resolve_span(self.span)
     }
 }
 
 impl FileSpan {
+    /// File of this span.
     pub fn file(&self) -> &CodeMap {
         &self.file
     }
 
+    /// Resolve the span.
     pub fn source_span(&self) -> &str {
         self.file.source_span(self.span)
     }
 
+    /// Cheap reference to the span.
     pub fn as_ref(&self) -> FileSpanRef {
         FileSpanRef {
             file: &self.file,
@@ -352,10 +362,12 @@ impl FileSpan {
         }
     }
 
+    /// Resolve the span to lines and columns.
     pub fn resolve_span(&self) -> ResolvedSpan {
         self.as_ref().resolve_span()
     }
 
+    /// Resolve the span to lines and columns.
     pub fn resolve(&self) -> ResolvedFileSpan {
         ResolvedFileSpan {
             file: self.file.filename().to_owned(),
@@ -368,9 +380,13 @@ impl FileSpan {
 /// All are 0-based, but print out with 1-based.
 #[derive(Debug, Dupe, Clone, Copy, PartialEq, Eq)]
 pub struct ResolvedSpan {
+    /// 0-based line number of the beginning of the span.
     pub begin_line: usize,
+    /// 0-based column number of the beginning of the span.
     pub begin_column: usize,
+    /// 0-based line number of the end of the span.
     pub end_line: usize,
+    /// 0-based column number of the end of the span.
     pub end_column: usize,
 }
 
@@ -413,9 +429,12 @@ impl ResolvedSpan {
     }
 }
 
+/// File name and line and column pairs for a span.
 #[derive(Debug)]
 pub struct ResolvedFileSpan {
+    /// File name.
     pub file: String,
+    /// The span.
     pub span: ResolvedSpan,
 }
 

@@ -162,6 +162,7 @@ impl FrozenModule {
         self.module.0.all_items()
     }
 
+    /// Fetch the documentation for the module.
     pub fn documentation(&self) -> Option<DocItem> {
         self.module.documentation()
     }

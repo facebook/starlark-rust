@@ -80,6 +80,7 @@ impl StarlarkHashValue {
         StarlarkHashValue(h as u32)
     }
 
+    /// Get the integer hash value.
     pub fn get(self) -> u32 {
         self.0
     }

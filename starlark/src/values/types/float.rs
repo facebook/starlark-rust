@@ -142,6 +142,7 @@ pub(crate) fn write_compact<W: fmt::Write>(
     }
 }
 
+/// Runtime representation of Starlark `float` type.
 #[derive(Clone, Dupe, Copy, Debug, AnyLifetime)]
 pub struct StarlarkFloat(pub f64);
 

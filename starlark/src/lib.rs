@@ -391,6 +391,7 @@
 #![allow(clippy::float_cmp)]
 // FIXME: Temporary
 #![allow(clippy::useless_transmute)] // Seems to be a clippy bug, but we should be using less transmute anyway
+#![deny(missing_docs)]
 
 #[macro_use]
 extern crate gazebo;

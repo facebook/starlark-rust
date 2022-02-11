@@ -87,26 +87,34 @@ where
 }
 
 impl<T> SmallSet<T> {
+    /// Creates an empty `SmallSet`.
     pub const fn new() -> Self {
         SmallSet(SmallMap::new())
     }
 
+    /// Empty small set with preallocated capacity.
     pub fn with_capacity(n: usize) -> Self {
         Self(SmallMap::with_capacity(n))
     }
 
+    /// Current capacity of the set.
     pub fn capacity(&self) -> usize {
         self.0.capacity()
     }
 
+    /// Iterate the element references.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + Clone {
         self.0.keys()
     }
 
+    /// Convert the set into the iterator over the elements.
     pub fn into_iter(self) -> impl ExactSizeIterator<Item = T> {
         self.0.into_iter().map(|(t, _)| t)
     }
 
+    /// Insert the element into the set.
+    ///
+    /// Return `true` iff the element was inserted.
     pub fn insert(&mut self, key: T) -> bool
     where
         T: Hash + Eq,
@@ -135,6 +143,7 @@ impl<T> SmallSet<T> {
         self.0.get_index_of(value)
     }
 
+    /// Remove the element from the set if it is present.
     pub fn remove<Q>(&mut self, key: &Q)
     where
         Q: ?Sized + Hash + Equivalent<T>,
@@ -143,6 +152,9 @@ impl<T> SmallSet<T> {
         self.0.remove(key);
     }
 
+    /// Remove the element from the set if it is present,
+    ///
+    /// and return the removed element.
     pub fn take<Q>(&mut self, key: &Q) -> Option<T>
     where
         Q: ?Sized + Hash + Equivalent<T>,
@@ -159,14 +171,17 @@ impl<T> SmallSet<T> {
         self.0.pop().map(|(k, ())| k)
     }
 
+    /// Is the set empty?
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
+    /// Number of elements in the set.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Check if the set contains an element.
     pub fn contains<Q>(&self, key: &Q) -> bool
     where
         Q: Hash + Equivalent<T> + ?Sized,
@@ -175,6 +190,9 @@ impl<T> SmallSet<T> {
         self.0.contains_key(key)
     }
 
+    /// Remove all elements from the set.
+    ///
+    /// Retain the capacity.
     pub fn clear(&mut self) {
         self.0.clear()
     }

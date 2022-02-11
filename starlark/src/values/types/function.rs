@@ -34,9 +34,12 @@ use crate::{
     },
 };
 
+/// Return value of `type(any function)`.
 pub const FUNCTION_TYPE: &str = "function";
 
 /// A native function that can be evaluated.
+///
+/// This trait is implemented by generated code and rarely needed to be implemented manually.
 pub trait NativeFunc:
     for<'v> Fn(&mut Evaluator<'v, '_>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
@@ -53,6 +56,9 @@ impl<T> NativeFunc for T where
 {
 }
 
+/// Native method implementation.
+///
+/// This trait is implemented by generated code and rarely needed to be implemented manually.
 pub trait NativeMeth:
     for<'v> Fn(&mut Evaluator<'v, '_>, Value<'v>, &Arguments<'v, '_>) -> anyhow::Result<Value<'v>>
     + Send
@@ -93,6 +99,7 @@ pub struct NativeCallableRawDocs {
     pub return_type: Option<docs::Type>,
 }
 
+#[doc(hidden)]
 impl NativeCallableRawDocs {
     pub fn documentation(&self) -> docs::Function {
         docs::Function::from_docstring(

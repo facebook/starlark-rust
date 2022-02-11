@@ -330,6 +330,7 @@ impl<V> ParametersSpec<V> {
 }
 
 impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
+    /// Number of function parameters.
     pub fn len(&self) -> usize {
         self.kinds.len()
     }
@@ -345,6 +346,9 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         self.collect_inline(args, slots, heap)
     }
 
+    /// Collect `N` arguments.
+    ///
+    /// This function is called by generated code.
     pub fn collect_into<const N: usize>(
         &self,
         args: &Arguments<'v, '_>,
@@ -671,6 +675,7 @@ impl<'v> ParametersSpec<Value<'v>> {
 pub struct ParametersParser<'v, 'a>(std::slice::Iter<'a, Cell<Option<Value<'v>>>>);
 
 impl<'v, 'a> ParametersParser<'v, 'a> {
+    /// Create a parameter parser, which stored parameters into provided slots reference.
     pub fn new(slots: &'a [Cell<Option<Value<'v>>>]) -> Self {
         Self(slots.iter())
     }
@@ -708,6 +713,8 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 }
 
+/// Arguments object is passed from the starlark interpreter to function implementation
+/// when evaluation function or method calls.
 #[derive(Default, Clone, Copy, Dupe)]
 pub struct Arguments<'v, 'a> {
     /// Positional arguments.

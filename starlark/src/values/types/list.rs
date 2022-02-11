@@ -83,6 +83,7 @@ impl ListGen<FrozenList> {
     }
 }
 
+/// Reference to list content.
 #[repr(transparent)]
 #[derive(Coerce)]
 pub struct ListRef<'v> {
@@ -94,6 +95,7 @@ impl<'v> ListRef<'v> {
         coerce(slice)
     }
 
+    /// List elements.
     pub fn content(&self) -> &[Value<'v>] {
         &self.content
     }
@@ -113,6 +115,7 @@ unsafe impl<'v> AnyLifetime<'v> for ListGen<List<'v>> {
 any_lifetime!(ListGen<FrozenList>);
 
 impl<'v> List<'v> {
+    /// Downcast the list.
     pub fn from_value(x: Value<'v>) -> Option<&'v ListRef<'v>> {
         if x.unpack_frozen().is_some() {
             x.downcast_ref::<ListGen<FrozenList>>()
@@ -299,6 +302,7 @@ impl<'v> List<'v> {
     /// The result of calling `type()` on lists.
     pub const TYPE: &'static str = "list";
 
+    /// Type of list as frozen string value.
     pub fn get_type_value_static() -> FrozenStringValue {
         ListGen::<FrozenList>::get_type_value_static()
     }
@@ -583,6 +587,7 @@ pub struct ListOf<'v, V: UnpackValue<'v>> {
 }
 
 impl<'v, V: UnpackValue<'v>> ListOf<'v, V> {
+    /// Collect the list elements into a `Vec`.
     pub fn to_vec(&self) -> Vec<V> {
         List::from_value(self.value)
             .expect("already validated as a list")

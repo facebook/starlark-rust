@@ -42,6 +42,7 @@ impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
         FrozenRef { value }
     }
 
+    /// Returns a reference to the underlying value.
     pub fn as_ref(self) -> &'f T {
         self.value
     }

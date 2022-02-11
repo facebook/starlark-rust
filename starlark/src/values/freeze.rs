@@ -48,6 +48,7 @@ use crate::{
 /// }
 /// ```
 pub trait Freeze {
+    /// When type is frozen, it is frozen into this type.
     type Frozen;
 
     /// Freeze a value. The frozen value _must_ be equal to the original,

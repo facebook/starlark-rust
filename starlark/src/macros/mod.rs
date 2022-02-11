@@ -56,6 +56,7 @@ macro_rules! starlark_complex_value {
             }
 
             impl<'v> $x<'v> {
+                /// Downcast the value.
                 pub fn from_value(x: $crate::values::Value<'v>) -> Option<&'v Self> {
                     if let Some(x) = x.unpack_frozen() {
                         $crate::values::ValueLike::downcast_ref::< [< Frozen $x >] >(x).map($crate::__macro_refs::coerce_ref)
@@ -78,7 +79,9 @@ macro_rules! starlark_complex_value {
     };
     ($v:vis $x:ident) => {
         $crate::__macro_refs::item! {
+            /// Type of value.
             $v type $x<'v> = [< $x Gen >]<$crate::values::Value<'v>>;
+            /// Type of frozen value.
             $v type [< Frozen $x >] = [< $x Gen >]<$crate::values::FrozenValue>;
 
             starlark_complex_value!(impl $x);
@@ -86,7 +89,9 @@ macro_rules! starlark_complex_value {
     };
     ($v:vis $x:ident <'v>) => {
         $crate::__macro_refs::item! {
+            /// Type of unfrozen value.
             $v type $x<'v> = [< $x Gen >]<'v, $crate::values::Value<'v>>;
+            /// Type of frozen value.
             $v type [< Frozen $x >] = [< $x Gen >]<'static, $crate::values::FrozenValue>;
 
             starlark_complex_value!(impl $x);
@@ -192,6 +197,7 @@ macro_rules! starlark_simple_value {
             }
 
             impl $x {
+                /// Downcast a value to self type.
                 pub fn from_value<'v>(x: $crate::values::Value<'v>) -> Option<&'v Self> {
                     $crate::values::ValueLike::downcast_ref::< $x >(x)
                 }

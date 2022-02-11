@@ -28,11 +28,13 @@ use crate::collections::StarlarkHashValue;
 pub struct StarlarkHasher(FnvHasher);
 
 impl StarlarkHasher {
+    /// Creates a new hasher.
     #[inline]
     pub fn new() -> StarlarkHasher {
         StarlarkHasher::default()
     }
 
+    /// Finish the hash computation and return the result.
     #[inline]
     pub(crate) fn finish_small(self) -> StarlarkHashValue {
         // NOTE: Here we throw away half the key material we are given,

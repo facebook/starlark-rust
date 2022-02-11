@@ -348,9 +348,12 @@ impl<'v> Value<'v> {
         self.0.ptr_value()
     }
 
+    /// `type(x)`.
     pub fn get_type(self) -> &'static str {
         self.get_ref().get_type()
     }
+
+    /// `bool(x)`.
     pub fn to_bool(self) -> bool {
         // Fast path for the common case
         if let Some(x) = self.unpack_bool() {
@@ -359,6 +362,8 @@ impl<'v> Value<'v> {
             self.get_ref().to_bool()
         }
     }
+
+    /// `int(x)`.
     pub fn to_int(self) -> anyhow::Result<i32> {
         // Fast path for the common case
         if let Some(x) = self.unpack_int() {
@@ -367,10 +372,13 @@ impl<'v> Value<'v> {
             self.get_ref().to_int()
         }
     }
+
+    /// `x[index]`.
     pub fn at(self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().at(index, heap)
     }
 
+    /// `x[start:stop:stride]`.
     pub fn slice(
         self,
         start: Option<Value<'v>>,
@@ -381,54 +389,72 @@ impl<'v> Value<'v> {
         self.get_ref().slice(start, stop, stride, heap)
     }
 
+    /// `len(x)`.
     pub fn length(self) -> anyhow::Result<i32> {
         self.get_ref().length()
     }
 
+    /// `other in x`.
     pub fn is_in(self, other: Value<'v>) -> anyhow::Result<bool> {
         self.get_ref().is_in(other)
     }
 
+    /// `+x`.
     pub fn plus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().plus(heap)
     }
 
+    /// `-x`.
     pub fn minus(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().minus(heap)
     }
 
+    /// `x - other`.
     pub fn sub(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().sub(other, heap)
     }
 
+    /// `x * other`.
     pub fn mul(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().mul(other, heap)
     }
 
+    /// `x % other`.
     pub fn percent(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().percent(other, heap)
     }
 
+    /// `x / other`.
     pub fn div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().div(other, heap)
     }
 
+    /// `x // other`.
     pub fn floor_div(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().floor_div(other, heap)
     }
 
+    /// `x & other`.
     pub fn bit_and(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.get_ref().bit_and(other)
     }
+
+    /// `x | other`.
     pub fn bit_or(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.get_ref().bit_or(other)
     }
+
+    /// `x ^ other`.
     pub fn bit_xor(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.get_ref().bit_xor(other)
     }
+
+    /// `x << other`.
     pub fn left_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.get_ref().left_shift(other)
     }
+
+    /// `x >> other`.
     pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.get_ref().right_shift(other)
     }
@@ -444,6 +470,7 @@ impl<'v> Value<'v> {
         })
     }
 
+    /// Invoke self with given arguments.
     pub fn invoke(
         self,
         args: &Arguments<'v, '_>,
@@ -477,6 +504,7 @@ impl<'v> Value<'v> {
         self.invoke(&params, eval)
     }
 
+    /// `type(x)`.
     pub fn get_type_value(self) -> FrozenStringValue {
         self.get_ref().get_type_value()
     }
@@ -513,6 +541,9 @@ impl<'v> Value<'v> {
         s
     }
 
+    /// Convert the value to JSON.
+    ///
+    /// Return an error if the value or any contained value does not support conversion to JSON.
     pub fn to_json(self) -> anyhow::Result<String> {
         let mut s = String::new();
         self.collect_json(&mut s)?;
@@ -770,10 +801,12 @@ impl FrozenValue {
         }
     }
 
+    /// Downcast to given type.
     pub fn downcast_frozen_ref<T: StarlarkValue<'static>>(self) -> Option<FrozenRef<'static, T>> {
         self.downcast_ref::<T>().map(|value| FrozenRef { value })
     }
 
+    /// Downcast to string.
     pub fn downcast_frozen_str(self) -> Option<FrozenRef<'static, str>> {
         self.to_value()
             .unpack_str()
@@ -798,7 +831,7 @@ impl FrozenValue {
 pub trait ValueLike<'v>:
     Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> + Freeze<Frozen = FrozenValue>
 {
-    // `StringValue` or `FrozenStringValue`.
+    /// `StringValue` or `FrozenStringValue`.
     type String: StringValueLike<'v>;
 
     /// Produce a [`Value`] regardless of the type you are starting with.
@@ -807,6 +840,7 @@ pub trait ValueLike<'v>:
     /// Get referenced [`StarlarkValue`] a value as [`AnyLifetime`].
     fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v>;
 
+    /// Call this value as a function with given arguments.
     fn invoke(
         self,
         args: &Arguments<'v, '_>,
@@ -815,14 +849,18 @@ pub trait ValueLike<'v>:
         self.to_value().invoke(args, eval)
     }
 
+    /// Hash the value.
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
 
+    /// Get hash value.
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
         Ok(Hashed::new_unchecked(self.to_value().get_hash()?, self))
     }
 
+    /// `repr(x)`.
     fn collect_repr(self, collector: &mut String);
 
+    /// `str(x)`.
     fn collect_str(self, collector: &mut String) {
         if let Some(s) = self.to_value().unpack_str() {
             collector.push_str(s);
@@ -831,10 +869,17 @@ pub trait ValueLike<'v>:
         }
     }
 
+    /// Serialize the value to JSON.
+    ///
+    /// Return error if the value or any contained value cannot be converted to JSON.
     fn collect_json(self, collector: &mut String) -> anyhow::Result<()>;
 
+    /// `x == other`.
+    ///
+    /// This operation can only return error on stack overflow.
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool>;
 
+    /// `x <=> other`.
     fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering>;
 
     /// Get a reference to underlying data or [`None`]

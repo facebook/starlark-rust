@@ -84,6 +84,7 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
         Some(ValueTyped(value, marker::PhantomData))
     }
 
+    /// Construct typed value without checking the value is of type `<T>`.
     pub unsafe fn new_unchecked(value: Value<'v>) -> ValueTyped<'v, T> {
         debug_assert!(value.downcast_ref::<T>().is_some());
         ValueTyped(value, marker::PhantomData)
@@ -95,10 +96,12 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
         ValueTyped(Value::new_repr(repr), marker::PhantomData)
     }
 
+    /// Erase the type.
     pub fn to_value(self) -> Value<'v> {
         self.0
     }
 
+    /// Get the reference to the pointed value.
     pub fn as_ref(self) -> &'v T {
         if T::static_type_id() == PointerI32::static_type_id() {
             unsafe {
@@ -132,18 +135,22 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
         )
     }
 
+    /// Erase the type.
     pub fn to_frozen_value(self) -> FrozenValue {
         self.0
     }
 
+    /// Convert to the value.
     pub fn to_value(self) -> Value<'v> {
         self.0.to_value()
     }
 
+    /// Convert to the value.
     pub fn to_value_typed(self) -> ValueTyped<'v, T> {
         unsafe { ValueTyped::new_unchecked(self.0.to_value()) }
     }
 
+    /// Get the reference to the pointed value.
     pub fn as_ref(self) -> &'v T {
         if T::static_type_id() == PointerI32::static_type_id() {
             unsafe {

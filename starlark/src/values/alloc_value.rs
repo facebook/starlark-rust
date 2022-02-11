@@ -26,6 +26,10 @@ use crate::values::{FrozenHeap, FrozenValue, Heap, UnpackValue, Value, ValueOf};
 /// but there's no Starlark type for `char`, this trait
 /// is implemented for `char` to construct Starlark `str`.
 pub trait AllocValue<'v> {
+    /// Allocate the value on a heap and return a reference to the allocated value.
+    ///
+    /// Note, for certain values (e.g. empty strings) no allocation is actually performed,
+    /// and a reference to the statically allocated object is returned.
     fn alloc_value(self, heap: &'v Heap) -> Value<'v>;
 }
 
@@ -55,6 +59,7 @@ where
 
 /// Trait for things that can be allocated on a [`FrozenHeap`] producing a [`FrozenValue`].
 pub trait AllocFrozenValue {
+    /// Allocate a value in the frozen heap and return a reference to the allocated value.
     fn alloc_frozen_value(self, heap: &FrozenHeap) -> FrozenValue;
 }
 

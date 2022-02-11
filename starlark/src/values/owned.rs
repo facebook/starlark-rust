@@ -176,14 +176,22 @@ impl<T: StarlarkValue<'static>> Deref for OwnedFrozenValueTyped<T> {
 }
 
 impl<T: StarlarkValue<'static>> OwnedFrozenValueTyped<T> {
+    /// Erase the type.
+    ///
+    /// This operation is unsafe because returned value is not bound by the heap lifetime.
+    /// So if the heap is dropped, the returned value quetly becomes invalid.
     pub unsafe fn to_frozen_value(&self) -> FrozenValue {
         self.value.to_frozen_value()
     }
 
+    /// Get a value reference.
     pub fn to_value<'v>(&'v self) -> Value<'v> {
+        // SAFETY: returned value lifetime is tied to self, so
+        //   the heap is guaranteed to outlive the returned value.
         unsafe { self.to_frozen_value().to_value() }
     }
 
+    /// Erase the type.
     pub fn to_owned_frozen_value(&self) -> OwnedFrozenValue {
         OwnedFrozenValue {
             owner: self.owner.dupe(),
@@ -196,6 +204,7 @@ impl<T: StarlarkValue<'static>> OwnedFrozenValueTyped<T> {
         &self.owner
     }
 
+    /// Obtain a reference to the value.
     pub fn as_ref(&self) -> &T {
         self.value.as_ref()
     }

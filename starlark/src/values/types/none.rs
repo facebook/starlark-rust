@@ -93,7 +93,9 @@ impl AllocFrozenValue for NoneType {
 /// Equivalent of a Rust [`Option`], where [`None`] is encoded as [`NoneType`]. Useful for its [`UnpackValue`] instance.
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Dupe)]
 pub enum NoneOr<T> {
+    /// Starlark `None`.
     None,
+    /// Not `None`.
     Other(T),
 }
 

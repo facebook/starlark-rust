@@ -232,10 +232,12 @@ impl<'a> Assert<'a> {
         self.gc_strategy = Some(GcStrategy::Never)
     }
 
+    /// Configure a callback which is used to setup evaluator before each evaluation.
     pub fn setup_eval(&mut self, setup: impl Fn(&mut Evaluator) + 'static) {
         self.setup_eval = box setup;
     }
 
+    /// Configure the handler for `print` function.
     pub fn set_print_handler(&mut self, handler: &'a (dyn PrintHandler + 'a)) {
         self.print_handler = Some(handler);
     }

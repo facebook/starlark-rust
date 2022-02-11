@@ -23,6 +23,7 @@ use crate::values::{StarlarkValue, Value};
 
 /// Common errors returned by Starlark evaluation.
 #[derive(Debug, Error)]
+#[allow(missing_docs)] // Self-explanatory.
 pub enum ValueError {
     #[error("Operation `{op}` not supported on type `{typ}`")]
     OperationNotSupported { op: String, typ: String },

@@ -86,7 +86,9 @@ impl<V: Display, Typ> Display for EnumTypeGen<V, Typ> {
     }
 }
 
+/// Unfrozen enum type.
 pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
+/// Frozen enum type.
 pub type FrozenEnumType = EnumTypeGen<FrozenValue, Option<String>>;
 
 /// A value from an enumeration.

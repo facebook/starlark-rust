@@ -114,7 +114,9 @@ impl<V: Display, Typ> Display for RecordTypeGen<V, Typ> {
     }
 }
 
+/// Type of a record in a heap.
 pub type RecordType<'v> = RecordTypeGen<Value<'v>, RefCell<Option<String>>>;
+/// Type of a record in a frozen heap.
 pub type FrozenRecordType = RecordTypeGen<FrozenValue, Option<String>>;
 
 /// An actual record.
@@ -187,6 +189,7 @@ impl<'v> RecordType<'v> {
 }
 
 impl<'v, V: ValueLike<'v>> RecordGen<V> {
+    /// `type(x)` for records.
     pub const TYPE: &'static str = "record";
 
     fn get_record_type(&self) -> Either<&'v RecordType<'v>, &'v FrozenRecordType> {

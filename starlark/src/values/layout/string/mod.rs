@@ -171,10 +171,12 @@ impl FrozenStringValue {
         self.as_starlark_str().unpack()
     }
 
+    /// Get self along with the hash.
     pub fn get_hashed(self) -> Hashed<Self> {
         Hashed::new_unchecked(self.get_hash(), self)
     }
 
+    /// Get the string reference along with the hash.
     pub fn get_hashed_str(self) -> BorrowHashed<'static, str> {
         BorrowHashed::new_unchecked(self.get_hash(), self.as_str())
     }
@@ -249,10 +251,12 @@ impl<'v> StringValue<'v> {
         }
     }
 
+    /// Get the Rust string reference.
     pub fn as_str(self) -> &'v str {
         self.unpack_starlark_str().unpack()
     }
 
+    /// Convert to Starlark value.
     pub fn to_value(self) -> Value<'v> {
         self.0
     }
@@ -262,14 +266,17 @@ impl<'v> StringValue<'v> {
         Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.0)?) })
     }
 
+    /// Get self along with the hash.
     pub fn get_hashed(self) -> Hashed<Self> {
         Hashed::new_unchecked(self.get_hash(), self)
     }
 
+    /// Get the string reference along with the hash.
     pub fn get_hashed_str(self) -> BorrowHashed<'v, str> {
         BorrowHashed::new_unchecked(self.get_hash(), self.as_str())
     }
 
+    /// If this string value is frozen, return it.
     pub fn unpack_frozen(self) -> Option<FrozenStringValue> {
         self.0
             .unpack_frozen()

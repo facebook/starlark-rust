@@ -72,6 +72,7 @@ impl<'v, V: ValueLike<'v>> Debug for TupleGen<V> {
 }
 
 impl<V> TupleGen<V> {
+    /// `type(())`.
     pub const TYPE: &'static str = "tuple";
 
     pub(crate) const unsafe fn new(len: usize) -> TupleGen<V> {
@@ -83,7 +84,9 @@ impl<V> TupleGen<V> {
     }
 }
 
+/// Runtime type of unfrozen tuple.
 pub type Tuple<'v> = TupleGen<Value<'v>>;
+/// Runtime type of frozen tuple.
 pub type FrozenTuple = TupleGen<FrozenValue>;
 
 unsafe impl<'v> Coerce<Tuple<'v>> for FrozenTuple {}
@@ -97,6 +100,7 @@ unsafe impl<'v> AnyLifetime<'v> for TupleGen<FrozenValue> {
 }
 
 impl<'v> Tuple<'v> {
+    /// Downcast a value to a tuple.
     pub fn from_value(value: Value<'v>) -> Option<&'v Self> {
         if value.unpack_frozen().is_some() {
             value.downcast_ref::<FrozenTuple>().map(coerce_ref)

@@ -15,6 +15,11 @@
  * limitations under the License.
  */
 
+//! Types supporting documentation for code written in or for Starlark.
+
+// TODO(nga): document it
+#![allow(missing_docs)]
+
 use std::collections::HashMap;
 
 use gazebo::prelude::*;
@@ -314,16 +319,20 @@ impl DocString {
 /// Line / column for where in a file a symbol is.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Pos {
+    /// Line number.
+    // TODO(nga): explain is it 0-based or 1-based?
     pub line: usize,
+    /// Column number.
+    // TODO(nga): explain is it 0-based or 1-based?
     pub column: usize,
 }
 
 /// The file a symbol resides in, and if available its location within that file.
-///
-/// `path` should be a string that can be passed into `load()` statements.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Location {
+    /// `path` is a string that can be passed into `load()` statements.
     pub path: String,
+    /// Location of the symbol within the file.
     pub position: Option<Pos>,
 }
 

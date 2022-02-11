@@ -37,6 +37,7 @@ pub trait FileLoader {
 /// [`AstModule::loads`](crate::syntax::AstModule::loads).
 /// This struct will raise an error if any requested files are not available.
 pub struct ReturnFileLoader<'a> {
+    /// Map from module name (first argument to `load` statement) to the actual module.
     pub modules: &'a HashMap<&'a str, &'a FrozenModule>,
 }
 

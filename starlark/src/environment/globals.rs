@@ -197,6 +197,7 @@ impl Methods {
         self.0.members.iter().map(|(k, v)| (k.as_str(), *v))
     }
 
+    /// Fetch the documentation.
     pub fn documentation(&self) -> DocItem {
         common_documentation(&self.0.docstring, &self.0.members)
     }
@@ -317,6 +318,10 @@ impl GlobalsBuilder {
         value.alloc_frozen_value(&self.heap)
     }
 
+    /// Set per module docstring.
+    ///
+    /// This function is called by the `starlark_derive` generated code
+    /// and rarely needs to be called manually.
     pub fn set_docstring(&mut self, docstring: &str) {
         self.docstring = Some(docstring.to_owned());
     }

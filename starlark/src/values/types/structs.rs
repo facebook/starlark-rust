@@ -262,10 +262,12 @@ impl<'v, V: UnpackValue<'v>> UnpackValue<'v> for StructOf<'v, V> {
 }
 
 impl<'v, V: UnpackValue<'v>> StructOf<'v, V> {
+    /// Get the actual value this `StructOf` wraps.
     pub fn to_value(&self) -> Value<'v> {
         self.value.value
     }
 
+    /// Get untyped struct reference.
     pub fn as_struct(&self) -> &Struct<'v> {
         self.value.typed
     }

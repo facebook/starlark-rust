@@ -129,6 +129,7 @@ impl<'v> DerefMut for DictMut<'v> {
 }
 
 impl<'v> Dict<'v> {
+    /// Downcast the value to a dict.
     pub fn from_value(x: Value<'v>) -> Option<DictRef<'v>> {
         if x.unpack_frozen().is_some() {
             x.downcast_ref::<DictGen<FrozenDict>>().map(|x| DictRef {
@@ -142,6 +143,7 @@ impl<'v> Dict<'v> {
         }
     }
 
+    /// Downcast the value to a mutable dict reference.
     pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<DictMut>> {
         if unlikely(x.unpack_frozen().is_some()) {
             return Err(ValueError::CannotMutateImmutableValue.into());
@@ -202,6 +204,7 @@ impl<'v> Dict<'v> {
     /// The result of calling `type()` on dictionaries.
     pub const TYPE: &'static str = "dict";
 
+    /// Dict type string as Starlark frozen string value.
     pub fn get_type_value_static() -> FrozenStringValue {
         DictGen::<FrozenDict>::get_type_value_static()
     }
@@ -211,10 +214,12 @@ impl<'v> Dict<'v> {
         Self { content }
     }
 
+    /// Number of elements in the dict.
     pub fn len(&self) -> usize {
         self.content.len()
     }
 
+    /// Is the dict empty?
     pub fn is_empty(&self) -> bool {
         self.content.is_empty()
     }
@@ -250,6 +255,7 @@ impl<'v> Dict<'v> {
         Ok(self.get_hashed(key.get_hashed()?))
     }
 
+    /// Lookup the value by the given prehashed key.
     pub fn get_hashed(&self, key: Hashed<Value<'v>>) -> Option<Value<'v>> {
         self.content.get_hashed(key.borrow()).copied()
     }
@@ -291,18 +297,22 @@ impl<'v> Dict<'v> {
         })
     }
 
+    /// Reserve capacity to insert `additional` elements without reallocating.
     pub fn reserve(&mut self, additional: usize) {
         self.content.reserve(additional);
     }
 
+    /// Insert a key/value pair into the dictionary.
     pub fn insert_hashed(&mut self, key: Hashed<Value<'v>>, value: Value<'v>) {
         self.content.insert_hashed(key, value);
     }
 
+    /// Remove given key from the dictionary.
     pub fn remove_hashed(&mut self, key: Hashed<Value<'v>>) -> Option<Value<'v>> {
         self.content.remove_hashed(key.borrow())
     }
 
+    /// Remove all elements from the dictionary.
     pub fn clear(&mut self) {
         self.content.clear();
     }
@@ -516,6 +526,7 @@ pub struct DictOf<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> {
 }
 
 impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> DictOf<'v, K, V> {
+    /// Get all the elements.
     // This should return an iterator, but it is not trivial to do with `ARef`.
     pub fn collect_entries(&self) -> Vec<(K, V)> {
         Dict::from_value(self.value)
@@ -532,6 +543,7 @@ impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> DictOf<'v, K, V> {
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
+    /// Collect all the elements to a fresh `SmallMap`.
     pub fn to_dict(&self) -> SmallMap<K, V> {
         Dict::from_value(self.value)
             .expect("already validated as a dict")

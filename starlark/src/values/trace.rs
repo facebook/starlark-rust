@@ -30,6 +30,7 @@ use crate::{
 /// Called by the garbage collection, and must walk over every contained `Value` in the type.
 /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
 pub unsafe trait Trace<'v> {
+    /// Recursively "trace" the value.
     fn trace(&mut self, tracer: &Tracer<'v>);
 }
 

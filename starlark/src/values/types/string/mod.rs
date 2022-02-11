@@ -127,6 +127,7 @@ impl StarlarkStr {
         }
     }
 
+    /// Get a Rust string refence from this Starlark string.
     pub fn unpack(&self) -> &str {
         unsafe {
             let slice = slice::from_raw_parts(self.str.body.as_ptr(), self.str.len as usize);
@@ -134,6 +135,7 @@ impl StarlarkStr {
         }
     }
 
+    /// Get cached hash value or compute if it is not cached yet.
     pub fn get_hash(&self) -> StarlarkHashValue {
         // Note relaxed load and store are practically non-locking memory operations.
         let hash = self.str.hash.load(atomic::Ordering::Relaxed);
@@ -149,14 +151,17 @@ impl StarlarkStr {
         }
     }
 
+    /// Rust string reference along with its hash value.
     pub fn as_str_hashed(&self) -> BorrowHashed<str> {
         BorrowHashed::new_unchecked(self.get_hash(), self.unpack())
     }
 
+    /// String length, in bytes.
     pub fn len(&self) -> usize {
         self.str.len as usize
     }
 
+    /// Is this string empty?
     pub fn is_empty(&self) -> bool {
         self.str.len == 0
     }

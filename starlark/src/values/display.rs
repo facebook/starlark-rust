@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+//! Utilities to implement `Display` (or `repr`) for Starlark values.
+
 use std::fmt::{self, Display, Write};
 
 const INDENT: &str = "  ";
