@@ -48,7 +48,7 @@ fn write_non_finite<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
     }
 }
 
-pub fn write_decimal<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
+pub(crate) fn write_decimal<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
     if !f.is_finite() {
         write_non_finite(output, f)
     } else {
@@ -56,7 +56,7 @@ pub fn write_decimal<W: fmt::Write>(output: &mut W, f: f64) -> fmt::Result {
     }
 }
 
-pub fn write_scientific<W: fmt::Write>(
+pub(crate) fn write_scientific<W: fmt::Write>(
     output: &mut W,
     f: f64,
     exponent_char: char,
@@ -114,7 +114,11 @@ pub fn write_scientific<W: fmt::Write>(
     }
 }
 
-pub fn write_compact<W: fmt::Write>(output: &mut W, f: f64, exponent_char: char) -> fmt::Result {
+pub(crate) fn write_compact<W: fmt::Write>(
+    output: &mut W,
+    f: f64,
+    exponent_char: char,
+) -> fmt::Result {
     if !f.is_finite() {
         write_non_finite(output, f)
     } else {
