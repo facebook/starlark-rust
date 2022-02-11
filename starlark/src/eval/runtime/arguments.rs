@@ -683,11 +683,6 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         v.get()
     }
 
-    pub fn this<T: UnpackValue<'v>>(&self, this: Option<Value<'v>>) -> anyhow::Result<T> {
-        let this = this.ok_or(ValueError::MissingThis)?;
-        T::unpack_named_param(this, "this")
-    }
-
     /// Obtain the next parameter, corresponding to [`ParametersSpec::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
