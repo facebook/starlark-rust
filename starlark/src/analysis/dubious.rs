@@ -110,7 +110,7 @@ pub(crate) fn dubious(module: &AstModule) -> Vec<LintT<Dubious>> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use gazebo::prelude::*;
 
     use super::*;

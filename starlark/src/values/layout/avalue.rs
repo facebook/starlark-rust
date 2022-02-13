@@ -1125,7 +1125,7 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::{environment::Module, values::list::List};
 
     #[test]

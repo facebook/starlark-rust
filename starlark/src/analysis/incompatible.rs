@@ -190,7 +190,7 @@ pub(crate) fn incompatibilities(module: &AstModule) -> Vec<LintT<Incompatibility
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use gazebo::prelude::*;
 
     use super::*;

@@ -558,7 +558,7 @@ fn common_documentation(docstring: &Option<String>, members: &SymbolMap<FrozenVa
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use derive_more::Display;
 
     use super::*;

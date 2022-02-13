@@ -224,7 +224,7 @@ impl BcProfile {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::{
         environment::{Globals, Module},
         eval::{bc::opcode::BcOpcode, Evaluator},

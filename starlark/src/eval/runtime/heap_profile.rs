@@ -597,7 +597,7 @@ mod flame {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::{
         environment::{Globals, Module},

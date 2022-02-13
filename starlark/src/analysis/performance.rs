@@ -73,7 +73,7 @@ pub(crate) fn performance(module: &AstModule) -> Vec<LintT<Performance>> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use gazebo::prelude::*;
 
     use super::*;

@@ -201,7 +201,7 @@ impl BcOpcode {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::eval::bc::opcode::BcOpcode;
 
     #[test]

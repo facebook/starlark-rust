@@ -495,7 +495,7 @@ impl Drop for Arena {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::values::{any::StarlarkAny, layout::avalue::simple};
 

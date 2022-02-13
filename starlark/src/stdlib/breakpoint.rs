@@ -221,7 +221,7 @@ pub fn global(builder: &mut GlobalsBuilder) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::{cell::RefCell, env, rc::Rc};
 
     use gazebo::dupe::Dupe;

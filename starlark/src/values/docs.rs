@@ -564,7 +564,7 @@ pub struct Doc {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::fmt::{Display, Formatter};
 
     use starlark_derive::starlark_module;

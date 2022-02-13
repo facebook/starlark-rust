@@ -279,7 +279,7 @@ fn use_ignored(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use crate::syntax::Dialect;
 

@@ -1013,7 +1013,7 @@ impl Arguments<'_, '_> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

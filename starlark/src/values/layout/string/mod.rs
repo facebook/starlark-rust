@@ -350,7 +350,7 @@ impl<'v> AllocValue<'v> for StringValue<'v> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::{
         collections::Hashed,
         values::{FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue, Value, ValueLike},

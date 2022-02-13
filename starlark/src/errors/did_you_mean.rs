@@ -44,7 +44,7 @@ pub(crate) fn did_you_mean<'a>(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::errors::did_you_mean::did_you_mean;
 
     #[test]

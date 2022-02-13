@@ -227,7 +227,7 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::mem;
 
     use crate::{

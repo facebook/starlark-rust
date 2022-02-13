@@ -49,7 +49,7 @@ impl AstModule {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use gazebo::prelude::*;
 
     use super::*;

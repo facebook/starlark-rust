@@ -326,7 +326,7 @@ impl BcInstrsWriter {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::mem;
 
     use crate::{

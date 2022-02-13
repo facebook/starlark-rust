@@ -786,7 +786,7 @@ pub(crate) type CstStmt = AstStmtP<CstPayload>;
 pub(crate) type CstLoad = AstLoadP<CstPayload>;
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::fmt::Write;
 
     use gazebo::dupe::Dupe;

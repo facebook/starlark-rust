@@ -307,7 +307,7 @@ impl<'v> StarlarkValue<'v> for Array<'v> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::values::{Heap, Value};
 
     #[test]

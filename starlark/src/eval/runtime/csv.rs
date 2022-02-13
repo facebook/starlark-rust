@@ -146,7 +146,7 @@ impl CsvValue for u128 {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::time::Duration;
 
     use crate::eval::runtime::csv::CsvWriter;

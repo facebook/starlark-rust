@@ -224,7 +224,7 @@ impl<'v, T: StarlarkValue<'v>> AllocFrozenValue for FrozenValueTyped<'v, T> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use crate::values::{FrozenValue, FrozenValueTyped, PointerI32, StarlarkValue};
 
     #[test]

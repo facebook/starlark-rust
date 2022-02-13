@@ -274,7 +274,7 @@ pub(crate) fn contains(haystack: &str, needle: &str) -> bool {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::iter;
 
     use crate::values::{

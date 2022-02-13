@@ -268,7 +268,7 @@ pub(crate) fn flow_issues(module: &AstModule) -> Vec<LintT<FlowIssue>> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use gazebo::prelude::*;
 
     use super::*;
