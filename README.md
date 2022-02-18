@@ -11,9 +11,13 @@ This project provides a Rust implementation of the [Starlark language](https://g
 
 There are at least three implementations of Starlark, [one in Java](https://github.com/bazelbuild/starlark), [one in Go](https://github.com/google/starlark-go), and this one in Rust. We mostly follow the Starlark standard.
 
-## Learn More in This Intro Video
+## Learn More 
+
+Watch this introductory video about Starlark-Rust from [Meta Open Source team](https://opensource.facebook.com/):
 
 [![Explain Like I'm 5: Starlark-Rust](https://img.youtube.com/vi/3kHER3KIPj4/0.jpg)](https://www.youtube.com/watch?v=3kHER3KIPj4)
+
+You can also read about the project functionalities in [this blog post](https://developers.facebook.com/blog/post/2021/04/08/rust-starlark-library/). 
 
 ## Features
 
