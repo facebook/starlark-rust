@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
+use gazebo::dupe::Dupe;
+
 /// How to profile starlark code.
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe)]
 pub enum ProfileMode {
     /// The heap profile mode provides information about the time spent in each function and allocations
     /// performed by each function. Enabling this mode the side effect of disabling garbage-collection.

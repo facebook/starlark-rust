@@ -212,16 +212,29 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
     }
 
+
     /// Generate instructions to invoke before stmt callbacks when evaluating the module,
     /// even if this module does not use any such callbacks.
     ///
-    /// This function need to be called when evaluating a dependency of a module, if a dependency:
-    /// * registers `before_stmt` callback
-    /// * uses statement profiling
-    // TODO(nga): this API exposes too much interpreter internals.
-    //   Need to implement better abstraction for profiling/instrumentation.
+    /// This function need to be called when evaluating a dependency of a module, if a module
+    /// registers `before_stmt` callback.
     pub fn enable_before_stmt_instrumentation(&mut self) {
         self.before_stmt.instrument = true;
+    }
+
+    /// Enable instrumentation in module which is loaded by a module to be profiled.
+    ///
+    /// This function need to be called when evaluating a dependency of a module, if a module
+    /// does profiling in the given mode.
+    pub fn enable_profile_instrumentation(&mut self, mode: &ProfileMode) {
+        match mode {
+            ProfileMode::Bytecode | ProfileMode::BytecodePairs => {
+                self.bc_profile.enable_1();
+            }
+            _ => {
+                self.before_stmt.instrument = true;
+            }
+        }
     }
 
     /// Write a profile to a file.
