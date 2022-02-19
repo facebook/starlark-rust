@@ -47,6 +47,7 @@ pub(crate) mod bc;
 mod compiler;
 mod fragment;
 pub(crate) mod runtime;
+pub use runtime::profile::ProfileMode;
 
 #[cfg(test)]
 mod tests;

@@ -39,6 +39,7 @@ use crate::{
             call_stack::{CallStack, FrozenFileSpan},
             flame_profile::FlameProfile,
             heap_profile::{HeapProfile, HeapProfileFormat},
+            profile::ProfileMode,
             slots::LocalSlotId,
             stmt_profile::StmtProfile,
         },
@@ -182,39 +183,33 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.loader = Some(loader);
     }
 
-    /// Enable profiling, allowing [`Evaluator::write_heap_profile`] to be used.
-    /// Has the side effect of disabling garbage-collection.
-    ///
-    /// Starlark contains three types of profile information - `heap`, `stmt` and `flame`.
-    /// These must be enabled _before_ execution with [`enable_heap_profile`](Evaluator::enable_heap_profile)/
-    /// [`enable_stmt_profile`](Evaluator::enable_stmt_profile)/
-    /// [`enable_flame_profile`](Evaluator::enable_flame_profile), then after execution the
-    /// profiles can be written to a file using [`write_heap_profile`](Evaluator::write_heap_profile)/
-    /// [`write_stmt_profile`](Evaluator::write_stmt_profile)/
-    /// [`write_flame_profile`](Evaluator::write_flame_profile). These profiling modes both have
-    /// some overhead, so while they _can_ be used simultaneously, it's usually better to run the
-    /// code repeatedly if that's possible.
-    ///
-    /// * The `heap_profile` mode provides information about the time spent in each function and allocations
-    ///   performed by each function. Enabling this mode the side effect of disabling garbage-collection.
-    ///   This profiling mode is the recommended one.
-    /// * The `stmt_profile` mode provides information about time spent in each statement.
-    /// * The `bc_profile` mode provides information about bytecode instructions.
-    /// * The `flame_profile` and the `heap_profile` mode provide input compatible with
-    ///   [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
-    pub fn enable_heap_profile(&mut self) {
-        self.heap_profile.enable();
-        self.heap_or_flame_profile = true;
-        // Disable GC because otherwise why lose the profile records, as we use the heap
-        // to store a complete list of what happened in linear order.
-        self.disable_gc = true;
-    }
-
-    /// Enable statement profiling, allowing [`Evaluator::write_stmt_profile`] to be used.
-    /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
-    pub fn enable_stmt_profile(&mut self) {
-        self.stmt_profile.enable();
-        self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+    /// Enable profiling, allowing [`Evaluator::write_profile`] to be used.
+    /// Profilers add overhead, and while some profilers can be used together,
+    /// it's better to run at most one profiler at a time.
+    pub fn enable_profile(&mut self, mode: &ProfileMode) {
+        match mode {
+            ProfileMode::Heap | ProfileMode::HeapFlame => {
+                self.heap_profile.enable();
+                self.heap_or_flame_profile = true;
+                // Disable GC because otherwise why lose the profile records, as we use the heap
+                // to store a complete list of what happened in linear order.
+                self.disable_gc = true;
+            }
+            ProfileMode::Stmt => {
+                self.stmt_profile.enable();
+                self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+            }
+            ProfileMode::Flame => {
+                self.flame_profile.enable();
+                self.heap_or_flame_profile = true;
+            }
+            ProfileMode::Bytecode => {
+                self.bc_profile.enable_1();
+            }
+            ProfileMode::BytecodePairs => {
+                self.bc_profile.enable_2();
+            }
+        }
     }
 
     /// Generate instructions to invoke before stmt callbacks when evaluating the module,
@@ -229,74 +224,38 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.before_stmt.instrument = true;
     }
 
-    /// Enable bytecode profiling, allowing [`Evaluator::write_bytecode_profile`] to be used.
-    pub fn enable_bytecode_profile(&mut self) {
-        self.bc_profile.enable_1();
-    }
-
-    /// Enable bytecode instruction pairs profiling,
-    /// allowing [`Evaluator::write_bytecode_profile`] to be used.
-    ///
-    /// This option is mutually exclusive with
-    /// [`enable_bytecode_profile`](Self::enable_bytecode_profile).
-    pub fn enable_bytecode_pairs_profile(&mut self) {
-        self.bc_profile.enable_2();
-    }
-
-    /// Enable statement profiling, allowing [`Evaluator::write_flame_profile`] to be used.
-    /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
-    pub fn enable_flame_profile(&mut self) {
-        self.flame_profile.enable();
-        self.heap_or_flame_profile = true;
-    }
-
-    /// Write a profile (as a summarized `.csv` file) to a file.
-    /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
-    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
-    pub fn write_heap_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        self.heap_profile
-            .write(filename.as_ref(), self.heap(), HeapProfileFormat::Summary)
-            .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
-    }
-
-    /// Write a heap profile as a flamegraph, suitable as input to
-    /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
-    /// Only valid if [`enable_heap_profile`](Evaluator::enable_heap_profile) was called before execution began.
-    /// See [`Evaluator::enable_heap_profile`] for details about the two types of Starlark profiles.
-    pub fn write_heap_flame_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        self.heap_profile
-            .write(
-                filename.as_ref(),
-                self.heap(),
-                HeapProfileFormat::FlameGraph,
-            )
-            .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into()))
-    }
-
-    /// Write a profile (as a `.csv` file) to a file.
-    /// Only valid if [`enable_stmt_profile`](Evaluator::enable_stmt_profile) was called before execution began.
-    /// See [`Evaluator::enable_heap_profile`] for details about two types of Starlark profiles.
-    pub fn write_stmt_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        self.stmt_profile
-            .write(filename.as_ref())
-            .unwrap_or_else(|| Err(EvaluatorError::StmtProfilingNotEnabled.into()))
-    }
-
-    /// Write a profile (as a `.csv` file) to a file.
-    /// Only valid if [`enable_bc_profile`](Self::enable_bytecode_profile) was called
-    /// before execution began.
-    pub fn write_bytecode_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        self.bc_profile.write_csv(filename.as_ref())
-    }
-
-    /// Write a profile to a file, suitable as input to
-    /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
-    /// Only valid if [`enable_flame_profile`](Evaluator::enable_flame_profile) was called before execution began.
-    /// See [`Evaluator::enable_heap_profile`] for details about the types of Starlark profiles.
-    pub fn write_flame_profile<P: AsRef<Path>>(&self, filename: P) -> anyhow::Result<()> {
-        self.flame_profile
-            .write(filename.as_ref())
-            .unwrap_or_else(|| Err(EvaluatorError::FlameProfilingNotEnabled.into()))
+    /// Write a profile to a file.
+    /// Only valid if corresponding profiler was enabled.
+    pub fn write_profile<P: AsRef<Path>>(
+        &self,
+        mode: &ProfileMode,
+        filename: P,
+    ) -> anyhow::Result<()> {
+        match mode {
+            ProfileMode::Heap => self
+                .heap_profile
+                .write(filename.as_ref(), self.heap(), HeapProfileFormat::Summary)
+                .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into())),
+            ProfileMode::HeapFlame => self
+                .heap_profile
+                .write(
+                    filename.as_ref(),
+                    self.heap(),
+                    HeapProfileFormat::FlameGraph,
+                )
+                .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into())),
+            ProfileMode::Stmt => self
+                .stmt_profile
+                .write(filename.as_ref())
+                .unwrap_or_else(|| Err(EvaluatorError::StmtProfilingNotEnabled.into())),
+            ProfileMode::Bytecode | ProfileMode::BytecodePairs => {
+                self.bc_profile.write_csv(filename.as_ref())
+            }
+            ProfileMode::Flame => self
+                .flame_profile
+                .write(filename.as_ref())
+                .unwrap_or_else(|| Err(EvaluatorError::FlameProfilingNotEnabled.into())),
+        }
     }
 
     /// Enable interactive `breakpoint()`. When enabled, `breakpoint()`

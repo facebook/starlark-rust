@@ -227,7 +227,7 @@ impl BcProfile {
 mod tests {
     use crate::{
         environment::{Globals, Module},
-        eval::{bc::opcode::BcOpcode, Evaluator},
+        eval::{bc::opcode::BcOpcode, Evaluator, ProfileMode},
         syntax::{AstModule, Dialect},
     };
 
@@ -236,7 +236,7 @@ mod tests {
         let module = Module::new();
         let globals = Globals::standard();
         let mut eval = Evaluator::new(&module);
-        eval.enable_bytecode_profile();
+        eval.enable_profile(&ProfileMode::Bytecode);
         eval.eval_module(
             AstModule::parse("bc.star", "repr([1, 2])".to_owned(), &Dialect::Standard).unwrap(),
             &globals,
@@ -255,7 +255,7 @@ mod tests {
         let module = Module::new();
         let globals = Globals::standard();
         let mut eval = Evaluator::new(&module);
-        eval.enable_bytecode_pairs_profile();
+        eval.enable_profile(&ProfileMode::BytecodePairs);
         eval.eval_module(
             AstModule::parse("bc.star", "repr([1, 2])".to_owned(), &Dialect::Standard).unwrap(),
             &globals,
