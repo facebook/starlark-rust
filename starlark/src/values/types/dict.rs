@@ -501,6 +501,22 @@ where
         let index = index.get_hashed()?;
         self.0.set_at(index, alloc_value)
     }
+
+    fn bit_or(&self, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        let rhs = Dict::from_value(rhs)
+            .map_or_else(|| ValueError::unsupported_with(self, "|", rhs), Ok)?;
+        if self.0.content().is_empty() {
+            return Ok(heap.alloc(rhs.clone()));
+        }
+        // Might be faster if we preallocate the capacity, but then copying in the LHS
+        // is more expensive and might oversize given the behaviour on duplicates.
+        // If this becomes a bottleneck, benchmark.
+        let mut items = self.0.content().clone();
+        for (k, v) in rhs.iter_hashed() {
+            items.insert_hashed(k, v);
+        }
+        Ok(heap.alloc(Dict::new(items)))
+    }
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for SmallMap<K, V> {

@@ -634,6 +634,8 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     /// # starlark::assert::all_true(r#"
     /// 0xb00f | 0x0ee0 == 0xbeef
     /// 4 | 7 == 7
+    /// {1: 2} | {3: 4} == {1: 2, 3: 4}
+    /// {1: 2} | {1: 3} == {1: 3}
     /// # "#);
     /// ```
     fn bit_or(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
