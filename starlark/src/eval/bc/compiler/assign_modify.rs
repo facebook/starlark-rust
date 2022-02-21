@@ -22,10 +22,10 @@ use crate::{
     eval::{
         bc::{
             instr_impl::{
-                InstrAddAssign, InstrArrayIndexNoPop, InstrArrayIndexSet, InstrBitAnd, InstrBitOr,
-                InstrBitXor, InstrDivide, InstrDup, InstrFloorDivide, InstrLeftShift,
-                InstrLoadModule, InstrMultiply, InstrObjectField, InstrObjectSetField,
-                InstrPercent, InstrRightShift, InstrStoreModule, InstrSub,
+                InstrAddAssign, InstrArrayIndexNoPop, InstrArrayIndexSet, InstrBitAnd,
+                InstrBitOrAssign, InstrBitXor, InstrDivide, InstrDup, InstrFloorDivide,
+                InstrLeftShift, InstrLoadModule, InstrMultiply, InstrObjectField,
+                InstrObjectSetField, InstrPercent, InstrRightShift, InstrStoreModule, InstrSub,
             },
             writer::BcWriter,
         },
@@ -46,7 +46,7 @@ impl AssignOp {
             AssignOp::FloorDivide => bc.write_instr::<InstrFloorDivide>(span, ()),
             AssignOp::Percent => bc.write_instr::<InstrPercent>(span, ()),
             AssignOp::BitAnd => bc.write_instr::<InstrBitAnd>(span, ()),
-            AssignOp::BitOr => bc.write_instr::<InstrBitOr>(span, ()),
+            AssignOp::BitOr => bc.write_instr::<InstrBitOrAssign>(span, ()),
             AssignOp::BitXor => bc.write_instr::<InstrBitXor>(span, ()),
             AssignOp::LeftShift => bc.write_instr::<InstrLeftShift>(span, ()),
             AssignOp::RightShift => bc.write_instr::<InstrRightShift>(span, ()),

@@ -77,6 +77,7 @@ pub(crate) enum BcOpcode {
     FloorDivide,
     BitAnd,
     BitOr,
+    BitOrAssign,
     BitXor,
     LeftShift,
     RightShift,

@@ -43,7 +43,7 @@ use crate::{
             def::{DefInfo, ParameterCompiled},
             expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError, MemberOrValue},
             span::IrSpanned,
-            stmt::{add_assign, before_stmt, possible_gc, AssignError},
+            stmt::{add_assign, before_stmt, bit_or_assign, possible_gc, AssignError},
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
         Arguments, Def, Evaluator, FrozenDef, ParametersSpec,
@@ -710,6 +710,7 @@ pub(crate) struct InstrDivideImpl;
 pub(crate) struct InstrFloorDivideImpl;
 pub(crate) struct InstrBitAndImpl;
 pub(crate) struct InstrBitOrImpl;
+pub(crate) struct InstrBitOrAssignImpl;
 pub(crate) struct InstrBitXorImpl;
 pub(crate) struct InstrLeftShiftImpl;
 pub(crate) struct InstrRightShiftImpl;
@@ -725,6 +726,7 @@ pub(crate) type InstrDivide = InstrBinOp<InstrDivideImpl>;
 pub(crate) type InstrFloorDivide = InstrBinOp<InstrFloorDivideImpl>;
 pub(crate) type InstrBitAnd = InstrBinOp<InstrBitAndImpl>;
 pub(crate) type InstrBitOr = InstrBinOp<InstrBitOrImpl>;
+pub(crate) type InstrBitOrAssign = InstrBinOp<InstrBitOrAssignImpl>;
 pub(crate) type InstrBitXor = InstrBinOp<InstrBitXorImpl>;
 pub(crate) type InstrLeftShift = InstrBinOp<InstrLeftShiftImpl>;
 pub(crate) type InstrRightShift = InstrBinOp<InstrRightShiftImpl>;
@@ -804,6 +806,13 @@ impl InstrBinOpImpl for InstrBitOrImpl {
     #[inline(always)]
     fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         v0.bit_or(v1, heap)
+    }
+}
+
+impl InstrBinOpImpl for InstrBitOrAssignImpl {
+    #[inline(always)]
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        bit_or_assign(v0, v1, heap)
     }
 }
 

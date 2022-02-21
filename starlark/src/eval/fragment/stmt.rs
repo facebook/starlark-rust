@@ -48,7 +48,7 @@ use crate::{
         },
     },
     syntax::ast::{AssignOp, AssignP, StmtP},
-    values::{list::List, FrozenHeap, FrozenValue, Heap, Value, ValueError},
+    values::{dict::Dict, list::List, FrozenHeap, FrozenValue, Heap, Value, ValueError},
 };
 
 #[derive(Clone, Debug)]
@@ -529,6 +529,41 @@ pub(crate) fn possible_gc(eval: &mut Evaluator) {
             eval.garbage_collect()
         }
         eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
+    }
+}
+
+/// Implement lhs |= rhs, which is special in Starlark, because dicts are mutated,
+/// while all other types are not.
+pub(crate) fn bit_or_assign<'v>(
+    lhs: Value<'v>,
+    rhs: Value<'v>,
+    heap: &'v Heap,
+) -> anyhow::Result<Value<'v>> {
+    // The Starlark spec says dict |= mutates, while nothing else does.
+    // When mutating, be careful if they alias, so we don't have `lhs`
+    // mutably borrowed when we iterate over `rhs`, as they might alias.
+
+    let lhs_aref = lhs.get_ref();
+    let lhs_ty = lhs_aref.static_type_of_value();
+
+    if Dict::is_dict_type(lhs_ty) {
+        // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
+        let mut dict = Dict::from_value_mut(lhs)?
+            .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
+        if lhs.ptr_eq(rhs) {
+            // Nothing to do as union is idempotent
+        } else {
+            let rhs = Dict::from_value(rhs).map_or_else(
+                || ValueError::unsupported_owned(lhs_aref.get_type(), "|=", Some(rhs.get_type())),
+                Ok,
+            )?;
+            for (k, v) in rhs.iter_hashed() {
+                dict.insert_hashed(k, v);
+            }
+        }
+        Ok(lhs)
+    } else {
+        lhs_aref.bit_or(rhs, heap)
     }
 }
 

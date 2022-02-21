@@ -795,6 +795,13 @@ xs[xs] = xs
 #[test]
 fn test_self_mutate_dict() {
     // Check functions that mutate and access self on dicts
+    assert::is_true(
+        r#"
+xs = {1: 2}
+xs |= xs
+xs == {1: 2}
+"#,
+    );
     assert::fail(
         r#"
 xs = {}
@@ -821,6 +828,18 @@ len(xs[1]) == 1
 xs = {}
 xs.update(xs)
 len(xs) == 0
+"#,
+    );
+}
+
+#[test]
+fn test_dict_union() {
+    assert::is_true(
+        r#"
+xs = {1: 2, 3: 4}
+xs |= {5: 6}
+xs |= {1: 7}
+xs.items() == [(1, 7), (3, 4), (5, 6)]
 "#,
     );
 }

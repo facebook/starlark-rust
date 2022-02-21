@@ -18,6 +18,7 @@
 //! The dictionary type, a mutable associative-map, which iterates in insertion order.
 
 use std::{
+    any::TypeId,
     cell::{Ref, RefCell, RefMut},
     fmt,
     fmt::{Debug, Display},
@@ -156,6 +157,11 @@ impl<'v> Dict<'v> {
                 Err(_) => Err(ValueError::MutationDuringIteration.into()),
             },
         }
+    }
+
+    pub(crate) fn is_dict_type(x: TypeId) -> bool {
+        x == TypeId::of::<DictGen<FrozenDict>>()
+            || x == TypeId::of::<DictGen<RefCell<Dict<'static>>>>()
     }
 }
 
