@@ -21,5 +21,5 @@ gazebo_lint = { version = "0.1", optional = true } # @oss-enable
 quote = "1.0.3"
 
 [features]
-# @oss-disable: default = ["custom_linter"]
-custom_linter = ["gazebo_lint"]
+# @oss-disable: default = ["gazebo_linter"]
+gazebo_linter = ["gazebo_lint"]

@@ -19,9 +19,9 @@
 #![feature(box_syntax)]
 //
 // Plugins
-#![cfg_attr(feature = "custom_linter", feature(plugin))]
-#![cfg_attr(feature = "custom_linter", allow(deprecated))] // :(
-#![cfg_attr(feature = "custom_linter", plugin(gazebo_lint))]
+#![cfg_attr(feature = "gazebo_linter", feature(plugin))]
+#![cfg_attr(feature = "gazebo_linter", allow(deprecated))] // :(
+#![cfg_attr(feature = "gazebo_linter", plugin(gazebo_lint))]
 // Disagree these are good hints
 #![allow(clippy::type_complexity)]
 

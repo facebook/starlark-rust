@@ -369,9 +369,9 @@
 #![feature(iter_intersperse)]
 //
 // Plugins
-#![cfg_attr(feature = "custom_linter", feature(plugin))]
-#![cfg_attr(feature = "custom_linter", allow(deprecated))] // :(
-#![cfg_attr(feature = "custom_linter", plugin(gazebo_lint))]
+#![cfg_attr(feature = "gazebo_linter", feature(plugin))]
+#![cfg_attr(feature = "gazebo_linter", allow(deprecated))] // :(
+#![cfg_attr(feature = "gazebo_linter", plugin(gazebo_lint))]
 //
 // Good reasons
 #![allow(clippy::new_ret_no_self)] // We often return Value, even though its morally a Self

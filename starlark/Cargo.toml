@@ -62,8 +62,8 @@ criterion = "0.3"
 rand      = { version = "0.8.4", features = ["small_rng"] }
 
 [features]
-# @oss-disable: default = ["custom_linter"]
-custom_linter = ["gazebo_lint"]
+# @oss-disable: default = ["gazebo_linter"]
+gazebo_linter = ["gazebo_lint"]
 
 [[bin]]
 name = "starlark"
