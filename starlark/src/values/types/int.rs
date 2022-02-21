@@ -218,7 +218,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
-    fn bit_or(&self, other: Value) -> anyhow::Result<Value<'v>> {
+    fn bit_or(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             Ok(Value::new_int(self.get() | other))
         } else {

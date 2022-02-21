@@ -440,8 +440,8 @@ impl<'v> Value<'v> {
     }
 
     /// `x | other`.
-    pub fn bit_or(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_ref().bit_or(other)
+    pub fn bit_or(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().bit_or(other, heap)
     }
 
     /// `x ^ other`.

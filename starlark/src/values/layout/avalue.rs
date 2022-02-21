@@ -924,7 +924,7 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
         panic!()
     }
-    fn bit_or(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn bit_or(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
     fn bit_xor(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
@@ -1101,8 +1101,8 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     fn bit_and(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.1.bit_and(other)
     }
-    fn bit_or(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.1.bit_or(other)
+    fn bit_or(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.1.bit_or(other, heap)
     }
     fn bit_xor(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         self.1.bit_xor(other)

@@ -138,7 +138,7 @@ impl ExprBinOp {
             ExprBinOp::Divide => a.div(b, heap),
             ExprBinOp::FloorDivide => a.floor_div(b, heap),
             ExprBinOp::BitAnd => a.bit_and(b),
-            ExprBinOp::BitOr => a.bit_or(b),
+            ExprBinOp::BitOr => a.bit_or(b, heap),
             ExprBinOp::BitXor => a.bit_xor(b),
             ExprBinOp::LeftShift => a.left_shift(b),
             ExprBinOp::RightShift => a.right_shift(b),

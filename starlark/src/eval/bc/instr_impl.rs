@@ -802,8 +802,8 @@ impl InstrBinOpImpl for InstrBitAndImpl {
 
 impl InstrBinOpImpl for InstrBitOrImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        v0.bit_or(v1)
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        v0.bit_or(v1, heap)
     }
 }
 
