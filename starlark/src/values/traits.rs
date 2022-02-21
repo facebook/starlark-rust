@@ -627,6 +627,15 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     }
 
     /// Bitwise `|` operator.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # starlark::assert::all_true(r#"
+    /// 0xb00f | 0x0ee0 == 0xbeef
+    /// 4 | 7 == 7
+    /// # "#);
+    /// ```
     fn bit_or(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "|", other)
     }
