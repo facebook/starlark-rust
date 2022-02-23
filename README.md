@@ -13,7 +13,7 @@ There are at least three implementations of Starlark, [one in Java](https://gith
 
 ## Learn More 
 
-You can learn more about Starlark Rust in [this introductory video(https://www.youtube.com/watch?v=3kHER3KIPj4) from [Meta Open Source team](https://opensource.facebook.com/).
+You can learn more about Starlark Rust in [this introductory video](https://www.youtube.com/watch?v=3kHER3KIPj4) from [Meta Open Source team](https://opensource.facebook.com/).
 
 You can also read about the project functionalities in [this blog post](https://developers.facebook.com/blog/post/2021/04/08/rust-starlark-library/).
 
