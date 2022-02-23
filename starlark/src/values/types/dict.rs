@@ -47,7 +47,7 @@ use crate::{
     },
 };
 
-#[derive(Clone, Default, Trace, Debug)]
+#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
 struct DictGen<T>(T);
 
 impl<'v, T: DictLike<'v>> Display for DictGen<T> {
@@ -63,7 +63,7 @@ impl<'v> Display for Dict<'v> {
 }
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
-#[derive(Clone, Default, Trace, Debug)]
+#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
 #[repr(transparent)]
 pub struct Dict<'v> {
     /// The data stored by the dictionary. The keys must all be hashable values.
@@ -77,11 +77,6 @@ pub struct FrozenDict {
     /// The data stored by the dictionary. The keys must all be hashable values.
     content: SmallMap<FrozenValue, FrozenValue>,
 }
-
-unsafe impl<'v> AnyLifetime<'v> for DictGen<RefCell<Dict<'v>>> {
-    any_lifetime_body!(DictGen<RefCell<Dict<'static>>>);
-}
-any_lifetime!(DictGen<FrozenDict>);
 
 unsafe impl<'v> Coerce<Dict<'v>> for FrozenDict {}
 

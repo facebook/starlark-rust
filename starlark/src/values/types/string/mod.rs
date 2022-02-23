@@ -77,6 +77,7 @@ impl Add for CharIndex {
 pub const STRING_TYPE: &str = "string";
 
 #[repr(C)] // We want the body to come after len
+#[derive(AnyLifetime)]
 pub(crate) struct StarlarkStrN<const N: usize> {
     // Lazily-initialized cached hash code.
     pub(crate) hash: atomic::AtomicU32,
@@ -86,10 +87,6 @@ pub(crate) struct StarlarkStrN<const N: usize> {
     // But we can't mark it as such since we really want &StarlarkStr to
     // take up only one word.
     pub(crate) body: [u8; N],
-}
-
-unsafe impl<'a, const N: usize> AnyLifetime<'a> for StarlarkStrN<N> {
-    any_lifetime_body!(StarlarkStrN<N>);
 }
 
 /// A pointer to this type represents a Starlark string.

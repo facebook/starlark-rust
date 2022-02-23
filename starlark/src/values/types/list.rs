@@ -49,7 +49,7 @@ use crate::{
     },
 };
 
-#[derive(Clone, Default, Trace, Debug)]
+#[derive(Clone, Default, Trace, Debug, AnyLifetime)]
 #[repr(transparent)]
 pub(crate) struct ListGen<T>(pub(crate) T);
 
@@ -108,11 +108,6 @@ impl<'v> ListRef<'v> {
         self.content.iter().copied()
     }
 }
-
-unsafe impl<'v> AnyLifetime<'v> for ListGen<List<'v>> {
-    any_lifetime_body!(ListGen<List<'static>>);
-}
-any_lifetime!(ListGen<FrozenList>);
 
 impl<'v> List<'v> {
     /// Downcast the list.

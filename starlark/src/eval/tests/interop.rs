@@ -45,14 +45,12 @@ fn test_export_as() {
     use crate as starlark;
     use crate::values::{AllocValue, Freezer, Heap, StarlarkValue, Trace, Value};
 
-    #[derive(Debug, Trace)]
+    #[derive(Debug, Trace, AnyLifetime)]
     struct Exporter<T> {
         // Either String or a RefCell therefore
         named: T,
         value: i32,
     }
-    any_lifetime!(Exporter<RefCell<String>>);
-    any_lifetime!(Exporter<String>);
 
     impl<T: AsARef<String>> Display for Exporter<T> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

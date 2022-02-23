@@ -40,6 +40,7 @@ use crate::{
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[repr(C)]
+#[derive(AnyLifetime)]
 pub struct TupleGen<V> {
     len: usize,
     /// The data stored by the tuple.
@@ -90,14 +91,6 @@ pub type Tuple<'v> = TupleGen<Value<'v>>;
 pub type FrozenTuple = TupleGen<FrozenValue>;
 
 unsafe impl<'v> Coerce<Tuple<'v>> for FrozenTuple {}
-
-unsafe impl<'v> AnyLifetime<'v> for TupleGen<Value<'v>> {
-    any_lifetime_body!(TupleGen<Value<'static>>);
-}
-
-unsafe impl<'v> AnyLifetime<'v> for TupleGen<FrozenValue> {
-    any_lifetime_body!(TupleGen<FrozenValue>);
-}
 
 impl<'v> Tuple<'v> {
     /// Downcast a value to a tuple.

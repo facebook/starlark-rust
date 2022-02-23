@@ -68,16 +68,12 @@ struct NoDrop;
 impl MaybeDrop for NeedsDrop {}
 impl MaybeDrop for NoDrop {}
 
-#[derive(Trace, Debug, Display)]
+#[derive(Trace, Debug, Display, AnyLifetime)]
 #[display(fmt = "CallEnter")]
-struct CallEnter<'v, D: MaybeDrop> {
+struct CallEnter<'v, D: MaybeDrop + 'static> {
     function: Value<'v>,
     time: Instant,
     maybe_drop: D,
-}
-
-unsafe impl<'v, D: MaybeDrop + AnyLifetime<'v>> AnyLifetime<'v> for CallEnter<'v, D> {
-    any_lifetime_body!(CallEnter<'static, D>);
 }
 
 impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> Freeze for CallEnter<'v, D> {
@@ -91,15 +87,11 @@ impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> StarlarkValue<'v> for CallE
     starlark_type!("call_enter");
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug, Display, AnyLifetime)]
 #[display(fmt = "CallExit")]
-struct CallExit<D: MaybeDrop> {
+struct CallExit<D: MaybeDrop + 'static> {
     time: Instant,
     maybe_drop: D,
-}
-
-unsafe impl<'v, D: MaybeDrop> AnyLifetime<'v> for CallExit<D> {
-    any_lifetime_body!(CallExit<D>);
 }
 
 impl<'v, D: MaybeDrop + AnyLifetime<'static>> StarlarkValue<'v> for CallExit<D> {

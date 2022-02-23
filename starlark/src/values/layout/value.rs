@@ -82,7 +82,7 @@ use crate::{
 ///
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
 /// The [`Display`](std::fmt::Display) trait is equivalent to the `repr()` function in Starlark.
-#[derive(Clone_, Copy_, Dupe_)]
+#[derive(Clone_, Copy_, Dupe_, AnyLifetime)]
 // One possible change: moving to Forward during GC.
 pub struct Value<'v>(pub(crate) Pointer<'v, AValueHeader>);
 
@@ -177,7 +177,7 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// while a [`FrozenValue`] from it still exists, the program will probably segfault, so be careful
 /// when working directly with [`FrozenValue`]s. See the type [`OwnedFrozenValue`](crate::values::OwnedFrozenValue)
 /// for a little bit more safety.
-#[derive(Clone, Copy, Dupe)]
+#[derive(Clone, Copy, Dupe, AnyLifetime)]
 // One possible change: moving from Blackhole during GC
 pub struct FrozenValue(pub(crate) FrozenPointer<'static, AValueHeader>);
 
