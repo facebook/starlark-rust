@@ -44,12 +44,8 @@ impl Compiler<'_, '_, '_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiled {
         let clauses = self.compile_clauses(for_, clauses);
-        if clauses.is_nop() {
-            ExprCompiled::List(Vec::new())
-        } else {
-            let x = self.expr(x);
-            ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
-        }
+        let x = self.expr(x);
+        ExprCompiled::compr(ComprCompiled::List(box x, clauses))
     }
 
     pub fn dict_comprehension(
@@ -60,13 +56,9 @@ impl Compiler<'_, '_, '_> {
         clauses: Vec<ClauseP<CstPayload>>,
     ) -> ExprCompiled {
         let clauses = self.compile_clauses(for_, clauses);
-        if clauses.is_nop() {
-            ExprCompiled::Dict(Vec::new())
-        } else {
-            let k = self.expr(k);
-            let v = self.expr(v);
-            ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
-        }
+        let k = self.expr(k);
+        let v = self.expr(v);
+        ExprCompiled::compr(ComprCompiled::Dict(box (k, v), clauses))
     }
 
     /// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
@@ -144,22 +136,14 @@ impl ComprCompiled {
         match self {
             ComprCompiled::List(box ref x, ref clauses) => {
                 let clauses = clauses.optimize_on_freeze(ctx);
-                if clauses.is_nop() {
-                    ExprCompiled::List(Vec::new())
-                } else {
-                    ExprCompiled::Compr(ComprCompiled::List(box x.optimize_on_freeze(ctx), clauses))
-                }
+                ExprCompiled::compr(ComprCompiled::List(box x.optimize_on_freeze(ctx), clauses))
             }
             ComprCompiled::Dict(box (ref k, ref v), ref clauses) => {
                 let clauses = clauses.optimize_on_freeze(ctx);
-                if clauses.is_nop() {
-                    ExprCompiled::Dict(Vec::new())
-                } else {
-                    ExprCompiled::Compr(ComprCompiled::Dict(
-                        box (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx)),
-                        clauses.optimize_on_freeze(ctx),
-                    ))
-                }
+                ExprCompiled::compr(ComprCompiled::Dict(
+                    box (k.optimize_on_freeze(ctx), v.optimize_on_freeze(ctx)),
+                    clauses.optimize_on_freeze(ctx),
+                ))
             }
         }
     }
@@ -212,7 +196,7 @@ impl ClausesCompiled {
     }
 
     /// Clauses are definitely no-op, i. e. zero iterations, and no side effects of iteration.
-    fn is_nop(&self) -> bool {
+    pub(crate) fn is_nop(&self) -> bool {
         // NOTE(nga): if the first loop argument is empty collection, clauses are definitely no-op.
         //   But this is not true for the rest of loops: if inner loop collection is empty,
         //   clauses produce no iterations, but the outer loop may still has side effects.

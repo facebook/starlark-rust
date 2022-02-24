@@ -685,6 +685,25 @@ impl ExprCompiled {
         }
     }
 
+    pub(crate) fn compr(compr: ComprCompiled) -> ExprCompiled {
+        match compr {
+            ComprCompiled::List(box x, clauses) => {
+                if clauses.is_nop() {
+                    ExprCompiled::List(Vec::new())
+                } else {
+                    ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
+                }
+            }
+            ComprCompiled::Dict(box (k, v), clauses) => {
+                if clauses.is_nop() {
+                    ExprCompiled::Dict(Vec::new())
+                } else {
+                    ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
+                }
+            }
+        }
+    }
+
     /// Construct tuple expression from elements optimizing to frozen tuple value when possible.
     pub(crate) fn tuple(elems: Vec<IrSpanned<ExprCompiled>>, heap: &FrozenHeap) -> ExprCompiled {
         if let Ok(elems) = elems.try_map(|e| e.as_value().ok_or(())) {
