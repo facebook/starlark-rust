@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-// For `#[allow(gazebo_impl_dupe)]`.
+// For `#[allow(gazebo_lint_impl_dupe)]`.
 #![allow(unknown_lints)]
 
 //! Bytecode profiler.
@@ -36,7 +36,7 @@ use crate::eval::{
 };
 
 // TODO(nga): `Dupe` for `Duration` added in D31723072, need to release gazebo to use it.
-#[allow(gazebo_impl_dupe)]
+#[allow(gazebo_lint_impl_dupe)]
 #[derive(Default, Clone, Copy)]
 struct BcInstrStat {
     count: u64,

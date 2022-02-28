@@ -40,7 +40,7 @@ use gazebo::dupe::Dupe;
 #[derive(Debug, Default, Copy, Clone, Dupe)]
 // In release build this structure is DST,
 // so gazebo suggests implementing `Dupe` for any `<T>`. T102920913.
-#[allow(gazebo_impl_dupe)]
+#[allow(gazebo_lint_impl_dupe)]
 pub(crate) struct IfDebug<T> {
     #[cfg(debug_assertions)]
     value: T,
