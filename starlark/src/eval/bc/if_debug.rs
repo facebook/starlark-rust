@@ -17,9 +17,6 @@
 
 //! Utility to make stateful debug assertions easier.
 
-// Some lint complains about unknown `#[allow(gazebo_impl_dupe)]` used below.
-#![allow(unknown_lints)]
-
 use std::{cmp::Ordering, marker};
 
 use gazebo::dupe::Dupe;
@@ -40,7 +37,7 @@ use gazebo::dupe::Dupe;
 #[derive(Debug, Default, Copy, Clone, Dupe)]
 // In release build this structure is DST,
 // so gazebo suggests implementing `Dupe` for any `<T>`. T102920913.
-#[allow(gazebo_lint_impl_dupe)]
+#[cfg_attr(feature = "gazebo_linter", allow(gazebo_lint_impl_dupe))]
 pub(crate) struct IfDebug<T> {
     #[cfg(debug_assertions)]
     value: T,

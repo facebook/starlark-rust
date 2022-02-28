@@ -93,8 +93,7 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 /// Parse attribute `#[freeze(identity)]`.
 ///
 /// Currently it fails on any attribute argument other than `id`.
-#[allow(unknown_lints)]
-#[allow(gazebo_lint_impl_dupe)]
+#[cfg_attr(feature = "gazebo_linter", allow(gazebo_lint_impl_dupe))] // The custom_keyword macro
 fn is_identity(attrs: &[Attribute]) -> bool {
     syn::custom_keyword!(identity);
 
