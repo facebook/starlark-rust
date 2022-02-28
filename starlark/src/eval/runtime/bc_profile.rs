@@ -32,9 +32,7 @@ use crate::eval::{
     runtime::{csv::CsvWriter, evaluator::EvaluatorError},
 };
 
-// TODO(nga): `Dupe` for `Duration` added in D31723072, need to release gazebo to use it.
-#[cfg_attr(feature = "gazebo_linter", allow(gazebo_lint_impl_dupe))]
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Dupe, Copy)]
 struct BcInstrStat {
     count: u64,
     total_time: Duration,
