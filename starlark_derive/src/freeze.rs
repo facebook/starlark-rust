@@ -19,7 +19,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Fields, GenericParam,
+    DeriveInput, Fields, GenericParam, Token,
 };
 
 struct Input<'a> {
@@ -78,16 +78,52 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
     let (impl_params, input_params, output_params) = input.format_impl_generics();
 
+    let validate_body = match extract_validator(&input.input.attrs) {
+        Some(validator) => quote! {
+            #validator(&self)?;
+        },
+        None => quote! {},
+    };
+
     let body = freeze_impl(name, &input.input.data);
+
     let gen = quote! {
         impl #impl_params starlark::values::Freeze for #name #input_params {
             type Frozen = #name #output_params;
             fn freeze(self, freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
+                #validate_body
                 #body
             }
         }
     };
+
     gen.into()
+}
+
+/// Parse a #[freeze(validator = function)] annotation.
+#[cfg_attr(feature = "gazebo_linter", allow(gazebo_lint_impl_dupe))] // The custom_keyword macro
+fn extract_validator(attrs: &[Attribute]) -> Option<Ident> {
+    syn::custom_keyword!(validator);
+
+    for attr in attrs.iter() {
+        if !attr.path.is_ident("freeze") {
+            continue;
+        }
+
+        let ident = attr
+            .parse_args_with(|input: ParseStream| {
+                input.parse::<validator>()?;
+                input.parse::<Token![=]>()?;
+                let ident = input.parse::<Ident>()?;
+                input.parse::<Option<Token![,]>>()?;
+                Ok(ident)
+            })
+            .unwrap();
+
+        return Some(ident);
+    }
+
+    None
 }
 
 /// Parse attribute `#[freeze(identity)]`.
