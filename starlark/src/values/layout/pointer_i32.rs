@@ -19,6 +19,8 @@ use std::fmt::{self, Debug};
 
 use gazebo::{any::AnyLifetime, cast};
 
+use crate::values::StarlarkValue;
+
 // WARNING: This type isn't a real type, a pointer to this is secretly an i32.
 // Therefore, don't derive stuff on it, since it will be wrong.
 // However, `AnyLifetime` promises not to peek at its value, so that's fine.
@@ -46,6 +48,10 @@ impl PointerI32 {
 
     pub fn get(&self) -> i32 {
         cast::ptr_to_usize(self) as i32
+    }
+
+    pub(crate) fn type_is_pointer_i32<'v, T: StarlarkValue<'v>>() -> bool {
+        T::static_type_id() == PointerI32::static_type_id()
     }
 }
 

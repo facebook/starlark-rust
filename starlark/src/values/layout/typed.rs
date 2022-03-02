@@ -103,7 +103,7 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
 
     /// Get the reference to the pointed value.
     pub fn as_ref(self) -> &'v T {
-        if T::static_type_id() == PointerI32::static_type_id() {
+        if PointerI32::type_is_pointer_i32::<T>() {
             unsafe {
                 transmute!(
                     &PointerI32,
@@ -152,7 +152,7 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
 
     /// Get the reference to the pointed value.
     pub fn as_ref(self) -> &'v T {
-        if T::static_type_id() == PointerI32::static_type_id() {
+        if PointerI32::type_is_pointer_i32::<T>() {
             unsafe {
                 transmute!(
                     &PointerI32,
