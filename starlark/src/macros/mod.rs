@@ -170,7 +170,7 @@ macro_rules! starlark_complex_values {
 /// # use crate::starlark::values::*;
 /// # struct MyObject;
 /// impl MyObject {
-///     pub fn from_value<'v>(x: Value<'v>) -> Option<ARef<'v, MyObject>> {
+///     pub fn from_value<'v>(x: Value<'v>) -> Option<&'v MyObject> {
 /// # unimplemented!(
 /// # r#"
 ///         ...

@@ -116,7 +116,7 @@ use crate::{
 /// impl<'v> One<'v> {
 ///     // Obtain a reference to `One` from a `Value`, regardless
 ///     // of whether the underlying `Value` is a `One` or `FrozenOne`.
-///     pub fn from_value(x: Value<'v>) -> Option<ARef<'v, Self>> {
+///     pub fn from_value(x: Value<'v>) -> Option<&'v Self> {
 /// # unimplemented!(
 /// # r#"
 ///         ...

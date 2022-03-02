@@ -30,7 +30,7 @@
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
 //!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
 
-pub use gazebo::{any::AnyLifetime, cell::ARef, coerce::Coerce, prelude::*};
+pub use gazebo::{any::AnyLifetime, coerce::Coerce, prelude::*};
 pub use starlark_derive::{starlark_attrs, Freeze, StarlarkAttrs, Trace};
 
 pub use crate::values::{
