@@ -19,7 +19,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Fields, GenericParam, Token,
+    DeriveInput, Fields, GenericParam, LitStr, Token, WherePredicate,
 };
 
 struct Input<'a> {
@@ -39,6 +39,7 @@ impl<'a> Input<'a> {
         let mut impl_params = Vec::new();
         let mut input_params = Vec::new();
         let mut output_params = Vec::new();
+        impl_params.push(quote!('freeze));
         for param in &self.input.generics.params {
             match param {
                 GenericParam::Type(t) => {
@@ -78,17 +79,24 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
     let (impl_params, input_params, output_params) = input.format_impl_generics();
 
-    let validate_body = match extract_validator(&input.input.attrs) {
+    let opts = extract_options(&input.input.attrs);
+
+    let validate_body = match opts.validator {
         Some(validator) => quote! {
             #validator(&self)?;
         },
         None => quote! {},
     };
 
+    let bounds_body = match opts.bounds {
+        Some(bounds) => quote! { where #bounds },
+        None => quote!(),
+    };
+
     let body = freeze_impl(name, &input.input.data);
 
     let gen = quote! {
-        impl #impl_params starlark::values::Freeze for #name #input_params {
+        impl #impl_params starlark::values::Freeze for #name #input_params #bounds_body {
             type Frozen = #name #output_params;
             fn freeze(self, freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
                 #validate_body
@@ -100,30 +108,54 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
     gen.into()
 }
 
+#[derive(Default)]
+struct FreezeDeriveOptions {
+    validator: Option<Ident>,
+    bounds: Option<WherePredicate>,
+}
+
 /// Parse a #[freeze(validator = function)] annotation.
 #[cfg_attr(feature = "gazebo_linter", allow(gazebo_lint_impl_dupe))] // The custom_keyword macro
-fn extract_validator(attrs: &[Attribute]) -> Option<Ident> {
+fn extract_options(attrs: &[Attribute]) -> FreezeDeriveOptions {
     syn::custom_keyword!(validator);
+    syn::custom_keyword!(bounds);
+
+    let mut opts = FreezeDeriveOptions::default();
 
     for attr in attrs.iter() {
         if !attr.path.is_ident("freeze") {
             continue;
         }
 
-        let ident = attr
-            .parse_args_with(|input: ParseStream| {
-                input.parse::<validator>()?;
-                input.parse::<Token![=]>()?;
-                let ident = input.parse::<Ident>()?;
-                input.parse::<Option<Token![,]>>()?;
-                Ok(ident)
-            })
-            .unwrap();
+        attr.parse_args_with(|input: ParseStream| {
+            loop {
+                let lookahead = input.lookahead1();
+                if lookahead.peek(validator) {
+                    input.parse::<validator>()?;
+                    input.parse::<Token![=]>()?;
+                    assert!(opts.bounds.is_none(), "set validator twice");
+                    opts.validator = Some(input.parse()?);
+                } else if lookahead.peek(bounds) {
+                    input.parse::<bounds>()?;
+                    input.parse::<Token![=]>()?;
+                    let bounds_input = input.parse::<LitStr>()?;
+                    assert!(opts.bounds.is_none(), "set bounds twice");
+                    opts.bounds = Some(bounds_input.parse()?);
+                } else {
+                    panic!("{}", lookahead.error());
+                }
 
-        return Some(ident);
+                if input.parse::<Option<Token![,]>>()?.is_none() {
+                    break;
+                }
+            }
+
+            Ok(())
+        })
+        .unwrap();
     }
 
-    None
+    opts
 }
 
 /// Parse attribute `#[freeze(identity)]`.
