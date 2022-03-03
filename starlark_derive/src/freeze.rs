@@ -52,7 +52,7 @@ impl<'a> Input<'a> {
                         #name
                     });
                     output_params.push(quote! {
-                        #name::Frozen
+                        <#name as starlark::values::Freeze>::Frozen
                     });
                 }
                 GenericParam::Lifetime(lt) => {
