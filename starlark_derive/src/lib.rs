@@ -17,9 +17,9 @@
 
 //! A proc-macro for writing functions in Rust that can be called from Starlark.
 
-#![cfg_attr(feature = "gazebo_linter", feature(plugin))]
-#![cfg_attr(feature = "gazebo_linter", allow(deprecated))] // :(
-#![cfg_attr(feature = "gazebo_linter", plugin(gazebo_lint))]
+#![cfg_attr(feature = "gazebo_lint", feature(plugin))]
+#![cfg_attr(feature = "gazebo_lint", allow(deprecated))] // :(
+#![cfg_attr(feature = "gazebo_lint", plugin(gazebo_lint))]
 #![feature(box_patterns)]
 
 #[allow(unused_extern_crates)] // proc_macro is very special
