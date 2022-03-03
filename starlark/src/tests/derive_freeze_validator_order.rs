@@ -16,28 +16,38 @@
  */
 
 use crate as starlark;
-use crate::values::Freeze;
+use crate::values::{Freeze, Freezer, FrozenHeap};
 
-trait Bound<'x> {}
-
-#[derive(Freeze)]
-#[freeze(validator = check_type, bounds = "<V as Freeze>::Frozen: Bound<'freeze>")]
-struct Test<V> {
-    field: V,
+struct FreezeSentinel {
+    frozen: bool,
 }
 
-fn check_type<'x, V>(_: &Test<V>) -> anyhow::Result<()>
-where
-    V: Bound<'x>,
-{
+impl Freeze for FreezeSentinel {
+    type Frozen = Self;
+
+    fn freeze(self, _: &Freezer) -> anyhow::Result<Self> {
+        assert!(!self.frozen);
+        Ok(Self { frozen: true })
+    }
+}
+
+#[derive(Freeze)]
+#[freeze(validator = check_froze_before_validating)]
+struct Test {
+    sentinel: FreezeSentinel,
+}
+
+fn check_froze_before_validating(test: &Test) -> anyhow::Result<()> {
+    assert!(test.sentinel.frozen);
     Ok(())
 }
 
 #[test]
-fn assert_impl() {
-    #[derive(Freeze)]
-    struct Impl {}
-    impl<'x> Bound<'x> for Impl {}
-    fn check(_: impl Freeze) {}
-    check(Test { field: Impl {} });
+fn test() -> anyhow::Result<()> {
+    let t = Test {
+        sentinel: FreezeSentinel { frozen: false },
+    };
+    let freezer = Freezer::new(FrozenHeap::new());
+    t.freeze(&freezer)?;
+    Ok(())
 }

@@ -83,7 +83,7 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
     let validate_body = match opts.validator {
         Some(validator) => quote! {
-            #validator(&self)?;
+            #validator(&frozen)?;
         },
         None => quote! {},
     };
@@ -99,8 +99,9 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         impl #impl_params starlark::values::Freeze for #name #input_params #bounds_body {
             type Frozen = #name #output_params;
             fn freeze(self, freezer: &starlark::values::Freezer) -> anyhow::Result<Self::Frozen> {
+                let frozen = #body;
                 #validate_body
-                #body
+                std::result::Result::Ok(frozen)
             }
         }
     };
@@ -195,9 +196,9 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
                 })
                 .collect();
             quote! {
-                std::result::Result::Ok(#name {
+                #name {
                     #(#xs)*
-                })
+                }
             }
         }
         Fields::Unnamed(ref fields) => {
@@ -218,9 +219,9 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
                 })
                 .collect();
             quote! {
-                std::result::Result::Ok(#name (
+                #name (
                     #(#xs)*
-                ))
+                )
             }
         }
         Fields::Unit => {
