@@ -29,8 +29,25 @@ use crate::{
 
 /// Called by the garbage collection, and must walk over every contained `Value` in the type.
 /// Marked `unsafe` because if you miss a nested `Value`, it will probably segfault.
+///
+/// For the most cases `#[derive(Trace)]` is enough to implement this trait:
+///
+/// ```
+/// # use starlark::values::Value;
+/// # use starlark::values::Trace;
+///
+/// #[derive(Trace)]
+/// struct MySet<'v> {
+///    keys: Vec<Value<'v>>
+/// }
+/// ```
 pub unsafe trait Trace<'v> {
     /// Recursively "trace" the value.
+    ///
+    /// Note during trace, `Value` objects in `Self` might be already special forward-objects,
+    /// trying to unpack these values may crash the process.
+    ///
+    /// Generally this function should not do anything except calling `trace` on the fields.
     fn trace(&mut self, tracer: &Tracer<'v>);
 }
 

@@ -53,6 +53,10 @@ pub trait Freeze {
 
     /// Freeze a value. The frozen value _must_ be equal to the original,
     /// and produce the same hash.
+    ///
+    /// Note during freeze, `Value` objects in `Self` might be already special forward-objects,
+    /// trying to unpack these objects will crash the process.
+    /// So the function is only allowed to access `Value` objects after it froze them.
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen>;
 }
 
