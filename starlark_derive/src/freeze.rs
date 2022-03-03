@@ -19,7 +19,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Fields, GenericParam, Index, LitStr, Token, WherePredicate,
+    DeriveInput, Error, Fields, GenericParam, Index, LitStr, Token, WherePredicate,
 };
 
 struct Input<'a> {
@@ -35,7 +35,7 @@ impl<'a> Input<'a> {
         }
     }
 
-    fn format_impl_generics(&self) -> (TokenStream, TokenStream, TokenStream) {
+    fn format_impl_generics(&self) -> syn::Result<(TokenStream, TokenStream, TokenStream)> {
         let mut impl_params = Vec::new();
         let mut input_params = Vec::new();
         let mut output_params = Vec::new();
@@ -60,26 +60,27 @@ impl<'a> Input<'a> {
                     input_params.push(quote! { #lt });
                     output_params.push(quote! { 'static });
                 }
-                GenericParam::Const(_) => panic!("const generics not supported"),
+                GenericParam::Const(_) => {
+                    return Err(Error::new_spanned(param, "const generics not supported"));
+                }
             }
         }
-        (
+        Ok((
             Self::angle_brankets(&impl_params),
             Self::angle_brankets(&input_params),
             Self::angle_brankets(&output_params),
-        )
+        ))
     }
 }
 
-pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+fn derive_freeze_impl(input: DeriveInput) -> syn::Result<TokenStream> {
     let input = Input { input: &input };
 
     let name = &input.input.ident;
 
-    let (impl_params, input_params, output_params) = input.format_impl_generics();
+    let (impl_params, input_params, output_params) = input.format_impl_generics()?;
 
-    let opts = extract_options(&input.input.attrs);
+    let opts = extract_options(&input.input.attrs)?;
 
     let validate_body = match opts.validator {
         Some(validator) => quote! {
@@ -93,7 +94,7 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         None => quote!(),
     };
 
-    let body = freeze_impl(name, &input.input.data);
+    let body = freeze_impl(name, &input.input.data)?;
 
     let gen = quote! {
         impl #impl_params starlark::values::Freeze for #name #input_params #bounds_body {
@@ -106,7 +107,7 @@ pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream 
         }
     };
 
-    gen.into()
+    Ok(gen)
 }
 
 #[derive(Default)]
@@ -117,7 +118,7 @@ struct FreezeDeriveOptions {
 
 /// Parse a #[freeze(validator = function)] annotation.
 #[cfg_attr(feature = "gazebo_lint", allow(gazebo_lint_impl_dupe))] // The custom_keyword macro
-fn extract_options(attrs: &[Attribute]) -> FreezeDeriveOptions {
+fn extract_options(attrs: &[Attribute]) -> syn::Result<FreezeDeriveOptions> {
     syn::custom_keyword!(validator);
     syn::custom_keyword!(bounds);
 
@@ -132,18 +133,22 @@ fn extract_options(attrs: &[Attribute]) -> FreezeDeriveOptions {
             loop {
                 let lookahead = input.lookahead1();
                 if lookahead.peek(validator) {
+                    if opts.validator.is_some() {
+                        return Err(input.error("`validator` was set twice"));
+                    }
                     input.parse::<validator>()?;
                     input.parse::<Token![=]>()?;
-                    assert!(opts.bounds.is_none(), "set validator twice");
                     opts.validator = Some(input.parse()?);
                 } else if lookahead.peek(bounds) {
+                    if opts.bounds.is_some() {
+                        return Err(input.error("`bounds` was set twice"));
+                    }
                     input.parse::<bounds>()?;
                     input.parse::<Token![=]>()?;
                     let bounds_input = input.parse::<LitStr>()?;
-                    assert!(opts.bounds.is_none(), "set bounds twice");
                     opts.bounds = Some(bounds_input.parse()?);
                 } else {
-                    panic!("{}", lookahead.error());
+                    return Err(lookahead.error());
                 }
 
                 if input.parse::<Option<Token![,]>>()?.is_none() {
@@ -152,39 +157,48 @@ fn extract_options(attrs: &[Attribute]) -> FreezeDeriveOptions {
             }
 
             Ok(())
-        })
-        .unwrap();
+        })?;
     }
 
-    opts
+    Ok(opts)
 }
 
 /// Parse attribute `#[freeze(identity)]`.
 ///
 /// Currently it fails on any attribute argument other than `id`.
 #[cfg_attr(feature = "gazebo_lint", allow(gazebo_lint_impl_dupe))] // The custom_keyword macro
-fn is_identity(attrs: &[Attribute]) -> bool {
+fn is_identity(attrs: &[Attribute]) -> syn::Result<bool> {
     syn::custom_keyword!(identity);
 
-    attrs.iter().any(|a| {
-        a.path.is_ident("freeze")
-            && a.parse_args_with(|input: ParseStream| {
-                let ignore = input.parse::<Option<identity>>()?.is_some();
-                Ok(ignore)
-            })
-            .unwrap()
-    })
+    for attr in attrs.iter() {
+        if !attr.path.is_ident("freeze") {
+            continue;
+        }
+
+        let ignore = attr.parse_args_with(|input: ParseStream| {
+            let ignore = input.parse::<Option<identity>>()?.is_some();
+            Ok(ignore)
+        })?;
+
+        if !ignore {
+            continue;
+        }
+
+        return Ok(true);
+    }
+
+    Ok(false)
 }
 
-fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
-    match data.fields {
+fn freeze_struct(name: &Ident, data: &DataStruct) -> syn::Result<TokenStream> {
+    let res = match data.fields {
         Fields::Named(ref fields) => {
-            let xs: Vec<_> = fields
+            let xs = fields
                 .named
                 .iter()
                 .map(|f| {
                     let name = &f.ident;
-                    if is_identity(&f.attrs) {
+                    let res = if is_identity(&f.attrs)? {
                         quote_spanned! {f.span() =>
                             #name: self.#name,
                         }
@@ -192,9 +206,11 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
                         quote_spanned! {f.span() =>
                             #name: starlark::values::Freeze::freeze(self.#name, freezer)?,
                         }
-                    }
+                    };
+
+                    syn::Result::Ok(res)
                 })
-                .collect();
+                .collect::<Result<Vec<_>, _>>()?;
             quote! {
                 #name {
                     #(#xs)*
@@ -202,22 +218,24 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
             }
         }
         Fields::Unnamed(ref fields) => {
-            let xs: Vec<_> = fields
+            let xs = fields
                 .unnamed
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
                     let i = Index::from(i);
 
-                    if is_identity(&f.attrs) {
+                    let res = if is_identity(&f.attrs)? {
                         quote_spanned! {f.span() =>
                             self.#i,
                         }
                     } else {
                         quote_spanned! {f.span() => starlark::values::Freeze::freeze(self.#i, freezer)?,}
-                    }
+                    };
+
+                    syn::Result::Ok(res)
                 })
-                .collect();
+                .collect::<Result<Vec<_>, _>>()?;
             quote! {
                 #name (
                     #(#xs)*
@@ -227,17 +245,28 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
         Fields::Unit => {
             quote!()
         }
-    }
+    };
+
+    Ok(res)
 }
 
-fn freeze_enum(_name: &Ident, _data: &DataEnum) -> TokenStream {
-    unimplemented!("Can't derive freeze for enums");
+fn freeze_enum(name: &Ident, _data: &DataEnum) -> syn::Result<TokenStream> {
+    Err(Error::new_spanned(name, "Can't derive freeze for enums"))
 }
 
-fn freeze_impl(name: &Ident, data: &Data) -> TokenStream {
+fn freeze_impl(name: &Ident, data: &Data) -> syn::Result<TokenStream> {
     match data {
         Data::Struct(data) => freeze_struct(name, data),
         Data::Enum(data) => freeze_enum(name, data),
-        Data::Union(_) => unimplemented!("Can't derive freeze for unions"),
+        Data::Union(_) => Err(Error::new_spanned(name, "Can't derive freeze for unions")),
+    }
+}
+
+pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+
+    match derive_freeze_impl(input) {
+        Ok(s) => s.into(),
+        Err(e) => e.to_compile_error().into(),
     }
 }
