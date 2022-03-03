@@ -38,6 +38,8 @@ struct Test {
 }
 
 fn check_froze_before_validating(test: &Test) -> anyhow::Result<()> {
+    // Accessing fields on a Starlark value before we call freeze() on it may fail (because we
+    // read the forward not what it points to), so we check that validators receive frozen data.
     assert!(test.sentinel.frozen);
     Ok(())
 }

@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-use anyhow::Context as _;
-
 use crate::values::{list::List, Freeze, Freezer, FrozenHeap, FrozenValue, Heap, Value};
 
 struct Test<V> {
@@ -30,7 +28,9 @@ impl<'v> Freeze for Test<Value<'v>> {
         let test = Test {
             field: self.field.freeze(freezer)?,
         };
-        let _ignored = List::from_value(test.field.to_value()).context("Not a list!")?;
+        let members = List::from_value(test.field.to_value()).unwrap();
+        assert_eq!(members[0].unpack_num().unwrap().as_int().unwrap(), 1);
+        assert_eq!(members[1].unpack_num().unwrap().as_int().unwrap(), 2);
         Ok(test)
     }
 }
