@@ -19,7 +19,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Fields, GenericParam, LitStr, Token, WherePredicate,
+    DeriveInput, Fields, GenericParam, Index, LitStr, Token, WherePredicate,
 };
 
 struct Input<'a> {
@@ -206,12 +206,14 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> TokenStream {
                 .iter()
                 .enumerate()
                 .map(|(i, f)| {
+                    let i = Index::from(i);
+
                     if is_identity(&f.attrs) {
                         quote_spanned! {f.span() =>
-                            self.#i
+                            self.#i,
                         }
                     } else {
-                        quote_spanned! {f.span() => starlark::values::FreezeField::freeze_field(self.#i, freezer)?}
+                        quote_spanned! {f.span() => starlark::values::Freeze::freeze(self.#i, freezer)?,}
                     }
                 })
                 .collect();
