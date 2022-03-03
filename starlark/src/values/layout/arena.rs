@@ -398,6 +398,16 @@ impl AValueHeader {
 
     pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValueDyn<'v> {
         unsafe {
+            // TODO: this assertion does not belong here.
+            //   Instead, `Value` should be a `Pointer<AValueOrForward>`
+            //   instead of `Pointer<AValueHeader>`,
+            //   and assertion should be where we unpack the pointer.
+            debug_assert!(
+                !(*(self as *const AValueHeader as *const AValueOrForward)).is_forward(),
+                "value is a forward pointer; value cannot be unpacked during GC or freeze"
+            );
+        }
+        unsafe {
             let res = &*(from_raw_parts(self.payload_ptr(), self.0));
             mem::transmute::<&'v dyn AValueDyn<'static>, &'v dyn AValueDyn<'v>>(res)
         }
