@@ -58,7 +58,6 @@ strsim = "0.10.0"
 argfile = "0.1.0"
 
 [dev-dependencies]
-criterion = "0.3"
 rand      = { version = "0.8.4", features = ["small_rng"] }
 
 [features]
@@ -67,7 +66,3 @@ rand      = { version = "0.8.4", features = ["small_rng"] }
 [[bin]]
 name = "starlark"
 path = "bin/main.rs"
-
-[[bench]]
-name = "main"
-harness = false
