@@ -18,3 +18,4 @@
 mod derive_freeze_basic;
 mod derive_freeze_bounds;
 mod derive_freeze_validator;
+mod freeze_access_value;
