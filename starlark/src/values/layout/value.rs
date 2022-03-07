@@ -43,6 +43,7 @@ use gazebo::{
     prelude::*,
 };
 use indexmap::Equivalent;
+use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{Hashed, StarlarkHashValue, StarlarkHasher},
@@ -818,6 +819,24 @@ impl FrozenValue {
         self.to_value()
             .unpack_starlark_str()
             .map(|value| FrozenRef { value })
+    }
+}
+
+impl<'v> Serialize for Value<'v> {
+    fn serialize<S>(&self, _s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        unimplemented!("Serialise not yet implemented for Value")
+    }
+}
+
+impl Serialize for FrozenValue {
+    fn serialize<S>(&self, _s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        unimplemented!("Serialise not yet implemented for Value")
     }
 }
 

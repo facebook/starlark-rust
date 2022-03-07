@@ -28,6 +28,7 @@ use gazebo::{
     any::AnyLifetime,
     coerce::{coerce, coerce_ref, Coerce},
 };
+use serde::{ser::SerializeTuple, Serialize};
 
 use crate::{
     collections::StarlarkHasher,
@@ -249,6 +250,21 @@ where
 
     fn collect_repr_cycle(&self, collector: &mut String) {
         collector.push_str("(...)");
+    }
+}
+
+impl<'v, V: ValueLike<'v>> Serialize for TupleGen<V> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut tuple_serializer = serializer.serialize_tuple(self.len)?;
+
+        for e in self.content().iter() {
+            tuple_serializer.serialize_element(&e.to_value())?;
+        }
+
+        tuple_serializer.end()
     }
 }
 
