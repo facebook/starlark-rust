@@ -188,7 +188,7 @@ pub fn abs(builder: &mut GlobalsBuilder) {
     }
 }
 
-#[derive(Debug, Coerce, Trace)]
+#[derive(Debug, Coerce, Trace, NoSerialize)]
 #[repr(C)]
 struct PartialGen<V, S> {
     func: V,
