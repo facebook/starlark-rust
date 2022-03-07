@@ -33,7 +33,6 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
 
 use crate::{
-    self as starlark,
     environment::{
         names::{FrozenNames, MutableNames},
         slots::{FrozenSlots, ModuleSlotId, MutableSlots},
@@ -44,8 +43,7 @@ use crate::{
     values::{
         docs,
         docs::{DocItem, DocString, DocStringKind},
-        Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, StarlarkValue,
-        Value,
+        Freezer, FrozenHeap, FrozenHeapRef, FrozenValue, Heap, OwnedFrozenValue, Value,
     },
 };
 
@@ -70,7 +68,7 @@ pub struct FrozenModule {
     pub(crate) eval_duration: Duration,
 }
 
-#[derive(Debug, Clone, Dupe, AnyLifetime, Display, NoSerialize)]
+#[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
 #[display(fmt = "{:?}", self)] // Type should not be user visible
 pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
@@ -227,10 +225,8 @@ impl FrozenModuleData {
     }
 }
 
-impl<'v> StarlarkValue<'v> for FrozenModuleRef {
-    starlark_type!("frozen_module");
-
-    fn documentation(&self) -> Option<DocItem> {
+impl FrozenModuleRef {
+    pub(crate) fn documentation(&self) -> Option<DocItem> {
         self.0.docstring.as_ref().map(|d| {
             DocItem::Module(docs::Module {
                 docs: DocString::from_docstring(DocStringKind::Starlark, d),
@@ -316,7 +312,7 @@ impl Module {
             slots,
             docstring: docstring.into_inner(),
         }));
-        let frozen_module_ref = freezer.heap.alloc_simple_frozen_ref(rest.dupe());
+        let frozen_module_ref = freezer.heap.alloc_any(rest.dupe());
         for frozen_def in freezer.frozen_defs.borrow().as_slice() {
             frozen_def.post_freeze(frozen_module_ref, &heap, &freezer.heap);
         }
