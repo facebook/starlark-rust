@@ -24,6 +24,7 @@ use std::{
 };
 
 use gazebo::{any::AnyLifetime, prelude::*};
+use serde::Serialize;
 
 use crate::{
     collections::StarlarkHasher,
@@ -143,7 +144,8 @@ pub(crate) fn write_compact<W: fmt::Write>(
 }
 
 /// Runtime representation of Starlark `float` type.
-#[derive(Clone, Dupe, Copy, Debug, AnyLifetime)]
+#[derive(Clone, Dupe, Copy, Debug, AnyLifetime, Serialize)]
+#[serde(transparent)]
 pub struct StarlarkFloat(pub f64);
 
 impl StarlarkFloat {
