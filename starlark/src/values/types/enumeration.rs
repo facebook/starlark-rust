@@ -46,6 +46,7 @@ use gazebo::{
     cell::AsARef,
     coerce::{coerce_ref, Coerce},
 };
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::{
@@ -68,7 +69,7 @@ enum EnumError {
 }
 
 /// The type of an enumeration, created by `enum()`.
-#[derive(Clone, Debug, Trace, Coerce, Freeze)]
+#[derive(Clone, Debug, Trace, Coerce, Freeze, NoSerialize)]
 #[repr(C)]
 // Deliberately store fully populated values
 // for each entry, so we can produce enum values with zero allocation.
@@ -321,5 +322,17 @@ where
 
     fn dir_attr(&self) -> Vec<String> {
         vec!["index".to_owned(), "value".to_owned()]
+    }
+}
+
+impl<'v, V: ValueLike<'v>> Serialize for EnumValueGen<V>
+where
+    Self: AnyLifetime<'v>,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.value.to_value().serialize(serializer)
     }
 }
