@@ -38,6 +38,7 @@ use derive_more::Display;
 use gazebo::any::AnyLifetime;
 
 use crate::{
+    self as starlark,
     collections::StarlarkHasher,
     environment::Methods,
     eval::{Arguments, Evaluator},
@@ -159,7 +160,7 @@ where
 ///
 /// Useful when implementing [`ComplexValue`], which is not meant to be frozen
 /// (e.g. when evaluating code which is never frozen or in tests).
-#[derive(Debug, AnyLifetime, Display)]
+#[derive(Debug, AnyLifetime, Display, NoSerialize)]
 #[display(fmt = "NoSimpleValue")] // Can't actually be invoked since no &self
 pub enum NoSimpleValue {}
 impl<'v> StarlarkValue<'v> for NoSimpleValue {
