@@ -33,6 +33,7 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use itertools::Itertools;
 
 use crate::{
+    self as starlark,
     environment::{
         names::{FrozenNames, MutableNames},
         slots::{FrozenSlots, ModuleSlotId, MutableSlots},
@@ -69,7 +70,7 @@ pub struct FrozenModule {
     pub(crate) eval_duration: Duration,
 }
 
-#[derive(Debug, Clone, Dupe, AnyLifetime, Display)]
+#[derive(Debug, Clone, Dupe, AnyLifetime, Display, NoSerialize)]
 #[display(fmt = "{:?}", self)] // Type should not be user visible
 pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
