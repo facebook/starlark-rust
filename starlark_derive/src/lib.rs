@@ -33,6 +33,7 @@ mod bc;
 mod freeze;
 mod parse;
 mod render;
+mod serde;
 mod trace;
 mod typ;
 mod util;
@@ -121,6 +122,12 @@ pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_derive(Freeze, attributes(freeze))]
 pub fn derive_freeze(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     freeze::derive_freeze(input)
+}
+
+/// Derive the `NoSerialize` trait for serde.
+#[proc_macro_derive(NoSerialize)]
+pub fn derive_no_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    serde::derive_no_serialize(input)
 }
 
 /// Derive accessor methods that are designed to be used from {has,get,dir}_attr
