@@ -34,6 +34,7 @@ use gazebo::{
     coerce::{coerce, coerce_ref, Coerce},
 };
 use indexmap::Equivalent;
+use serde::{ser::SerializeMap, Serialize};
 
 use crate::{
     self as starlark,
@@ -517,6 +518,21 @@ where
             items.insert_hashed(k, v);
         }
         Ok(heap.alloc(Dict::new(items)))
+    }
+}
+
+impl<'v, T: DictLike<'v>> Serialize for DictGen<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map_serializer = serializer.serialize_map(Some(self.0.content().len()))?;
+
+        for (k, v) in self.0.content().iter() {
+            map_serializer.serialize_entry(k, v)?;
+        }
+
+        map_serializer.end()
     }
 }
 
