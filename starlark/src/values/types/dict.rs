@@ -159,6 +159,11 @@ impl<'v> Dict<'v> {
         x == TypeId::of::<DictGen<FrozenDict>>()
             || x == TypeId::of::<DictGen<RefCell<Dict<'static>>>>()
     }
+
+    pub(crate) unsafe fn from_value_unchecked_mut(x: Value<'v>) -> RefMut<'v, Self> {
+        let dict = &x.downcast_ref_unchecked::<DictGen<RefCell<Dict<'v>>>>().0;
+        dict.borrow_mut()
+    }
 }
 
 impl<'v> UnpackValue<'v> for DictRef<'v> {

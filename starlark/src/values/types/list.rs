@@ -136,6 +136,12 @@ impl<'v> List<'v> {
         }
     }
 
+    pub(crate) unsafe fn from_value_unchecked_mut(x: Value<'v>) -> &'v Self {
+        let list = x.downcast_ref_unchecked::<ListGen<List<'v>>>();
+        debug_assert!(list.0.check_can_mutate().is_ok());
+        &list.0
+    }
+
     pub(crate) fn is_list_type(x: TypeId) -> bool {
         x == TypeId::of::<ListGen<List>>() || x == TypeId::of::<ListGen<FrozenList>>()
     }

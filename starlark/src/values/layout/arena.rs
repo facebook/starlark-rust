@@ -40,7 +40,10 @@ use bumpalo::Bump;
 use either::Either;
 use gazebo::prelude::*;
 
-use crate::values::layout::avalue::{AValue, AValueDyn, BlackHole};
+use crate::values::{
+    layout::avalue::{AValue, AValueDyn, BlackHole},
+    StarlarkValue,
+};
 
 /// Min size of allocated object including header.
 /// Should be able to fit `BlackHole` or forward.
@@ -394,6 +397,11 @@ impl AValueHeader {
     pub(crate) fn payload_ptr(&self) -> *const () {
         let self_repr = self as *const AValueHeader as *const AValueRepr<()>;
         unsafe { &(*self_repr).payload }
+    }
+
+    pub(crate) unsafe fn payload<'v, T: StarlarkValue<'v>>(&self) -> &T {
+        debug_assert_eq!(self.unpack().static_type_of_value(), T::static_type_id());
+        &*(self.payload_ptr() as *const T)
     }
 
     pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValueDyn<'v> {

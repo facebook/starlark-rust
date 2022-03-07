@@ -312,6 +312,20 @@ impl<'v> Value<'v> {
         }
     }
 
+    /// Downcast without checking the value type.
+    pub(crate) unsafe fn downcast_ref_unchecked<T: StarlarkValue<'v>>(self) -> &'v T {
+        debug_assert!(self.downcast_ref::<T>().is_some());
+        if PointerI32::type_is_pointer_i32::<T>() {
+            transmute!(
+                &PointerI32,
+                &T,
+                PointerI32::new(self.0.unpack_int_unchecked())
+            )
+        } else {
+            self.0.unpack_ptr_no_int_unchecked().payload()
+        }
+    }
+
     pub(crate) fn get_hash(self) -> anyhow::Result<StarlarkHashValue> {
         self.get_ref().get_hash()
     }
