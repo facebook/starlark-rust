@@ -30,6 +30,7 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use once_cell::sync::Lazy;
 
 use crate::{
+    self as starlark,
     codemap::CodeMap,
     environment::{FrozenModuleRef, Globals},
     eval::{
@@ -472,7 +473,7 @@ impl Compiler<'_, '_, '_> {
 
 /// Starlark function internal representation and implementation of
 /// [`StarlarkValue`].
-#[derive(Derivative)]
+#[derive(Derivative, NoSerialize)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
