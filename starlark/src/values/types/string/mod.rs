@@ -29,6 +29,7 @@ use std::{
 };
 
 use gazebo::{any::AnyLifetime, prelude::*};
+use serde::Serialize;
 
 use crate::{
     collections::{BorrowHashed, StarlarkHashValue, StarlarkHasher},
@@ -405,6 +406,15 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.unpack().percent(other, heap)
+    }
+}
+
+impl Serialize for StarlarkStr {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.unpack())
     }
 }
 
