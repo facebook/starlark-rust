@@ -20,6 +20,7 @@ use std::hash::Hasher;
 
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, prelude::*};
+use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
@@ -81,6 +82,15 @@ impl<'v> StarlarkValueBasic<'v> for NoneType {
 impl<'v> AllocValue<'v> for NoneType {
     fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
         Value::new_none()
+    }
+}
+
+impl Serialize for NoneType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_none()
     }
 }
 
