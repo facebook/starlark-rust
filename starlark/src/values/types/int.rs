@@ -29,6 +29,8 @@ use std::{
     hash::Hasher,
 };
 
+use serde::{Serialize, Serializer};
+
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
     values::{
@@ -264,6 +266,15 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
 impl<'v> StarlarkValueBasic<'v> for PointerI32 {
     fn get_hash(&self) -> StarlarkHashValue {
         Num::from(self.get()).get_hash()
+    }
+}
+
+impl Serialize for PointerI32 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i32(self.get())
     }
 }
 
