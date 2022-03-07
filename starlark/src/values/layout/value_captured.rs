@@ -28,12 +28,12 @@ use gazebo::{any::AnyLifetime, prelude::*};
 use crate as starlark;
 use crate::values::{Freeze, Freezer, FrozenValue, StarlarkValue, Value, ValueLike};
 
-#[derive(Debug, Trace, AnyLifetime, Display)]
+#[derive(Debug, Trace, AnyLifetime, Display, NoSerialize)]
 #[display(fmt = "{:?}", self)] // This type should never be user visible
 #[repr(transparent)]
 pub(crate) struct ValueCaptured<'v>(pub Cell<Option<Value<'v>>>);
 
-#[derive(Debug, AnyLifetime, Display)]
+#[derive(Debug, AnyLifetime, Display, NoSerialize)]
 #[display(fmt = "{:?}", self)] // Type is not user visible
 #[repr(transparent)]
 pub(crate) struct FrozenValueCaptured(Option<FrozenValue>);
