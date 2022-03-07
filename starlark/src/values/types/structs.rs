@@ -46,6 +46,7 @@ use gazebo::{
     any::AnyLifetime,
     coerce::{coerce_ref, Coerce},
 };
+use serde::{ser::SerializeMap, Serialize};
 
 use crate::{
     self as starlark,
@@ -233,6 +234,23 @@ where
             docs: None,
             members,
         }))
+    }
+}
+
+impl<'v, V: ValueLike<'v>> Serialize for StructGen<'v, V>
+where
+    Self: AnyLifetime<'v>,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map_serialize = serializer.serialize_map(Some(self.fields.len()))?;
+        for (k, v) in self.fields.iter() {
+            map_serialize.serialize_entry(k.to_string_value().as_str(), &v.to_value())?;
+        }
+
+        map_serialize.end()
     }
 }
 
