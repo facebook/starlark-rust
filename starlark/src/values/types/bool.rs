@@ -27,6 +27,7 @@ use std::{
 };
 
 use gazebo::any::AnyLifetime;
+use serde::Serialize;
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
@@ -40,7 +41,8 @@ use crate::{
 pub const BOOL_TYPE: &str = "bool";
 
 // We have to alias bool so we can have a Display that uses True/False.
-#[derive(AnyLifetime, Debug)]
+#[derive(AnyLifetime, Debug, Serialize)]
+#[serde(transparent)]
 pub(crate) struct StarlarkBool(pub(crate) bool);
 
 impl Display for StarlarkBool {
