@@ -55,6 +55,7 @@ use gazebo::{
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
+use serde::{ser::SerializeMap, Serialize};
 
 use crate::{
     self as starlark,
@@ -68,7 +69,7 @@ use crate::{
 };
 
 /// The result of `field()`.
-#[derive(Clone, Debug, Dupe, Trace, Freeze)]
+#[derive(Clone, Debug, Dupe, Trace, Freeze, NoSerialize)]
 pub struct FieldGen<V> {
     pub(crate) typ: V,
     default: Option<V>,
@@ -90,7 +91,7 @@ impl<V: Display> Display for FieldGen<V> {
 unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 
 /// The result of `record()`, being the type of records.
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, NoSerialize)]
 pub struct RecordTypeGen<V, Typ> {
     /// The name of this type, e.g. MyRecord
     /// Either `Option<String>` or a `RefCell` thereof.
@@ -418,5 +419,22 @@ where
 
     fn dir_attr(&self) -> Vec<String> {
         self.get_record_fields().keys().cloned().collect()
+    }
+}
+
+impl<'v, V: ValueLike<'v>> Serialize for RecordGen<V>
+where
+    Self: AnyLifetime<'v>,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map_serialize = serializer.serialize_map(Some(self.get_record_fields().len()))?;
+        for (k, v) in self.get_record_fields().keys().zip(&self.values) {
+            map_serialize.serialize_entry(k, &v.to_value())?;
+        }
+
+        map_serialize.end()
     }
 }
