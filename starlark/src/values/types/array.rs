@@ -27,6 +27,7 @@ use std::{
 };
 
 use gazebo::any::AnyLifetime;
+use serde::{ser::SerializeSeq, Serialize};
 
 use crate::values::{types::list::display_list, StarlarkValue, Value};
 
@@ -303,6 +304,21 @@ impl<'v> StarlarkValue<'v> for Array<'v> {
 
     fn length(&self) -> anyhow::Result<i32> {
         Ok(self.len() as i32)
+    }
+}
+
+impl<'v> Serialize for Array<'v> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq_serializer = serializer.serialize_seq(Some(self.content().len()))?;
+
+        for e in self.content().iter() {
+            seq_serializer.serialize_element(&e)?;
+        }
+
+        seq_serializer.end()
     }
 }
 
