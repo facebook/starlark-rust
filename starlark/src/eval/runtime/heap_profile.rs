@@ -68,7 +68,7 @@ struct NoDrop;
 impl MaybeDrop for NeedsDrop {}
 impl MaybeDrop for NoDrop {}
 
-#[derive(Trace, Debug, Display, AnyLifetime)]
+#[derive(Trace, Debug, Display, AnyLifetime, NoSerialize)]
 #[display(fmt = "CallEnter")]
 struct CallEnter<'v, D: MaybeDrop + 'static> {
     function: Value<'v>,
@@ -87,7 +87,7 @@ impl<'v, D: MaybeDrop + AnyLifetime<'v> + Trace<'v>> StarlarkValue<'v> for CallE
     starlark_type!("call_enter");
 }
 
-#[derive(Debug, Display, AnyLifetime)]
+#[derive(Debug, Display, AnyLifetime, NoSerialize)]
 #[display(fmt = "CallExit")]
 struct CallExit<D: MaybeDrop + 'static> {
     time: Instant,
