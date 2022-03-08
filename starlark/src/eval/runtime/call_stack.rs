@@ -176,7 +176,7 @@ impl<'v> CallStack<'v> {
     /// The location at the top of the stack. May be `None` if
     /// either there the stack is empty, or the top of the stack lacks location
     /// information (e.g. called from Rust).
-    pub fn top_location(&self) -> Option<FileSpan> {
+    pub(crate) fn top_location(&self) -> Option<FileSpan> {
         if self.count == 0 {
             None
         } else {
@@ -184,7 +184,7 @@ impl<'v> CallStack<'v> {
         }
     }
 
-    pub fn to_diagnostic_frames(&self) -> Vec<Frame> {
+    pub(crate) fn to_diagnostic_frames(&self) -> Vec<Frame> {
         // The first entry is just the entire module, so skip it
         self.stack[1..self.count].map(CheapFrame::to_frame)
     }
