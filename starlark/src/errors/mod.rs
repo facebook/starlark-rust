@@ -50,7 +50,7 @@ pub struct Diagnostic {
 }
 
 /// A frame of the call-stack.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Frame {
     /// The name of the entry on the call-stack.
     pub name: String,
