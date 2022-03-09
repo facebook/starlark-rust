@@ -25,13 +25,14 @@ use std::{
 
 use gazebo::prelude::*;
 
+use crate as starlark;
 use crate::values::{
     index::{convert_index, convert_slice_indices},
     Heap, StarlarkValue, Value, ValueError, ValueLike,
 };
 
 /// Representation of `range()` type.
-#[derive(Clone, Copy, Dupe, Debug)]
+#[derive(Clone, Copy, Dupe, Debug, NoSerialize)]
 pub struct Range {
     start: i32,
     stop: i32,
