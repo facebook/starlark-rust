@@ -426,9 +426,6 @@ mod tests;
 #[doc(hidden)]
 pub mod __macro_refs {
     pub use either::Either;
-    pub use gazebo::{
-        any_lifetime,
-        coerce::{coerce_ref, Coerce},
-    };
+    pub use gazebo::{any_lifetime, coerce::coerce_ref};
     pub use paste::item;
 }
