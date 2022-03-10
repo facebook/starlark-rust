@@ -560,6 +560,7 @@ fn common_documentation(docstring: &Option<String>, members: &SymbolMap<FrozenVa
 #[cfg(test)]
 mod tests {
     use derive_more::Display;
+    use gazebo::any::AnyLifetime;
 
     use super::*;
     use crate::{assert::Assert, starlark_type, values::StarlarkValue};
@@ -573,7 +574,7 @@ mod tests {
 
     #[test]
     fn test_set_attribute() {
-        #[derive(Debug, Display)]
+        #[derive(Debug, Display, AnyLifetime)]
         #[display(fmt = "Magic")]
         struct Magic;
         starlark_simple_value!(Magic);

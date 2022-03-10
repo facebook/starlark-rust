@@ -24,7 +24,7 @@ use crate as starlark;
 use crate::values::{Heap, StarlarkValue, Value, ValueLike};
 
 /// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug, Trace, Coerce, Display, Freeze, NoSerialize)]
+#[derive(Debug, Trace, Coerce, Display, Freeze, NoSerialize, AnyLifetime)]
 #[display(fmt = "iterator")]
 #[repr(C)]
 struct StringIteratorGen<V> {

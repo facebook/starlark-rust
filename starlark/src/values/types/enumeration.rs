@@ -69,7 +69,7 @@ enum EnumError {
 }
 
 /// The type of an enumeration, created by `enum()`.
-#[derive(Clone, Debug, Trace, Coerce, Freeze, NoSerialize)]
+#[derive(Clone, Debug, Trace, Coerce, Freeze, NoSerialize, AnyLifetime)]
 #[repr(C)]
 // Deliberately store fully populated values
 // for each entry, so we can produce enum values with zero allocation.
@@ -93,7 +93,7 @@ pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenEnumType = EnumTypeGen<FrozenValue, Option<String>>;
 
 /// A value from an enumeration.
-#[derive(Clone, Derivative, Trace, Coerce, Freeze)]
+#[derive(Clone, Derivative, Trace, Coerce, Freeze, AnyLifetime)]
 #[repr(C)]
 #[derivative(Debug)]
 pub struct EnumValueGen<V> {

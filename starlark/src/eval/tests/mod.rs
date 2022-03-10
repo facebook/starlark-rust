@@ -289,7 +289,7 @@ xs[1] += 1
 fn test_radd() {
     // We want select append to always produce a select, much like the
     // Bazel/Buck `select` function.
-    #[derive(Debug, Display, Clone)]
+    #[derive(Debug, Display, Clone, AnyLifetime)]
     #[display(fmt = "${:?}", _0)]
     struct Select(Vec<i32>);
     starlark_simple_value!(Select);

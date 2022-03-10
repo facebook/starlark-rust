@@ -69,7 +69,7 @@ use crate::{
 };
 
 /// The result of `field()`.
-#[derive(Clone, Debug, Dupe, Trace, Freeze, NoSerialize)]
+#[derive(Clone, Debug, Dupe, Trace, Freeze, NoSerialize, AnyLifetime)]
 pub struct FieldGen<V> {
     pub(crate) typ: V,
     default: Option<V>,
@@ -91,7 +91,7 @@ impl<V: Display> Display for FieldGen<V> {
 unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 
 /// The result of `record()`, being the type of records.
-#[derive(Debug, Trace, NoSerialize)]
+#[derive(Debug, Trace, NoSerialize, AnyLifetime)]
 pub struct RecordTypeGen<V, Typ> {
     /// The name of this type, e.g. MyRecord
     /// Either `Option<String>` or a `RefCell` thereof.
@@ -121,7 +121,7 @@ pub type RecordType<'v> = RecordTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenRecordType = RecordTypeGen<FrozenValue, Option<String>>;
 
 /// An actual record.
-#[derive(Clone, Debug, Trace, Coerce, Freeze)]
+#[derive(Clone, Debug, Trace, Coerce, Freeze, AnyLifetime)]
 #[repr(C)]
 pub struct RecordGen<V> {
     typ: V, // Must be RecordType

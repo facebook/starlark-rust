@@ -292,12 +292,12 @@
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
 //! use starlark::syntax::{AstModule, Dialect};
-//! use starlark::values::{Heap, StarlarkValue, Value, ValueError, ValueLike};
+//! use starlark::values::{Heap, StarlarkValue, Value, ValueError, ValueLike, AnyLifetime};
 //! use starlark::{starlark_type, starlark_simple_value};
 //! use std::fmt::{self, Display, Write};
 //!
 //! // Define complex numbers
-//! #[derive(Debug, PartialEq, Eq)]
+//! #[derive(Debug, PartialEq, Eq, AnyLifetime)]
 //! struct Complex {
 //!     real: i32,
 //!     imaginary: i32,
@@ -426,6 +426,6 @@ mod tests;
 #[doc(hidden)]
 pub mod __macro_refs {
     pub use either::Either;
-    pub use gazebo::{any_lifetime, coerce::coerce_ref};
+    pub use gazebo::coerce::coerce_ref;
     pub use paste::item;
 }

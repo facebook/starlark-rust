@@ -28,6 +28,7 @@ use std::{
 };
 
 use gazebo::{
+    any::AnyLifetime,
     coerce::{Coerce, CoerceKey},
     prelude::*,
 };
@@ -53,7 +54,7 @@ use crate::{
 /// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
-#[derive(Copy, Clone, Dupe)]
+#[derive(Copy, Clone, Dupe, AnyLifetime)]
 #[repr(C)]
 pub struct FrozenStringValue(FrozenValue);
 
@@ -66,7 +67,7 @@ impl Debug for FrozenStringValue {
 }
 
 /// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
-#[derive(Copy, Clone, Dupe, Debug)]
+#[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
 #[repr(C)]
 pub struct StringValue<'v>(Value<'v>);
 

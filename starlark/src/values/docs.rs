@@ -567,6 +567,7 @@ pub struct Doc {
 mod tests {
     use std::fmt::{Display, Formatter};
 
+    use gazebo::any::AnyLifetime;
     use starlark_derive::starlark_module;
 
     use super::*;
@@ -639,7 +640,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, AnyLifetime)]
     struct SomeValue {}
 
     impl Display for SomeValue {

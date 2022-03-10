@@ -473,7 +473,7 @@ impl Compiler<'_, '_, '_> {
 
 /// Starlark function internal representation and implementation of
 /// [`StarlarkValue`].
-#[derive(Derivative, NoSerialize)]
+#[derive(Derivative, NoSerialize, AnyLifetime)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)

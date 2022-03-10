@@ -67,7 +67,7 @@ use crate::{
 /// use starlark::{starlark_complex_value, starlark_type};
 /// use derive_more::Display;
 ///
-/// #[derive(Debug, Trace, Coerce, Display)]
+/// #[derive(Debug, Trace, Coerce, Display, AnyLifetime)]
 /// #[repr(C)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
@@ -182,11 +182,12 @@ impl<'v> StarlarkValue<'v> for NoSimpleValue {
 ///
 /// ```
 /// use starlark::values::StarlarkValue;
+/// use starlark::values::AnyLifetime;
 /// # use starlark::starlark_simple_value;
 /// use starlark::starlark_type;
 /// use derive_more::Display;
 ///
-/// #[derive(Debug, Display)]
+/// #[derive(Debug, Display, AnyLifetime)]
 /// #[display(fmt = "Foo")]
 /// struct Foo;
 /// # starlark_simple_value!(Foo);

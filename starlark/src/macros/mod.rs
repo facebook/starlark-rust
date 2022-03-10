@@ -40,9 +40,6 @@ macro_rules! starlark_complex_value {
     // Common part of macro variants.
     (impl $x:ident) => {
         $crate::__macro_refs::item! {
-            $crate::__macro_refs::any_lifetime!($x<'v>);
-            $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
-
             impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
                     heap.alloc_complex(self)
@@ -105,9 +102,6 @@ macro_rules! starlark_complex_value {
 macro_rules! starlark_complex_values {
     ($x:ident) => {
         $crate::__macro_refs::item! {
-            $crate::__macro_refs::any_lifetime!($x<'v>);
-            $crate::__macro_refs::any_lifetime!([< Frozen $x >]);
-
             impl<'v> $crate::values::AllocValue<'v> for $x<'v> {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
                     heap.alloc_complex(self)
@@ -142,11 +136,11 @@ macro_rules! starlark_complex_values {
 /// Let's define a simple object, where `+x` makes the string uppercase:
 ///
 /// ```
-/// use starlark::values::{Heap, StarlarkValue, Value};
+/// use starlark::values::{Heap, StarlarkValue, Value, AnyLifetime};
 /// use starlark::{starlark_simple_value, starlark_type};
 /// use derive_more::Display;
 ///
-/// #[derive(Debug, Display)]
+/// #[derive(Debug, Display, AnyLifetime)]
 /// struct MyObject(String);
 /// starlark_simple_value!(MyObject);
 /// impl<'v> StarlarkValue<'v> for MyObject {
@@ -182,8 +176,6 @@ macro_rules! starlark_complex_values {
 macro_rules! starlark_simple_value {
     ($x:ident) => {
         $crate::__macro_refs::item! {
-            $crate::__macro_refs::any_lifetime!($x);
-
             impl<'v> $crate::values::AllocValue<'v> for $x {
                 fn alloc_value(self, heap: &'v $crate::values::Heap) -> $crate::values::Value<'v> {
                     heap.alloc_simple(self)

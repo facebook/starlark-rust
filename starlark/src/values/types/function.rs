@@ -232,7 +232,7 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     }
 }
 
-#[derive(Derivative, Display, NoSerialize)]
+#[derive(Derivative, Display, NoSerialize, AnyLifetime)]
 #[derivative(Debug)]
 #[display(fmt = "{}", name)]
 pub(crate) struct NativeMethod {
@@ -267,7 +267,7 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
 
 /// Used by the `#[starlark(attribute)]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
-#[derive(Derivative, Display, NoSerialize)]
+#[derive(Derivative, Display, NoSerialize, AnyLifetime)]
 #[display(fmt = "Attribute")]
 #[derivative(Debug)]
 pub(crate) struct NativeAttribute {
@@ -303,7 +303,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 }
 
 /// A wrapper for a method with a self object already bound.
-#[derive(Clone, Debug, Trace, Coerce, Display, Freeze, NoSerialize)]
+#[derive(Clone, Debug, Trace, Coerce, Display, Freeze, NoSerialize, AnyLifetime)]
 #[repr(C)]
 #[display(fmt = "{}", method)]
 pub(crate) struct BoundMethodGen<V> {
