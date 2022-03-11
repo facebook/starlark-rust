@@ -34,7 +34,7 @@ pub use gazebo::{
     any::{AnyLifetime, ProvidesStaticType},
     coerce::Coerce,
 };
-pub use starlark_derive::{starlark_attrs, Freeze, StarlarkAttrs, Trace};
+pub use starlark_derive::{starlark_attrs, Freeze, NoSerialize, StarlarkAttrs, Trace};
 
 pub use crate::values::{
     alloc_value::*,

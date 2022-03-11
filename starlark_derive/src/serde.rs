@@ -41,12 +41,12 @@ pub fn derive_no_serialize(input: proc_macro::TokenStream) -> proc_macro::TokenS
 
     let name = &input.ident;
     let gen = quote! {
-        impl #impl_generics serde::Serialize for #name #ty_generics where Self : starlark::values::StarlarkValue<'v> {
+        impl #impl_generics starlark::__derive_refs::serde::Serialize for #name #ty_generics where Self : starlark::values::StarlarkValue<'v> {
             fn serialize<__NoSerializeS>(&self, serializer: __NoSerializeS) -> Result<__NoSerializeS::Ok, __NoSerializeS::Error>
             where
-                __NoSerializeS: serde::Serializer,
+                __NoSerializeS: starlark::__derive_refs::serde::Serializer,
             {
-                Err(serde::ser::Error::custom(format!("Operation `serde::serialize` not supported on type `{}`", self.get_type())))
+                Err(starlark::__derive_refs::serde::Error::custom(format!("Operation `serde::serialize` not supported on type `{}`", starlark::values::StarlarkValue::get_type(self))))
             }
         }
     };
