@@ -447,7 +447,8 @@ impl Heap {
         }
     }
 
-    pub(crate) fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> StringValue<'v> {
+    /// Allocate a string on the heap, based on two concatenated strings.
+    pub fn alloc_str_concat<'v>(&'v self, x: &str, y: &str) -> StringValue<'v> {
         if x.is_empty() {
             self.alloc_str(y)
         } else if y.is_empty() {
@@ -460,7 +461,8 @@ impl Heap {
         }
     }
 
-    pub(crate) fn alloc_str_concat3<'v>(&'v self, x: &str, y: &str, z: &str) -> StringValue<'v> {
+    /// Allocate a string on the heap, based on three concatenated strings.
+    pub fn alloc_str_concat3<'v>(&'v self, x: &str, y: &str, z: &str) -> StringValue<'v> {
         if x.is_empty() {
             self.alloc_str_concat(y, z)
         } else if y.is_empty() {
