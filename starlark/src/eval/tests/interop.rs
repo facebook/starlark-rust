@@ -33,7 +33,7 @@ use crate::{
     environment::{GlobalsBuilder, Module},
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{any::StarlarkAny, none::NoneType, Freeze, StarlarkValue, Value},
+    values::{any::StarlarkAny, none::NoneType, Freeze, NoSerialize, StarlarkValue, Value},
 };
 
 #[test]
@@ -45,7 +45,7 @@ fn test_export_as() {
     use crate as starlark;
     use crate::values::{AllocValue, Freezer, Heap, StarlarkValue, Trace, Value};
 
-    #[derive(Debug, Trace, AnyLifetime)]
+    #[derive(Debug, Trace, AnyLifetime, NoSerialize)]
     struct Exporter<T> {
         // Either String or a RefCell therefore
         named: T,
@@ -384,7 +384,7 @@ mod value_of {
 
 #[test]
 fn test_derive_attrs() {
-    #[derive(Debug, StarlarkAttrs, Display, AnyLifetime)]
+    #[derive(Debug, StarlarkAttrs, Display, AnyLifetime, NoSerialize)]
     #[display(fmt = "{:?}", self)]
     struct Example {
         hello: String,
@@ -399,7 +399,7 @@ fn test_derive_attrs() {
         starlark_attrs!();
     }
 
-    #[derive(Debug, Clone, StarlarkAttrs, Display, AnyLifetime)]
+    #[derive(Debug, Clone, StarlarkAttrs, Display, AnyLifetime, NoSerialize)]
     #[display(fmt = "{}", foo)]
     struct Nested {
         foo: String,

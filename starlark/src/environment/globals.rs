@@ -563,7 +563,12 @@ mod tests {
     use gazebo::any::AnyLifetime;
 
     use super::*;
-    use crate::{assert::Assert, starlark_type, values::StarlarkValue};
+    use crate::{
+        self as starlark,
+        assert::Assert,
+        starlark_type,
+        values::{NoSerialize, StarlarkValue},
+    };
 
     #[test]
     fn test_send_sync()
@@ -574,7 +579,7 @@ mod tests {
 
     #[test]
     fn test_set_attribute() {
-        #[derive(Debug, Display, AnyLifetime)]
+        #[derive(Debug, Display, AnyLifetime, NoSerialize)]
         #[display(fmt = "Magic")]
         struct Magic;
         starlark_simple_value!(Magic);

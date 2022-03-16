@@ -28,7 +28,7 @@ use crate::{
     errors::Diagnostic,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
-    values::{Freeze, Freezer, Heap, StarlarkValue, Trace, UnpackValue, Value},
+    values::{Freeze, Freezer, Heap, NoSerialize, StarlarkValue, Trace, UnpackValue, Value},
 };
 
 mod basic;
@@ -289,7 +289,7 @@ xs[1] += 1
 fn test_radd() {
     // We want select append to always produce a select, much like the
     // Bazel/Buck `select` function.
-    #[derive(Debug, Display, Clone, AnyLifetime)]
+    #[derive(Debug, Display, Clone, AnyLifetime, NoSerialize)]
     #[display(fmt = "${:?}", _0)]
     struct Select(Vec<i32>);
     starlark_simple_value!(Select);
@@ -661,7 +661,7 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug, Trace, AnyLifetime, Display)]
+    #[derive(Debug, Trace, AnyLifetime, Display, NoSerialize)]
     #[display(fmt = "{:?}", self)]
     struct Wrapper<'v>(RefCell<SmallMap<String, Value<'v>>>);
 
@@ -681,7 +681,7 @@ fn test_label_assign() {
         }
     }
 
-    #[derive(Debug, AnyLifetime, Display)]
+    #[derive(Debug, AnyLifetime, Display, NoSerialize)]
     #[display(fmt = "FrozenWrapper")]
     struct FrozenWrapper;
 

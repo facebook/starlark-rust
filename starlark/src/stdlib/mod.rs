@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_value_attributes() {
-        #[derive(Copy, Clone, Debug, Dupe, PartialEq, Display, AnyLifetime)]
+        #[derive(Copy, Clone, Debug, Dupe, PartialEq, Display, AnyLifetime, NoSerialize)]
         #[display(fmt = "{}", _0)]
         struct Bool2(bool);
         starlark_simple_value!(Bool2);

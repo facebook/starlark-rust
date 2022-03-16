@@ -574,7 +574,7 @@ mod tests {
     use crate as starlark;
     use crate::{
         environment::{GlobalsBuilder, GlobalsStatic, Methods, MethodsBuilder, MethodsStatic},
-        values::{StarlarkValue, Value},
+        values::{NoSerialize, StarlarkValue, Value},
     };
 
     /// These are where the module docs go
@@ -640,7 +640,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, AnyLifetime)]
+    #[derive(Debug, AnyLifetime, NoSerialize)]
     struct SomeValue {}
 
     impl Display for SomeValue {
