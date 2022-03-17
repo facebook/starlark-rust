@@ -63,11 +63,11 @@ use crate::{
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
-/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze};
+/// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze, NoSerialize};
 /// use starlark::{starlark_complex_value, starlark_type};
 /// use derive_more::Display;
 ///
-/// #[derive(Debug, Trace, Coerce, Display, AnyLifetime)]
+/// #[derive(Debug, Trace, Coerce, Display, AnyLifetime, NoSerialize)]
 /// #[repr(C)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
@@ -183,11 +183,12 @@ impl<'v> StarlarkValue<'v> for NoSimpleValue {
 /// ```
 /// use starlark::values::StarlarkValue;
 /// use starlark::values::AnyLifetime;
+/// use starlark::values::NoSerialize;
 /// # use starlark::starlark_simple_value;
 /// use starlark::starlark_type;
 /// use derive_more::Display;
 ///
-/// #[derive(Debug, Display, AnyLifetime)]
+/// #[derive(Debug, Display, AnyLifetime, NoSerialize)]
 /// #[display(fmt = "Foo")]
 /// struct Foo;
 /// # starlark_simple_value!(Foo);

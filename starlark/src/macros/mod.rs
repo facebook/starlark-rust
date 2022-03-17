@@ -136,11 +136,11 @@ macro_rules! starlark_complex_values {
 /// Let's define a simple object, where `+x` makes the string uppercase:
 ///
 /// ```
-/// use starlark::values::{Heap, StarlarkValue, Value, AnyLifetime};
+/// use starlark::values::{Heap, StarlarkValue, Value, AnyLifetime, NoSerialize};
 /// use starlark::{starlark_simple_value, starlark_type};
 /// use derive_more::Display;
 ///
-/// #[derive(Debug, Display, AnyLifetime)]
+/// #[derive(Debug, Display, AnyLifetime, NoSerialize)]
 /// struct MyObject(String);
 /// starlark_simple_value!(MyObject);
 /// impl<'v> StarlarkValue<'v> for MyObject {
