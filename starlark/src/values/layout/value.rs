@@ -837,20 +837,23 @@ impl FrozenValue {
 }
 
 impl<'v> Serialize for Value<'v> {
-    fn serialize<S>(&self, _s: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        unimplemented!("Serialise not yet implemented for Value")
+        match json_stack_push(*self) {
+            Ok(_guard) => erased_serde::serialize(self.get_ref(), s),
+            Err(..) => Err(serde::ser::Error::custom(ToJsonCycleError(self.get_type()))),
+        }
     }
 }
 
 impl Serialize for FrozenValue {
-    fn serialize<S>(&self, _s: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        unimplemented!("Serialise not yet implemented for Value")
+        self.to_value().serialize(s)
     }
 }
 
