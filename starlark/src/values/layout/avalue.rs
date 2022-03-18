@@ -28,6 +28,7 @@ use std::{
 
 use derive_more::Display;
 use gazebo::{any::AnyLifetime, cast, coerce::Coerce, prelude::*};
+use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
@@ -947,6 +948,15 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     }
 }
 
+impl Serialize for BlackHole {
+    fn serialize<S>(&self, _s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        panic!()
+    }
+}
+
 impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImpl<Mode, T> {
     fn static_type_id_of_value() -> TypeId
     where
@@ -1121,6 +1131,15 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     }
     fn set_attr(&self, attribute: &str, new_value: Value<'v>) -> anyhow::Result<()> {
         self.1.set_attr(attribute, new_value)
+    }
+}
+
+impl<'v, Mode: 'static, T: StarlarkValue<'v>> Serialize for AValueImpl<Mode, T> {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        erased_serde::serialize(&self.1, s)
     }
 }
 

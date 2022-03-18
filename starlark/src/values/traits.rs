@@ -35,6 +35,7 @@ use std::{
 };
 
 use derive_more::Display;
+use erased_serde::Serialize;
 use gazebo::any::AnyLifetime;
 
 use crate::{
@@ -204,7 +205,7 @@ impl<'v> StarlarkValue<'v> for NoSimpleValue {
 /// Any additional methods that are added to this trait also need to be added to the
 /// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
 /// any implementations other than the default implementation will not be run.
-pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
+pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///
@@ -687,9 +688,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display {
     }
 }
 
+erased_serde::serialize_trait_object!(<'v> StarlarkValue<'v>);
+
 /// Trait implemented by a value stored in arena which delegates
 /// it's operations to contained [`StarlarkValue`].
-pub(crate) trait StarlarkValueDyn<'v>: 'v {
+pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
     // `AValue` is not a `StarlarkValue`, but a `Wrapper` type (or `BlackHole`).
     // `static_type_xxx_of_value` operations return `TypeId` of that `StarlarkValue`,
     // which is not the same of `TypeId` of `AValue` (because `AValue` is a wrapper).
@@ -775,3 +778,5 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v {
     fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()>;
     fn set_attr(&self, _attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()>;
 }
+
+erased_serde::serialize_trait_object!(<'v> StarlarkValueDyn<'v>);
