@@ -429,7 +429,7 @@ fn format_capture<'v, T: Iterator<Item = Value<'v>>>(
     result: &mut String,
 ) -> anyhow::Result<()> {
     let (n, conv) = {
-        if let Some((n, conv)) = capture.split1_opt('!') {
+        if let Some((n, conv)) = capture.split_once('!') {
             (n, conv)
         } else {
             (capture, "s")
