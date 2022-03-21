@@ -15,7 +15,7 @@ proc-macro = true
 proc-macro2 = "1.0"
 syn = { version = "1.0.33", features = ["full", "extra-traits"] }
 # @oss-disable: gazebo = { path = "../../gazebo/gazebo", features =  ["str_pattern_extensions"] }
-gazebo = { version = "0.2.1", features =  ["str_pattern_extensions"] } # @oss-enable
+gazebo = { version = "0.6.0", features =  ["str_pattern_extensions"] } # @oss-enable
 # @oss-disable: gazebo_lint = { path = "../../gazebo_lint/gazebo_lint", optional = true }
 gazebo_lint = { version = "0.1", optional = true } # @oss-enable
 quote = "1.0.3"
