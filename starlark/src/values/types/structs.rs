@@ -150,20 +150,6 @@ where
         collector.push_str("struct(...)");
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        collector.push('{');
-        for (i, (k, v)) in self.fields.iter().enumerate() {
-            if i != 0 {
-                collector.push(',');
-            }
-            k.to_string_value().as_str().collect_json(collector)?;
-            collector.push(':');
-            v.collect_json(collector)?;
-        }
-        collector.push('}');
-        Ok(())
-    }
-
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Struct::from_value(other) {
             None => Ok(false),

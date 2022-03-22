@@ -435,20 +435,6 @@ where
         collector.push_str("{...}");
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        collector.push('{');
-        for (i, (k, v)) in self.0.content().iter().enumerate() {
-            if i != 0 {
-                collector.push_str(", ");
-            }
-            k.collect_json(collector)?;
-            collector.push_str(": ");
-            v.collect_json(collector)?;
-        }
-        collector.push('}');
-        Ok(())
-    }
-
     fn to_bool(&self) -> bool {
         !self.0.content().is_empty()
     }

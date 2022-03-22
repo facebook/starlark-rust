@@ -37,10 +37,7 @@ use crate::{
     values::{
         index::apply_slice,
         string::repr::string_repr,
-        types::{
-            none::NoneOr,
-            string::{fast_string::StrIndices, json::json_escape},
-        },
+        types::{none::NoneOr, string::fast_string::StrIndices},
         Heap, StarlarkValue, UnpackValue, Value, ValueError,
     },
 };
@@ -49,7 +46,6 @@ mod alloc_unpack;
 pub(crate) mod fast_string;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
-mod json;
 mod repr;
 pub(crate) mod simd;
 
@@ -205,11 +201,6 @@ impl<'v> StarlarkValue<'v> for str {
         string_repr(self, buffer)
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        json_escape(self, collector);
-        Ok(())
-    }
-
     fn to_bool(&self) -> bool {
         !self.is_empty()
     }
@@ -356,10 +347,6 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
 
     fn collect_repr(&self, collector: &mut String) {
         self.unpack().collect_repr(collector)
-    }
-
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        self.unpack().collect_json(collector)
     }
 
     fn to_bool(&self) -> bool {

@@ -156,7 +156,7 @@
 //! let store = Store::default();
 //! eval.extra = Some(&store);
 //! eval.eval_module(ast, &globals)?;
-//! assert_eq!(&*store.0.borrow(), &["1", "[\"test\"]", "{\"x\": \"y\"}"]);
+//! assert_eq!(&*store.0.borrow(), &["1", "[\"test\"]", "{\"x\":\"y\"}"]);
 //! # Ok(())
 //! # }
 //! # fn main(){ run().unwrap(); }

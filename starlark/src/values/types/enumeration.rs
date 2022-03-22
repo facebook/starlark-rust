@@ -293,10 +293,6 @@ where
         }
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        self.value.collect_json(collector)
-    }
-
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match EnumValue::from_value(other) {
             Some(other) if self.typ.equals(other.typ)? => Ok(self.index == other.index),

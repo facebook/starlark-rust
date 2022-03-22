@@ -97,14 +97,6 @@ impl StarlarkValue<'_> for StarlarkBool {
         }
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        if self.0 {
-            collector.push_str("true");
-        } else {
-            collector.push_str("false");
-        }
-        Ok(())
-    }
     fn to_int(&self) -> anyhow::Result<i32> {
         Ok(if self.0 { 1 } else { 0 })
     }

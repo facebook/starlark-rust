@@ -814,9 +814,6 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn collect_repr_cycle(&self, _collector: &mut String) {
         panic!()
     }
-    fn collect_json(&self, _collector: &mut String) -> anyhow::Result<()> {
-        panic!()
-    }
     fn to_bool(&self) -> bool {
         panic!()
     }
@@ -999,9 +996,6 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     }
     fn collect_repr_cycle(&self, collector: &mut String) {
         self.1.collect_repr_cycle(collector)
-    }
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        self.1.collect_json(collector)
     }
     fn to_bool(&self) -> bool {
         self.1.to_bool()

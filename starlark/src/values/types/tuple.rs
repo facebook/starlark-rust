@@ -152,18 +152,6 @@ where
         Ok(())
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        collector.push('[');
-        for (i, e) in self.content().iter().enumerate() {
-            if i != 0 {
-                collector.push(',');
-            }
-            e.collect_json(collector)?;
-        }
-        collector.push(']');
-        Ok(())
-    }
-
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Tuple::from_value(other) {
             None => Ok(false),

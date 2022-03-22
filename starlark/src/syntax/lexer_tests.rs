@@ -130,12 +130,12 @@ fn test_string_lit() {
 
 #[test]
 fn test_string_escape() {
-    assert_eq!(assert::lex("'\\0\\0\\1n'"), "\"\u{0}\u{0}\u{1}n\" \n");
+    assert_eq!(assert::lex("'\\0\\0\\1n'"), "\"\\u0000\\u0000\\u0001n\" \n");
     assert_eq!(
         assert::lex("'\\0\\00\\000\\0000'"),
-        "\"\u{0}\u{0}\u{0}\u{0}0\" \n"
+        "\"\\u0000\\u0000\\u0000\\u00000\" \n"
     );
-    assert_eq!(assert::lex("'\\x000'"), "\"\u{0}0\" \n");
+    assert_eq!(assert::lex("'\\x000'"), "\"\\u00000\" \n");
     assert_eq!(assert::lex("'\\372x'"), "\"úx\" \n");
     assert::parse_fail("test 'more !\\xT!Z");
     assert::parse_fail("test + 'more !\\UFFFFFFFF! overflows'");

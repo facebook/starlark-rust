@@ -560,9 +560,7 @@ impl<'v> Value<'v> {
     ///
     /// Return an error if the value or any contained value does not support conversion to JSON.
     pub fn to_json(self) -> anyhow::Result<String> {
-        let mut s = String::new();
-        self.collect_json(&mut s)?;
-        Ok(s)
+        serde_json::to_string(&self).map_err(|e| anyhow::anyhow!(e))
     }
 
     /// Forwards to [`StarlarkValue::set_attr`].
@@ -905,11 +903,6 @@ pub trait ValueLike<'v>:
         }
     }
 
-    /// Serialize the value to JSON.
-    ///
-    /// Return error if the value or any contained value cannot be converted to JSON.
-    fn collect_json(self, collector: &mut String) -> anyhow::Result<()>;
-
     /// `x == other`.
     ///
     /// This operation can only return error on stack overflow.
@@ -946,13 +939,6 @@ impl<'v> ValueLike<'v> for Value<'v> {
             Err(..) => {
                 self.get_ref().collect_repr_cycle(collector);
             }
-        }
-    }
-
-    fn collect_json(self, collector: &mut String) -> anyhow::Result<()> {
-        match json_stack_push(self) {
-            Ok(_guard) => self.get_ref().collect_json(collector),
-            Err(..) => Err(ToJsonCycleError(self.get_type()).into()),
         }
     }
 
@@ -996,10 +982,6 @@ impl<'v> ValueLike<'v> for FrozenValue {
 
     fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         self.to_value().write_hash(hasher)
-    }
-
-    fn collect_json(self, collector: &mut String) -> anyhow::Result<()> {
-        self.to_value().collect_json(collector)
     }
 
     fn equals(self, other: Value<'v>) -> anyhow::Result<bool> {

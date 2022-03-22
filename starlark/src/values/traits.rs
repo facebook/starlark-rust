@@ -278,11 +278,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize 
         write!(collector, "<{}...>", self.get_type()).unwrap()
     }
 
-    /// Convert the type to a JSON string.
-    fn collect_json(&self, _collector: &mut String) -> anyhow::Result<()> {
-        ValueError::unsupported(self, "collect_json()")
-    }
-
     /// Convert self to a boolean, as returned by the bool() function.
     /// The default implementation returns [`true`].
     fn to_bool(&self) -> bool {
@@ -716,7 +711,6 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
     fn documentation(&self) -> Option<DocItem>;
     fn collect_repr(&self, _collector: &mut String);
     fn collect_repr_cycle(&self, _collector: &mut String);
-    fn collect_json(&self, _collector: &mut String) -> anyhow::Result<()>;
     fn to_bool(&self) -> bool;
     fn to_int(&self) -> anyhow::Result<i32>;
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;

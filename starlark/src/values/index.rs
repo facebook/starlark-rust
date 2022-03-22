@@ -245,6 +245,6 @@ mod tests {
             Some(Value::new_int(-1)),
         )
         .unwrap();
-        assert_eq!(x, &[]);
+        assert_eq!(x, &[] as &[i32]);
     }
 }

@@ -372,25 +372,6 @@ where
         }
     }
 
-    fn collect_json(&self, collector: &mut String) -> anyhow::Result<()> {
-        collector.push('{');
-        for (i, (k, v)) in self
-            .get_record_fields()
-            .keys()
-            .zip(&self.values)
-            .enumerate()
-        {
-            if i != 0 {
-                collector.push(',');
-            }
-            k.collect_json(collector)?;
-            collector.push(':');
-            v.collect_json(collector)?;
-        }
-        collector.push('}');
-        Ok(())
-    }
-
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         match Record::from_value(other) {
             Some(other) if self.typ.equals(other.typ)? => {
