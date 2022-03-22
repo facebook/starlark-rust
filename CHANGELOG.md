@@ -1,5 +1,25 @@
 # Starlark
 
+## 0.7.0 (March 22, 2022)
+
+There have been many changes since the last release, focused on performance and features. These changes caused a number of API changes and behavioural changes, the most significant of which are listed below.
+
+* Requires all Starlark types support `Serialize`, and provide `derive(NoSerialize)` to easily add a failing `Serialize`.
+* Remove `collection_json`.
+* Support the latest `gazebo` dependency.
+* `SmallSet` now returns an `ExactSizeIterator`.
+* Many optimisations, particularly around strings.
+* Many optimisations to the bytecode compiler.
+* Rename functions for working with constant strings.
+* Add `StringValue` type, for `Value`s which are known to be strings.
+* Remove `SimpleValue`.
+* Remove the `Span` type.
+* Rename `SmallHashResult` to `SmallHashValue`.
+* Improve error messages on the wrong number of positional arguments.
+* Remove some float-related functions from the API.
+* Adjust the profiling API to make it more modular.
+* Add support for validators when freezing.
+
 ## 0.6.0 (November 22, 2021)
 
 There have been many changes since the last release, focused on performance, documentation, type safety and profiling. These changes caused a number of API changes and behavioural changes, the most significant of which are listed below.

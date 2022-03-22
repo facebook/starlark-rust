@@ -1,7 +1,7 @@
 [package]
 name = "starlark"
 edition = "2021"
-version = "0.6.0"
+version = "0.7.0"
 license = "Apache-2.0"
 description = "An implementation of the Starlark language in Rust."
 documentation = "https://docs.rs/starlark"
@@ -37,7 +37,7 @@ fnv = "1.0.7"
 static_assertions = "1.1.0"
 memoffset = "0.6.4"
 thiserror = "1.0.9"
-starlark_derive = { version = "0.6.0", path = "../starlark_derive" }
+starlark_derive = { version = "0.7.0", path = "../starlark_derive" }
 # @oss-disable: gazebo = { path = "../../gazebo/gazebo", features = ["str_pattern_extensions"] }
 gazebo = { version = "0.6.0", features = ["str_pattern_extensions"] } # @oss-enable
 # @oss-disable: gazebo_lint = { path = "../../gazebo_lint/gazebo_lint", optional = true }
