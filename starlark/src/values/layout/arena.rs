@@ -503,9 +503,7 @@ impl Drop for Arena {
         self.for_each_drop_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
             let x = x.unpack() as *const dyn AValueDyn as *mut dyn AValueDyn;
-            unsafe {
-                ptr::drop_in_place(x)
-            };
+            unsafe { ptr::drop_in_place(x) };
         });
         self.non_drop.reset();
         self.drop.reset();

@@ -525,9 +525,7 @@ pub(crate) fn possible_gc(eval: &mut Evaluator) {
         // When we are at a module scope (as checked above) the eval contains
         // references to all values, so walking covers everything and the unsafe
         // is satisfied.
-        unsafe {
-            eval.garbage_collect()
-        }
+        unsafe { eval.garbage_collect() }
         eval.next_gc_level = eval.heap().allocated_bytes() + GC_THRESHOLD;
     }
 }

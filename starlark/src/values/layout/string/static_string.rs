@@ -38,9 +38,7 @@ impl<const N: usize> StarlarkStrNRepr<N> {
         assert!(N == s.len());
         assert!(N as u32 as usize == N);
         let mut payload = [0u8; N];
-        unsafe {
-            ptr::copy_nonoverlapping(s.as_ptr(), payload.as_mut_ptr(), N)
-        };
+        unsafe { ptr::copy_nonoverlapping(s.as_ptr(), payload.as_mut_ptr(), N) };
         Self {
             repr: AValueRepr {
                 header: VALUE_STR_A_VALUE_PTR,

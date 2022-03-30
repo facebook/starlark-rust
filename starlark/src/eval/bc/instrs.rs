@@ -290,9 +290,7 @@ impl BcInstrsWriter {
         &self,
         (instr_start, addr): (BcAddr, *const BcAddrOffset),
     ) -> PatchAddr {
-        unsafe {
-            assert_eq!(*addr, BcAddrOffset::FORWARD)
-        };
+        unsafe { assert_eq!(*addr, BcAddrOffset::FORWARD) };
         let offset_bytes =
             unsafe { (addr as *const u8).offset_from(self.instrs.as_ptr() as *const u8) };
         assert!((offset_bytes as usize) < self.instrs_len_bytes());
