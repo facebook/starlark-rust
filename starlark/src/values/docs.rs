@@ -881,7 +881,8 @@ mod tests {
             })
         );
         assert_eq!(
-            DocString::from_docstring(DocStringKind::Starlark,
+            DocString::from_docstring(
+                DocStringKind::Starlark,
                 r#"This is a summary line that is not dedented like the 'details'
 
         Typing the first line right after the """ in python docstrings is common,

@@ -1,4 +1,5 @@
-edition = "2018"
+edition = "2021"
+version = "Two"
 imports_granularity = "Crate"
 merge_imports = true
 use_field_init_shorthand = true
