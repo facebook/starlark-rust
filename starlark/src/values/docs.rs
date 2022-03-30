@@ -277,7 +277,6 @@ impl DocString {
             let mut current_section = None;
             let mut current_section_text = vec![];
 
-
             for line in details.lines() {
                 if let Some(matches) = section_re.captures(line) {
                     finish_section(&mut current_section, &mut current_section_text);
@@ -432,7 +431,6 @@ impl Function {
             },
         }
     }
-
 
     /// Parse out parameter docs from an "Args:" section of a docstring
     ///

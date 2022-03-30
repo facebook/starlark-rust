@@ -212,7 +212,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
     }
 
-
     /// Generate instructions to invoke before stmt callbacks when evaluating the module,
     /// even if this module does not use any such callbacks.
     ///

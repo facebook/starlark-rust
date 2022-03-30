@@ -559,7 +559,6 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
             self.def_info.docstring.as_ref().map(String::as_ref),
         );
 
-
         Some(DocItem::Function(function_docs))
     }
 }
