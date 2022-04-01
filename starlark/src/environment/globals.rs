@@ -437,6 +437,11 @@ impl MethodsBuilder {
             }),
         );
     }
+
+    /// Allocate a value using the same underlying heap as the [`MethodsBuilder`]
+    pub fn alloc<'v, V: AllocFrozenValue>(&'v self, value: V) -> FrozenValue {
+        value.alloc_frozen_value(&self.heap)
+    }
 }
 
 /// Used to create methods for a [`StarlarkValue`](crate::values::StarlarkValue).
