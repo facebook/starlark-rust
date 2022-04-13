@@ -1,5 +1,9 @@
 # Starlark
 
+## 0.7.1 (April 13, 2022)
+
+* Add `MethodsBuilder::alloc`.
+
 ## 0.7.0 (March 22, 2022)
 
 There have been many changes since the last release, focused on performance and features. These changes caused a number of API changes and behavioural changes, the most significant of which are listed below.
