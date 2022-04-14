@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+use std::str::FromStr;
+
 use gazebo::dupe::Dupe;
 
 /// How to profile starlark code.
@@ -36,4 +38,19 @@ pub enum ProfileMode {
     /// Provide output compatible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     Flame,
+}
+
+impl FromStr for ProfileMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "heap" => Ok(Self::Heap),
+            "heap-flame" => Ok(Self::HeapFlame),
+            "stmt" => Ok(Self::Stmt),
+            "bytecode" => Ok(Self::Bytecode),
+            "bytecode-pairs" => Ok(Self::BytecodePairs),
+            s => Err(anyhow::anyhow!("Invalid ProfileMode: `{}`", s)),
+        }
+    }
 }
