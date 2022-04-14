@@ -565,9 +565,7 @@ impl Heap {
             // Otherwise the Value is constrainted by the borrow_mut, when
             // we consider values to be kept alive permanently, other than
             // when a GC happens
-            f(Value::new_ptr_query_is_str(unsafe {
-                cast::ptr_lifetime(x)
-            }))
+            f(Value::new_ptr_query_is_str(cast::ptr_lifetime(x)))
         })
     }
 
