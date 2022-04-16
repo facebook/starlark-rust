@@ -39,7 +39,7 @@ pub use starlark_derive::{starlark_attrs, Freeze, NoSerialize, StarlarkAttrs, Tr
 pub use crate::values::{
     alloc_value::*,
     error::*,
-    freeze::*,
+    freeze::Freeze,
     frozen_ref::*,
     layout::{identity::*, value::*, *},
     owned::*,
