@@ -45,7 +45,7 @@ pub use crate::values::{
     owned::*,
     trace::Trace,
     traits::{ComplexValue, NoSimpleValue, StarlarkValue},
-    typed::*,
+    typed::{FrozenValueTyped, ValueTyped},
     types::*,
     unpack::{UnpackValue, ValueOf},
 };
