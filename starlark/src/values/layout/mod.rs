@@ -22,7 +22,6 @@ pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
 pub(crate) use string::StringValueLike;
 pub use string::{static_string::*, FrozenStringValue, StringValue};
-pub(crate) use value_captured::*;
 
 mod arena;
 mod avalue;
@@ -34,4 +33,4 @@ mod pointer_i32;
 mod string;
 pub(crate) mod typed;
 pub(crate) mod value;
-mod value_captured;
+pub(crate) mod value_captured;
