@@ -47,7 +47,7 @@ pub use crate::values::{
     traits::*,
     typed::*,
     types::*,
-    unpack::*,
+    unpack::{UnpackValue, ValueOf},
 };
 
 #[macro_use]
