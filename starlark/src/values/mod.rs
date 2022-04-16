@@ -43,7 +43,7 @@ pub use crate::values::{
     frozen_ref::*,
     layout::{identity::*, value::*, *},
     owned::*,
-    trace::*,
+    trace::Trace,
     traits::*,
     typed::*,
     types::*,
