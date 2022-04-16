@@ -54,17 +54,9 @@ use crate::{
 /// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
-#[derive(Copy, Clone, Dupe, AnyLifetime)]
+#[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
 #[repr(C)]
 pub struct FrozenStringValue(FrozenValue);
-
-impl Debug for FrozenStringValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("FrozenStringValue")
-            .field(&self.unpack())
-            .finish()
-    }
-}
 
 /// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
 #[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
