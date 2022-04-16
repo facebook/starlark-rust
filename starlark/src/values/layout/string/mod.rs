@@ -161,7 +161,7 @@ impl FrozenStringValue {
 
     /// Get a string.
     pub fn as_str(self) -> &'static str {
-        self.as_starlark_str().unpack()
+        self.as_starlark_str().as_str()
     }
 
     /// Get self along with the hash.
@@ -246,7 +246,7 @@ impl<'v> StringValue<'v> {
 
     /// Get the Rust string reference.
     pub fn as_str(self) -> &'v str {
-        self.unpack_starlark_str().unpack()
+        self.unpack_starlark_str().as_str()
     }
 
     /// Convert to Starlark value.

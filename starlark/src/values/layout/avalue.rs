@@ -408,7 +408,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
             "short strings are allocated statically"
         );
 
-        let s = (*me).payload.1.unpack();
+        let s = (*me).payload.1.as_str();
         let fv = freezer.alloc(s);
         debug_assert!(fv.is_str());
         AValueHeader::overwrite_with_forward::<Self>(me, fv.0.ptr_value());
@@ -421,7 +421,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
             "short strings are allocated statically"
         );
 
-        let s = (*me).payload.1.unpack();
+        let s = (*me).payload.1.as_str();
         let v = tracer.alloc_str(s);
         debug_assert!(v.is_str());
         AValueHeader::overwrite_with_forward::<Self>(me, v.0.ptr_value() & !1);

@@ -202,7 +202,7 @@ where
                 let name = k
                     .to_string_value()
                     .unpack_starlark_str()
-                    .unpack()
+                    .as_str()
                     .to_owned();
                 match v.to_value().documentation() {
                     Some(DocItem::Function(f)) => (name, docs::Member::Function(f)),

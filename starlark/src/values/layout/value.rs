@@ -301,7 +301,7 @@ impl<'v> Value<'v> {
 
     /// Obtain the underlying `str` if it is a string.
     pub fn unpack_str(self) -> Option<&'v str> {
-        self.unpack_starlark_str().map(|s| s.unpack())
+        self.unpack_starlark_str().map(|s| s.as_str())
     }
 
     /// Get a pointer to a [`AValue`].

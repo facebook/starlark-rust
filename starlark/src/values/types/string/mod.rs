@@ -98,13 +98,13 @@ impl Deref for StarlarkStr {
     type Target = str;
 
     fn deref(&self) -> &str {
-        self.unpack()
+        self.as_str()
     }
 }
 
 impl Debug for StarlarkStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Debug::fmt(self.unpack(), f)
+        Debug::fmt(self.as_str(), f)
     }
 }
 
@@ -122,7 +122,7 @@ impl StarlarkStr {
     }
 
     /// Get a Rust string refence from this Starlark string.
-    pub fn unpack(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         unsafe {
             let slice = slice::from_raw_parts(self.str.body.as_ptr(), self.str.len as usize);
             str::from_utf8_unchecked(slice)
@@ -137,7 +137,7 @@ impl StarlarkStr {
             StarlarkHashValue::new_unchecked(hash)
         } else {
             let mut s = StarlarkHasher::new();
-            hash_string_value(self.unpack(), &mut s);
+            hash_string_value(self.as_str(), &mut s);
             let hash = s.finish_small();
             // If hash is zero, we are unlucky, but it is highly improbable.
             self.str.hash.store(hash.get(), atomic::Ordering::Relaxed);
@@ -147,7 +147,7 @@ impl StarlarkStr {
 
     /// Rust string reference along with its hash value.
     pub fn as_str_hashed(&self) -> BorrowHashed<str> {
-        BorrowHashed::new_unchecked(self.get_hash(), self.unpack())
+        BorrowHashed::new_unchecked(self.get_hash(), self.as_str())
     }
 
     /// String length, in bytes.
@@ -177,7 +177,7 @@ impl Display for StarlarkStr {
         // or accumulate into a String buffer first. Not sure which is faster, but string buffer lets us
         // share code with collect_repr more easily.
         let mut buffer = String::new();
-        string_repr(self.unpack(), &mut buffer);
+        string_repr(self.as_str(), &mut buffer);
         f.write_str(&buffer)
     }
 }
@@ -342,35 +342,35 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
     }
 
     fn get_methods(&self) -> Option<&'static Methods> {
-        self.unpack().get_methods()
+        self.as_str().get_methods()
     }
 
     fn collect_repr(&self, collector: &mut String) {
-        self.unpack().collect_repr(collector)
+        self.as_str().collect_repr(collector)
     }
 
     fn to_bool(&self) -> bool {
-        self.unpack().to_bool()
+        self.as_str().to_bool()
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
-        self.unpack().equals(other)
+        self.as_str().equals(other)
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
-        self.unpack().compare(other)
+        self.as_str().compare(other)
     }
 
     fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.unpack().at(index, heap)
+        self.as_str().at(index, heap)
     }
 
     fn length(&self) -> anyhow::Result<i32> {
-        self.unpack().length()
+        self.as_str().length()
     }
 
     fn is_in(&self, other: Value) -> anyhow::Result<bool> {
-        self.unpack().is_in(other)
+        self.as_str().is_in(other)
     }
 
     fn slice(
@@ -380,19 +380,19 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         stride: Option<Value<'v>>,
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
-        self.unpack().slice(start, stop, stride, heap)
+        self.as_str().slice(start, stop, stride, heap)
     }
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.unpack().add(other, heap)
+        self.as_str().add(other, heap)
     }
 
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.unpack().mul(other, heap)
+        self.as_str().mul(other, heap)
     }
 
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.unpack().percent(other, heap)
+        self.as_str().percent(other, heap)
     }
 }
 
@@ -401,7 +401,7 @@ impl Serialize for StarlarkStr {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(self.unpack())
+        serializer.serialize_str(self.as_str())
     }
 }
 
