@@ -42,7 +42,7 @@ pub use crate::values::{
     freeze::Freeze,
     frozen_ref::*,
     layout::{identity::*, value::*, *},
-    owned::*,
+    owned::{OwnedFrozenValue, OwnedFrozenValueTyped},
     trace::Trace,
     traits::{ComplexValue, NoSimpleValue, StarlarkValue},
     typed::{FrozenValueTyped, ValueTyped},
