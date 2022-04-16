@@ -44,12 +44,13 @@ use crate::{
         none::NoneType,
         num::Num,
         string::StarlarkStr,
+        traits::StarlarkValueDyn,
         types::{
             array::Array,
             tuple::{FrozenTuple, Tuple},
         },
-        ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, StarlarkValue,
-        StarlarkValueDyn, Trace, Tracer, Value, ValueTyped,
+        ComplexValue, Freezer, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Trace, Tracer,
+        Value, ValueTyped,
     },
 };
 
