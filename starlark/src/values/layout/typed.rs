@@ -55,13 +55,13 @@ impl<T: StarlarkValue<'static>> Freeze for FrozenValueTyped<'static, T> {
 
 impl<'v, T: StarlarkValue<'v>> Debug for ValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("ValueType").field(&self.0).finish()
+        f.debug_tuple("ValueTyped").field(&self.0).finish()
     }
 }
 
 impl<'v, T: StarlarkValue<'v>> Debug for FrozenValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("FrozenValueType").field(&self.0).finish()
+        f.debug_tuple("FrozenValueTyped").field(&self.0).finish()
     }
 }
 
