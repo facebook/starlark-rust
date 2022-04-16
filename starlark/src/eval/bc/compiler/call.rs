@@ -43,7 +43,7 @@ use crate::{
         FrozenDef,
     },
     values::{
-        function::NativeFunction, known_methods::get_known_method, typed::FrozenValueTyped,
+        function::NativeFunction, typed::FrozenValueTyped, types::known_methods::get_known_method,
         FrozenValue,
     },
 };

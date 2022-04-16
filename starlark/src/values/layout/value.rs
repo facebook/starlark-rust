@@ -73,7 +73,7 @@ use crate::{
         string::StarlarkStr,
         structs::FrozenStruct,
         tuple::FrozenTuple,
-        unbound::MaybeUnboundValue,
+        types::unbound::MaybeUnboundValue,
         Freeze, Freezer, FrozenRef, FrozenStringValue, FrozenValueTyped, Heap, StarlarkValue,
         StringValue, StringValueLike, UnpackValue, ValueError, VALUE_EMPTY_STRING,
     },

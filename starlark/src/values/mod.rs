@@ -46,7 +46,10 @@ pub use crate::values::{
     trace::Trace,
     traits::{ComplexValue, NoSimpleValue, StarlarkValue},
     typed::{FrozenValueTyped, ValueTyped},
-    types::*,
+    types::{
+        any, array, bool, dict, enumeration, float, function, int, list, none, range, record,
+        string, structs, tuple,
+    },
     unpack::{UnpackValue, ValueOf},
 };
 

@@ -51,10 +51,10 @@ use crate::{
     values::{
         dict::Dict,
         function::NativeFunction,
-        known_methods::KnownMethod,
         list::List,
         string::interpolation::{format_one, percent_s_one},
         typed::FrozenValueTyped,
+        types::known_methods::KnownMethod,
         typing::TypeCompiled,
         FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, StringValue, Value,
     },
