@@ -37,7 +37,7 @@ pub use gazebo::{
 pub use starlark_derive::{starlark_attrs, Freeze, NoSerialize, StarlarkAttrs, Trace};
 
 pub use crate::values::{
-    alloc_value::*,
+    alloc_value::{AllocFrozenValue, AllocValue},
     error::*,
     freeze::Freeze,
     frozen_ref::*,
