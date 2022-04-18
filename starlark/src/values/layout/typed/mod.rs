@@ -120,6 +120,12 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
 }
 
 impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
+    /// Construct `FrozenValueTyped` without checking that the value is of correct type.
+    pub unsafe fn new_unchecked(value: FrozenValue) -> FrozenValueTyped<'v, T> {
+        debug_assert!(value.downcast_ref::<T>().is_some());
+        FrozenValueTyped(value, marker::PhantomData)
+    }
+
     /// Downcast.
     pub fn new(value: FrozenValue) -> Option<FrozenValueTyped<'v, T>> {
         value.downcast_ref::<T>()?;

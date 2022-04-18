@@ -35,9 +35,8 @@ use indexmap::Equivalent;
 use crate::{
     collections::{BorrowHashed, Hashed},
     values::{
-        layout::{avalue::StarlarkStrAValue, value::FrozenValue},
-        string::StarlarkStr,
-        AllocValue, Freeze, Freezer, Heap, Trace, Tracer, UnpackValue, Value,
+        layout::value::FrozenValue, string::StarlarkStr, AllocValue, Freeze, Freezer,
+        FrozenValueTyped, Heap, Trace, Tracer, UnpackValue, Value, ValueTyped,
     },
 };
 
@@ -54,12 +53,12 @@ use crate::{
 /// ```
 #[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
 #[repr(C)]
-pub struct FrozenStringValue(FrozenValue);
+pub struct FrozenStringValue(FrozenValueTyped<'static, StarlarkStr>);
 
 /// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
 #[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
 #[repr(C)]
-pub struct StringValue<'v>(Value<'v>);
+pub struct StringValue<'v>(ValueTyped<'v, StarlarkStr>);
 
 unsafe impl<'v> Coerce<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
@@ -125,36 +124,23 @@ impl<'v> Equivalent<StringValue<'v>> for FrozenStringValue {
 impl FrozenStringValue {
     /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
     pub fn unpack(self) -> FrozenValue {
-        self.0
+        self.0.to_frozen_value()
     }
 
     /// Construct without a check that the value contains a string.
     ///
     /// If passed value does not contain a string, it may lead to memory corruption.
     pub unsafe fn new_unchecked(value: FrozenValue) -> FrozenStringValue {
-        debug_assert!(value.unpack_str().is_some());
-        FrozenStringValue(value)
+        FrozenStringValue(FrozenValueTyped::new_unchecked(value))
     }
 
     /// Construct from a value. Returns [`None`] if a value does not contain a string.
     pub fn new(value: FrozenValue) -> Option<FrozenStringValue> {
-        if value.unpack_str().is_some() {
-            Some(unsafe { Self::new_unchecked(value) })
-        } else {
-            None
-        }
+        FrozenValueTyped::new(value).map(FrozenStringValue)
     }
 
     pub(crate) fn as_starlark_str(self) -> &'static StarlarkStr {
-        unsafe {
-            &self
-                .0
-                .0
-                .unpack_ptr_no_int_unchecked()
-                .as_repr::<StarlarkStrAValue>()
-                .payload
-                .1
-        }
+        self.0.as_ref()
     }
 
     /// Get a string.
@@ -175,7 +161,7 @@ impl FrozenStringValue {
 
 impl<'v> PartialEq for StringValue<'v> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.ptr_eq(other.0) || self.as_str() == other.as_str()
+        self.to_value().ptr_eq(other.to_value()) || self.as_str() == other.as_str()
     }
 }
 
@@ -216,30 +202,17 @@ impl<'v> StringValue<'v> {
     ///
     /// If passed value does not contain a string, it may lead to memory corruption.
     pub unsafe fn new_unchecked(value: Value<'v>) -> StringValue<'v> {
-        debug_assert!(value.is_str());
-        StringValue(value)
+        StringValue(ValueTyped::new_unchecked(value))
     }
 
     /// Construct from a value. Returns [`None`] if a value does not contain a string.
     pub fn new(value: Value<'v>) -> Option<StringValue<'v>> {
-        if value.is_str() {
-            Some(StringValue(value))
-        } else {
-            None
-        }
+        ValueTyped::new(value).map(StringValue)
     }
 
     pub(crate) fn unpack_starlark_str(self) -> &'v StarlarkStr {
-        debug_assert!(self.0.is_str());
-        unsafe {
-            &self
-                .0
-                .0
-                .unpack_ptr_no_int_unchecked()
-                .as_repr::<StarlarkStrAValue>()
-                .payload
-                .1
-        }
+        debug_assert!(self.to_value().is_str());
+        self.0.as_ref()
     }
 
     /// Get the Rust string reference.
@@ -249,12 +222,12 @@ impl<'v> StringValue<'v> {
 
     /// Convert to Starlark value.
     pub fn to_value(self) -> Value<'v> {
-        self.0
+        self.0.to_value()
     }
 
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
     pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
-        Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.0)?) })
+        Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.to_value())?) })
     }
 
     /// Get self along with the hash.
@@ -269,7 +242,7 @@ impl<'v> StringValue<'v> {
 
     /// If this string value is frozen, return it.
     pub fn unpack_frozen(self) -> Option<FrozenStringValue> {
-        self.0
+        self.to_value()
             .unpack_frozen()
             .map(|s| unsafe { FrozenStringValue::new_unchecked(s) })
     }
@@ -320,7 +293,7 @@ unsafe impl<'v> Trace<'v> for FrozenStringValue {
 unsafe impl<'v> Trace<'v> for StringValue<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.0.trace(tracer);
-        debug_assert!(self.0.unpack_str().is_some());
+        debug_assert!(self.to_value().unpack_str().is_some());
     }
 }
 
