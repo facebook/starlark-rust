@@ -569,17 +569,11 @@ pub(crate) fn add_assign<'v>(
     rhs: Value<'v>,
     heap: &'v Heap,
 ) -> anyhow::Result<Value<'v>> {
-    // Addition of strings is super common, so have a special case
-    if let Some(ls) = lhs.unpack_str() {
-        if let Some(rs) = rhs.unpack_str() {
-            if ls.is_empty() {
-                return Ok(rhs);
-            } else if rs.is_empty() {
-                return Ok(lhs);
-            } else {
-                return Ok(heap.alloc_str_concat(ls, rs).to_value());
-            }
-        }
+    // Checking whether a value is an integer or a string is cheap (no virtual call),
+    // and `Value::add` has optimizations for these types, so check them first
+    // and delegate to `Value::add`.
+    if lhs.unpack_int().is_some() || lhs.is_str() {
+        return lhs.add(rhs, heap);
     }
 
     // The Starlark spec says list += mutates, while nothing else does.
