@@ -139,13 +139,9 @@ impl FrozenStringValue {
         FrozenValueTyped::new(value).map(FrozenStringValue)
     }
 
-    pub(crate) fn as_starlark_str(self) -> &'static StarlarkStr {
-        self.0.as_ref()
-    }
-
     /// Get a string.
     pub fn as_str(self) -> &'static str {
-        self.as_starlark_str().as_str()
+        self.0.as_ref().as_str()
     }
 
     /// Get self along with the hash.
