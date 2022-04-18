@@ -48,7 +48,7 @@ use crate::{
                 VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
             fast_cell::FastCell,
-            string::StringValueLike,
+            typed::string::StringValueLike,
             value::{FrozenValue, Value},
         },
         static_string::constant_string,

@@ -20,8 +20,6 @@
 
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
 pub(crate) use pointer_i32::PointerI32;
-pub(crate) use string::StringValueLike;
-pub use string::{FrozenStringValue, StringValue};
 
 mod arena;
 mod avalue;
@@ -31,7 +29,6 @@ pub(crate) mod identity;
 mod pointer;
 mod pointer_i32;
 pub(crate) mod static_string;
-mod string;
 pub(crate) mod typed;
 pub(crate) mod value;
 pub(crate) mod value_captured;

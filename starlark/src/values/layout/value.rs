@@ -74,9 +74,10 @@ use crate::{
         string::StarlarkStr,
         structs::FrozenStruct,
         tuple::FrozenTuple,
+        typed::string::StringValueLike,
         types::unbound::MaybeUnboundValue,
         Freeze, Freezer, FrozenRef, FrozenStringValue, FrozenValueTyped, Heap, StarlarkValue,
-        StringValue, StringValueLike, UnpackValue, ValueError,
+        StringValue, UnpackValue, ValueError,
     },
 };
 

@@ -58,8 +58,9 @@ use crate::{
         docs,
         docs::DocItem,
         error::ValueError,
-        AllocValue, Freeze, FrozenValue, Heap, StarlarkValue, StringValue, StringValueLike, Trace,
-        UnpackValue, Value, ValueLike, ValueOf,
+        layout::typed::string::StringValueLike,
+        AllocValue, Freeze, FrozenValue, Heap, StarlarkValue, StringValue, Trace, UnpackValue,
+        Value, ValueLike, ValueOf,
     },
 };
 

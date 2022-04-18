@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+pub(crate) mod string;
+
 use std::{
     fmt,
     fmt::{Debug, Display, Formatter},

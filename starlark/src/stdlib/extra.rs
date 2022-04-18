@@ -33,9 +33,9 @@ use crate::{
     environment::GlobalsBuilder,
     eval::{Arguments, Evaluator},
     values::{
-        dict::DictRef, function::FUNCTION_TYPE, none::NoneType, tuple::Tuple, Freeze, Freezer,
-        FrozenStringValue, FrozenValue, StarlarkValue, StringValue, StringValueLike, Trace, Value,
-        ValueLike,
+        dict::DictRef, function::FUNCTION_TYPE, layout::typed::string::StringValueLike,
+        none::NoneType, tuple::Tuple, Freeze, Freezer, FrozenStringValue, FrozenValue,
+        StarlarkValue, StringValue, Trace, Value, ValueLike,
     },
 };
 
