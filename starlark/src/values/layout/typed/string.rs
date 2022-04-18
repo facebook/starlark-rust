@@ -80,18 +80,18 @@ impl<'v> Borrow<str> for StringValue<'v> {
 }
 
 impl Deref for FrozenStringValue {
-    type Target = StarlarkStr;
+    type Target = FrozenValueTyped<'static, StarlarkStr>;
 
-    fn deref(&self) -> &StarlarkStr {
-        self.as_starlark_str()
+    fn deref(&self) -> &FrozenValueTyped<'static, StarlarkStr> {
+        &self.0
     }
 }
 
 impl<'v> Deref for StringValue<'v> {
-    type Target = StarlarkStr;
+    type Target = ValueTyped<'v, StarlarkStr>;
 
-    fn deref(&self) -> &StarlarkStr {
-        self.unpack_starlark_str()
+    fn deref(&self) -> &ValueTyped<'v, StarlarkStr> {
+        &self.0
     }
 }
 
