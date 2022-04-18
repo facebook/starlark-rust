@@ -736,19 +736,6 @@ pub(crate) type InstrNotIn = InstrBinOp<InstrNotInImpl>;
 impl InstrBinOpImpl for InstrAddImpl {
     #[inline(always)]
     fn eval<'v>(l: Value<'v>, r: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        // Addition of string is super common and pretty cheap, so have a special case for it.
-        if let Some(ls) = l.unpack_str() {
-            if let Some(rs) = r.unpack_str() {
-                if ls.is_empty() {
-                    return Ok(r);
-                } else if rs.is_empty() {
-                    return Ok(l);
-                } else {
-                    return Ok(heap.alloc_str_concat(ls, rs).to_value());
-                }
-            }
-        }
-
         l.add(r, heap)
     }
 }

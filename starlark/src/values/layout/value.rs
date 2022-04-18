@@ -529,6 +529,19 @@ impl<'v> Value<'v> {
     /// Add two [`Value`]s together. Will first try using [`radd`](StarlarkValue::radd),
     /// before falling back to [`add`](StarlarkValue::add).
     pub fn add(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        // Addition of string is super common and pretty cheap, so have a special case for it.
+        if let Some(ls) = self.unpack_str() {
+            if let Some(rs) = other.unpack_str() {
+                if ls.is_empty() {
+                    return Ok(other);
+                } else if rs.is_empty() {
+                    return Ok(self);
+                } else {
+                    return Ok(heap.alloc_str_concat(ls, rs).to_value());
+                }
+            }
+        }
+
         if let Some(v) = other.get_ref().radd(self, heap) {
             v
         } else {
