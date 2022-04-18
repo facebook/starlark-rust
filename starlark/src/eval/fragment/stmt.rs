@@ -25,7 +25,6 @@
 
 use std::mem;
 
-use anyhow::anyhow;
 use gazebo::prelude::*;
 use thiserror::Error;
 
@@ -545,9 +544,7 @@ pub(crate) fn bit_or_assign<'v>(
     let lhs_ty = lhs_aref.static_type_of_value();
 
     if Dict::is_dict_type(lhs_ty) {
-        // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
-        let mut dict = Dict::from_value_mut(lhs)?
-            .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
+        let mut dict = Dict::from_value_mut(lhs)?;
         if lhs.ptr_eq(rhs) {
             // Nothing to do as union is idempotent
         } else {

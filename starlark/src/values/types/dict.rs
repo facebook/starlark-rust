@@ -141,15 +141,27 @@ impl<'v> Dict<'v> {
     }
 
     /// Downcast the value to a mutable dict reference.
-    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<DictMut>> {
-        if unlikely(x.unpack_frozen().is_some()) {
-            return Err(ValueError::CannotMutateImmutableValue.into());
+    #[inline]
+    pub fn from_value_mut(x: Value<'v>) -> anyhow::Result<DictMut> {
+        #[derive(thiserror::Error, Debug)]
+        #[error("Value is not dict, value type: `{}`", .0)]
+        struct NotDictError(&'static str);
+
+        #[cold]
+        #[inline(never)]
+        fn error<'v>(x: Value<'v>) -> anyhow::Error {
+            if x.downcast_ref::<DictGen<FrozenDict>>().is_some() {
+                ValueError::CannotMutateImmutableValue.into()
+            } else {
+                NotDictError(x.get_type()).into()
+            }
         }
+
         let ptr = x.downcast_ref::<DictGen<RefCell<Dict<'v>>>>();
         match ptr {
-            None => Ok(None),
+            None => Err(error(x)),
             Some(ptr) => match ptr.0.try_borrow_mut() {
-                Ok(x) => Ok(Some(DictMut { aref: x })),
+                Ok(x) => Ok(DictMut { aref: x }),
                 Err(_) => Err(ValueError::MutationDuringIteration.into()),
             },
         }

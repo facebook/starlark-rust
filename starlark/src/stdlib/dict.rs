@@ -53,7 +53,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn clear(this: Value) -> anyhow::Result<NoneType> {
-        let mut this = Dict::from_value_mut(this)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?;
         this.clear();
         Ok(NoneType)
     }
@@ -167,7 +167,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # "#, "not found");
     /// ```
     fn pop(this: Value, ref key: Value, ref default: Option<Value>) -> anyhow::Result<Value<'v>> {
-        let mut me = Dict::from_value_mut(this)?.unwrap();
+        let mut me = Dict::from_value_mut(this)?;
         match me.remove_hashed(key.get_hashed()?) {
             Some(x) => Ok(x),
             None => match default {
@@ -216,7 +216,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # "#, "empty dict");
     /// ```
     fn popitem(this: Value) -> anyhow::Result<(Value<'v>, Value<'v>)> {
-        let mut this = Dict::from_value_mut(this)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?;
 
         let key = this.iter_hashed().next().map(|(k, _)| k);
         match key {
@@ -261,7 +261,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
         ref key: Value,
         ref default: Option<Value>,
     ) -> anyhow::Result<Value<'v>> {
-        let mut this = Dict::from_value_mut(this)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?;
         let key = key.get_hashed()?;
         if let Some(r) = this.get_hashed(key) {
             return Ok(r);
@@ -312,7 +312,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
             pairs
         };
 
-        let mut this = Dict::from_value_mut(this)?.unwrap();
+        let mut this = Dict::from_value_mut(this)?;
         if let Some(pairs) = pairs {
             if let Some(dict) = Dict::from_value(pairs) {
                 for (k, v) in dict.iter_hashed() {
