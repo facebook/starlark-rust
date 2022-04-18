@@ -554,8 +554,10 @@ impl<'v> Value<'v> {
 
         if let Some(v) = other.get_ref().radd(self, heap) {
             v
+        } else if let Some(v) = self.get_ref().add(other, heap) {
+            v
         } else {
-            self.get_ref().add(other, heap)
+            ValueError::unsupported_owned(self.get_type(), "+", Some(other.get_type()))
         }
     }
 

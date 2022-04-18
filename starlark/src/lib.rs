@@ -315,14 +315,14 @@
 //!
 //!     // How we add them
 //!     fn add(&self, rhs: Value<'v>, heap: &'v Heap)
-//!             -> anyhow::Result<Value<'v>> {
+//!             -> Option<anyhow::Result<Value<'v>>> {
 //!         if let Some(rhs) = rhs.downcast_ref::<Self>() {
-//!             Ok(heap.alloc(Complex {
+//!             Some(Ok(heap.alloc(Complex {
 //!                 real: self.real + rhs.real,
 //!                 imaginary: self.imaginary + rhs.imaginary,
-//!             }))
+//!             })))
 //!         } else {
-//!             ValueError::unsupported_with(self, "+", rhs)
+//!             None
 //!         }
 //!     }
 //! }

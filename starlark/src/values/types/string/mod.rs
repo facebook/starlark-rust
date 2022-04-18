@@ -292,15 +292,15 @@ impl<'v> StarlarkValue<'v> for str {
         }
     }
 
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         if let Some(other_str) = other.unpack_str() {
             if self.is_empty() {
-                Ok(other)
+                Some(Ok(other))
             } else {
-                Ok(heap.alloc_str_concat(self, other_str).to_value())
+                Some(Ok(heap.alloc_str_concat(self, other_str).to_value()))
             }
         } else {
-            ValueError::unsupported_with(self, "+", other)
+            None
         }
     }
 
@@ -383,7 +383,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         self.as_str().slice(start, stop, stride, heap)
     }
 
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         self.as_str().add(other, heap)
     }
 

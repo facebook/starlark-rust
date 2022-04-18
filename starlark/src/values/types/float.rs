@@ -237,8 +237,10 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
         Ok(heap.alloc_float(StarlarkFloat(-self.0)))
     }
 
-    fn add(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        f64_arith_bin_op(self.0, other, heap, "+", |l, r| Ok(l + r))
+    fn add(&self, other: Value, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
+        other
+            .unpack_num()
+            .map(|n| Ok(heap.alloc_float(StarlarkFloat(self.0 + n.as_float()))))
     }
 
     fn sub(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

@@ -598,8 +598,10 @@ pub(crate) fn add_assign<'v>(
                 rhs.with_iterator(heap, |it| list.extend(it, heap))?;
             }
             Ok(lhs)
+        } else if let Some(v) = lhs_aref.add(rhs, heap) {
+            v
         } else {
-            lhs_aref.add(rhs, heap)
+            ValueError::unsupported_owned(lhs.get_type(), "+", Some(rhs.get_type()))
         }
     }
 }

@@ -123,15 +123,16 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
             .map(Value::new_int)
             .ok_or_else(|| ValueError::IntegerOverflow.into())
     }
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         match other.unpack_num() {
-            Some(Num::Int(other)) => self
-                .get()
-                .checked_add(other)
-                .map(Value::new_int)
-                .ok_or_else(|| ValueError::IntegerOverflow.into()),
+            Some(Num::Int(other)) => Some(
+                self.get()
+                    .checked_add(other)
+                    .map(Value::new_int)
+                    .ok_or_else(|| ValueError::IntegerOverflow.into()),
+            ),
             Some(Num::Float(_)) => StarlarkFloat(self.get() as f64).add(other, heap),
-            None => ValueError::unsupported_with(self, "+", other),
+            None => None,
         }
     }
     fn sub(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {

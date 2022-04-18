@@ -212,7 +212,7 @@ where
         f(&mut self.iter())
     }
 
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         if let Some(other) = Tuple::from_value(other) {
             let mut result = Vec::with_capacity(self.len() + other.len());
             for x in self.iter() {
@@ -221,9 +221,9 @@ where
             for x in other.iter() {
                 result.push(x);
             }
-            Ok(heap.alloc_tuple(&result))
+            Some(Ok(heap.alloc_tuple(&result)))
         } else {
-            ValueError::unsupported_with(self, "a", other)
+            None
         }
     }
 

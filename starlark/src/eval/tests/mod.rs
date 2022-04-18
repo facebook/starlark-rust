@@ -320,9 +320,9 @@ fn test_radd() {
             let lhs: Select = UnpackValue::unpack_value(lhs).unwrap();
             Some(Ok(heap.alloc(lhs.add(self))))
         }
-        fn add(&self, rhs: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        fn add(&self, rhs: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
             let rhs: Select = UnpackValue::unpack_value(rhs).unwrap();
-            Ok(heap.alloc(self.clone().add(&rhs)))
+            Some(Ok(heap.alloc(self.clone().add(&rhs))))
         }
         fn collect_repr(&self, collector: &mut String) {
             write!(collector, "{}", self).unwrap()

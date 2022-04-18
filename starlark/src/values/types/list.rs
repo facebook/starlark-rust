@@ -556,12 +556,9 @@ where
         self.0.with_iterator(f)
     }
 
-    fn add(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = List::from_value(other) {
-            Ok(heap.alloc_list_concat(self.0.content(), other.content()))
-        } else {
-            ValueError::unsupported_with(self, "+", other)
-        }
+    fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
+        List::from_value(other)
+            .map(|other| Ok(heap.alloc_list_concat(self.0.content(), other.content())))
     }
 
     fn mul(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
