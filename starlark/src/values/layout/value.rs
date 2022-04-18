@@ -529,6 +529,16 @@ impl<'v> Value<'v> {
     /// Add two [`Value`]s together. Will first try using [`radd`](StarlarkValue::radd),
     /// before falling back to [`add`](StarlarkValue::add).
     pub fn add(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        // Fast special case for ints.
+        if let Some(ls) = self.unpack_int() {
+            if let Some(rs) = other.unpack_int() {
+                // On overflow take the slow path below.
+                if let Some(sum) = ls.checked_add(rs) {
+                    return Ok(Value::new_int(sum));
+                }
+            }
+        }
+
         // Addition of string is super common and pretty cheap, so have a special case for it.
         if let Some(ls) = self.unpack_str() {
             if let Some(rs) = other.unpack_str() {
