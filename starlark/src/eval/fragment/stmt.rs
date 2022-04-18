@@ -599,9 +599,7 @@ pub(crate) fn add_assign<'v>(
         let lhs_ty = lhs_aref.static_type_of_value();
 
         if List::is_list_type(lhs_ty) {
-            // If the value is None, that must mean its a FrozenList, thus turn it into an immutable error
-            let list = List::from_value_mut(lhs)?
-                .ok_or_else(|| anyhow!(ValueError::CannotMutateImmutableValue))?;
+            let list = List::from_value_mut(lhs)?;
             if lhs.ptr_eq(rhs) {
                 list.double(heap);
             } else {

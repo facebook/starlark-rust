@@ -1149,7 +1149,6 @@ mod tests {
         let tuple = module.heap().alloc_tuple(&[list]);
         List::from_value_mut(list)
             .unwrap()
-            .unwrap()
             .push(tuple, module.heap());
         module.set("t", tuple);
         module.freeze().unwrap();

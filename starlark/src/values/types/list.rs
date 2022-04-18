@@ -122,17 +122,27 @@ impl<'v> List<'v> {
         }
     }
 
-    pub(crate) fn from_value_mut(x: Value<'v>) -> anyhow::Result<Option<&'v Self>> {
-        if unlikely(x.unpack_frozen().is_some()) {
-            return Err(ValueError::CannotMutateImmutableValue.into());
-        }
-        let ptr = x.downcast_ref::<ListGen<List<'v>>>();
-        match ptr {
-            None => Ok(None),
-            Some(ptr) => {
-                ptr.0.check_can_mutate()?;
-                Ok(Some(&ptr.0))
+    #[inline]
+    pub(crate) fn from_value_mut(x: Value<'v>) -> anyhow::Result<&'v Self> {
+        #[derive(thiserror::Error, Debug)]
+        #[error("Value is not list, value type: `{}`", .0)]
+        struct NotListError(&'static str);
+
+        #[cold]
+        #[inline(never)]
+        fn error<'v>(x: Value<'v>) -> anyhow::Error {
+            if x.downcast_ref::<ListGen<FrozenList>>().is_some() {
+                ValueError::CannotMutateImmutableValue.into()
+            } else {
+                NotListError(x.get_type()).into()
             }
+        }
+
+        if let Some(x) = x.downcast_ref::<ListGen<List<'v>>>() {
+            x.0.check_can_mutate()?;
+            Ok(&x.0)
+        } else {
+            Err(error(x))
         }
     }
 

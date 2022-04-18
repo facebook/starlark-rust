@@ -52,7 +52,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn append(this: Value, ref el: Value) -> anyhow::Result<NoneType> {
-        let this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?;
         this.push(el, heap);
         Ok(NoneType)
     }
@@ -74,7 +74,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn clear(this: Value) -> anyhow::Result<NoneType> {
-        let this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?;
         this.clear();
         Ok(NoneType)
     }
@@ -100,7 +100,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn extend(this: Value, ref other: Value) -> anyhow::Result<NoneType> {
-        let res = List::from_value_mut(this)?.unwrap();
+        let res = List::from_value_mut(this)?;
         if this.ptr_eq(other) {
             // If the types alias, we can't borrow the `other` for iteration.
             // But we can do something smarter to double the elements
@@ -184,7 +184,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     fn insert(this: Value, ref index: i32, ref el: Value) -> anyhow::Result<NoneType> {
-        let this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?;
         let index = convert_index(this.len() as i32, index);
         this.insert(index, el, heap);
         Ok(NoneType)
@@ -219,7 +219,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
             None => None,
         };
 
-        let this = List::from_value_mut(this)?.unwrap();
+        let this = List::from_value_mut(this)?;
         let index = index.unwrap_or_else(|| (this.len() as i32) - 1);
         if index < 0 || index >= this.len() as i32 {
             return Err(ValueError::IndexOutOfBound(index).into());
@@ -278,7 +278,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
         };
         {
             // now mutate it with no further value calls
-            let this = List::from_value_mut(this)?.unwrap();
+            let this = List::from_value_mut(this)?;
             this.remove(position);
             Ok(NoneType)
         }
