@@ -40,7 +40,7 @@ pub use crate::values::{
     alloc_value::{AllocFrozenValue, AllocValue},
     error::*,
     freeze::Freeze,
-    frozen_ref::*,
+    frozen_ref::FrozenRef,
     layout::{identity::*, value::*, *},
     owned::{OwnedFrozenValue, OwnedFrozenValueTyped},
     trace::Trace,
@@ -63,7 +63,7 @@ pub mod display;
 pub mod docs;
 mod error;
 mod freeze;
-mod frozen_ref;
+pub(crate) mod frozen_ref;
 mod index;
 pub(crate) mod iter;
 pub(crate) mod layout;

@@ -56,10 +56,11 @@ use crate::{
     values::{
         docs,
         docs::{DocItem, DocString, DocStringKind},
+        frozen_ref::AtomicFrozenRefOption,
         function::FUNCTION_TYPE,
         typing::TypeCompiled,
-        AtomicFrozenRefOption, Freeze, Freezer, FrozenHeap, FrozenRef, FrozenStringValue,
-        FrozenValue, Heap, StarlarkValue, Trace, Tracer, Value, ValueLike,
+        Freeze, Freezer, FrozenHeap, FrozenRef, FrozenStringValue, FrozenValue, Heap,
+        StarlarkValue, Trace, Tracer, Value, ValueLike,
     },
 };
 
