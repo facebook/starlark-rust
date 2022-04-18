@@ -583,13 +583,13 @@ pub(crate) fn add_assign<'v>(
     // In practice, select is the only thing that implements radd.
     // If the users does x += select(...) we don't want an error,
     // we really want to x = x + select, so check radd first.
-    if let Some(v) = rhs.get_ref().radd(lhs, heap) {
-        v
-    } else {
-        let lhs_aref = lhs.get_ref();
-        let lhs_ty = lhs_aref.static_type_of_value();
+    let lhs_aref = lhs.get_ref();
+    let lhs_ty = lhs_aref.static_type_of_value();
 
-        if List::is_list_type(lhs_ty) {
+    if List::is_list_type(lhs_ty) {
+        if let Some(v) = rhs.get_ref().radd(lhs, heap) {
+            v
+        } else {
             let list = List::from_value_mut(lhs)?;
             if lhs.ptr_eq(rhs) {
                 list.double(heap);
@@ -598,11 +598,9 @@ pub(crate) fn add_assign<'v>(
                 rhs.with_iterator(heap, |it| list.extend(it, heap))?;
             }
             Ok(lhs)
-        } else if let Some(v) = lhs_aref.add(rhs, heap) {
-            v
-        } else {
-            ValueError::unsupported_owned(lhs.get_type(), "+", Some(rhs.get_type()))
         }
+    } else {
+        lhs.add(rhs, heap)
     }
 }
 
