@@ -70,12 +70,13 @@ use crate::{
         record::{FrozenRecord, RecordType},
         recursive_repr_or_json_guard::{json_stack_push, repr_stack_push},
         stack_guard,
+        static_string::VALUE_EMPTY_STRING,
         string::StarlarkStr,
         structs::FrozenStruct,
         tuple::FrozenTuple,
         types::unbound::MaybeUnboundValue,
         Freeze, Freezer, FrozenRef, FrozenStringValue, FrozenValueTyped, Heap, StarlarkValue,
-        StringValue, StringValueLike, UnpackValue, ValueError, VALUE_EMPTY_STRING,
+        StringValue, StringValueLike, UnpackValue, ValueError,
     },
 };
 

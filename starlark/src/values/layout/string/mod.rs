@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-pub(crate) mod static_string;
-
 use std::{
     borrow::Borrow,
     cmp::Ordering,

@@ -40,7 +40,6 @@ use crate::{
     values::{
         any::StarlarkAny,
         array::Array,
-        constant_string,
         layout::{
             arena::{AValueHeader, AValueRepr, Arena, HeapSummary, Reservation},
             avalue::{
@@ -49,11 +48,13 @@ use crate::{
                 VALUE_EMPTY_FROZEN_LIST, VALUE_EMPTY_TUPLE,
             },
             fast_cell::FastCell,
+            string::StringValueLike,
             value::{FrozenValue, Value},
         },
+        static_string::constant_string,
         types::float::StarlarkFloat,
         AllocFrozenValue, ComplexValue, FrozenRef, FrozenStringValue, FrozenValueTyped,
-        StarlarkValue, StringValue, StringValueLike, ValueTyped,
+        StarlarkValue, StringValue, ValueTyped,
     },
 };
 
