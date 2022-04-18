@@ -220,11 +220,6 @@ impl<'v> StringValue<'v> {
         self.unpack_starlark_str().as_str()
     }
 
-    /// Convert to Starlark value.
-    pub fn to_value(self) -> Value<'v> {
-        self.0.to_value()
-    }
-
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
     pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
         Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.to_value())?) })

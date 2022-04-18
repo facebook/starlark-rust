@@ -56,7 +56,7 @@ use crate::{
         typed::FrozenValueTyped,
         types::known_methods::KnownMethod,
         typing::TypeCompiled,
-        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, StringValue, Value,
+        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value,
     },
 };
 
@@ -869,7 +869,7 @@ impl InstrNoFlowImpl for InstrPercentSOneImpl {
         (before, after): &Self::Arg,
         arg: Value<'v>,
     ) -> anyhow::Result<Value<'v>> {
-        percent_s_one(before.as_str(), arg, after.as_str(), eval.heap()).map(StringValue::to_value)
+        percent_s_one(before.as_str(), arg, after.as_str(), eval.heap()).map(|v| v.to_value())
     }
 }
 
