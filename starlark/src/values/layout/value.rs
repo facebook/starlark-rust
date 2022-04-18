@@ -316,7 +316,7 @@ impl<'v> Value<'v> {
 
     /// Downcast without checking the value type.
     pub(crate) unsafe fn downcast_ref_unchecked<T: StarlarkValue<'v>>(self) -> &'v T {
-        debug_assert!(self.downcast_ref::<T>().is_some());
+        debug_assert!(self.get_ref().downcast_ref::<T>().is_some());
         if PointerI32::type_is_pointer_i32::<T>() {
             transmute!(
                 &PointerI32,
@@ -930,7 +930,23 @@ impl<'v> ValueLike<'v> for Value<'v> {
     }
 
     fn downcast_ref<T: StarlarkValue<'v>>(self) -> Option<&'v T> {
-        self.get_ref().downcast_ref::<T>()
+        if T::static_type_id() == StarlarkStr::static_type_id() {
+            if self.is_str() {
+                // SAFETY: we just checked this is string, and requested type is string.
+                Some(unsafe { self.downcast_ref_unchecked() })
+            } else {
+                None
+            }
+        } else if PointerI32::type_is_pointer_i32::<T>() {
+            if self.unpack_int().is_some() {
+                // SAFETY: we just checked this is int, and requested type is int.
+                Some(unsafe { self.downcast_ref_unchecked() })
+            } else {
+                None
+            }
+        } else {
+            self.get_ref().downcast_ref::<T>()
+        }
     }
 
     fn collect_repr(self, collector: &mut String) {
@@ -1003,4 +1019,32 @@ fn _test_send_sync()
 where
     FrozenValue: Send + Sync,
 {
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::values::{none::NoneType, string::StarlarkStr, Heap, PointerI32, Value, ValueLike};
+
+    #[test]
+    fn test_downcast_ref() {
+        let heap = Heap::new();
+        let string = heap.alloc_str("asd").to_value();
+        let none = Value::new_none();
+        let integer = Value::new_int(17);
+
+        assert!(string.downcast_ref::<NoneType>().is_none());
+        assert!(integer.downcast_ref::<NoneType>().is_none());
+        assert!(none.downcast_ref::<NoneType>().is_some());
+
+        assert_eq!(
+            "asd",
+            string.downcast_ref::<StarlarkStr>().unwrap().as_str()
+        );
+        assert!(integer.downcast_ref::<StarlarkStr>().is_none());
+        assert!(none.downcast_ref::<StarlarkStr>().is_none());
+
+        assert!(string.downcast_ref::<PointerI32>().is_none());
+        assert_eq!(17, integer.downcast_ref::<PointerI32>().unwrap().get());
+        assert!(none.downcast_ref::<PointerI32>().is_none());
+    }
 }
