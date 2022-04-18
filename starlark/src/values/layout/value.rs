@@ -529,8 +529,7 @@ impl<'v> Value<'v> {
     /// Add two [`Value`]s together. Will first try using [`radd`](StarlarkValue::radd),
     /// before falling back to [`add`](StarlarkValue::add).
     pub fn add(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        let me = self.to_value();
-        if let Some(v) = other.get_ref().radd(me, heap) {
+        if let Some(v) = other.get_ref().radd(self, heap) {
             v
         } else {
             self.get_ref().add(other, heap)
