@@ -25,18 +25,19 @@
 
 use std::{
     cmp::Ordering,
-    fmt::{self, Display},
+    fmt::{self, Debug, Display},
     hash::Hasher,
 };
 
+use gazebo::{any::AnyLifetime, cast};
 use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
     values::{
-        basic::StarlarkValueBasic, error::ValueError, float::StarlarkFloat, layout::PointerI32,
-        num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
-        UnpackValue, Value,
+        basic::StarlarkValueBasic, error::ValueError, float::StarlarkFloat, num::Num,
+        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
+        Value,
     },
 };
 
@@ -76,6 +77,40 @@ where
     match right.unpack_int() {
         Some(right) => Ok(Value::new_int(f(left, right)?)),
         None => ValueError::unsupported_owned(INT_TYPE, op, Some(INT_TYPE)),
+    }
+}
+
+// WARNING: This type isn't a real type, a pointer to this is secretly an i32.
+// Therefore, don't derive stuff on it, since it will be wrong.
+// However, `AnyLifetime` promises not to peek at its value, so that's fine.
+#[derive(AnyLifetime)]
+#[repr(C)]
+pub(crate) struct PointerI32 {
+    _private: (),
+}
+
+impl Debug for PointerI32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Debug::fmt(&self.get(), f)
+    }
+}
+
+impl PointerI32 {
+    const TAG: usize = 0x100000000;
+
+    pub(crate) fn new(x: i32) -> &'static Self {
+        // UB if the pointer isn't aligned, or it is zero
+        // Alignment is 1, so that's not an issue.
+        // To deal with 0's we OR in TAG.
+        unsafe { cast::usize_to_ptr(x as usize | Self::TAG) }
+    }
+
+    pub(crate) fn get(&self) -> i32 {
+        cast::ptr_to_usize(self) as i32
+    }
+
+    pub(crate) fn type_is_pointer_i32<'v, T: StarlarkValue<'v>>() -> bool {
+        T::static_type_id() == PointerI32::static_type_id()
     }
 }
 
@@ -276,6 +311,7 @@ impl Serialize for PointerI32 {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::assert;
 
     #[test]
@@ -295,5 +331,23 @@ mod tests {
 4 // 2 == 2
 "#,
         );
+    }
+
+    #[test]
+    fn test_int_tag() {
+        fn check(x: i32) {
+            assert_eq!(x, PointerI32::new(x).get())
+        }
+
+        for x in -10..10 {
+            check(x)
+        }
+        check(i32::MAX);
+        check(i32::MIN);
+    }
+
+    #[test]
+    fn test_alignment_int_pointer() {
+        assert_eq!(1, std::mem::align_of::<PointerI32>());
     }
 }

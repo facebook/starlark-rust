@@ -29,9 +29,10 @@ use gazebo::{cast, prelude::*};
 use crate::{
     gazebo::any::AnyLifetime,
     values::{
+        int::PointerI32,
         layout::{arena::AValueRepr, avalue::AValue},
         string::StarlarkStr,
-        AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap, FrozenValue, Heap, PointerI32,
+        AllocFrozenValue, AllocValue, Freeze, Freezer, FrozenHeap, FrozenValue, Heap,
         StarlarkValue, Trace, Tracer, UnpackValue, Value, ValueLike,
     },
 };
@@ -233,7 +234,7 @@ impl<'v, T: StarlarkValue<'v>> AllocFrozenValue for FrozenValueTyped<'v, T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::values::{FrozenValue, FrozenValueTyped, PointerI32, StarlarkValue};
+    use crate::values::{int::PointerI32, FrozenValue, FrozenValueTyped, StarlarkValue};
 
     #[test]
     fn int() {

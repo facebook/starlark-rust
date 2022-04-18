@@ -55,6 +55,7 @@ use crate::{
         float::StarlarkFloat,
         function::{FrozenBoundMethod, NativeFunction, FUNCTION_TYPE},
         identity::ValueIdentity,
+        int::PointerI32,
         layout::{
             arena::{AValueHeader, AValueRepr},
             avalue::{
@@ -62,7 +63,6 @@ use crate::{
                 VALUE_TRUE,
             },
             pointer::{FrozenPointer, Pointer},
-            pointer_i32::PointerI32,
         },
         list::FrozenList,
         num::Num,
@@ -1047,7 +1047,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::values::{none::NoneType, string::StarlarkStr, Heap, PointerI32, Value, ValueLike};
+    use crate::values::{
+        none::NoneType, string::StarlarkStr, types::int::PointerI32, Heap, Value, ValueLike,
+    };
 
     #[test]
     fn test_downcast_ref() {

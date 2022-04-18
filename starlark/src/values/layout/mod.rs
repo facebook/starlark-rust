@@ -19,7 +19,6 @@
 // Encoding none, bool etc in the pointer of frozen value
 
 pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
-pub(crate) use pointer_i32::PointerI32;
 
 mod arena;
 mod avalue;
@@ -27,7 +26,6 @@ mod fast_cell;
 mod heap;
 pub(crate) mod identity;
 mod pointer;
-mod pointer_i32;
 pub(crate) mod static_string;
 pub(crate) mod typed;
 pub(crate) mod value;
