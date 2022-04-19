@@ -466,6 +466,11 @@ impl<'v> Value<'v> {
         self.get_ref().bit_xor(other, heap)
     }
 
+    /// `~x`.
+    pub fn bit_not(self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().bit_not(heap)
+    }
+
     /// `x << other`.
     pub fn left_shift(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.get_ref().left_shift(other, heap)

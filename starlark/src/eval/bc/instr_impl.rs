@@ -649,8 +649,8 @@ impl InstrUnOpImpl for InstrMinusImpl {
 
 impl InstrUnOpImpl for InstrBitNotImpl {
     #[inline(always)]
-    fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(Value::new_int(!v.to_int()?))
+    fn eval<'v>(v: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        v.bit_not(heap)
     }
 }
 

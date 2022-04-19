@@ -646,6 +646,11 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize 
         ValueError::unsupported_with(self, "^", other)
     }
 
+    /// Bitwise `~` operator.
+    fn bit_not(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        ValueError::unsupported(self, "~")
+    }
+
     /// Bitwise `<<` operator.
     fn left_shift(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "<<", other)
@@ -766,6 +771,7 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
     fn bit_and(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn bit_or(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn bit_xor(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn bit_not(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn left_shift(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn right_shift(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>);

@@ -267,6 +267,10 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
+    fn bit_not(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        Ok(Value::new_int(!self.get()))
+    }
+
     fn left_shift(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             if let Ok(other) = other.try_into() {
