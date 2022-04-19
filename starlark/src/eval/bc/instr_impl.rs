@@ -1417,14 +1417,13 @@ impl InstrNoFlowImpl for InstrDefImpl {
         // index in the parameter mapping, and it messes up the indexes
         let mut i = 0;
         for x in &def_data.params {
-            if let Some(t) = x.ty() {
+            if let Some((name, Some(t))) = x.name_ty() {
                 assert!(*t == pop_index);
                 let v = pop[pop_index as usize];
                 pop_index += 1;
-                let name = x.name().unwrap_or("unknown").to_owned();
                 parameter_types.push((
                     i,
-                    name,
+                    name.name.clone(),
                     v,
                     expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval).map_err(|e| e.0)?,
                 ));

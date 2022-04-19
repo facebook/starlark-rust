@@ -123,16 +123,6 @@ impl<T> ParameterCompiled<T> {
         }
     }
 
-    fn param_name(&self) -> Option<&ParameterName> {
-        match self {
-            Self::Normal(x, _) => Some(x),
-            Self::WithDefaultValue(x, _, _) => Some(x),
-            Self::NoArgs => None,
-            Self::Args(x, _) => Some(x),
-            Self::KwArgs(x, _) => Some(x),
-        }
-    }
-
     fn accepts_positional(&self) -> bool {
         match self {
             ParameterCompiled::Normal(_, _) => true,
@@ -141,21 +131,17 @@ impl<T> ParameterCompiled<T> {
         }
     }
 
-    pub(crate) fn name(&self) -> Option<&str> {
-        self.param_name().map(|n| n.name.as_str())
-    }
-
     pub(crate) fn captured(&self) -> Captured {
-        self.param_name().map_or(Captured::No, |n| n.captured)
+        self.name_ty().map_or(Captured::No, |(n, _t)| n.captured)
     }
 
-    pub(crate) fn ty(&self) -> Option<&T> {
+    pub(crate) fn name_ty(&self) -> Option<(&ParameterName, Option<&T>)> {
         match self {
-            Self::Normal(_, t) => t.as_ref(),
-            Self::WithDefaultValue(_, t, _) => t.as_ref(),
+            Self::Normal(n, t) => Some((n, t.as_ref())),
+            Self::WithDefaultValue(n, t, _) => Some((n, t.as_ref())),
             Self::NoArgs => None,
-            Self::Args(_, t) => t.as_ref(),
-            Self::KwArgs(_, t) => t.as_ref(),
+            Self::Args(n, t) => Some((n, t.as_ref())),
+            Self::KwArgs(n, t) => Some((n, t.as_ref())),
         }
     }
 }
