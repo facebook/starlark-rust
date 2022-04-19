@@ -784,8 +784,8 @@ impl InstrBinOpImpl for InstrDivideImpl {
 
 impl InstrBinOpImpl for InstrBitAndImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        v0.bit_and(v1)
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        v0.bit_and(v1, heap)
     }
 }
 
@@ -805,22 +805,22 @@ impl InstrBinOpImpl for InstrBitOrAssignImpl {
 
 impl InstrBinOpImpl for InstrBitXorImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        v0.bit_xor(v1)
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        v0.bit_xor(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrLeftShiftImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        v0.left_shift(v1)
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        v0.left_shift(v1, heap)
     }
 }
 
 impl InstrBinOpImpl for InstrRightShiftImpl {
     #[inline(always)]
-    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        v0.right_shift(v1)
+    fn eval<'v>(v0: Value<'v>, v1: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        v0.right_shift(v1, heap)
     }
 }
 

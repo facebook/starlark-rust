@@ -621,7 +621,7 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize 
     }
 
     /// Bitwise `&` operator.
-    fn bit_and(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn bit_and(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "&", other)
     }
 
@@ -642,17 +642,17 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize 
     }
 
     /// Bitwise `^` operator.
-    fn bit_xor(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn bit_xor(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "^", other)
     }
 
     /// Bitwise `<<` operator.
-    fn left_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn left_shift(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, "<<", other)
     }
 
     /// Bitwise `>>` operator.
-    fn right_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn right_shift(&self, other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         ValueError::unsupported_with(self, ">>", other)
     }
 
@@ -763,11 +763,11 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
     fn percent(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn bit_and(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn bit_or(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn bit_xor(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
-    fn left_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
-    fn right_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>>;
+    fn bit_xor(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn left_shift(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
+    fn right_shift(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
     fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>);
     fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()>;
     fn set_attr(&self, _attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()>;

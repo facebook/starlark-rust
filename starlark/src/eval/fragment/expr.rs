@@ -137,11 +137,11 @@ impl ExprBinOp {
             ExprBinOp::Percent => a.percent(b, heap),
             ExprBinOp::Divide => a.div(b, heap),
             ExprBinOp::FloorDivide => a.floor_div(b, heap),
-            ExprBinOp::BitAnd => a.bit_and(b),
+            ExprBinOp::BitAnd => a.bit_and(b, heap),
             ExprBinOp::BitOr => a.bit_or(b, heap),
-            ExprBinOp::BitXor => a.bit_xor(b),
-            ExprBinOp::LeftShift => a.left_shift(b),
-            ExprBinOp::RightShift => a.right_shift(b),
+            ExprBinOp::BitXor => a.bit_xor(b, heap),
+            ExprBinOp::LeftShift => a.left_shift(b, heap),
+            ExprBinOp::RightShift => a.right_shift(b, heap),
         }
     }
 }

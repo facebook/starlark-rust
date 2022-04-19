@@ -920,19 +920,19 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
-    fn bit_and(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn bit_and(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
     fn bit_or(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
-    fn bit_xor(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn bit_xor(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
-    fn left_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn left_shift(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
-    fn right_shift(&self, _other: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn right_shift(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         panic!()
     }
     fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
@@ -1103,20 +1103,20 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     fn floor_div(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.1.floor_div(other, heap)
     }
-    fn bit_and(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.1.bit_and(other)
+    fn bit_and(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.1.bit_and(other, heap)
     }
     fn bit_or(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         self.1.bit_or(other, heap)
     }
-    fn bit_xor(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.1.bit_xor(other)
+    fn bit_xor(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.1.bit_xor(other, heap)
     }
-    fn left_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.1.left_shift(other)
+    fn left_shift(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.1.left_shift(other, heap)
     }
-    fn right_shift(&self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.1.right_shift(other)
+    fn right_shift(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.1.right_shift(other, heap)
     }
     fn export_as(&self, variable_name: &str, eval: &mut Evaluator<'v, '_>) {
         self.1.export_as(variable_name, eval)

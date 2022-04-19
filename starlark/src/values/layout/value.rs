@@ -452,8 +452,8 @@ impl<'v> Value<'v> {
     }
 
     /// `x & other`.
-    pub fn bit_and(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_ref().bit_and(other)
+    pub fn bit_and(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().bit_and(other, heap)
     }
 
     /// `x | other`.
@@ -462,18 +462,18 @@ impl<'v> Value<'v> {
     }
 
     /// `x ^ other`.
-    pub fn bit_xor(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_ref().bit_xor(other)
+    pub fn bit_xor(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().bit_xor(other, heap)
     }
 
     /// `x << other`.
-    pub fn left_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_ref().left_shift(other)
+    pub fn left_shift(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().left_shift(other, heap)
     }
 
     /// `x >> other`.
-    pub fn right_shift(self, other: Value<'v>) -> anyhow::Result<Value<'v>> {
-        self.get_ref().right_shift(other)
+    pub fn right_shift(self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.get_ref().right_shift(other, heap)
     }
 
     pub(crate) fn invoke_with_loc(

@@ -243,7 +243,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
-    fn bit_and(&self, other: Value) -> anyhow::Result<Value<'v>> {
+    fn bit_and(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             Ok(Value::new_int(self.get() & other))
         } else {
@@ -259,7 +259,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
-    fn bit_xor(&self, other: Value) -> anyhow::Result<Value<'v>> {
+    fn bit_xor(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             Ok(Value::new_int(self.get() ^ other))
         } else {
@@ -267,7 +267,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
-    fn left_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
+    fn left_shift(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             if let Ok(other) = other.try_into() {
                 if let Some(r) = self.get().checked_shl(other) {
@@ -283,7 +283,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
-    fn right_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
+    fn right_shift(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
             if let Ok(other) = other.try_into() {
                 if let Some(r) = self.get().checked_shr(other) {
