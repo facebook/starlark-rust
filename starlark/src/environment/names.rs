@@ -96,7 +96,7 @@ impl MutableNames {
         self.0.borrow_mut().remove(name);
     }
 
-    pub fn all_names(&self) -> IndexMap<String, ModuleSlotId> {
+    pub(crate) fn all_names(&self) -> Vec<(String, ModuleSlotId)> {
         self.0
             .borrow()
             .iter()
@@ -104,7 +104,7 @@ impl MutableNames {
             .collect()
     }
 
-    pub(crate) fn all_names_and_visibilities(&self) -> IndexMap<String, Visibility> {
+    pub(crate) fn all_names_and_visibilities(&self) -> Vec<(String, Visibility)> {
         self.0
             .borrow()
             .iter()
