@@ -42,7 +42,7 @@ pub struct Hashed<K> {
 }
 
 /// A borrowed key and its hash.
-#[derive(Copy_, Clone_, Dupe_)]
+#[derive(Copy_, Clone_, Dupe_, Eq, PartialEq)]
 pub struct BorrowHashed<'a, Q: ?Sized> {
     hash: StarlarkHashValue,
     key: &'a Q,
