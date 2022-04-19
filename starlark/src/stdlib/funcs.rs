@@ -512,9 +512,9 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(type(INT_TYPE))]
     #[starlark(speculative_exec_safe)]
-    fn int(ref a: Option<Value>, base: Option<Value>) -> anyhow::Result<i32> {
+    fn int(ref a: Option<Value<'v>>, base: Option<Value<'v>>) -> anyhow::Result<Value<'v>> {
         if a.is_none() {
-            return Ok(0);
+            return Ok(Value::new_int(0));
         }
         let a = a.unwrap();
         if let Some(s) = a.unpack_str() {
@@ -578,12 +578,14 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 )
             }
             match (u32::from_str_radix(s, base), negate) {
-                (Ok(i), false) => i32::try_from(i).map_err(|_| err(a, base, "overflow")),
+                (Ok(i), false) => i32::try_from(i)
+                    .map(Value::new_int)
+                    .map_err(|_| err(a, base, "overflow")),
                 (Ok(i), true) => {
                     if i > 0x80000000 {
                         Err(err(a, base, "overflow"))
                     } else {
-                        Ok(0u32.wrapping_sub(i) as i32)
+                        Ok(Value::new_int(0u32.wrapping_sub(i) as i32))
                     }
                 }
                 (Err(x), _) => Err(err(a, base, x)),
@@ -595,14 +597,14 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
             ))
         } else if let Some(Num::Float(f)) = a.unpack_num() {
             match Num::from(f.trunc()).as_int() {
-                Some(i) => Ok(i),
+                Some(i) => Ok(Value::new_int(i)),
                 None => Err(anyhow!(
                     "int() cannot convert float to integer: {}",
                     a.to_repr()
                 )),
             }
         } else {
-            Ok(a.to_int()?)
+            Ok(Value::new_int(a.to_int()?))
         }
     }
 
