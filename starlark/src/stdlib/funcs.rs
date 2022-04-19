@@ -18,7 +18,7 @@
 //! A module with the standard function and constants that are by default in all
 //! dialect of Starlark
 
-use std::{cmp::Ordering, num::NonZeroI32};
+use std::{cmp::Ordering, fmt::Display, num::NonZeroI32};
 
 use anyhow::anyhow;
 
@@ -528,11 +528,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                     base
                 ));
             }
-            let (sign, s) = {
+            let (negate, s) = {
                 match s.chars().next() {
-                    Some('+') => (1, s.get(1..).unwrap()),
-                    Some('-') => (-1, s.get(1..).unwrap()),
-                    _ => (1, s),
+                    Some('+') => (false, s.get(1..).unwrap()),
+                    Some('-') => (true, s.get(1..).unwrap()),
+                    _ => (false, s),
                 }
             };
             let base = if base == 0 {
@@ -569,14 +569,24 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 }
                 _ => s,
             };
-            match i32::from_str_radix(s, base) {
-                Ok(i) => Ok(sign * i),
-                Err(x) => Err(anyhow!(
+            fn err(a: Value, base: u32, error: impl Display) -> anyhow::Error {
+                anyhow!(
                     "{} is not a valid number in base {}: {}",
                     a.to_repr(),
                     base,
-                    x,
-                )),
+                    error,
+                )
+            }
+            match (u32::from_str_radix(s, base), negate) {
+                (Ok(i), false) => i32::try_from(i).map_err(|_| err(a, base, "overflow")),
+                (Ok(i), true) => {
+                    if i > 0x80000000 {
+                        Err(err(a, base, "overflow"))
+                    } else {
+                        Ok(0u32.wrapping_sub(i) as i32)
+                    }
+                }
+                (Err(x), _) => Err(err(a, base, x)),
             }
         } else if let Some(base) = base {
             Err(anyhow!(
@@ -1117,5 +1127,15 @@ hash(foo)
 "#,
             "doesn't match",
         );
+    }
+
+    #[test]
+    fn test_int() {
+        assert::eq("2147483647", "int('2147483647')");
+        assert::eq("-2147483647 - 1", "int('-2147483648')");
+        assert::eq("0", "int('0')");
+        assert::eq("0", "int('-0')");
+        assert::fail("int('2147483648')", "overflow");
+        assert::fail("int('-2147483649')", "overflow");
     }
 }
