@@ -290,18 +290,10 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
         if let Some(other_float) = other.unpack_num().map(|n| n.as_float()) {
             // According to the spec (https://github.com/bazelbuild/starlark/blob/689f54426951638ef5b7c41a14d8fc48e65c5f77/spec.md#floating-point-numbers)
             // All NaN values compare equal to each other, but greater than any non-NaN float value.
-            match (self.0.is_nan(), other_float.is_nan()) {
-                (true, true) => Ok(Ordering::Equal),
-                (true, false) => Ok(Ordering::Greater),
-                (false, true) => Ok(Ordering::Less),
-                (false, false) => {
-                    if let Some(ordering) = self.0.partial_cmp(&other_float) {
-                        Ok(ordering)
-                    } else {
-                        // This shouldn't happen as we handle potential NaNs above
-                        ValueError::unsupported_with(self, "==", other)
-                    }
-                }
+            if let Some(ord) = self.0.partial_cmp(&other_float) {
+                Ok(ord)
+            } else {
+                Ok(self.0.is_nan().cmp(&other_float.is_nan()))
             }
         } else {
             ValueError::unsupported_with(self, "==", other)
