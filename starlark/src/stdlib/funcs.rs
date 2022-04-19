@@ -595,13 +595,16 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                 "int() cannot convert non-string with explicit base '{}'",
                 base.to_repr()
             ))
-        } else if let Some(Num::Float(f)) = a.unpack_num() {
-            match Num::from(f.trunc()).as_int() {
-                Some(i) => Ok(Value::new_int(i)),
-                None => Err(anyhow!(
-                    "int() cannot convert float to integer: {}",
-                    a.to_repr()
-                )),
+        } else if let Some(num) = a.unpack_num() {
+            match num {
+                Num::Float(f) => match Num::from(f.trunc()).as_int() {
+                    Some(i) => Ok(Value::new_int(i)),
+                    None => Err(anyhow!(
+                        "int() cannot convert float to integer: {}",
+                        a.to_repr()
+                    )),
+                },
+                Num::Int(..) => Ok(a),
             }
         } else {
             Ok(Value::new_int(a.to_int()?))
