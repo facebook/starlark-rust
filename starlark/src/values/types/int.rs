@@ -269,12 +269,15 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
 
     fn left_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
-            other
-                .try_into()
-                .ok()
-                .and_then(|unsigned_other| self.get().checked_shl(unsigned_other))
-                .map(Value::new_int)
-                .ok_or_else(|| ValueError::IntegerOverflow.into())
+            if let Ok(other) = other.try_into() {
+                if let Some(r) = self.get().checked_shl(other) {
+                    Ok(Value::new_int(r))
+                } else {
+                    Err(ValueError::IntegerOverflow.into())
+                }
+            } else {
+                Err(ValueError::NegativeShiftCount.into())
+            }
         } else {
             ValueError::unsupported_with(self, "<<", other)
         }
@@ -282,12 +285,15 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
 
     fn right_shift(&self, other: Value) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
-            other
-                .try_into()
-                .ok()
-                .and_then(|unsigned_other| self.get().checked_shr(unsigned_other))
-                .map(Value::new_int)
-                .ok_or_else(|| ValueError::IntegerOverflow.into())
+            if let Ok(other) = other.try_into() {
+                if let Some(r) = self.get().checked_shr(other) {
+                    Ok(Value::new_int(r))
+                } else {
+                    Err(ValueError::IntegerOverflow.into())
+                }
+            } else {
+                Err(ValueError::NegativeShiftCount.into())
+            }
         } else {
             ValueError::unsupported_with(self, ">>", other)
         }

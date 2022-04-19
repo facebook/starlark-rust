@@ -49,9 +49,8 @@ fn bitwise_test() {
 "#,
     );
 
-    // For now, we report negative shift amounts as integer overflow
-    assert::fail("1 << -13", "overflow");
-    assert::fail("1 >> -13", "overflow");
+    assert::fail("1 << -13", "Negative shift count");
+    assert::fail("1 >> -13", "Negative shift count");
 }
 
 #[test]
