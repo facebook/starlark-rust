@@ -39,7 +39,10 @@ use crate::{
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
         FrozenDef,
     },
-    syntax::ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
+    syntax::{
+        ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},
+        lexer::TokenInt,
+    },
     values::{
         function::BoundMethodGen,
         string::{interpolation::parse_percent_s_one, StarlarkStr},
@@ -921,7 +924,9 @@ fn eval_equals(l: IrSpanned<ExprCompiled>, r: IrSpanned<ExprCompiled>) -> ExprCo
 impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
-            AstLiteral::Int(i) => FrozenValue::new_int(i.node),
+            AstLiteral::Int(i) => match &i.node {
+                TokenInt::I32(i) => FrozenValue::new_int(*i),
+            },
             AstLiteral::Float(f) => heap.alloc(f.node),
             AstLiteral::String(x) => heap.alloc(x.node.as_str()),
         }

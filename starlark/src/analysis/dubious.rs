@@ -25,6 +25,7 @@ use crate::{
     codemap::{CodeMap, FileSpan, Span},
     syntax::{
         ast::{AstExpr, AstLiteral, Expr},
+        lexer::TokenInt,
         AstModule,
     },
     values::num::Num,
@@ -57,7 +58,9 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
     fn to_key<'a>(x: &'a AstExpr) -> Option<(Key<'a>, Span)> {
         match &**x {
             Expr::Literal(x) => match &*x {
-                AstLiteral::Int(x) => Some((Key::Int(x.node), x.span)),
+                AstLiteral::Int(x) => match &x.node {
+                    TokenInt::I32(i) => Some((Key::Int(*i), x.span)),
+                },
                 AstLiteral::Float(x) => {
                     let n = Num::from(x.node);
                     if let Some(i) = n.as_int() {

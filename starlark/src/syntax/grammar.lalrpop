@@ -468,7 +468,7 @@ extern {
 
 
       "IDENTIFIER" => lexer::Token::Identifier(<String>),
-      "INTEGER" => lexer::Token::Int(<i32>),
+      "INTEGER" => lexer::Token::Int(<lexer::TokenInt>),
       "FLOAT" => lexer::Token::Float(<f64>),
       "STRING" => lexer::Token::String(<String>)
     }

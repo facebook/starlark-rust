@@ -26,7 +26,10 @@ use derivative::Derivative;
 use gazebo::prelude::*;
 use static_assertions::assert_eq_size;
 
-use crate::codemap::{CodeMap, Pos, Span, Spanned};
+use crate::{
+    codemap::{CodeMap, Pos, Span, Spanned},
+    syntax::lexer::TokenInt,
+};
 
 /// Payload types attached to AST nodes.
 pub trait AstPayload: Debug {
@@ -71,7 +74,7 @@ pub type AstAssignIdent = AstAssignIdentP<AstNoPayload>;
 pub type AstArgument = AstArgumentP<AstNoPayload>;
 pub type AstString = Spanned<String>;
 pub type AstParameter = AstParameterP<AstNoPayload>;
-pub type AstInt = Spanned<i32>;
+pub type AstInt = Spanned<TokenInt>;
 pub type AstFloat = Spanned<f64>;
 pub type AstLoad = AstLoadP<AstNoPayload>;
 pub type AstStmt = AstStmtP<AstNoPayload>;
