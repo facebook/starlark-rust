@@ -193,6 +193,18 @@ impl<'v> Ord for StringValue<'v> {
     }
 }
 
+impl PartialOrd for FrozenStringValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
+    }
+}
+
+impl Ord for FrozenStringValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
 impl<'v> StringValue<'v> {
     /// Construct without a check that the value contains a string.
     ///
