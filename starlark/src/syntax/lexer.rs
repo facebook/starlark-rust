@@ -375,6 +375,19 @@ impl<'a> Lexer<'a> {
         )
     }
 
+    fn int(&self, s: &str, radix: u32) -> Lexeme {
+        match i32::from_str_radix(s, radix) {
+            Ok(i) => {
+                let span = self.lexer.span();
+                Ok((span.start, Token::Int(i), span.end))
+            }
+            Err(_) => {
+                // Because we validated the characters going in, it must have been an overflow
+                self.err_now(LexemeError::IntOverflow)
+            }
+        }
+    }
+
     pub fn next(&mut self) -> Option<Lexeme> {
         loop {
             // Note that this function doesn't always return - a few branches use `continue`
@@ -416,27 +429,29 @@ impl<'a> Lexer<'a> {
                         }
                         Token::Reserved => Some(self.err_now(LexemeError::ReservedKeyword)),
                         Token::Error => Some(self.err_now(LexemeError::InvalidInput)),
-                        Token::Int(radix) => {
-                            let mut s = self.lexer.slice();
-                            if radix == 10 {
-                                if s.len() > 1 && &s[0..1] == "0" {
-                                    return Some(self.err_now(LexemeError::StartsZero));
-                                }
-                            } else {
-                                // Skip the 0x prefix
-                                s = &s[2..];
+                        Token::RawDecInt => {
+                            let s = self.lexer.slice();
+                            if s.len() > 1 && &s[0..1] == "0" {
+                                return Some(self.err_now(LexemeError::StartsZero));
                             }
-                            match i32::from_str_radix(s, radix as u32) {
-                                Ok(i) => {
-                                    let span = self.lexer.span();
-                                    Some(Ok((span.start, Token::Int(i), span.end)))
-                                }
-                                Err(_) => {
-                                    // Because we validated the characters going in, it must have been an overflow
-                                    Some(self.err_now(LexemeError::IntOverflow))
-                                }
-                            }
+                            Some(self.int(s, 10))
                         }
+                        Token::RawOctInt => {
+                            let s = self.lexer.slice();
+                            assert!(s.starts_with("0o") || s.starts_with("0O"));
+                            Some(self.int(&s[2..], 8))
+                        }
+                        Token::RawHexInt => {
+                            let s = self.lexer.slice();
+                            assert!(s.starts_with("0x") || s.starts_with("0X"));
+                            Some(self.int(&s[2..], 16))
+                        }
+                        Token::RawBinInt => {
+                            let s = self.lexer.slice();
+                            assert!(s.starts_with("0b") || s.starts_with("0B"));
+                            Some(self.int(&s[2..], 2))
+                        }
+                        Token::Int(..) => unreachable!("Lexer does not produce Int tokens"),
                         Token::RawDoubleQuote => {
                             let raw = self.lexer.span().len() == 2;
                             if self.lexer.remainder().starts_with("\"\"") {
@@ -525,10 +540,15 @@ pub enum Token {
     , |lex| lex.slice().to_owned())]
     Identifier(String), // An identifier
 
-    #[regex("[0-9]+", |_| 10)]
-    #[regex("0[xX][A-Fa-f0-9]+", |_| 16)]
-    #[regex("0[bB][01]+", |_| 2)]
-    #[regex("0[oO][0-7]+", |_| 8)]
+    #[regex("[0-9]+")]
+    RawDecInt,
+    #[regex("0[xX][A-Fa-f0-9]+")]
+    RawHexInt,
+    #[regex("0[bB][01]+")]
+    RawBinInt,
+    #[regex("0[oO][0-7]+")]
+    RawOctInt,
+
     Int(i32), // An integer literal (123, 0x1, 0b1011, 0o755, ...)
 
     #[regex("[0-9]+\\.[0-9]*([eE][-+]?[0-9]+)?", |lex| lex.slice().parse::<f64>())]
@@ -754,6 +774,10 @@ impl Display for Token {
             Token::Reserved => write!(f, "reserved keyword"),
             Token::Identifier(s) => write!(f, "identifier '{}'", s),
             Token::Int(i) => write!(f, "integer literal '{}'", i),
+            Token::RawDecInt => write!(f, "decimal integer literal"),
+            Token::RawHexInt => write!(f, "hexadecimal integer literal"),
+            Token::RawOctInt => write!(f, "octal integer literal"),
+            Token::RawBinInt => write!(f, "binary integer literal"),
             Token::Float(n) => write!(f, "float literal '{}'", n),
             Token::String(s) => write!(f, "string literal '{}'", s),
             Token::RawSingleQuote => write!(f, "starting '"),
