@@ -18,6 +18,7 @@
 use std::{
     borrow::Borrow,
     fmt::{Debug, Display},
+    hash::{Hash, Hasher},
 };
 
 use gazebo::{
@@ -52,8 +53,6 @@ pub type FrozenStringValue = FrozenValueTyped<'static, StarlarkStr>;
 /// We use `ValueTyped<StarlarkStr>` often, but also we define more operations
 /// on `ValueTyped<StarlarkStr>` than on generic `ValueTyped<T>`.
 pub type StringValue<'v> = ValueTyped<'v, StarlarkStr>;
-
-// TODO(nga): move everything below to `ValueTyped`.
 
 unsafe impl<'v> Coerce<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
@@ -145,6 +144,73 @@ impl<'v> StringValueLike<'v> for StringValue<'v> {
 impl<'v> StringValueLike<'v> for FrozenStringValue {
     fn to_string_value(self) -> StringValue<'v> {
         self.to_value_typed()
+    }
+}
+
+impl<'v1, 'v2> PartialEq<StringValue<'v1>> for StringValue<'v2> {
+    fn eq(&self, other: &StringValue) -> bool {
+        // `PartialEq` can be implemented for other types, not just for `StarlarkStr`.
+        // But at the moment of writing, we don't guarantee that `PartialEq` for `T`
+        // is consistent with `StarlarkValue::equals` for `T`.
+        self.to_value().ptr_eq(other.to_value()) || self.as_ref() == other.as_ref()
+    }
+}
+
+impl<'v> Eq for StringValue<'v> {}
+
+impl PartialEq for FrozenStringValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_value_typed() == other.to_value_typed()
+    }
+}
+
+impl Eq for FrozenStringValue {}
+
+impl<'v> PartialEq<StringValue<'v>> for FrozenStringValue {
+    fn eq(&self, other: &StringValue<'v>) -> bool {
+        &self.to_value_typed() == other
+    }
+}
+
+impl<'v> PartialEq<FrozenStringValue> for StringValue<'v> {
+    fn eq(&self, other: &FrozenStringValue) -> bool {
+        self == &other.to_value_typed()
+    }
+}
+
+impl<'v> Hash for StringValue<'v> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
+}
+
+impl Hash for FrozenStringValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
+}
+
+impl<'v> PartialOrd for StringValue<'v> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_ref().partial_cmp(other.as_ref())
+    }
+}
+
+impl<'v> Ord for StringValue<'v> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_ref().cmp(other.as_ref())
+    }
+}
+
+impl PartialOrd for FrozenStringValue {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_ref().partial_cmp(other.as_ref())
+    }
+}
+
+impl Ord for FrozenStringValue {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_ref().cmp(other.as_ref())
     }
 }
 

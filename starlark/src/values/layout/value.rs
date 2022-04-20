@@ -351,7 +351,7 @@ impl<'v> Value<'v> {
     /// Note that other properties are not guaranteed, and the result is not considered part of the API.
     /// The result can be impacted by optimisations such as hash-consing, copy-on-write, partial
     /// evaluation etc.
-    pub fn ptr_eq(self, other: Self) -> bool {
+    pub fn ptr_eq(self, other: Value) -> bool {
         self.0.ptr_eq(other.0)
     }
 
