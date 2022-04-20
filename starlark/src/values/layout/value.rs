@@ -54,7 +54,6 @@ use crate::{
         enumeration::{EnumType, FrozenEnumValue},
         float::StarlarkFloat,
         function::{FrozenBoundMethod, NativeFunction, FUNCTION_TYPE},
-        identity::ValueIdentity,
         int::PointerI32,
         layout::{
             arena::{AValueHeader, AValueRepr},
@@ -63,6 +62,8 @@ use crate::{
                 VALUE_TRUE,
             },
             pointer::{FrozenPointer, Pointer},
+            static_string::VALUE_EMPTY_STRING,
+            typed::string::StringValueLike,
         },
         list::FrozenList,
         num::Num,
@@ -70,14 +71,12 @@ use crate::{
         record::{FrozenRecord, RecordType},
         recursive_repr_or_json_guard::{json_stack_push, repr_stack_push},
         stack_guard,
-        static_string::VALUE_EMPTY_STRING,
         string::StarlarkStr,
         structs::FrozenStruct,
         tuple::FrozenTuple,
-        typed::string::StringValueLike,
         types::unbound::MaybeUnboundValue,
         Freeze, Freezer, FrozenRef, FrozenStringValue, FrozenValueTyped, Heap, StarlarkValue,
-        StringValue, UnpackValue, ValueError,
+        StringValue, UnpackValue, ValueError, ValueIdentity,
     },
 };
 

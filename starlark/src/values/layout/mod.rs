@@ -18,12 +18,10 @@
 // Possible optimisations:
 // Encoding none, bool etc in the pointer of frozen value
 
-pub use heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer};
-
 mod arena;
 mod avalue;
 mod fast_cell;
-mod heap;
+pub(crate) mod heap;
 pub(crate) mod identity;
 mod pointer;
 pub(crate) mod static_string;

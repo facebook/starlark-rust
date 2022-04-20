@@ -42,16 +42,18 @@ pub use crate::values::{
     freeze::Freeze,
     frozen_ref::FrozenRef,
     layout::{
-        identity::*,
+        heap::{Freezer, FrozenHeap, FrozenHeapRef, Heap, Tracer},
+        identity::ValueIdentity,
         static_string::StarlarkStrNRepr,
-        typed::string::{FrozenStringValue, StringValue},
-        value::*,
-        *,
+        typed::{
+            string::{FrozenStringValue, StringValue},
+            FrozenValueTyped, ValueTyped,
+        },
+        value::{FrozenValue, Value, ValueLike},
     },
     owned::{OwnedFrozenValue, OwnedFrozenValueTyped},
     trace::Trace,
     traits::{ComplexValue, NoSimpleValue, StarlarkValue},
-    typed::{FrozenValueTyped, ValueTyped},
     types::{
         any, array, bool, dict, enumeration, float, function, int, list, none, range, record,
         string, structs, tuple,

@@ -43,8 +43,8 @@ use crate::{
         runtime::call_stack::FrozenFileSpan,
     },
     values::{
-        function::NativeFunction, typed::FrozenValueTyped, types::known_methods::get_known_method,
-        FrozenValue,
+        function::NativeFunction, types::known_methods::get_known_method, FrozenValue,
+        FrozenValueTyped,
     },
 };
 

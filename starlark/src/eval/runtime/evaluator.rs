@@ -50,8 +50,8 @@ use crate::{
         extra::{PrintHandler, StderrPrintHandler},
     },
     values::{
-        layout::value_captured::value_captured_get, value_captured::ValueCaptured, FrozenHeap,
-        FrozenRef, Heap, Trace, Tracer, Value, ValueLike,
+        layout::value_captured::{value_captured_get, ValueCaptured},
+        FrozenHeap, FrozenRef, Heap, Trace, Tracer, Value, ValueLike,
     },
 };
 

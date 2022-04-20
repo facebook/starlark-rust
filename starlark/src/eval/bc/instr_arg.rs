@@ -39,8 +39,7 @@ use crate::{
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
     values::{
-        typed::FrozenValueTyped, types::known_methods::KnownMethod, FrozenRef, FrozenValue,
-        StarlarkValue,
+        types::known_methods::KnownMethod, FrozenRef, FrozenValue, FrozenValueTyped, StarlarkValue,
     },
 };
 

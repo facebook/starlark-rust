@@ -53,10 +53,9 @@ use crate::{
         function::NativeFunction,
         list::List,
         string::interpolation::{format_one, percent_s_one},
-        typed::FrozenValueTyped,
         types::known_methods::KnownMethod,
         typing::TypeCompiled,
-        FrozenRef, FrozenStringValue, FrozenValue, Heap, StarlarkValue, Value,
+        FrozenRef, FrozenStringValue, FrozenValue, FrozenValueTyped, Heap, StarlarkValue, Value,
     },
 };
 
