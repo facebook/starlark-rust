@@ -30,14 +30,16 @@ use std::{
 };
 
 use gazebo::{any::AnyLifetime, cast};
+use num_bigint::BigInt;
+use num_traits::Signed;
 use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
     values::{
         basic::StarlarkValueBasic, error::ValueError, float::StarlarkFloat, num::Num,
-        AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue, UnpackValue,
-        Value,
+        types::bigint::StarlarkBigInt, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
+        StarlarkValue, UnpackValue, Value,
     },
 };
 
@@ -62,21 +64,6 @@ impl UnpackValue<'_> for i32 {
 
     fn unpack_value(value: Value) -> Option<Self> {
         value.unpack_int()
-    }
-}
-
-fn i64_arith_bin_op<'v, F>(
-    left: i32,
-    right: Value,
-    op: &'static str,
-    f: F,
-) -> anyhow::Result<Value<'v>>
-where
-    F: FnOnce(i32, i32) -> anyhow::Result<i32>,
-{
-    match right.unpack_int() {
-        Some(right) => Ok(Value::new_int(f(left, right)?)),
-        None => ValueError::unsupported_owned(INT_TYPE, op, Some(INT_TYPE)),
     }
 }
 
@@ -109,6 +96,11 @@ impl PointerI32 {
         cast::ptr_to_usize(self) as i32
     }
 
+    /// This operation is expensive, use only if you have to.
+    fn to_bigint(&self) -> BigInt {
+        BigInt::from(self.get())
+    }
+
     pub(crate) fn type_is_pointer_i32<'v, T: StarlarkValue<'v>>() -> bool {
         T::static_type_id() == PointerI32::static_type_id()
     }
@@ -135,6 +127,7 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         Ok(match other.unpack_num() {
             Some(Num::Int(other)) => self.get() == other,
             Some(Num::Float(other)) => self.get() as f64 == other,
+            Some(Num::BigInt(b)) => *b == self.get(),
             None => false,
         })
     }
@@ -152,41 +145,45 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         Ok(Value::new_int(self.get()))
     }
-    fn minus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        self.get()
-            .checked_neg()
-            .map(Value::new_int)
-            .ok_or_else(|| ValueError::IntegerOverflow.into())
+    fn minus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        Ok(self.get().checked_neg().map_or_else(
+            || StarlarkBigInt::alloc_bigint(-BigInt::from(self.get()), heap),
+            Value::new_int,
+        ))
     }
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         match other.unpack_num() {
-            Some(Num::Int(other)) => Some(
-                self.get()
-                    .checked_add(other)
-                    .map(Value::new_int)
-                    .ok_or_else(|| ValueError::IntegerOverflow.into()),
-            ),
+            Some(Num::Int(other)) => Some(Ok(self.get().checked_add(other).map_or_else(
+                || StarlarkBigInt::alloc_bigint(self.to_bigint() + other, heap),
+                Value::new_int,
+            ))),
             Some(Num::Float(_)) => StarlarkFloat(self.get() as f64).add(other, heap),
+            Some(Num::BigInt(other)) => Some(Ok(StarlarkBigInt::alloc_bigint(
+                self.get() + other.get(),
+                heap,
+            ))),
             None => None,
         }
     }
     fn sub(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_num() {
-            Some(Num::Int(other)) => self
-                .get()
-                .checked_sub(other)
-                .map(Value::new_int)
-                .ok_or_else(|| ValueError::IntegerOverflow.into()),
+            Some(Num::Int(other)) => Ok(self.get().checked_sub(other).map_or_else(
+                || StarlarkBigInt::alloc_bigint(self.to_bigint() - other, heap),
+                Value::new_int,
+            )),
             Some(Num::Float(_)) => StarlarkFloat(self.get() as f64).sub(other, heap),
+            Some(Num::BigInt(other)) => {
+                Ok(StarlarkBigInt::alloc_bigint(self.get() - other.get(), heap))
+            }
             None => ValueError::unsupported_with(self, "-", other),
         }
     }
     fn mul(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         if let Some(other) = other.unpack_int() {
-            self.get()
-                .checked_mul(other)
-                .ok_or_else(|| ValueError::IntegerOverflow.into())
-                .map(Value::new_int)
+            Ok(self.get().checked_mul(other).map_or_else(
+                || StarlarkBigInt::alloc_bigint(self.to_bigint() * other, heap),
+                Value::new_int,
+            ))
         } else {
             other.mul(Value::new_int(self.get()), heap)
         }
@@ -199,71 +196,98 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
     fn percent(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(Num::Float(_)) = other.unpack_num() {
-            return StarlarkFloat(self.get() as f64).percent(other, heap);
+        match other.unpack_num() {
+            None => ValueError::unsupported_with(self, "%", other),
+            Some(Num::Float(_)) => return StarlarkFloat(self.get() as f64).percent(other, heap),
+            Some(Num::BigInt(other)) => {
+                return StarlarkBigInt::percent_big(&BigInt::from(self.get()), other.get(), heap);
+            }
+            Some(Num::Int(b)) => {
+                let a = self.get();
+                if b == 0 {
+                    return Err(ValueError::DivisionByZero.into());
+                }
+                // In Rust `i32::min_value() % -1` is overflow, but we should eval it to zero.
+                if self.get() == i32::min_value() && b == -1 {
+                    return Ok(Value::new_int(0));
+                }
+                let r = a % b;
+                if r == 0 {
+                    Ok(Value::new_int(0))
+                } else {
+                    Ok(Value::new_int(if b.signum() != r.signum() {
+                        r + b
+                    } else {
+                        r
+                    }))
+                }
+            }
         }
-        i64_arith_bin_op(self.get(), other, "%", |a, b| {
-            if b == 0 {
-                return Err(ValueError::DivisionByZero.into());
-            }
-            // In Rust `i32::min_value() % -1` is overflow, but we should eval it to zero.
-            if self.get() == i32::min_value() && b == -1 {
-                return Ok(0);
-            }
-            let r = a % b;
-            if r == 0 {
-                Ok(0)
-            } else {
-                Ok(if b.signum() != r.signum() { r + b } else { r })
-            }
-        })
     }
     fn floor_div(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(Num::Float(_)) = other.unpack_num() {
-            return StarlarkFloat(self.get() as f64).floor_div(other, heap);
+        let rhs = match other.unpack_num() {
+            None => return ValueError::unsupported_with(self, "//", other),
+            Some(rhs) => rhs,
+        };
+        match rhs {
+            Num::Float(_) => StarlarkFloat(self.get() as f64).floor_div(other, heap),
+            Num::Int(b) => {
+                let a = self.get();
+                if b == 0 {
+                    return Err(ValueError::DivisionByZero.into());
+                }
+                let sig = b.signum() * a.signum();
+                let offset = if sig < 0 && a % b != 0 { 1 } else { 0 };
+                match a.checked_div(b) {
+                    Some(div) => Ok(Value::new_int(div - offset)),
+                    None => StarlarkBigInt::floor_div_big(&BigInt::from(a), &BigInt::from(b), heap),
+                }
+            }
+            Num::BigInt(b) => {
+                StarlarkBigInt::floor_div_big(&BigInt::from(self.get()), b.get(), heap)
+            }
         }
-        i64_arith_bin_op(self.get(), other, "//", |a, b| {
-            if b == 0 {
-                return Err(ValueError::DivisionByZero.into());
-            }
-            let sig = b.signum() * a.signum();
-            let offset = if sig < 0 && a % b != 0 { 1 } else { 0 };
-            match a.checked_div(b) {
-                Some(div) => Ok(div - offset),
-                None => Err(ValueError::IntegerOverflow.into()),
-            }
-        })
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         match other.unpack_num() {
             Some(Num::Int(other)) => Ok(self.get().cmp(&other)),
             Some(Num::Float(_)) => StarlarkFloat(self.get() as f64).compare(other),
+            Some(Num::BigInt(b)) => Ok(StarlarkBigInt::cmp_small_big(self.get(), b)),
             None => ValueError::unsupported_with(self, "==", other),
         }
     }
 
-    fn bit_and(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
-            Ok(Value::new_int(self.get() & other))
-        } else {
-            ValueError::unsupported_with(self, "&", other)
+    fn bit_and(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match other.unpack_num() {
+            None | Some(Num::Float(_)) => ValueError::unsupported_with(self, "&", other),
+            Some(Num::Int(i)) => Ok(Value::new_int(self.get() & i)),
+            Some(Num::BigInt(b)) => Ok(StarlarkBigInt::alloc_bigint(
+                &self.to_bigint() & b.get(),
+                heap,
+            )),
         }
     }
 
-    fn bit_or(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
-            Ok(Value::new_int(self.get() | other))
-        } else {
-            ValueError::unsupported_with(self, "|", other)
+    fn bit_or(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match other.unpack_num() {
+            None | Some(Num::Float(_)) => ValueError::unsupported_with(self, "|", other),
+            Some(Num::Int(i)) => Ok(Value::new_int(self.get() | i)),
+            Some(Num::BigInt(b)) => Ok(StarlarkBigInt::alloc_bigint(
+                &self.to_bigint() | b.get(),
+                heap,
+            )),
         }
     }
 
-    fn bit_xor(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
-            Ok(Value::new_int(self.get() ^ other))
-        } else {
-            ValueError::unsupported_with(self, "^", other)
+    fn bit_xor(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match other.unpack_num() {
+            None | Some(Num::Float(_)) => ValueError::unsupported_with(self, "^", other),
+            Some(Num::Int(i)) => Ok(Value::new_int(self.get() ^ i)),
+            Some(Num::BigInt(b)) => Ok(StarlarkBigInt::alloc_bigint(
+                &self.to_bigint() ^ b.get(),
+                heap,
+            )),
         }
     }
 
@@ -272,34 +296,57 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
     }
 
     fn left_shift(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
-            if let Ok(other) = other.try_into() {
-                if let Some(r) = self.get().checked_shl(other) {
-                    Ok(Value::new_int(r))
+        match other.unpack_num() {
+            None | Some(Num::Float(_)) => ValueError::unsupported_with(self, "<<", other),
+            Some(Num::Int(other)) => {
+                if let Ok(other) = other.try_into() {
+                    if let Some(r) = self.get().checked_shl(other) {
+                        Ok(Value::new_int(r))
+                    } else {
+                        Err(ValueError::IntegerOverflow.into())
+                    }
+                } else {
+                    Err(ValueError::NegativeShiftCount.into())
+                }
+            }
+            Some(Num::BigInt(b)) => {
+                if b.get().is_negative() {
+                    Err(ValueError::NegativeShiftCount.into())
+                } else if self.get() == 0 {
+                    Ok(Value::new_int(0))
                 } else {
                     Err(ValueError::IntegerOverflow.into())
                 }
-            } else {
-                Err(ValueError::NegativeShiftCount.into())
             }
-        } else {
-            ValueError::unsupported_with(self, "<<", other)
         }
     }
 
+    #[allow(clippy::collapsible_else_if)]
     fn right_shift(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        if let Some(other) = other.unpack_int() {
-            if let Ok(other) = other.try_into() {
-                if let Some(r) = self.get().checked_shr(other) {
-                    Ok(Value::new_int(r))
+        match other.unpack_num() {
+            None | Some(Num::Float(_)) => ValueError::unsupported_with(self, ">>", other),
+            Some(Num::Int(other)) => {
+                if let Ok(other) = other.try_into() {
+                    if let Some(r) = self.get().checked_shr(other) {
+                        Ok(Value::new_int(r))
+                    } else {
+                        Err(ValueError::IntegerOverflow.into())
+                    }
                 } else {
-                    Err(ValueError::IntegerOverflow.into())
+                    Err(ValueError::NegativeShiftCount.into())
                 }
-            } else {
-                Err(ValueError::NegativeShiftCount.into())
             }
-        } else {
-            ValueError::unsupported_with(self, ">>", other)
+            Some(Num::BigInt(b)) => {
+                if b.get().is_negative() {
+                    Err(ValueError::NegativeShiftCount.into())
+                } else {
+                    if self.get() >= 0 {
+                        Ok(Value::new_int(0))
+                    } else {
+                        Ok(Value::new_int(-1))
+                    }
+                }
+            }
         }
     }
 }
@@ -341,6 +388,12 @@ mod tests {
 4 // 2 == 2
 "#,
         );
+    }
+
+    #[test]
+    fn test_minus() {
+        // `-i32::MIN` should overflow to `StarlarkBigInt`.
+        assert::eq("2147483648", "-(-2147483647 - 1)")
     }
 
     #[test]

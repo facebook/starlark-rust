@@ -18,6 +18,7 @@
 use std::collections::HashMap;
 
 use gazebo::variants::VariantName;
+use num_bigint::BigInt;
 use thiserror::Error;
 
 use crate::{
@@ -50,6 +51,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
     #[derive(PartialEq, Eq, Hash)]
     enum Key<'a> {
         Int(i32),
+        BigInt(&'a BigInt),
         Float(u64),
         String(&'a str),
         Identifier(&'a str),
@@ -60,6 +62,7 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
             Expr::Literal(x) => match &*x {
                 AstLiteral::Int(x) => match &x.node {
                     TokenInt::I32(i) => Some((Key::Int(*i), x.span)),
+                    TokenInt::BigInt(i) => Some((Key::BigInt(i), x.span)),
                 },
                 AstLiteral::Float(x) => {
                     let n = Num::from(x.node);

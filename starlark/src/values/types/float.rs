@@ -151,6 +151,37 @@ pub struct StarlarkFloat(pub f64);
 impl StarlarkFloat {
     /// The result of calling `type()` on floats.
     pub const TYPE: &'static str = "float";
+
+    pub(crate) fn compare_impl(a: f64, b: f64) -> Ordering {
+        // According to the spec (https://github.com/bazelbuild/starlark/blob/689f54426951638ef5b7c41a14d8fc48e65c5f77/spec.md#floating-point-numbers)
+        // All NaN values compare equal to each other, but greater than any non-NaN float value.
+        if let Some(ord) = a.partial_cmp(&b) {
+            ord
+        } else {
+            a.is_nan().cmp(&b.is_nan())
+        }
+    }
+
+    pub(crate) fn floor_div_impl(a: f64, b: f64) -> anyhow::Result<f64> {
+        if b == 0.0 {
+            Err(ValueError::DivisionByZero.into())
+        } else {
+            Ok((a / b).floor())
+        }
+    }
+
+    pub(crate) fn percent_impl(a: f64, b: f64) -> anyhow::Result<f64> {
+        if b == 0.0 {
+            Err(ValueError::DivisionByZero.into())
+        } else {
+            let r = a % b;
+            if r == 0.0 {
+                Ok(0.0)
+            } else {
+                Ok(if b.signum() != r.signum() { r + b } else { r })
+            }
+        }
+    }
 }
 
 impl<'v> AllocValue<'v> for f64 {
@@ -263,38 +294,19 @@ impl<'v> StarlarkValue<'v> for StarlarkFloat {
 
     fn percent(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         f64_arith_bin_op(self.0, other, heap, "%", |a, b| {
-            if b == 0.0 {
-                Err(ValueError::DivisionByZero.into())
-            } else {
-                let r = a % b;
-                if r == 0.0 {
-                    Ok(0.0)
-                } else {
-                    Ok(if b.signum() != r.signum() { r + b } else { r })
-                }
-            }
+            StarlarkFloat::percent_impl(a, b)
         })
     }
 
     fn floor_div(&self, other: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         f64_arith_bin_op(self.0, other, heap, "//", |l, r| {
-            if r == 0.0 {
-                Err(ValueError::DivisionByZero.into())
-            } else {
-                Ok((l / r).floor())
-            }
+            StarlarkFloat::floor_div_impl(l, r)
         })
     }
 
     fn compare(&self, other: Value) -> anyhow::Result<Ordering> {
         if let Some(other_float) = other.unpack_num().map(|n| n.as_float()) {
-            // According to the spec (https://github.com/bazelbuild/starlark/blob/689f54426951638ef5b7c41a14d8fc48e65c5f77/spec.md#floating-point-numbers)
-            // All NaN values compare equal to each other, but greater than any non-NaN float value.
-            if let Some(ord) = self.0.partial_cmp(&other_float) {
-                Ok(ord)
-            } else {
-                Ok(self.0.is_nan().cmp(&other_float.is_nan()))
-            }
+            Ok(StarlarkFloat::compare_impl(self.0, other_float))
         } else {
             ValueError::unsupported_with(self, "==", other)
         }

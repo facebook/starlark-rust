@@ -267,10 +267,6 @@ fn test_lexer_error_messages() {
         "invalid string escape sequence `x3 `",
     );
     f(
-        "large_int = !1238989456723879! + 8",
-        "integer overflow, must fit in 32 bits, got `1238989456723879`",
-    );
-    f(
         "leading_zero = !003! + 8",
         "integer cannot have leading 0, got `003`",
     );

@@ -17,6 +17,7 @@
 
 pub mod any;
 pub mod array;
+pub mod bigint;
 pub mod bool;
 pub mod dict;
 pub mod enumeration;

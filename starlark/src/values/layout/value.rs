@@ -30,6 +30,7 @@
 // somewhere. The solution is to have a separate value storage vs vtable.
 
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     fmt,
     fmt::{Debug, Display},
@@ -43,6 +44,7 @@ use gazebo::{
     prelude::*,
 };
 use indexmap::Equivalent;
+use num_bigint::BigInt;
 use serde::{Serialize, Serializer};
 
 use crate::{
@@ -252,8 +254,17 @@ impl<'v> Value<'v> {
     }
 
     /// Obtain the underlying numerical value, if it is one.
-    pub fn unpack_num(self) -> Option<Num> {
+    pub fn unpack_num(self) -> Option<Num<'v>> {
         Num::unpack_value(self)
+    }
+
+    /// This operation allocates `BigInt` for small int, use carefully.
+    pub(crate) fn unpack_int_or_big(self) -> Option<Cow<'v, BigInt>> {
+        match self.unpack_num()? {
+            Num::Float(_) => None,
+            Num::Int(x) => Some(Cow::Owned(BigInt::from(x))),
+            Num::BigInt(x) => Some(Cow::Borrowed(x.get())),
+        }
     }
 
     /// Obtain the underlying `bool` if it is a boolean.

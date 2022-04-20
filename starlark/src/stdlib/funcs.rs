@@ -604,7 +604,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
                         a.to_repr()
                     )),
                 },
-                Num::Int(..) => Ok(a),
+                Num::Int(..) | Num::BigInt(..) => Ok(a),
             }
         } else {
             Ok(Value::new_int(a.to_int()?))

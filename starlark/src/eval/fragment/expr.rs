@@ -50,6 +50,7 @@ use crate::{
         function::BoundMethodGen,
         string::{interpolation::parse_percent_s_one, StarlarkStr},
         types::{
+            bigint::StarlarkBigInt,
             bool::StarlarkBool,
             dict::Dict,
             float::StarlarkFloat,
@@ -931,6 +932,7 @@ impl AstLiteral {
         match self {
             AstLiteral::Int(i) => match &i.node {
                 TokenInt::I32(i) => FrozenValue::new_int(*i),
+                TokenInt::BigInt(i) => StarlarkBigInt::alloc_bigint_frozen(i.clone(), heap),
             },
             AstLiteral::Float(f) => heap.alloc(f.node),
             AstLiteral::String(x) => heap.alloc(x.node.as_str()),

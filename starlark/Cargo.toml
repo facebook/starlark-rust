@@ -57,6 +57,8 @@ textwrap = "0.14.2"
 regex = "1.5.4"
 strsim = "0.10.0"
 argfile = "0.1.0"
+num-bigint = "0.4.3"
+num-traits = "0.2.14"
 
 [dev-dependencies]
 rand      = { version = "0.8.4", features = ["small_rng"] }

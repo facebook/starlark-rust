@@ -17,12 +17,14 @@
 
 //! Helpers for numerical values.
 
-use either::Either;
-use gazebo::prelude::*;
+use gazebo::dupe::Dupe;
 
 use crate::{
     collections::StarlarkHashValue,
-    values::{types::float::StarlarkFloat, UnpackValue, Value},
+    values::{
+        types::{bigint::StarlarkBigInt, float::StarlarkFloat},
+        UnpackValue, Value, ValueLike,
+    },
 };
 
 /// [`Num`] represents a numerical value that can be unpacked from a [`Value`].
@@ -30,77 +32,95 @@ use crate::{
 /// It's an intermediate representation that facilitates conversions between
 /// numerical types and helps in implementation of arithmetical operations
 /// between them.
-#[derive(Clone, Copy, Dupe, Debug)]
-pub enum Num {
+#[derive(Clone, Debug, Dupe, Copy)]
+pub enum Num<'v> {
     Int(i32),
+    BigInt(&'v StarlarkBigInt),
     Float(f64),
 }
 
-type UnpackNumImpl = Either<i32, StarlarkFloat>;
-
-impl<'v> UnpackValue<'v> for Num {
+impl<'v> UnpackValue<'v> for Num<'v> {
     fn expected() -> String {
-        UnpackNumImpl::expected()
+        "int or float".to_owned()
     }
 
+    #[allow(clippy::manual_map)]
     fn unpack_value(value: Value<'v>) -> Option<Self> {
-        Some(match UnpackNumImpl::unpack_value(value)? {
-            Either::Left(i) => Num::Int(i),
-            Either::Right(f) => Num::Float(f.0),
-        })
+        if let Some(i) = value.unpack_int() {
+            Some(Num::Int(i))
+        } else if let Some(f) = value.downcast_ref::<StarlarkFloat>() {
+            Some(Num::Float(f.0))
+        } else if let Some(b) = value.downcast_ref::<StarlarkBigInt>() {
+            Some(Num::BigInt(b))
+        } else {
+            None
+        }
     }
 }
 
-impl Num {
+impl<'v> Num<'v> {
     /// Get underlying value as float
-    pub fn as_float(self) -> f64 {
+    pub fn as_float(&self) -> f64 {
         match self {
-            Self::Int(i) => i as f64,
-            Self::Float(f) => f,
+            Self::Int(i) => *i as f64,
+            Self::Float(f) => *f,
+            Self::BigInt(b) => b.to_f64(),
         }
     }
 
     /// Get underlying value as int (if it can be precisely expressed as int)
-    pub fn as_int(self) -> Option<i32> {
+    pub fn as_int(&self) -> Option<i32> {
         match self {
-            Self::Int(i) => Some(i),
+            Self::Int(i) => Some(*i),
             Self::Float(f) => {
                 // f64 can precisely represent all i32 values
                 // by a simple cast here we get for free:
                 // - making sure f doesn't have fractional part
                 // - i32 boundary checks
                 // - handling of special floats (+/- inf, nan)
-                let int_candidate = f as i32;
-                if f == int_candidate as f64 {
+                let int_candidate = *f as i32;
+                if *f == int_candidate as f64 {
                     Some(int_candidate)
                 } else {
                     None
                 }
+            }
+            Self::BigInt(..) => {
+                // `StarlarkBigInt` is outside of `i32` range.
+                None
             }
         }
     }
 
     /// Get hash of the underlying number
     pub(crate) fn get_hash_64(self) -> u64 {
+        fn float_hash(f: f64) -> u64 {
+            if f.is_nan() {
+                // all possible NaNs should hash to the same value
+                0
+            } else if f.is_infinite() {
+                u64::MAX
+            } else if f == 0.0 {
+                // Both 0.0 and -0.0 need the same hash, but are both equal to 0.0
+                0.0f64.to_bits()
+            } else {
+                f.to_bits()
+            }
+        }
+
         match (self.as_int(), self) {
             // equal ints and floats should have the same hash
             (Some(i), _) => i as u64,
-            (None, Self::Float(f)) => {
-                if f.is_nan() {
-                    // all possible NaNs should hash to the same value
-                    0
-                } else if f.is_infinite() {
-                    u64::MAX
-                } else if f == 0.0 {
-                    // Both 0.0 and -0.0 need the same hash, but are both equal to 0.0
-                    0.0f64.to_bits()
-                } else {
-                    f.to_bits()
-                }
-            }
+            (None, Self::Float(f)) => float_hash(f),
             (None, Self::Int(i)) => {
                 // shouldn't happen - as_int() should have resulted in an int
                 i as u64
+            }
+            (None, Self::BigInt(b)) => {
+                // Not perfect, but OK: `1000000000000000000000003` and `1000000000000000000000005`
+                // flush to the same float, and neither is exact float,
+                // so we could use better hash for such numbers.
+                float_hash(b.to_f64())
             }
         }
     }
@@ -110,13 +130,13 @@ impl Num {
     }
 }
 
-impl From<i32> for Num {
+impl<'v> From<i32> for Num<'v> {
     fn from(i: i32) -> Self {
         Self::Int(i)
     }
 }
 
-impl From<f64> for Num {
+impl<'v> From<f64> for Num<'v> {
     fn from(f: f64) -> Self {
         Self::Float(f)
     }
