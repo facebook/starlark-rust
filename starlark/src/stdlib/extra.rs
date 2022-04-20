@@ -84,7 +84,7 @@ pub fn partial(builder: &mut GlobalsBuilder) {
                 (
                     // We duplicate string here.
                     // If this becomes hot, we should do better.
-                    Symbol::new_hashed(x.unpack_starlark_str().as_str_hashed()),
+                    Symbol::new_hashed(x.as_str_hashed()),
                     x,
                 )
             })

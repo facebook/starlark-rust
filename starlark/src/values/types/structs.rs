@@ -200,11 +200,7 @@ where
             .fields
             .iter()
             .map(|(k, v)| {
-                let name = k
-                    .to_string_value()
-                    .unpack_starlark_str()
-                    .as_str()
-                    .to_owned();
+                let name = k.to_string_value().as_str().to_owned();
                 match v.to_value().documentation() {
                     Some(DocItem::Function(f)) => (name, docs::Member::Function(f)),
                     _ => (

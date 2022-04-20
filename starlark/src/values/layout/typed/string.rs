@@ -200,14 +200,9 @@ impl<'v> StringValue<'v> {
         ValueTyped::new(value).map(StringValue)
     }
 
-    pub(crate) fn unpack_starlark_str(self) -> &'v StarlarkStr {
-        debug_assert!(self.to_value().is_str());
-        self.0.as_ref()
-    }
-
     /// Get the Rust string reference.
     pub fn as_str(self) -> &'v str {
-        self.unpack_starlark_str().as_str()
+        self.0.as_str()
     }
 
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].

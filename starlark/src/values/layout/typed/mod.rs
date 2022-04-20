@@ -248,6 +248,20 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
     }
 }
 
+impl<'v> ValueTyped<'v, StarlarkStr> {
+    /// Get the Rust string reference.
+    pub fn as_str(self) -> &'v str {
+        self.as_ref().as_str()
+    }
+}
+
+impl<'v> FrozenValueTyped<'v, StarlarkStr> {
+    /// Get the Rust string reference.
+    pub fn as_str(self) -> &'v str {
+        self.as_ref().as_str()
+    }
+}
+
 unsafe impl<'v, T: StarlarkValue<'v>> Trace<'v> for ValueTyped<'v, T> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         tracer.trace(&mut self.0);
