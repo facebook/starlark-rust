@@ -1042,7 +1042,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(speculative_exec_safe)]
     fn r#type(ref a: Value) -> anyhow::Result<Value<'v>> {
-        Ok(a.get_type_value().unpack().to_value())
+        Ok(a.get_type_value().to_frozen_value().to_value())
     }
 
     /// [zip](

@@ -536,7 +536,7 @@ impl ExprCompiled {
             if let Ok(value) = percent_s_one(before.as_str(), arg.to_value(), after.as_str(), heap)
             {
                 let value = frozen_heap.alloc_str(value.as_str());
-                return ExprCompiled::Value(value.unpack());
+                return ExprCompiled::Value(value.to_frozen_value());
             }
         }
 
@@ -553,7 +553,7 @@ impl ExprCompiled {
         if let Some(arg) = arg.as_value() {
             let value = format_one(&before, arg.to_value(), &after, heap);
             let value = frozen_heap.alloc_str(value.as_str());
-            return ExprCompiled::Value(value.unpack());
+            return ExprCompiled::Value(value.to_frozen_value());
         }
         ExprCompiled::FormatOne(box (before, arg, after))
     }
@@ -670,7 +670,7 @@ impl ExprCompiled {
             Some(ExprCompiled::Value(v))
         } else if let Some(v) = v.unpack_str() {
             // If string, copy it to frozen heap.
-            Some(ExprCompiled::Value(heap.alloc_str(v).unpack()))
+            Some(ExprCompiled::Value(heap.alloc_str(v).to_frozen_value()))
         } else if let Some(v) = v.downcast_ref::<StarlarkFloat>() {
             Some(ExprCompiled::Value(heap.alloc_float(*v)))
         } else if let Some(v) = v.downcast_ref::<Range>() {
@@ -798,24 +798,26 @@ impl ExprCompiled {
 
     pub(crate) fn typ(v: IrSpanned<ExprCompiled>) -> ExprCompiled {
         match &v.node {
-            ExprCompiled::Value(v) => ExprCompiled::Value(v.to_value().get_type_value().unpack()),
+            ExprCompiled::Value(v) => {
+                ExprCompiled::Value(v.to_value().get_type_value().to_frozen_value())
+            }
             ExprCompiled::Tuple(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
-                ExprCompiled::Value(Tuple::get_type_value_static().unpack())
+                ExprCompiled::Value(Tuple::get_type_value_static().to_frozen_value())
             }
             ExprCompiled::List(xs) if xs.iter().all(|e| e.is_pure_infallible()) => {
-                ExprCompiled::Value(List::get_type_value_static().unpack())
+                ExprCompiled::Value(List::get_type_value_static().to_frozen_value())
             }
             ExprCompiled::Dict(xs) if xs.is_empty() => {
-                ExprCompiled::Value(Dict::get_type_value_static().unpack())
+                ExprCompiled::Value(Dict::get_type_value_static().to_frozen_value())
             }
             ExprCompiled::Type(x) if x.is_pure_infallible() => {
-                ExprCompiled::Value(StarlarkStr::get_type_value_static().unpack())
+                ExprCompiled::Value(StarlarkStr::get_type_value_static().to_frozen_value())
             }
             ExprCompiled::TypeIs(x, _t) if x.is_pure_infallible() => {
-                ExprCompiled::Value(StarlarkBool::get_type_value_static().unpack())
+                ExprCompiled::Value(StarlarkBool::get_type_value_static().to_frozen_value())
             }
             ExprCompiled::Not(x) if x.is_pure_infallible() => {
-                ExprCompiled::Value(StarlarkBool::get_type_value_static().unpack())
+                ExprCompiled::Value(StarlarkBool::get_type_value_static().to_frozen_value())
             }
             _ => ExprCompiled::Type(box v),
         }

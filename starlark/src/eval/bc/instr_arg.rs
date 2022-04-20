@@ -309,7 +309,7 @@ impl BcInstrArg for Option<FrozenValue> {
 
 impl BcInstrArg for FrozenStringValue {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
-        write!(f, " {}", TruncateValueRepr(param.unpack()))
+        write!(f, " {}", TruncateValueRepr(param.to_frozen_value()))
     }
 
     fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}

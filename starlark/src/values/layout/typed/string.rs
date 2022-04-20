@@ -47,7 +47,7 @@ use crate::{
 /// use starlark::const_frozen_string;
 /// use starlark::values::{FrozenStringValue, FrozenValue};
 ///
-/// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
+/// let fv: FrozenValue =  const_frozen_string!("magic").to_frozen_value();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
 #[derive(
@@ -136,11 +136,6 @@ impl<'v> Equivalent<StringValue<'v>> for FrozenStringValue {
 }
 
 impl FrozenStringValue {
-    /// Obtain the [`FrozenValue`] for a [`FrozenStringValue`].
-    pub fn unpack(self) -> FrozenValue {
-        self.0.to_frozen_value()
-    }
-
     /// Construct without a check that the value contains a string.
     ///
     /// If passed value does not contain a string, it may lead to memory corruption.
@@ -262,7 +257,7 @@ impl<'v> StringValueLike<'v> for StringValue<'v> {
 
 impl<'v> StringValueLike<'v> for FrozenStringValue {
     fn to_string_value(self) -> StringValue<'v> {
-        unsafe { StringValue::new_unchecked(self.unpack().to_value()) }
+        unsafe { StringValue::new_unchecked(self.to_frozen_value().to_value()) }
     }
 }
 
@@ -302,7 +297,7 @@ mod tests {
         let heap = FrozenHeap::new();
         let fs: FrozenStringValue = heap.alloc_str("xyz");
         assert_eq!(expected, Hashed::new(fs).hash());
-        let fv: FrozenValue = heap.alloc_str("xyz").unpack();
+        let fv: FrozenValue = heap.alloc_str("xyz").to_frozen_value();
         assert_eq!(expected, fv.get_hashed().unwrap().hash());
     }
 }

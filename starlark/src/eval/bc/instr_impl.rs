@@ -934,7 +934,7 @@ pub(crate) type InstrType = InstrUnOp<InstrTypeImpl>;
 impl InstrUnOpImpl for InstrTypeImpl {
     #[inline(always)]
     fn eval<'v>(v: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        Ok(v.get_type_value().unpack().to_value())
+        Ok(v.get_type_value().to_frozen_value().to_value())
     }
 }
 
