@@ -38,7 +38,7 @@ pub use starlark_derive::{starlark_attrs, Freeze, NoSerialize, StarlarkAttrs, Tr
 
 pub use crate::values::{
     alloc_value::{AllocFrozenValue, AllocValue},
-    error::*,
+    error::ValueError,
     freeze::Freeze,
     frozen_ref::FrozenRef,
     layout::{
@@ -67,7 +67,7 @@ mod alloc_value;
 pub(crate) mod basic;
 pub mod display;
 pub mod docs;
-mod error;
+pub(crate) mod error;
 mod freeze;
 pub(crate) mod frozen_ref;
 mod index;

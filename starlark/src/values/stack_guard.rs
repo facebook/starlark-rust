@@ -19,7 +19,7 @@
 
 use std::{cell::Cell, intrinsics::unlikely};
 
-use crate::values::ControlError;
+use crate::values::error::ControlError;
 
 // Maximum recursion level for comparison
 // TODO(dmarting): those are rather short, maybe make it configurable?

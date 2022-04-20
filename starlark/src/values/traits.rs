@@ -44,8 +44,8 @@ use crate::{
     environment::Methods,
     eval::{Arguments, Evaluator},
     values::{
-        docs::DocItem, function::FUNCTION_TYPE, ControlError, Freeze, FrozenStringValue, Heap,
-        Trace, Value, ValueError,
+        docs::DocItem, error::ControlError, function::FUNCTION_TYPE, Freeze, FrozenStringValue,
+        Heap, Trace, Value, ValueError,
     },
 };
 

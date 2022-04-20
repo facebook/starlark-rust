@@ -36,7 +36,7 @@ use once_cell::sync::Lazy;
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     errors::Frame,
-    values::{ControlError, FrozenRef, Trace, Tracer, Value},
+    values::{error::ControlError, FrozenRef, Trace, Tracer, Value},
 };
 
 #[derive(Debug, Clone, Copy, Dupe)]
