@@ -39,10 +39,10 @@ use crate::{
 };
 
 /// [`Value`] wrapper which asserts contained value is of type `<T>`.
-#[derive(Copy_, Clone_, Dupe_)]
+#[derive(Copy_, Clone_, Dupe_, AnyLifetime)]
 pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<&'v T>);
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.
-#[derive(Copy_, Clone_, Dupe_)]
+#[derive(Copy_, Clone_, Dupe_, AnyLifetime)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
 
 unsafe impl<'v, T: StarlarkValue<'v>> Trace<'v> for FrozenValueTyped<'v, T> {
