@@ -24,7 +24,11 @@ use std::{
     ops::Deref,
 };
 
-use gazebo::{cast, prelude::*};
+use gazebo::{
+    cast,
+    coerce::{Coerce, CoerceKey},
+    prelude::*,
+};
 
 use crate::{
     gazebo::any::AnyLifetime,
@@ -43,6 +47,18 @@ pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<&
 /// [`FrozenValue`] wrapper which asserts contained value is of type `<T>`.
 #[derive(Copy_, Clone_, Dupe_, AnyLifetime)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
+
+unsafe impl<'v, T: StarlarkValue<'v>> Coerce<ValueTyped<'v, T>> for ValueTyped<'v, T> {}
+unsafe impl<'v, T: StarlarkValue<'v>> CoerceKey<ValueTyped<'v, T>> for ValueTyped<'v, T> {}
+unsafe impl<'v, T: StarlarkValue<'v>> Coerce<Value<'v>> for ValueTyped<'v, T> {}
+unsafe impl<'v, T: StarlarkValue<'v>> CoerceKey<Value<'v>> for ValueTyped<'v, T> {}
+unsafe impl<'v, T: StarlarkValue<'v>> Coerce<FrozenValueTyped<'v, T>> for FrozenValueTyped<'v, T> {}
+unsafe impl<'v, T: StarlarkValue<'v>> CoerceKey<FrozenValueTyped<'v, T>>
+    for FrozenValueTyped<'v, T>
+{
+}
+unsafe impl<'v, T: StarlarkValue<'v>> Coerce<Value<'v>> for FrozenValueTyped<'v, T> {}
+unsafe impl<'v, T: StarlarkValue<'v>> CoerceKey<Value<'v>> for FrozenValueTyped<'v, T> {}
 
 unsafe impl<'v, 'f, T: StarlarkValue<'f>> Trace<'v> for FrozenValueTyped<'f, T> {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}

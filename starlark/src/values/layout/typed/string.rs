@@ -29,7 +29,7 @@ use indexmap::Equivalent;
 
 use crate::{
     collections::{BorrowHashed, Hashed},
-    values::{string::StarlarkStr, Freeze, Freezer, FrozenValueTyped, Trace, Value, ValueTyped},
+    values::{string::StarlarkStr, Freeze, Freezer, FrozenValueTyped, Trace, ValueTyped},
 };
 
 /// Convenient type alias.
@@ -54,12 +54,9 @@ pub type FrozenStringValue = FrozenValueTyped<'static, StarlarkStr>;
 /// on `ValueTyped<StarlarkStr>` than on generic `ValueTyped<T>`.
 pub type StringValue<'v> = ValueTyped<'v, StarlarkStr>;
 
+// TODO(nga): figure out how to make these operations generic over `T`.
 unsafe impl<'v> Coerce<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
-unsafe impl<'v> Coerce<StringValue<'v>> for StringValue<'v> {}
-unsafe impl<'v> CoerceKey<StringValue<'v>> for StringValue<'v> {}
-unsafe impl<'v> Coerce<Value<'v>> for StringValue<'v> {}
-unsafe impl<'v> CoerceKey<Value<'v>> for StringValue<'v> {}
 
 impl Borrow<str> for FrozenStringValue {
     fn borrow(&self) -> &str {
