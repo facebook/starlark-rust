@@ -27,9 +27,9 @@ use crate::{
     environment::Globals,
     errors::Diagnostic,
     eval::{
-        compiler::scope::{ScopeData, ScopeId},
+        compiler::scope::{ScopeData, ScopeId, ScopeNames},
         runtime::call_stack::FrozenFileSpan,
-        Evaluator, ScopeNames,
+        Evaluator,
     },
     values::{FrozenRef, FrozenValue},
 };
