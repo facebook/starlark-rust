@@ -30,11 +30,12 @@ use gazebo::{
 };
 use indexmap::Equivalent;
 
+use crate as starlark;
 use crate::{
     collections::{BorrowHashed, Hashed},
     values::{
         layout::value::FrozenValue, string::StarlarkStr, AllocValue, Freeze, Freezer,
-        FrozenValueTyped, Heap, Trace, Tracer, UnpackValue, Value, ValueTyped,
+        FrozenValueTyped, Heap, Trace, UnpackValue, Value, ValueTyped,
     },
 };
 
@@ -49,12 +50,34 @@ use crate::{
 /// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
-#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Dupe,
+    Debug,
+    AnyLifetime,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Trace
+)]
 #[repr(C)]
-pub struct FrozenStringValue(FrozenValueTyped<'static, StarlarkStr>);
+pub struct FrozenStringValue(#[trace(unsafe_ignore)] FrozenValueTyped<'static, StarlarkStr>);
 
 /// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
-#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Copy,
+    Clone,
+    Dupe,
+    Debug,
+    AnyLifetime,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Trace
+)]
 #[repr(C)]
 pub struct StringValue<'v>(ValueTyped<'v, StarlarkStr>);
 
@@ -245,17 +268,6 @@ impl<'v> StringValueLike<'v> for StringValue<'v> {
 impl<'v> StringValueLike<'v> for FrozenStringValue {
     fn to_string_value(self) -> StringValue<'v> {
         unsafe { StringValue::new_unchecked(self.unpack().to_value()) }
-    }
-}
-
-unsafe impl<'v> Trace<'v> for FrozenStringValue {
-    fn trace(&mut self, _tracer: &Tracer<'v>) {}
-}
-
-unsafe impl<'v> Trace<'v> for StringValue<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.0.trace(tracer);
-        debug_assert!(self.to_value().unpack_str().is_some());
     }
 }
 
