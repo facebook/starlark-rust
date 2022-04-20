@@ -100,6 +100,18 @@ impl<'v> PartialEq for FrozenValueTyped<'v, StarlarkStr> {
 
 impl<'v> Eq for FrozenValueTyped<'v, StarlarkStr> {}
 
+impl<'v> PartialEq<ValueTyped<'v, StarlarkStr>> for FrozenValueTyped<'v, StarlarkStr> {
+    fn eq(&self, other: &ValueTyped<'v, StarlarkStr>) -> bool {
+        &self.to_value_typed() == other
+    }
+}
+
+impl<'v> PartialEq<FrozenValueTyped<'v, StarlarkStr>> for ValueTyped<'v, StarlarkStr> {
+    fn eq(&self, other: &FrozenValueTyped<'v, StarlarkStr>) -> bool {
+        self == &other.to_value_typed()
+    }
+}
+
 impl<'v> Hash for ValueTyped<'v, StarlarkStr> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.as_ref().hash(state)

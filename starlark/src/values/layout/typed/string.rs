@@ -148,13 +148,13 @@ impl FrozenStringValue {
 
 impl<'v> PartialEq<FrozenStringValue> for StringValue<'v> {
     fn eq(&self, other: &FrozenStringValue) -> bool {
-        *self == other.to_string_value()
+        self.0 == other.0
     }
 }
 
 impl<'v> PartialEq<StringValue<'v>> for FrozenStringValue {
     fn eq(&self, other: &StringValue<'v>) -> bool {
-        self.to_string_value() == *other
+        self.0 == other.0
     }
 }
 
