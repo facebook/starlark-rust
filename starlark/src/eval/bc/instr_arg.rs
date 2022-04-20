@@ -39,8 +39,8 @@ use crate::{
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
     values::{
-        typed::FrozenValueTyped, types::known_methods::KnownMethod, FrozenRef, FrozenStringValue,
-        FrozenValue, StarlarkValue,
+        typed::FrozenValueTyped, types::known_methods::KnownMethod, FrozenRef, FrozenValue,
+        StarlarkValue,
     },
 };
 
@@ -294,22 +294,6 @@ impl BcInstrArg for Option<FrozenValue> {
             None => write!(f, " ()"),
             Some(v) => write!(f, " {}", TruncateValueRepr(*v)),
         }
-    }
-
-    fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}
-
-    fn pops_stack(_: &Self) -> u32 {
-        0
-    }
-
-    fn pushes_stack(_: &Self) -> u32 {
-        0
-    }
-}
-
-impl BcInstrArg for FrozenStringValue {
-    fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
-        write!(f, " {}", TruncateValueRepr(param.to_frozen_value()))
     }
 
     fn visit_jump_addr(_param: &Self, _consumer: &mut dyn FnMut(BcAddrOffset)) {}

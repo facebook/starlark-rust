@@ -45,7 +45,7 @@ pub struct ValueTyped<'v, T: StarlarkValue<'v>>(Value<'v>, marker::PhantomData<&
 #[derive(Copy_, Clone_, Dupe_, AnyLifetime)]
 pub struct FrozenValueTyped<'v, T: StarlarkValue<'v>>(FrozenValue, marker::PhantomData<&'v T>);
 
-unsafe impl<'v, T: StarlarkValue<'v>> Trace<'v> for FrozenValueTyped<'v, T> {
+unsafe impl<'v, 'f, T: StarlarkValue<'f>> Trace<'v> for FrozenValueTyped<'f, T> {
     fn trace(&mut self, _tracer: &Tracer<'v>) {}
 }
 

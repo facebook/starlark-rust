@@ -189,11 +189,3 @@ impl<'v> Freeze for StringValue<'v> {
         self.freeze(freezer)
     }
 }
-
-impl Freeze for FrozenStringValue {
-    type Frozen = FrozenStringValue;
-
-    fn freeze(self, _freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
-        Ok(self)
-    }
-}
