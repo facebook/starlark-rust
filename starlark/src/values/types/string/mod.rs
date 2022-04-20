@@ -102,6 +102,14 @@ impl Deref for StarlarkStr {
     }
 }
 
+impl PartialEq for StarlarkStr {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl Eq for StarlarkStr {}
+
 impl Debug for StarlarkStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(self.as_str(), f)

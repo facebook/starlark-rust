@@ -20,6 +20,7 @@ pub(crate) mod string;
 use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
+    hash::{Hash, Hasher},
     marker,
     ops::Deref,
 };
@@ -77,6 +78,37 @@ impl<'v, T: StarlarkValue<'v>> Display for ValueTyped<'v, T> {
 impl<'v, T: StarlarkValue<'v>> Display for FrozenValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)
+    }
+}
+
+impl<'v> PartialEq for ValueTyped<'v, StarlarkStr> {
+    fn eq(&self, other: &Self) -> bool {
+        // `PartialEq` can be implemented for other types, not just for `StarlarkStr`.
+        // But at the moment of writing, we don't guarantee that `PartialEq` for `T`
+        // is consistent with `StarlarkValue::equals` for `T`.
+        self.to_value().ptr_eq(other.to_value()) || self.as_ref() == other.as_ref()
+    }
+}
+
+impl<'v> Eq for ValueTyped<'v, StarlarkStr> {}
+
+impl<'v> PartialEq for FrozenValueTyped<'v, StarlarkStr> {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_value_typed() == other.to_value_typed()
+    }
+}
+
+impl<'v> Eq for FrozenValueTyped<'v, StarlarkStr> {}
+
+impl<'v> Hash for ValueTyped<'v, StarlarkStr> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
+    }
+}
+
+impl<'v> Hash for FrozenValueTyped<'v, StarlarkStr> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_ref().hash(state)
     }
 }
 

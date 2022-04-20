@@ -22,7 +22,6 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::Deref,
-    ptr,
 };
 
 use gazebo::{
@@ -51,12 +50,12 @@ use crate::{
 /// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
-#[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
+#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq)]
 #[repr(C)]
 pub struct FrozenStringValue(FrozenValueTyped<'static, StarlarkStr>);
 
 /// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
-#[derive(Copy, Clone, Dupe, Debug, AnyLifetime)]
+#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq)]
 #[repr(C)]
 pub struct StringValue<'v>(ValueTyped<'v, StarlarkStr>);
 
@@ -95,17 +94,10 @@ impl<'v> Deref for StringValue<'v> {
     }
 }
 
-impl PartialEq for FrozenStringValue {
-    fn eq(&self, other: &Self) -> bool {
-        ptr::eq(self, other) || self.as_str() == other.as_str()
-    }
-}
-
-impl Eq for FrozenStringValue {}
-
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for FrozenStringValue {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state)
+        self.0.hash(state)
     }
 }
 
@@ -155,14 +147,6 @@ impl FrozenStringValue {
     }
 }
 
-impl<'v> PartialEq for StringValue<'v> {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_value().ptr_eq(other.to_value()) || self.as_str() == other.as_str()
-    }
-}
-
-impl<'v> Eq for StringValue<'v> {}
-
 impl<'v> PartialEq<FrozenStringValue> for StringValue<'v> {
     fn eq(&self, other: &FrozenStringValue) -> bool {
         *self == other.to_string_value()
@@ -177,7 +161,7 @@ impl<'v> PartialEq<StringValue<'v>> for FrozenStringValue {
 
 impl<'v> Hash for StringValue<'v> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state)
+        self.0.hash(state)
     }
 }
 
@@ -319,22 +303,24 @@ impl<'v> AllocValue<'v> for StringValue<'v> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        collections::Hashed,
+        collections::{BorrowHashed, Hashed},
         values::{FrozenHeap, FrozenStringValue, FrozenValue, Heap, StringValue, Value, ValueLike},
     };
 
     #[test]
     fn test_string_hashes() {
+        let expected = BorrowHashed::new("xyz").hash();
+
         let heap = Heap::new();
         let s: StringValue = heap.alloc_str("xyz");
+        assert_eq!(expected, Hashed::new(s).hash());
         let v: Value = heap.alloc_str("xyz").to_value();
-        assert_eq!(Hashed::new(s).hash(), v.get_hashed().unwrap().hash());
+        assert_eq!(expected, v.get_hashed().unwrap().hash());
 
         let heap = FrozenHeap::new();
         let fs: FrozenStringValue = heap.alloc_str("xyz");
+        assert_eq!(expected, Hashed::new(fs).hash());
         let fv: FrozenValue = heap.alloc_str("xyz").unpack();
-        assert_eq!(Hashed::new(fs).hash(), fv.get_hashed().unwrap().hash());
-
-        assert_eq!(Hashed::new(s).hash(), Hashed::new(fs).hash());
+        assert_eq!(expected, fv.get_hashed().unwrap().hash());
     }
 }
