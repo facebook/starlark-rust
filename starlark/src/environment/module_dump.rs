@@ -19,7 +19,7 @@ use std::fmt::Write;
 
 use crate::{
     environment::FrozenModule,
-    eval::FrozenDef,
+    eval::fragment::def::FrozenDef,
     values::{FrozenHeapRef, FrozenValueTyped},
 };
 

@@ -40,13 +40,13 @@ use crate::{
         },
         compiler::{add_span_to_expr_error, expr_throw, scope::Captured, EvalException},
         fragment::{
-            def::{DefInfo, ParameterCompiled},
+            def::{Def, DefInfo, FrozenDef, ParameterCompiled},
             expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError, MemberOrValue},
             span::IrSpanned,
             stmt::{add_assign, before_stmt, bit_or_assign, possible_gc, AssignError},
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
-        Arguments, Def, Evaluator, FrozenDef, ParametersSpec,
+        Arguments, Evaluator, ParametersSpec,
     },
     values::{
         dict::Dict,

@@ -37,10 +37,10 @@ use crate::{
         },
         fragment::{
             call::{ArgsCompiledValue, CallCompiled},
+            def::FrozenDef,
             span::IrSpanned,
         },
         runtime::call_stack::FrozenFileSpan,
-        FrozenDef,
     },
     values::{
         function::NativeFunction, typed::FrozenValueTyped, types::known_methods::get_known_method,

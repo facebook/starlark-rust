@@ -33,7 +33,7 @@ use serde::{Serialize, Serializer};
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
     environment::Methods,
-    eval::{Arguments, Evaluator, FrozenDef},
+    eval::{fragment::def::FrozenDef, Arguments, Evaluator},
     values::{
         basic::StarlarkValueBasic,
         bool::StarlarkBool,

@@ -20,7 +20,6 @@
 
 use std::{intrinsics::unlikely, mem, time::Instant};
 
-pub(crate) use fragment::def::{Def, FrozenDef};
 use gazebo::prelude::*;
 pub use runtime::{
     arguments::{Arguments, ParametersParser, ParametersSpec},
@@ -44,7 +43,7 @@ use crate::{
 
 pub(crate) mod bc;
 pub(crate) mod compiler;
-mod fragment;
+pub(crate) mod fragment;
 pub(crate) mod runtime;
 pub use runtime::profile::ProfileMode;
 

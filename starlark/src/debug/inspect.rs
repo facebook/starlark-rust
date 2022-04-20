@@ -17,7 +17,11 @@
 
 use crate::{
     collections::SmallMap,
-    eval::{compiler::scope::ScopeNames, Def, Evaluator, FrozenDef},
+    eval::{
+        compiler::scope::ScopeNames,
+        fragment::def::{Def, FrozenDef},
+        Evaluator,
+    },
     values::{Value, ValueLike},
 };
 

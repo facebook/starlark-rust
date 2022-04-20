@@ -24,7 +24,7 @@ mod if_stmt;
 
 use crate::{
     assert::Assert,
-    eval::{bc::opcode::BcOpcode, FrozenDef},
+    eval::{bc::opcode::BcOpcode, fragment::def::FrozenDef},
 };
 
 pub(crate) fn test_instrs(expected: &[BcOpcode], def_program: &str) {

@@ -21,7 +21,7 @@ use crate as starlark;
 use crate::{
     assert::Assert,
     environment::GlobalsBuilder,
-    eval::{Def, FrozenDef},
+    eval::fragment::def::{Def, FrozenDef},
     values::{Value, ValueLike},
 };
 

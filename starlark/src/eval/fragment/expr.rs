@@ -32,12 +32,15 @@ use crate::{
             Compiler,
         },
         fragment::{
-            call::CallCompiled, compr::ComprCompiled, def::DefCompiled,
-            expr_bool::ExprCompiledBool, known::list_to_tuple, span::IrSpanned,
+            call::CallCompiled,
+            compr::ComprCompiled,
+            def::{DefCompiled, FrozenDef},
+            expr_bool::ExprCompiledBool,
+            known::list_to_tuple,
+            span::IrSpanned,
             stmt::OptimizeOnFreezeContext,
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
-        FrozenDef,
     },
     syntax::{
         ast::{AstExprP, AstLiteral, AstPayload, AstString, BinOp, ExprP, StmtP},

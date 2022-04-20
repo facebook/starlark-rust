@@ -36,7 +36,7 @@ use gazebo::{cast, prelude::*};
 use once_cell::sync::Lazy;
 
 use crate::{
-    eval::FrozenDef,
+    eval::fragment::def::FrozenDef,
     values::{
         any::StarlarkAny,
         array::Array,
