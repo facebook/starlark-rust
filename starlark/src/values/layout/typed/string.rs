@@ -17,7 +17,6 @@
 
 use std::{
     borrow::Borrow,
-    cmp::Ordering,
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -50,12 +49,12 @@ use crate::{
 /// let fv: FrozenValue =  const_frozen_string!("magic").unpack();
 /// assert_eq!(Some("magic"), fv.to_value().unpack_str());
 /// ```
-#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq)]
+#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct FrozenStringValue(FrozenValueTyped<'static, StarlarkStr>);
 
 /// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
-#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq)]
+#[derive(Copy, Clone, Dupe, Debug, AnyLifetime, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct StringValue<'v>(ValueTyped<'v, StarlarkStr>);
 
@@ -162,30 +161,6 @@ impl<'v> PartialEq<StringValue<'v>> for FrozenStringValue {
 impl<'v> Hash for StringValue<'v> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.0.hash(state)
-    }
-}
-
-impl<'v> PartialOrd for StringValue<'v> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_str().partial_cmp(other.as_str())
-    }
-}
-
-impl<'v> Ord for StringValue<'v> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.as_str().cmp(other.as_str())
-    }
-}
-
-impl PartialOrd for FrozenStringValue {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_str().partial_cmp(other.as_str())
-    }
-}
-
-impl Ord for FrozenStringValue {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.as_str().cmp(other.as_str())
     }
 }
 

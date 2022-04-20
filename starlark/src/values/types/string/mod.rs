@@ -110,6 +110,18 @@ impl PartialEq for StarlarkStr {
 
 impl Eq for StarlarkStr {}
 
+impl PartialOrd for StarlarkStr {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_str().partial_cmp(other.as_str())
+    }
+}
+
+impl Ord for StarlarkStr {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
 impl Debug for StarlarkStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         Debug::fmt(self.as_str(), f)

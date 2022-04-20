@@ -112,6 +112,30 @@ impl<'v> Hash for FrozenValueTyped<'v, StarlarkStr> {
     }
 }
 
+impl<'v> PartialOrd for ValueTyped<'v, StarlarkStr> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_ref().partial_cmp(other.as_ref())
+    }
+}
+
+impl<'v> Ord for ValueTyped<'v, StarlarkStr> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_ref().cmp(other.as_ref())
+    }
+}
+
+impl<'v> PartialOrd for FrozenValueTyped<'v, StarlarkStr> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_ref().partial_cmp(other.as_ref())
+    }
+}
+
+impl<'v> Ord for FrozenValueTyped<'v, StarlarkStr> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.as_ref().cmp(other.as_ref())
+    }
+}
+
 impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
     /// Downcast.
     pub fn new(value: Value<'v>) -> Option<ValueTyped<'v, T>> {
