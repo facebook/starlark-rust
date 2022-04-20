@@ -34,8 +34,8 @@ use crate as starlark;
 use crate::{
     collections::{BorrowHashed, Hashed},
     values::{
-        layout::value::FrozenValue, string::StarlarkStr, AllocValue, Freeze, Freezer,
-        FrozenValueTyped, Heap, Trace, UnpackValue, Value, ValueTyped,
+        layout::value::FrozenValue, string::StarlarkStr, Freeze, Freezer, FrozenValueTyped, Trace,
+        Value, ValueTyped,
     },
 };
 
@@ -65,21 +65,13 @@ use crate::{
 #[repr(C)]
 pub struct FrozenStringValue(#[trace(unsafe_ignore)] FrozenValueTyped<'static, StarlarkStr>);
 
-/// Wrapper for a [`Value`] which can only contain a [`StarlarkStr`].
-#[derive(
-    Copy,
-    Clone,
-    Dupe,
-    Debug,
-    AnyLifetime,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Trace
-)]
-#[repr(C)]
-pub struct StringValue<'v>(ValueTyped<'v, StarlarkStr>);
+/// Convenient type alias.
+///
+/// We use `ValueTyped<StarlarkStr>` often, but also we define more operations
+/// on `ValueTyped<StarlarkStr>` than on generic `ValueTyped<T>`.
+pub type StringValue<'v> = ValueTyped<'v, StarlarkStr>;
+
+// TODO(nga): move everything below to `ValueTyped`.
 
 unsafe impl<'v> Coerce<StringValue<'v>> for FrozenStringValue {}
 unsafe impl<'v> CoerceKey<StringValue<'v>> for FrozenStringValue {}
@@ -104,14 +96,6 @@ impl Deref for FrozenStringValue {
     type Target = FrozenValueTyped<'static, StarlarkStr>;
 
     fn deref(&self) -> &FrozenValueTyped<'static, StarlarkStr> {
-        &self.0
-    }
-}
-
-impl<'v> Deref for StringValue<'v> {
-    type Target = ValueTyped<'v, StarlarkStr>;
-
-    fn deref(&self) -> &ValueTyped<'v, StarlarkStr> {
         &self.0
     }
 }
@@ -166,40 +150,17 @@ impl FrozenStringValue {
 
 impl<'v> PartialEq<FrozenStringValue> for StringValue<'v> {
     fn eq(&self, other: &FrozenStringValue) -> bool {
-        self.0 == other.0
+        self == &other.0
     }
 }
 
 impl<'v> PartialEq<StringValue<'v>> for FrozenStringValue {
     fn eq(&self, other: &StringValue<'v>) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl<'v> Hash for StringValue<'v> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state)
+        self.0 == *other
     }
 }
 
 impl<'v> StringValue<'v> {
-    /// Construct without a check that the value contains a string.
-    ///
-    /// If passed value does not contain a string, it may lead to memory corruption.
-    pub unsafe fn new_unchecked(value: Value<'v>) -> StringValue<'v> {
-        StringValue(ValueTyped::new_unchecked(value))
-    }
-
-    /// Construct from a value. Returns [`None`] if a value does not contain a string.
-    pub fn new(value: Value<'v>) -> Option<StringValue<'v>> {
-        ValueTyped::new(value).map(StringValue)
-    }
-
-    /// Get the Rust string reference.
-    pub fn as_str(self) -> &'v str {
-        self.0.as_str()
-    }
-
     /// Convert a value to a [`FrozenValue`] using a supplied [`Freezer`].
     pub fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenStringValue> {
         Ok(unsafe { FrozenStringValue::new_unchecked(freezer.freeze(self.to_value())?) })
@@ -220,12 +181,6 @@ impl<'v> StringValue<'v> {
         self.to_value()
             .unpack_frozen()
             .map(|s| unsafe { FrozenStringValue::new_unchecked(s) })
-    }
-}
-
-impl<'v> Display for StringValue<'v> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        Display::fmt(&self.0, f)
     }
 }
 
@@ -258,22 +213,6 @@ impl<'v> StringValueLike<'v> for StringValue<'v> {
 impl<'v> StringValueLike<'v> for FrozenStringValue {
     fn to_string_value(self) -> StringValue<'v> {
         unsafe { StringValue::new_unchecked(self.to_frozen_value().to_value()) }
-    }
-}
-
-impl<'v> UnpackValue<'v> for StringValue<'v> {
-    fn expected() -> String {
-        "str".to_owned()
-    }
-
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        StringValue::new(value)
-    }
-}
-
-impl<'v> AllocValue<'v> for StringValue<'v> {
-    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
-        self.to_value()
     }
 }
 
