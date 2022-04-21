@@ -18,8 +18,9 @@
 use gazebo::prelude::*;
 use proc_macro2::Span;
 use syn::{
-    spanned::Spanned, Attribute, FnArg, GenericArgument, Item, ItemConst, ItemFn, Meta,
-    MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType, Stmt, Type, TypeReference,
+    spanned::Spanned, Attribute, FnArg, GenericArgument, GenericParam, Generics, Item, ItemConst,
+    ItemFn, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType, Stmt, Type,
+    TypeReference,
 };
 
 use crate::{typ::*, util::*};
@@ -256,6 +257,8 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
         attrs,
     } = process_attributes(func.span(), func.attrs)?;
 
+    parse_fn_generics(&func.sig.generics)?;
+
     let (return_type, return_type_arg) = match func.sig.output {
         ReturnType::Default => {
             return Err(syn::Error::new(span, "Function must have a return type"));
@@ -321,6 +324,45 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             docstring,
         }))
     }
+}
+
+fn parse_fn_generics(generics: &Generics) -> syn::Result<()> {
+    let mut seen_v = false;
+    for param in &generics.params {
+        match param {
+            GenericParam::Type(..) => {
+                return Err(syn::Error::new(
+                    param.span(),
+                    "Function cannot have type parameters",
+                ));
+            }
+            GenericParam::Const(..) => {
+                return Err(syn::Error::new(
+                    param.span(),
+                    "Function cannot have const parameters",
+                ));
+            }
+            GenericParam::Lifetime(lifetime) => {
+                if lifetime.lifetime.ident != "v" {
+                    return Err(syn::Error::new(
+                        lifetime.lifetime.span(),
+                        "Function cannot have lifetime parameters other than `v",
+                    ));
+                }
+                if !lifetime.bounds.is_empty() {
+                    return Err(syn::Error::new(
+                        lifetime.span(),
+                        "Function lifetime params must not have bounds",
+                    ));
+                }
+                if seen_v {
+                    return Err(syn::Error::new(lifetime.span(), "Duplicate `v parameters"));
+                }
+                seen_v = true;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn parse_arg(x: FnArg) -> syn::Result<StarArg> {
