@@ -292,7 +292,7 @@ impl DebugServer for Backend {
         // We record the location of the call, but DAP wants the location we are at.
         // We also have them in the wrong order
         self.with_ctx(box |span, eval| {
-            let frames = eval.call_stack();
+            let frames = eval.call_stack().into_frames();
             let mut next = Some(span.to_file_span());
             let mut res = Vec::with_capacity(frames.len() + 1);
             for (i, x) in frames.iter().rev().enumerate() {

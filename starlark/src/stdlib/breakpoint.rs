@@ -103,8 +103,8 @@ fn cmd_variables(eval: &mut Evaluator, rl: &mut dyn BreakpointConsole) -> anyhow
 }
 
 fn cmd_stack(eval: &mut Evaluator, rl: &mut dyn BreakpointConsole) -> anyhow::Result<Next> {
-    for x in eval.call_stack() {
-        rl.println(&format!("* {}", x))
+    for line in eval.call_stack().to_string().lines() {
+        rl.println(line)
     }
     Ok(Next::Again)
 }

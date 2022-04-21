@@ -77,7 +77,7 @@ mod tests {
     #[starlark_module]
     fn debugger(builder: &mut GlobalsBuilder) {
         fn debug_inspect_stack() -> anyhow::Result<Vec<String>> {
-            Ok(eval.call_stack().map(ToString::to_string))
+            Ok(eval.call_stack().into_frames().map(ToString::to_string))
         }
 
         fn debug_inspect_variables() -> anyhow::Result<Dict<'v>> {

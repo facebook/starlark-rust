@@ -29,7 +29,7 @@ use crate::{
     codemap::{FileSpan, FileSpanRef},
     collections::{alloca::Alloca, string_pool::StringPool},
     environment::{slots::ModuleSlotId, EnvironmentError, FrozenModuleRef, Module},
-    errors::{Diagnostic, Frame},
+    errors::Diagnostic,
     eval::{
         bc::frame::BcFramePtr,
         fragment::def::DefInfo,
@@ -43,7 +43,7 @@ use crate::{
             slots::LocalSlotId,
             stmt_profile::StmtProfile,
         },
-        FileLoader,
+        CallStack, FileLoader,
     },
     stdlib::{
         breakpoint::{BreakpointConsole, RealBreakpointConsole},
@@ -278,8 +278,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     }
 
     /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
-    pub fn call_stack(&self) -> Vec<Frame> {
-        self.call_stack.to_diagnostic_frames().into_frames()
+    pub fn call_stack(&self) -> CallStack {
+        self.call_stack.to_diagnostic_frames()
     }
 
     /// Obtain the top location on the call-stack. May be [`None`] if the
