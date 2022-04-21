@@ -597,6 +597,10 @@ impl<'v> Value<'v> {
         s
     }
 
+    pub(crate) fn name_for_call_stack(self) -> String {
+        self.get_ref().name_for_call_stack(self)
+    }
+
     /// Convert the value to JSON.
     ///
     /// Return an error if the value or any contained value does not support conversion to JSON.

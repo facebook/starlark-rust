@@ -32,6 +32,7 @@ use once_cell::sync::Lazy;
 use crate::{
     self as starlark,
     codemap::CodeMap,
+    const_frozen_string,
     environment::{FrozenModuleRef, Globals},
     eval::{
         bc::{bytecode::Bc, frame::alloca_frame},
@@ -151,6 +152,7 @@ impl<T> ParameterCompiled<T> {
 #[derivative(Debug)]
 #[display(fmt = "DefInfo")]
 pub(crate) struct DefInfo {
+    pub(crate) name: FrozenStringValue,
     /// Codemap of the file where the function is declared.
     pub(crate) codemap: FrozenRef<'static, CodeMap>,
     /// The raw docstring pulled out of the AST.
@@ -176,6 +178,7 @@ impl DefInfo {
     pub(crate) fn empty() -> FrozenRef<'static, DefInfo> {
         static EMPTY_CODEMAP: Lazy<CodeMap> = Lazy::new(CodeMap::default);
         static EMPTY: Lazy<DefInfo> = Lazy::new(|| DefInfo {
+            name: const_frozen_string!("<empty>"),
             codemap: FrozenRef::new(&EMPTY_CODEMAP),
             docstring: None,
             scope_names: ScopeNames::default(),
@@ -194,6 +197,7 @@ impl DefInfo {
         globals: FrozenRef<'static, Globals>,
     ) -> DefInfo {
         DefInfo {
+            name: const_frozen_string!("<module>"),
             codemap,
             docstring: None,
             scope_names,
@@ -417,6 +421,7 @@ impl Compiler<'_, '_, '_> {
     ) -> ExprCompiled {
         let file = self.codemap.file_span(suite.span);
         let function_name = format!("{}.{}", file.file.filename(), name);
+        let name = self.eval.frozen_heap().alloc_str(name);
 
         // The parameters run in the scope of the parent, so compile them with the outer
         // scope
@@ -435,6 +440,7 @@ impl Compiler<'_, '_, '_> {
         let inline_def_body = Self::inline_def_body(&params, &body);
 
         let info = self.eval.module_env.frozen_heap().alloc_any(DefInfo {
+            name,
             codemap: self.codemap,
             docstring,
             scope_names,
@@ -614,6 +620,10 @@ where
     Self: AnyLifetime<'v> + DefLike<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
+
+    fn name_for_call_stack(&self, _me: Value<'v>) -> String {
+        self.def_info.name.as_str().to_owned()
+    }
 
     fn invoke(
         &self,

@@ -815,6 +815,9 @@ impl<'v> StarlarkValueDyn<'v> for BlackHole {
     fn collect_repr_cycle(&self, _collector: &mut String) {
         panic!()
     }
+    fn name_for_call_stack(&self, _me: Value<'v>) -> String {
+        panic!()
+    }
     fn to_bool(&self) -> bool {
         panic!()
     }
@@ -1000,6 +1003,9 @@ impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImp
     }
     fn collect_repr_cycle(&self, collector: &mut String) {
         self.1.collect_repr_cycle(collector)
+    }
+    fn name_for_call_stack(&self, me: Value<'v>) -> String {
+        self.1.name_for_call_stack(me)
     }
     fn to_bool(&self) -> bool {
         self.1.to_bool()

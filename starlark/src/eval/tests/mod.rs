@@ -444,18 +444,17 @@ add3(8)"#,
     if display {
         Diagnostic::eprint(&diag)
     }
-    // TODO(nga): function name in stack trace now includes module name, which is redundant.
     assert_eq!(
         &format!("\n{}", diag),
         r#"
 Traceback (most recent call last):
   File assert.bzl, line 5, in <module>
     add3(8)
-  File assert.bzl, line 4, in assert.bzl.add3
+  File assert.bzl, line 4, in add3
     add2(z)
-  File imported.bzl, line 9, in imported.bzl.add2
+  File imported.bzl, line 9, in add2
     add(z)
-  File imported.bzl, line 11, in imported.bzl.add
+  File imported.bzl, line 11, in add
     x.append(z)
 error: Immutable
   --> imported.bzl:11:3
@@ -471,11 +470,11 @@ error: Immutable
 Traceback (most recent call last):
   File assert.bzl, line 5, in <module>
     add3(8)
-  File assert.bzl, line 4, in assert.bzl.add3
+  File assert.bzl, line 4, in add3
     add2(z)
-  File imported.bzl, line 9, in imported.bzl.add2
+  File imported.bzl, line 9, in add2
     add(z)
-  File imported.bzl, line 11, in imported.bzl.add
+  File imported.bzl, line 11, in add
     x.append(z)
 error: Immutable
   --> imported.bzl:11:3

@@ -249,6 +249,10 @@ where
 {
     starlark_type!(FUNCTION_TYPE);
 
+    fn name_for_call_stack(&self, _me: Value<'v>) -> String {
+        "partial".to_owned()
+    }
+
     fn invoke(
         &self,
         _me: Value<'v>,

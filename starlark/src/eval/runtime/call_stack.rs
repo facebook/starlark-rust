@@ -98,7 +98,7 @@ impl CheapFrame<'_> {
 
     fn to_frame(&self) -> Frame {
         Frame {
-            name: self.function.to_repr(),
+            name: self.function.name_for_call_stack(),
             location: self.location(),
         }
     }
