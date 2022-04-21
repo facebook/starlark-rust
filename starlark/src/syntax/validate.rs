@@ -89,7 +89,7 @@ impl Expr {
     /// multiple **kwargs.
     ///
     /// We allow at most one **kwargs.
-    pub fn check_call(
+    pub(crate) fn check_call(
         f: AstExpr,
         args: Vec<AstArgument>,
         codemap: &CodeMap,
@@ -228,7 +228,7 @@ fn check_parameters(parameters: &[AstParameter], codemap: &CodeMap) -> anyhow::R
 }
 
 impl Expr {
-    pub fn check_lambda(
+    pub(crate) fn check_lambda(
         parameters: Vec<AstParameter>,
         body: AstExpr,
         codemap: &CodeMap,
@@ -239,7 +239,7 @@ impl Expr {
 }
 
 impl Stmt {
-    pub fn check_def(
+    pub(crate) fn check_def(
         name: AstString,
         parameters: Vec<AstParameter>,
         return_type: Option<Box<AstExpr>>,
@@ -251,7 +251,7 @@ impl Stmt {
         Ok(Stmt::Def(name, parameters, return_type, box stmts, ()))
     }
 
-    pub fn check_assign(codemap: &CodeMap, x: AstExpr) -> anyhow::Result<AstAssign> {
+    pub(crate) fn check_assign(codemap: &CodeMap, x: AstExpr) -> anyhow::Result<AstAssign> {
         Ok(Spanned {
             span: x.span,
             node: match x.node {
@@ -268,7 +268,7 @@ impl Stmt {
         })
     }
 
-    pub fn check_assignment(
+    pub(crate) fn check_assignment(
         codemap: &CodeMap,
         lhs: AstExpr,
         op: Option<AssignOp>,
@@ -295,7 +295,11 @@ impl Stmt {
     }
 
     /// Validate all statements only occur where they are allowed to.
-    pub fn validate(codemap: &CodeMap, stmt: &AstStmt, dialect: &Dialect) -> anyhow::Result<()> {
+    pub(crate) fn validate(
+        codemap: &CodeMap,
+        stmt: &AstStmt,
+        dialect: &Dialect,
+    ) -> anyhow::Result<()> {
         // Inside a for, we allow continue/break, unless we go beneath a def.
         // Inside a def, we allow return.
         // All load's must occur at the top-level.

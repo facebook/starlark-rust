@@ -125,21 +125,21 @@ impl<P: AstPayload> StmtP<P> {
         }
     }
 
-    pub fn visit_stmt<'a>(&'a self, mut f: impl FnMut(&'a AstStmtP<P>)) {
+    pub(crate) fn visit_stmt<'a>(&'a self, mut f: impl FnMut(&'a AstStmtP<P>)) {
         self.visit_children(|x| match x {
             Visit::Stmt(x) => f(x),
             Visit::Expr(_) => {} // Nothing to do
         })
     }
 
-    pub fn visit_stmt_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstStmtP<P>)) {
+    pub(crate) fn visit_stmt_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstStmtP<P>)) {
         self.visit_children_mut(|x| match x {
             VisitMut::Stmt(x) => f(x),
             VisitMut::Expr(_) => {} // Nothing to do
         })
     }
 
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
+    pub(crate) fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         // Note the &mut impl on f, it's subtle, see
         // https://stackoverflow.com/questions/54613966/error-reached-the-recursion-limit-while-instantiating-funcclosure
         fn pick<'a, P: AstPayload>(x: Visit<'a, P>, f: &mut impl FnMut(&'a AstExprP<P>)) {
@@ -151,17 +151,7 @@ impl<P: AstPayload> StmtP<P> {
         self.visit_children(|x| pick(x, &mut f))
     }
 
-    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
-        fn pick<'a, P: AstPayload>(x: VisitMut<'a, P>, f: &mut impl FnMut(&'a mut AstExprP<P>)) {
-            match x {
-                VisitMut::Stmt(x) => x.visit_children_mut(|x| pick(x, f)),
-                VisitMut::Expr(x) => f(x),
-            }
-        }
-        self.visit_children_mut(|x| pick(x, &mut f))
-    }
-
-    pub fn visit_stmt_result<E>(
+    pub(crate) fn visit_stmt_result<E>(
         &self,
         mut f: impl FnMut(&AstStmtP<P>) -> Result<(), E>,
     ) -> Result<(), E> {
@@ -178,7 +168,7 @@ impl<P: AstPayload> StmtP<P> {
 
 impl<P: AstPayload> ParameterP<P> {
     // Split a parameter into name, type, default value
-    pub fn split(
+    pub(crate) fn split(
         &self,
     ) -> (
         Option<&AstAssignIdentP<P>>,
@@ -197,7 +187,7 @@ impl<P: AstPayload> ParameterP<P> {
     }
 
     // Split a parameter into name, type, default value
-    pub fn split_mut(
+    pub(crate) fn split_mut(
         &mut self,
     ) -> (
         Option<&mut AstAssignIdentP<P>>,
@@ -215,13 +205,13 @@ impl<P: AstPayload> ParameterP<P> {
         }
     }
 
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
+    pub(crate) fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         let (_, typ, def) = self.split();
         typ.iter().for_each(|x| f(x));
         def.iter().for_each(|x| f(x));
     }
 
-    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+    pub(crate) fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
         let (_, typ, def) = self.split_mut();
         if let Some(typ) = typ {
             f(typ);
@@ -233,7 +223,7 @@ impl<P: AstPayload> ParameterP<P> {
 }
 
 impl<P: AstPayload> ExprP<P> {
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
+    pub(crate) fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         match self {
             ExprP::Tuple(xs) => xs.iter().for_each(|x| f(x)),
             ExprP::Dot(x, _) => f(x),
@@ -347,7 +337,7 @@ impl<P: AstPayload> ExprP<P> {
 }
 
 impl<P: AstPayload> AssignP<P> {
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
+    pub(crate) fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         fn recurse<'a, P: AstPayload>(x: &'a AssignP<P>, f: &mut impl FnMut(&'a AstExprP<P>)) {
             match x {
                 AssignP::Tuple(xs) => xs.iter().for_each(|x| recurse(&*x, f)),
@@ -362,7 +352,7 @@ impl<P: AstPayload> AssignP<P> {
         recurse(self, &mut f)
     }
 
-    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+    pub(crate) fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
         fn recurse<'a, P: AstPayload>(
             x: &'a mut AssignP<P>,
             f: &mut impl FnMut(&'a mut AstExprP<P>),
@@ -383,7 +373,7 @@ impl<P: AstPayload> AssignP<P> {
     /// Assuming this expression was on the left-hand-side of an assignment,
     /// visit all the names that are bound by this assignment.
     /// Note that assignments like `x[i] = n` don't bind any names.
-    pub fn visit_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstAssignIdentP<P>)) {
+    pub(crate) fn visit_lvalue<'a>(&'a self, mut f: impl FnMut(&'a AstAssignIdentP<P>)) {
         fn recurse<'a, P: AstPayload>(
             x: &'a AssignP<P>,
             f: &mut impl FnMut(&'a AstAssignIdentP<P>),
@@ -397,7 +387,10 @@ impl<P: AstPayload> AssignP<P> {
         recurse(self, &mut f)
     }
 
-    pub fn visit_lvalue_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstAssignIdentP<P>)) {
+    pub(crate) fn visit_lvalue_mut<'a>(
+        &'a mut self,
+        mut f: impl FnMut(&'a mut AstAssignIdentP<P>),
+    ) {
         fn recurse<'a, P: AstPayload>(
             x: &'a mut AssignP<P>,
             f: &mut impl FnMut(&'a mut AstAssignIdentP<P>),
@@ -413,26 +406,26 @@ impl<P: AstPayload> AssignP<P> {
 }
 
 impl<P: AstPayload> ForClauseP<P> {
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
+    pub(crate) fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         self.var.visit_expr(&mut f);
         f(&self.over);
     }
 
-    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+    pub(crate) fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
         self.var.visit_expr_mut(&mut f);
         f(&mut self.over);
     }
 }
 
 impl<P: AstPayload> ClauseP<P> {
-    pub fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
+    pub(crate) fn visit_expr<'a>(&'a self, mut f: impl FnMut(&'a AstExprP<P>)) {
         match self {
             ClauseP::For(x) => x.visit_expr(f),
             ClauseP::If(x) => f(x),
         }
     }
 
-    pub fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
+    pub(crate) fn visit_expr_mut<'a>(&'a mut self, mut f: impl FnMut(&'a mut AstExprP<P>)) {
         match self {
             ClauseP::For(x) => x.visit_expr_mut(f),
             ClauseP::If(x) => f(x),

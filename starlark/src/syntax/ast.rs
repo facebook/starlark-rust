@@ -32,7 +32,7 @@ use crate::{
 };
 
 /// Payload types attached to AST nodes.
-pub trait AstPayload: Debug {
+pub(crate) trait AstPayload: Debug {
     type IdentPayload: Debug;
     type IdentAssignPayload: Debug;
     type DefPayload: Debug;
@@ -41,43 +41,43 @@ pub trait AstPayload: Debug {
 /// Default implementation of payload, which attaches `()` to nodes.
 /// This payload is returned with AST by parser.
 #[derive(Debug, Copy, Clone, Dupe)]
-pub struct AstNoPayload;
+pub(crate) struct AstNoPayload;
 impl AstPayload for AstNoPayload {
     type IdentPayload = ();
     type IdentAssignPayload = ();
     type DefPayload = ();
 }
 
-pub type Expr = ExprP<AstNoPayload>;
-pub type Assign = AssignP<AstNoPayload>;
-pub type AssignIdent = AssignIdentP<AstNoPayload>;
-pub type Clause = ClauseP<AstNoPayload>;
-pub type ForClause = ForClauseP<AstNoPayload>;
-pub type Argument = ArgumentP<AstNoPayload>;
-pub type Parameter = ParameterP<AstNoPayload>;
-pub type Load = LoadP<AstNoPayload>;
-pub type Stmt = StmtP<AstNoPayload>;
+pub(crate) type Expr = ExprP<AstNoPayload>;
+pub(crate) type Assign = AssignP<AstNoPayload>;
+pub(crate) type AssignIdent = AssignIdentP<AstNoPayload>;
+pub(crate) type Clause = ClauseP<AstNoPayload>;
+pub(crate) type ForClause = ForClauseP<AstNoPayload>;
+pub(crate) type Argument = ArgumentP<AstNoPayload>;
+pub(crate) type Parameter = ParameterP<AstNoPayload>;
+pub(crate) type Load = LoadP<AstNoPayload>;
+pub(crate) type Stmt = StmtP<AstNoPayload>;
 
 // Boxed types used for storing information from the parsing will be used
 // especially for the location of the AST item
-pub type AstExprP<P> = Spanned<ExprP<P>>;
-pub type AstAssignP<P> = Spanned<AssignP<P>>;
-pub type AstAssignIdentP<P> = Spanned<AssignIdentP<P>>;
-pub type AstArgumentP<P> = Spanned<ArgumentP<P>>;
-pub type AstParameterP<P> = Spanned<ParameterP<P>>;
-pub type AstLoadP<P> = Spanned<LoadP<P>>;
-pub type AstStmtP<P> = Spanned<StmtP<P>>;
+pub(crate) type AstExprP<P> = Spanned<ExprP<P>>;
+pub(crate) type AstAssignP<P> = Spanned<AssignP<P>>;
+pub(crate) type AstAssignIdentP<P> = Spanned<AssignIdentP<P>>;
+pub(crate) type AstArgumentP<P> = Spanned<ArgumentP<P>>;
+pub(crate) type AstParameterP<P> = Spanned<ParameterP<P>>;
+pub(crate) type AstLoadP<P> = Spanned<LoadP<P>>;
+pub(crate) type AstStmtP<P> = Spanned<StmtP<P>>;
 
-pub type AstExpr = AstExprP<AstNoPayload>;
-pub type AstAssign = AstAssignP<AstNoPayload>;
-pub type AstAssignIdent = AstAssignIdentP<AstNoPayload>;
-pub type AstArgument = AstArgumentP<AstNoPayload>;
-pub type AstString = Spanned<String>;
-pub type AstParameter = AstParameterP<AstNoPayload>;
-pub type AstInt = Spanned<TokenInt>;
-pub type AstFloat = Spanned<f64>;
-pub type AstLoad = AstLoadP<AstNoPayload>;
-pub type AstStmt = AstStmtP<AstNoPayload>;
+pub(crate) type AstExpr = AstExprP<AstNoPayload>;
+pub(crate) type AstAssign = AstAssignP<AstNoPayload>;
+pub(crate) type AstAssignIdent = AstAssignIdentP<AstNoPayload>;
+pub(crate) type AstArgument = AstArgumentP<AstNoPayload>;
+pub(crate) type AstString = Spanned<String>;
+pub(crate) type AstParameter = AstParameterP<AstNoPayload>;
+pub(crate) type AstInt = Spanned<TokenInt>;
+pub(crate) type AstFloat = Spanned<f64>;
+pub(crate) type AstLoad = AstLoadP<AstNoPayload>;
+pub(crate) type AstStmt = AstStmtP<AstNoPayload>;
 
 // We don't care _that_ much about the size of these structures,
 // but we equally don't want to regress without noticing.
@@ -113,7 +113,7 @@ pub(crate) trait ToAst: Sized {
 impl<T> ToAst for T {}
 
 #[derive(Debug)]
-pub enum ArgumentP<P: AstPayload> {
+pub(crate) enum ArgumentP<P: AstPayload> {
     Positional(AstExprP<P>),
     Named(AstString, AstExprP<P>),
     Args(AstExprP<P>),
@@ -121,7 +121,7 @@ pub enum ArgumentP<P: AstPayload> {
 }
 
 #[derive(Debug)]
-pub enum ParameterP<P: AstPayload> {
+pub(crate) enum ParameterP<P: AstPayload> {
     Normal(AstAssignIdentP<P>, Option<Box<AstExprP<P>>>),
     WithDefaultValue(
         AstAssignIdentP<P>,
@@ -134,14 +134,14 @@ pub enum ParameterP<P: AstPayload> {
 }
 
 #[derive(Debug, Clone)]
-pub enum AstLiteral {
+pub(crate) enum AstLiteral {
     Int(AstInt),
     Float(AstFloat),
     String(AstString),
 }
 
 #[derive(Debug)]
-pub enum ExprP<P: AstPayload> {
+pub(crate) enum ExprP<P: AstPayload> {
     Tuple(Vec<AstExprP<P>>),
     Dot(Box<AstExprP<P>>, AstString),
     Call(Box<AstExprP<P>>, Vec<AstArgumentP<P>>),
@@ -173,7 +173,7 @@ pub enum ExprP<P: AstPayload> {
 
 /// In some places e.g. AssignModify, the Tuple case is not allowed.
 #[derive(Debug)]
-pub enum AssignP<P: AstPayload> {
+pub(crate) enum AssignP<P: AstPayload> {
     // We use Tuple for both Tuple and List,
     // as these have the same semantics in Starlark.
     Tuple(Vec<AstAssignP<P>>),
@@ -184,30 +184,30 @@ pub enum AssignP<P: AstPayload> {
 
 /// Identifier in assign position.
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub struct AssignIdentP<P: AstPayload>(pub String, pub P::IdentAssignPayload);
+pub(crate) struct AssignIdentP<P: AstPayload>(pub String, pub P::IdentAssignPayload);
 
 /// `load` statement.
 #[derive(Debug)]
-pub struct LoadP<P: AstPayload> {
+pub(crate) struct LoadP<P: AstPayload> {
     pub module: AstString,
     pub args: Vec<(AstAssignIdentP<P>, AstString)>,
     pub visibility: Visibility,
 }
 
 #[derive(Debug)]
-pub struct ForClauseP<P: AstPayload> {
-    pub var: AstAssignP<P>,
-    pub over: AstExprP<P>,
+pub(crate) struct ForClauseP<P: AstPayload> {
+    pub(crate) var: AstAssignP<P>,
+    pub(crate) over: AstExprP<P>,
 }
 
 #[derive(Debug)]
-pub enum ClauseP<P: AstPayload> {
+pub(crate) enum ClauseP<P: AstPayload> {
     For(ForClauseP<P>),
     If(AstExprP<P>),
 }
 
 #[derive(Debug, Clone, Copy, Dupe, Eq, PartialEq)]
-pub enum BinOp {
+pub(crate) enum BinOp {
     Or,
     And,
     Equal,
@@ -232,7 +232,7 @@ pub enum BinOp {
 }
 
 #[derive(Debug, Clone, Copy, Dupe, PartialEq, Eq)]
-pub enum AssignOp {
+pub(crate) enum AssignOp {
     Add,         // +=
     Subtract,    // -=
     Multiply,    // *=
@@ -253,7 +253,7 @@ pub enum Visibility {
 }
 
 #[derive(Debug)]
-pub enum StmtP<P: AstPayload> {
+pub(crate) enum StmtP<P: AstPayload> {
     Break,
     Continue,
     Pass,
@@ -277,7 +277,7 @@ pub enum StmtP<P: AstPayload> {
 }
 
 impl<P: AstPayload> ArgumentP<P> {
-    pub fn expr(&self) -> &AstExprP<P> {
+    pub(crate) fn expr(&self) -> &AstExprP<P> {
         match self {
             ArgumentP::Positional(x) => x,
             ArgumentP::Named(_, x) => x,
@@ -286,7 +286,7 @@ impl<P: AstPayload> ArgumentP<P> {
         }
     }
 
-    pub fn expr_mut(&mut self) -> &mut AstExprP<P> {
+    pub(crate) fn expr_mut(&mut self) -> &mut AstExprP<P> {
         match self {
             ArgumentP::Positional(x) => x,
             ArgumentP::Named(_, x) => x,
@@ -295,7 +295,7 @@ impl<P: AstPayload> ArgumentP<P> {
         }
     }
 
-    pub fn into_expr(self) -> AstExprP<P> {
+    pub(crate) fn into_expr(self) -> AstExprP<P> {
         match self {
             ArgumentP::Positional(x) => x,
             ArgumentP::Named(_, x) => x,
@@ -304,7 +304,7 @@ impl<P: AstPayload> ArgumentP<P> {
         }
     }
 
-    pub fn is_positional(&self) -> bool {
+    pub(crate) fn is_positional(&self) -> bool {
         matches!(self, ArgumentP::Positional(_))
     }
 }

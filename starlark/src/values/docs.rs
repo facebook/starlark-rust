@@ -106,7 +106,9 @@ pub enum DocStringKind {
 impl DocString {
     /// Extracts the docstring from a function or module body, iff the first
     /// statement is a string literal.
-    pub fn extract_raw_starlark_docstring<P: AstPayload>(body: &AstStmtP<P>) -> Option<String> {
+    pub(crate) fn extract_raw_starlark_docstring<P: AstPayload>(
+        body: &AstStmtP<P>,
+    ) -> Option<String> {
         if let StmtP::Statements(stmts) = &body.node {
             if let Some(Spanned {
                 node:
