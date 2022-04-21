@@ -138,12 +138,13 @@ const MAX_CALLSTACK_RECURSION: usize = 40;
 
 unsafe impl<'v> Trace<'v> for CallStack<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
-        for x in self.stack[0..self.count].iter_mut() {
+        let (used, unused) = self.stack.split_at_mut(self.count);
+        for x in used {
             x.function.trace(tracer);
         }
         // Not required, but since we are chosing not to walk those above
         // the current stack depth, it's good practice to blank those values out
-        for x in self.stack[self.count..].iter_mut() {
+        for x in unused {
             x.function = Value::new_none();
             x.span = None;
         }
