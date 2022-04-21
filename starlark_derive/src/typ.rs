@@ -18,7 +18,7 @@
 use proc_macro2::{Ident, Span};
 use syn::{spanned::Spanned, Attribute, Block, Expr, NestedMeta, Pat, Type, Visibility};
 
-use crate::{parse::ModuleKind, util::*};
+use crate::{module::parse::ModuleKind, util::*};
 
 #[derive(Debug)]
 pub(crate) struct StarModule {

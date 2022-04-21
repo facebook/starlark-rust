@@ -26,13 +26,11 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use syn::*;
 
 mod attrs;
 mod bc;
 mod freeze;
-mod parse;
-mod render;
+mod module;
 mod serde;
 mod trace;
 mod typ;
@@ -88,19 +86,7 @@ mod util;
 /// If a desired function name is also a Rust keyword, use the `r#` prefix, e.g. `r#type`.
 #[proc_macro_attribute]
 pub fn starlark_module(attr: TokenStream, input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ItemFn);
-
-    fn starlark_module_impl(attr: TokenStream, input: ItemFn) -> syn::Result<TokenStream> {
-        assert!(attr.is_empty());
-        let mut x = parse::parse(input)?;
-        x.resolve()?;
-        Ok(render::render(x).into())
-    }
-
-    match starlark_module_impl(attr, input) {
-        Ok(x) => x,
-        Err(e) => e.to_compile_error().into(),
-    }
+    module::starlark_module(attr, input)
 }
 
 /// Stubs for Starlark bytecode interpreter.
