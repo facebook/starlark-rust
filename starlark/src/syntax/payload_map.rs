@@ -38,15 +38,10 @@ impl<A: AstPayload> LoadP<A> {
         self,
         f: &mut impl AstPayloadFunction<A, B>,
     ) -> LoadP<B> {
-        let LoadP {
-            module,
-            args,
-            visibility,
-        } = self;
+        let LoadP { module, args } = self;
         LoadP {
             module,
             args: args.into_map(|(local, their)| (local.into_map_payload(f), their)),
-            visibility,
         }
     }
 }

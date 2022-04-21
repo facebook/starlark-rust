@@ -101,7 +101,11 @@ impl AstModule {
         dialect: &Dialect,
     ) -> anyhow::Result<AstModule> {
         Stmt::validate(&codemap, &statement, dialect)?;
-        Ok(AstModule { codemap, statement })
+        Ok(AstModule {
+            codemap,
+            statement,
+            dialect: dialect.clone(),
+        })
     }
 
     /// Parse a file stored on disk. For details see [`parse`](AstModule::parse).

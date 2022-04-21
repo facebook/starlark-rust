@@ -33,6 +33,7 @@ use crate::{
         },
         payload_map::AstPayloadFunction,
         uniplate::VisitMut,
+        Dialect,
     },
     values::{FrozenRef, FrozenValue},
 };
@@ -169,6 +170,7 @@ impl<'a> Scope<'a> {
         code: &mut CstStmt,
         globals: FrozenRef<'static, Globals>,
         codemap: FrozenRef<'static, CodeMap>,
+        dialect: &Dialect,
     ) -> Self {
         // Not really important, sanity check
         assert_eq!(scope_id, ScopeId::module());
@@ -181,7 +183,7 @@ impl<'a> Scope<'a> {
             locals.insert(name.as_str(), binding_id);
         }
 
-        Stmt::collect_defines(code, InLoop::No, &mut scope_data, &mut locals);
+        Stmt::collect_defines(code, InLoop::No, &mut scope_data, &mut locals, dialect);
 
         let mut module_bindings = HashMap::new();
         for (x, binding_id) in locals {
@@ -194,7 +196,7 @@ impl<'a> Scope<'a> {
         }
 
         // Here we traverse the AST second time to collect scopes of defs
-        Self::collect_defines_recursively(&mut scope_data, code);
+        Self::collect_defines_recursively(&mut scope_data, code, dialect);
         let mut scope = Self {
             scope_data,
             module,
@@ -225,6 +227,7 @@ impl<'a> Scope<'a> {
         scope_id: ScopeId,
         params: &mut [CstParameter],
         body: Option<&mut CstStmt>,
+        dialect: &Dialect,
     ) {
         let params = params.iter_mut().filter_map(|p| match &mut p.node {
             ParameterP::Normal(n, ..) => Some(n),
@@ -245,7 +248,7 @@ impl<'a> Scope<'a> {
             assert!(old_local.is_none());
         }
         if let Some(code) = body {
-            Stmt::collect_defines(code, InLoop::No, scope_data, &mut locals);
+            Stmt::collect_defines(code, InLoop::No, scope_data, &mut locals, dialect);
         }
         for (name, binding_id) in locals.into_iter() {
             let slot = scope_data.mut_scope(scope_id).add_name(name, binding_id);
@@ -255,25 +258,33 @@ impl<'a> Scope<'a> {
         }
     }
 
-    fn collect_defines_recursively(scope_data: &mut ScopeData, code: &mut CstStmt) {
+    fn collect_defines_recursively(
+        scope_data: &mut ScopeData,
+        code: &mut CstStmt,
+        dialect: &Dialect,
+    ) {
         if let StmtP::Def(_name, params, _ret, suite, scope_id) = &mut code.node {
             // Here we traverse the AST twice: once for this def scope,
             // second time below for nested defs.
-            Self::collect_defines_in_def(scope_data, *scope_id, params, Some(suite));
+            Self::collect_defines_in_def(scope_data, *scope_id, params, Some(suite), dialect);
         }
 
         code.visit_children_mut(&mut |visit| match visit {
-            VisitMut::Expr(e) => Self::collect_defines_recursively_in_expr(scope_data, e),
-            VisitMut::Stmt(s) => Self::collect_defines_recursively(scope_data, s),
+            VisitMut::Expr(e) => Self::collect_defines_recursively_in_expr(scope_data, e, dialect),
+            VisitMut::Stmt(s) => Self::collect_defines_recursively(scope_data, s, dialect),
         });
     }
 
-    fn collect_defines_recursively_in_expr(scope_data: &mut ScopeData, code: &mut CstExpr) {
+    fn collect_defines_recursively_in_expr(
+        scope_data: &mut ScopeData,
+        code: &mut CstExpr,
+        dialect: &Dialect,
+    ) {
         if let ExprP::Lambda(params, _expr, scope_id) = &mut code.node {
-            Self::collect_defines_in_def(scope_data, *scope_id, params, None);
+            Self::collect_defines_in_def(scope_data, *scope_id, params, None, dialect);
         }
 
-        code.visit_expr_mut(|e| Self::collect_defines_recursively_in_expr(scope_data, e));
+        code.visit_expr_mut(|e| Self::collect_defines_recursively_in_expr(scope_data, e, dialect));
     }
 
     fn resolve_idents(&mut self, code: &mut CstStmt) {
@@ -511,6 +522,7 @@ impl Stmt {
         in_loop: InLoop,
         scope_data: &mut ScopeData,
         result: &mut IndexMap<&'a str, BindingId>,
+        dialect: &Dialect,
     ) {
         match &mut stmt.node {
             StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
@@ -518,7 +530,7 @@ impl Stmt {
             }
             StmtP::For(dest, box (_, body)) => {
                 Assign::collect_defines_lvalue(dest, InLoop::Yes, scope_data, result);
-                StmtP::collect_defines(body, InLoop::Yes, scope_data, result);
+                StmtP::collect_defines(body, InLoop::Yes, scope_data, result, dialect);
             }
             StmtP::Def(name, ..) => AssignIdent::collect_assign_ident(
                 name,
@@ -528,7 +540,7 @@ impl Stmt {
                 result,
             ),
             StmtP::Load(load) => {
-                let vis = load.visibility;
+                let vis = dialect.load_visibility();
                 for (name, _) in &mut load.node.args {
                     let mut vis = vis;
                     if Module::default_visibility(&name.0) == Visibility::Private {
@@ -537,7 +549,8 @@ impl Stmt {
                     AssignIdent::collect_assign_ident(name, in_loop, vis, scope_data, result);
                 }
             }
-            stmt => stmt.visit_stmt_mut(|x| Stmt::collect_defines(x, in_loop, scope_data, result)),
+            stmt => stmt
+                .visit_stmt_mut(|x| Stmt::collect_defines(x, in_loop, scope_data, result, dialect)),
         }
     }
 }
@@ -821,6 +834,7 @@ mod tests {
             &mut cst,
             FrozenRef::new(Globals::empty()),
             codemap,
+            &Dialect::Extended,
         );
         assert!(scope.errors.is_empty());
         let (.., scope_data) = scope.exit_module();

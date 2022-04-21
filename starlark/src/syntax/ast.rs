@@ -28,7 +28,7 @@ use static_assertions::assert_eq_size;
 
 use crate::{
     codemap::{CodeMap, Pos, Span, Spanned},
-    syntax::lexer::TokenInt,
+    syntax::{lexer::TokenInt, Dialect},
 };
 
 /// Payload types attached to AST nodes.
@@ -98,6 +98,7 @@ pub struct AstModule {
     #[derivative(Debug = "ignore")]
     pub(crate) codemap: CodeMap,
     pub(crate) statement: AstStmt,
+    pub(crate) dialect: Dialect,
 }
 
 // A trait rather than a function to allow .ast() chaining in the parser.
@@ -191,7 +192,6 @@ pub(crate) struct AssignIdentP<P: AstPayload>(pub String, pub P::IdentAssignPayl
 pub(crate) struct LoadP<P: AstPayload> {
     pub module: AstString,
     pub args: Vec<(AstAssignIdentP<P>, AstString)>,
-    pub visibility: Visibility,
 }
 
 #[derive(Debug)]

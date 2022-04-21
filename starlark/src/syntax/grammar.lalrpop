@@ -185,7 +185,6 @@ LoadStmtInner_: Load = "load" "(" <module:string> <args:("," <LoadStmtSyms>)+> "
     Load {
         module,
         args,
-        visibility: dialect.load_visibility(),
     }
 };
 

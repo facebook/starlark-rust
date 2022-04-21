@@ -56,7 +56,11 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     pub fn eval_module(&mut self, ast: AstModule, globals: &Globals) -> anyhow::Result<Value<'v>> {
         let start = Instant::now();
 
-        let AstModule { codemap, statement } = ast;
+        let AstModule {
+            codemap,
+            statement,
+            dialect,
+        } = ast;
 
         let codemap = self
             .module_env
@@ -82,6 +86,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             &mut statement,
             globals,
             codemap,
+            &dialect,
         );
 
         // We want to grab the first error only, with ownership, so drop all but the first
