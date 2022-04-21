@@ -38,8 +38,9 @@ static_assertions = "1.1.0"
 memoffset = "0.6.4"
 thiserror = "1.0.9"
 starlark_derive = { version = "0.7.0", path = "../starlark_derive" }
-# @oss-disable: gazebo = { path = "../../gazebo/gazebo", features = ["str_pattern_extensions"] }
-gazebo = { version = "0.6.0", features = ["str_pattern_extensions"] } # @oss-enable
+gazebo.version = "0.6.0"
+gazebo.features = ["str_pattern_extensions"]
+# @oss-disable: gazebo.path = "../../gazebo/gazebo"
 # @oss-disable: gazebo_lint = { path = "../../gazebo_lint/gazebo_lint", optional = true }
 gazebo_lint = { version = "0.1", optional = true } # @oss-enable
 structopt = "0.3.0"
