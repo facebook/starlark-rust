@@ -185,13 +185,41 @@ impl<'v> CheapCallStack<'v> {
         }
     }
 
-    pub(crate) fn to_diagnostic_frames(&self) -> Vec<Frame> {
+    pub(crate) fn to_diagnostic_frames(&self) -> CallStack {
         // The first entry is just the entire module, so skip it
-        self.stack[1..self.count].map(CheapFrame::to_frame)
+        let frames = self.stack[1..self.count].map(CheapFrame::to_frame);
+        CallStack { frames }
     }
 
     /// List the entries on the stack as values
     pub(crate) fn to_function_values(&self) -> Vec<Value<'v>> {
         self.stack[1..self.count].map(|x| x.function)
+    }
+}
+
+/// Owned call stack.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+pub struct CallStack {
+    frames: Vec<Frame>,
+}
+
+impl CallStack {
+    /// Is the call stack empty?
+    pub fn is_empty(&self) -> bool {
+        self.frames.is_empty()
+    }
+
+    /// Take the contained frames.
+    pub fn into_frames(self) -> Vec<Frame> {
+        self.frames
+    }
+}
+
+impl Display for CallStack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for x in &self.frames {
+            writeln!(f, "* {}", x)?;
+        }
+        Ok(())
     }
 }

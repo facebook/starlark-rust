@@ -28,7 +28,10 @@ use annotate_snippets::{
 };
 
 pub use crate::analysis::Lint;
-use crate::codemap::{CodeMap, FileSpan, Span};
+use crate::{
+    codemap::{CodeMap, FileSpan, Span},
+    eval::CallStack,
+};
 
 pub(crate) mod did_you_mean;
 
@@ -46,11 +49,11 @@ pub struct Diagnostic {
     pub span: Option<FileSpan>,
 
     /// Call stack of what called what. Most recent frames are at the end.
-    pub call_stack: Vec<Frame>,
+    pub call_stack: CallStack,
 }
 
 /// A frame of the call-stack.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Frame {
     /// The name of the entry on the call-stack.
     pub name: String,
@@ -107,7 +110,7 @@ impl Diagnostic {
                 let mut err = Self {
                     message: err,
                     span: None,
-                    call_stack: Vec::new(),
+                    call_stack: CallStack::default(),
                 };
                 f(&mut err);
                 err.into()
@@ -124,7 +127,7 @@ impl Diagnostic {
     }
 
     /// Set the [`Diagnostic::call_stack`] field, unless it's already been set.
-    pub fn set_call_stack(&mut self, call_stack: impl FnOnce() -> Vec<Frame>) {
+    pub fn set_call_stack(&mut self, call_stack: impl FnOnce() -> CallStack) {
         if self.call_stack.is_empty() {
             // We want the best call stack, which is likely the first person to set it
             self.call_stack = call_stack();
@@ -148,17 +151,6 @@ impl Diagnostic {
 impl Display for Diagnostic {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         diagnostic_display(self, f)
-    }
-}
-
-struct CallStackFmt<'a>(&'a Vec<Frame>);
-
-impl Display for CallStackFmt<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        for x in self.0.iter() {
-            writeln!(f, "* {}", x)?;
-        }
-        Ok(())
     }
 }
 
@@ -224,7 +216,7 @@ fn get_display_list_for_diagnostic<'a>(
 }
 
 fn diagnostic_display(diagnostic: &Diagnostic, f: &mut Formatter<'_>) -> fmt::Result {
-    CallStackFmt(&diagnostic.call_stack).fmt(f)?;
+    write!(f, "{}", &diagnostic.call_stack)?;
     let annotation_label = format!("{:#}", diagnostic.message);
     // I set color to false here to make the comparison easier with tests (coloring
     // adds in pretty strange unicode chars).
@@ -233,7 +225,7 @@ fn diagnostic_display(diagnostic: &Diagnostic, f: &mut Formatter<'_>) -> fmt::Re
 }
 
 fn diagnostic_stderr(diagnostic: &Diagnostic) {
-    eprint!("{}", CallStackFmt(&diagnostic.call_stack));
+    eprint!("{}", diagnostic.call_stack);
     let annotation_label = format!("{:#}", diagnostic.message);
     let display_list = get_display_list_for_diagnostic(&annotation_label, diagnostic, true);
     eprintln!("{}", display_list);

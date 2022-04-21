@@ -279,7 +279,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
     /// Obtain the current call-stack, suitable for use with [`Diagnostic`].
     pub fn call_stack(&self) -> Vec<Frame> {
-        self.call_stack.to_diagnostic_frames()
+        self.call_stack.to_diagnostic_frames().into_frames()
     }
 
     /// Obtain the top location on the call-stack. May be [`None`] if the
