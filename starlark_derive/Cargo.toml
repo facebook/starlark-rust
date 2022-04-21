@@ -17,8 +17,9 @@ syn = { version = "1.0.33", features = ["full", "extra-traits"] }
 gazebo.version = "0.6.0"
 gazebo.features = ["str_pattern_extensions"]
 # @oss-disable: gazebo.path = "../../gazebo/gazebo"
-# @oss-disable: gazebo_lint = { path = "../../gazebo_lint/gazebo_lint", optional = true }
-gazebo_lint = { version = "0.1", optional = true } # @oss-enable
+gazebo_lint.version = "0.1"
+gazebo_lint.optional = true
+# @oss-disable: gazebo_lint.path = "../../gazebo_lint/gazebo_lint"
 quote = "1.0.3"
 
 [features]

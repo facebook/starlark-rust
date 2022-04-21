@@ -41,8 +41,9 @@ starlark_derive = { version = "0.7.0", path = "../starlark_derive" }
 gazebo.version = "0.6.0"
 gazebo.features = ["str_pattern_extensions"]
 # @oss-disable: gazebo.path = "../../gazebo/gazebo"
-# @oss-disable: gazebo_lint = { path = "../../gazebo_lint/gazebo_lint", optional = true }
-gazebo_lint = { version = "0.1", optional = true } # @oss-enable
+gazebo_lint.version = "0.1"
+gazebo_lint.optional = true
+# @oss-disable: gazebo_lint.path = "../../gazebo_lint/gazebo_lint"
 structopt = "0.3.0"
 walkdir = "2.3"
 serde = { version = "1.0", features = ["derive"] }
