@@ -217,8 +217,15 @@ impl CallStack {
 
 impl Display for CallStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for x in &self.frames {
-            writeln!(f, "* {}", x)?;
+        if !self.frames.is_empty() {
+            // Match Python output.
+            writeln!(f, "Traceback (most recent call last):")?;
+            // TODO(nga): use real module name.
+            let mut prev = "<module>";
+            for x in &self.frames {
+                x.write_two_lines_as_in_python("  ", prev, f)?;
+                prev = &x.name;
+            }
         }
         Ok(())
     }

@@ -444,13 +444,19 @@ add3(8)"#,
     if display {
         Diagnostic::eprint(&diag)
     }
+    // TODO(nga): function name in stack trace now includes module name, which is redundant.
     assert_eq!(
         &format!("\n{}", diag),
         r#"
-* assert.bzl.add3 (called from assert.bzl:5:1-8)
-* imported.bzl.add2 (called from assert.bzl:4:5-12)
-* imported.bzl.add (called from imported.bzl:9:3-9)
-* append (called from imported.bzl:11:3-14)
+Traceback (most recent call last):
+  File assert.bzl, line 5, in <module>
+    add3(8)
+  File assert.bzl, line 4, in assert.bzl.add3
+    add2(z)
+  File imported.bzl, line 9, in imported.bzl.add2
+    add(z)
+  File imported.bzl, line 11, in imported.bzl.add
+    x.append(z)
 error: Immutable
   --> imported.bzl:11:3
    |
@@ -462,10 +468,15 @@ error: Immutable
     assert_eq!(
         &format!("\n{:#}", diag),
         r#"
-* assert.bzl.add3 (called from assert.bzl:5:1-8)
-* imported.bzl.add2 (called from assert.bzl:4:5-12)
-* imported.bzl.add (called from imported.bzl:9:3-9)
-* append (called from imported.bzl:11:3-14)
+Traceback (most recent call last):
+  File assert.bzl, line 5, in <module>
+    add3(8)
+  File assert.bzl, line 4, in assert.bzl.add3
+    add2(z)
+  File imported.bzl, line 9, in imported.bzl.add2
+    add(z)
+  File imported.bzl, line 11, in imported.bzl.add
+    x.append(z)
 error: Immutable
   --> imported.bzl:11:3
    |

@@ -69,6 +69,11 @@ impl Span {
         Span { begin, end }
     }
 
+    /// The position at the first byte of the span.
+    pub fn begin(self) -> Pos {
+        self.begin
+    }
+
     /// The position after the last byte of the span.
     pub fn end(self) -> Pos {
         self.end
@@ -275,6 +280,10 @@ impl CodeMap {
     pub fn source_line(&self, line: usize) -> &str {
         self.source_span(self.line_span(line))
             .trim_end_matches(&['\n', '\r'][..])
+    }
+
+    pub(crate) fn source_line_at_pos(&self, pos: Pos) -> &str {
+        self.source_line(self.find_line(pos))
     }
 
     /// Gets the number of lines in the file

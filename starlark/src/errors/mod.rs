@@ -71,6 +71,38 @@ impl Display for Frame {
     }
 }
 
+impl Frame {
+    pub(crate) fn write_two_lines_as_in_python(
+        &self,
+        indent: &str,
+        caller: &str,
+        write: &mut dyn fmt::Write,
+    ) -> fmt::Result {
+        if let Some(location) = &self.location {
+            let line = location
+                .file
+                .source_line_at_pos(location.span.begin())
+                .trim();
+            let line = line.get(..50).unwrap_or(line).trim();
+            writeln!(
+                write,
+                "{}File {}, line {}, in {}",
+                indent,
+                location.file.filename(),
+                location.file.find_line(location.span.begin()) + 1,
+                // Note we print caller function here as in Python, not callee,
+                // so in the stack trace, top frame is printed without executed function name.
+                caller,
+            )?;
+            writeln!(write, "{}  {}", indent, line)?;
+        } else {
+            // Python just omits builtin functions in the traceback.
+            writeln!(write, "{}File <builtin>, in {}", indent, caller)?;
+        }
+        Ok(())
+    }
+}
+
 impl Error for Diagnostic {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         // We do have an underlying source (namely `self.message`), but if we return

@@ -199,7 +199,7 @@ f()
 "#,
         "bad",
     );
-    assert!(d.to_string().contains("* fail"));
+    assert!(d.to_string().contains("fail(\"bad\")"));
 }
 
 #[test]
