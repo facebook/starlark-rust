@@ -115,12 +115,12 @@ impl Debug for CheapFrame<'_> {
 
 /// Starlark call stack.
 #[derive(Debug)]
-pub(crate) struct CallStack<'v> {
+pub(crate) struct CheapCallStack<'v> {
     count: usize,
     stack: [CheapFrame<'v>; MAX_CALLSTACK_RECURSION],
 }
 
-impl<'v> Default for CallStack<'v> {
+impl<'v> Default for CheapCallStack<'v> {
     fn default() -> Self {
         Self {
             count: 0,
@@ -136,7 +136,7 @@ impl<'v> Default for CallStack<'v> {
 // low...)
 const MAX_CALLSTACK_RECURSION: usize = 40;
 
-unsafe impl<'v> Trace<'v> for CallStack<'v> {
+unsafe impl<'v> Trace<'v> for CheapCallStack<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         let (used, unused) = self.stack.split_at_mut(self.count);
         for x in used {
@@ -151,7 +151,7 @@ unsafe impl<'v> Trace<'v> for CallStack<'v> {
     }
 }
 
-impl<'v> CallStack<'v> {
+impl<'v> CheapCallStack<'v> {
     /// Push an element to the stack. It is important the each `push` is paired
     /// with a `pop`.
     pub(crate) fn push(

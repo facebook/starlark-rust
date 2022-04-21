@@ -36,7 +36,7 @@ use crate::{
         runtime::{
             bc_profile::BcProfile,
             before_stmt::BeforeStmt,
-            call_stack::{CallStack, FrozenFileSpan},
+            call_stack::{CheapCallStack, FrozenFileSpan},
             flame_profile::FlameProfile,
             heap_profile::{HeapProfile, HeapProfileFormat},
             profile::ProfileMode,
@@ -120,7 +120,7 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) print_handler: &'a (dyn PrintHandler + 'a),
     // The Starlark-level call-stack of functions.
     // Must go last because it's quite a big structure
-    pub(crate) call_stack: CallStack<'v>,
+    pub(crate) call_stack: CheapCallStack<'v>,
 }
 
 unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
@@ -140,7 +140,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// [`set_loader`](Evaluator::set_loader).
     pub fn new(module: &'v Module) -> Self {
         Evaluator {
-            call_stack: CallStack::default(),
+            call_stack: CheapCallStack::default(),
             module_env: module,
             module_variables: None,
             current_frame: BcFramePtr::null(),
