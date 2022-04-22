@@ -33,8 +33,6 @@ mod freeze;
 mod module;
 mod serde;
 mod trace;
-mod typ;
-mod util;
 
 /// Write Starlark modules concisely in Rust syntax.
 ///

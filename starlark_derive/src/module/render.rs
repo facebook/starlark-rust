@@ -19,7 +19,12 @@ use gazebo::prelude::*;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote_spanned};
 
-use crate::{typ::*, util::*};
+use crate::module::{
+    typ::{
+        StarArg, StarArgSource, StarAttr, StarConst, StarFun, StarFunSource, StarModule, StarStmt,
+    },
+    util::{ident_string, mut_token},
+};
 
 pub(crate) fn render(x: StarModule) -> TokenStream {
     let span = x.span();

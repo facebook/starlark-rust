@@ -23,7 +23,12 @@ use syn::{
     TypeReference,
 };
 
-use crate::{typ::*, util::*};
+use crate::module::{
+    typ::{
+        StarArg, StarArgSource, StarAttr, StarConst, StarFun, StarFunSource, StarModule, StarStmt,
+    },
+    util::is_type_name,
+};
 
 #[derive(Debug, Copy, Clone, Dupe, PartialEq, Eq)]
 pub(crate) enum ModuleKind {

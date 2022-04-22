@@ -17,6 +17,8 @@
 
 pub(crate) mod parse;
 mod render;
+mod typ;
+mod util;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, ItemFn};
