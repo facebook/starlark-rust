@@ -18,18 +18,31 @@
 // This is not public API, but it is used by Starlark command line utility.
 #![doc(hidden)]
 
+use std::{env, io};
+
 use rustyline::{error::ReadlineError, Editor};
 
 /// Wrapper for the readline library, whichever we are using at the moment.
 pub struct ReadLine {
     editor: Editor<()>,
+    histfile: Option<String>,
 }
 
 impl ReadLine {
-    pub fn new() -> ReadLine {
-        ReadLine {
-            editor: Editor::new(),
-        }
+    pub fn new(histfile_env: &str) -> ReadLine {
+        let mut editor = Editor::new();
+        let histfile = if let Ok(histfile) = env::var(histfile_env) {
+            if let Err(e) = editor.load_history(&histfile) {
+                match e {
+                    ReadlineError::Io(e) if e.kind() == io::ErrorKind::NotFound => {}
+                    e => eprintln!("Failed to load history from `{}`: {}", histfile, e),
+                }
+            }
+            Some(histfile)
+        } else {
+            None
+        };
+        ReadLine { editor, histfile }
     }
 
     /// Read line. Return `None` on EOF or interrupt.
@@ -37,6 +50,11 @@ impl ReadLine {
         match self.editor.readline(prompt) {
             Ok(line) => {
                 self.editor.add_history_entry(line.as_str());
+                if let Some(histfile) = &self.histfile {
+                    if let Err(e) = self.editor.save_history(&histfile) {
+                        eprintln!("Failed to save history to `{}`: {}", histfile, e);
+                    }
+                }
                 Ok(Some(line))
             }
             // User pressed EOF - disconnected terminal, or similar

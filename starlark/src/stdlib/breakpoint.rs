@@ -60,7 +60,7 @@ impl BreakpointConsole for RealBreakpointConsole {
 impl RealBreakpointConsole {
     pub(crate) fn factory() -> Box<dyn Fn() -> Box<dyn BreakpointConsole>> {
         box || box RealBreakpointConsole {
-            read_line: ReadLine::new(),
+            read_line: ReadLine::new("STARLARK_RUST_DEBUGGER_HISTFILE"),
         }
     }
 }
