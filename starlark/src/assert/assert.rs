@@ -126,7 +126,7 @@ fn assert_star(builder: &mut crate::environment::GlobalsBuilder) {
     }
 
     // We don't allow this at runtime - just to be compatible with the Go Starlark test suite
-    fn freeze(x: Value) -> anyhow::Result<Value<'v>> {
+    fn freeze<'v>(x: Value) -> anyhow::Result<Value<'v>> {
         Ok(x)
     }
 
@@ -144,12 +144,12 @@ fn test_methods(builder: &mut GlobalsBuilder) {
     const fibonacci: Vec<i32> = vec![0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
 
     // Approximate version of a method used by the Go test suite
-    fn hasfields() -> anyhow::Result<Struct<'v>> {
+    fn hasfields<'v>() -> anyhow::Result<Struct<'v>> {
         Ok(Struct::new(SmallMap::new()))
     }
 
     // Approximate version of a method used by the Go test suite
-    fn set(xs: Value) -> anyhow::Result<Value<'v>> {
+    fn set<'v>(xs: Value) -> anyhow::Result<Value<'v>> {
         Ok(xs)
     }
 

@@ -707,8 +707,8 @@ fn test_label_assign() {
     }
 
     #[starlark_module]
-    fn module(builder: &mut GlobalsBuilder) {
-        fn wrapper() -> anyhow::Result<Value<'v>> {
+    fn module<'v>(builder: &mut GlobalsBuilder) {
+        fn wrapper<'v>() -> anyhow::Result<Value<'v>> {
             Ok(heap.alloc_complex(Wrapper(RefCell::new(SmallMap::new()))))
         }
     }

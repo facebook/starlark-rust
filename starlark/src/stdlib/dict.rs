@@ -83,7 +83,11 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # )"#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn get(this: DictRef, ref key: Value, ref default: Option<Value>) -> anyhow::Result<Value<'v>> {
+    fn get<'v>(
+        this: DictRef,
+        ref key: Value,
+        ref default: Option<Value>,
+    ) -> anyhow::Result<Value<'v>> {
         match this.get(key)? {
             None => Ok(default.unwrap_or_else(Value::new_none)),
             Some(x) => Ok(x),
@@ -107,7 +111,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn items(this: DictRef) -> anyhow::Result<Value<'v>> {
+    fn items<'v>(this: DictRef) -> anyhow::Result<Value<'v>> {
         Ok(heap.alloc_list_iter(this.iter().map(|(k, v)| heap.alloc((k, v)))))
     }
 
@@ -127,7 +131,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn keys(this: DictRef) -> anyhow::Result<Value<'v>> {
+    fn keys<'v>(this: DictRef) -> anyhow::Result<Value<'v>> {
         Ok(heap.alloc_list_iter(this.keys()))
     }
 
@@ -166,7 +170,11 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// {'one': 1}.pop('four')   # error: not found
     /// # "#, "not found");
     /// ```
-    fn pop(this: Value, ref key: Value, ref default: Option<Value>) -> anyhow::Result<Value<'v>> {
+    fn pop<'v>(
+        this: Value,
+        ref key: Value,
+        ref default: Option<Value>,
+    ) -> anyhow::Result<Value<'v>> {
         let mut me = Dict::from_value_mut(this)?;
         match me.remove_hashed(key.get_hashed()?) {
             Some(x) => Ok(x),
@@ -215,7 +223,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// {}.popitem()   # error: empty dict
     /// # "#, "empty dict");
     /// ```
-    fn popitem(this: Value) -> anyhow::Result<(Value<'v>, Value<'v>)> {
+    fn popitem<'v>(this: Value) -> anyhow::Result<(Value<'v>, Value<'v>)> {
         let mut this = Dict::from_value_mut(this)?;
 
         let key = this.iter_hashed().next().map(|(k, _)| k);
@@ -256,7 +264,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// x == {"one": 1, "two": 2, "three": 0, "four": None}
     /// # )"#)
     /// ```
-    fn setdefault(
+    fn setdefault<'v>(
         this: Value,
         ref key: Value,
         ref default: Option<Value>,
@@ -356,7 +364,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn values(this: DictRef) -> anyhow::Result<Value<'v>> {
+    fn values<'v>(this: DictRef) -> anyhow::Result<Value<'v>> {
         Ok(heap.alloc_list_iter(this.values()))
     }
 }

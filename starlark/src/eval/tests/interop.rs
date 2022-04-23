@@ -122,7 +122,7 @@ v == '{}' or v == '{}'"#,
 fn test_load_symbols() {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn load_symbol(name: &str, value: Value<'v>) -> anyhow::Result<NoneType> {
+        fn load_symbol<'v>(name: &str, value: Value<'v>) -> anyhow::Result<NoneType> {
             eval.set_module_variable_at_some_point(name, value)?;
             Ok(NoneType)
         }
@@ -153,7 +153,7 @@ fn test_load_public_symbols_does_not_reexport() -> anyhow::Result<()> {
 fn test_load_symbols_extra() -> anyhow::Result<()> {
     #[starlark_module]
     fn module(builder: &mut GlobalsBuilder) {
-        fn load_symbol(name: &str, value: Value<'v>) -> anyhow::Result<NoneType> {
+        fn load_symbol<'v>(name: &str, value: Value<'v>) -> anyhow::Result<NoneType> {
             let extra = eval.extra_v.unwrap().downcast_ref::<Extra<'v>>().unwrap();
             extra.0.lock().unwrap().insert(name.to_owned(), value);
             Ok(NoneType)
@@ -236,14 +236,14 @@ mod value_of {
     // TODO(nmj): Figure out default values here. ValueOf<i32> = 5 should work.
     #[starlark_module]
     fn validate_module(builder: &mut GlobalsBuilder) {
-        fn with_int(v: ValueOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_int<'v>(v: ValueOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
             Ok((*v, format!("{}", v.typed)))
         }
-        fn with_int_list(v: ListOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_int_list<'v>(v: ListOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v.to_vec().iter().join(", ");
             Ok((*v, repr))
         }
-        fn with_list_list(v: ListOf<ListOf<i32>>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_list_list<'v>(v: ListOf<ListOf<i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_vec()
                 .iter()
@@ -251,7 +251,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_dict_list(v: ListOf<DictOf<i32, i32>>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_dict_list<'v>(v: ListOf<DictOf<i32, i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_vec()
                 .iter()
@@ -264,7 +264,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_int_dict(v: DictOf<i32, i32>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_int_dict<'v>(v: DictOf<i32, i32>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_dict()
                 .iter()
@@ -272,7 +272,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_list_dict(v: DictOf<i32, ListOf<i32>>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_list_dict<'v>(v: DictOf<i32, ListOf<i32>>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_dict()
                 .iter()
@@ -280,7 +280,9 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_dict_dict(v: DictOf<i32, DictOf<i32, i32>>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_dict_dict<'v>(
+            v: DictOf<i32, DictOf<i32, i32>>,
+        ) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_dict()
                 .iter()
@@ -295,7 +297,7 @@ mod value_of {
                 .join(" + ");
             Ok((*v, repr))
         }
-        fn with_struct_int(v: StructOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
+        fn with_struct_int<'v>(v: StructOf<i32>) -> anyhow::Result<(Value<'v>, String)> {
             let repr = v
                 .to_map()
                 .iter()

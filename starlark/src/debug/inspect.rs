@@ -80,7 +80,7 @@ mod tests {
             Ok(eval.call_stack().into_frames().map(ToString::to_string))
         }
 
-        fn debug_inspect_variables() -> anyhow::Result<Dict<'v>> {
+        fn debug_inspect_variables<'v>() -> anyhow::Result<Dict<'v>> {
             let mut sm = SmallMap::new();
             for (k, v) in eval.local_variables() {
                 sm.insert_hashed(heap.alloc_str(&k).get_hashed(), v);

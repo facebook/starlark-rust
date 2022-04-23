@@ -41,7 +41,7 @@ use crate::{
 
 #[starlark_module]
 pub fn filter(builder: &mut GlobalsBuilder) {
-    fn filter(ref func: Value, ref seq: Value) -> anyhow::Result<Value<'v>> {
+    fn filter<'v>(ref func: Value, ref seq: Value) -> anyhow::Result<Value<'v>> {
         let mut res = Vec::new();
 
         for v in seq.iterate(heap)? {
@@ -59,7 +59,7 @@ pub fn filter(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn map(builder: &mut GlobalsBuilder) {
-    fn map(ref func: Value, ref seq: Value) -> anyhow::Result<Value<'v>> {
+    fn map<'v>(ref func: Value, ref seq: Value) -> anyhow::Result<Value<'v>> {
         let it = seq.iterate(heap)?;
         let mut res = Vec::with_capacity(it.size_hint().0);
         for v in it {
@@ -71,7 +71,7 @@ pub fn map(builder: &mut GlobalsBuilder) {
 
 #[starlark_module]
 pub fn partial(builder: &mut GlobalsBuilder) {
-    fn partial(
+    fn partial<'v>(
         ref func: Value,
         args: Value<'v>,
         kwargs: DictRef<'v>,
@@ -111,7 +111,7 @@ pub fn debug(builder: &mut GlobalsBuilder) {
 pub fn dedupe(builder: &mut GlobalsBuilder) {
     /// Remove duplicates in a list. Uses identity of value (pointer),
     /// rather than by equality.
-    fn dedupe(ref val: Value) -> anyhow::Result<Value<'v>> {
+    fn dedupe<'v>(ref val: Value) -> anyhow::Result<Value<'v>> {
         let mut seen = HashSet::new();
         let mut res = Vec::new();
         for v in val.iterate(heap)? {

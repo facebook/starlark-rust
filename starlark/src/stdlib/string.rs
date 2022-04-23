@@ -140,7 +140,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///     "H", "e", "l", "l", "o", ",", " ", "世", "界"]
     /// # "#);
     /// ```
-    fn elems(this: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn elems<'v>(this: Value<'v>) -> anyhow::Result<Value<'v>> {
         Ok(iterate_chars(this, heap))
     }
 
@@ -203,7 +203,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// list("Hello, 世界".codepoints()) == [72, 101, 108, 108, 111, 44, 32, 19990, 30028]
     /// # "#);
     /// ```
-    fn codepoints(this: Value<'v>) -> anyhow::Result<Value<'v>> {
+    fn codepoints<'v>(this: Value<'v>) -> anyhow::Result<Value<'v>> {
         Ok(iterate_codepoints(this, heap))
     }
 
@@ -359,7 +359,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn format(this: &str, args: &Arguments<'v, '_>) -> anyhow::Result<StringValue<'v>> {
+    fn format<'v>(this: &str, args: &Arguments<'v, '_>) -> anyhow::Result<StringValue<'v>> {
         let iter = args.positions(heap)?;
         interpolation::format(
             this,
@@ -660,7 +660,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn join(this: &str, ref to_join: Value) -> anyhow::Result<Value<'v>> {
+    fn join<'v>(this: &str, ref to_join: Value) -> anyhow::Result<Value<'v>> {
         #[inline(always)]
         fn as_str<'v>(x: Value<'v>) -> anyhow::Result<&'v str> {
             <&str>::unpack_named_param(x, "to_join")
@@ -716,7 +716,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn lstrip(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
+    fn lstrip<'v>(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
         match chars {
             None => Ok(this.trim_start()),
             Some(s) => Ok(this.trim_start_matches(|c| s.contains(c))),
@@ -743,7 +743,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn partition(
+    fn partition<'v>(
         this: ValueOf<'v, &str>,
         ref needle: ValueOf<'v, &str>,
     ) -> anyhow::Result<(Value<'v>, Value<'v>, Value<'v>)> {
@@ -881,7 +881,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn rpartition(
+    fn rpartition<'v>(
         this: ValueOf<'v, &str>,
         ref needle: ValueOf<'v, &str>,
     ) -> anyhow::Result<(Value<'v>, Value<'v>, Value<'v>)> {
@@ -919,7 +919,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn rsplit(
+    fn rsplit<'v>(
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
@@ -966,7 +966,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn rstrip(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
+    fn rstrip<'v>(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
         match chars {
             None => Ok(this.trim_end()),
             Some(s) => Ok(this.trim_end_matches(|c| s.contains(c))),
@@ -1008,7 +1008,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn split(
+    fn split<'v>(
         this: &str,
         ref sep @ NoneOr::None: NoneOr<&str>,
         ref maxsplit @ NoneOr::None: NoneOr<i32>,
@@ -1072,7 +1072,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn splitlines(this: &str, ref keepends @ false: bool) -> anyhow::Result<Value<'v>> {
+    fn splitlines<'v>(this: &str, ref keepends @ false: bool) -> anyhow::Result<Value<'v>> {
         let mut s = this;
         let mut lines = Vec::new();
         loop {
@@ -1142,7 +1142,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn strip(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
+    fn strip<'v>(this: &'v str, ref chars: Option<&str>) -> anyhow::Result<&'v str> {
         match chars {
             None => Ok(this.trim()),
             Some(s) => Ok(this.trim_matches(|c| s.contains(c))),
@@ -1228,7 +1228,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn removeprefix(this: Value<'v>, ref prefix: &str) -> anyhow::Result<Value<'v>> {
+    fn removeprefix<'v>(this: Value<'v>, ref prefix: &str) -> anyhow::Result<Value<'v>> {
         let x = this.unpack_str().unwrap();
         if x.starts_with(prefix) && !prefix.is_empty() {
             Ok(heap.alloc(&x[prefix.len()..]))
@@ -1254,7 +1254,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn removesuffix(this: Value<'v>, ref suffix: &str) -> anyhow::Result<Value<'v>> {
+    fn removesuffix<'v>(this: Value<'v>, ref suffix: &str) -> anyhow::Result<Value<'v>> {
         let x = this.unpack_str().unwrap();
         if x.ends_with(suffix) && !suffix.is_empty() {
             Ok(heap.alloc(&x[..x.len() - suffix.len()]))

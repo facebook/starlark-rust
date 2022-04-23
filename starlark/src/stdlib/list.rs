@@ -213,7 +213,7 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     /// x == [1]
     /// # )"#);
     /// ```
-    fn pop(this: Value, ref index: Option<Value>) -> anyhow::Result<Value<'v>> {
+    fn pop<'v>(this: Value, ref index: Option<Value>) -> anyhow::Result<Value<'v>> {
         let index = match index {
             Some(index) => Some(index.to_int()?),
             None => None,
