@@ -192,7 +192,7 @@ impl CodeMap {
         &self.0
     }
 
-    fn full_span(&self) -> Span {
+    pub(crate) fn full_span(&self) -> Span {
         Span {
             begin: Pos(0),
             end: Pos(self.0.source.len() as u32),

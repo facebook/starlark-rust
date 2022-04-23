@@ -31,7 +31,7 @@ use crate::{
     self as starlark,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
-    eval::{Arguments, Evaluator},
+    eval::{runtime::rust_loc::rust_loc, Arguments, Evaluator},
     values::{
         dict::DictRef, function::FUNCTION_TYPE, layout::typed::string::StringValueLike,
         none::NoneType, tuple::Tuple, Freeze, Freezer, FrozenStringValue, FrozenValue,
@@ -275,7 +275,9 @@ where
                         args: args.args,
                         kwargs: args.kwargs,
                     };
-                    self.func.invoke(&params, eval)
+                    self.func
+                        .to_value()
+                        .invoke_with_loc(Some(rust_loc!()), &params, eval)
                 })
             })
         })
