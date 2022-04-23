@@ -223,7 +223,7 @@ impl Display for CallStack {
             // TODO(nga): use real module name.
             let mut prev = "<module>";
             for x in &self.frames {
-                x.write_two_lines_as_in_python("  ", prev, f)?;
+                x.write_two_lines("  ", prev, f)?;
                 prev = &x.name;
             }
         }

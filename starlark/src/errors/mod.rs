@@ -72,7 +72,7 @@ impl Display for Frame {
 }
 
 impl Frame {
-    pub(crate) fn write_two_lines_as_in_python(
+    pub(crate) fn write_two_lines(
         &self,
         indent: &str,
         caller: &str,
@@ -86,7 +86,7 @@ impl Frame {
             let line = line.get(..50).unwrap_or(line).trim();
             writeln!(
                 write,
-                "{}File {}, line {}, in {}",
+                "{}* {}:{}, in {}",
                 indent,
                 location.file.filename(),
                 location.file.find_line(location.span.begin()) + 1,

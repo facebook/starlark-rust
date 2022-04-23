@@ -448,13 +448,13 @@ add3(8)"#,
         &format!("\n{}", diag),
         r#"
 Traceback (most recent call last):
-  File assert.bzl, line 5, in <module>
+  * assert.bzl:5, in <module>
     add3(8)
-  File assert.bzl, line 4, in add3
+  * assert.bzl:4, in add3
     add2(z)
-  File imported.bzl, line 9, in add2
+  * imported.bzl:9, in add2
     add(z)
-  File imported.bzl, line 11, in add
+  * imported.bzl:11, in add
     x.append(z)
 error: Immutable
   --> imported.bzl:11:3
@@ -468,13 +468,13 @@ error: Immutable
         &format!("\n{:#}", diag),
         r#"
 Traceback (most recent call last):
-  File assert.bzl, line 5, in <module>
+  * assert.bzl:5, in <module>
     add3(8)
-  File assert.bzl, line 4, in add3
+  * assert.bzl:4, in add3
     add2(z)
-  File imported.bzl, line 9, in add2
+  * imported.bzl:9, in add2
     add(z)
-  File imported.bzl, line 11, in add
+  * imported.bzl:11, in add
     x.append(z)
 error: Immutable
   --> imported.bzl:11:3
