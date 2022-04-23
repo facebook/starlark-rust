@@ -251,7 +251,6 @@ fn is_anyhow_result(t: &Type) -> Option<Type> {
 
 // Add a function to the `GlobalsModule` named `globals_builder`.
 fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
-    let span = func.span();
     let sig_span = func.sig.span();
 
     let ProcessedAttributes {
@@ -264,20 +263,8 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
 
     parse_fn_generics(&func.sig.generics)?;
 
-    let (return_type, return_type_arg) = match func.sig.output {
-        ReturnType::Default => {
-            return Err(syn::Error::new(span, "Function must have a return type"));
-        }
-        ReturnType::Type(_, x) => match is_anyhow_result(&x) {
-            Some(return_arg_type) => (x, return_arg_type),
-            None => {
-                return Err(syn::Error::new(
-                    span,
-                    "Function return type must be precisely `anyhow::Result<...>`",
-                ));
-            }
-        },
-    };
+    let (return_type, return_type_arg) = parse_fn_output(&func.sig.output, func.sig.span())?;
+
     let mut args: Vec<_> = func
         .sig
         .inputs
@@ -309,7 +296,7 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             name: func.sig.ident,
             arg: arg.ty,
             attrs,
-            return_type: *return_type,
+            return_type,
             return_type_arg,
             speculative_exec_safe,
             body: *func.block,
@@ -321,13 +308,26 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
             type_attribute,
             attrs,
             args,
-            return_type: *return_type,
+            return_type,
             return_type_arg,
             speculative_exec_safe,
             body: *func.block,
             source: StarFunSource::Unknown,
             docstring,
         }))
+    }
+}
+
+fn parse_fn_output(return_type: &ReturnType, span: Span) -> syn::Result<(Type, Type)> {
+    match return_type {
+        ReturnType::Default => Err(syn::Error::new(span, "Function must have a return type")),
+        ReturnType::Type(_, x) => match is_anyhow_result(x) {
+            Some(return_arg_type) => Ok(((**x).clone(), return_arg_type)),
+            None => Err(syn::Error::new(
+                return_type.span(),
+                "Function return type must be precisely `anyhow::Result<...>`",
+            )),
+        },
     }
 }
 
