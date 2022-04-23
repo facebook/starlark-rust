@@ -388,7 +388,14 @@ fn parse_arg(x: FnArg) -> syn::Result<StarArg> {
             default: ident.subpat.map(|x| *x.1),
             source: StarArgSource::Unknown,
         }),
-        arg => panic!("Unexpected argument, {:?}", arg),
+        FnArg::Typed(PatType { .. }) => Err(syn::Error::new(
+            span,
+            "Function parameter pattern must be identifier",
+        )),
+        FnArg::Receiver(..) => Err(syn::Error::new(
+            span,
+            "Function cannot have `self` parameters",
+        )),
     }
 }
 
