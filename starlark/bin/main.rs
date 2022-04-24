@@ -199,6 +199,7 @@ fn main() -> anyhow::Result<()> {
         args.check,
         args.info,
         !args.check && !args.info,
+        !args.evaluate.is_empty() || args.interactive,
         &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
         args.interactive,
     )?;

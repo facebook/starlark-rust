@@ -35,6 +35,7 @@ pub struct Context {
     pub check: bool,
     pub info: bool,
     pub run: bool,
+    pub print_non_none: bool,
     pub prelude: Vec<FrozenModule>,
     pub module: Option<Module>,
 }
@@ -44,6 +45,7 @@ impl Context {
         check: bool,
         info: bool,
         run: bool,
+        print_non_none: bool,
         prelude: &[PathBuf],
         module: bool,
     ) -> anyhow::Result<Self> {
@@ -67,6 +69,7 @@ impl Context {
             check,
             info,
             run,
+            print_non_none,
             prelude,
             module,
         })
@@ -147,7 +150,15 @@ impl Context {
         let mut eval = Evaluator::new(module);
         eval.enable_terminal_breakpoint_console();
         let globals = globals();
-        Self::err(file, eval.eval_module(ast, &globals).map(|_| iter::empty()))
+        Self::err(
+            file,
+            eval.eval_module(ast, &globals).map(|v| {
+                if self.print_non_none && !v.is_none() {
+                    println!("{}", v);
+                }
+                iter::empty()
+            }),
+        )
     }
 
     fn info(&self, module: &AstModule) {
