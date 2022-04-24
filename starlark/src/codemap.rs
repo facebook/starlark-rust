@@ -135,7 +135,7 @@ impl<T> DerefMut for Spanned<T> {
 
 /// A data structure recording a source code file for position lookup.
 #[derive(Clone, Dupe)]
-pub struct CodeMap(Arc<CodeMapData>);
+pub(crate) struct CodeMap(Arc<CodeMapData>);
 
 /// A `CodeMap`'s record of a source file.
 pub(crate) struct CodeMapData {
@@ -285,11 +285,6 @@ impl CodeMap {
     pub(crate) fn source_line_at_pos(&self, pos: Pos) -> &str {
         self.source_line(self.find_line(pos))
     }
-
-    /// Gets the number of lines in the file
-    pub fn num_lines(&self) -> usize {
-        self.0.lines.len()
-    }
 }
 
 /// A line and column.
@@ -333,9 +328,9 @@ impl fmt::Display for FileSpan {
 }
 
 impl<'a> FileSpanRef<'a> {
-    /// File of this reference.
-    pub fn file(self) -> &'a CodeMap {
-        self.file
+    /// Filename of this reference.
+    pub fn filename(&self) -> &str {
+        self.file.filename()
     }
 
     /// Convert to the owned span.
@@ -353,9 +348,9 @@ impl<'a> FileSpanRef<'a> {
 }
 
 impl FileSpan {
-    /// File of this span.
-    pub fn file(&self) -> &CodeMap {
-        &self.file
+    /// Filename of this span.
+    pub fn filename(&self) -> &str {
+        self.file.filename()
     }
 
     /// Resolve the span.
@@ -483,7 +478,7 @@ mod tests {
 
         // Test .source() and .num_lines()
         assert_eq!(codemap.source(), source);
-        assert_eq!(codemap.num_lines(), 3);
+        assert_eq!(codemap.0.lines.len(), 3);
 
         // Test generic properties on each line
         for line in 0..3 {

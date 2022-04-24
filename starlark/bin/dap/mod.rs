@@ -108,7 +108,7 @@ impl Backend {
                 } else {
                     let breaks = breakpoints.lock().unwrap();
                     breaks
-                        .get(span_loc.file().filename())
+                        .get(span_loc.filename())
                         .map(|set| set.contains(&span_loc.to_file_span()))
                         .unwrap_or_default()
                 };
@@ -281,7 +281,7 @@ impl DebugServer for Backend {
                 s.end_line = Some(span.end_line as i64 + 1);
                 s.end_column = Some(span.end_column as i64 + 1);
                 s.source = Some(Source {
-                    path: Some(loc.file().filename().to_owned()),
+                    path: Some(loc.filename().to_owned()),
                     ..Source::default()
                 })
             }
