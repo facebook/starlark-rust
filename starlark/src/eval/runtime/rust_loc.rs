@@ -48,10 +48,7 @@ pub(crate) fn make_rust_source_span(
     let heap = FrozenHeap::new();
     let codemap = CodeMap::new(file.to_owned(), new_src);
     let codemap = heap.alloc_any_display_from_debug(codemap);
-    let file_span = heap.alloc_any(FrozenFileSpan {
-        file: codemap,
-        span,
-    });
+    let file_span = heap.alloc_any(FrozenFileSpan::new(codemap, span));
     mem::forget(heap);
     file_span
 }

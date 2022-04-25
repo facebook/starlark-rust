@@ -36,10 +36,7 @@ impl<'v> Compiler<'v, '_, '_> {
     fn eval_load(&mut self, load: CstLoad) -> Result<(), EvalException> {
         let name = load.node.module.node;
 
-        let span = FrozenFileSpan {
-            file: self.codemap,
-            span: load.span,
-        };
+        let span = FrozenFileSpan::new(self.codemap, load.span);
 
         let loadenv = match self.eval.loader.as_ref() {
             None => {
@@ -60,10 +57,7 @@ impl<'v> Compiler<'v, '_, '_> {
             };
             let value = expr_throw(
                 self.eval.module_env.load_symbol(&loadenv, &their_name.node),
-                FrozenFileSpan {
-                    file: self.codemap,
-                    span: our_name.span.merge(their_name.span),
-                },
+                FrozenFileSpan::new(self.codemap, our_name.span.merge(their_name.span)),
                 self.eval,
             )?;
             self.eval.set_slot_module(slot, value)

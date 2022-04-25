@@ -42,7 +42,7 @@ pub(crate) struct EvalException(pub(crate) anyhow::Error);
 #[inline(never)]
 fn add_span_to_error(e: anyhow::Error, span: FrozenFileSpan, eval: &Evaluator) -> anyhow::Error {
     Diagnostic::modify(e, |d: &mut Diagnostic| {
-        d.set_span(span.span, &span.file);
+        d.set_span(span.span(), &span.file());
         d.set_call_stack(|| eval.call_stack.to_diagnostic_frames());
     })
 }

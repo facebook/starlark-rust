@@ -244,10 +244,7 @@ impl Compiler<'_, '_, '_> {
         &mut self,
         x: CstParameter,
     ) -> IrSpanned<ParameterCompiled<IrSpanned<ExprCompiled>>> {
-        let span = FrozenFileSpan {
-            file: self.codemap,
-            span: x.span,
-        };
+        let span = FrozenFileSpan::new(self.codemap, x.span);
         IrSpanned {
             span,
             node: match x.node {

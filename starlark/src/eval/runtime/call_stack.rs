@@ -41,17 +41,31 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, Dupe)]
 pub(crate) struct FrozenFileSpan {
-    pub(crate) file: FrozenRef<'static, CodeMap>,
-    pub(crate) span: Span,
+    file: FrozenRef<'static, CodeMap>,
+    span: Span,
+}
+
+impl FrozenFileSpan {
+    pub(crate) fn new(file: FrozenRef<'static, CodeMap>, span: Span) -> Self {
+        // Check the span is valid: this will panic if the span is not valid.
+        file.source_span(span);
+
+        FrozenFileSpan { file, span }
+    }
+
+    pub(crate) fn file(&self) -> FrozenRef<'static, CodeMap> {
+        self.file
+    }
+
+    pub(crate) fn span(&self) -> Span {
+        self.span
+    }
 }
 
 impl Default for FrozenFileSpan {
     fn default() -> Self {
         static EMPTY_FILE: Lazy<CodeMap> = Lazy::new(CodeMap::default);
-        FrozenFileSpan {
-            file: FrozenRef::new(&EMPTY_FILE),
-            span: Span::default(),
-        }
+        FrozenFileSpan::new(FrozenRef::new(&EMPTY_FILE), Span::default())
     }
 }
 

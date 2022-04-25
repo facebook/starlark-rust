@@ -1093,10 +1093,7 @@ impl Compiler<'_, '_, '_> {
 
     pub(crate) fn expr(&mut self, expr: CstExpr) -> IrSpanned<ExprCompiled> {
         // println!("compile {}", expr.node);
-        let span = FrozenFileSpan {
-            span: expr.span,
-            file: self.codemap,
-        };
+        let span = FrozenFileSpan::new(self.codemap, expr.span);
         let expr = match expr.node {
             ExprP::Identifier(ident, resolved_ident) => self.expr_ident(ident, resolved_ident),
             ExprP::Lambda(params, box inner, scope_id) => {
