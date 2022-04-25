@@ -20,8 +20,6 @@ use std::{
     fs::File,
     io::Write,
     path::Path,
-    ptr,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -29,35 +27,21 @@ use anyhow::Context;
 use gazebo::prelude::*;
 
 use crate::{
-    codemap::{CodeMap, FileSpan, FileSpanRef, Span},
+    codemap::{CodeMap, CodeMapId, FileSpan, FileSpanRef, Span},
     eval::runtime::csv::CsvWriter,
 };
 
 // When line profiling is not enabled, we want this to be small and cheap
 pub(crate) struct StmtProfile(Option<Box<StmtProfileData>>);
 
-// A cheap unowned unique identifier per file/CodeMap,
-// somewhat delving into internal details.
-// Remains unique because we take a reference to the CodeMap.
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Dupe)]
-struct FileId(*const crate::codemap::CodeMapData);
-
-impl FileId {
-    const EMPTY: FileId = FileId(ptr::null());
-
-    fn new(codemap: &CodeMap) -> Self {
-        Self(Arc::as_ptr(codemap.get_ptr()))
-    }
-}
-
 // So we don't need a special case for the first time around,
 // we have a special FileId of empty that we ignore when printing
 #[derive(Clone)]
 struct StmtProfileData {
-    files: HashMap<FileId, CodeMap>,
-    stmts: HashMap<(FileId, Span), (usize, Duration)>,
-    next_file: FileId,
-    last_span: (FileId, Span),
+    files: HashMap<CodeMapId, CodeMap>,
+    stmts: HashMap<(CodeMapId, Span), (usize, Duration)>,
+    next_file: CodeMapId,
+    last_span: (CodeMapId, Span),
     last_start: Instant,
 }
 
@@ -66,8 +50,8 @@ impl StmtProfileData {
         StmtProfileData {
             files: HashMap::new(),
             stmts: HashMap::new(),
-            next_file: FileId::EMPTY,
-            last_span: (FileId::EMPTY, Span::default()),
+            next_file: CodeMapId::EMPTY,
+            last_span: (CodeMapId::EMPTY, Span::default()),
             last_start: Instant::now(),
         }
     }
@@ -90,7 +74,7 @@ impl StmtProfileData {
     fn before_stmt(&mut self, span: Span, codemap: &CodeMap) {
         let now = Instant::now();
         self.add_last(now);
-        if self.last_span.0 != FileId::new(codemap) {
+        if self.last_span.0 != codemap.id() {
             self.add_codemap(codemap);
         }
         self.last_span = (self.next_file, span);
@@ -98,7 +82,7 @@ impl StmtProfileData {
     }
 
     fn add_codemap(&mut self, codemap: &CodeMap) {
-        let id = FileId::new(codemap);
+        let id = codemap.id();
         self.next_file = id;
         match self.files.entry(id) {
             Entry::Occupied(_) => {
@@ -146,7 +130,7 @@ impl StmtProfileData {
         let mut total_count = 0;
         for ((file, span), (count, time)) in data.stmts {
             // EMPTY represents the first time special-case
-            if file != FileId::EMPTY {
+            if file != CodeMapId::EMPTY {
                 let span = data.files[&file].file_span(span);
                 total_time += time;
                 total_count += count;

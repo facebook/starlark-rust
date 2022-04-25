@@ -133,12 +133,22 @@ impl<T> DerefMut for Spanned<T> {
     }
 }
 
+// A cheap unowned unique identifier per file/CodeMap,
+// somewhat delving into internal details.
+// Remains unique because we take a reference to the CodeMap.
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, Dupe)]
+pub(crate) struct CodeMapId(*const ());
+
+impl CodeMapId {
+    pub(crate) const EMPTY: CodeMapId = CodeMapId(ptr::null());
+}
+
 /// A data structure recording a source code file for position lookup.
 #[derive(Clone, Dupe)]
 pub(crate) struct CodeMap(Arc<CodeMapData>);
 
 /// A `CodeMap`'s record of a source file.
-pub(crate) struct CodeMapData {
+struct CodeMapData {
     /// The filename as it would be displayed in an error message.
     filename: String,
     /// Contents of the file.
@@ -162,7 +172,7 @@ impl fmt::Debug for CodeMap {
 impl PartialEq for CodeMap {
     /// Compares by identity
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        self.id() == other.id()
     }
 }
 
@@ -170,7 +180,7 @@ impl Eq for CodeMap {}
 
 impl Hash for CodeMap {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        ptr::hash::<CodeMapData, H>(&*self.0, state);
+        self.id().hash(state)
     }
 }
 
@@ -188,8 +198,8 @@ impl CodeMap {
     }
 
     /// Only used internally for profiling optimisations
-    pub(crate) fn get_ptr(&self) -> &Arc<CodeMapData> {
-        &self.0
+    pub(crate) fn id(&self) -> CodeMapId {
+        CodeMapId(Arc::as_ptr(&self.0) as *const ())
     }
 
     pub(crate) fn full_span(&self) -> Span {
