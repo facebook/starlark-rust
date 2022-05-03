@@ -29,6 +29,7 @@ pub mod list;
 pub mod none;
 pub mod range;
 pub mod record;
+pub mod regex;
 pub mod string;
 pub mod structs;
 pub mod tuple;

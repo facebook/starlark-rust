@@ -56,7 +56,7 @@ pub use crate::values::{
     traits::{ComplexValue, NoSimpleValue, StarlarkValue},
     types::{
         any, array, bool, dict, enumeration, float, function, int, list, none, range, record,
-        string, structs, tuple,
+        regex, string, structs, tuple,
     },
     unpack::{UnpackValue, ValueOf},
 };

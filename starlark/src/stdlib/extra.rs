@@ -34,8 +34,8 @@ use crate::{
     eval::{runtime::rust_loc::rust_loc, Arguments, Evaluator},
     values::{
         dict::DictRef, function::FUNCTION_TYPE, layout::typed::string::StringValueLike,
-        none::NoneType, tuple::Tuple, Freeze, Freezer, FrozenStringValue, FrozenValue,
-        StarlarkValue, StringValue, Trace, Value, ValueLike,
+        none::NoneType, regex::StarlarkRegex, tuple::Tuple, Freeze, Freezer, FrozenStringValue,
+        FrozenValue, StarlarkValue, StringValue, Trace, Value, ValueLike,
     },
 };
 
@@ -122,6 +122,14 @@ pub fn dedupe(builder: &mut GlobalsBuilder) {
             }
         }
         Ok(heap.alloc_list(&res))
+    }
+}
+
+#[starlark_module]
+pub fn regex(builder: &mut GlobalsBuilder) {
+    /// Creates a regex which can be used for matching
+    fn regex<'v>(ref regex: &str) -> anyhow::Result<StarlarkRegex> {
+        StarlarkRegex::new(regex)
     }
 }
 
