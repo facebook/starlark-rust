@@ -571,6 +571,10 @@ fn test_getattr_did_you_mean_custom() {
         "struct(grey=1).gray",
         "Object of type `struct` has no attribute `gray`, did you mean `grey`?",
     );
+    assert::fail(
+        "record(grey=int.type)(grey=1).gray",
+        "Object of type `record` has no attribute `gray`, did you mean `grey`?",
+    );
 }
 
 #[test]
