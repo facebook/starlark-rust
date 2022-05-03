@@ -31,6 +31,7 @@ pub use crate::analysis::Lint;
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     eval::CallStack,
+    values::string::{fast_string, CharIndex},
 };
 
 pub(crate) mod did_you_mean;
@@ -71,6 +72,16 @@ impl Display for Frame {
     }
 }
 
+fn truncate_snippet(snippet: &str, max_len: usize) -> (&str, &str) {
+    let ddd = "...";
+    assert!(max_len >= ddd.len());
+    match fast_string::split_at(snippet, CharIndex(max_len - ddd.len())) {
+        None => (snippet, ""),
+        Some((_, b)) if b.chars().nth(3).is_none() => (snippet, ""),
+        Some((a, _)) => (a, "..."),
+    }
+}
+
 impl Frame {
     pub(crate) fn write_two_lines(
         &self,
@@ -83,7 +94,7 @@ impl Frame {
                 .file
                 .source_line_at_pos(location.span.begin())
                 .trim();
-            let line = line.get(..50).unwrap_or(line).trim();
+            let (line, ddd) = truncate_snippet(line, 50);
             writeln!(
                 write,
                 "{}* {}:{}, in {}",
@@ -94,7 +105,7 @@ impl Frame {
                 // so in the stack trace, top frame is printed without executed function name.
                 caller,
             )?;
-            writeln!(write, "{}  {}", indent, line)?;
+            writeln!(write, "{}  {}{}", indent, line, ddd)?;
         } else {
             // Python just omits builtin functions in the traceback.
             writeln!(write, "{}File <builtin>, in {}", indent, caller)?;
@@ -261,4 +272,25 @@ fn diagnostic_stderr(diagnostic: &Diagnostic) {
     let annotation_label = format!("{:#}", diagnostic.message);
     let display_list = get_display_list_for_diagnostic(&annotation_label, diagnostic, true);
     eprintln!("{}", display_list);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::errors::truncate_snippet;
+
+    #[test]
+    fn test_truncate_snippet() {
+        assert_eq!(("", ""), truncate_snippet("", 5));
+        assert_eq!(("a", ""), truncate_snippet("a", 5));
+        assert_eq!(("ab", ""), truncate_snippet("ab", 5));
+        assert_eq!(("abc", ""), truncate_snippet("abc", 5));
+        assert_eq!(("abcd", ""), truncate_snippet("abcd", 5));
+        assert_eq!(("abcde", ""), truncate_snippet("abcde", 5));
+        assert_eq!(("ab", "..."), truncate_snippet("abcdef", 5));
+        assert_eq!(("ab", "..."), truncate_snippet("abcdefg", 5));
+        assert_eq!(("ab", "..."), truncate_snippet("abcdefgh", 5));
+        assert_eq!(("ab", "..."), truncate_snippet("abcdefghi", 5));
+        assert_eq!(("Київ", ""), truncate_snippet("Київ", 5));
+        assert_eq!(("па", "..."), truncate_snippet("паляниця", 5));
+    }
 }

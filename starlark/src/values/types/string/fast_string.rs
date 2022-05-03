@@ -147,7 +147,7 @@ pub(crate) struct StrIndices<'a> {
 }
 
 /// Split the string at given char offset. `None` if offset is out of bounds.
-fn split_at(x: &str, i: CharIndex) -> Option<(&str, &str)> {
+pub(crate) fn split_at(x: &str, i: CharIndex) -> Option<(&str, &str)> {
     if i.0 == 0 {
         return Some(("", x));
     }
