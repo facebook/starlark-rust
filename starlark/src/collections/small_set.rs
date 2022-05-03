@@ -134,6 +134,12 @@ impl<T> SmallSet<T> {
         self.0.get_full(value).map(|(_, t, _)| t)
     }
 
+    /// Find an entry by an index.
+    #[inline]
+    pub fn get_index(&self, index: usize) -> Option<&T> {
+        self.0.get_index(index).map(|(k, _)| k)
+    }
+
     /// Return item index, if it exists in the set
     pub fn get_index_of<Q>(&self, value: &Q) -> Option<usize>
     where
