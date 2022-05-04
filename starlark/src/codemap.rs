@@ -40,7 +40,7 @@ pub struct Pos(u32);
 
 impl Pos {
     /// Constructor.
-    pub fn new(x: u32) -> Self {
+    pub const fn new(x: u32) -> Self {
         Self(x)
     }
 }
@@ -143,9 +143,15 @@ impl CodeMapId {
     pub(crate) const EMPTY: CodeMapId = CodeMapId(ptr::null());
 }
 
+#[derive(Clone, Dupe)]
+enum CodeMapImpl {
+    Real(Arc<CodeMapData>),
+    Native(&'static NativeCodeMap),
+}
+
 /// A data structure recording a source code file for position lookup.
 #[derive(Clone, Dupe)]
-pub(crate) struct CodeMap(Arc<CodeMapData>);
+pub(crate) struct CodeMap(CodeMapImpl);
 
 /// A `CodeMap`'s record of a source file.
 struct CodeMapData {
@@ -157,6 +163,35 @@ struct CodeMapData {
     lines: Vec<Pos>,
 }
 
+/// "Codemap" for `.rs` files.
+pub(crate) struct NativeCodeMap {
+    filename: &'static str,
+    start: LineCol,
+}
+
+impl NativeCodeMap {
+    const SOURCE: &'static str = "<native>";
+
+    pub(crate) const FULL_SPAN: Span = Span {
+        begin: Pos::new(0),
+        end: Pos::new(Self::SOURCE.len() as u32),
+    };
+
+    pub(crate) const fn new(filename: &'static str, line: u32, column: u32) -> NativeCodeMap {
+        Self {
+            filename,
+            start: LineCol {
+                line: line as usize,
+                column: column as usize,
+            },
+        }
+    }
+
+    pub(crate) const fn to_codemap(&'static self) -> CodeMap {
+        CodeMap(CodeMapImpl::Native(self))
+    }
+}
+
 impl Default for CodeMap {
     fn default() -> Self {
         Self::new("".to_owned(), "".to_owned())
@@ -165,7 +200,7 @@ impl Default for CodeMap {
 
 impl fmt::Debug for CodeMap {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "CodeMap({:?})", self.0.filename)
+        write!(f, "CodeMap({:?})", self.filename())
     }
 }
 
@@ -190,22 +225,26 @@ impl CodeMap {
         let mut lines = vec![Pos(0)];
         lines.extend(source.match_indices('\n').map(|(p, _)| Pos(p as u32 + 1)));
 
-        CodeMap(Arc::new(CodeMapData {
+        CodeMap(CodeMapImpl::Real(Arc::new(CodeMapData {
             filename,
             source,
             lines,
-        }))
+        })))
     }
 
     /// Only used internally for profiling optimisations
     pub(crate) fn id(&self) -> CodeMapId {
-        CodeMapId(Arc::as_ptr(&self.0) as *const ())
+        match &self.0 {
+            CodeMapImpl::Real(data) => CodeMapId(Arc::as_ptr(data) as *const ()),
+            CodeMapImpl::Native(data) => CodeMapId(*data as *const NativeCodeMap as *const ()),
+        }
     }
 
     pub(crate) fn full_span(&self) -> Span {
+        let source = self.source();
         Span {
             begin: Pos(0),
-            end: Pos(self.0.source.len() as u32),
+            end: Pos(source.len() as u32),
         }
     }
 
@@ -219,7 +258,10 @@ impl CodeMap {
 
     /// Gets the name of the file
     pub fn filename(&self) -> &str {
-        &self.0.filename
+        match &self.0 {
+            CodeMapImpl::Real(data) => &data.filename,
+            CodeMapImpl::Native(data) => data.filename,
+        }
     }
 
     /// Gets the line number of a Pos.
@@ -229,9 +271,12 @@ impl CodeMap {
     /// Panics if `pos` is not within this file's span.
     pub(crate) fn find_line(&self, pos: Pos) -> usize {
         assert!(pos <= self.full_span().end());
-        match self.0.lines.binary_search(&pos) {
-            Ok(i) => i,
-            Err(i) => i - 1,
+        match &self.0 {
+            CodeMapImpl::Real(data) => match data.lines.binary_search(&pos) {
+                Ok(i) => i,
+                Err(i) => i - 1,
+            },
+            CodeMapImpl::Native(data) => data.start.line,
         }
     }
 
@@ -240,26 +285,38 @@ impl CodeMap {
     /// Panics if `pos` is not with this file's span or
     /// if `pos` points to a byte in the middle of a UTF-8 character.
     fn find_line_col(&self, pos: Pos) -> LineCol {
-        let line = self.find_line(pos);
-        let line_span = self.line_span(line);
-        let byte_col = pos.0 - line_span.begin.0;
-        let column = self.source_span(line_span)[..byte_col as usize]
-            .chars()
-            .count();
+        assert!(pos <= self.full_span().end());
+        match &self.0 {
+            CodeMapImpl::Real(_) => {
+                let line = self.find_line(pos);
+                let line_span = self.line_span(line);
+                let byte_col = pos.0 - line_span.begin.0;
+                let column = self.source_span(line_span)[..byte_col as usize]
+                    .chars()
+                    .count();
 
-        LineCol { line, column }
+                LineCol { line, column }
+            }
+            CodeMapImpl::Native(data) => LineCol {
+                line: data.start.line,
+                column: data.start.column + pos.0 as usize,
+            },
+        }
     }
 
     /// Gets the full source text of the file
     pub fn source(&self) -> &str {
-        &self.0.source
+        match &self.0 {
+            CodeMapImpl::Real(data) => &data.source,
+            CodeMapImpl::Native(_) => NativeCodeMap::SOURCE,
+        }
     }
 
     /// Gets the source text of a Span.
     ///
     /// Panics if `span` is not entirely within this file.
     pub(crate) fn source_span(&self, span: Span) -> &str {
-        &self.0.source[(span.begin.0 as usize)..(span.end.0 as usize)]
+        &self.source()[(span.begin.0 as usize)..(span.end.0 as usize)]
     }
 
     /// Gets the span representing a line by line number.
@@ -269,10 +326,21 @@ impl CodeMap {
     ///
     /// Panics if the line number is out of range.
     pub(crate) fn line_span(&self, line: usize) -> Span {
-        assert!(line < self.0.lines.len());
-        Span {
-            begin: self.0.lines[line],
-            end: *self.0.lines.get(line + 1).unwrap_or(&self.full_span().end),
+        match &self.0 {
+            CodeMapImpl::Real(data) => {
+                assert!(line < data.lines.len());
+                Span {
+                    begin: data.lines[line],
+                    end: *data.lines.get(line + 1).unwrap_or(&self.full_span().end),
+                }
+            }
+            CodeMapImpl::Native(data) => {
+                assert_eq!(line, data.start.line);
+                Span {
+                    begin: Pos(0),
+                    end: Pos(NativeCodeMap::SOURCE.len() as u32),
+                }
+            }
         }
     }
 
@@ -486,9 +554,11 @@ mod tests {
             LineCol { line: 2, column: 4 }
         );
 
-        // Test .source() and .num_lines()
+        // Test .source() and num lines.
         assert_eq!(codemap.source(), source);
-        assert_eq!(codemap.0.lines.len(), 3);
+        assert!(
+            matches!(&codemap, CodeMap(CodeMapImpl::Real(codemap)) if codemap.lines.len() == 3)
+        );
 
         // Test generic properties on each line
         for line in 0..3 {
@@ -571,5 +641,22 @@ mod tests {
         };
         let span = ResolvedSpan::from_span(begin, end);
         assert_eq!(span.to_string(), "1:1-3:33");
+    }
+
+    #[test]
+    fn test_native_code_map() {
+        static NATIVE_CODEMAP: NativeCodeMap = NativeCodeMap::new("test.rs", 100, 200);
+        static CODEMAP: CodeMap = NATIVE_CODEMAP.to_codemap();
+        assert_eq!(NativeCodeMap::SOURCE, CODEMAP.source());
+        assert_eq!(NativeCodeMap::SOURCE, CODEMAP.source_line(100));
+        assert_eq!(
+            ResolvedSpan {
+                begin_line: 100,
+                begin_column: 200,
+                end_line: 100,
+                end_column: 200 + NativeCodeMap::SOURCE.len(),
+            },
+            CODEMAP.resolve_span(CODEMAP.full_span())
+        );
     }
 }

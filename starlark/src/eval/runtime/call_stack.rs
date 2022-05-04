@@ -46,11 +46,15 @@ pub(crate) struct FrozenFileSpan {
 }
 
 impl FrozenFileSpan {
+    pub(crate) const fn new_unchecked(file: FrozenRef<'static, CodeMap>, span: Span) -> Self {
+        FrozenFileSpan { file, span }
+    }
+
     pub(crate) fn new(file: FrozenRef<'static, CodeMap>, span: Span) -> Self {
         // Check the span is valid: this will panic if the span is not valid.
         file.source_span(span);
 
-        FrozenFileSpan { file, span }
+        Self::new_unchecked(file, span)
     }
 
     pub(crate) fn file(&self) -> FrozenRef<'static, CodeMap> {

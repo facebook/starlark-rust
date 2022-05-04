@@ -38,7 +38,7 @@ pub struct FrozenRef<'f, T: 'f + ?Sized> {
 }
 
 impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
-    pub(crate) fn new(value: &'f T) -> FrozenRef<T> {
+    pub(crate) const fn new(value: &'f T) -> FrozenRef<T> {
         FrozenRef { value }
     }
 
