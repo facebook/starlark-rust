@@ -141,9 +141,8 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
     /// Return `mem::size_of::<Self>()` if there's no extra content.
     fn offset_of_extra() -> usize;
 
-    fn is_str() -> bool {
-        false
-    }
+    /// Type is `StarlarkStr`.
+    const IS_STR: bool = false;
 
     fn memory_size_for_extra_len(extra_len: usize) -> usize {
         assert!(
@@ -211,7 +210,7 @@ impl<'v, A: AValue<'v>> AValueDyn<'v> for A {
     }
 
     fn is_str(&self) -> bool {
-        A::is_str()
+        A::IS_STR
     }
 
     fn get_hash(&self) -> anyhow::Result<StarlarkHashValue> {
@@ -396,9 +395,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, StarlarkStr> {
         StarlarkStr::offset_of_content()
     }
 
-    fn is_str() -> bool {
-        true
-    }
+    const IS_STR: bool = true;
 
     unsafe fn heap_freeze(
         me: *mut AValueRepr<Self>,

@@ -224,7 +224,7 @@ impl Arena {
         // from `AValueHeader` (with `TAG_STR` when appropriate).
         // `BlackHole` assumes it is created for non-string, so
         // it returns `false` from `is_str`.
-        assert!(!T::is_str());
+        assert!(!T::IS_STR);
 
         let (p, extra) = Self::alloc_uninit::<T>(self.bump_for_type::<T>(), extra_len);
         // If we don't have a vtable we can't skip over missing elements to drop,

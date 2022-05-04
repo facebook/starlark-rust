@@ -201,7 +201,7 @@ impl<'v> Value<'v> {
     }
 
     pub(crate) fn new_repr<T: AValue<'v>>(x: &'v AValueRepr<T>) -> Self {
-        Self::new_ptr(&x.header, T::is_str())
+        Self::new_ptr(&x.header, T::IS_STR)
     }
 
     pub(crate) fn new_ptr_usize_with_str_tag(x: usize) -> Self {
@@ -744,7 +744,7 @@ impl FrozenValue {
     }
 
     pub(crate) fn new_repr<'a, T: AValue<'a>>(x: &'static AValueRepr<T>) -> Self {
-        Self::new_ptr(&x.header, T::is_str())
+        Self::new_ptr(&x.header, T::IS_STR)
     }
 
     pub(crate) fn new_ptr_usize_with_str_tag(x: usize) -> Self {

@@ -628,7 +628,7 @@ impl<'v> Tracer<'v> {
         Reservation<'a, 'v2, T>,
         &'a mut [MaybeUninit<T::ExtraElem>],
     ) {
-        assert!(!T::is_str(), "strings cannot be reserved");
+        assert!(!T::IS_STR, "strings cannot be reserved");
         let (r, extra) = self.arena.reserve_with_extra::<T>(extra_len);
         let v = Value::new_ptr(unsafe { cast::ptr_lifetime(r.ptr()) }, false);
         (v, r, extra)
