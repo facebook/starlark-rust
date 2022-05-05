@@ -131,12 +131,12 @@ impl AValueForward {
 /// Reservation is morally a Reservation<T>, but we treat is as an
 /// existential.
 /// Tied to the lifetime of the heap.
-pub(crate) struct Reservation<'v, 'v2, T: AValueDyn<'v2>> {
+pub(crate) struct Reservation<'v, 'v2, T: AValue<'v2>> {
     pointer: *mut AValueRepr<T>, // Secretly AValueObject<T>
     phantom: PhantomData<(&'v (), &'v2 T)>,
 }
 
-impl<'v, 'v2, T: AValueDyn<'v2>> Reservation<'v, 'v2, T> {
+impl<'v, 'v2, T: AValue<'v2>> Reservation<'v, 'v2, T> {
     pub(crate) fn fill(self, x: T) {
         unsafe {
             ptr::write(
