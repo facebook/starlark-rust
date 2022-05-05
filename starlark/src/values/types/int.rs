@@ -83,17 +83,15 @@ impl Debug for PointerI32 {
 }
 
 impl PointerI32 {
-    const TAG: usize = 0x100000000;
-
     pub(crate) fn new(x: i32) -> &'static Self {
         // UB if the pointer isn't aligned, or it is zero
         // Alignment is 1, so that's not an issue.
-        // To deal with 0's we OR in TAG.
-        unsafe { cast::usize_to_ptr(x as usize | Self::TAG) }
+        // And the pointer is not zero because it has `TAG_INT` bit set.
+        unsafe { cast::usize_to_ptr(FrozenValue::new_int(x).ptr_value()) }
     }
 
     pub(crate) fn get(&self) -> i32 {
-        cast::ptr_to_usize(self) as i32
+        unsafe { FrozenValue::new_ptr_value(cast::ptr_to_usize(self)).unpack_int_unchecked() }
     }
 
     /// This operation is expensive, use only if you have to.

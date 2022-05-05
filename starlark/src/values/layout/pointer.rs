@@ -31,6 +31,8 @@ use either::Either;
 use gazebo::{cast, phantom::PhantomDataInvariant, prelude::*};
 use static_assertions::assert_eq_size;
 
+use crate::values::int::PointerI32;
+
 // A structure that is morally a `PointerUnpack`, but gets encoded in one
 // pointer sized lump. The two types P1 and P2 are arbitrary pointers (which we
 // instantiate to FrozenValueMem and ValueMem)
@@ -120,12 +122,12 @@ impl<'p, P> Pointer<'p, P> {
         (self.pointer.get() & TAG_UNFROZEN) != 0
     }
 
-    pub fn unpack(self) -> Either<&'p P, i32> {
+    pub fn unpack(self) -> Either<&'p P, &'static PointerI32> {
         let p = self.pointer.get();
         if p & TAG_INT == 0 {
             Either::Left(unsafe { untag_pointer(p) })
         } else {
-            Either::Right(untag_int(p))
+            Either::Right(unsafe { cast::usize_to_ptr(p) })
         }
     }
 
@@ -186,11 +188,11 @@ impl<'p, P> Pointer<'p, P> {
 }
 
 impl<'p, P> FrozenPointer<'p, P> {
-    fn new(pointer: usize) -> Self {
+    pub(crate) unsafe fn new(pointer: usize) -> Self {
         // Never zero because the only TAG which is zero is P1, and that must be a pointer
         debug_assert!(pointer != 0);
         debug_assert!((pointer & TAG_UNFROZEN) == 0);
-        let pointer = unsafe { NonZeroUsize::new_unchecked(pointer) };
+        let pointer = NonZeroUsize::new_unchecked(pointer);
         Self {
             pointer,
             phantom: PhantomData,
@@ -200,12 +202,12 @@ impl<'p, P> FrozenPointer<'p, P> {
     pub fn new_frozen_usize(x: usize, is_string: bool) -> Self {
         debug_assert!((x & TAG_BITS) == 0);
         let x = if is_string { x | TAG_STR } else { x };
-        Self::new(x)
+        unsafe { Self::new(x) }
     }
 
     pub fn new_frozen_usize_with_str_tag(x: usize) -> Self {
         debug_assert!((x & TAG_BITS & !TAG_STR) == 0);
-        Self::new(x)
+        unsafe { Self::new(x) }
     }
 
     pub(crate) fn new_frozen(x: &'p P, is_str: bool) -> Self {
@@ -213,7 +215,7 @@ impl<'p, P> FrozenPointer<'p, P> {
     }
 
     pub(crate) fn new_int(x: i32) -> Self {
-        Self::new(tag_int(x))
+        unsafe { Self::new(tag_int(x)) }
     }
 
     /// It is safe to bitcast `FrozenPointer` to `Pointer`
@@ -229,7 +231,7 @@ impl<'p, P> FrozenPointer<'p, P> {
         self.pointer.get()
     }
 
-    pub fn unpack(self) -> Either<&'p P, i32> {
+    pub fn unpack(self) -> Either<&'p P, &'static PointerI32> {
         self.to_pointer().unpack()
     }
 

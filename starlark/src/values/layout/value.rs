@@ -320,7 +320,7 @@ impl<'v> Value<'v> {
     pub(crate) fn get_ref(self) -> &'v dyn AValueDyn<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
-            Either::Right(x) => basic_ref(PointerI32::new(x)),
+            Either::Right(x) => basic_ref(x),
         }
     }
 
@@ -751,6 +751,10 @@ impl FrozenValue {
         Self(FrozenPointer::new_frozen_usize_with_str_tag(x))
     }
 
+    pub(crate) fn new_ptr_value(x: usize) -> Self {
+        unsafe { Self(FrozenPointer::new(x)) }
+    }
+
     /// Create a new value representing `None` in Starlark.
     pub fn new_none() -> Self {
         Self::new_repr(&VALUE_NONE)
@@ -773,6 +777,10 @@ impl FrozenValue {
     /// Create a new empty string.
     pub(crate) fn new_empty_string() -> Self {
         VALUE_EMPTY_STRING.unpack()
+    }
+
+    pub(crate) fn ptr_value(self) -> usize {
+        self.0.ptr_value()
     }
 
     /// Is a value a Starlark `None`.
@@ -798,6 +806,10 @@ impl FrozenValue {
         self.0.unpack_int()
     }
 
+    pub(crate) unsafe fn unpack_int_unchecked(self) -> i32 {
+        self.0.unpack_int_unchecked()
+    }
+
     pub(crate) fn is_str(self) -> bool {
         self.to_value().is_str()
     }
@@ -815,7 +827,7 @@ impl FrozenValue {
     pub(crate) fn get_ref<'v>(self) -> &'v dyn AValueDyn<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
-            Either::Right(x) => basic_ref(PointerI32::new(x)),
+            Either::Right(x) => basic_ref(x),
         }
     }
 
