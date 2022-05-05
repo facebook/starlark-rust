@@ -693,8 +693,6 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize 
     }
 }
 
-erased_serde::serialize_trait_object!(<'v> StarlarkValue<'v>);
-
 /// Trait implemented by a value stored in arena which delegates
 /// it's operations to contained [`StarlarkValue`].
 pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
@@ -784,5 +782,3 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
     fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()>;
     fn set_attr(&self, _attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()>;
 }
-
-erased_serde::serialize_trait_object!(<'v> StarlarkValueDyn<'v>);
