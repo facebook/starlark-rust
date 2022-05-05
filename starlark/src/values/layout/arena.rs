@@ -38,7 +38,7 @@ use std::{
 
 use bumpalo::Bump;
 use either::Either;
-use gazebo::prelude::*;
+use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate::values::{
     layout::avalue::{AValue, AValueDyn, BlackHole},
@@ -454,7 +454,7 @@ impl AValueHeader {
     /// Cast header pointer to repr pointer.
     pub(crate) unsafe fn as_repr<'v, A: AValue<'v>>(&self) -> &AValueRepr<A> {
         debug_assert_eq!(
-            A::static_type_id_of_value(),
+            A::StarlarkValue::static_type_id(),
             self.unpack().static_type_of_value()
         );
         &*(self as *const AValueHeader as *const AValueRepr<A>)
@@ -463,7 +463,7 @@ impl AValueHeader {
     /// Cast header pointer to repr pointer.
     pub(crate) unsafe fn as_repr_mut<'v, A: AValue<'v>>(&mut self) -> &mut AValueRepr<A> {
         debug_assert_eq!(
-            A::static_type_id_of_value(),
+            A::StarlarkValue::static_type_id(),
             self.unpack().static_type_of_value()
         );
         &mut *(self as *mut AValueHeader as *mut AValueRepr<A>)

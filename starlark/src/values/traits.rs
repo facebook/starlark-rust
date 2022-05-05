@@ -699,9 +699,6 @@ pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
     // `AValue` is not a `StarlarkValue`, but a `Wrapper` type (or `BlackHole`).
     // `static_type_xxx_of_value` operations return `TypeId` of that `StarlarkValue`,
     // which is not the same of `TypeId` of `AValue` (because `AValue` is a wrapper).
-    fn static_type_id_of_value() -> TypeId
-    where
-        Self: Sized;
     fn static_type_of_value(&self) -> TypeId;
 
     fn as_debug(&self) -> &dyn Debug;

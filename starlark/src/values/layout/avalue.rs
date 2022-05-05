@@ -765,13 +765,6 @@ impl<'v> AValueDyn<'v> for BlackHole {
 }
 
 impl<'v> StarlarkValueDyn<'v> for BlackHole {
-    fn static_type_id_of_value() -> TypeId
-    where
-        Self: Sized,
-    {
-        panic!()
-    }
-
     fn static_type_of_value(&self) -> TypeId {
         panic!()
     }
@@ -959,12 +952,6 @@ impl Serialize for BlackHole {
 }
 
 impl<'v, Mode: 'static, T: StarlarkValue<'v>> StarlarkValueDyn<'v> for AValueImpl<Mode, T> {
-    fn static_type_id_of_value() -> TypeId
-    where
-        Self: Sized,
-    {
-        T::static_type_id()
-    }
     fn static_type_of_value(&self) -> TypeId {
         T::static_type_id()
     }
