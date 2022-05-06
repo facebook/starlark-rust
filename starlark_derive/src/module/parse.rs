@@ -19,8 +19,8 @@ use gazebo::prelude::*;
 use proc_macro2::Span;
 use syn::{
     spanned::Spanned, Attribute, FnArg, GenericArgument, GenericParam, Generics, Item, ItemConst,
-    ItemFn, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType, Stmt, Type,
-    TypeReference,
+    ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType,
+    Stmt, Type, TypeReference,
 };
 
 use crate::module::{
@@ -261,15 +261,15 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
         attrs,
     } = process_attributes(func.span(), func.attrs)?;
 
-    parse_fn_generics(&func.sig.generics)?;
+    let has_v = parse_fn_generics(&func.sig.generics)?;
 
-    let (return_type, return_type_arg) = parse_fn_output(&func.sig.output, func.sig.span())?;
+    let (return_type, return_type_arg) = parse_fn_output(&func.sig.output, func.sig.span(), has_v)?;
 
     let mut args: Vec<_> = func
         .sig
         .inputs
         .into_iter()
-        .map(parse_arg)
+        .map(|a| parse_arg(a, has_v))
         .collect::<Result<_, _>>()?;
 
     if is_attribute {
@@ -318,7 +318,98 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
     }
 }
 
-fn parse_fn_output(return_type: &ReturnType, span: Span) -> syn::Result<(Type, Type)> {
+fn check_lifetime_in_lifetime(lifetime: &Lifetime, has_v: bool) -> syn::Result<()> {
+    if lifetime.ident != "_" {
+        if lifetime.ident != "v" {
+            return Err(syn::Error::new(
+                lifetime.span(),
+                "Only 'v lifetime is allowed",
+            ));
+        }
+        if !has_v {
+            return Err(syn::Error::new(lifetime.span(), "Undeclared lifetime"));
+        }
+    }
+    Ok(())
+}
+
+fn check_lifetimes_in_generic_arg(arg: &GenericArgument, has_v: bool) -> syn::Result<()> {
+    match arg {
+        GenericArgument::Lifetime(lifetime) => check_lifetime_in_lifetime(lifetime, has_v),
+        GenericArgument::Type(t) => check_lifetimes_in_type(t, has_v),
+        GenericArgument::Binding(b) => check_lifetimes_in_type(&b.ty, has_v),
+        GenericArgument::Constraint(..) => Err(syn::Error::new(
+            arg.span(),
+            "Constraints are not allowed in generic arguments",
+        )),
+        GenericArgument::Const(_) => Ok(()),
+    }
+}
+
+/// Check there are no undeclared lifetiems in return type.
+fn check_lifetimes_in_return_type(return_type: &ReturnType, has_v: bool) -> syn::Result<()> {
+    match return_type {
+        ReturnType::Default => Ok(()),
+        ReturnType::Type(_, ty) => check_lifetimes_in_type(ty, has_v),
+    }
+}
+
+/// Check there are no undeclared lifetiems in type.
+fn check_lifetimes_in_type(ty: &Type, has_v: bool) -> syn::Result<()> {
+    match ty {
+        Type::Array(a) => {
+            check_lifetimes_in_type(&a.elem, has_v)?;
+        }
+        Type::BareFn(f) => {
+            for arg in &f.inputs {
+                check_lifetimes_in_type(&arg.ty, has_v)?;
+            }
+            check_lifetimes_in_return_type(&f.output, has_v)?;
+        }
+        Type::Never(_) => {}
+        Type::Group(g) => check_lifetimes_in_type(&g.elem, has_v)?,
+        Type::Paren(p) => check_lifetimes_in_type(&p.elem, has_v)?,
+        Type::Path(p) => {
+            for seg in &p.path.segments {
+                match &seg.arguments {
+                    PathArguments::None => {}
+                    PathArguments::AngleBracketed(a) => {
+                        for a in &a.args {
+                            check_lifetimes_in_generic_arg(a, has_v)?;
+                        }
+                    }
+                    PathArguments::Parenthesized(a) => {
+                        for a in &a.inputs {
+                            check_lifetimes_in_type(a, has_v)?;
+                        }
+                        match &a.output {
+                            ReturnType::Default => {}
+                            ReturnType::Type(_, ty) => check_lifetimes_in_type(ty, has_v)?,
+                        }
+                    }
+                }
+            }
+        }
+        Type::Ptr(p) => check_lifetimes_in_type(&p.elem, has_v)?,
+        Type::Reference(r) => {
+            if let Some(lifetime) = &r.lifetime {
+                check_lifetime_in_lifetime(lifetime, has_v)?;
+            }
+            check_lifetimes_in_type(&r.elem, has_v)?;
+        }
+        Type::Slice(s) => check_lifetimes_in_type(&s.elem, has_v)?,
+        Type::Tuple(t) => {
+            for ty in &t.elems {
+                check_lifetimes_in_type(ty, has_v)?;
+            }
+        }
+        _ => return Err(syn::Error::new(ty.span(), "Unsupported type")),
+    }
+    Ok(())
+}
+
+fn parse_fn_output(return_type: &ReturnType, span: Span, has_v: bool) -> syn::Result<(Type, Type)> {
+    check_lifetimes_in_return_type(return_type, has_v)?;
     match return_type {
         ReturnType::Default => Err(syn::Error::new(span, "Function must have a return type")),
         ReturnType::Type(_, x) => match is_anyhow_result(x) {
@@ -331,7 +422,7 @@ fn parse_fn_output(return_type: &ReturnType, span: Span) -> syn::Result<(Type, T
     }
 }
 
-fn parse_fn_generics(generics: &Generics) -> syn::Result<()> {
+fn parse_fn_generics(generics: &Generics) -> syn::Result<bool> {
     let mut seen_v = false;
     for param in &generics.params {
         match param {
@@ -367,10 +458,10 @@ fn parse_fn_generics(generics: &Generics) -> syn::Result<()> {
             }
         }
     }
-    Ok(())
+    Ok(seen_v)
 }
 
-fn parse_arg(x: FnArg) -> syn::Result<StarArg> {
+fn parse_arg(x: FnArg, has_v: bool) -> syn::Result<StarArg> {
     let span = x.span();
     match x {
         FnArg::Typed(PatType {
@@ -378,16 +469,19 @@ fn parse_arg(x: FnArg) -> syn::Result<StarArg> {
             pat: box Pat::Ident(ident),
             ty: box ty,
             ..
-        }) => Ok(StarArg {
-            span,
-            attrs,
-            mutable: ident.mutability.is_some(),
-            name: ident.ident,
-            by_ref: ident.by_ref.is_some(),
-            ty,
-            default: ident.subpat.map(|x| *x.1),
-            source: StarArgSource::Unknown,
-        }),
+        }) => {
+            check_lifetimes_in_type(&ty, has_v)?;
+            Ok(StarArg {
+                span,
+                attrs,
+                mutable: ident.mutability.is_some(),
+                name: ident.ident,
+                by_ref: ident.by_ref.is_some(),
+                ty,
+                default: ident.subpat.map(|x| *x.1),
+                source: StarArgSource::Unknown,
+            })
+        }
         FnArg::Typed(PatType { .. }) => Err(syn::Error::new(
             span,
             "Function parameter pattern must be identifier",
