@@ -945,7 +945,12 @@ pub trait ValueLike<'v>:
 
     /// Get hash value.
     fn get_hashed(self) -> anyhow::Result<Hashed<Self>> {
-        Ok(Hashed::new_unchecked(self.to_value().get_hash()?, self))
+        let hash = if let Some(s) = self.to_value().unpack_starlark_str() {
+            s.get_hash()
+        } else {
+            self.to_value().get_hash()?
+        };
+        Ok(Hashed::new_unchecked(hash, self))
     }
 
     /// `repr(x)`.
