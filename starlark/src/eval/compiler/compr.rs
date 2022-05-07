@@ -20,18 +20,14 @@
 use gazebo::prelude::*;
 
 use crate::{
-    eval::{
-        compiler::{
-            scope::{CstExpr, CstPayload},
-            Compiler,
-        },
-        fragment::{
-            expr::ExprCompiled,
-            expr_bool::ExprCompiledBool,
-            known::list_to_tuple,
-            span::IrSpanned,
-            stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
-        },
+    eval::compiler::{
+        expr::ExprCompiled,
+        expr_bool::ExprCompiledBool,
+        known::list_to_tuple,
+        scope::{CstExpr, CstPayload},
+        span::IrSpanned,
+        stmt::{AssignCompiledValue, OptimizeOnFreezeContext},
+        Compiler,
     },
     syntax::ast::{ClauseP, ForClauseP},
 };

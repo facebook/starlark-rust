@@ -18,8 +18,10 @@
 use crate::{
     collections::SmallMap,
     eval::{
-        compiler::scope::ScopeNames,
-        fragment::def::{Def, FrozenDef},
+        compiler::{
+            def::{Def, FrozenDef},
+            scope::ScopeNames,
+        },
         Evaluator,
     },
     values::{Value, ValueLike},

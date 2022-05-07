@@ -31,12 +31,9 @@ pub use runtime::{
 use crate::{
     collections::symbol_map::Symbol,
     environment::Globals,
-    eval::{
-        compiler::{
-            scope::{CompilerAstMap, Scope, ScopeData},
-            Compiler, Constants,
-        },
-        fragment::def::DefInfo,
+    eval::compiler::{
+        scope::{CompilerAstMap, Scope, ScopeData},
+        Compiler, Constants,
     },
     syntax::ast::AstModule,
     values::{docs::DocString, Value},
@@ -44,9 +41,10 @@ use crate::{
 
 pub(crate) mod bc;
 pub(crate) mod compiler;
-pub(crate) mod fragment;
 pub(crate) mod runtime;
 pub use runtime::profile::ProfileMode;
+
+use crate::eval::compiler::def::DefInfo;
 
 #[cfg(test)]
 mod tests;

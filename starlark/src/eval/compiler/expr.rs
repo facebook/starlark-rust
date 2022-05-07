@@ -16,6 +16,7 @@
  */
 
 //! Evaluation of an expression.
+
 use std::cmp::Ordering;
 
 use gazebo::prelude::*;
@@ -28,17 +29,15 @@ use crate::{
     errors::did_you_mean::did_you_mean,
     eval::{
         compiler::{
-            scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
-            Compiler,
-        },
-        fragment::{
             call::CallCompiled,
             compr::ComprCompiled,
             def::{DefCompiled, FrozenDef},
             expr_bool::ExprCompiledBool,
             known::list_to_tuple,
+            scope::{AssignCount, Captured, CstExpr, ResolvedIdent, Slot},
             span::IrSpanned,
             stmt::OptimizeOnFreezeContext,
+            Compiler,
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },

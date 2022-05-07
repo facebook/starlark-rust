@@ -33,12 +33,13 @@ use crate::{
     environment::{slots::ModuleSlotId, FrozenModuleRef},
     eval::{
         compiler::{
+            expr::ExprCompiled,
+            expr_bool::ExprCompiledBool,
+            known::list_to_tuple,
             scope::{Captured, CstAssign, CstExpr, CstStmt, Slot},
+            small_vec_1::SmallVec1,
+            span::IrSpanned,
             Compiler,
-        },
-        fragment::{
-            expr::ExprCompiled, expr_bool::ExprCompiledBool, known::list_to_tuple,
-            small_vec_1::SmallVec1, span::IrSpanned,
         },
         runtime::{
             call_stack::FrozenFileSpan,

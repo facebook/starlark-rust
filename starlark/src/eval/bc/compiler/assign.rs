@@ -27,8 +27,7 @@ use crate::{
             },
             writer::BcWriter,
         },
-        compiler::scope::Captured,
-        fragment::{span::IrSpanned, stmt::AssignCompiledValue},
+        compiler::{scope::Captured, span::IrSpanned, stmt::AssignCompiledValue},
     },
 };
 

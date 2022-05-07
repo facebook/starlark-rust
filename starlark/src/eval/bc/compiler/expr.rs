@@ -31,7 +31,7 @@ use crate::{
             slow_arg::BcInstrSlowArg,
             writer::BcWriter,
         },
-        fragment::{
+        compiler::{
             expr::{CompareOp, ExprBinOp, ExprCompiled, ExprUnOp},
             span::IrSpanned,
         },

@@ -26,7 +26,7 @@ use crate::{
             },
             writer::BcWriter,
         },
-        fragment::{
+        compiler::{
             expr::{ExprCompiled, MaybeNot},
             span::IrSpanned,
             stmt::{StmtCompileContext, StmtCompiled, StmtsCompiled},

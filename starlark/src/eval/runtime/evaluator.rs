@@ -32,7 +32,7 @@ use crate::{
     errors::Diagnostic,
     eval::{
         bc::frame::BcFramePtr,
-        fragment::def::DefInfo,
+        compiler::def::DefInfo,
         runtime::{
             bc_profile::BcProfile,
             before_stmt::BeforeStmt,

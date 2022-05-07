@@ -38,15 +38,18 @@ use crate::{
             stack_ptr::BcStackPtr,
             stack_values::BcStackValues,
         },
-        compiler::{add_span_to_expr_error, expr_throw, scope::Captured, EvalException},
-        fragment::{
-            def::{Def, DefInfo, FrozenDef, ParameterCompiled},
+        compiler::{
+            add_span_to_expr_error,
+            def::{Def, FrozenDef, ParameterCompiled},
             expr::{get_attr_hashed_bind, get_attr_hashed_raw, EvalError, MemberOrValue},
+            expr_throw,
+            scope::Captured,
             span::IrSpanned,
             stmt::{add_assign, before_stmt, bit_or_assign, possible_gc, AssignError},
+            EvalException,
         },
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
-        Arguments, Evaluator, ParametersSpec,
+        Arguments, DefInfo, Evaluator, ParametersSpec,
     },
     values::{
         dict::Dict,

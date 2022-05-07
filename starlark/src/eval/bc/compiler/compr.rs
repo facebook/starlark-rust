@@ -25,7 +25,7 @@ use crate::eval::{
         },
         writer::BcWriter,
     },
-    fragment::{
+    compiler::{
         compr::{ClauseCompiled, ComprCompiled},
         expr::MaybeNot,
     },

@@ -35,7 +35,7 @@ use crate::{
             },
             writer::BcWriter,
         },
-        fragment::{
+        compiler::{
             call::{ArgsCompiledValue, CallCompiled},
             def::FrozenDef,
             span::IrSpanned,

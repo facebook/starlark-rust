@@ -35,7 +35,7 @@ use crate::{
             opcode::BcOpcode,
             slow_arg::BcInstrSlowArg,
         },
-        fragment::span::IrSpanned,
+        compiler::span::IrSpanned,
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
     values::{FrozenHeap, FrozenRef, FrozenValue},

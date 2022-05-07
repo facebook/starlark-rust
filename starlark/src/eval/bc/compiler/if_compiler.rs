@@ -17,7 +17,7 @@
 
 use crate::eval::{
     bc::{instrs::PatchAddr, writer::BcWriter},
-    fragment::{
+    compiler::{
         expr::{ExprCompiled, MaybeNot},
         span::IrSpanned,
     },

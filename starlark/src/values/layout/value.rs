@@ -49,7 +49,7 @@ use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{Hashed, StarlarkHashValue, StarlarkHasher},
-    eval::{fragment::def::FrozenDef, runtime::call_stack::FrozenFileSpan, Arguments, Evaluator},
+    eval::{compiler::def::FrozenDef, runtime::call_stack::FrozenFileSpan, Arguments, Evaluator},
     values::{
         dict::FrozenDict,
         docs::DocItem,

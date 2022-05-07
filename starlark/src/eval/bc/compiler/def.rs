@@ -25,7 +25,7 @@ use crate::eval::{
         instr_impl::{InstrDef, InstrDefData},
         writer::BcWriter,
     },
-    fragment::{def::DefCompiled, span::IrSpanned},
+    compiler::{def::DefCompiled, span::IrSpanned},
     runtime::call_stack::FrozenFileSpan,
 };
 

@@ -23,11 +23,12 @@ use crate::{
     collections::symbol_map::Symbol,
     eval::{
         compiler::{
+            def::InlineDefBody,
+            expr::ExprCompiled,
             scope::{CstArgument, CstExpr},
+            span::IrSpanned,
+            stmt::OptimizeOnFreezeContext,
             Compiler,
-        },
-        fragment::{
-            def::InlineDefBody, expr::ExprCompiled, span::IrSpanned, stmt::OptimizeOnFreezeContext,
         },
         runtime::call_stack::FrozenFileSpan,
         Arguments,

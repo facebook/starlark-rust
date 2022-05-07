@@ -19,7 +19,7 @@
 
 use crate::{
     eval::{
-        fragment::{expr::ExprCompiled, span::IrSpanned},
+        compiler::{expr::ExprCompiled, span::IrSpanned},
         runtime::call_stack::FrozenFileSpan,
     },
     values::FrozenValue,

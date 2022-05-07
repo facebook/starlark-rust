@@ -37,15 +37,13 @@ use crate::{
     eval::{
         bc::{bytecode::Bc, frame::alloca_frame},
         compiler::{
+            expr::ExprCompiled,
             scope::{
                 Captured, CstAssignIdent, CstExpr, CstParameter, CstStmt, ScopeId, ScopeNames,
             },
-            Compiler, EvalException,
-        },
-        fragment::{
-            expr::ExprCompiled,
             span::IrSpanned,
             stmt::{OptimizeOnFreezeContext, StmtCompileContext, StmtCompiled, StmtsCompiled},
+            Compiler, EvalException,
         },
         runtime::{
             arguments::ParametersSpec, call_stack::FrozenFileSpan, evaluator::Evaluator,
