@@ -92,6 +92,7 @@ impl Bc {
         self.run_with_stack(eval, stack_ptr)
     }
 
+    #[inline(always)]
     fn run_with_stack<'v>(
         &self,
         eval: &mut Evaluator<'v, '_>,
