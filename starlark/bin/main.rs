@@ -66,7 +66,11 @@ struct Args {
     #[structopt(long = "dap", help = "Start a DAP server.")]
     dap: bool,
 
-    #[structopt(long = "check", help = "Run checks and lints.")]
+    #[structopt(
+        long = "check",
+        help = "Run checks and lints.",
+        conflicts_with_all = &["lsp", "dap"],
+    )]
     check: bool,
 
     #[structopt(long = "json", help = "Show output as JSON lines.")]
