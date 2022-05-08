@@ -31,9 +31,14 @@ use starlark::{
 use crate::types::Message;
 
 #[derive(Debug)]
+pub(crate) enum ContextMode {
+    Check,
+    Run,
+}
+
+#[derive(Debug)]
 pub(crate) struct Context {
-    pub(crate) check: bool,
-    pub(crate) run: bool,
+    pub(crate) mode: ContextMode,
     pub(crate) print_non_none: bool,
     pub(crate) prelude: Vec<FrozenModule>,
     pub(crate) module: Option<Module>,
@@ -41,8 +46,7 @@ pub(crate) struct Context {
 
 impl Context {
     pub(crate) fn new(
-        check: bool,
-        run: bool,
+        mode: ContextMode,
         print_non_none: bool,
         prelude: &[PathBuf],
         module: bool,
@@ -64,8 +68,7 @@ impl Context {
         };
 
         Ok(Self {
-            check,
-            run,
+            mode,
             print_non_none,
             prelude,
             module,
@@ -83,11 +86,13 @@ impl Context {
     fn go(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
-        if self.check {
-            warnings = Either::Right(self.check(&ast));
-        }
-        if self.run {
-            errors = Either::Right(self.run(file, ast));
+        match self.mode {
+            ContextMode::Check => {
+                warnings = Either::Right(self.check(&ast));
+            }
+            ContextMode::Run => {
+                errors = Either::Right(self.run(file, ast));
+            }
         }
         warnings.chain(errors)
     }

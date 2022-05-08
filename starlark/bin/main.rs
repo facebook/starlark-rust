@@ -35,7 +35,10 @@ use starlark::read_line::ReadLine;
 use structopt::{clap::AppSettings, StructOpt};
 use walkdir::WalkDir;
 
-use crate::types::{LintMessage, Message, Severity};
+use crate::{
+    eval::ContextMode,
+    types::{LintMessage, Message, Severity},
+};
 
 mod dap;
 mod eval;
@@ -186,8 +189,11 @@ fn main() -> anyhow::Result<()> {
         .map_or("bzl", |x| x.as_str())
         .trim_start_match('.');
     let mut ctx = Context::new(
-        args.check,
-        !args.check,
+        if args.check {
+            ContextMode::Check
+        } else {
+            ContextMode::Run
+        },
         !args.evaluate.is_empty() || args.interactive,
         &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
         args.interactive,
@@ -209,8 +215,7 @@ fn main() -> anyhow::Result<()> {
     }
 
     if args.lsp {
-        ctx.check = true;
-        ctx.run = false;
+        ctx.mode = ContextMode::Check;
         lsp::server(ctx)?;
     } else if args.dap {
         dap::server()
