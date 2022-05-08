@@ -73,13 +73,6 @@ pub struct Args {
     json: bool,
 
     #[structopt(
-        long = "repeat",
-        help = "Number of times to repeat the execution",
-        default_value = "1"
-    )]
-    repeat: usize,
-
-    #[structopt(
         long = "extension",
         help = "File extension when searching directories."
     )]
@@ -205,16 +198,14 @@ fn main() -> anyhow::Result<()> {
     )?;
 
     let mut stats = Stats::default();
-    for _ in 0..args.repeat {
-        for e in args.evaluate.clone() {
-            stats.increment_file();
-            drain(ctx.expression(e), args.json, &mut stats);
-        }
+    for e in args.evaluate.clone() {
+        stats.increment_file();
+        drain(ctx.expression(e), args.json, &mut stats);
+    }
 
-        for file in expand_dirs(ext, args.files.clone()) {
-            stats.increment_file();
-            drain(ctx.file(&file), args.json, &mut stats);
-        }
+    for file in expand_dirs(ext, args.files.clone()) {
+        stats.increment_file();
+        drain(ctx.file(&file), args.json, &mut stats);
     }
 
     if args.interactive {
