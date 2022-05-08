@@ -23,7 +23,7 @@ use serde_json::Value;
 use crate::dap::library::stream::{log, send};
 
 #[derive(Debug, Clone, Dupe)]
-pub struct Client {
+pub(crate) struct Client {
     _private: (),
 }
 
@@ -32,7 +32,7 @@ impl Client {
         Self { _private: () }
     }
 
-    pub fn log(&self, x: &str) {
+    pub(crate) fn log(&self, x: &str) {
         log(x)
     }
 
@@ -40,7 +40,7 @@ impl Client {
         send(serde_json::to_value(&x).unwrap())
     }
 
-    pub fn event_stopped(&self, body: StoppedEventBody) {
+    pub(crate) fn event_stopped(&self, body: StoppedEventBody) {
         self.event(StoppedEvent {
             type_: "event".to_owned(),
             seq: 0,
@@ -49,7 +49,7 @@ impl Client {
         })
     }
 
-    pub fn event_initialized(&self, body: Option<Value>) {
+    pub(crate) fn event_initialized(&self, body: Option<Value>) {
         self.event(InitializedEvent {
             type_: "event".to_owned(),
             seq: 0,
@@ -58,7 +58,7 @@ impl Client {
         })
     }
 
-    pub fn event_exited(&self, body: ExitedEventBody) {
+    pub(crate) fn event_exited(&self, body: ExitedEventBody) {
         self.event(ExitedEvent {
             type_: "event".to_owned(),
             seq: 0,
@@ -67,7 +67,7 @@ impl Client {
         })
     }
 
-    pub fn event_terminated(&self, body: Option<TerminatedEventBody>) {
+    pub(crate) fn event_terminated(&self, body: Option<TerminatedEventBody>) {
         self.event(TerminatedEvent {
             type_: "event".to_owned(),
             seq: 0,
@@ -76,7 +76,7 @@ impl Client {
         })
     }
 
-    pub fn event_output(&self, body: OutputEventBody) {
+    pub(crate) fn event_output(&self, body: OutputEventBody) {
         self.event(OutputEvent {
             type_: "event".to_owned(),
             seq: 0,

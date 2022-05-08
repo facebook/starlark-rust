@@ -19,12 +19,12 @@ use debugserver_types as ds;
 
 use crate::dap::library::{events::*, requests::*, stream::*};
 
-pub struct DapService {
+pub(crate) struct DapService {
     _private: (),
 }
 
 impl DapService {
-    pub fn run<T: DebugServer>(f: impl FnOnce(Client) -> T) {
+    pub(crate) fn run<T: DebugServer>(f: impl FnOnce(Client) -> T) {
         server(f(Client::new()));
     }
 }

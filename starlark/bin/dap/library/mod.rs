@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-pub use crate::dap::library::{events::Client, requests::DebugServer, server::DapService};
+pub(crate) use crate::dap::library::{events::Client, requests::DebugServer, server::DapService};
 
 mod events;
 mod requests;

@@ -48,7 +48,7 @@ mod types;
     about = "Evaluate Starlark code",
     global_settings(&[AppSettings::ColoredHelp]),
 )]
-pub struct Args {
+struct Args {
     #[structopt(
         long = "interactive",
         long = "repl",

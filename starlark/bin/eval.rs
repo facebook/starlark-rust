@@ -31,16 +31,16 @@ use starlark::{
 use crate::types::Message;
 
 #[derive(Debug)]
-pub struct Context {
-    pub check: bool,
-    pub run: bool,
-    pub print_non_none: bool,
-    pub prelude: Vec<FrozenModule>,
-    pub module: Option<Module>,
+pub(crate) struct Context {
+    pub(crate) check: bool,
+    pub(crate) run: bool,
+    pub(crate) print_non_none: bool,
+    pub(crate) prelude: Vec<FrozenModule>,
+    pub(crate) module: Option<Module>,
 }
 
 impl Context {
-    pub fn new(
+    pub(crate) fn new(
         check: bool,
         run: bool,
         print_non_none: bool,
@@ -103,7 +103,7 @@ impl Context {
         }
     }
 
-    pub fn expression(&self, content: String) -> impl Iterator<Item = Message> {
+    pub(crate) fn expression(&self, content: String) -> impl Iterator<Item = Message> {
         let file = "expression";
         Self::err(
             file,
@@ -111,7 +111,7 @@ impl Context {
         )
     }
 
-    pub fn file(&self, file: &Path) -> impl Iterator<Item = Message> {
+    pub(crate) fn file(&self, file: &Path) -> impl Iterator<Item = Message> {
         let filename = &file.to_string_lossy();
         Self::err(
             filename,
@@ -121,7 +121,7 @@ impl Context {
         )
     }
 
-    pub fn file_with_contents(
+    pub(crate) fn file_with_contents(
         &self,
         filename: &str,
         content: String,
@@ -170,10 +170,10 @@ impl Context {
     }
 }
 
-pub fn globals() -> Globals {
+pub(crate) fn globals() -> Globals {
     Globals::extended()
 }
 
-pub fn dialect() -> Dialect {
+pub(crate) fn dialect() -> Dialect {
     Dialect::Extended
 }

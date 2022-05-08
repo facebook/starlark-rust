@@ -19,7 +19,7 @@ use debugserver_types::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub trait DebugServer {
+pub(crate) trait DebugServer {
     fn initialize(&self, x: InitializeRequestArguments) -> anyhow::Result<Option<Capabilities>>;
     fn set_breakpoints(
         &self,

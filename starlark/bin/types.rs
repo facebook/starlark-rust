@@ -27,7 +27,7 @@ use starlark::{
 /// A standardised set of severities.
 #[derive(Debug, Serialize, Dupe, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
-pub enum Severity {
+pub(crate) enum Severity {
     Error,
     Warning,
     // Not all severities are used right now
@@ -48,15 +48,15 @@ impl Display for Severity {
 }
 
 #[derive(Debug, Clone)]
-pub struct Message {
-    pub path: String,
-    pub span: Option<ResolvedSpan>,
-    pub severity: Severity,
-    pub name: String,
-    pub description: String,
-    pub full_error_with_span: Option<String>,
+pub(crate) struct Message {
+    pub(crate) path: String,
+    pub(crate) span: Option<ResolvedSpan>,
+    pub(crate) severity: Severity,
+    pub(crate) name: String,
+    pub(crate) description: String,
+    pub(crate) full_error_with_span: Option<String>,
     /// The text referred to by span
-    pub original: Option<String>,
+    pub(crate) original: Option<String>,
 }
 
 impl Display for Message {
@@ -70,7 +70,7 @@ impl Display for Message {
 }
 
 impl Message {
-    pub fn from_anyhow(file: &str, x: anyhow::Error) -> Self {
+    pub(crate) fn from_anyhow(file: &str, x: anyhow::Error) -> Self {
         match x.downcast_ref::<Diagnostic>() {
             Some(
                 d @ Diagnostic {
@@ -103,7 +103,7 @@ impl Message {
         }
     }
 
-    pub fn from_lint(x: Lint) -> Self {
+    pub(crate) fn from_lint(x: Lint) -> Self {
         Self {
             path: x.location.filename().to_owned(),
             span: Some(x.location.resolve_span()),
@@ -124,7 +124,7 @@ impl Message {
 /// A JSON-deriving type that gives a stable interface to downstream types.
 /// Do NOT change this type, change Message instead.
 #[derive(Debug, Clone, Serialize)]
-pub struct LintMessage {
+pub(crate) struct LintMessage {
     path: String,
     line: Option<usize>,
     char: Option<usize>,
@@ -137,7 +137,7 @@ pub struct LintMessage {
 }
 
 impl LintMessage {
-    pub fn new(x: Message) -> Self {
+    pub(crate) fn new(x: Message) -> Self {
         Self {
             path: x.path,
             line: x.span.map(|x| x.begin_line + 1),

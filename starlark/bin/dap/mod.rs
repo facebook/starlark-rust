@@ -28,7 +28,7 @@ use std::{
 
 use debugserver_types::*;
 use gazebo::prelude::*;
-pub use library::*;
+pub(crate) use library::*;
 use serde_json::{Map, Value};
 use starlark::{
     codemap::{FileSpan, FileSpanRef},
@@ -377,7 +377,7 @@ impl DebugServer for Backend {
     }
 }
 
-pub fn server() {
+pub(crate) fn server() {
     let (sender, receiver) = channel();
     DapService::run(|client| Backend {
         client,

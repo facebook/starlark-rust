@@ -159,7 +159,7 @@ impl Backend {
     }
 }
 
-pub fn server(starlark: Context) -> anyhow::Result<()> {
+pub(crate) fn server(starlark: Context) -> anyhow::Result<()> {
     // Note that  we must have our logging only write out to stderr.
     eprintln!("Starting Rust Starlark server");
 
