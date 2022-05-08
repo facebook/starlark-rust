@@ -66,9 +66,6 @@ pub struct Args {
     #[structopt(long = "check", help = "Run checks and lints.")]
     check: bool,
 
-    #[structopt(long = "info", help = "Show information about the code.")]
-    info: bool,
-
     #[structopt(long = "json", help = "Show output as JSON lines.")]
     json: bool,
 
@@ -190,8 +187,7 @@ fn main() -> anyhow::Result<()> {
         .trim_start_match('.');
     let mut ctx = Context::new(
         args.check,
-        args.info,
-        !args.check && !args.info,
+        !args.check,
         !args.evaluate.is_empty() || args.interactive,
         &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
         args.interactive,
@@ -214,7 +210,6 @@ fn main() -> anyhow::Result<()> {
 
     if args.lsp {
         ctx.check = true;
-        ctx.info = false;
         ctx.run = false;
         lsp::server(ctx)?;
     } else if args.dap {

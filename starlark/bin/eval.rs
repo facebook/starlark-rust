@@ -33,7 +33,6 @@ use crate::types::Message;
 #[derive(Debug)]
 pub struct Context {
     pub check: bool,
-    pub info: bool,
     pub run: bool,
     pub print_non_none: bool,
     pub prelude: Vec<FrozenModule>,
@@ -43,7 +42,6 @@ pub struct Context {
 impl Context {
     pub fn new(
         check: bool,
-        info: bool,
         run: bool,
         print_non_none: bool,
         prelude: &[PathBuf],
@@ -67,7 +65,6 @@ impl Context {
 
         Ok(Self {
             check,
-            info,
             run,
             print_non_none,
             prelude,
@@ -86,9 +83,6 @@ impl Context {
     fn go(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
-        if self.info {
-            self.info(&ast);
-        }
         if self.check {
             warnings = Either::Right(self.check(&ast));
         }
@@ -159,14 +153,6 @@ impl Context {
                 iter::empty()
             }),
         )
-    }
-
-    fn info(&self, module: &AstModule) {
-        let exports = module.exported_symbols();
-        println!("Exports {} symbol(s)", exports.len());
-        for (loc, name) in exports {
-            println!("* {} {}", loc, name)
-        }
     }
 
     fn check(&self, module: &AstModule) -> impl Iterator<Item = Message> {
