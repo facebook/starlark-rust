@@ -73,7 +73,11 @@ struct Args {
     )]
     check: bool,
 
-    #[structopt(long = "json", help = "Show output as JSON lines.")]
+    #[structopt(
+        long = "json",
+        help = "Show output as JSON lines.",
+        conflicts_with_all = &["lsp", "dap"],
+    )]
     json: bool,
 
     #[structopt(
@@ -89,11 +93,16 @@ struct Args {
         long = "expression",
         short = "e",
         name = "EXPRESSION",
-        help = "Expressions to evaluate."
+        help = "Expressions to evaluate.",
+        conflicts_with_all = &["lsp", "dap"],
     )]
     evaluate: Vec<String>,
 
-    #[structopt(name = "FILE", help = "Files to evaluate.")]
+    #[structopt(
+        name = "FILE",
+        help = "Files to evaluate.",
+        conflicts_with_all = &["lsp", "dap"],
+    )]
     files: Vec<PathBuf>,
 }
 
