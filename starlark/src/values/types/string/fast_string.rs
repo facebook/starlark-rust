@@ -253,7 +253,7 @@ pub(crate) fn contains(haystack: &str, needle: &str) -> bool {
     if needle.is_empty() {
         true
     } else if needle.len() == 1 {
-        haystack.as_bytes().contains(&needle.as_bytes()[0])
+        memchr::memchr(needle.as_bytes()[0], haystack.as_bytes()).is_some()
     } else if haystack.len() < needle.len() {
         false
     } else {
