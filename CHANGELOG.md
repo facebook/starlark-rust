@@ -1,5 +1,20 @@
 # Starlark
 
+## 0.8.0 (May 9, 2022)
+
+* Redo `StringValue` and `FrozenStringValue` as aliases for `ValueTyped<StarlarkStr>` and `FrozenValueTyped<StarlarkStr>` respectively.
+* Add more trait implementations for `ValueTyped`.
+* Format call stack reports more like Python.
+* Implement `FromStr` for `ProfileMode`.
+* Impelement `Eq` for `BorrowHashed` .
+* Minor optimisations throughout.
+* Better error messages, e.g for `1 << -2`.
+* Add `StarlarkValue::bit_not` for the bit-negation operator.
+* In the REPL print non-`None` values.
+* Add `get_index` to `SmallSet`.
+* Add a `Regex` type - note this is likely to change API in the next release and is not considered stable.
+* Upgrade dependencies.
+
 ## 0.7.1 (April 13, 2022)
 
 * Add `MethodsBuilder::alloc`.
