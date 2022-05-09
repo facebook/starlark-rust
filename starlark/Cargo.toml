@@ -47,9 +47,9 @@ gazebo_lint.optional = true
 structopt = "0.3.0"
 walkdir = "2.3"
 serde = { version = "1.0", features = ["derive"] }
-logos = "0.11.4"
+logos = "0.12"
 serde_json = "1.0"
-rustyline = "7.0.0"
+rustyline = "9.1"
 maplit = "1.0.2"
 lsp-server = "0.5"
 lsp-types = "0.89.0"
