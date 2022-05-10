@@ -500,6 +500,15 @@ impl Display for ResolvedSpan {
     }
 }
 
+impl From<ResolvedSpan> for lsp_types::Range {
+    fn from(span: ResolvedSpan) -> Self {
+        lsp_types::Range::new(
+            lsp_types::Position::new(span.begin_line as u32, span.begin_column as u32),
+            lsp_types::Position::new(span.end_line as u32, span.end_column as u32),
+        )
+    }
+}
+
 impl ResolvedSpan {
     fn from_span(begin: LineCol, end: LineCol) -> Self {
         Self {
