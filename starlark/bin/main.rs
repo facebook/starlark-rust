@@ -63,7 +63,21 @@ struct Args {
     #[structopt(long = "lsp", help = "Start an LSP server.")]
     lsp: bool,
 
-    #[structopt(long = "dap", help = "Start a DAP server.")]
+    #[structopt(
+        long = "dap",
+        help = "Start a DAP server.",
+        // Conflicts with all options.
+        conflicts_with_all = &[
+            "interactive",
+            "lsp",
+            "check",
+            "json",
+            "extension",
+            "prelude",
+            "evaluate",
+            "files",
+        ],
+    )]
     dap: bool,
 
     #[structopt(
@@ -195,49 +209,51 @@ fn main() -> anyhow::Result<()> {
     gazebo::terminate_on_panic();
 
     let args = argfile::expand_args(argfile::parse_fromfile, argfile::PREFIX)?;
-    let args = Args::from_iter(args);
-    let ext = args
-        .extension
-        .as_ref()
-        .map_or("bzl", |x| x.as_str())
-        .trim_start_match('.');
-    let mut ctx = Context::new(
-        if args.check {
-            ContextMode::Check
-        } else {
-            ContextMode::Run
-        },
-        !args.evaluate.is_empty() || args.interactive,
-        &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
-        args.interactive,
-    )?;
+    let args: Args = Args::from_iter(args);
+    if args.dap {
+        dap::server();
+    } else {
+        let ext = args
+            .extension
+            .as_ref()
+            .map_or("bzl", |x| x.as_str())
+            .trim_start_match('.');
+        let mut ctx = Context::new(
+            if args.check {
+                ContextMode::Check
+            } else {
+                ContextMode::Run
+            },
+            !args.evaluate.is_empty() || args.interactive,
+            &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
+            args.interactive,
+        )?;
 
-    let mut stats = Stats::default();
-    for e in args.evaluate.clone() {
-        stats.increment_file();
-        drain(ctx.expression(e), args.json, &mut stats);
-    }
+        let mut stats = Stats::default();
+        for e in args.evaluate.clone() {
+            stats.increment_file();
+            drain(ctx.expression(e), args.json, &mut stats);
+        }
 
-    for file in expand_dirs(ext, args.files.clone()) {
-        stats.increment_file();
-        drain(ctx.file(&file), args.json, &mut stats);
-    }
+        for file in expand_dirs(ext, args.files.clone()) {
+            stats.increment_file();
+            drain(ctx.file(&file), args.json, &mut stats);
+        }
 
-    if args.interactive {
-        interactive(&ctx)?;
-    }
+        if args.interactive {
+            interactive(&ctx)?;
+        }
 
-    if args.lsp {
-        ctx.mode = ContextMode::Check;
-        lsp::server(ctx)?;
-    } else if args.dap {
-        dap::server()
-    }
+        if args.lsp {
+            ctx.mode = ContextMode::Check;
+            lsp::server(ctx)?;
+        }
 
-    if !args.json {
-        println!("{}", stats);
-        if stats.error > 0 {
-            return Err(anyhow!("Failed with {} errors", stats.error));
+        if !args.json {
+            println!("{}", stats);
+            if stats.error > 0 {
+                return Err(anyhow!("Failed with {} errors", stats.error));
+            }
         }
     }
     Ok(())
