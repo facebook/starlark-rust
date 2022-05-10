@@ -17,16 +17,18 @@
 
 //! Based on the reference lsp-server example at <https://github.com/rust-analyzer/lsp-server/blob/master/examples/goto_def.rs>.
 
-use lsp_server::{Connection, Message, Notification};
+use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use lsp_types::{
     notification::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, LogMessage,
         PublishDiagnostics,
     },
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, InitializeParams, LogMessageParams, MessageType, NumberOrString,
-    Position, PublishDiagnosticsParams, Range, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url,
+    request::GotoDefinition,
+    DefinitionOptions, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionResponse,
+    InitializeParams, LogMessageParams, MessageType, NumberOrString, OneOf, Position,
+    PublishDiagnosticsParams, Range, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Url, WorkDoneProgressOptions,
 };
 use serde::de::DeserializeOwned;
 
@@ -73,6 +75,11 @@ impl Backend {
     fn server_capabilities() -> ServerCapabilities {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full)),
+            definition_provider: Some(OneOf::Right(DefinitionOptions {
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
+            })),
             ..ServerCapabilities::default()
         }
     }
@@ -118,6 +125,10 @@ impl Backend {
             .unwrap()
     }
 
+    fn send_response(&self, x: Response) {
+        self.connection.sender.send(Message::Response(x)).unwrap()
+    }
+
     fn log_message(&self, typ: MessageType, message: &str) {
         self.send_notification(new_notification::<LogMessage>(LogMessageParams {
             typ,
@@ -136,7 +147,14 @@ impl Backend {
         for msg in &self.connection.receiver {
             match msg {
                 Message::Request(req) => {
-                    if self.connection.handle_shutdown(&req)? {
+                    // TODO(nmj): Also implement DocumentSymbols so that some logic can
+                    //            be handled client side.
+                    if as_request::<GotoDefinition>(&req).is_some() {
+                        self.send_response(new_response(
+                            req.id,
+                            GotoDefinitionResponse::Array(vec![]),
+                        ));
+                    } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }
                     // Currently don't handle any other requests
@@ -197,6 +215,20 @@ where
     }
 }
 
+fn as_request<T>(x: &Request) -> Option<T::Params>
+where
+    T: lsp_types::request::Request,
+    T::Params: DeserializeOwned,
+{
+    if x.method == T::METHOD {
+        let params = serde_json::from_value(x.params.clone())
+            .unwrap_or_else(|err| panic!("Invalid request\nMethod: {}\n error: {}", x.method, err));
+        Some(params)
+    } else {
+        None
+    }
+}
+
 fn new_notification<T>(params: T::Params) -> Notification
 where
     T: lsp_types::notification::Notification,
@@ -204,5 +236,16 @@ where
     Notification {
         method: T::METHOD.to_owned(),
         params: serde_json::to_value(&params).unwrap(),
+    }
+}
+
+fn new_response<T>(id: RequestId, params: T) -> Response
+where
+    T: serde::Serialize,
+{
+    Response {
+        id,
+        result: Some(serde_json::to_value(params).unwrap()),
+        error: None,
     }
 }
