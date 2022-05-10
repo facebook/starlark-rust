@@ -657,14 +657,12 @@ where
     fn invoke_raw(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
 
-        if eval.check_types() {
-            for (i, arg_name, ty, ty2) in &self.parameter_types {
-                match eval.current_frame.get_slot(LocalSlotId::new(*i)) {
-                    None => {
-                        panic!("Not allowed optional unassigned with type annotations on them")
-                    }
-                    Some(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
+        for (i, arg_name, ty, ty2) in &self.parameter_types {
+            match eval.current_frame.get_slot(LocalSlotId::new(*i)) {
+                None => {
+                    panic!("Not allowed optional unassigned with type annotations on them")
                 }
+                Some(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
             }
         }
 
@@ -702,17 +700,16 @@ where
             Ok(v) => v,
         };
 
-        if eval.check_types() {
-            // Slightly ugly: by the time we check the return type, we no longer
-            // have the location of the return statement, so the "blame" is attached
-            // to the caller, rather than the return statement. Fixing it requires
-            // either passing the type down (ugly) or passing the location back
-            // (ugly and fiddly). Both also imply some runtime cost. If types take off,
-            // worth revisiting.
-            if let Some((tv, t)) = &self.return_type {
-                ret.check_type_compiled(tv.to_value(), t, None)?
-            }
+        // Slightly ugly: by the time we check the return type, we no longer
+        // have the location of the return statement, so the "blame" is attached
+        // to the caller, rather than the return statement. Fixing it requires
+        // either passing the type down (ugly) or passing the location back
+        // (ugly and fiddly). Both also imply some runtime cost. If types take off,
+        // worth revisiting.
+        if let Some((tv, t)) = &self.return_type {
+            ret.check_type_compiled(tv.to_value(), t, None)?
         }
+
         Ok(ret)
     }
 

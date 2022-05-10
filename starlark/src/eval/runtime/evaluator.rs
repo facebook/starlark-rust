@@ -302,12 +302,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         self.print_handler = handler;
     }
 
-    pub(crate) fn check_types(&self) -> bool {
-        // We currently always check types. We suspect that for performance reasons one day
-        // we'll want to make it optional, so guard the relevant places behind this test.
-        true
-    }
-
     /// Called to add an entry to the call stack, by the function being invoked.
     /// Called for all types of function, including those written in Rust.
     #[inline(always)]
