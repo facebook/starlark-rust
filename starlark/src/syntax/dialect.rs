@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use gazebo::dupe::Dupe;
 use thiserror::Error;
 
 use crate::{
@@ -37,6 +38,17 @@ enum DialectError {
     Types,
 }
 
+/// How to handle type annotations in Starlark.
+#[derive(Debug, Clone, Copy, Dupe, Eq, PartialEq, Hash)]
+pub enum DialectTypes {
+    /// Prohibit types at parse time.
+    Disable,
+    /// Allow types at parse time, but ignore types at runtime.
+    ParseOnly,
+    /// Check types at runtime.
+    Enable,
+}
+
 /// Starlark language features to enable, e.g. [`Standard`](Dialect::Standard) to follow the Starlark standard.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Dialect {
@@ -54,7 +66,7 @@ pub struct Dialect {
     pub enable_keyword_only_arguments: bool,
     /// Are expressions allowed in type positions as per [PEP 484](https://www.python.org/dev/peps/pep-0484/).
     /// Only enabled in [`Extended`](Dialect::Extended).
-    pub enable_types: bool,
+    pub enable_types: DialectTypes,
     /// Are tabs permitted for indentation. If permitted, tabs are equivalent to 8 spaces.
     /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended).
     pub enable_tabs: bool,
@@ -77,7 +89,7 @@ impl Dialect {
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: false,
-        enable_types: false,
+        enable_types: DialectTypes::Disable,
         enable_tabs: true,
         enable_load_reexport: true, // But they plan to change it
         enable_top_level_stmt: false,
@@ -89,7 +101,7 @@ impl Dialect {
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: true,
-        enable_types: true,
+        enable_types: DialectTypes::Enable,
         enable_tabs: true,
         enable_load_reexport: true,
         enable_top_level_stmt: true,
@@ -157,7 +169,7 @@ impl Dialect {
         codemap: &CodeMap,
         x: Spanned<T>,
     ) -> anyhow::Result<Spanned<T>> {
-        if self.enable_types {
+        if self.enable_types != DialectTypes::Disable {
             Ok(x)
         } else {
             err(codemap, x.span, DialectError::Types)

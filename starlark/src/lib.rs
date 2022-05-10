@@ -171,7 +171,7 @@
 //! # fn run() -> anyhow::Result<()> {
 //! use starlark::environment::{Globals, Module};
 //! use starlark::eval::Evaluator;
-//! use starlark::syntax::{AstModule, Dialect};
+//! use starlark::syntax::{AstModule, Dialect, DialectTypes};
 //!
 //! let content = r#"
 //! def takes_int(x: int.type):
@@ -180,7 +180,7 @@
 //! "#;
 //!
 //! // Make the dialect enable types
-//! let dialect = Dialect {enable_types: true, ..Dialect::Standard};
+//! let dialect = Dialect {enable_types: DialectTypes::Enable, ..Dialect::Standard};
 //! // We could equally have done `dialect = Dialect::Extended`.
 //! let ast = AstModule::parse("json.star", content.to_owned(), &dialect)?;
 //! let globals = Globals::standard();
