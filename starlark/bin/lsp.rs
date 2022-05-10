@@ -229,7 +229,16 @@ pub(crate) fn server(starlark: Context) -> anyhow::Result<()> {
     eprintln!("Starting Rust Starlark server");
 
     let (connection, io_threads) = Connection::stdio();
-    // Run the server and wait for the two threads to end (typically by trigger LSP Exit event).
+    server_with_connection(connection, starlark)?;
+    // Make sure that the io threads stop properly too.
+    io_threads.join()?;
+
+    eprintln!("Stopping Rust Starlark server");
+    Ok(())
+}
+
+fn server_with_connection(connection: Connection, starlark: Context) -> anyhow::Result<()> {
+    // Run the server and wait for the main thread to end (typically by trigger LSP Exit event).
     let server_capabilities = serde_json::to_value(&Backend::server_capabilities()).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
     let initialization_params = serde_json::from_value(initialization_params).unwrap();
@@ -239,9 +248,7 @@ pub(crate) fn server(starlark: Context) -> anyhow::Result<()> {
         last_valid_parse: RwLock::default(),
     }
     .main_loop(initialization_params)?;
-    io_threads.join()?;
 
-    eprintln!("Stopping Rust Starlark server");
     Ok(())
 }
 
@@ -295,5 +302,438 @@ where
         id,
         result: Some(serde_json::to_value(params).unwrap()),
         error: None,
+    }
+}
+
+#[cfg(test)]
+mod helpers {
+    use std::{
+        collections::{hash_map::Entry, HashMap, VecDeque},
+        time::Duration,
+    };
+
+    use lsp_server::Connection;
+    use lsp_types::{
+        notification::{Exit, Initialized, Notification},
+        request::{Initialize, Request, Shutdown},
+        ClientCapabilities, GotoCapability, InitializeResult, InitializedParams,
+        TextDocumentClientCapabilities, TextDocumentContentChangeEvent, TextDocumentItem,
+        VersionedTextDocumentIdentifier,
+    };
+
+    use super::*;
+    use crate::ContextMode;
+
+    /// A server for use in testing that provides helpers for sending requests, correlating
+    /// responses, and sending / receiving notifications
+    pub struct TestServer {
+        /// The thread that's actually running the server
+        server_thread: Option<std::thread::JoinHandle<()>>,
+        client_connection: Connection,
+        /// Incrementing counter to automatically generate request IDs when making a request
+        req_counter: i32,
+        /// Simple incrementing document version counter
+        version_counter: i32,
+        /// A mapping of the requests that have arrived -> the response. Stored here as
+        /// these responses might be interleaved with notifications and the like.
+        responses: HashMap<RequestId, Response>,
+        /// An ordered queue of all of the notifications that have been received. Drained as
+        /// notifications are processed.
+        notifications: VecDeque<lsp_server::Notification>,
+        /// How long to wait for messages to be received.
+        recv_timeout: Duration,
+    }
+
+    impl Drop for TestServer {
+        fn drop(&mut self) {
+            // Need to send both a Shutdown request and an Exit notification in succession
+            // so that lsp_server knows to shutdown correctly.
+            let req = lsp_server::Request {
+                id: self.next_request_id(),
+                method: Shutdown::METHOD.to_owned(),
+                params: Default::default(),
+            };
+            if let Err(e) = self.send_request(req) {
+                eprintln!("Server was already shutdown: {}", e);
+            } else {
+                let notif = lsp_server::Notification {
+                    method: Exit::METHOD.to_owned(),
+                    params: Default::default(),
+                };
+                if let Err(e) = self.send_notification(notif) {
+                    eprintln!("Could not send Exit notification: {}", e);
+                }
+            }
+
+            if let Some(server_thread) = self.server_thread.take() {
+                server_thread.join().expect("test server to join");
+            }
+        }
+    }
+
+    impl TestServer {
+        /// Generate a new request ID
+        fn next_request_id(&mut self) -> RequestId {
+            self.req_counter += 1;
+            RequestId::from(self.req_counter)
+        }
+
+        fn next_document_version(&mut self) -> i32 {
+            self.version_counter += 1;
+            self.version_counter
+        }
+
+        /// Create a new request object with an automatically generated request ID.
+        pub fn new_request<T: Request>(&mut self, params: T::Params) -> lsp_server::Request {
+            lsp_server::Request {
+                id: self.next_request_id(),
+                method: T::METHOD.to_owned(),
+                params: serde_json::to_value(params).unwrap(),
+            }
+        }
+
+        /// Create and start a new LSP server. This sends the initialization messages, and makes
+        /// sure that when the server is dropped, the threads are attempted to be stopped.
+        pub(crate) fn new() -> anyhow::Result<Self> {
+            let (server_connection, client_connection) = Connection::memory();
+
+            let server_thread = std::thread::spawn(|| {
+                let ctx = Context::new(ContextMode::Check, false, &[], false).unwrap();
+                if let Err(e) = server_with_connection(server_connection, ctx) {
+                    eprintln!("Stopped test server thread with error `{:?}`", e);
+                }
+            });
+
+            let ret = Self {
+                server_thread: Some(server_thread),
+                client_connection,
+                req_counter: 0,
+                version_counter: 0,
+                responses: Default::default(),
+                notifications: Default::default(),
+                recv_timeout: Duration::from_secs(2),
+            };
+            ret.initialize()
+        }
+
+        fn initialize(mut self) -> anyhow::Result<Self> {
+            let capabilities = ClientCapabilities {
+                text_document: Some(TextDocumentClientCapabilities {
+                    definition: Some(GotoCapability {
+                        dynamic_registration: Some(true),
+                        link_support: Some(true),
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+
+            let init = InitializeParams {
+                process_id: None,
+                root_path: None,
+                root_uri: None,
+                initialization_options: None,
+                capabilities,
+                trace: None,
+                workspace_folders: None,
+                client_info: None,
+                locale: None,
+            };
+
+            let init_request = self.new_request::<Initialize>(init);
+            let initialize_id = self.send_request(init_request)?;
+
+            self.get_response::<InitializeResult>(initialize_id)?;
+
+            self.send_notification(lsp_server::Notification {
+                method: Initialized::METHOD.to_owned(),
+                params: serde_json::to_value(InitializedParams {})?,
+            })?;
+
+            Ok(self)
+        }
+
+        /// Send a request to the server, and get back the ID from the original message.
+        pub fn send_request(&self, req: lsp_server::Request) -> anyhow::Result<RequestId> {
+            let id = req.id.clone();
+            self.send(Message::Request(req))?;
+            Ok(id)
+        }
+
+        /// Send a notification to the server.
+        pub fn send_notification(
+            &self,
+            notification: lsp_server::Notification,
+        ) -> anyhow::Result<()> {
+            self.send(Message::Notification(notification))
+        }
+
+        fn send(&self, message: Message) -> anyhow::Result<()> {
+            Ok(self.client_connection.sender.send(message)?)
+        }
+
+        /// Receive messages from the server until either the response for the given request ID
+        /// has been seen, or until there are no more messages and the receive method times out.
+        pub fn get_response<T: DeserializeOwned>(&mut self, id: RequestId) -> anyhow::Result<T> {
+            loop {
+                self.receive()?;
+
+                match self.responses.get(&id) {
+                    Some(Response {
+                        error: None,
+                        result: Some(result),
+                        ..
+                    }) => {
+                        break Ok(serde_json::from_value::<T>(result.clone())?);
+                    }
+                    Some(Response {
+                        error: Some(err),
+                        result: None,
+                        ..
+                    }) => {
+                        break Err(anyhow::anyhow!("Response error: {}", err.message));
+                    }
+                    Some(msg) => {
+                        break Err(anyhow::anyhow!(
+                            "Invalid response message for request {}: {:?}",
+                            id,
+                            msg
+                        ));
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        #[allow(dead_code)]
+        pub fn get_notification<T: Notification>(&mut self) -> anyhow::Result<T::Params> {
+            loop {
+                self.receive()?;
+                if let Some(notification) = self.notifications.pop_front() {
+                    break Ok(serde_json::from_value(notification.params)?);
+                }
+            }
+        }
+
+        /// Attempt to receive a message and either put it in the `responses` map if it's a
+        /// response, or the notifications queue if it's a notification.
+        ///
+        /// Returns an error if an invalid message is received, or if no message is
+        /// received within the timeout.
+        fn receive(&mut self) -> anyhow::Result<()> {
+            let message = self
+                .client_connection
+                .receiver
+                .recv_timeout(self.recv_timeout)?;
+            match message {
+                Message::Request(req) => {
+                    Err(anyhow::anyhow!("Got a request from the server: {:?}", req))
+                }
+                Message::Response(response) => match self.responses.entry(response.id.clone()) {
+                    Entry::Occupied(existing) => Err(anyhow::anyhow!(
+                        "Got a duplicate response for request ID {:?}: Existing: {:?}, New: {:?}",
+                        response.id,
+                        existing.get(),
+                        response
+                    )),
+                    Entry::Vacant(entry) => {
+                        entry.insert(response);
+                        Ok(())
+                    }
+                },
+                Message::Notification(notification) => {
+                    self.notifications.push_back(notification);
+                    Ok(())
+                }
+            }
+        }
+
+        /// Send a notification saying that a file was opened with the given contents.
+        pub fn open_file(&mut self, uri: Url, contents: String) -> anyhow::Result<()> {
+            let open_params = DidOpenTextDocumentParams {
+                text_document: TextDocumentItem {
+                    uri,
+                    language_id: String::new(),
+                    version: self.next_document_version(),
+                    text: contents,
+                },
+            };
+            let open_notification = new_notification::<DidOpenTextDocument>(open_params);
+            self.send_notification(open_notification)?;
+            Ok(())
+        }
+
+        /// Send a notification saying that a file was changed with the given contents.
+        pub fn change_file(&mut self, uri: Url, contents: String) -> anyhow::Result<()> {
+            let change_params = DidChangeTextDocumentParams {
+                text_document: VersionedTextDocumentIdentifier {
+                    uri,
+                    version: self.next_document_version(),
+                },
+                content_changes: vec![TextDocumentContentChangeEvent {
+                    range: None,
+                    range_length: None,
+                    text: contents,
+                }],
+            };
+            let change_notification = new_notification::<DidChangeTextDocument>(change_params);
+            self.send_notification(change_notification)?;
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use lsp_types::{
+        request::GotoDefinition, GotoDefinitionParams, GotoDefinitionResponse, Location, Position,
+        Range, TextDocumentIdentifier, TextDocumentPositionParams, Url,
+    };
+
+    use super::helpers::TestServer;
+
+    #[test]
+    fn sends_empty_goto_definition_on_nonexistent_file() -> anyhow::Result<()> {
+        let mut server = TestServer::new()?;
+        let req = server.new_request::<GotoDefinition>(GotoDefinitionParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier {
+                    uri: Url::parse("file:///tmp/nonexistent")?,
+                },
+                position: Default::default(),
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        });
+
+        let request_id = server.send_request(req)?;
+        let response: GotoDefinitionResponse = server.get_response(request_id)?;
+        match response {
+            GotoDefinitionResponse::Array(definitions) if definitions.is_empty() => Ok(()),
+            response => Err(anyhow::anyhow!(
+                "Expected empty definitions, got `{:?}`",
+                response
+            )),
+        }
+    }
+
+    #[test]
+    fn sends_empty_goto_definition_on_non_access_symbol() -> anyhow::Result<()> {
+        let uri = Url::parse("file:///tmp/file.star")?;
+
+        let mut server = TestServer::new()?;
+        let contents = "y = 1\ndef nothing():\n    pass\nprint(nothing())\n";
+        server.open_file(uri.clone(), contents.to_owned())?;
+
+        let goto_definition = server.new_request::<GotoDefinition>(GotoDefinitionParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position {
+                    line: 1,
+                    character: 6,
+                },
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        });
+
+        let request_id = server.send_request(goto_definition)?;
+        let response = server.get_response::<GotoDefinitionResponse>(request_id)?;
+        match response {
+            GotoDefinitionResponse::Array(definitions) if definitions.is_empty() => Ok(()),
+            response => Err(anyhow::anyhow!(
+                "Expected empty definitions, got `{:?}`",
+                response
+            )),
+        }
+    }
+
+    #[test]
+    fn goes_to_definition() -> anyhow::Result<()> {
+        let uri = Url::parse("file:///tmp/file.star")?;
+        let expected_location = Location {
+            uri: uri.clone(),
+            range: Range {
+                start: Position {
+                    line: 1,
+                    character: 4,
+                },
+                end: Position {
+                    line: 1,
+                    character: 11,
+                },
+            },
+        };
+
+        let mut server = TestServer::new()?;
+        let contents = "y = 1\ndef nothing():\n    pass\nprint(nothing())\n";
+        server.open_file(uri.clone(), contents.to_owned())?;
+
+        let goto_definition = server.new_request::<GotoDefinition>(GotoDefinitionParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position {
+                    line: 3,
+                    character: 6,
+                },
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        });
+
+        let request_id = server.send_request(goto_definition)?;
+        let response = server.get_response::<GotoDefinitionResponse>(request_id)?;
+        match response {
+            GotoDefinitionResponse::Scalar(location) => {
+                assert_eq!(expected_location, location);
+                Ok(())
+            }
+            _ => Err(anyhow::anyhow!("Got invalid message type: {:?}", response)),
+        }
+    }
+
+    #[test]
+    fn returns_old_definitions_if_current_file_does_not_parse() -> anyhow::Result<()> {
+        let uri = Url::parse("file:///tmp/file.star")?;
+        let expected_location = Location {
+            uri: uri.clone(),
+            range: Range {
+                start: Position {
+                    line: 1,
+                    character: 4,
+                },
+                end: Position {
+                    line: 1,
+                    character: 11,
+                },
+            },
+        };
+
+        let mut server = TestServer::new()?;
+        let contents = "y = 1\ndef nothing():\n    pass\nprint(nothing())\n";
+        server.open_file(uri.clone(), contents.to_owned())?;
+        server.change_file(uri.clone(), "\"invalid parse".to_owned())?;
+
+        let goto_definition = server.new_request::<GotoDefinition>(GotoDefinitionParams {
+            text_document_position_params: TextDocumentPositionParams {
+                text_document: TextDocumentIdentifier { uri },
+                position: Position {
+                    line: 3,
+                    character: 6,
+                },
+            },
+            work_done_progress_params: Default::default(),
+            partial_result_params: Default::default(),
+        });
+
+        let request_id = server.send_request(goto_definition)?;
+        let response = server.get_response::<GotoDefinitionResponse>(request_id)?;
+        match response {
+            GotoDefinitionResponse::Scalar(location) => {
+                assert_eq!(expected_location, location);
+                Ok(())
+            }
+            _ => Err(anyhow::anyhow!("Got invalid message type: {:?}", response)),
+        }
     }
 }
