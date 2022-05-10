@@ -31,10 +31,10 @@ use lsp_types::{
     },
     request::GotoDefinition,
     DefinitionOptions, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionResponse,
-    InitializeParams, LogMessageParams, MessageType, NumberOrString, OneOf, Position,
-    PublishDiagnosticsParams, Range, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url, WorkDoneProgressOptions,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams,
+    GotoDefinitionResponse, InitializeParams, Location, LogMessageParams, MessageType,
+    NumberOrString, OneOf, Position, PublishDiagnosticsParams, Range, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
 };
 use serde::de::DeserializeOwned;
 use starlark::syntax::AstModule;
@@ -94,7 +94,6 @@ impl Backend {
         }
     }
 
-    #[allow(dead_code)]
     fn get_ast(&self, uri: &Url) -> Option<Arc<AstModule>> {
         let last_valid_parse = self.last_valid_parse.read().unwrap();
         last_valid_parse.get(uri).duped()
@@ -136,6 +135,35 @@ impl Backend {
         }
         self.publish_diagnostics(params.text_document.uri, Vec::new(), None)
     }
+
+    /// Go to the definition of the symbol at the current cursor if that definition is in
+    /// the same file.
+    ///
+    /// NOTE: This uses the last valid parse of a file as a basis for symbol locations.
+    /// If a file has changed and does result in a valid parse, then symbol locations may
+    /// be slightly incorrect.
+    fn goto_definition(&self, id: RequestId, params: GotoDefinitionParams) {
+        let response = match self.get_ast(&params.text_document_position_params.text_document.uri) {
+            Some(ast) => {
+                match ast.find_definition(
+                    params.text_document_position_params.position.line,
+                    params.text_document_position_params.position.character,
+                ) {
+                    Some(span) => GotoDefinitionResponse::Scalar(Location {
+                        uri: params
+                            .text_document_position_params
+                            .text_document
+                            .uri
+                            .clone(),
+                        range: span.into(),
+                    }),
+                    None => GotoDefinitionResponse::Array(vec![]),
+                }
+            }
+            None => GotoDefinitionResponse::Array(vec![]),
+        };
+        self.send_response(new_response(id, response));
+    }
 }
 
 /// The library style pieces
@@ -171,11 +199,8 @@ impl Backend {
                 Message::Request(req) => {
                     // TODO(nmj): Also implement DocumentSymbols so that some logic can
                     //            be handled client side.
-                    if as_request::<GotoDefinition>(&req).is_some() {
-                        self.send_response(new_response(
-                            req.id,
-                            GotoDefinitionResponse::Array(vec![]),
-                        ));
+                    if let Some(params) = as_request::<GotoDefinition>(&req) {
+                        self.goto_definition(req.id, params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }

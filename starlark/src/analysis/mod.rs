@@ -20,6 +20,7 @@ pub use types::Lint;
 use crate::{analysis::types::LintT, syntax::AstModule};
 
 mod bind;
+mod definition;
 mod dubious;
 mod exported;
 mod flow;
