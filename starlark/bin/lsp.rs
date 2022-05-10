@@ -17,6 +17,12 @@
 
 //! Based on the reference lsp-server example at <https://github.com/rust-analyzer/lsp-server/blob/master/examples/goto_def.rs>.
 
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
+
+use gazebo::prelude::*;
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response};
 use lsp_types::{
     notification::{
@@ -31,6 +37,7 @@ use lsp_types::{
     TextDocumentSyncKind, Url, WorkDoneProgressOptions,
 };
 use serde::de::DeserializeOwned;
+use starlark::syntax::AstModule;
 
 use crate::{
     eval::Context,
@@ -40,6 +47,9 @@ use crate::{
 struct Backend {
     connection: Connection,
     starlark: Context,
+    /// The `AstModule` from the last time that a file was opened / changed and parsed successfully.
+    /// Entries are evicted when the file is closed.
+    last_valid_parse: RwLock<HashMap<Url, Arc<AstModule>>>,
 }
 
 fn to_severity(x: Severity) -> DiagnosticSeverity {
@@ -84,12 +94,20 @@ impl Backend {
         }
     }
 
+    #[allow(dead_code)]
+    fn get_ast(&self, uri: &Url) -> Option<Arc<AstModule>> {
+        let last_valid_parse = self.last_valid_parse.read().unwrap();
+        last_valid_parse.get(uri).duped()
+    }
+
     fn validate(&self, uri: Url, version: Option<i64>, text: String) {
-        let diags = self
-            .starlark
-            .file_with_contents(&uri.to_string(), text)
-            .map(to_diagnostic)
-            .collect();
+        let eval_result = self.starlark.file_with_contents(&uri.to_string(), text);
+        let diags = eval_result.messages.map(to_diagnostic).collect();
+        if let Some(ast) = eval_result.ast {
+            let ast = Arc::new(ast);
+            let mut last_valid_parse = self.last_valid_parse.write().unwrap();
+            last_valid_parse.insert(uri.clone(), ast);
+        }
         self.publish_diagnostics(uri, diags, version)
     }
 
@@ -112,6 +130,10 @@ impl Backend {
     }
 
     fn did_close(&self, params: DidCloseTextDocumentParams) {
+        {
+            let mut last_valid_parse = self.last_valid_parse.write().unwrap();
+            last_valid_parse.remove(&params.text_document.uri);
+        }
         self.publish_diagnostics(params.text_document.uri, Vec::new(), None)
     }
 }
@@ -189,6 +211,7 @@ pub(crate) fn server(starlark: Context) -> anyhow::Result<()> {
     Backend {
         connection,
         starlark,
+        last_valid_parse: RwLock::default(),
     }
     .main_loop(initialization_params)?;
     io_threads.join()?;

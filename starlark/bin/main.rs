@@ -208,7 +208,7 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
         match rl.read_line("$> ")? {
             Some(line) => {
                 let mut stats = Stats::default();
-                drain(ctx.expression(line), false, &mut stats);
+                drain(ctx.expression(line).messages, false, &mut stats);
             }
             // User pressed EOF - disconnected terminal, or similar
             None => return Ok(()),
@@ -247,12 +247,12 @@ fn main() -> anyhow::Result<()> {
             let mut stats = Stats::default();
             for e in args.evaluate.clone() {
                 stats.increment_file();
-                drain(ctx.expression(e), args.json, &mut stats);
+                drain(ctx.expression(e).messages, args.json, &mut stats);
             }
 
             for file in expand_dirs(ext, args.files.clone()) {
                 stats.increment_file();
-                drain(ctx.file(&file), args.json, &mut stats);
+                drain(ctx.file(&file).messages, args.json, &mut stats);
             }
 
             if args.interactive {

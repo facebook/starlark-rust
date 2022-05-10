@@ -44,6 +44,15 @@ pub(crate) struct Context {
     pub(crate) module: Option<Module>,
 }
 
+/// The outcome of evaluating (checking, parsing or running) given starlark code.
+pub(crate) struct EvalResult<T: Iterator<Item = Message>> {
+    /// The diagnostic and error messages from evaluating a given piece of starlark code.
+    pub messages: T,
+    /// If the code is only parsed, not run, and there were no errors, this will contain
+    /// the parsed module. Otherwise, it will be `None`
+    pub ast: Option<AstModule>,
+}
+
 impl Context {
     pub(crate) fn new(
         mode: ContextMode,
@@ -83,32 +92,43 @@ impl Context {
         module
     }
 
-    fn go(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
+    fn go(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = Message>> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
-        match self.mode {
+        let final_ast = match self.mode {
             ContextMode::Check => {
                 warnings = Either::Right(self.check(&ast));
+                Some(ast)
             }
             ContextMode::Run => {
-                errors = Either::Right(self.run(file, ast));
+                errors = Either::Right(self.run(file, ast).messages);
+                None
             }
+        };
+        EvalResult {
+            messages: warnings.chain(errors),
+            ast: final_ast,
         }
-        warnings.chain(errors)
     }
 
     // Convert an anyhow over iterator of Message, into an iterator of Message
     fn err(
         file: &str,
-        result: anyhow::Result<impl Iterator<Item = Message>>,
-    ) -> impl Iterator<Item = Message> {
+        result: anyhow::Result<EvalResult<impl Iterator<Item = Message>>>,
+    ) -> EvalResult<impl Iterator<Item = Message>> {
         match result {
-            Err(e) => Either::Left(iter::once(Message::from_anyhow(file, e))),
-            Ok(res) => Either::Right(res),
+            Err(e) => EvalResult {
+                messages: Either::Left(iter::once(Message::from_anyhow(file, e))),
+                ast: None,
+            },
+            Ok(res) => EvalResult {
+                messages: Either::Right(res.messages),
+                ast: res.ast,
+            },
         }
     }
 
-    pub(crate) fn expression(&self, content: String) -> impl Iterator<Item = Message> {
+    pub(crate) fn expression(&self, content: String) -> EvalResult<impl Iterator<Item = Message>> {
         let file = "expression";
         Self::err(
             file,
@@ -116,7 +136,7 @@ impl Context {
         )
     }
 
-    pub(crate) fn file(&self, file: &Path) -> impl Iterator<Item = Message> {
+    pub(crate) fn file(&self, file: &Path) -> EvalResult<impl Iterator<Item = Message>> {
         let filename = &file.to_string_lossy();
         Self::err(
             filename,
@@ -130,14 +150,14 @@ impl Context {
         &self,
         filename: &str,
         content: String,
-    ) -> impl Iterator<Item = Message> {
+    ) -> EvalResult<impl Iterator<Item = Message>> {
         Self::err(
             filename,
             AstModule::parse(filename, content, &dialect()).map(|module| self.go(filename, module)),
         )
     }
 
-    fn run(&self, file: &str, ast: AstModule) -> impl Iterator<Item = Message> {
+    fn run(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = Message>> {
         let new_module;
         let module = match self.module.as_ref() {
             Some(module) => module,
@@ -155,7 +175,10 @@ impl Context {
                 if self.print_non_none && !v.is_none() {
                     println!("{}", v);
                 }
-                iter::empty()
+                EvalResult {
+                    messages: iter::empty(),
+                    ast: None,
+                }
             }),
         )
     }
