@@ -1392,6 +1392,7 @@ pub(crate) struct InstrDefData {
     pub(crate) params: Vec<IrSpanned<ParameterCompiled<u32>>>,
     pub(crate) return_type: Option<IrSpanned<u32>>,
     pub(crate) info: FrozenRef<'static, DefInfo>,
+    pub(crate) check_types: bool,
 }
 
 impl InstrNoFlowImpl for InstrDefImpl {
@@ -1423,12 +1424,15 @@ impl InstrNoFlowImpl for InstrDefImpl {
                 assert!(*t == pop_index);
                 let v = pop[pop_index as usize];
                 pop_index += 1;
-                parameter_types.push((
-                    i,
-                    name.name.clone(),
-                    v,
-                    expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval).map_err(|e| e.0)?,
-                ));
+                if def_data.check_types {
+                    parameter_types.push((
+                        i,
+                        name.name.clone(),
+                        v,
+                        expr_throw(TypeCompiled::new(v, eval.heap()), x.span, eval)
+                            .map_err(|e| e.0)?,
+                    ));
+                }
             }
             match &x.node {
                 ParameterCompiled::Normal(n, _) => parameters.required(&n.name),
@@ -1437,7 +1441,7 @@ impl InstrNoFlowImpl for InstrDefImpl {
                     let value = pop[pop_index as usize];
                     pop_index += 1;
 
-                    if ty.is_some() {
+                    if ty.is_some() && def_data.check_types {
                         // Check the type of the default
                         let (_, _, ty_value, ty_compiled) = parameter_types.last().unwrap();
                         expr_throw(
@@ -1466,11 +1470,15 @@ impl InstrNoFlowImpl for InstrDefImpl {
                 assert!(v.node == pop_index);
                 let value = pop[pop_index as usize];
                 pop_index += 1;
-                Some((
-                    value,
-                    expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)
-                        .map_err(|e| e.0)?,
-                ))
+                if def_data.check_types {
+                    Some((
+                        value,
+                        expr_throw(TypeCompiled::new(value, eval.heap()), v.span, eval)
+                            .map_err(|e| e.0)?,
+                    ))
+                } else {
+                    None
+                }
             }
         };
         assert!(pop_index as usize == pop.len());

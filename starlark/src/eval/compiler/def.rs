@@ -214,6 +214,7 @@ pub(crate) struct DefCompiled {
     pub(crate) params: Vec<IrSpanned<ParameterCompiled<IrSpanned<ExprCompiled>>>>,
     pub(crate) return_type: Option<Box<IrSpanned<ExprCompiled>>>,
     pub(crate) info: FrozenRef<'static, DefInfo>,
+    pub(crate) check_types: bool,
 }
 
 /// Function body suitable for inlining.
@@ -455,6 +456,7 @@ impl Compiler<'_, '_, '_> {
             params,
             return_type,
             info,
+            check_types: self.check_types,
         })
     }
 }

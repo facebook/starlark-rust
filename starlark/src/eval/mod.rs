@@ -44,7 +44,7 @@ pub(crate) mod compiler;
 pub(crate) mod runtime;
 pub use runtime::profile::ProfileMode;
 
-use crate::eval::compiler::def::DefInfo;
+use crate::{eval::compiler::def::DefInfo, syntax::DialectTypes};
 
 #[cfg(test)]
 mod tests;
@@ -127,6 +127,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             has_before_stmt: self.before_stmt.enabled(),
             bc_profile: self.bc_profile.enabled(),
             eval: self,
+            check_types: dialect.enable_types == DialectTypes::Enable,
         };
 
         let res = compiler.eval_module(statement, local_count);

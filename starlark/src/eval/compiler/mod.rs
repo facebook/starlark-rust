@@ -89,6 +89,7 @@ pub(crate) struct Compiler<'v, 'a, 'e> {
     pub(crate) constants: Constants,
     pub(crate) has_before_stmt: bool,
     pub(crate) bc_profile: bool,
+    pub(crate) check_types: bool,
 }
 
 impl Compiler<'_, '_, '_> {

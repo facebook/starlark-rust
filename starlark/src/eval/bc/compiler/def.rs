@@ -36,6 +36,7 @@ impl DefCompiled {
             ref params,
             ref return_type,
             info,
+            check_types,
         } = *self;
         let function_name = function_name.clone();
         let mut value_count = 0;
@@ -62,6 +63,7 @@ impl DefCompiled {
             params,
             return_type,
             info,
+            check_types,
         };
 
         bc.write_instr::<InstrDef>(span, (ArgPopsStack(value_count), instr_def_data));
