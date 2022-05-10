@@ -60,7 +60,18 @@ struct Args {
     )]
     interactive: bool,
 
-    #[structopt(long = "lsp", help = "Start an LSP server.")]
+    #[structopt(
+        long = "lsp",
+        help = "Start an LSP server.",
+        conflicts_with_all = &[
+            "interactive",
+            "dap",
+            "check",
+            "json",
+            "evaluate",
+            "files",
+        ],
+    )]
     lsp: bool,
 
     #[structopt(
@@ -229,30 +240,30 @@ fn main() -> anyhow::Result<()> {
             args.interactive,
         )?;
 
-        let mut stats = Stats::default();
-        for e in args.evaluate.clone() {
-            stats.increment_file();
-            drain(ctx.expression(e), args.json, &mut stats);
-        }
-
-        for file in expand_dirs(ext, args.files.clone()) {
-            stats.increment_file();
-            drain(ctx.file(&file), args.json, &mut stats);
-        }
-
-        if args.interactive {
-            interactive(&ctx)?;
-        }
-
         if args.lsp {
             ctx.mode = ContextMode::Check;
             lsp::server(ctx)?;
-        }
+        } else {
+            let mut stats = Stats::default();
+            for e in args.evaluate.clone() {
+                stats.increment_file();
+                drain(ctx.expression(e), args.json, &mut stats);
+            }
 
-        if !args.json {
-            println!("{}", stats);
-            if stats.error > 0 {
-                return Err(anyhow!("Failed with {} errors", stats.error));
+            for file in expand_dirs(ext, args.files.clone()) {
+                stats.increment_file();
+                drain(ctx.file(&file), args.json, &mut stats);
+            }
+
+            if args.interactive {
+                interactive(&ctx)?;
+            }
+
+            if !args.json {
+                println!("{}", stats);
+                if stats.error > 0 {
+                    return Err(anyhow!("Failed with {} errors", stats.error));
+                }
             }
         }
     }
