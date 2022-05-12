@@ -16,7 +16,7 @@ There are at least three implementations of Starlark, [one in Java](https://gith
 
 ```shell
 $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-$ cargo run -- --repl
+$ cargo run
 $> 1+2
 3
 ```

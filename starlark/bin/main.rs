@@ -53,14 +53,6 @@ mod types;
 )]
 struct Args {
     #[structopt(
-        long = "interactive",
-        long = "repl",
-        short = "i",
-        help = "Start an interactive REPL."
-    )]
-    interactive: bool,
-
-    #[structopt(
         long = "lsp",
         help = "Start an LSP server.",
         conflicts_with_all = &[
@@ -224,6 +216,8 @@ fn main() -> anyhow::Result<()> {
     if args.dap {
         dap::server();
     } else {
+        let is_interactive = args.evaluate.is_empty() && args.files.is_empty();
+
         let ext = args
             .extension
             .as_ref()
@@ -235,9 +229,9 @@ fn main() -> anyhow::Result<()> {
             } else {
                 ContextMode::Run
             },
-            !args.evaluate.is_empty() || args.interactive,
+            !args.evaluate.is_empty() || is_interactive,
             &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
-            args.interactive,
+            is_interactive,
         )?;
 
         if args.lsp {
@@ -255,7 +249,7 @@ fn main() -> anyhow::Result<()> {
                 drain(ctx.file(&file).messages, args.json, &mut stats);
             }
 
-            if args.interactive {
+            if is_interactive {
                 interactive(&ctx)?;
             }
 
