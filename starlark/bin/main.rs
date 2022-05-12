@@ -237,6 +237,8 @@ fn main() -> anyhow::Result<()> {
         if args.lsp {
             ctx.mode = ContextMode::Check;
             lsp::server(ctx)?;
+        } else if is_interactive {
+            interactive(&ctx)?;
         } else {
             let mut stats = Stats::default();
             for e in args.evaluate.clone() {
@@ -247,10 +249,6 @@ fn main() -> anyhow::Result<()> {
             for file in expand_dirs(ext, args.files.clone()) {
                 stats.increment_file();
                 drain(ctx.file(&file).messages, args.json, &mut stats);
-            }
-
-            if is_interactive {
-                interactive(&ctx)?;
             }
 
             if !args.json {
