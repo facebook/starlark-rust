@@ -117,6 +117,25 @@ unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>> Trace<'v> for (T1, T2) {
     }
 }
 
+unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>, T3: Trace<'v>> Trace<'v> for (T1, T2, T3) {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
+        self.2.trace(tracer);
+    }
+}
+
+unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>, T3: Trace<'v>, T4: Trace<'v>> Trace<'v>
+    for (T1, T2, T3, T4)
+{
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
+        self.2.trace(tracer);
+        self.3.trace(tracer);
+    }
+}
+
 unsafe impl<'v> Trace<'v> for Value<'v> {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         tracer.trace(self)

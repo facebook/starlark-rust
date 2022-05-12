@@ -69,6 +69,12 @@ struct StmtCompiledCell {
     cell: UnsafeCell<Bc>,
 }
 
+unsafe impl<'v> Trace<'v> for StmtCompiledCell {
+    fn trace(&mut self, _: &Tracer<'v>) {
+        // Bytecode contains only frozen values.
+    }
+}
+
 unsafe impl Sync for StmtCompiledCell {}
 unsafe impl Send for StmtCompiledCell {}
 
@@ -463,7 +469,7 @@ impl Compiler<'_, '_, '_> {
 
 /// Starlark function internal representation and implementation of
 /// [`StarlarkValue`].
-#[derive(Derivative, NoSerialize, AnyLifetime)]
+#[derive(Derivative, NoSerialize, AnyLifetime, Trace)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
@@ -556,21 +562,6 @@ impl<'v, T1: ValueLike<'v>> DefGen<T1> {
 impl<T1> DefGen<T1> {
     pub(crate) fn scope_names(&self) -> &ScopeNames {
         &self.def_info.scope_names
-    }
-}
-
-unsafe impl<'v> Trace<'v> for Def<'v> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.parameters.trace(tracer);
-        for (_, _, x, _) in self.parameter_types.iter_mut() {
-            x.trace(tracer);
-        }
-        for (x, _) in self.return_type.iter_mut() {
-            x.trace(tracer);
-        }
-        for x in self.captured.iter_mut() {
-            x.trace(tracer);
-        }
     }
 }
 

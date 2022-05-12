@@ -27,6 +27,8 @@ use std::{
 
 use gazebo::prelude::*;
 
+use crate::values::{Trace, Tracer};
+
 /// A [`FrozenRef`] is essentially a [`FrozenValue`](crate::values::FrozenValue),
 /// and has the same memory and access guarantees as it.
 /// However, this keeps the type of the type `T` of the actual
@@ -35,6 +37,12 @@ use gazebo::prelude::*;
 #[derive(Clone_, Dupe_, Copy_, Debug)]
 pub struct FrozenRef<'f, T: 'f + ?Sized> {
     pub(crate) value: &'f T,
+}
+
+unsafe impl<'v, 'f, T: 'f + ?Sized> Trace<'v> for FrozenRef<'f, T> {
+    fn trace(&mut self, _: &Tracer<'v>) {
+        // Do nothing, because `FrozenRef` can only point to frozen value.
+    }
 }
 
 impl<'f, T: 'f + ?Sized> FrozenRef<'f, T> {
@@ -124,6 +132,12 @@ where
 
 /// `Atomic<Option<FrozenRef<T>>>`.
 pub(crate) struct AtomicFrozenRefOption<T>(atomic::AtomicPtr<T>);
+
+unsafe impl<'v, T> Trace<'v> for AtomicFrozenRefOption<T> {
+    fn trace(&mut self, _: &Tracer<'v>) {
+        // Do nothing, because `AtomicFrozenRefOption` holds `FrozenRef`.
+    }
+}
 
 impl<T> AtomicFrozenRefOption<T> {
     pub(crate) fn new(module: Option<FrozenRef<T>>) -> AtomicFrozenRefOption<T> {
