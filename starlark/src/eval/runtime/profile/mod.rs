@@ -20,23 +20,29 @@ use std::str::FromStr;
 use gazebo::dupe::Dupe;
 
 /// How to profile starlark code.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe, derive_more::Display)]
 pub enum ProfileMode {
     /// The heap profile mode provides information about the time spent in each function and allocations
     /// performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     /// This profiling mode is the recommended one.
+    #[display(fmt = "heap")]
     Heap,
     /// Like heap profile, but writes output comparible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
+    #[display(fmt = "heap flame")]
     HeapFlame,
     /// The statement profile mode provides information about time spent in each statement.
+    #[display(fmt = "statement")]
     Stmt,
     /// The bytecode profile mode provides information about bytecode instructions.
+    #[display(fmt = "bytecode")]
     Bytecode,
     /// The bytecode profile mode provides information about bytecode instruction pairs.
+    #[display(fmt = "bytecode pairs")]
     BytecodePairs,
     /// Provide output compatible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
+    #[display(fmt = "time flame")]
     Flame,
 }
 
