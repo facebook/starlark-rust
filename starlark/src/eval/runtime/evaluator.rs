@@ -188,18 +188,18 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// it's better to run at most one profiler at a time.
     pub fn enable_profile(&mut self, mode: &ProfileMode) {
         match mode {
-            ProfileMode::Heap | ProfileMode::HeapFlame => {
+            ProfileMode::HeapSummary | ProfileMode::HeapFlame => {
                 self.heap_profile.enable();
                 self.heap_or_flame_profile = true;
                 // Disable GC because otherwise why lose the profile records, as we use the heap
                 // to store a complete list of what happened in linear order.
                 self.disable_gc = true;
             }
-            ProfileMode::Stmt => {
+            ProfileMode::Statement => {
                 self.stmt_profile.enable();
                 self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
             }
-            ProfileMode::Flame => {
+            ProfileMode::TimeFlame => {
                 self.flame_profile.enable();
                 self.heap_or_flame_profile = true;
             }
@@ -244,7 +244,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         filename: P,
     ) -> anyhow::Result<()> {
         match mode {
-            ProfileMode::Heap => self
+            ProfileMode::HeapSummary => self
                 .heap_profile
                 .write(filename.as_ref(), self.heap(), HeapProfileFormat::Summary)
                 .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into())),
@@ -256,14 +256,14 @@ impl<'v, 'a> Evaluator<'v, 'a> {
                     HeapProfileFormat::FlameGraph,
                 )
                 .unwrap_or_else(|| Err(EvaluatorError::HeapProfilingNotEnabled.into())),
-            ProfileMode::Stmt => self
+            ProfileMode::Statement => self
                 .stmt_profile
                 .write(filename.as_ref())
                 .unwrap_or_else(|| Err(EvaluatorError::StmtProfilingNotEnabled.into())),
             ProfileMode::Bytecode | ProfileMode::BytecodePairs => {
                 self.bc_profile.write_csv(filename.as_ref())
             }
-            ProfileMode::Flame => self
+            ProfileMode::TimeFlame => self
                 .flame_profile
                 .write(filename.as_ref())
                 .unwrap_or_else(|| Err(EvaluatorError::FlameProfilingNotEnabled.into())),

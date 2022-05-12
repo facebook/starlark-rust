@@ -25,15 +25,15 @@ pub enum ProfileMode {
     /// The heap profile mode provides information about the time spent in each function and allocations
     /// performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     /// This profiling mode is the recommended one.
-    #[display(fmt = "heap")]
-    Heap,
+    #[display(fmt = "heap summary")]
+    HeapSummary,
     /// Like heap profile, but writes output comparible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     #[display(fmt = "heap flame")]
     HeapFlame,
     /// The statement profile mode provides information about time spent in each statement.
     #[display(fmt = "statement")]
-    Stmt,
+    Statement,
     /// The bytecode profile mode provides information about bytecode instructions.
     #[display(fmt = "bytecode")]
     Bytecode,
@@ -43,7 +43,7 @@ pub enum ProfileMode {
     /// Provide output compatible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     #[display(fmt = "time flame")]
-    Flame,
+    TimeFlame,
 }
 
 impl FromStr for ProfileMode {
@@ -51,9 +51,9 @@ impl FromStr for ProfileMode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "heap" => Ok(Self::Heap),
+            "heap" => Ok(Self::HeapSummary),
             "heap-flame" => Ok(Self::HeapFlame),
-            "stmt" => Ok(Self::Stmt),
+            "stmt" => Ok(Self::Statement),
             "bytecode" => Ok(Self::Bytecode),
             "bytecode-pairs" => Ok(Self::BytecodePairs),
             s => Err(anyhow::anyhow!("Invalid ProfileMode: `{}`", s)),

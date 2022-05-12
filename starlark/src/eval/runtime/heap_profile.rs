@@ -618,7 +618,7 @@ f
         let globals = Globals::standard();
         let module = Module::new();
         let mut eval = Evaluator::new(&module);
-        eval.enable_profile(&ProfileMode::Heap);
+        eval.enable_profile(&ProfileMode::HeapSummary);
         let f = eval.eval_module(ast, &globals)?;
         // first check module profiling works
         HeapProfile::write_summarized_heap_profile_to(&mut Vec::new(), module.heap())?;
@@ -627,7 +627,7 @@ f
         // second check function profiling works
         let module = Module::new();
         let mut eval = Evaluator::new(&module);
-        eval.enable_profile(&ProfileMode::Heap);
+        eval.enable_profile(&ProfileMode::HeapSummary);
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         HeapProfile::write_summarized_heap_profile_to(&mut Vec::new(), module.heap())?;
         HeapProfile::write_flame_heap_profile_to(&mut Vec::new(), module.heap())?;
@@ -636,7 +636,7 @@ f
         let module = Module::new();
         let mut eval = Evaluator::new(&module);
         module.heap().alloc("Thing that goes before");
-        eval.enable_profile(&ProfileMode::Heap);
+        eval.enable_profile(&ProfileMode::HeapSummary);
         eval.eval_function(f, &[Value::new_int(100)], &[])?;
         module.heap().alloc("Thing that goes after");
         HeapProfile::write_summarized_heap_profile_to(&mut Vec::new(), module.heap())?;
@@ -662,7 +662,7 @@ _ignore = str([1])     # allocate a string in non_drop
         let globals = Globals::standard();
         let module = Module::new();
         let mut eval = Evaluator::new(&module);
-        eval.enable_profile(&ProfileMode::Heap);
+        eval.enable_profile(&ProfileMode::HeapSummary);
 
         eval.eval_module(ast, &globals).unwrap();
 
