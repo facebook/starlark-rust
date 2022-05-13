@@ -29,5 +29,4 @@ mod interop;
 mod opt;
 mod runtime;
 mod type_annot;
-mod type_is;
 mod uncategorized;

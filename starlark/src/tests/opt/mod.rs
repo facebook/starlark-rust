@@ -20,6 +20,7 @@
 mod def_inline;
 mod if_rand;
 mod speculative_exec;
+mod type_is;
 
 use crate::{eval::bc::opcode::BcOpcode, tests::bc::test_instrs};
 
