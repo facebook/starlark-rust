@@ -21,6 +21,25 @@ use crate::{
     syntax::AstModule,
 };
 
+/// The location of a definition for a given symbol. See [`AstModule::find_definition`].
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum DefinitionLocation {
+    /// The definition was found at this location in the current file.
+    Location(ResolvedSpan),
+    /// The symbol was loaded from another file. "location" is the position within the
+    /// "load()" statement, but additionally, the path in that load statement, and the
+    /// name of the symbol within that file are provided so that additional lookups can
+    /// happen to find the original definition.
+    LoadedLocation {
+        location: ResolvedSpan,
+        path: String,
+        name: String,
+    },
+    /// Either the provided location was not an access of a variable, or no definition
+    /// could be found.
+    NotFound,
+}
+
 impl AstModule {
     /// Attempts to find the location where a symbol is defined in the module, or `None` if it
     /// was not defined anywhere in this file.
@@ -29,15 +48,15 @@ impl AstModule {
     ///
     /// This method also handles scoping properly (i.e. an access of "foo" in a function
     /// will return location of the parameter "foo", even if there is a global called "foo").
-    pub fn find_definition(&self, line: u32, col: u32) -> Option<ResolvedSpan> {
-        enum DefinitionLocation<'a> {
+    pub fn find_definition(&self, line: u32, col: u32) -> DefinitionLocation {
+        // The inner structure here lets us just hold references, and has some un-resolved
+        // spans and the like. We turn it into a more proper structure at the end.
+        enum Definition<'a> {
             // The location of the definition of the symbol at the current line/column
             Location(Span),
             LoadedLocation {
                 location: Span,
-                #[allow(dead_code)]
                 path: &'a str,
-                #[allow(dead_code)]
                 name: &'a str,
             },
             // The definition was not found in the current scope but the name of an identifier
@@ -50,7 +69,7 @@ impl AstModule {
 
         // Look at the given scope and child scopes to try to find the definition of the symbol
         // accessed at Pos.
-        fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> DefinitionLocation<'a> {
+        fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> Definition<'a> {
             for bind in &scope.inner {
                 match bind {
                     Bind::Set(_, _) => {}
@@ -58,46 +77,43 @@ impl AstModule {
                         if g.span.begin() <= pos && pos <= g.span.end() {
                             let res = match scope.bound.get(g.node.as_str()) {
                                 Some((Assigner::Load { path, name }, span)) => {
-                                    DefinitionLocation::LoadedLocation {
+                                    Definition::LoadedLocation {
                                         location: *span,
                                         path,
                                         name: name.as_str(),
                                     }
                                 }
-                                Some((_, span)) => DefinitionLocation::Location(*span),
+                                Some((_, span)) => Definition::Location(*span),
                                 // We know the symbol name, but it might only be available in
                                 // an outer scope.
-                                None => DefinitionLocation::Name(g.node.as_str()),
+                                None => Definition::Name(g.node.as_str()),
                             };
                             return res;
                         }
                     }
                     Bind::Flow => {}
                     Bind::Scope(inner_scope) => match find_definition_in_scope(inner_scope, pos) {
-                        x @ DefinitionLocation::Location(_) => {
+                        x @ Definition::Location(_) | x @ Definition::LoadedLocation { .. } => {
                             return x;
                         }
-                        x @ DefinitionLocation::LoadedLocation { .. } => {
-                            return x;
-                        }
-                        DefinitionLocation::Name(missing_symbol) => {
+                        Definition::Name(missing_symbol) => {
                             return match scope.bound.get(missing_symbol) {
-                                None => DefinitionLocation::Name(missing_symbol),
+                                None => Definition::Name(missing_symbol),
                                 Some((Assigner::Load { path, name }, span)) => {
-                                    DefinitionLocation::LoadedLocation {
+                                    Definition::LoadedLocation {
                                         location: *span,
                                         path,
                                         name: name.as_str(),
                                     }
                                 }
-                                Some((_, span)) => DefinitionLocation::Location(*span),
+                                Some((_, span)) => Definition::Location(*span),
                             };
                         }
-                        DefinitionLocation::NotFound => {}
+                        Definition::NotFound => {}
                     },
                 }
             }
-            DefinitionLocation::NotFound
+            Definition::NotFound
         }
 
         let scope = scope(self);
@@ -105,17 +121,28 @@ impl AstModule {
         let current_pos = std::cmp::min(line_span.begin() + col, line_span.end());
 
         match find_definition_in_scope(&scope, current_pos) {
-            DefinitionLocation::Location(span) => Some(self.codemap.resolve_span(span)),
-            DefinitionLocation::Name(missing_symbol) => scope
-                .bound
-                .get(missing_symbol)
-                .map(|(_, span)| self.codemap.resolve_span(*span)),
-            DefinitionLocation::NotFound => None,
-            DefinitionLocation::LoadedLocation {
+            Definition::Location(span) => {
+                DefinitionLocation::Location(self.codemap.resolve_span(span))
+            }
+            Definition::Name(missing_symbol) => match scope.bound.get(missing_symbol) {
+                None => DefinitionLocation::NotFound,
+                Some((Assigner::Load { path, name }, span)) => DefinitionLocation::LoadedLocation {
+                    location: self.codemap.resolve_span(*span),
+                    path: path.node.clone(),
+                    name: name.node.clone(),
+                },
+                Some((_, span)) => DefinitionLocation::Location(self.codemap.resolve_span(*span)),
+            },
+            Definition::NotFound => DefinitionLocation::NotFound,
+            Definition::LoadedLocation {
                 location,
-                path: _,
-                name: _,
-            } => Some(self.codemap.resolve_span(location)),
+                path,
+                name,
+            } => DefinitionLocation::LoadedLocation {
+                location: self.codemap.resolve_span(location),
+                path: path.to_owned(),
+                name: name.to_owned(),
+            },
         }
     }
 }
@@ -308,6 +335,7 @@ mod test {
     use textwrap::dedent;
 
     use super::helpers::FixtureWithRanges;
+    use crate::analysis::DefinitionLocation;
 
     #[test]
     fn find_definition_loaded_symbol() -> anyhow::Result<()> {
@@ -334,16 +362,21 @@ mod test {
         let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
         let module = parsed.module()?;
 
+        let expected = DefinitionLocation::LoadedLocation {
+            location: parsed.span("print"),
+            path: "bar.star".to_owned(),
+            name: "other_print".to_owned(),
+        };
         assert_eq!(
-            Some(parsed.span("print")),
+            expected,
             module.find_definition(parsed.begin_line("p1"), parsed.begin_column("p1"))
         );
         assert_eq!(
-            Some(parsed.span("print")),
+            expected,
             module.find_definition(parsed.begin_line("p2"), parsed.begin_column("p2"))
         );
         assert_eq!(
-            Some(parsed.span("print")),
+            expected,
             module.find_definition(parsed.begin_line("p3"), parsed.begin_column("p3"))
         );
         Ok(())
@@ -374,29 +407,31 @@ mod test {
         let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
         let module = parsed.module()?;
 
+        let expected_add = DefinitionLocation::Location(parsed.span("add"));
+        let expected_invalid = DefinitionLocation::Location(parsed.span("invalid_symbol"));
         assert_eq!(
-            Some(parsed.span("add")),
+            expected_add,
             module.find_definition(parsed.begin_line("a1"), parsed.begin_column("a1"))
         );
         assert_eq!(
-            Some(parsed.span("add")),
+            expected_add,
             module.find_definition(parsed.begin_line("a2"), parsed.begin_column("a2"))
         );
         assert_eq!(
-            Some(parsed.span("add")),
+            expected_add,
             module.find_definition(parsed.begin_line("a3"), parsed.begin_column("a3"))
         );
 
         assert_eq!(
-            Some(parsed.span("invalid_symbol")),
+            expected_invalid,
             module.find_definition(parsed.begin_line("i1"), parsed.begin_column("i1"))
         );
         assert_eq!(
-            Some(parsed.span("invalid_symbol")),
+            expected_invalid,
             module.find_definition(parsed.begin_line("i2"), parsed.begin_column("i2"))
         );
         assert_eq!(
-            Some(parsed.span("invalid_symbol")),
+            expected_invalid,
             module.find_definition(parsed.begin_line("i3"), parsed.begin_column("i3"))
         );
         Ok(())
@@ -428,7 +463,7 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            Some(parsed.span("x")),
+            DefinitionLocation::Location(parsed.span("x")),
             module.find_definition(parsed.begin_line("x_param"), parsed.begin_column("x_param"))
         );
         Ok(())
@@ -460,20 +495,20 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            Some(parsed.span("x")),
+            DefinitionLocation::Location(parsed.span("x")),
             module.find_definition(parsed.begin_line("x_var"), parsed.begin_column("x_var"))
         );
         assert_eq!(
-            Some(parsed.span("y2")),
+            DefinitionLocation::Location(parsed.span("y2")),
             module.find_definition(parsed.begin_line("y_var1"), parsed.begin_column("y_var1"))
         );
 
         assert_eq!(
-            Some(parsed.span("y1")),
+            DefinitionLocation::Location(parsed.span("y1")),
             module.find_definition(parsed.begin_line("y_var2"), parsed.begin_column("y_var2"))
         );
         assert_eq!(
-            None,
+            DefinitionLocation::NotFound,
             module.find_definition(parsed.begin_line("z_var"), parsed.begin_column("z_var"))
         );
         Ok(())
@@ -505,7 +540,7 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            None,
+            DefinitionLocation::NotFound,
             module.find_definition(parsed.begin_line("no_def"), parsed.begin_column("no_def"))
         );
 

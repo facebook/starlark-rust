@@ -37,7 +37,7 @@ use lsp_types::{
 };
 use serde::de::DeserializeOwned;
 
-use crate::syntax::AstModule;
+use crate::{analysis::DefinitionLocation, syntax::AstModule};
 
 /// The result of evaluating a starlark program for use in the LSP.
 pub struct LspEvalResult {
@@ -131,15 +131,29 @@ impl<T: LspContext> Backend<T> {
                     params.text_document_position_params.position.line,
                     params.text_document_position_params.position.character,
                 ) {
-                    Some(span) => GotoDefinitionResponse::Scalar(Location {
-                        uri: params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .clone(),
-                        range: span.into(),
-                    }),
-                    None => GotoDefinitionResponse::Array(vec![]),
+                    DefinitionLocation::Location(span) => {
+                        GotoDefinitionResponse::Scalar(Location {
+                            uri: params
+                                .text_document_position_params
+                                .text_document
+                                .uri
+                                .clone(),
+                            range: span.into(),
+                        })
+                    }
+
+                    DefinitionLocation::LoadedLocation { location, .. } => {
+                        GotoDefinitionResponse::Scalar(Location {
+                            uri: params
+                                .text_document_position_params
+                                .text_document
+                                .uri
+                                .clone(),
+                            range: location.into(),
+                        })
+                    }
+
+                    DefinitionLocation::NotFound => GotoDefinitionResponse::Array(vec![]),
                 }
             }
             None => GotoDefinitionResponse::Array(vec![]),

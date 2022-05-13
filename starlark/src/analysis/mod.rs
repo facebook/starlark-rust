@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+pub(crate) use definition::DefinitionLocation;
 pub use types::{EvalMessage, EvalSeverity, Lint};
 
 use crate::{analysis::types::LintT, syntax::AstModule};
