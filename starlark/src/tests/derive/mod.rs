@@ -15,5 +15,4 @@
  * limitations under the License.
  */
 
-mod derive;
-mod freeze_access_value;
+mod freeze;
