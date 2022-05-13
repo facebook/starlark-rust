@@ -366,7 +366,7 @@ impl<K, V> SmallMap<K, V> {
 
     /// Insert an entry into the map without checking for a duplicate key.
     #[inline]
-    fn insert_unique_unchecked(&mut self, key: Hashed<K>, val: V) {
+    fn insert_unique_unchecked(&mut self, key: Hashed<K>, val: V) -> &mut V {
         let hash = key.hash();
         let entry_index = self.entries.len();
         self.entries.insert_unique_unchecked(key, val);
@@ -377,6 +377,8 @@ impl<K, V> SmallMap<K, V> {
         } else {
             debug_assert!(self.entries.len() < NO_INDEX_THRESHOLD + 1);
         }
+        // SAFETY: We've just inserted an entry, so we know entries is not empty.
+        unsafe { &mut self.entries.get_unchecked_mut(self.entries.len() - 1).value }
     }
 
     /// Insert a key-value pair into the map.
@@ -601,6 +603,12 @@ impl<'a, K, V> OccupiedEntry<'a, K, V> {
     pub fn get_mut(&mut self) -> &mut V {
         self.value
     }
+
+    /// Get a reference to the value in the entry with map lifetime.
+    #[inline]
+    pub fn into_mut(self) -> &'a mut V {
+        self.value
+    }
 }
 
 impl<'a, K, V> VacantEntry<'a, K, V>
@@ -614,10 +622,9 @@ where
     }
 
     /// Insert the value into the entry.
-    // NOTE(nga): `VacantEntry::insert` is supposed to return `&'a mut V`
     #[inline]
-    pub fn insert(self, value: V) {
-        self.map.insert_unique_unchecked(self.key, value);
+    pub fn insert(self, value: V) -> &'a mut V {
+        self.map.insert_unique_unchecked(self.key, value)
     }
 }
 
@@ -631,6 +638,15 @@ where
         match self {
             Entry::Occupied(e) => e.key(),
             Entry::Vacant(e) => e.key(),
+        }
+    }
+
+    /// Insert if vacant.
+    #[inline]
+    pub fn or_insert(self, default: V) -> &'a mut V {
+        match self {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => e.insert(default),
         }
     }
 }
@@ -924,7 +940,9 @@ mod tests {
         let mut map = SmallMap::new();
         for i in 0..100 {
             match map.entry(i) {
-                Entry::Vacant(e) => e.insert(i * 2),
+                Entry::Vacant(e) => {
+                    e.insert(i * 2);
+                }
                 Entry::Occupied(..) => panic!(),
             }
             match map.entry(i) {
