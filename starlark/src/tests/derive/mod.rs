@@ -15,5 +15,6 @@
  * limitations under the License.
  */
 
+mod attrs;
 mod freeze;
 mod module;
