@@ -15,48 +15,66 @@
  * limitations under the License.
  */
 
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use gazebo::dupe::Dupe;
 
 /// How to profile starlark code.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe, derive_more::Display)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe)]
 pub enum ProfileMode {
     /// The heap profile mode provides information about the time spent in each function and allocations
     /// performed by each function. Enabling this mode the side effect of disabling garbage-collection.
     /// This profiling mode is the recommended one.
-    #[display(fmt = "heap summary")]
     HeapSummary,
     /// Like heap profile, but writes output comparible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
-    #[display(fmt = "heap flame")]
     HeapFlame,
     /// The statement profile mode provides information about time spent in each statement.
-    #[display(fmt = "statement")]
     Statement,
     /// The bytecode profile mode provides information about bytecode instructions.
-    #[display(fmt = "bytecode")]
     Bytecode,
     /// The bytecode profile mode provides information about bytecode instruction pairs.
-    #[display(fmt = "bytecode pairs")]
     BytecodePairs,
     /// Provide output compatible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
-    #[display(fmt = "time flame")]
     TimeFlame,
+}
+
+impl Display for ProfileMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl ProfileMode {
+    fn name(&self) -> &str {
+        match self {
+            ProfileMode::HeapSummary => "heap-summary",
+            ProfileMode::HeapFlame => "heap-flame",
+            ProfileMode::Statement => "statement",
+            ProfileMode::Bytecode => "bytecode",
+            ProfileMode::BytecodePairs => "bytecode-pairs",
+            ProfileMode::TimeFlame => "time-flame",
+        }
+    }
 }
 
 impl FromStr for ProfileMode {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "heap" => Ok(Self::HeapSummary),
-            "heap-flame" => Ok(Self::HeapFlame),
-            "stmt" => Ok(Self::Statement),
-            "bytecode" => Ok(Self::Bytecode),
-            "bytecode-pairs" => Ok(Self::BytecodePairs),
-            s => Err(anyhow::anyhow!("Invalid ProfileMode: `{}`", s)),
+        for mode in [
+            ProfileMode::HeapSummary,
+            ProfileMode::HeapFlame,
+            ProfileMode::Statement,
+            ProfileMode::Bytecode,
+            ProfileMode::BytecodePairs,
+            ProfileMode::TimeFlame,
+        ] {
+            if s == mode.name() {
+                return Ok(mode);
+            }
         }
+        Err(anyhow::anyhow!("Invalid ProfileMode: `{}`", s))
     }
 }
