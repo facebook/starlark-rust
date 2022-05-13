@@ -24,11 +24,10 @@ use gazebo::prelude::*;
 use itertools::Either;
 use starlark::{
     environment::{FrozenModule, Globals, Module},
+    errors::EvalMessage,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
 };
-
-use crate::types::Message;
 
 #[derive(Debug)]
 pub(crate) enum ContextMode {
@@ -45,7 +44,7 @@ pub(crate) struct Context {
 }
 
 /// The outcome of evaluating (checking, parsing or running) given starlark code.
-pub(crate) struct EvalResult<T: Iterator<Item = Message>> {
+pub(crate) struct EvalResult<T: Iterator<Item = EvalMessage>> {
     /// The diagnostic and error messages from evaluating a given piece of starlark code.
     pub messages: T,
     /// If the code is only parsed, not run, and there were no errors, this will contain
@@ -92,7 +91,7 @@ impl Context {
         module
     }
 
-    fn go(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = Message>> {
+    fn go(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = EvalMessage>> {
         let mut warnings = Either::Left(iter::empty());
         let mut errors = Either::Left(iter::empty());
         let final_ast = match self.mode {
@@ -111,14 +110,14 @@ impl Context {
         }
     }
 
-    // Convert an anyhow over iterator of Message, into an iterator of Message
+    // Convert an anyhow over iterator of EvalMessage, into an iterator of EvalMessage
     fn err(
         file: &str,
-        result: anyhow::Result<EvalResult<impl Iterator<Item = Message>>>,
-    ) -> EvalResult<impl Iterator<Item = Message>> {
+        result: anyhow::Result<EvalResult<impl Iterator<Item = EvalMessage>>>,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
         match result {
             Err(e) => EvalResult {
-                messages: Either::Left(iter::once(Message::from_anyhow(file, e))),
+                messages: Either::Left(iter::once(EvalMessage::from_anyhow(file, e))),
                 ast: None,
             },
             Ok(res) => EvalResult {
@@ -128,7 +127,10 @@ impl Context {
         }
     }
 
-    pub(crate) fn expression(&self, content: String) -> EvalResult<impl Iterator<Item = Message>> {
+    pub(crate) fn expression(
+        &self,
+        content: String,
+    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
         let file = "expression";
         Self::err(
             file,
@@ -136,7 +138,7 @@ impl Context {
         )
     }
 
-    pub(crate) fn file(&self, file: &Path) -> EvalResult<impl Iterator<Item = Message>> {
+    pub(crate) fn file(&self, file: &Path) -> EvalResult<impl Iterator<Item = EvalMessage>> {
         let filename = &file.to_string_lossy();
         Self::err(
             filename,
@@ -150,14 +152,14 @@ impl Context {
         &self,
         filename: &str,
         content: String,
-    ) -> EvalResult<impl Iterator<Item = Message>> {
+    ) -> EvalResult<impl Iterator<Item = EvalMessage>> {
         Self::err(
             filename,
             AstModule::parse(filename, content, &dialect()).map(|module| self.go(filename, module)),
         )
     }
 
-    fn run(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = Message>> {
+    fn run(&self, file: &str, ast: AstModule) -> EvalResult<impl Iterator<Item = EvalMessage>> {
         let new_module;
         let module = match self.module.as_ref() {
             Some(module) => module,
@@ -183,7 +185,7 @@ impl Context {
         )
     }
 
-    fn check(&self, module: &AstModule) -> impl Iterator<Item = Message> {
+    fn check(&self, module: &AstModule) -> impl Iterator<Item = EvalMessage> {
         let mut globals = Vec::new();
         for x in &self.prelude {
             globals.extend(x.names());
@@ -194,7 +196,7 @@ impl Context {
             Some(globals.as_slice())
         };
 
-        module.lint(globals).into_iter().map(Message::from_lint)
+        module.lint(globals).into_iter().map(EvalMessage::from)
     }
 }
 

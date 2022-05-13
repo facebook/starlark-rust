@@ -27,7 +27,7 @@ use annotate_snippets::{
     snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
 };
 
-pub use crate::analysis::Lint;
+pub use crate::analysis::{EvalMessage, EvalSeverity, Lint};
 use crate::{
     codemap::{CodeMap, FileSpan, Span},
     eval::CallStack,

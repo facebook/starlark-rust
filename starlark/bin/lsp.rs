@@ -30,19 +30,15 @@ use lsp_types::{
         PublishDiagnostics,
     },
     request::GotoDefinition,
-    DefinitionOptions, Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, GotoDefinitionParams,
-    GotoDefinitionResponse, InitializeParams, Location, LogMessageParams, MessageType,
-    NumberOrString, OneOf, Position, PublishDiagnosticsParams, Range, ServerCapabilities,
+    DefinitionOptions, Diagnostic, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
+    Location, LogMessageParams, MessageType, OneOf, PublishDiagnosticsParams, ServerCapabilities,
     TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
 };
 use serde::de::DeserializeOwned;
 use starlark::syntax::AstModule;
 
-use crate::{
-    eval::Context,
-    types::{Message as StarlarkMessage, Severity},
-};
+use crate::eval::Context;
 
 struct Backend {
     connection: Connection,
@@ -50,34 +46,6 @@ struct Backend {
     /// The `AstModule` from the last time that a file was opened / changed and parsed successfully.
     /// Entries are evicted when the file is closed.
     last_valid_parse: RwLock<HashMap<Url, Arc<AstModule>>>,
-}
-
-fn to_severity(x: Severity) -> DiagnosticSeverity {
-    match x {
-        Severity::Error => DiagnosticSeverity::Error,
-        Severity::Warning => DiagnosticSeverity::Warning,
-        Severity::Advice => DiagnosticSeverity::Hint,
-        Severity::Disabled => DiagnosticSeverity::Information,
-    }
-}
-
-fn to_diagnostic(x: StarlarkMessage) -> Diagnostic {
-    let range = match x.span {
-        Some(s) => Range::new(
-            Position::new(s.begin_line as u32, s.begin_column as u32),
-            Position::new(s.end_line as u32, s.end_column as u32),
-        ),
-        _ => Range::default(),
-    };
-    Diagnostic::new(
-        range,
-        Some(to_severity(x.severity)),
-        Some(NumberOrString::String(x.name)),
-        None,
-        x.description,
-        None,
-        None,
-    )
 }
 
 /// The logic implementations of stuff
@@ -101,7 +69,7 @@ impl Backend {
 
     fn validate(&self, uri: Url, version: Option<i64>, text: String) {
         let eval_result = self.starlark.file_with_contents(&uri.to_string(), text);
-        let diags = eval_result.messages.map(to_diagnostic).collect();
+        let diags = eval_result.messages.map(Diagnostic::from).collect();
         if let Some(ast) = eval_result.ast {
             let ast = Arc::new(ast);
             let mut last_valid_parse = self.last_valid_parse.write().unwrap();

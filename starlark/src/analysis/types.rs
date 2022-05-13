@@ -17,9 +17,14 @@
 
 use std::fmt::{self, Display};
 
-use gazebo::variants::VariantName;
+use gazebo::{prelude::*, variants::VariantName};
+use lsp_types::{Diagnostic, DiagnosticSeverity, NumberOrString, Range};
+use serde::Serialize;
 
-use crate::codemap::{CodeMap, FileSpan, Span};
+use crate::{
+    codemap::{CodeMap, FileSpan, ResolvedSpan, Span},
+    errors::Diagnostic as StarlarkDiagnostic,
+};
 
 pub(crate) trait LintWarning: Display + VariantName {
     fn is_serious(&self) -> bool;
@@ -79,6 +84,144 @@ impl<T: LintWarning> LintT<T> {
             problem: self.problem.to_string(),
             original: self.original,
         }
+    }
+}
+
+/// A standardised set of severities.
+#[derive(Debug, Serialize, Dupe, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum EvalSeverity {
+    /// An error while the program was being parsed.
+    Error,
+    /// The program parsed, but might not execute without error.
+    Warning,
+    /// This could be changed, but is not a blocking problem.
+    Advice,
+    /// This should be ignored
+    Disabled,
+}
+
+impl Display for EvalSeverity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            EvalSeverity::Error => "Error",
+            EvalSeverity::Warning => "Warning",
+            EvalSeverity::Advice => "Advice",
+            EvalSeverity::Disabled => "Disabled",
+        })
+    }
+}
+
+impl From<EvalSeverity> for DiagnosticSeverity {
+    fn from(s: EvalSeverity) -> Self {
+        match s {
+            EvalSeverity::Error => DiagnosticSeverity::Error,
+            EvalSeverity::Warning => DiagnosticSeverity::Warning,
+            EvalSeverity::Advice => DiagnosticSeverity::Hint,
+            EvalSeverity::Disabled => DiagnosticSeverity::Information,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Potential problems that occurred while parsing a starlark program.
+pub struct EvalMessage {
+    /// The path to the starlark program
+    pub path: String,
+    /// If present, where in the program the problem occurred.
+    pub span: Option<ResolvedSpan>,
+    /// How severed the problem is.
+    pub severity: EvalSeverity,
+    /// The general name of the issue.
+    pub name: String,
+    /// The details of the issue, generally displayed to the user.
+    pub description: String,
+    /// The full error details.
+    pub full_error_with_span: Option<String>,
+    /// The text referred to by `.span`
+    pub original: Option<String>,
+}
+
+impl Display for EvalMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}:", self.severity, self.path)?;
+        if let Some(span) = self.span {
+            write!(f, "{}", span)?;
+        }
+        write!(f, " {}", self.description)
+    }
+}
+
+impl EvalMessage {
+    /// Convert from an `anyhow::Error`, including some type checking, to an `EvalMessage`
+    pub fn from_anyhow(file: &str, x: anyhow::Error) -> Self {
+        match x.downcast_ref::<StarlarkDiagnostic>() {
+            Some(
+                d @ StarlarkDiagnostic {
+                    message,
+                    span: Some(span),
+                    ..
+                },
+            ) => {
+                let original = span.source_span().to_owned();
+                let resolved_span = span.resolve_span();
+                Self {
+                    path: span.filename().to_owned(),
+                    span: Some(resolved_span),
+                    severity: EvalSeverity::Error,
+                    name: "error".to_owned(),
+                    description: format!("{:#}", message),
+                    full_error_with_span: Some(d.to_string()),
+                    original: Some(original),
+                }
+            }
+            _ => Self {
+                path: file.to_owned(),
+                span: None,
+                severity: EvalSeverity::Error,
+                name: "error".to_owned(),
+                description: format!("{:#}", x),
+                full_error_with_span: None,
+                original: None,
+            },
+        }
+    }
+}
+
+impl From<Lint> for EvalMessage {
+    fn from(x: Lint) -> Self {
+        Self {
+            path: x.location.filename().to_owned(),
+            span: Some(x.location.resolve_span()),
+            severity: if x.serious {
+                EvalSeverity::Warning
+            } else {
+                // Start with all non-serious errors disabled, and ramp up from there
+                EvalSeverity::Disabled
+            },
+            name: x.short_name,
+            description: x.problem,
+            full_error_with_span: None,
+            original: Some(x.original),
+        }
+    }
+}
+
+impl From<EvalMessage> for Diagnostic {
+    fn from(x: EvalMessage) -> Self {
+        let range = match x.span {
+            Some(s) => s.into(),
+            _ => Range::default(),
+        };
+        Diagnostic::new(
+            range,
+            Some(x.severity.into()),
+            Some(NumberOrString::String(x.name)),
+            None,
+            x.description,
+            None,
+            None,
+        )
     }
 }
 

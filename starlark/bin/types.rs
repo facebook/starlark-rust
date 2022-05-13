@@ -15,111 +15,8 @@
  * limitations under the License.
  */
 
-use std::fmt::{self, Display};
-
-use gazebo::prelude::*;
 use serde::Serialize;
-use starlark::{
-    codemap::ResolvedSpan,
-    errors::{Diagnostic, Lint},
-};
-
-/// A standardised set of severities.
-#[derive(Debug, Serialize, Dupe, Clone, Copy)]
-#[serde(rename_all = "lowercase")]
-pub(crate) enum Severity {
-    Error,
-    Warning,
-    // Not all severities are used right now
-    #[allow(dead_code)]
-    Advice,
-    Disabled,
-}
-
-impl Display for Severity {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Severity::Error => "Error",
-            Severity::Warning => "Warning",
-            Severity::Advice => "Advice",
-            Severity::Disabled => "Disabled",
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Message {
-    pub(crate) path: String,
-    pub(crate) span: Option<ResolvedSpan>,
-    pub(crate) severity: Severity,
-    pub(crate) name: String,
-    pub(crate) description: String,
-    pub(crate) full_error_with_span: Option<String>,
-    /// The text referred to by span
-    pub(crate) original: Option<String>,
-}
-
-impl Display for Message {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}:", self.severity, self.path)?;
-        if let Some(span) = self.span {
-            write!(f, "{}", span)?;
-        }
-        write!(f, " {}", self.description)
-    }
-}
-
-impl Message {
-    pub(crate) fn from_anyhow(file: &str, x: anyhow::Error) -> Self {
-        match x.downcast_ref::<Diagnostic>() {
-            Some(
-                d @ Diagnostic {
-                    message,
-                    span: Some(span),
-                    ..
-                },
-            ) => {
-                let original = span.source_span().to_owned();
-                let resolved_span = span.resolve_span();
-                Self {
-                    path: span.filename().to_owned(),
-                    span: Some(resolved_span),
-                    severity: Severity::Error,
-                    name: "error".to_owned(),
-                    description: format!("{:#}", message),
-                    full_error_with_span: Some(d.to_string()),
-                    original: Some(original),
-                }
-            }
-            _ => Self {
-                path: file.to_owned(),
-                span: None,
-                severity: Severity::Error,
-                name: "error".to_owned(),
-                description: format!("{:#}", x),
-                full_error_with_span: None,
-                original: None,
-            },
-        }
-    }
-
-    pub(crate) fn from_lint(x: Lint) -> Self {
-        Self {
-            path: x.location.filename().to_owned(),
-            span: Some(x.location.resolve_span()),
-            severity: if x.serious {
-                Severity::Warning
-            } else {
-                // Start with all non-serious errors disabled, and ramp up from there
-                Severity::Disabled
-            },
-            name: x.short_name,
-            description: x.problem,
-            full_error_with_span: None,
-            original: Some(x.original),
-        }
-    }
-}
+use starlark::errors::{EvalMessage, EvalSeverity};
 
 /// A JSON-deriving type that gives a stable interface to downstream types.
 /// Do NOT change this type, change Message instead.
@@ -131,7 +28,7 @@ pub(crate) struct LintMessage {
     line: Option<usize>,
     char: Option<usize>,
     code: String,
-    severity: Severity,
+    severity: EvalSeverity,
     name: String,
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -139,7 +36,7 @@ pub(crate) struct LintMessage {
 }
 
 impl LintMessage {
-    pub(crate) fn new(x: Message) -> Self {
+    pub(crate) fn new(x: EvalMessage) -> Self {
         Self {
             path: x.path,
             line: x.span.map(|x| x.begin_line + 1),

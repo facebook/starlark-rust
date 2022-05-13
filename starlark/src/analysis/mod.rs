@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-pub use types::Lint;
+pub use types::{EvalMessage, EvalSeverity, Lint};
 
 use crate::{analysis::types::LintT, syntax::AstModule};
 

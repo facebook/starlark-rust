@@ -31,14 +31,14 @@ use anyhow::anyhow;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
-use starlark::read_line::ReadLine;
+use starlark::{
+    errors::{EvalMessage, EvalSeverity},
+    read_line::ReadLine,
+};
 use structopt::{clap::AppSettings, StructOpt};
 use walkdir::WalkDir;
 
-use crate::{
-    eval::ContextMode,
-    types::{LintMessage, Message, Severity},
-};
+use crate::{eval::ContextMode, types::LintMessage};
 
 mod dap;
 mod eval;
@@ -167,17 +167,17 @@ impl Stats {
         self.file += 1;
     }
 
-    fn increment(&mut self, x: Severity) {
+    fn increment(&mut self, x: EvalSeverity) {
         match x {
-            Severity::Error => self.error += 1,
-            Severity::Warning => self.warning += 1,
-            Severity::Advice => self.advice += 1,
-            Severity::Disabled => self.disabled += 1,
+            EvalSeverity::Error => self.error += 1,
+            EvalSeverity::Warning => self.warning += 1,
+            EvalSeverity::Advice => self.advice += 1,
+            EvalSeverity::Disabled => self.disabled += 1,
         }
     }
 }
 
-fn drain(xs: impl Iterator<Item = Message>, json: bool, stats: &mut Stats) {
+fn drain(xs: impl Iterator<Item = EvalMessage>, json: bool, stats: &mut Stats) {
     for x in xs {
         stats.increment(x.severity);
         if json {
