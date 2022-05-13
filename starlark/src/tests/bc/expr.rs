@@ -15,14 +15,11 @@
  * limitations under the License.
  */
 
-use crate::{
-    assert,
-    eval::{bc::opcode::BcOpcode, tests::bc},
-};
+use crate::{assert, eval::bc::opcode::BcOpcode, tests::bc::test_instrs};
 
 #[test]
 fn test_type() {
-    bc::test_instrs(
+    test_instrs(
         &[BcOpcode::LoadLocal, BcOpcode::Type, BcOpcode::Return],
         "def test(x): return type(x)",
     );
@@ -30,7 +27,7 @@ fn test_type() {
 
 #[test]
 fn test_percent_s_one() {
-    bc::test_instrs(
+    test_instrs(
         &[BcOpcode::LoadLocal, BcOpcode::PercentSOne, BcOpcode::Return],
         "def test(x): return '((%s))' % x",
     )
@@ -38,7 +35,7 @@ fn test_percent_s_one() {
 
 #[test]
 fn test_format_one() {
-    bc::test_instrs(
+    test_instrs(
         &[BcOpcode::LoadLocal, BcOpcode::FormatOne, BcOpcode::Return],
         "def test(x): return '(({}))'.format(x)",
     )
@@ -63,7 +60,7 @@ assert.eq(("<(1,)>", "<1>"), test((1,)))
 #[test]
 fn test_spec_exec_list() {
     // `list` function is const-evaluated and the resulting list is compiled as list instruction.
-    bc::test_instrs(
+    test_instrs(
         &[BcOpcode::ListOfConsts, BcOpcode::Return],
         "def test(): return list((10, 20))",
     )
@@ -71,7 +68,7 @@ fn test_spec_exec_list() {
 
 #[test]
 fn test_call_maybe_known_method() {
-    bc::test_instrs(
+    test_instrs(
         &[
             BcOpcode::LoadLocalAndConst,
             BcOpcode::CallMaybeKnownMethodPos,

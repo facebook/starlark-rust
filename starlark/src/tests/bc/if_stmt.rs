@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
+use crate::{eval::bc::opcode::BcOpcode, tests::bc::test_instrs};
 
 #[test]
 fn test_if_x_and_true() {

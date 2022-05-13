@@ -15,5 +15,19 @@
  * limitations under the License.
  */
 
+mod basic;
+mod bc;
+mod before_stmt;
+mod call;
+mod comprehension;
+mod def;
 mod derive;
+mod docstring;
 mod freeze_access_value;
+mod go;
+mod interop;
+mod opt;
+mod runtime;
+mod type_annot;
+mod type_is;
+mod uncategorized;

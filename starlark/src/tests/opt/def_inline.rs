@@ -15,17 +15,35 @@
  * limitations under the License.
  */
 
-mod basic;
-mod bc;
-mod before_stmt;
-mod call;
-mod comprehension;
-mod def;
-mod docstring;
-mod go;
-mod interop;
-mod opt;
-mod runtime;
-mod type_annot;
-mod type_is;
-mod uncategorized;
+//! Test function bodies inlined.
+
+use crate::{eval::bc::opcode::BcOpcode, tests::bc::test_instrs};
+
+#[test]
+fn test_def_const_inlined() {
+    test_instrs(
+        &[BcOpcode::ReturnConst],
+        r#"
+def trivial():
+    return 10
+
+def test():
+    return trivial()
+"#,
+    )
+}
+
+#[test]
+fn test_def_list_inlined() {
+    test_instrs(
+        &[BcOpcode::ListOfConsts, BcOpcode::Return],
+        r#"
+def test():
+    return returns_list()
+
+# Also test function is inlined if it is defined after the caller.
+def returns_list():
+    return [10, True]
+"#,
+    )
+}

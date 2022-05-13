@@ -15,35 +15,27 @@
  * limitations under the License.
  */
 
-//! Test function bodies inlined.
-
-use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
+use crate::{eval::bc::opcode::BcOpcode, tests::bc::test_instrs};
 
 #[test]
-fn test_def_const_inlined() {
+fn test_methods_invoked_speculatively() {
     test_instrs(
         &[BcOpcode::ReturnConst],
         r#"
-def trivial():
-    return 10
-
 def test():
-    return trivial()
+    return "foo".startswith("f")
 "#,
     )
 }
 
 #[test]
-fn test_def_list_inlined() {
+fn test_format_speculatively_before_format_instr() {
     test_instrs(
-        &[BcOpcode::ListOfConsts, BcOpcode::Return],
+        &[BcOpcode::ReturnConst],
         r#"
 def test():
-    return returns_list()
-
-# Also test function is inlined if it is defined after the caller.
-def returns_list():
-    return [10, True]
+    # Test this expression is compiled to constant, not to `FormatOne` instruction.
+    return "x{}y".format(1)
 "#,
-    )
+    );
 }

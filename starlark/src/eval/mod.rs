@@ -46,9 +46,6 @@ pub use runtime::profile::ProfileMode;
 
 use crate::{eval::compiler::def::DefInfo, syntax::DialectTypes};
 
-#[cfg(test)]
-mod tests;
-
 impl<'v, 'a> Evaluator<'v, 'a> {
     /// Evaluate an [`AstModule`] with this [`Evaluator`], modifying the in-scope
     /// [`Module`](crate::environment::Module) as appropriate.

@@ -17,7 +17,7 @@
 
 //! Test compilation of comprehensions.
 
-use crate::eval::{bc::opcode::BcOpcode, tests::bc::test_instrs};
+use crate::{eval::bc::opcode::BcOpcode, tests::bc::test_instrs};
 
 #[test]
 fn test_no_loop_if_top_collection_is_empty() {
