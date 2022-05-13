@@ -201,26 +201,6 @@ fn test_repr_str() {
     a.pass("assert_eq(repr(mk_foo()), 'Foo(Some(42))')");
 }
 
-// The example from the starlark_module documentation.
-#[test]
-fn test_starlark_module() {
-    #[starlark_module]
-    fn global(builder: &mut GlobalsBuilder) {
-        fn cc_binary(name: &str, srcs: Vec<&str>) -> anyhow::Result<String> {
-            // real implementation may write it to a global variable
-            Ok(format!("{:?} {:?}", name, srcs))
-        }
-    }
-
-    let mut a = Assert::new();
-    a.globals_add(global);
-    let v = a.pass("cc_binary(name='star', srcs=['a.cc', 'b.cc'])");
-    assert_eq!(
-        v.value().unpack_str().unwrap(),
-        r#""star" ["a.cc", "b.cc"]"#
-    );
-}
-
 mod value_of {
     use either::Either;
     use itertools::Itertools;
