@@ -27,10 +27,9 @@ use starlark::{
     environment::{FrozenModule, Globals, Module},
     errors::EvalMessage,
     eval::Evaluator,
+    lsp::server::{LspContext, LspEvalResult},
     syntax::{AstModule, Dialect},
 };
-
-use crate::lsp::{LspContext, LspEvalResult};
 
 #[derive(Debug)]
 pub(crate) enum ContextMode {

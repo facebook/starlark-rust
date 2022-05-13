@@ -33,6 +33,7 @@ use gazebo::prelude::*;
 use itertools::Either;
 use starlark::{
     errors::{EvalMessage, EvalSeverity},
+    lsp,
     read_line::ReadLine,
 };
 use structopt::{clap::AppSettings, StructOpt};
@@ -42,7 +43,6 @@ use crate::{eval::ContextMode, types::LintMessage};
 
 mod dap;
 mod eval;
-mod lsp;
 mod types;
 
 #[derive(Debug, StructOpt)]
@@ -236,7 +236,7 @@ fn main() -> anyhow::Result<()> {
 
         if args.lsp {
             ctx.mode = ContextMode::Check;
-            lsp::server(ctx)?;
+            lsp::server::stdio_server(ctx)?;
         } else if is_interactive {
             interactive(&ctx)?;
         } else {

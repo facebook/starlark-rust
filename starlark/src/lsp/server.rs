@@ -36,18 +36,19 @@ use lsp_types::{
     TextDocumentSyncCapability, TextDocumentSyncKind, Url, WorkDoneProgressOptions,
 };
 use serde::de::DeserializeOwned;
-use starlark::syntax::AstModule;
+
+use crate::syntax::AstModule;
 
 /// The result of evaluating a starlark program for use in the LSP.
-pub(crate) struct LspEvalResult {
+pub struct LspEvalResult {
     /// The list of diagnostic issues that were encountered while evaluating a starlark program.
-    pub(crate) diagnostics: Vec<Diagnostic>,
+    pub diagnostics: Vec<Diagnostic>,
     /// If the program could be parsed, the parsed module.
-    pub(crate) ast: Option<AstModule>,
+    pub ast: Option<AstModule>,
 }
 
 /// Various pieces of context to allow the LSP to interact with starlark parsers, etc.
-pub(crate) trait LspContext {
+pub trait LspContext {
     /// Parse a file with the given contents. The filename is used in the diagnostics.
     fn parse_file_with_contents(&self, filename: &str, content: String) -> LspEvalResult;
 }
@@ -205,7 +206,8 @@ impl<T: LspContext> Backend<T> {
     }
 }
 
-pub(crate) fn server<T: LspContext>(context: T) -> anyhow::Result<()> {
+/// Instantiate an LSP server that reads on stdin, and writes to stdout
+pub fn stdio_server<T: LspContext>(context: T) -> anyhow::Result<()> {
     // Note that  we must have our logging only write out to stderr.
     eprintln!("Starting Rust Starlark server");
 
@@ -218,7 +220,11 @@ pub(crate) fn server<T: LspContext>(context: T) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn server_with_connection<T: LspContext>(connection: Connection, context: T) -> anyhow::Result<()> {
+/// Instantiate an LSP server that reads and writes using the given connection.
+pub fn server_with_connection<T: LspContext>(
+    connection: Connection,
+    context: T,
+) -> anyhow::Result<()> {
     // Run the server and wait for the main thread to end (typically by trigger LSP Exit event).
     let server_capabilities = serde_json::to_value(&Backend::<T>::server_capabilities()).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
@@ -265,7 +271,8 @@ where
     }
 }
 
-fn new_notification<T>(params: T::Params) -> Notification
+/// Create a new `Notification` object with the correct name from the given params.
+pub(crate) fn new_notification<T>(params: T::Params) -> Notification
 where
     T: lsp_types::notification::Notification,
 {
@@ -293,7 +300,7 @@ mod test {
         Range, TextDocumentIdentifier, TextDocumentPositionParams, Url,
     };
 
-    use super::helpers::TestServer;
+    use crate::lsp::test::TestServer;
 
     #[test]
     fn sends_empty_goto_definition_on_nonexistent_file() -> anyhow::Result<()> {
