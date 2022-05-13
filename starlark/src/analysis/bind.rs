@@ -17,8 +17,6 @@
 
 use std::collections::HashMap;
 
-use gazebo::prelude::*;
-
 use crate::{
     codemap::Span,
     syntax::{
@@ -30,9 +28,13 @@ use crate::{
     },
 };
 
-#[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Assigner {
-    Load,     // Obtained from `load`
+    /// Obtained from `load`. `name` is the symbol in that file, not necessarily the local name
+    Load {
+        path: AstString,
+        name: AstString,
+    },
     Argument, // From a function argument
     Assign,   // From an assignment
 }
@@ -59,7 +61,9 @@ impl Scope {
         for x in &inner {
             match x {
                 Bind::Set(assigner, x) => {
-                    bound.entry(x.0.clone()).or_insert((*assigner, x.span));
+                    bound
+                        .entry(x.0.clone())
+                        .or_insert((assigner.clone(), x.span));
                 }
                 Bind::Get(x) => {
                     free.entry(x.node.clone()).or_insert(x.span);
@@ -208,7 +212,13 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
         }
         Stmt::Load(load) => {
             for x in &load.node.args {
-                res.push(Bind::Set(Assigner::Load, x.0.clone()))
+                res.push(Bind::Set(
+                    Assigner::Load {
+                        path: load.module.clone(),
+                        name: x.1.clone(),
+                    },
+                    x.0.clone(),
+                ))
             }
         }
     }

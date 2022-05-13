@@ -66,7 +66,7 @@ impl NameWarning {
             codemap,
             span,
             match typ {
-                Assigner::Load => NameWarning::UnusedLoad(name),
+                Assigner::Load { .. } => NameWarning::UnusedLoad(name),
                 Assigner::Argument => NameWarning::UnusedArgument(name),
                 Assigner::Assign => NameWarning::UnusedAssign(name),
             },
@@ -123,8 +123,8 @@ fn duplicate_assign(
             Bind::Set(reason, x) => {
                 let ignored = !top && x.0.starts_with('_');
                 if !ignored && !captured.contains(x.0.as_str()) {
-                    if let Some((span, typ)) = warnings.insert(&x.node.0, (x.span, *reason)) {
-                        res.push(NameWarning::unused(typ, codemap, span, x.0.clone()))
+                    if let Some((span, typ)) = warnings.insert(&x.node.0, (x.span, reason)) {
+                        res.push(NameWarning::unused(typ.clone(), codemap, span, x.0.clone()))
                     }
                 }
             }
@@ -151,7 +151,7 @@ fn unused_variable(codemap: &CodeMap, scope: &Scope, top: bool, res: &mut Vec<Li
 
         // We don't want to warn about exported things or ignored things
         if !exported && !ignored {
-            warnings.insert(x, (*typ, *span));
+            warnings.insert(x, (typ.clone(), *span));
         }
     }
 

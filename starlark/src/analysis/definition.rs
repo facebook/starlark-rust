@@ -16,7 +16,7 @@
  */
 
 use crate::{
-    analysis::bind::{scope, Bind, Scope},
+    analysis::bind::{scope, Assigner, Bind, Scope},
     codemap::{Pos, ResolvedSpan, Span},
     syntax::AstModule,
 };
@@ -33,6 +33,13 @@ impl AstModule {
         enum DefinitionLocation<'a> {
             // The location of the definition of the symbol at the current line/column
             Location(Span),
+            LoadedLocation {
+                location: Span,
+                #[allow(dead_code)]
+                path: &'a str,
+                #[allow(dead_code)]
+                name: &'a str,
+            },
             // The definition was not found in the current scope but the name of an identifier
             // was found at the given position. This should be checked in outer scopes
             // to attempt to find the definition.
@@ -50,6 +57,13 @@ impl AstModule {
                     Bind::Get(g) => {
                         if g.span.begin() <= pos && pos <= g.span.end() {
                             let res = match scope.bound.get(g.node.as_str()) {
+                                Some((Assigner::Load { path, name }, span)) => {
+                                    DefinitionLocation::LoadedLocation {
+                                        location: *span,
+                                        path,
+                                        name: name.as_str(),
+                                    }
+                                }
                                 Some((_, span)) => DefinitionLocation::Location(*span),
                                 // We know the symbol name, but it might only be available in
                                 // an outer scope.
@@ -60,12 +74,22 @@ impl AstModule {
                     }
                     Bind::Flow => {}
                     Bind::Scope(inner_scope) => match find_definition_in_scope(inner_scope, pos) {
-                        DefinitionLocation::Location(span) => {
-                            return DefinitionLocation::Location(span);
+                        x @ DefinitionLocation::Location(_) => {
+                            return x;
+                        }
+                        x @ DefinitionLocation::LoadedLocation { .. } => {
+                            return x;
                         }
                         DefinitionLocation::Name(missing_symbol) => {
                             return match scope.bound.get(missing_symbol) {
                                 None => DefinitionLocation::Name(missing_symbol),
+                                Some((Assigner::Load { path, name }, span)) => {
+                                    DefinitionLocation::LoadedLocation {
+                                        location: *span,
+                                        path,
+                                        name: name.as_str(),
+                                    }
+                                }
                                 Some((_, span)) => DefinitionLocation::Location(*span),
                             };
                         }
@@ -87,6 +111,11 @@ impl AstModule {
                 .get(missing_symbol)
                 .map(|(_, span)| self.codemap.resolve_span(*span)),
             DefinitionLocation::NotFound => None,
+            DefinitionLocation::LoadedLocation {
+                location,
+                path: _,
+                name: _,
+            } => Some(self.codemap.resolve_span(location)),
         }
     }
 }
@@ -284,7 +313,7 @@ mod test {
     fn find_definition_loaded_symbol() -> anyhow::Result<()> {
         let contents = dedent(
             r#"
-        load("bar.star", <print>"print"</print>);
+        load("bar.star", <print>print</print> = "other_print");
 
         x = 1
         y = 2
