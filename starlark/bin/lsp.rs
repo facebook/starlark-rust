@@ -38,8 +38,6 @@ use lsp_types::{
 use serde::de::DeserializeOwned;
 use starlark::syntax::AstModule;
 
-use crate::eval::Context;
-
 /// The result of evaluating a starlark program for use in the LSP.
 pub(crate) struct LspEvalResult {
     /// The list of diagnostic issues that were encountered while evaluating a starlark program.
@@ -303,9 +301,32 @@ mod helpers {
         TextDocumentClientCapabilities, TextDocumentContentChangeEvent, TextDocumentItem,
         VersionedTextDocumentIdentifier,
     };
+    use starlark::{errors::EvalMessage, syntax::Dialect};
 
     use super::*;
-    use crate::ContextMode;
+
+    struct TestServerContext {}
+
+    impl LspContext for TestServerContext {
+        fn parse_file_with_contents(&self, filename: &str, content: String) -> LspEvalResult {
+            match AstModule::parse(filename, content, &Dialect::Extended) {
+                Ok(ast) => {
+                    let diagnostics = ast.lint(None).into_map(|l| EvalMessage::from(l).into());
+                    LspEvalResult {
+                        diagnostics,
+                        ast: Some(ast),
+                    }
+                }
+                Err(e) => {
+                    let diagnostics = vec![EvalMessage::from_anyhow(filename, e).into()];
+                    LspEvalResult {
+                        diagnostics,
+                        ast: None,
+                    }
+                }
+            }
+        }
+    }
 
     /// A server for use in testing that provides helpers for sending requests, correlating
     /// responses, and sending / receiving notifications
@@ -381,7 +402,7 @@ mod helpers {
             let (server_connection, client_connection) = Connection::memory();
 
             let server_thread = std::thread::spawn(|| {
-                let ctx = Context::new(ContextMode::Check, false, &[], false).unwrap();
+                let ctx = TestServerContext {};
                 if let Err(e) = server_with_connection(server_connection, ctx) {
                     eprintln!("Stopped test server thread with error `{:?}`", e);
                 }
