@@ -22,12 +22,15 @@ use std::{
 
 use gazebo::prelude::*;
 use itertools::Either;
+use lsp_types::Diagnostic;
 use starlark::{
     environment::{FrozenModule, Globals, Module},
     errors::EvalMessage,
     eval::Evaluator,
     syntax::{AstModule, Dialect},
 };
+
+use crate::lsp::{LspContext, LspEvalResult};
 
 #[derive(Debug)]
 pub(crate) enum ContextMode {
@@ -197,6 +200,16 @@ impl Context {
         };
 
         module.lint(globals).into_iter().map(EvalMessage::from)
+    }
+}
+
+impl LspContext for Context {
+    fn parse_file_with_contents(&self, filename: &str, content: String) -> LspEvalResult {
+        let EvalResult { messages, ast } = self.file_with_contents(filename, content);
+        LspEvalResult {
+            diagnostics: messages.map(Diagnostic::from).collect(),
+            ast,
+        }
     }
 }
 

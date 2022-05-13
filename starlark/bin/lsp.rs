@@ -40,16 +40,30 @@ use starlark::syntax::AstModule;
 
 use crate::eval::Context;
 
-struct Backend {
+/// The result of evaluating a starlark program for use in the LSP.
+pub(crate) struct LspEvalResult {
+    /// The list of diagnostic issues that were encountered while evaluating a starlark program.
+    pub(crate) diagnostics: Vec<Diagnostic>,
+    /// If the program could be parsed, the parsed module.
+    pub(crate) ast: Option<AstModule>,
+}
+
+/// Various pieces of context to allow the LSP to interact with starlark parsers, etc.
+pub(crate) trait LspContext {
+    /// Parse a file with the given contents. The filename is used in the diagnostics.
+    fn parse_file_with_contents(&self, filename: &str, content: String) -> LspEvalResult;
+}
+
+struct Backend<T: LspContext> {
     connection: Connection,
-    starlark: Context,
+    context: T,
     /// The `AstModule` from the last time that a file was opened / changed and parsed successfully.
     /// Entries are evicted when the file is closed.
     last_valid_parse: RwLock<HashMap<Url, Arc<AstModule>>>,
 }
 
 /// The logic implementations of stuff
-impl Backend {
+impl<T: LspContext> Backend<T> {
     fn server_capabilities() -> ServerCapabilities {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::Full)),
@@ -68,14 +82,15 @@ impl Backend {
     }
 
     fn validate(&self, uri: Url, version: Option<i64>, text: String) {
-        let eval_result = self.starlark.file_with_contents(&uri.to_string(), text);
-        let diags = eval_result.messages.map(Diagnostic::from).collect();
+        let eval_result = self
+            .context
+            .parse_file_with_contents(&uri.to_string(), text);
         if let Some(ast) = eval_result.ast {
             let ast = Arc::new(ast);
             let mut last_valid_parse = self.last_valid_parse.write().unwrap();
             last_valid_parse.insert(uri.clone(), ast);
         }
-        self.publish_diagnostics(uri, diags, version)
+        self.publish_diagnostics(uri, eval_result.diagnostics, version)
     }
 
     fn did_open(&self, params: DidOpenTextDocumentParams) {
@@ -135,7 +150,7 @@ impl Backend {
 }
 
 /// The library style pieces
-impl Backend {
+impl<T: LspContext> Backend<T> {
     fn send_notification(&self, x: Notification) {
         self.connection
             .sender
@@ -192,12 +207,12 @@ impl Backend {
     }
 }
 
-pub(crate) fn server(starlark: Context) -> anyhow::Result<()> {
+pub(crate) fn server<T: LspContext>(context: T) -> anyhow::Result<()> {
     // Note that  we must have our logging only write out to stderr.
     eprintln!("Starting Rust Starlark server");
 
     let (connection, io_threads) = Connection::stdio();
-    server_with_connection(connection, starlark)?;
+    server_with_connection(connection, context)?;
     // Make sure that the io threads stop properly too.
     io_threads.join()?;
 
@@ -205,14 +220,14 @@ pub(crate) fn server(starlark: Context) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn server_with_connection(connection: Connection, starlark: Context) -> anyhow::Result<()> {
+fn server_with_connection<T: LspContext>(connection: Connection, context: T) -> anyhow::Result<()> {
     // Run the server and wait for the main thread to end (typically by trigger LSP Exit event).
-    let server_capabilities = serde_json::to_value(&Backend::server_capabilities()).unwrap();
+    let server_capabilities = serde_json::to_value(&Backend::<T>::server_capabilities()).unwrap();
     let initialization_params = connection.initialize(server_capabilities)?;
     let initialization_params = serde_json::from_value(initialization_params).unwrap();
     Backend {
         connection,
-        starlark,
+        context,
         last_valid_parse: RwLock::default(),
     }
     .main_loop(initialization_params)?;
