@@ -19,14 +19,17 @@
 
 use std::{fs, path::Path, time::Duration};
 
-use crate::{collections::SmallMap, eval::runtime::csv::CsvWriter, values::FrozenStringValue};
+use crate::{
+    collections::SmallMap,
+    eval::runtime::{csv::CsvWriter, small_duration::SmallDuration},
+    values::FrozenStringValue,
+};
 
 #[derive(Default, Debug)]
 pub(crate) struct TypecheckProfile {
     pub(crate) enabled: bool,
-    /// `u64::MAX` nanos is 500 years.
     // TODO(nga): we don't need ordered map here.
-    by_function: SmallMap<FrozenStringValue, u64>,
+    by_function: SmallMap<FrozenStringValue, SmallDuration>,
 }
 
 impl TypecheckProfile {
@@ -35,23 +38,23 @@ impl TypecheckProfile {
         *self
             .by_function
             .entry_hashed(function.get_hashed())
-            .or_insert(0) += time.as_nanos() as u64;
+            .or_insert(SmallDuration::default()) += time;
     }
 
     fn gen_csv(&self) -> String {
-        let total_time_nanos = self.by_function.values().sum::<u64>();
+        let total_time = self.by_function.values().sum::<SmallDuration>();
 
         let mut w = CsvWriter::new(["Function", "Time (s)"]);
         w.write_display("TOTAL");
-        w.write_value(Duration::from_nanos(total_time_nanos));
+        w.write_value(total_time);
         w.finish_row();
 
         let mut by_function = Vec::from_iter(&self.by_function);
-        by_function.sort_by_key(|(name, t)| (u64::MAX - **t, *name));
+        by_function.sort_by_key(|(name, t)| (u64::MAX - t.nanos, *name));
 
         for (name, t) in by_function {
             w.write_display(name);
-            w.write_value(Duration::from_nanos(*t));
+            w.write_value(t);
             w.finish_row();
         }
 

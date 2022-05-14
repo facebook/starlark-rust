@@ -22,14 +22,17 @@ use std::{
     io::Write,
     path::Path,
     slice,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::Context;
 use gazebo::prelude::*;
 
 use crate as starlark;
-use crate::values::{Trace, Tracer, Value};
+use crate::{
+    eval::runtime::small_duration::SmallDuration,
+    values::{Trace, Tracer, Value},
+};
 
 /// Index into FlameData.values
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Dupe)]
@@ -82,7 +85,7 @@ unsafe impl<'v> Trace<'v> for FlameData<'v> {
 
 struct Stacks<'a> {
     name: &'a str,
-    time: Duration,
+    time: SmallDuration,
     children: HashMap<ValueIndex, Stacks<'a>>,
 }
 
@@ -90,7 +93,7 @@ impl<'a> Stacks<'a> {
     fn blank(name: &'a str) -> Self {
         Stacks {
             name,
-            time: Duration::default(),
+            time: SmallDuration::default(),
             children: HashMap::new(),
         }
     }
@@ -130,7 +133,7 @@ impl<'a> Stacks<'a> {
             buffer.push(';')
         }
         buffer.push_str(self.name);
-        let count = self.time.as_millis();
+        let count = self.time.to_duration().as_millis();
         if count > 0 {
             writeln!(file, "{} {}", buffer, count)?;
         }

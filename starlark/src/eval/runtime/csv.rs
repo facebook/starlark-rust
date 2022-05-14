@@ -17,10 +17,9 @@
 
 //! Write CSV files.
 
-use std::{
-    fmt::{Debug, Display},
-    time::Duration,
-};
+use std::fmt::{Debug, Display};
+
+use crate::eval::runtime::small_duration::SmallDuration;
 
 /// Writer for CSV files.
 pub(crate) struct CsvWriter {
@@ -102,9 +101,9 @@ pub(crate) trait CsvValue {
     fn format_for_csv(&self) -> String;
 }
 
-impl CsvValue for Duration {
+impl CsvValue for SmallDuration {
     fn format_for_csv(&self) -> String {
-        format!("{:.3}", self.as_secs_f64())
+        format!("{:.3}", self.to_duration().as_secs_f64())
     }
 }
 
@@ -147,20 +146,18 @@ impl CsvValue for u128 {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use crate::eval::runtime::csv::CsvWriter;
+    use crate::eval::runtime::{csv::CsvWriter, small_duration::SmallDuration};
 
     #[test]
     fn test_csv_writer() {
         let mut csv = CsvWriter::new(["File", "Count", "Duration"]);
         csv.write_value("a.bzl");
         csv.write_value(10);
-        csv.write_value(Duration::from_millis(17));
+        csv.write_value(SmallDuration { nanos: 17_000_000 });
         csv.finish_row();
         csv.write_value("b.bzl");
         csv.write_value(20);
-        csv.write_value(Duration::from_millis(19));
+        csv.write_value(SmallDuration { nanos: 19_000_000 });
         csv.finish_row();
         assert_eq!(
             "\

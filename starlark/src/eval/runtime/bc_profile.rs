@@ -17,25 +17,19 @@
 
 //! Bytecode profiler.
 
-use std::{
-    collections::HashMap,
-    fs,
-    iter::Sum,
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, fs, iter::Sum, path::Path, time::Instant};
 
 use gazebo::prelude::*;
 
 use crate::eval::{
     bc::opcode::BcOpcode,
-    runtime::{csv::CsvWriter, evaluator::EvaluatorError},
+    runtime::{csv::CsvWriter, evaluator::EvaluatorError, small_duration::SmallDuration},
 };
 
 #[derive(Default, Clone, Dupe, Copy)]
 struct BcInstrStat {
     count: u64,
-    total_time: Duration,
+    total_time: SmallDuration,
 }
 
 impl<'a> Sum<&'a BcInstrStat> for BcInstrStat {
@@ -50,11 +44,13 @@ impl<'a> Sum<&'a BcInstrStat> for BcInstrStat {
 }
 
 impl BcInstrStat {
-    fn avg_time(&self) -> Duration {
+    fn avg_time(&self) -> SmallDuration {
         if self.count == 0 {
-            Duration::ZERO
+            SmallDuration::default()
         } else {
-            Duration::from_nanos(self.total_time.as_nanos() as u64 / self.count)
+            SmallDuration {
+                nanos: self.total_time.nanos as u64 / self.count,
+            }
         }
     }
 }
@@ -112,14 +108,14 @@ impl BcProfileData {
             csv.write_display("TOTAL");
             csv.write_value(total.count);
             csv.write_value(total.total_time);
-            csv.write_value(total.avg_time().as_nanos());
+            csv.write_value(total.avg_time().nanos);
             csv.finish_row();
         }
         for (opcode, instr_stats) in &by_instr {
             csv.write_debug(opcode);
             csv.write_value(instr_stats.count);
             csv.write_value(instr_stats.total_time);
-            csv.write_value(instr_stats.avg_time().as_nanos());
+            csv.write_value(instr_stats.avg_time().nanos);
             csv.finish_row();
         }
         csv.finish()

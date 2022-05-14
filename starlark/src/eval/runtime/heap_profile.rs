@@ -24,7 +24,7 @@ use std::{
     mem,
     path::Path,
     rc::Rc,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -33,7 +33,7 @@ use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate as starlark;
 use crate::{
-    eval::runtime::csv::CsvWriter,
+    eval::runtime::{csv::CsvWriter, small_duration::SmallDuration},
     values::{Freeze, Freezer, Heap, NoSimpleValue, StarlarkValue, Trace, Value, ValueLike},
 };
 
@@ -253,7 +253,7 @@ impl HeapProfile {
             ids,
             info: Vec::new(),
             last_changed: start,
-            call_stack: vec![(root, Duration::default(), start)],
+            call_stack: vec![(root, SmallDuration::default(), start)],
         };
         info.ensure(root);
         unsafe {
@@ -275,7 +275,7 @@ impl HeapProfile {
         let mut info = info.iter().enumerate().collect::<Vec<_>>();
 
         columns.sort_by_key(|x| -(x.1 as isize));
-        info.sort_by_key(|x| -(x.1.time.as_nanos() as i128));
+        info.sort_by_key(|x| -(x.1.time.nanos as i128));
 
         let mut csv = CsvWriter::new(
             [
@@ -327,6 +327,7 @@ impl HeapProfile {
 
 mod summary {
     use super::*;
+    use crate::eval::runtime::small_duration::SmallDuration;
 
     /// Information relating to a function.
     #[derive(Default, Debug, Clone)]
@@ -336,9 +337,9 @@ mod summary {
         /// Who called this function (and how many times each)
         pub callers: HashMap<FunctionId, usize>,
         /// Time spent directly in this function
-        pub time: Duration,
+        pub time: SmallDuration,
         /// Time spent directly in this function and recursive functions.
-        pub time_rec: Duration,
+        pub time_rec: SmallDuration,
         /// Allocations made by this function
         pub allocs: HashMap<&'static str, usize>,
     }
@@ -374,7 +375,7 @@ mod summary {
         pub last_changed: Instant,
         /// Each entry is (Function, time_rec when I started, time I started)
         /// The time_rec is recorded so that recursion doesn't screw up time_rec
-        pub call_stack: Vec<(FunctionId, Duration, Instant)>,
+        pub call_stack: Vec<(FunctionId, SmallDuration, Instant)>,
     }
 
     impl Info {
@@ -672,7 +673,7 @@ _ignore = str([1])     # allocate a string in non_drop
             ids,
             info: Vec::new(),
             last_changed: Instant::now(),
-            call_stack: vec![(root, Duration::ZERO, Instant::now())],
+            call_stack: vec![(root, SmallDuration::default(), Instant::now())],
         };
 
         unsafe {

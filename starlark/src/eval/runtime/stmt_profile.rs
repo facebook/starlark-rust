@@ -20,7 +20,7 @@ use std::{
     fs::File,
     io::Write,
     path::Path,
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -28,7 +28,7 @@ use gazebo::prelude::*;
 
 use crate::{
     codemap::{CodeMap, CodeMapId, FileSpan, FileSpanRef, Span},
-    eval::runtime::csv::CsvWriter,
+    eval::runtime::{csv::CsvWriter, small_duration::SmallDuration},
 };
 
 // When line profiling is not enabled, we want this to be small and cheap
@@ -39,7 +39,7 @@ pub(crate) struct StmtProfile(Option<Box<StmtProfileData>>);
 #[derive(Clone)]
 struct StmtProfileData {
     files: HashMap<CodeMapId, CodeMap>,
-    stmts: HashMap<(CodeMapId, Span), (usize, Duration)>,
+    stmts: HashMap<(CodeMapId, Span), (usize, SmallDuration)>,
     next_file: CodeMapId,
     last_span: (CodeMapId, Span),
     last_start: Instant,
@@ -63,10 +63,10 @@ impl StmtProfileData {
             Entry::Occupied(mut x) => {
                 let v = x.get_mut();
                 v.0 += 1;
-                v.1 += time;
+                v.1 += SmallDuration::from_duration(time);
             }
             Entry::Vacant(x) => {
-                x.insert((1, time));
+                x.insert((1, SmallDuration::from_duration(time)));
             }
         }
     }
@@ -121,12 +121,12 @@ impl StmtProfileData {
 
         struct Item {
             span: FileSpan,
-            time: Duration,
+            time: SmallDuration,
             count: usize,
         }
         // There should be one EMPTY span entry
         let mut items = Vec::with_capacity(data.stmts.len() - 1);
-        let mut total_time = Duration::default();
+        let mut total_time = SmallDuration::default();
         let mut total_count = 0;
         for ((file, span), (count, time)) in data.stmts {
             // EMPTY represents the first time special-case
@@ -137,7 +137,7 @@ impl StmtProfileData {
                 items.push(Item { span, time, count })
             }
         }
-        items.sort_by_key(|x| -(x.time.as_nanos() as i128));
+        items.sort_by_key(|x| -(x.time.nanos as i128));
 
         let mut csv = CsvWriter::new(["File", "Span", "Duration(s)", "Count"]);
         csv.write_value("TOTAL");
