@@ -644,12 +644,7 @@ where
         }
     }
 
-    /// Invoke the function, assuming that:
-    /// * the frame has been allocated and stored in `eval.current_frame`
-    /// * the arguments have been collected into the frame
-    fn invoke_raw(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
-        // println!("invoking {}", self.def.stmt.name.node);
-
+    fn check_parameter_types(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<()> {
         for (i, arg_name, ty, ty2) in &self.parameter_types {
             match eval.current_frame.get_slot(LocalSlotId::new(*i)) {
                 None => {
@@ -657,6 +652,29 @@ where
                 }
                 Some(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
             }
+        }
+        Ok(())
+    }
+
+    fn check_return_type(
+        &self,
+        ret: Value<'v>,
+        (return_type_value, return_type_ty): &(V, TypeCompiled),
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<()> {
+        let _ = eval; // Used in the following diff.
+        ret.check_type_compiled(return_type_value.to_value(), return_type_ty, None)?;
+        Ok(())
+    }
+
+    /// Invoke the function, assuming that:
+    /// * the frame has been allocated and stored in `eval.current_frame`
+    /// * the arguments have been collected into the frame
+    fn invoke_raw(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
+        // println!("invoking {}", self.def.stmt.name.node);
+
+        if !self.parameter_types.is_empty() {
+            self.check_parameter_types(eval)?;
         }
 
         // Parameters are collected into local slots without captures
@@ -699,8 +717,8 @@ where
         // either passing the type down (ugly) or passing the location back
         // (ugly and fiddly). Both also imply some runtime cost. If types take off,
         // worth revisiting.
-        if let Some((tv, t)) = &self.return_type {
-            ret.check_type_compiled(tv.to_value(), t, None)?
+        if let Some(return_type) = &self.return_type {
+            self.check_return_type(ret, return_type, eval)?;
         }
 
         Ok(ret)
