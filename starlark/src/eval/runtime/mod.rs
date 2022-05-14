@@ -28,3 +28,4 @@ pub(crate) mod profile;
 pub(crate) mod rust_loc;
 pub(crate) mod slots;
 pub(crate) mod stmt_profile;
+pub(crate) mod typecheck_profile;

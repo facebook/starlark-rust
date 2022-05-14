@@ -42,6 +42,7 @@ use crate::{
             profile::ProfileMode,
             slots::LocalSlotId,
             stmt_profile::StmtProfile,
+            typecheck_profile::TypecheckProfile,
         },
         CallStack, FileLoader,
     },
@@ -66,6 +67,8 @@ pub(crate) enum EvaluatorError {
     FlameProfilingNotEnabled,
     #[error("Can't call `write_bc_profile` unless you first call `enable_bc_profile`.")]
     BcProfilingNotEnabled,
+    #[error("Typecheck profiling not enabled")]
+    TypecheckProfilingNotEnabled,
 }
 
 /// Number of bytes to allocate between GC's.
@@ -104,6 +107,9 @@ pub struct Evaluator<'v, 'a> {
     stmt_profile: StmtProfile,
     // Bytecode profile.
     pub(crate) bc_profile: BcProfile,
+    // Total time spent in runtime typechecking.
+    // Filled only if runtime typechecking profiling is enabled.
+    pub(crate) typecheck_profile: TypecheckProfile,
     // Used for stack-like allocation
     alloca: Alloca,
     // Another stack-like allocation
@@ -153,6 +159,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
             bc_profile: BcProfile::new(),
+            typecheck_profile: TypecheckProfile::default(),
             flame_profile: FlameProfile::new(),
             heap_or_flame_profile: false,
             before_stmt: BeforeStmt::default(),
@@ -208,6 +215,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             }
             ProfileMode::BytecodePairs => {
                 self.bc_profile.enable_2();
+            }
+            ProfileMode::Typecheck => {
+                self.typecheck_profile.enabled = true;
             }
         }
     }
@@ -267,6 +277,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
                 .flame_profile
                 .write(filename.as_ref())
                 .unwrap_or_else(|| Err(EvaluatorError::FlameProfilingNotEnabled.into())),
+            ProfileMode::Typecheck => self
+                .typecheck_profile
+                .write(filename.as_ref())
+                .unwrap_or_else(|| Err(EvaluatorError::TypecheckProfilingNotEnabled.into())),
         }
     }
 

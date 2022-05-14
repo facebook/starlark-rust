@@ -22,6 +22,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Write},
     mem, ptr,
+    time::Instant,
 };
 
 use derivative::Derivative;
@@ -645,6 +646,11 @@ where
     }
 
     fn check_parameter_types(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<()> {
+        let start = if eval.typecheck_profile.enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
         for (i, arg_name, ty, ty2) in &self.parameter_types {
             match eval.current_frame.get_slot(LocalSlotId::new(*i)) {
                 None => {
@@ -652,6 +658,10 @@ where
                 }
                 Some(v) => v.check_type_compiled(ty.to_value(), ty2, Some(arg_name))?,
             }
+        }
+        if let Some(start) = start {
+            eval.typecheck_profile
+                .add(self.def_info.name, start.elapsed());
         }
         Ok(())
     }
@@ -662,8 +672,16 @@ where
         (return_type_value, return_type_ty): &(V, TypeCompiled),
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<()> {
-        let _ = eval; // Used in the following diff.
+        let start = if eval.typecheck_profile.enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
         ret.check_type_compiled(return_type_value.to_value(), return_type_ty, None)?;
+        if let Some(start) = start {
+            eval.typecheck_profile
+                .add(self.def_info.name, start.elapsed());
+        }
         Ok(())
     }
 

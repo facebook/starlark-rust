@@ -38,6 +38,8 @@ pub enum ProfileMode {
     /// Provide output compatible with
     /// [flamegraph.pl](https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl).
     TimeFlame,
+    /// Profile runtime typechecking.
+    Typecheck,
 }
 
 impl Display for ProfileMode {
@@ -55,6 +57,7 @@ impl ProfileMode {
             ProfileMode::Bytecode => "bytecode",
             ProfileMode::BytecodePairs => "bytecode-pairs",
             ProfileMode::TimeFlame => "time-flame",
+            ProfileMode::Typecheck => "typecheck",
         }
     }
 }
@@ -70,6 +73,7 @@ impl FromStr for ProfileMode {
             ProfileMode::Bytecode,
             ProfileMode::BytecodePairs,
             ProfileMode::TimeFlame,
+            ProfileMode::Typecheck,
         ] {
             if s == mode.name() {
                 return Ok(mode);
