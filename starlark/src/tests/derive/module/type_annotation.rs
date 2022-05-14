@@ -15,7 +15,22 @@
  * limitations under the License.
  */
 
-mod basic;
-mod named_positional;
-mod type_annotation;
-mod unpack_value;
+use crate as starlark;
+use crate::{assert::Assert, environment::GlobalsBuilder};
+
+const FOO_TYPE: &str = "Foo";
+
+#[starlark_module]
+fn type_annotation_functions(globals: &mut GlobalsBuilder) {
+    #[starlark(type(FOO_TYPE))]
+    fn foo(x: i32) -> anyhow::Result<i32> {
+        Ok(x)
+    }
+}
+
+#[test]
+fn test_type_annotation() {
+    let mut a = Assert::new();
+    a.globals_add(type_annotation_functions);
+    a.eq("'Foo'", "foo.type");
+}
