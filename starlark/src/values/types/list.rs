@@ -30,7 +30,7 @@ use std::{
 };
 
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     coerce::{coerce, coerce_ref, Coerce},
     prelude::*,
 };
@@ -455,7 +455,7 @@ pub(crate) fn list_methods() -> Option<&'static Methods> {
 
 impl<'v, T: ListLike<'v>> StarlarkValue<'v> for ListGen<T>
 where
-    Self: AnyLifetime<'v> + Display,
+    Self: AnyLifetime<'v> + ProvidesStaticType + Display,
 {
     starlark_type!(List::TYPE);
 

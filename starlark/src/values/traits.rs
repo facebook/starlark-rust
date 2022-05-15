@@ -35,7 +35,7 @@ use std::{
 
 use derive_more::Display;
 use erased_serde::Serialize;
-use gazebo::any::AnyLifetime;
+use gazebo::any::{AnyLifetime, ProvidesStaticType};
 
 use crate::{
     self as starlark,
@@ -66,6 +66,7 @@ use crate::{
 /// use starlark::values::{AnyLifetime, ComplexValue, Coerce, Freezer, FrozenValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze, NoSerialize};
 /// use starlark::{starlark_complex_value, starlark_type};
 /// use derive_more::Display;
+/// use gazebo::any::ProvidesStaticType;
 ///
 /// #[derive(Debug, Trace, Coerce, Display, AnyLifetime, NoSerialize)]
 /// #[repr(C)]
@@ -73,7 +74,7 @@ use crate::{
 /// starlark_complex_value!(One);
 ///
 /// impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for OneGen<V>
-///     where Self: AnyLifetime<'v>
+///     where Self: AnyLifetime<'v> + ProvidesStaticType
 /// {
 ///     starlark_type!("one");
 ///
@@ -205,7 +206,9 @@ impl<'v> StarlarkValue<'v> for NoSimpleValue {
 /// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
 /// any implementations other than the default implementation will not be run.
 #[starlark_internal_vtable]
-pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize {
+pub trait StarlarkValue<'v>:
+    'v + AnyLifetime<'v> + ProvidesStaticType + Debug + Display + Serialize
+{
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///

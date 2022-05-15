@@ -18,7 +18,10 @@
 //! Implementation of iterators for string type.
 
 use derive_more::Display;
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::{
+    any::{AnyLifetime, ProvidesStaticType},
+    coerce::Coerce,
+};
 
 use crate as starlark;
 use crate::values::{Heap, StarlarkValue, Value, ValueLike};
@@ -50,7 +53,7 @@ starlark_complex_value!(StringIterator);
 
 impl<'v, T: ValueLike<'v>> StarlarkValue<'v> for StringIteratorGen<T>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!("iterator");
 

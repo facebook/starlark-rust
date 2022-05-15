@@ -43,7 +43,7 @@ use std::{
 };
 
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     coerce::{coerce_ref, Coerce},
 };
 use serde::{ser::SerializeMap, Serialize};
@@ -134,7 +134,7 @@ impl<'v> StructBuilder<'v> {
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for StructGen<'v, V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(Struct::TYPE);
 

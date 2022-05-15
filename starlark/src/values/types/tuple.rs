@@ -25,7 +25,7 @@ use std::{
 };
 
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     coerce::{coerce, coerce_ref, Coerce},
 };
 use serde::{ser::SerializeTuple, Serialize};
@@ -130,7 +130,7 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for TupleGen<V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(Tuple::TYPE);
 

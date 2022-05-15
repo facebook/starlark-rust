@@ -21,7 +21,7 @@ use std::{
 };
 
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
@@ -253,7 +253,7 @@ impl<'v> Freeze for Partial<'v> {
 
 impl<'v, V: ValueLike<'v>, S: StringValueLike<'v>> StarlarkValue<'v> for PartialGen<V, S>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(FUNCTION_TYPE);
 

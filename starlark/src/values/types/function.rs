@@ -21,7 +21,10 @@ use std::collections::HashMap;
 
 use derivative::Derivative;
 use derive_more::Display;
-use gazebo::{any::AnyLifetime, coerce::Coerce};
+use gazebo::{
+    any::{AnyLifetime, ProvidesStaticType},
+    coerce::Coerce,
+};
 
 use crate as starlark;
 use crate::{
@@ -324,7 +327,7 @@ impl<'v, V: ValueLike<'v>> BoundMethodGen<V> {
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for BoundMethodGen<V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(FUNCTION_TYPE);
 

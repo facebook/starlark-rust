@@ -29,7 +29,7 @@ use std::{
 };
 
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     cell::ARef,
     coerce::{coerce, coerce_ref, Coerce},
 };
@@ -421,7 +421,7 @@ pub(crate) fn dict_methods() -> Option<&'static Methods> {
 
 impl<'v, T: DictLike<'v>> StarlarkValue<'v> for DictGen<T>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(Dict::TYPE);
 

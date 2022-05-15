@@ -27,7 +27,10 @@ use std::{
 
 use derivative::Derivative;
 use derive_more::Display;
-use gazebo::{any::AnyLifetime, prelude::*};
+use gazebo::{
+    any::{AnyLifetime, ProvidesStaticType},
+    prelude::*,
+};
 use once_cell::sync::Lazy;
 
 use crate::{
@@ -606,7 +609,7 @@ impl<'v> DefLike<'v> for DefGen<FrozenValue> {
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for DefGen<V>
 where
-    Self: AnyLifetime<'v> + DefLike<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType + DefLike<'v>,
 {
     starlark_type!(FUNCTION_TYPE);
 

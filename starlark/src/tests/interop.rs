@@ -24,7 +24,10 @@ use std::{
 };
 
 use derive_more::Display;
-use gazebo::{any::AnyLifetime, cell::AsARef};
+use gazebo::{
+    any::{AnyLifetime, ProvidesStaticType},
+    cell::AsARef,
+};
 
 use crate as starlark;
 use crate::{
@@ -60,7 +63,7 @@ fn test_export_as() {
 
     impl<'v, T: AsARef<String> + Debug> StarlarkValue<'v> for Exporter<T>
     where
-        Self: AnyLifetime<'v>,
+        Self: AnyLifetime<'v> + ProvidesStaticType,
     {
         starlark_type!("exporter");
 

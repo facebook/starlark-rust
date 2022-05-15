@@ -50,7 +50,7 @@ use std::{
 
 use either::Either;
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     cell::AsARef,
     coerce::{coerce_ref, Coerce},
     prelude::*,
@@ -205,7 +205,7 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for FieldGen<V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!("field");
 
@@ -236,8 +236,8 @@ impl<'v> Freeze for RecordType<'v> {
 
 impl<'v, Typ, V: ValueLike<'v>> StarlarkValue<'v> for RecordTypeGen<V, Typ>
 where
-    Self: AnyLifetime<'v>,
-    FieldGen<V>: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
+    FieldGen<V>: AnyLifetime<'v> + ProvidesStaticType,
     Typ: AsARef<Option<String>> + Debug,
 {
     starlark_type!(FUNCTION_TYPE);
@@ -358,7 +358,7 @@ where
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for RecordGen<V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(Record::TYPE);
 

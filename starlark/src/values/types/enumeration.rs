@@ -42,7 +42,7 @@ use std::{
 use derivative::Derivative;
 use either::Either;
 use gazebo::{
-    any::AnyLifetime,
+    any::{AnyLifetime, ProvidesStaticType},
     cell::AsARef,
     coerce::{coerce_ref, Coerce},
 };
@@ -160,7 +160,7 @@ impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
 
 impl<'v, Typ, V: ValueLike<'v>> StarlarkValue<'v> for EnumTypeGen<V, Typ>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
     Typ: AsARef<Option<String>> + Debug,
 {
     starlark_type!(FUNCTION_TYPE);
@@ -279,7 +279,7 @@ fn enum_type_methods(builder: &mut MethodsBuilder) {
 
 impl<'v, V: ValueLike<'v>> StarlarkValue<'v> for EnumValueGen<V>
 where
-    Self: AnyLifetime<'v>,
+    Self: AnyLifetime<'v> + ProvidesStaticType,
 {
     starlark_type!(EnumValue::TYPE);
 
