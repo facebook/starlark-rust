@@ -30,10 +30,10 @@ use std::{
     alloc::Layout,
     cmp,
     collections::HashMap,
+    hash::Hash,
     marker::PhantomData,
     mem::{self, ManuallyDrop, MaybeUninit},
-    ptr::{self, from_raw_parts, metadata, DynMetadata},
-    slice,
+    ptr, slice,
 };
 
 use bumpalo::Bump;
@@ -41,7 +41,10 @@ use either::Either;
 use gazebo::{any::AnyLifetime, prelude::*};
 
 use crate::values::{
-    layout::avalue::{AValue, AValueDyn, BlackHole},
+    layout::{
+        avalue::{AValue, BlackHole},
+        vtable::{AValueDyn, AValueVTable},
+    },
     StarlarkValue,
 };
 
@@ -66,9 +69,23 @@ pub(crate) struct Arena {
     drop: Bump,
 }
 
-#[derive(Hash, PartialEq, Eq, Clone)]
+#[derive(Clone)]
 #[repr(transparent)]
-pub(crate) struct AValueHeader(DynMetadata<dyn AValueDyn<'static>>);
+pub(crate) struct AValueHeader(&'static AValueVTable);
+
+impl Hash for AValueHeader {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        ptr::hash(self.0, state);
+    }
+}
+
+impl PartialEq for AValueHeader {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0, other.0)
+    }
+}
+
+impl Eq for AValueHeader {}
 
 // Implements Copy so this is fine
 impl Dupe for AValueHeader {}
@@ -142,7 +159,7 @@ impl<'v, 'v2, T: AValue<'v2>> Reservation<'v, 'v2, T> {
             ptr::write(
                 self.pointer,
                 AValueRepr {
-                    header: AValueHeader::new(&x),
+                    header: AValueHeader::new::<T>(),
                     payload: x,
                 },
             );
@@ -240,7 +257,7 @@ impl Arena {
             )
         };
         let p = p.write(AValueRepr {
-            header: AValueHeader::new(&x),
+            header: AValueHeader(AValueVTable::new_black_hole()),
             payload: x,
         });
         let p = unsafe { transmute!(&mut AValueRepr<BlackHole>, &mut AValueRepr<T>, p) };
@@ -264,7 +281,7 @@ impl Arena {
         let (p, extra) = Self::alloc_uninit::<T>(bump, 0);
         debug_assert!(extra.is_empty());
         p.write(AValueRepr {
-            header: AValueHeader::new(&x),
+            header: AValueHeader::new::<T>(),
             payload: x,
         })
     }
@@ -280,7 +297,7 @@ impl Arena {
 
         let (p, extra) = Self::alloc_uninit::<T>(&self.non_drop, x.extra_len());
         let p = p.write(AValueRepr {
-            header: AValueHeader::new(&x),
+            header: AValueHeader::new::<T>(),
             payload: x,
         });
         (p, extra)
@@ -378,20 +395,18 @@ impl Arena {
 }
 
 impl AValueHeader {
-    pub(crate) fn new<'a, 'b>(x: &'a dyn AValueDyn<'b>) -> Self
-    where
-        'b: 'a,
-    {
-        let metadata: DynMetadata<dyn AValueDyn> = metadata(x);
-        // The vtable is invariant based on the lifetime, so this is safe
-        let metadata: DynMetadata<dyn AValueDyn<'static>> = unsafe { mem::transmute(metadata) };
+    pub(crate) fn new<'v, T: AValue<'v>>() -> AValueHeader {
+        let header = AValueHeader::new_const::<T>();
+
+        let vtable_ptr = header.0 as *const AValueVTable as usize;
         // Check that the LSB is not set, as we reuse that for overwrite
-        debug_assert!(unsafe { mem::transmute::<_, usize>(metadata) } & 1 == 0);
-        AValueHeader(metadata)
+        debug_assert!(vtable_ptr & 1 == 0);
+
+        header
     }
 
-    pub(crate) const fn with_metadata(metadata: DynMetadata<dyn AValueDyn<'static>>) -> Self {
-        AValueHeader(metadata)
+    pub(crate) const fn new_const<'v, T: AValue<'v>>() -> AValueHeader {
+        AValueHeader(AValueVTable::new::<T>())
     }
 
     pub(crate) fn payload_ptr(&self) -> *const () {
@@ -404,7 +419,7 @@ impl AValueHeader {
         &*(self.payload_ptr() as *const T)
     }
 
-    pub(crate) fn unpack<'v>(&'v self) -> &'v dyn AValueDyn<'v> {
+    pub(crate) fn unpack<'v>(&'v self) -> AValueDyn<'v> {
         unsafe {
             // TODO: this assertion does not belong here.
             //   Instead, `Value` should be a `Pointer<AValueOrForward>`
@@ -416,14 +431,16 @@ impl AValueHeader {
             );
         }
         unsafe {
-            let res = &*(from_raw_parts(self.payload_ptr(), self.0));
-            mem::transmute::<&'v dyn AValueDyn<'static>, &'v dyn AValueDyn<'v>>(res)
+            AValueDyn {
+                value: &*self.payload_ptr(),
+                vtable: self.0,
+            }
         }
     }
 
     /// Unpack something that might have been overwritten.
     // TODO(nga): this function does not belong here, it should accept `AValueOrForward`.
-    pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, &'v dyn AValueDyn<'v>> {
+    pub(crate) fn unpack_overwrite<'v>(&'v self) -> Either<usize, AValueDyn<'v>> {
         let x = unsafe { &*(self as *const AValueHeader as *const AValueOrForward) };
         match x.unpack() {
             Either::Left(header) => Either::Right(header.unpack()),
@@ -459,24 +476,15 @@ impl AValueHeader {
         );
         &*(self as *const AValueHeader as *const AValueRepr<A>)
     }
-
-    /// Cast header pointer to repr pointer.
-    pub(crate) unsafe fn as_repr_mut<'v, A: AValue<'v>>(&mut self) -> &mut AValueRepr<A> {
-        debug_assert_eq!(
-            A::StarlarkValue::static_type_id(),
-            self.unpack().static_type_of_value()
-        );
-        &mut *(self as *mut AValueHeader as *mut AValueRepr<A>)
-    }
 }
 
 impl<T> AValueRepr<T> {
     pub(crate) const fn with_metadata(
-        metadata: DynMetadata<dyn AValueDyn<'static>>,
+        metadata: &'static AValueVTable,
         payload: T,
     ) -> AValueRepr<T> {
         AValueRepr {
-            header: AValueHeader::with_metadata(metadata),
+            header: AValueHeader(metadata),
             payload,
         }
     }
@@ -496,14 +504,20 @@ impl<T> AValueRepr<T> {
 
         mem::size_of::<AValueHeader>() + T::offset_of_extra()
     }
+
+    pub(crate) fn from_payload_ptr_mut(payload_ptr: *mut T) -> *mut AValueRepr<T> {
+        let payload_ptr = payload_ptr as usize;
+        let header_ptr = payload_ptr - mem::size_of::<AValueHeader>();
+        header_ptr as *mut AValueRepr<T>
+    }
 }
 
 impl Drop for Arena {
     fn drop(&mut self) {
         self.for_each_drop_unordered(|x| {
             // Safe to convert to *mut because we are the only owner
-            let x = x.unpack() as *const dyn AValueDyn as *mut dyn AValueDyn;
-            unsafe { ptr::drop_in_place(x) };
+            let value = x.payload_ptr() as *mut ();
+            x.0.drop_in_place(value);
         });
         self.non_drop.reset();
         self.drop.reset();

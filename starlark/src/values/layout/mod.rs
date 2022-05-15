@@ -28,3 +28,4 @@ pub(crate) mod static_string;
 pub(crate) mod typed;
 pub(crate) mod value;
 pub(crate) mod value_captured;
+pub(crate) mod vtable;

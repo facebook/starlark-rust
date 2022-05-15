@@ -59,13 +59,11 @@ use crate::{
         int::PointerI32,
         layout::{
             arena::{AValueHeader, AValueRepr},
-            avalue::{
-                basic_ref, AValue, AValueDyn, StarlarkStrAValue, VALUE_FALSE, VALUE_NONE,
-                VALUE_TRUE,
-            },
+            avalue::{basic_ref, AValue, StarlarkStrAValue, VALUE_FALSE, VALUE_NONE, VALUE_TRUE},
             pointer::{FrozenPointer, Pointer},
             static_string::VALUE_EMPTY_STRING,
             typed::string::StringValueLike,
+            vtable::AValueDyn,
         },
         list::FrozenList,
         num::Num,
@@ -113,7 +111,7 @@ impl Display for Value<'_> {
             Ok(_guard) => {
                 // We want to reuse Display for `repr`, so that means that
                 // strings must display "with quotes", so we get everything consistent.
-                self.get_ref().as_display().fmt(f)
+                Display::fmt(self.get_ref().as_display(), f)
             }
             Err(..) => {
                 let mut recursive = String::new();
@@ -317,7 +315,7 @@ impl<'v> Value<'v> {
     }
 
     /// Get a pointer to a [`AValue`].
-    pub(crate) fn get_ref(self) -> &'v dyn AValueDyn<'v> {
+    pub(crate) fn get_ref(self) -> AValueDyn<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(x),
@@ -824,7 +822,7 @@ impl FrozenValue {
     }
 
     /// Get a pointer to the [`AValue`] object this value represents.
-    pub(crate) fn get_ref<'v>(self) -> &'v dyn AValueDyn<'v> {
+    pub(crate) fn get_ref<'v>(self) -> AValueDyn<'v> {
         match self.0.unpack() {
             Either::Left(x) => x.unpack(),
             Either::Right(x) => basic_ref(x),
@@ -897,7 +895,7 @@ impl<'v> Serialize for Value<'v> {
         S: Serializer,
     {
         match json_stack_push(*self) {
-            Ok(_guard) => erased_serde::serialize(self.get_ref(), s),
+            Ok(_guard) => erased_serde::serialize(self.get_ref().as_serialize(), s),
             Err(..) => Err(serde::ser::Error::custom(ToJsonCycleError(self.get_type()))),
         }
     }

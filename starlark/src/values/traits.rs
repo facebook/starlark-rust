@@ -29,7 +29,6 @@
 //! We also use the term _container_ for denoting any of those type that can
 //! hold several values.
 use std::{
-    any::TypeId,
     cmp::Ordering,
     fmt::{Debug, Display, Write},
 };
@@ -205,6 +204,7 @@ impl<'v> StarlarkValue<'v> for NoSimpleValue {
 /// Any additional methods that are added to this trait also need to be added to the
 /// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
 /// any implementations other than the default implementation will not be run.
+#[starlark_internal_vtable]
 pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
@@ -696,86 +696,5 @@ pub trait StarlarkValue<'v>: 'v + AnyLifetime<'v> + Debug + Display + Serialize 
 /// Trait implemented by a value stored in arena which delegates
 /// it's operations to contained [`StarlarkValue`].
 pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
-    // `AValue` is not a `StarlarkValue`, but a `Wrapper` type (or `BlackHole`).
-    // `static_type_xxx_of_value` operations return `TypeId` of that `StarlarkValue`,
-    // which is not the same of `TypeId` of `AValue` (because `AValue` is a wrapper).
-    fn static_type_of_value(&self) -> TypeId;
-
-    fn as_debug(&self) -> &dyn Debug;
-    fn as_display(&self) -> &dyn Display;
-    /// Get [`StarlarkValue`] as [`AnyLifetime`].
-    fn value_as_dyn_any(&self) -> &dyn AnyLifetime<'v>;
-
-    // Remaining operations are identical to operations of `StarlarkValue`.
-    // `Wrapper` implementation of these operations delegate to `StarlarkValue`.
-
-    fn get_type(&self) -> &'static str;
-    fn get_type_value(&self) -> FrozenStringValue;
-    fn matches_type(&self, _ty: &str) -> bool;
-    fn get_methods(&self) -> Option<&'static Methods>;
-    fn documentation(&self) -> Option<DocItem>;
-    fn collect_repr(&self, _collector: &mut String);
-    fn collect_repr_cycle(&self, _collector: &mut String);
-    fn name_for_call_stack(&self, me: Value<'v>) -> String;
-    fn to_bool(&self) -> bool;
-    fn to_int(&self) -> anyhow::Result<i32>;
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
-    fn extra_memory(&self) -> usize;
-    fn equals(&self, _other: Value<'v>) -> anyhow::Result<bool>;
-    fn compare(&self, _other: Value<'v>) -> anyhow::Result<Ordering>;
-    fn invoke(
-        &self,
-        _me: Value<'v>,
-        _args: &Arguments<'v, '_>,
-        _eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>>;
-    fn invoke_method(
-        &self,
-        me: Value<'v>,
-        this: Value<'v>,
-        args: &Arguments<'v, '_>,
-        eval: &mut Evaluator<'v, '_>,
-    ) -> anyhow::Result<Value<'v>>;
-    fn at(&self, _index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn slice(
-        &self,
-        _start: Option<Value<'v>>,
-        _stop: Option<Value<'v>>,
-        _stride: Option<Value<'v>>,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>>;
-    fn iterate<'a>(
-        &'a self,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
-    where
-        'v: 'a;
-    fn with_iterator(
-        &self,
-        _heap: &'v Heap,
-        _f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()>;
-    fn length(&self) -> anyhow::Result<i32>;
-    fn get_attr(&self, _attribute: &str, _heap: &'v Heap) -> Option<Value<'v>>;
-    fn has_attr(&self, _attribute: &str) -> bool;
-    fn dir_attr(&self) -> Vec<String>;
-    fn is_in(&self, _other: Value<'v>) -> anyhow::Result<bool>;
-    fn plus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn minus(&self, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn radd(&self, _lhs: Value<'v>, _heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>>;
-    fn add(&self, _rhs: Value<'v>, _heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>>;
-    fn sub(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn mul(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn percent(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn floor_div(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn bit_and(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn bit_or(&self, _other: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn bit_xor(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn bit_not(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn left_shift(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn right_shift(&self, _other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>>;
-    fn export_as(&self, _variable_name: &str, _eval: &mut Evaluator<'v, '_>);
-    fn set_at(&self, _index: Value<'v>, _new_value: Value<'v>) -> anyhow::Result<()>;
-    fn set_attr(&self, _attribute: &str, _new_value: Value<'v>) -> anyhow::Result<()>;
 }
