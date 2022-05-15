@@ -17,6 +17,7 @@
 
 use gazebo::prelude::*;
 use proc_macro2::Span;
+use quote::ToTokens;
 use syn::{
     spanned::Spanned, Attribute, FnArg, GenericArgument, GenericParam, Generics, Item, ItemConst,
     ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType,
@@ -471,6 +472,10 @@ fn parse_arg(x: FnArg, has_v: bool) -> syn::Result<StarArg> {
             ..
         }) => {
             check_lifetimes_in_type(&ty, has_v)?;
+            let default = ident
+                .subpat
+                .map(|x| syn::parse2(x.1.to_token_stream()))
+                .transpose()?;
             Ok(StarArg {
                 span,
                 attrs,
@@ -478,7 +483,7 @@ fn parse_arg(x: FnArg, has_v: bool) -> syn::Result<StarArg> {
                 name: ident.ident,
                 by_ref: ident.by_ref.is_some(),
                 ty,
-                default: ident.subpat.map(|x| *x.1),
+                default,
                 source: StarArgSource::Unknown,
             })
         }

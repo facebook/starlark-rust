@@ -16,7 +16,7 @@
  */
 
 use proc_macro2::{Ident, Span};
-use syn::{spanned::Spanned, Attribute, Block, Expr, NestedMeta, Pat, Type, Visibility};
+use syn::{spanned::Spanned, Attribute, Block, Expr, NestedMeta, Type, Visibility};
 
 use crate::module::{parse::ModuleKind, util::is_type_name};
 
@@ -152,7 +152,7 @@ pub(crate) struct StarArg {
     pub by_ref: bool,
     pub name: Ident,
     pub ty: Type,
-    pub default: Option<Pat>,
+    pub default: Option<Expr>,
     pub source: StarArgSource,
 }
 
