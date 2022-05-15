@@ -15,8 +15,20 @@
  * limitations under the License.
  */
 
-mod basic;
-mod default_value;
-mod named_positional;
-mod type_annotation;
-mod unpack_value;
+use crate as starlark;
+use crate::{assert::Assert, environment::GlobalsBuilder};
+
+#[starlark_module]
+fn default_value_functions(globals: &mut GlobalsBuilder) {
+    fn foo(x @ 75: i32) -> anyhow::Result<i32> {
+        Ok(x)
+    }
+}
+
+#[test]
+fn test_default_value() {
+    let mut a = Assert::new();
+    a.globals_add(default_value_functions);
+    a.eq("74", "foo(74)");
+    a.eq("75", "foo()");
+}
