@@ -163,7 +163,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// bool("1") == True
     /// # "#);
     /// ```
-    #[starlark(type(BOOL_TYPE))]
+    #[starlark(type = BOOL_TYPE)]
     #[starlark(speculative_exec_safe)]
     fn bool(ref x: Option<Value>) -> anyhow::Result<bool> {
         match x {
@@ -232,7 +232,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// x == {'a': 1} and y == {'x': 2, 'a': 1}
     /// # "#);
     /// ```
-    #[starlark(type(Dict::TYPE))]
+    #[starlark(type = Dict::TYPE)]
     #[starlark(speculative_exec_safe)]
     fn dict<'v>(args: &Arguments<'v, '_>) -> anyhow::Result<Dict<'v>> {
         // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
@@ -346,7 +346,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// float([])   # error: argument must be a string, a number, or a boolean
     /// # "#, "argument must be a string, a number, or a boolean");
     /// ```
-    #[starlark(type(StarlarkFloat::TYPE))]
+    #[starlark(type = StarlarkFloat::TYPE)]
     #[starlark(speculative_exec_safe)]
     fn float(ref a: Option<Value>) -> anyhow::Result<f64> {
         if a.is_none() {
@@ -510,7 +510,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// int(float("inf"))   # error: cannot convert infinity to int
     /// # "#, "cannot convert float to integer");
     /// ```
-    #[starlark(type(INT_TYPE))]
+    #[starlark(type = INT_TYPE)]
     #[starlark(speculative_exec_safe)]
     fn int<'v>(ref a: Option<Value<'v>>, base: Option<Value<'v>>) -> anyhow::Result<Value<'v>> {
         if a.is_none() {
@@ -655,7 +655,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// list("strings are not iterable") # error: not supported
     /// # "#, "not supported");
     /// ```
-    #[starlark(type(List::TYPE))]
+    #[starlark(type = List::TYPE)]
     #[starlark(speculative_exec_safe)]
     fn list<'v>(ref a: Option<Value>) -> anyhow::Result<Value<'v>> {
         Ok(if let Some(a) = a {
@@ -848,7 +848,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// list(range(10, 3, -2))                  == [10, 8, 6, 4]
     /// # "#);
     /// ```
-    #[starlark(type(Range::TYPE))]
+    #[starlark(type = Range::TYPE)]
     #[starlark(speculative_exec_safe)]
     fn range(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> anyhow::Result<Range> {
         let start = match a2 {
@@ -988,7 +988,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// str([1, "x"])                   == "[1, \"x\"]"
     /// # "#);
     /// ```
-    #[starlark(type(STRING_TYPE))]
+    #[starlark(type = STRING_TYPE)]
     #[starlark(speculative_exec_safe)]
     fn str<'v>(ref a: Value) -> anyhow::Result<StringValue<'v>> {
         if let Some(a) = StringValue::new(a) {
@@ -1015,7 +1015,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// tuple([1,2,3]) == (1, 2, 3)
     /// # "#);
     /// ```
-    #[starlark(type(Tuple::TYPE))]
+    #[starlark(type = Tuple::TYPE)]
     #[starlark(speculative_exec_safe)]
     fn tuple<'v>(ref a: Option<Value>) -> anyhow::Result<Value<'v>> {
         let mut l = Vec::new();
