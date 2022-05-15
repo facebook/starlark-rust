@@ -16,12 +16,12 @@
  */
 
 use gazebo::prelude::*;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use syn::{
-    spanned::Spanned, Attribute, Expr, FnArg, GenericArgument, GenericParam, Generics, Item,
-    ItemConst, ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments,
-    ReturnType, Stmt, Type, TypeReference,
+    parse::ParseStream, spanned::Spanned, Attribute, Expr, FnArg, GenericArgument, GenericParam,
+    Generics, Item, ItemConst, ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType,
+    PathArguments, ReturnType, Stmt, Token, Type, TypeReference,
 };
 
 use crate::module::{
@@ -140,10 +140,27 @@ fn is_attribute_docstring(x: &Attribute) -> Option<String> {
     None
 }
 
+/// Parse `#[starlark(type = expr)]`.
+fn parse_starlark_type_eq(tokens: &Attribute) -> syn::Result<Option<Expr>> {
+    assert!(tokens.path.is_ident("starlark"));
+    let parse = |parser: ParseStream| -> syn::Result<Option<Expr>> {
+        if parser.parse::<Token![type]>().is_err() {
+            parser.parse::<TokenStream>()?;
+            return Ok(None);
+        }
+        if parser.parse::<Token![=]>().is_err() {
+            parser.parse::<TokenStream>()?;
+            return Ok(None);
+        }
+        parser.parse::<Expr>().map(Some)
+    };
+    tokens.parse_args_with(parse)
+}
+
 /// Parse `#[starlark(...)]` attribute.
 fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAttributes> {
     const ERROR: &str = "Couldn't parse attribute. \
-        Expected `#[starlark(type(\"ty\")]`, \
+        Expected `#[starlark(type = \"ty\")]`, \
         `#[starlark(attribute)]` or `#[starlark(speculative_exec_safe)]`";
 
     let mut attrs = Vec::with_capacity(xs.len());
@@ -153,39 +170,47 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
     let mut doc_attrs = Vec::new();
     for x in xs {
         if x.path.is_ident("starlark") {
-            match x.parse_meta()? {
-                Meta::List(list) => {
-                    assert!(list.path.is_ident("starlark"));
-                    for nested in list.nested {
-                        match nested {
-                            NestedMeta::Lit(lit) => {
-                                return Err(syn::Error::new(lit.span(), ERROR));
-                            }
-                            NestedMeta::Meta(meta) => {
-                                if meta.path().is_ident("type") {
-                                    match meta {
-                                        Meta::List(list) => {
-                                            if list.nested.len() != 1 {
-                                                return Err(syn::Error::new(list.span(), ERROR));
+            if let Some(ty) = parse_starlark_type_eq(&x)? {
+                type_attribute = Some(ty);
+            } else {
+                match x.parse_meta()? {
+                    Meta::List(list) => {
+                        assert!(list.path.is_ident("starlark"));
+                        for nested in list.nested {
+                            match nested {
+                                NestedMeta::Lit(lit) => {
+                                    return Err(syn::Error::new(lit.span(), ERROR));
+                                }
+                                NestedMeta::Meta(meta) => {
+                                    if meta.path().is_ident("type") {
+                                        match meta {
+                                            Meta::List(list) => {
+                                                if list.nested.len() != 1 {
+                                                    return Err(syn::Error::new(
+                                                        list.span(),
+                                                        ERROR,
+                                                    ));
+                                                }
+                                                let ty = list.nested.first().unwrap();
+                                                type_attribute = Some(syn::parse2::<Expr>(
+                                                    ty.into_token_stream(),
+                                                )?);
                                             }
-                                            let ty = list.nested.first().unwrap();
-                                            type_attribute =
-                                                Some(syn::parse2::<Expr>(ty.into_token_stream())?);
+                                            _ => return Err(syn::Error::new(meta.span(), ERROR)),
                                         }
-                                        _ => return Err(syn::Error::new(meta.span(), ERROR)),
+                                    } else if meta.path().is_ident("attribute") {
+                                        is_attribute = true;
+                                    } else if meta.path().is_ident("speculative_exec_safe") {
+                                        speculative_exec_safe = true;
+                                    } else {
+                                        return Err(syn::Error::new(meta.span(), ERROR));
                                     }
-                                } else if meta.path().is_ident("attribute") {
-                                    is_attribute = true;
-                                } else if meta.path().is_ident("speculative_exec_safe") {
-                                    speculative_exec_safe = true;
-                                } else {
-                                    return Err(syn::Error::new(meta.span(), ERROR));
                                 }
                             }
                         }
                     }
+                    _ => return Err(syn::Error::new(x.span(), ERROR)),
                 }
-                _ => return Err(syn::Error::new(x.span(), ERROR)),
             }
         } else if let Some(ds) = is_attribute_docstring(&x) {
             doc_attrs.push(ds);
