@@ -19,9 +19,9 @@ use gazebo::prelude::*;
 use proc_macro2::Span;
 use quote::ToTokens;
 use syn::{
-    spanned::Spanned, Attribute, FnArg, GenericArgument, GenericParam, Generics, Item, ItemConst,
-    ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments, ReturnType,
-    Stmt, Type, TypeReference,
+    spanned::Spanned, Attribute, Expr, FnArg, GenericArgument, GenericParam, Generics, Item,
+    ItemConst, ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType, PathArguments,
+    ReturnType, Stmt, Type, TypeReference,
 };
 
 use crate::module::{
@@ -120,7 +120,7 @@ fn parse_const(x: ItemConst) -> StarConst {
 
 struct ProcessedAttributes {
     is_attribute: bool,
-    type_attribute: Option<NestedMeta>,
+    type_attribute: Option<Expr>,
     speculative_exec_safe: bool,
     docstring: Option<String>,
     /// Rest attributes
@@ -168,8 +168,9 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
                                             if list.nested.len() != 1 {
                                                 return Err(syn::Error::new(list.span(), ERROR));
                                             }
+                                            let ty = list.nested.first().unwrap();
                                             type_attribute =
-                                                Some(list.nested.first().unwrap().clone());
+                                                Some(syn::parse2::<Expr>(ty.into_token_stream())?);
                                         }
                                         _ => return Err(syn::Error::new(meta.span(), ERROR)),
                                     }

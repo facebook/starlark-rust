@@ -16,7 +16,7 @@
  */
 
 use proc_macro2::{Ident, Span};
-use syn::{spanned::Spanned, Attribute, Block, Expr, NestedMeta, Type, Visibility};
+use syn::{spanned::Spanned, Attribute, Block, Expr, Type, Visibility};
 
 use crate::module::{parse::ModuleKind, util::is_type_name};
 
@@ -80,7 +80,7 @@ impl StarConst {
 #[derive(Debug)]
 pub(crate) struct StarFun {
     pub name: Ident,
-    pub type_attribute: Option<NestedMeta>,
+    pub type_attribute: Option<Expr>,
     pub attrs: Vec<Attribute>,
     pub args: Vec<StarArg>,
     /// `anyhow::Result<T>`.
