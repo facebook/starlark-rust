@@ -25,7 +25,10 @@ use std::{
     ptr::DynMetadata,
 };
 
-use gazebo::{any::AnyLifetime, dupe::Dupe};
+use gazebo::{
+    any::{AnyLifetime, ProvidesStaticType},
+    dupe::Dupe,
+};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
@@ -84,7 +87,7 @@ impl<'v, T: Display + Debug + AnyLifetime<'v> + erased_serde::Serialize> GetDynM
 
 pub(crate) struct AValueVTable {
     // Common `AValue` fields.
-    static_type_of_value: fn() -> TypeId,
+    static_type_of_value: TypeId,
     get_hash: fn(*const ()) -> anyhow::Result<StarlarkHashValue>,
 
     // `StarlarkValue`
@@ -108,6 +111,12 @@ pub(crate) struct AValueVTable {
     any_lifetime: DynMetadata<dyn AnyLifetime<'static>>,
 }
 
+struct GetTypeId<T: ?Sized + 'static>(PhantomData<&'static T>);
+
+impl<T: ?Sized + 'static> GetTypeId<T> {
+    const TYPE_ID: TypeId = TypeId::of::<T>();
+}
+
 impl AValueVTable {
     pub(crate) fn new_black_hole() -> &'static AValueVTable {
         &AValueVTable {
@@ -115,7 +124,7 @@ impl AValueVTable {
 
             is_str: false,
             memory_size: |p| unsafe { (*(p as *const BlackHole)).0 },
-            static_type_of_value: || panic!("BlackHole"),
+            static_type_of_value: GetTypeId::<BlackHole>::TYPE_ID,
 
             heap_freeze: |_, _| panic!("BlackHole"),
             heap_copy: |_, _| panic!("BlackHole"),
@@ -149,7 +158,8 @@ impl AValueVTable {
                 let value = T::heap_copy(p, transmute!(&Tracer, &Tracer, tracer));
                 transmute!(Value, Value, value)
             },
-            static_type_of_value: T::StarlarkValue::static_type_id,
+            static_type_of_value:
+                GetTypeId::<<T::StarlarkValue as ProvidesStaticType>::StaticType>::TYPE_ID,
             get_hash: |p| unsafe {
                 let p = &*(p as *const T);
                 T::get_hash(p)
@@ -195,7 +205,7 @@ impl<'v> AValueDyn<'v> {
     }
 
     pub(crate) fn static_type_of_value(self) -> TypeId {
-        (self.vtable.static_type_of_value)()
+        self.vtable.static_type_of_value
     }
 
     pub(crate) fn is_str(self) -> bool {

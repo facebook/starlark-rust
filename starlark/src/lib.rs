@@ -357,6 +357,7 @@
 #![feature(const_mut_refs)]
 #![feature(const_ptr_offset)]
 #![feature(const_refs_to_cell)]
+#![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(generic_associated_types)]
 #![feature(hash_set_entry)]
