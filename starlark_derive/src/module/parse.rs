@@ -148,10 +148,7 @@ fn parse_starlark_type_eq(tokens: &Attribute) -> syn::Result<Option<Expr>> {
             parser.parse::<TokenStream>()?;
             return Ok(None);
         }
-        if parser.parse::<Token![=]>().is_err() {
-            parser.parse::<TokenStream>()?;
-            return Ok(None);
-        }
+        parser.parse::<Token![=]>()?;
         parser.parse::<Expr>().map(Some)
     };
     tokens.parse_args_with(parse)
@@ -182,23 +179,7 @@ fn process_attributes(span: Span, xs: Vec<Attribute>) -> syn::Result<ProcessedAt
                                     return Err(syn::Error::new(lit.span(), ERROR));
                                 }
                                 NestedMeta::Meta(meta) => {
-                                    if meta.path().is_ident("type") {
-                                        match meta {
-                                            Meta::List(list) => {
-                                                if list.nested.len() != 1 {
-                                                    return Err(syn::Error::new(
-                                                        list.span(),
-                                                        ERROR,
-                                                    ));
-                                                }
-                                                let ty = list.nested.first().unwrap();
-                                                type_attribute = Some(syn::parse2::<Expr>(
-                                                    ty.into_token_stream(),
-                                                )?);
-                                            }
-                                            _ => return Err(syn::Error::new(meta.span(), ERROR)),
-                                        }
-                                    } else if meta.path().is_ident("attribute") {
+                                    if meta.path().is_ident("attribute") {
                                         is_attribute = true;
                                     } else if meta.path().is_ident("speculative_exec_safe") {
                                         speculative_exec_safe = true;

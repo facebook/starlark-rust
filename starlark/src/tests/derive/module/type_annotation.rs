@@ -26,11 +26,6 @@ fn type_annotation_functions(globals: &mut GlobalsBuilder) {
     fn foo(x: i32) -> anyhow::Result<i32> {
         Ok(x)
     }
-
-    #[starlark(type = FOO_TYPE)]
-    fn foo_new(x: i32) -> anyhow::Result<i32> {
-        Ok(x)
-    }
 }
 
 #[test]
@@ -38,11 +33,4 @@ fn test_type_annotation() {
     let mut a = Assert::new();
     a.globals_add(type_annotation_functions);
     a.eq("'Foo'", "foo.type");
-}
-
-#[test]
-fn test_type_annotation_new() {
-    let mut a = Assert::new();
-    a.globals_add(type_annotation_functions);
-    a.eq("'Foo'", "foo_new.type");
 }
