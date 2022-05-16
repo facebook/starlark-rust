@@ -32,8 +32,9 @@ use crate::{
     collections::symbol_map::Symbol,
     environment::Globals,
     eval::compiler::{
+        constants::Constants,
         scope::{CompilerAstMap, Scope, ScopeData},
-        Compiler, Constants,
+        Compiler,
     },
     syntax::ast::AstModule,
     values::{docs::DocString, Value},

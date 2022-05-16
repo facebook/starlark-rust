@@ -17,6 +17,7 @@
 
 pub(crate) mod call;
 pub(crate) mod compr;
+pub(crate) mod constants;
 pub(crate) mod def;
 pub(crate) mod expr;
 pub(crate) mod expr_bool;
@@ -29,19 +30,19 @@ pub(crate) mod stmt;
 
 use std::fmt::Debug;
 
-use gazebo::prelude::*;
-use once_cell::sync::Lazy;
-
 use crate::{
     codemap::CodeMap,
     environment::Globals,
     errors::Diagnostic,
     eval::{
-        compiler::scope::{ScopeData, ScopeId, ScopeNames},
+        compiler::{
+            constants::Constants,
+            scope::{ScopeData, ScopeId, ScopeNames},
+        },
         runtime::call_stack::FrozenFileSpan,
         Evaluator,
     },
-    values::{FrozenRef, FrozenValue},
+    values::FrozenRef,
 };
 
 /// Error of evaluation of an expression.
@@ -100,24 +101,5 @@ impl Compiler<'_, '_, '_> {
     pub(crate) fn exit_scope(&mut self) -> &mut ScopeNames {
         let scope_id = self.locals.pop().unwrap();
         self.scope_data.mut_scope(scope_id)
-    }
-}
-
-#[derive(Clone, Copy, Dupe)]
-pub(crate) struct Constants {
-    pub(crate) fn_len: FrozenValue,
-    pub(crate) fn_type: FrozenValue,
-}
-
-impl Constants {
-    pub fn new() -> Self {
-        static RES: Lazy<Constants> = Lazy::new(|| {
-            let g = Globals::standard();
-            Constants {
-                fn_len: g.get_frozen("len").unwrap(),
-                fn_type: g.get_frozen("type").unwrap(),
-            }
-        });
-        *Lazy::force(&RES)
     }
 }
