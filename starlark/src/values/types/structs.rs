@@ -75,6 +75,16 @@ impl<'v, V: ValueLike<'v>> StructGen<'v, V> {
             _marker: marker::PhantomData,
         }
     }
+
+    /// Iterate over the elements in the struct.
+    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = (StringValue<'v>, V)> + 'a
+    where
+        'v: 'a,
+    {
+        self.fields
+            .iter()
+            .map(|(name, value)| (name.to_string_value(), *value))
+    }
 }
 
 starlark_complex_value!(pub Struct<'v>);
@@ -97,9 +107,7 @@ impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
             "struct(",
             ")",
             "=",
-            self.fields
-                .iter()
-                .map(|(name, value)| (name.to_string_value().as_str(), value)),
+            self.iter().map(|(k, v)| (k.as_str(), v)),
         )
     }
 }
@@ -229,10 +237,9 @@ where
         S: serde::Serializer,
     {
         let mut map_serialize = serializer.serialize_map(Some(self.fields.len()))?;
-        for (k, v) in self.fields.iter() {
-            map_serialize.serialize_entry(k.to_string_value().as_str(), &v.to_value())?;
+        for (k, v) in self.iter() {
+            map_serialize.serialize_entry(&k, &v.to_value())?;
         }
-
         map_serialize.end()
     }
 }
