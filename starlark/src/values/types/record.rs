@@ -131,17 +131,12 @@ pub struct RecordGen<V> {
 impl<'v, V: ValueLike<'v>> Display for RecordGen<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "record(")?;
-        for (i, (name, typ)) in self
-            .get_record_fields()
-            .keys()
-            .zip(&self.values)
-            .enumerate()
-        {
+        for (i, (name, typ)) in self.iter().enumerate() {
             if i != 0 {
                 write!(f, ", ")?;
             }
             write!(f, "{}=", name)?;
-            Display::fmt(typ, f)?;
+            Display::fmt(&typ, f)?;
         }
         write!(f, ")")
     }
@@ -200,6 +195,17 @@ impl<'v, V: ValueLike<'v>> RecordGen<V> {
 
     fn get_record_fields(&self) -> &'v SmallMap<String, (FieldGen<Value<'v>>, TypeCompiled)> {
         record_fields(self.get_record_type())
+    }
+
+    /// Iterate over the elements in the record.
+    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = (&'v str, V)> + 'a
+    where
+        'v: 'a,
+    {
+        self.get_record_fields()
+            .keys()
+            .map(String::as_str)
+            .zip(self.values.iter().copied())
     }
 }
 
@@ -412,10 +418,9 @@ where
         S: serde::Serializer,
     {
         let mut map_serialize = serializer.serialize_map(Some(self.get_record_fields().len()))?;
-        for (k, v) in self.get_record_fields().keys().zip(&self.values) {
+        for (k, v) in self.iter() {
             map_serialize.serialize_entry(k, &v.to_value())?;
         }
-
         map_serialize.end()
     }
 }
