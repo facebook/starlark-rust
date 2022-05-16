@@ -29,6 +29,7 @@ use gazebo::{
     coerce::{Coerce, CoerceKey},
     prelude::*,
 };
+use serde::Serialize;
 
 use crate::{
     gazebo::any::AnyLifetime,
@@ -93,6 +94,24 @@ impl<'v, T: StarlarkValue<'v>> Display for ValueTyped<'v, T> {
 impl<'v, T: StarlarkValue<'v>> Display for FrozenValueTyped<'v, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(&self.0, f)
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> Serialize for ValueTyped<'v, T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'v, T: StarlarkValue<'v>> Serialize for FrozenValueTyped<'v, T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
     }
 }
 
