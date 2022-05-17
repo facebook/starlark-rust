@@ -43,13 +43,13 @@ impl Gen {
             match param {
                 FnArg::Receiver(_) => {
                     field_fn_param_types.push(quote_spanned! {method.sig.span()=>
-                        *const ()
+                        crate::values::layout::vtable::StarlarkValueRawPtr<'a, 'v>
                     });
                     field_params_names.push(quote_spanned! {method.sig.span()=>
                         this
                     });
                     field_init_args.push(quote_spanned! {method.sig.span()=>
-                        std::mem::transmute::<*const (), &T>(this)
+                        std::mem::transmute::<crate::values::layout::vtable::StarlarkValueRawPtr, &T>(this)
                     });
                 }
                 FnArg::Typed(p) => {
@@ -82,25 +82,16 @@ impl Gen {
             .collect();
         let ret = match &method.sig.output {
             ReturnType::Default => quote! {},
-            ReturnType::Type(_, ty) => quote_spanned! {method.sig.span()=>
-                -> #ty
-            },
+            ReturnType::Type(_, ty) => {
+                quote_spanned! {method.sig.span()=>
+                    -> #ty
+                }
+            }
         };
-        let field = if method.sig.ident == "iterate" {
-            // Iterate is the only function with `'a` lifetime parameter,
-            // so it's easier to handle it manually.
-            quote_spanned! {method.sig.span()=>
-                pub(crate) #fn_name: for<'v> fn(
-                    *const (),
-                    heap: &'v Heap,
-                ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>>
-            }
-        } else {
-            quote_spanned! {method.sig.span()=>
-                pub(crate) #fn_name: for<'v> fn(
-                    #(#field_fn_param_types),*
-                ) #ret
-            }
+        let field = quote_spanned! {method.sig.span()=>
+            pub(crate) #fn_name: for<'a, 'v> fn(
+                #(#field_fn_param_types),*
+            ) #ret
         };
         let init = quote_spanned! {method.sig.span()=>
             #fn_name: {
