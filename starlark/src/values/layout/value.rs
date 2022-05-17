@@ -40,7 +40,7 @@ use either::Either;
 use gazebo::{
     any::AnyLifetime,
     cast,
-    coerce::{Coerce, CoerceKey},
+    coerce::{coerce, Coerce, CoerceKey},
     prelude::*,
 };
 use indexmap::Equivalent;
@@ -49,7 +49,11 @@ use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{Hashed, StarlarkHashValue, StarlarkHasher},
-    eval::{compiler::def::FrozenDef, runtime::call_stack::FrozenFileSpan, Arguments, Evaluator},
+    eval::{
+        compiler::def::{Def, FrozenDef},
+        runtime::call_stack::FrozenFileSpan,
+        Arguments, Evaluator, ParametersSpec,
+    },
     values::{
         dict::FrozenDict,
         docs::DocItem,
@@ -498,6 +502,19 @@ impl<'v> Value<'v> {
         eval.with_call_stack(self, location, |eval| {
             self.get_ref().invoke(self, args, eval)
         })
+    }
+
+    /// Callable parameters if known.
+    ///
+    /// For now it only returns parameter spec for `def` and `lambda`.
+    pub fn parameters_spec(self) -> Option<&'v ParametersSpec<Value<'v>>> {
+        if let Some(def) = self.downcast_ref::<Def>() {
+            Some(&def.parameters)
+        } else if let Some(def) = self.downcast_ref::<FrozenDef>() {
+            Some(coerce(&def.parameters))
+        } else {
+            None
+        }
     }
 
     /// Invoke self with given arguments.

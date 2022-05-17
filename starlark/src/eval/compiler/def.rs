@@ -476,8 +476,8 @@ impl Compiler<'_, '_, '_> {
 #[derive(Derivative, NoSerialize, AnyLifetime, Trace)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
-    parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
-    parameter_captures: Vec<u32>,  // Indices of parameters, which are captured in nested defs
+    pub(crate) parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
+    parameter_captures: Vec<u32>, // Indices of parameters, which are captured in nested defs
     parameter_types: Vec<(u32, String, V, TypeCompiled)>, // The types of the parameters (sparse indexed array, (0, argm T) implies parameter 0 named arg must have type T)
     return_type: Option<(V, TypeCompiled)>, // The return type annotation for the function
     pub(crate) def_info: FrozenRef<'static, DefInfo>, // The source code and metadata for this function
