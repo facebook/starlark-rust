@@ -32,7 +32,10 @@ use crate::{
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
     eval::{
-        runtime::{arguments::ArgNames, rust_loc::rust_loc},
+        runtime::{
+            arguments::{ArgNames, ArgumentsImpl},
+            rust_loc::rust_loc,
+        },
         Arguments, Evaluator,
     },
     values::{
@@ -276,16 +279,16 @@ where
         let self_named = coerce_ref(&self.named);
         let self_names = coerce_ref(&self.names);
 
-        eval.alloca_concat(self_pos, args.pos, |pos, eval| {
-            eval.alloca_concat(self_named, args.named, |named, eval| {
-                eval.alloca_concat(self_names, args.names.names(), |names, eval| {
-                    let params = Arguments {
+        eval.alloca_concat(self_pos, args.0.pos, |pos, eval| {
+            eval.alloca_concat(self_named, args.0.named, |named, eval| {
+                eval.alloca_concat(self_names, args.0.names.names(), |names, eval| {
+                    let params = Arguments(ArgumentsImpl {
                         pos,
                         named,
                         names: ArgNames::new(names),
-                        args: args.args,
-                        kwargs: args.kwargs,
-                    };
+                        args: args.0.args,
+                        kwargs: args.0.kwargs,
+                    });
                     self.func
                         .to_value()
                         .invoke_with_loc(Some(rust_loc!()), &params, eval)

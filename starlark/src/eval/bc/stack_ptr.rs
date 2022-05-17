@@ -28,7 +28,7 @@ use crate::{
             if_debug::IfDebug,
             instr_arg::{ArgPopsStack, ArgPopsStackMaybe1, ArgPushesStack},
         },
-        runtime::arguments::ArgNames,
+        runtime::arguments::{ArgNames, ArgumentsImpl},
         Arguments,
     },
     values::Value,
@@ -146,24 +146,24 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         let args = if a.args { Some(self.pop()) } else { None };
         let pos_named = self.pop_slice(ArgPopsStack(a.pos_named));
         let (pos, named) = pos_named.split_at(pos_named.len() - a.names.len());
-        Arguments {
+        Arguments(ArgumentsImpl {
             pos,
             named,
             names: ArgNames::new(coerce_ref(&a.names)),
             args,
             kwargs,
-        }
+        })
     }
 
     pub(crate) fn pop_args_pos<'a>(&'a self, npos: &BcCallArgsPos) -> Arguments<'v, 'a> {
         let pos = self.pop_slice(ArgPopsStack(npos.pos));
-        Arguments {
+        Arguments(ArgumentsImpl {
             pos,
             named: &[],
             names: ArgNames::new(&[]),
             args: None,
             kwargs: None,
-        }
+        })
     }
 
     pub(crate) fn push(&mut self, value: Value<'v>) {

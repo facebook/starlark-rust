@@ -345,7 +345,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
-        self.collect_inline(args, slots, heap)
+        self.collect_inline(&args.0, slots, heap)
     }
 
     /// Collect `N` arguments.
@@ -366,7 +366,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     #[inline(always)]
     pub(crate) fn collect_inline(
         &self,
-        args: &Arguments<'v, '_>,
+        args: &ArgumentsImpl<'v, '_>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -391,7 +391,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
     fn collect_slow(
         &self,
-        args: &Arguments<'v, '_>,
+        args: &ArgumentsImpl<'v, '_>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -648,7 +648,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
             self.len(),
             || Cell::new(None),
             |slots, eval| {
-                self.collect_inline(args, slots, eval.heap())?;
+                self.collect_inline(&args.0, slots, eval.heap())?;
                 let parser = ParametersParser::new(slots);
                 k(parser, eval)
             },
@@ -750,7 +750,7 @@ impl<'a, 'v> ArgNames<'a, 'v> {
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
 #[derive(Default, Clone, Copy, Dupe)]
-pub struct Arguments<'v, 'a> {
+pub(crate) struct ArgumentsImpl<'v, 'a> {
     /// Positional arguments.
     pub(crate) pos: &'a [Value<'v>],
     /// Named arguments.
@@ -765,6 +765,11 @@ pub struct Arguments<'v, 'a> {
     pub(crate) kwargs: Option<Value<'v>>,
 }
 
+/// Arguments object is passed from the starlark interpreter to function implementation
+/// when evaluation function or method calls.
+#[derive(Default, Clone, Copy, Dupe)]
+pub struct Arguments<'v, 'a>(pub(crate) ArgumentsImpl<'v, 'a>);
+
 impl<'v, 'a> Arguments<'v, 'a> {
     /// Unwrap all named arguments (both explicit and in `**kwargs`) into a map.
     ///
@@ -772,22 +777,22 @@ impl<'v, 'a> Arguments<'v, 'a> {
     pub fn names_map(&self) -> anyhow::Result<SmallMap<StringValue<'v>, Value<'v>>> {
         match self.unpack_kwargs()? {
             None => {
-                let mut result = SmallMap::with_capacity(self.names.len());
-                for (k, v) in self.names.iter().zip(self.named) {
+                let mut result = SmallMap::with_capacity(self.0.names.len());
+                for (k, v) in self.0.names.iter().zip(self.0.named) {
                     result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
                 }
                 Ok(result)
             }
             Some(kwargs) => {
-                if self.names.is_empty() {
+                if self.0.names.is_empty() {
                     match kwargs.downcast_ref_key_string() {
                         Some(kwargs) => Ok(kwargs.clone()),
                         None => Err(FunctionError::ArgsValueIsNotString.into()),
                     }
                 } else {
                     // We have to insert the names before the kwargs since the iteration order is observable
-                    let mut result = SmallMap::with_capacity(self.names.len() + kwargs.len());
-                    for (k, v) in self.names.iter().zip(self.named) {
+                    let mut result = SmallMap::with_capacity(self.0.names.len() + kwargs.len());
+                    for (k, v) in self.0.names.iter().zip(self.0.named) {
                         result.insert_hashed(Hashed::new_unchecked(k.0.small_hash(), k.1), *v);
                     }
                     for (k, v) in kwargs.iter_hashed() {
@@ -819,11 +824,11 @@ impl<'v, 'a> Arguments<'v, 'a> {
         &'b self,
         heap: &'v Heap,
     ) -> anyhow::Result<impl Iterator<Item = Value<'v>> + 'b> {
-        let tail = match self.args {
+        let tail = match self.0.args {
             None => Either::Left(iter::empty()),
             Some(args) => Either::Right(args.iterate(heap)?),
         };
-        Ok(self.pos.iter().copied().chain(tail))
+        Ok(self.0.pos.iter().copied().chain(tail))
     }
 
     /// Examine the `kwargs` field, converting it to a [`Dict`] or failing.
@@ -832,7 +837,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
     /// The arguments may also overlap with named, which would be an error.
     #[inline(always)]
     pub fn unpack_kwargs(&self) -> anyhow::Result<Option<DictRef<'v>>> {
-        match self.kwargs {
+        match self.0.kwargs {
             None => Ok(None),
             Some(kwargs) => match Dict::from_value(kwargs) {
                 None => Err(FunctionError::KwArgsIsNotDict.into()),
@@ -871,7 +876,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
         fn bad(x: &Arguments) -> anyhow::Result<()> {
             // We might have a empty kwargs dictionary, but probably have an error
             let mut extra = Vec::new();
-            extra.extend(x.names.iter().map(|x| x.0.as_str().to_owned()));
+            extra.extend(x.0.names.iter().map(|x| x.0.as_str().to_owned()));
             if let Some(kwargs) = x.unpack_kwargs()? {
                 for k in kwargs.keys() {
                     extra.push(Arguments::unpack_kwargs_key(k)?.to_owned());
@@ -889,7 +894,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
             }
         }
 
-        if self.named.is_empty() && self.kwargs.is_none() {
+        if self.0.named.is_empty() && self.0.kwargs.is_none() {
             Ok(())
         } else {
             bad(self)
@@ -908,28 +913,28 @@ impl<'v, 'a> Arguments<'v, 'a> {
         ) -> anyhow::Result<[Value<'v>; N]> {
             // Very sad that we allocate into a vector, but I expect calling into a small positional argument
             // with a *args is very rare.
-            let xs = x
-                .pos
-                .iter()
-                .copied()
-                .chain(x.args.unwrap().iterate(heap)?)
-                .collect::<Vec<_>>();
+            let xs =
+                x.0.pos
+                    .iter()
+                    .copied()
+                    .chain(x.0.args.unwrap().iterate(heap)?)
+                    .collect::<Vec<_>>();
             xs.as_slice().try_into().map_err(|_| {
                 FunctionError::WrongNumberOfParameters {
                     min: N,
                     max: N,
-                    got: x.pos.len(),
+                    got: x.0.pos.len(),
                 }
                 .into()
             })
         }
 
-        if self.args.is_none() {
-            self.pos.try_into().map_err(|_| {
+        if self.0.args.is_none() {
+            self.0.pos.try_into().map_err(|_| {
                 FunctionError::WrongNumberOfParameters {
                     min: N,
                     max: N,
-                    got: self.pos.len(),
+                    got: self.0.pos.len(),
                 }
                 .into()
             })
@@ -954,11 +959,11 @@ impl<'v, 'a> Arguments<'v, 'a> {
         ) -> anyhow::Result<([Value<'v>; REQUIRED], [Option<Value<'v>>; OPTIONAL])> {
             // Very sad that we allocate into a vector, but I expect calling into a small positional argument
             // with a *args is very rare.
-            let args = match x.args {
+            let args = match x.0.args {
                 None => box None.into_iter(),
                 Some(args) => args.iterate(heap)?,
             };
-            let xs = x.pos.iter().copied().chain(args).collect::<Vec<_>>();
+            let xs = x.0.pos.iter().copied().chain(args).collect::<Vec<_>>();
             if xs.len() >= REQUIRED && xs.len() <= REQUIRED + OPTIONAL {
                 let required = xs[0..REQUIRED].try_into().unwrap();
                 let mut optional = [None; OPTIONAL];
@@ -976,13 +981,13 @@ impl<'v, 'a> Arguments<'v, 'a> {
             }
         }
 
-        if self.args.is_none()
-            && self.pos.len() >= REQUIRED
-            && self.pos.len() <= REQUIRED + OPTIONAL
+        if self.0.args.is_none()
+            && self.0.pos.len() >= REQUIRED
+            && self.0.pos.len() <= REQUIRED + OPTIONAL
         {
-            let required = self.pos[0..REQUIRED].try_into().unwrap();
+            let required = self.0.pos[0..REQUIRED].try_into().unwrap();
             let mut optional = [None; OPTIONAL];
-            for (a, b) in optional.iter_mut().zip(&self.pos[REQUIRED..]) {
+            for (a, b) in optional.iter_mut().zip(&self.0.pos[REQUIRED..]) {
                 *a = Some(*b);
             }
             Ok((required, optional))
@@ -1060,11 +1065,11 @@ mod tests {
                 let pos = (0..i).map(|x| Value::new_int(x as i32)).collect::<Vec<_>>();
                 let args = (i..N).map(|x| Value::new_int(x as i32)).collect::<Vec<_>>();
                 let empty_args = args.is_empty();
-                p.pos = &pos;
-                p.args = Some(heap.alloc(args));
+                p.0.pos = &pos;
+                p.0.args = Some(heap.alloc(args));
                 op(&p);
                 if empty_args {
-                    p.args = None;
+                    p.0.args = None;
                     op(&p);
                 }
             }
@@ -1129,21 +1134,21 @@ mod tests {
         assert!(p.no_named_args().is_ok());
 
         // Test lots of forms of kwargs work properly
-        p.kwargs = Some(Value::new_none());
+        p.0.kwargs = Some(Value::new_none());
         assert!(p.no_named_args().is_err());
-        p.kwargs = Some(heap.alloc(Dict::default()));
+        p.0.kwargs = Some(heap.alloc(Dict::default()));
         assert!(p.no_named_args().is_ok());
         let mut sm = SmallMap::new();
         sm.insert_hashed(heap.alloc_str("test").get_hashed(), Value::new_none());
-        p.kwargs = Some(heap.alloc(Dict::new(coerce(sm))));
+        p.0.kwargs = Some(heap.alloc(Dict::new(coerce(sm))));
         assert!(p.no_named_args().is_err());
 
         // Test named arguments work properly
-        p.kwargs = None;
+        p.0.kwargs = None;
         let named = [Value::new_none()];
-        p.named = &named;
+        p.0.named = &named;
         let names = [(Symbol::new("test"), heap.alloc_str("test"))];
-        p.names = ArgNames::new(&names);
+        p.0.names = ArgNames::new(&names);
         assert!(p.no_named_args().is_err());
     }
 

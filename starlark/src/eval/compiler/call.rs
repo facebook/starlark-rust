@@ -30,7 +30,10 @@ use crate::{
             stmt::OptimizeOnFreezeContext,
             Compiler,
         },
-        runtime::{arguments::ArgNames, call_stack::FrozenFileSpan},
+        runtime::{
+            arguments::{ArgNames, ArgumentsImpl},
+            call_stack::FrozenFileSpan,
+        },
         Arguments,
     },
     gazebo::prelude::SliceExt,
@@ -172,13 +175,13 @@ impl ArgsCompiledValue {
             .as_ref()
             .try_map(|kwargs| kwargs.as_value().map(FrozenValue::to_value).ok_or(()))
             .ok()?;
-        Some(handler(&Arguments {
+        Some(handler(&Arguments(ArgumentsImpl {
             pos: &pos,
             named: &named,
             names: ArgNames::new(coerce(&self.names)),
             args,
             kwargs,
-        }))
+        })))
     }
 
     fn optimize_on_freeze(&self, ctx: &OptimizeOnFreezeContext) -> ArgsCompiledValue {

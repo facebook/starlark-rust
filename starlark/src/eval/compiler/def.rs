@@ -626,7 +626,8 @@ where
         let bc = self.bc();
         alloca_frame(eval, bc.local_count, bc.max_stack_size, |eval| {
             let slots = eval.current_frame.locals();
-            self.parameters.collect_inline(args, slots, eval.heap())?;
+            self.parameters
+                .collect_inline(&args.0, slots, eval.heap())?;
             self.invoke_raw(eval)
         })
     }
