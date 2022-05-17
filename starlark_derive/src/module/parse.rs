@@ -19,9 +19,9 @@ use gazebo::prelude::*;
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use syn::{
-    parse::ParseStream, spanned::Spanned, Attribute, Expr, FnArg, GenericArgument, GenericParam,
-    Generics, Item, ItemConst, ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta, Pat, PatType,
-    PathArguments, ReturnType, Stmt, Token, Type, TypeReference,
+    parse::ParseStream, spanned::Spanned, visit::Visit, Attribute, Expr, FnArg, GenericArgument,
+    GenericParam, Generics, Item, ItemConst, ItemFn, Lifetime, Meta, MetaNameValue, NestedMeta,
+    Pat, PatType, PathArguments, ReturnType, Stmt, Token, Type, TypeReference,
 };
 
 use crate::module::{
@@ -326,34 +326,6 @@ fn parse_fun(func: ItemFn) -> syn::Result<StarStmt> {
     }
 }
 
-fn check_lifetime_in_lifetime(lifetime: &Lifetime, has_v: bool) -> syn::Result<()> {
-    if lifetime.ident != "_" {
-        if lifetime.ident != "v" {
-            return Err(syn::Error::new(
-                lifetime.span(),
-                "Only 'v lifetime is allowed",
-            ));
-        }
-        if !has_v {
-            return Err(syn::Error::new(lifetime.span(), "Undeclared lifetime"));
-        }
-    }
-    Ok(())
-}
-
-fn check_lifetimes_in_generic_arg(arg: &GenericArgument, has_v: bool) -> syn::Result<()> {
-    match arg {
-        GenericArgument::Lifetime(lifetime) => check_lifetime_in_lifetime(lifetime, has_v),
-        GenericArgument::Type(t) => check_lifetimes_in_type(t, has_v),
-        GenericArgument::Binding(b) => check_lifetimes_in_type(&b.ty, has_v),
-        GenericArgument::Constraint(..) => Err(syn::Error::new(
-            arg.span(),
-            "Constraints are not allowed in generic arguments",
-        )),
-        GenericArgument::Const(_) => Ok(()),
-    }
-}
-
 /// Check there are no undeclared lifetiems in return type.
 fn check_lifetimes_in_return_type(return_type: &ReturnType, has_v: bool) -> syn::Result<()> {
     match return_type {
@@ -364,56 +336,38 @@ fn check_lifetimes_in_return_type(return_type: &ReturnType, has_v: bool) -> syn:
 
 /// Check there are no undeclared lifetiems in type.
 fn check_lifetimes_in_type(ty: &Type, has_v: bool) -> syn::Result<()> {
-    match ty {
-        Type::Array(a) => {
-            check_lifetimes_in_type(&a.elem, has_v)?;
-        }
-        Type::BareFn(f) => {
-            for arg in &f.inputs {
-                check_lifetimes_in_type(&arg.ty, has_v)?;
-            }
-            check_lifetimes_in_return_type(&f.output, has_v)?;
-        }
-        Type::Never(_) => {}
-        Type::Group(g) => check_lifetimes_in_type(&g.elem, has_v)?,
-        Type::Paren(p) => check_lifetimes_in_type(&p.elem, has_v)?,
-        Type::Path(p) => {
-            for seg in &p.path.segments {
-                match &seg.arguments {
-                    PathArguments::None => {}
-                    PathArguments::AngleBracketed(a) => {
-                        for a in &a.args {
-                            check_lifetimes_in_generic_arg(a, has_v)?;
-                        }
+    struct VisitImpl {
+        has_v: bool,
+        result: syn::Result<()>,
+    }
+
+    impl<'ast> Visit<'ast> for VisitImpl {
+        #[allow(clippy::collapsible_if)]
+        fn visit_lifetime(&mut self, lifetime: &'ast Lifetime) {
+            if self.result.is_ok() {
+                if lifetime.ident != "_" {
+                    if lifetime.ident != "v" {
+                        self.result = Err(syn::Error::new(
+                            lifetime.span(),
+                            "Only 'v lifetime is allowed",
+                        ));
                     }
-                    PathArguments::Parenthesized(a) => {
-                        for a in &a.inputs {
-                            check_lifetimes_in_type(a, has_v)?;
-                        }
-                        match &a.output {
-                            ReturnType::Default => {}
-                            ReturnType::Type(_, ty) => check_lifetimes_in_type(ty, has_v)?,
-                        }
+                    if !self.has_v {
+                        self.result = Err(syn::Error::new(lifetime.span(), "Undeclared lifetime"));
                     }
                 }
             }
         }
-        Type::Ptr(p) => check_lifetimes_in_type(&p.elem, has_v)?,
-        Type::Reference(r) => {
-            if let Some(lifetime) = &r.lifetime {
-                check_lifetime_in_lifetime(lifetime, has_v)?;
-            }
-            check_lifetimes_in_type(&r.elem, has_v)?;
-        }
-        Type::Slice(s) => check_lifetimes_in_type(&s.elem, has_v)?,
-        Type::Tuple(t) => {
-            for ty in &t.elems {
-                check_lifetimes_in_type(ty, has_v)?;
-            }
-        }
-        _ => return Err(syn::Error::new(ty.span(), "Unsupported type")),
     }
-    Ok(())
+
+    let mut visit = VisitImpl {
+        has_v,
+        result: Ok(()),
+    };
+
+    visit.visit_type(ty);
+
+    visit.result
 }
 
 fn parse_fn_output(return_type: &ReturnType, span: Span, has_v: bool) -> syn::Result<(Type, Type)> {
