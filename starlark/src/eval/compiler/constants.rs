@@ -38,3 +38,20 @@ impl Constants {
         *Lazy::force(&RES)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{environment::Globals, eval::compiler::constants::Constants};
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(
+            Globals::standard().get_frozen("len").unwrap(),
+            Constants::new().fn_len
+        );
+        assert_eq!(
+            Globals::extended().get_frozen("len").unwrap(),
+            Constants::new().fn_len
+        );
+    }
+}
