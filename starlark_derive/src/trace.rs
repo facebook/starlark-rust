@@ -47,7 +47,12 @@ pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (impl_generics, _, _) = generics2.split_for_impl();
 
     let name = &input.ident;
-    let body = trace_impl(&input.data);
+    let body = match trace_impl(&input.data) {
+        Ok(body) => body,
+        Err(e) => {
+            return e.to_compile_error().into();
+        }
+    };
     let gen = quote! {
         unsafe impl #impl_generics starlark::values::Trace<'v> for #name #ty_generics #where_clause {
             fn trace(&mut self, tracer: &starlark::values::Tracer<'v>) {
@@ -75,7 +80,7 @@ fn is_ignore(attrs: &[Attribute]) -> bool {
     })
 }
 
-fn trace_struct(data: &DataStruct) -> TokenStream {
+fn trace_struct(data: &DataStruct) -> syn::Result<TokenStream> {
     match data.fields {
         Fields::Named(ref fields) => {
             let xs: Vec<_> = fields
@@ -92,9 +97,9 @@ fn trace_struct(data: &DataStruct) -> TokenStream {
                     }
                 })
                 .collect();
-            quote! {
+            Ok(quote! {
                 #(#xs)*
-            }
+            })
         }
         Fields::Unnamed(ref fields) => {
             let xs: Vec<_> = fields
@@ -110,17 +115,15 @@ fn trace_struct(data: &DataStruct) -> TokenStream {
                     }
                 })
                 .collect();
-            quote! {
+            Ok(quote! {
                 #(#xs)*
-            }
+            })
         }
-        Fields::Unit => {
-            quote!()
-        }
+        Fields::Unit => Ok(quote!()),
     }
 }
 
-fn trace_enum(data: &DataEnum) -> TokenStream {
+fn trace_enum(data: &DataEnum) -> syn::Result<TokenStream> {
     for variant in &data.variants {
         if let Fields::Unit = variant.fields {
             continue;
@@ -132,7 +135,10 @@ fn trace_enum(data: &DataEnum) -> TokenStream {
                         continue;
                     }
                     // TODO: implement
-                    unimplemented!("Can't derive Trace for enums");
+                    return Err(syn::Error::new_spanned(
+                        fields,
+                        "Can't derive `Trace` for enums",
+                    ));
                 }
             }
             Fields::Unnamed(fields) => {
@@ -141,19 +147,25 @@ fn trace_enum(data: &DataEnum) -> TokenStream {
                         continue;
                     }
                     // TODO: implement
-                    unimplemented!("Can't derive Trace for enums");
+                    return Err(syn::Error::new_spanned(
+                        fields,
+                        "Can't derive `Trace` for enums",
+                    ));
                 }
             }
             Fields::Unit => {}
         }
     }
-    quote!()
+    Ok(quote!())
 }
 
-fn trace_impl(data: &Data) -> TokenStream {
+fn trace_impl(data: &Data) -> syn::Result<TokenStream> {
     match data {
         Data::Struct(data) => trace_struct(data),
         Data::Enum(data) => trace_enum(data),
-        Data::Union(_) => unimplemented!("Can't derive Trace for unions"),
+        Data::Union(uni) => Err(syn::Error::new_spanned(
+            uni.union_token,
+            "Can't derive `Trace` for unions",
+        )),
     }
 }
