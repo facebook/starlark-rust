@@ -713,6 +713,38 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 }
 
+#[derive(Debug, Copy, Clone, Dupe, Default)]
+pub(crate) struct ArgNames<'a, 'v> {
+    /// Names are not guaranteed to be unique here.
+    names: &'a [(Symbol, StringValue<'v>)],
+}
+
+impl<'a, 'v> ArgNames<'a, 'v> {
+    /// Names are allowed to be not-unique.
+    /// String in `Symbol` must be equal to the `StringValue`,
+    /// it is caller responsibility to ensure that.
+    pub(crate) fn new(names: &'a [(Symbol, StringValue<'v>)]) -> ArgNames<'a, 'v> {
+        debug_assert!(names.iter().all(|(s, v)| s.as_str() == v.as_str()));
+        ArgNames { names }
+    }
+
+    pub(crate) fn names(&self) -> &'a [(Symbol, StringValue<'v>)] {
+        self.names
+    }
+
+    pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = &'a (Symbol, StringValue<'v>)> {
+        self.names.iter()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.names.is_empty()
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.names.len()
+    }
+}
+
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
 #[derive(Default, Clone, Copy, Dupe)]
@@ -724,7 +756,7 @@ pub struct Arguments<'v, 'a> {
     /// Names of named arguments.
     ///
     /// `named` length must be equal to `names` length.
-    pub(crate) names: &'a [(Symbol, StringValue<'v>)],
+    pub(crate) names: ArgNames<'a, 'v>,
     /// `*args` argument.
     pub(crate) args: Option<Value<'v>>,
     /// `**kwargs` argument.
@@ -1108,7 +1140,7 @@ mod tests {
         let named = [Value::new_none()];
         p.named = &named;
         let names = [(Symbol::new("test"), heap.alloc_str("test"))];
-        p.names = &names;
+        p.names = ArgNames::new(&names);
         assert!(p.no_named_args().is_err());
     }
 

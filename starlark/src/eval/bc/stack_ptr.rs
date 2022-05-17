@@ -28,6 +28,7 @@ use crate::{
             if_debug::IfDebug,
             instr_arg::{ArgPopsStack, ArgPopsStackMaybe1, ArgPushesStack},
         },
+        runtime::arguments::ArgNames,
         Arguments,
     },
     values::Value,
@@ -148,7 +149,7 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         Arguments {
             pos,
             named,
-            names: coerce_ref(&a.names),
+            names: ArgNames::new(coerce_ref(&a.names)),
             args,
             kwargs,
         }
@@ -159,7 +160,7 @@ impl<'v, 's> BcStackPtr<'v, 's> {
         Arguments {
             pos,
             named: &[],
-            names: &[],
+            names: ArgNames::new(&[]),
             args: None,
             kwargs: None,
         }

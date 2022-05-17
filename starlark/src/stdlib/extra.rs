@@ -31,7 +31,10 @@ use crate::{
     self as starlark,
     collections::symbol_map::Symbol,
     environment::GlobalsBuilder,
-    eval::{runtime::rust_loc::rust_loc, Arguments, Evaluator},
+    eval::{
+        runtime::{arguments::ArgNames, rust_loc::rust_loc},
+        Arguments, Evaluator,
+    },
     values::{
         dict::DictRef, function::FUNCTION_TYPE, layout::typed::string::StringValueLike,
         none::NoneType, regex::StarlarkRegex, tuple::Tuple, Freeze, Freezer, FrozenStringValue,
@@ -275,11 +278,11 @@ where
 
         eval.alloca_concat(self_pos, args.pos, |pos, eval| {
             eval.alloca_concat(self_named, args.named, |named, eval| {
-                eval.alloca_concat(self_names, args.names, |names, eval| {
+                eval.alloca_concat(self_names, args.names.names(), |names, eval| {
                     let params = Arguments {
                         pos,
                         named,
-                        names,
+                        names: ArgNames::new(names),
                         args: args.args,
                         kwargs: args.kwargs,
                     };

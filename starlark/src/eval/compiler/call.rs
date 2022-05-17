@@ -30,7 +30,7 @@ use crate::{
             stmt::OptimizeOnFreezeContext,
             Compiler,
         },
-        runtime::call_stack::FrozenFileSpan,
+        runtime::{arguments::ArgNames, call_stack::FrozenFileSpan},
         Arguments,
     },
     gazebo::prelude::SliceExt,
@@ -175,7 +175,7 @@ impl ArgsCompiledValue {
         Some(handler(&Arguments {
             pos: &pos,
             named: &named,
-            names: coerce(&self.names),
+            names: ArgNames::new(coerce(&self.names)),
             args,
             kwargs,
         }))

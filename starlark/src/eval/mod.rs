@@ -31,10 +31,13 @@ pub use runtime::{
 use crate::{
     collections::symbol_map::Symbol,
     environment::Globals,
-    eval::compiler::{
-        constants::Constants,
-        scope::{CompilerAstMap, Scope, ScopeData},
-        Compiler,
+    eval::{
+        compiler::{
+            constants::Constants,
+            scope::{CompilerAstMap, Scope, ScopeData},
+            Compiler,
+        },
+        runtime::arguments::ArgNames,
     },
     syntax::ast::AstModule,
     values::{docs::DocString, Value},
@@ -156,7 +159,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let params = Arguments {
             pos: positional,
             named: &named,
-            names: &names,
+            names: ArgNames::new(&names),
             args: None,
             kwargs: None,
         };
