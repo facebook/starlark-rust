@@ -251,35 +251,37 @@ impl<V> ParametersSpec<V> {
         // We used to make the "name" of a function include all its parameters, but that is a lot of
         // details and visually crowds out everything else. Try disabling, although we might want it
         // in some contexts, so don't delete it.
-        if false {
-            collector.push('(');
+    }
 
-            let mut names = self.names.keys();
-            let mut next_name = || {
-                // We prepend '$' on the front of variable names that are positional-only
-                // arguments to the native functions. We rip those off when
-                // displaying the signature.
-                // The `unwrap` is safe because we must have a names entry for each
-                // non-Args/KWargs kind.
-                names.next().unwrap().as_str().trim_start_match('$')
-            };
+    /// Function parameter as they would appear in `def`
+    /// (excluding types, default values and formatting).
+    pub fn parameters_str(&self) -> String {
+        let mut collector = String::new();
+        let mut names = self.names.keys();
+        let mut next_name = || {
+            // We prepend '$' on the front of variable names that are positional-only
+            // arguments to the native functions. We rip those off when
+            // displaying the signature.
+            // The `unwrap` is safe because we must have a names entry for each
+            // non-Args/KWargs kind.
+            names.next().unwrap().as_str().trim_start_match('$')
+        };
 
-            for (i, typ) in self.kinds.iter().enumerate() {
-                if i != 0 {
-                    collector.push_str(", ");
-                }
-                match typ {
-                    ParameterKind::Required => collector.push_str(next_name()),
-                    ParameterKind::Optional | ParameterKind::Defaulted(_) => {
-                        collector.push_str(next_name());
-                        collector.push_str(" = ...");
-                    }
-                    ParameterKind::Args => collector.push_str("*args"),
-                    ParameterKind::KWargs => collector.push_str("**kwargs"),
-                }
+        for (i, typ) in self.kinds.iter().enumerate() {
+            if i != 0 {
+                collector.push_str(", ");
             }
-            collector.push(')');
+            match typ {
+                ParameterKind::Required => collector.push_str(next_name()),
+                ParameterKind::Optional | ParameterKind::Defaulted(_) => {
+                    collector.push_str(next_name());
+                    collector.push_str(" = ...");
+                }
+                ParameterKind::Args => collector.push_str("*args"),
+                ParameterKind::KWargs => collector.push_str("**kwargs"),
+            }
         }
+        collector
     }
 
     /// Get the index where a user would have supplied "*" as a parameter.
@@ -1047,6 +1049,7 @@ impl Arguments<'_, '_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::assert::Assert;
 
     #[test]
     fn test_parameter_unpack() {
@@ -1244,5 +1247,18 @@ mod tests {
         let params = p.documentation(types, docs);
         assert_eq!(expected, params);
         Ok(())
+    }
+
+    #[test]
+    fn test_parameters_str() {
+        let a = Assert::new();
+        let f = a
+            .pass_module("def f(a, b, *args, **kwargs): pass")
+            .get("f")
+            .unwrap();
+        assert_eq!(
+            "a, b, *args, **kwargs",
+            &f.value().parameters_spec().unwrap().parameters_str()
+        );
     }
 }
