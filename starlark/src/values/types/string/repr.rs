@@ -228,12 +228,8 @@ pub(crate) fn string_repr(str: &str, buffer: &mut String) {
 
 #[cfg(test)]
 mod tests {
-    use std::mem;
 
-    use crate::{
-        assert,
-        values::types::string::repr::{chunk_non_ascii_or_need_escape, string_repr},
-    };
+    use crate::{assert, values::types::string::repr::string_repr};
 
     #[test]
     fn test_to_repr() {
@@ -326,9 +322,11 @@ mod tests {
     #[cfg(target_feature = "sse2")]
     #[test]
     fn test_chunk_non_ascii_or_need_escape() {
-        use std::arch::x86_64::*;
+        use std::{arch::x86_64::*, mem};
 
-        use crate::values::types::string::simd::Vector;
+        use crate::values::{
+            string::repr::chunk_non_ascii_or_need_escape, types::string::simd::Vector,
+        };
 
         unsafe fn load(s: &str) -> __m128i {
             assert_eq!(s.len(), mem::size_of::<__m128i>());
