@@ -50,7 +50,9 @@ use crate::{
             Compiler, EvalException,
         },
         runtime::{
-            arguments::ParametersSpec, call_stack::FrozenFileSpan, evaluator::Evaluator,
+            arguments::{ArgSymbol, ArgumentsImpl, ParametersSpec},
+            call_stack::FrozenFileSpan,
+            evaluator::Evaluator,
             slots::LocalSlotId,
         },
         Arguments,
@@ -623,13 +625,7 @@ where
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        let bc = self.bc();
-        alloca_frame(eval, bc.local_count, bc.max_stack_size, |eval| {
-            let slots = eval.current_frame.locals();
-            self.parameters
-                .collect_inline(&args.0, slots, eval.heap())?;
-            self.invoke_raw(eval)
-        })
+        self.invoke_impl(&args.0, eval)
     }
 
     fn documentation(&self) -> Option<DocItem> {
@@ -689,9 +685,24 @@ where
         Ok(())
     }
 
+    #[inline(always)]
+    fn invoke_impl<S: ArgSymbol>(
+        &self,
+        args: &ArgumentsImpl<'v, '_, S>,
+        eval: &mut Evaluator<'v, '_>,
+    ) -> anyhow::Result<Value<'v>> {
+        let bc = self.bc();
+        alloca_frame(eval, bc.local_count, bc.max_stack_size, |eval| {
+            let slots = eval.current_frame.locals();
+            self.parameters.collect_inline(args, slots, eval.heap())?;
+            self.invoke_raw(eval)
+        })
+    }
+
     /// Invoke the function, assuming that:
     /// * the frame has been allocated and stored in `eval.current_frame`
     /// * the arguments have been collected into the frame
+    #[inline(always)]
     fn invoke_raw(&self, eval: &mut Evaluator<'v, '_>) -> anyhow::Result<Value<'v>> {
         // println!("invoking {}", self.def.stmt.name.node);
 
