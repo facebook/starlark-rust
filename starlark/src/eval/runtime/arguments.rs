@@ -750,6 +750,29 @@ impl ArgSymbol for Symbol {
     }
 }
 
+/// `Symbol` resolved to function parameter index.
+pub(crate) struct ResolvedArgName {
+    /// Hash of the argument name.
+    hash: StarlarkHashValue,
+    /// Parameter index or `None` if the argument should go to kwargs.
+    param_index: Option<u32>,
+}
+
+impl ArgSymbol for ResolvedArgName {
+    fn get_index_from_param_spec<'v, V: ValueLike<'v>>(
+        &self,
+        _ps: &ParametersSpec<V>,
+    ) -> Option<usize> {
+        self.param_index.map(|i| i as usize)
+    }
+
+    fn small_hash(&self) -> StarlarkHashValue {
+        self.hash
+    }
+}
+
+unsafe impl Coerce<ResolvedArgName> for ResolvedArgName {}
+
 #[derive(Debug, Clone_, Dupe_, Default_)]
 pub(crate) struct ArgNames<'a, 'v, S: ArgSymbol> {
     /// Names are not guaranteed to be unique here.
