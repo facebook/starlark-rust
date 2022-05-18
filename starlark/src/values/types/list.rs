@@ -34,7 +34,7 @@ use gazebo::{
     coerce::{coerce, coerce_ref, Coerce},
     prelude::*,
 };
-use serde::{ser::SerializeSeq, Serialize};
+use serde::Serialize;
 
 use crate::{
     self as starlark,
@@ -581,13 +581,7 @@ impl<'v, T: ListLike<'v>> Serialize for ListGen<T> {
     where
         S: serde::Serializer,
     {
-        let mut seq_serializer = serializer.serialize_seq(Some(self.0.content().len()))?;
-
-        for e in self.0.content().iter() {
-            seq_serializer.serialize_element(e)?;
-        }
-
-        seq_serializer.end()
+        serializer.collect_seq(self.0.content().iter())
     }
 }
 
