@@ -25,6 +25,7 @@ pub(crate) mod dict;
 pub(crate) mod enumeration;
 pub(crate) mod extra;
 mod funcs;
+pub(crate) mod json;
 use gazebo::prelude::*;
 pub(crate) mod list;
 pub(crate) mod record;
@@ -106,7 +107,7 @@ impl LibraryExtension {
             Print => extra::print(builder),
             Pprint => extra::pprint(builder),
             Breakpoint => breakpoint::global(builder),
-            Json => extra::json(builder),
+            Json => json::json(builder),
             Abs => extra::abs(builder),
         }
     }

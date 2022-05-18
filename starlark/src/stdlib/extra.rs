@@ -189,13 +189,6 @@ pub fn pprint(builder: &mut GlobalsBuilder) {
 }
 
 #[starlark_module]
-pub fn json(builder: &mut GlobalsBuilder) {
-    fn json(ref x: Value) -> anyhow::Result<String> {
-        x.to_json()
-    }
-}
-
-#[starlark_module]
 pub fn abs(builder: &mut GlobalsBuilder) {
     fn abs(ref x: i32) -> anyhow::Result<i32> {
         Ok(x.abs())
