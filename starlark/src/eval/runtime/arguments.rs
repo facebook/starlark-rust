@@ -378,7 +378,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     #[inline(always)]
     pub(crate) fn collect_inline(
         &self,
-        args: &ArgumentsImpl<'v, '_>,
+        args: &ArgumentsImpl<'v, '_, Symbol>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -403,7 +403,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
     fn collect_slow(
         &self,
-        args: &ArgumentsImpl<'v, '_>,
+        args: &ArgumentsImpl<'v, '_, Symbol>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -727,26 +727,30 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 }
 
-#[derive(Debug, Clone, Dupe, Default)]
-pub(crate) struct ArgNames<'a, 'v> {
+/// An object accompanying argument name for faster argument resolution.
+pub(crate) trait ArgSymbol {}
+
+impl ArgSymbol for Symbol {}
+
+#[derive(Debug, Clone_, Dupe_, Default_)]
+pub(crate) struct ArgNames<'a, 'v, S: ArgSymbol> {
     /// Names are not guaranteed to be unique here.
-    names: &'a [(Symbol, StringValue<'v>)],
+    names: &'a [(S, StringValue<'v>)],
 }
 
-impl<'a, 'v> ArgNames<'a, 'v> {
+impl<'a, 'v, S: ArgSymbol> ArgNames<'a, 'v, S> {
     /// Names are allowed to be not-unique.
     /// String in `Symbol` must be equal to the `StringValue`,
     /// it is caller responsibility to ensure that.
-    pub(crate) fn new(names: &'a [(Symbol, StringValue<'v>)]) -> ArgNames<'a, 'v> {
-        debug_assert!(names.iter().all(|(s, v)| s.as_str() == v.as_str()));
+    pub(crate) fn new(names: &'a [(S, StringValue<'v>)]) -> ArgNames<'a, 'v, S> {
         ArgNames { names }
     }
 
-    pub(crate) fn names(&self) -> &'a [(Symbol, StringValue<'v>)] {
+    pub(crate) fn names(&self) -> &'a [(S, StringValue<'v>)] {
         self.names
     }
 
-    pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = &'a (Symbol, StringValue<'v>)> {
+    pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = &'a (S, StringValue<'v>)> {
         self.names.iter()
     }
 
@@ -761,8 +765,8 @@ impl<'a, 'v> ArgNames<'a, 'v> {
 
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
-#[derive(Default, Clone, Dupe)]
-pub(crate) struct ArgumentsImpl<'v, 'a> {
+#[derive(Default_, Clone_, Dupe_)]
+pub(crate) struct ArgumentsImpl<'v, 'a, S: ArgSymbol> {
     /// Positional arguments.
     pub(crate) pos: &'a [Value<'v>],
     /// Named arguments.
@@ -770,17 +774,17 @@ pub(crate) struct ArgumentsImpl<'v, 'a> {
     /// Names of named arguments.
     ///
     /// `named` length must be equal to `names` length.
-    pub(crate) names: ArgNames<'a, 'v>,
+    pub(crate) names: ArgNames<'a, 'v, S>,
     /// `*args` argument.
     pub(crate) args: Option<Value<'v>>,
     /// `**kwargs` argument.
     pub(crate) kwargs: Option<Value<'v>>,
 }
 
-#[derive(Default, Clone, Dupe)]
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
-pub struct Arguments<'v, 'a>(pub(crate) ArgumentsImpl<'v, 'a>);
+#[derive(Default, Clone, Dupe_)]
+pub struct Arguments<'v, 'a>(pub(crate) ArgumentsImpl<'v, 'a, Symbol>);
 
 impl<'v, 'a> Arguments<'v, 'a> {
     /// Unwrap all named arguments (both explicit and in `**kwargs`) into a map.
