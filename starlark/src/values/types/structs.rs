@@ -238,7 +238,7 @@ where
     {
         let mut map_serialize = serializer.serialize_map(Some(self.fields.len()))?;
         for (k, v) in self.iter() {
-            map_serialize.serialize_entry(&k, &v.to_value())?;
+            map_serialize.serialize_entry(&k, &v)?;
         }
         map_serialize.end()
     }

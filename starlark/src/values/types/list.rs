@@ -584,7 +584,7 @@ impl<'v, T: ListLike<'v>> Serialize for ListGen<T> {
         let mut seq_serializer = serializer.serialize_seq(Some(self.0.content().len()))?;
 
         for e in self.0.content().iter() {
-            seq_serializer.serialize_element(&e.to_value())?;
+            seq_serializer.serialize_element(e)?;
         }
 
         seq_serializer.end()

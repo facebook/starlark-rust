@@ -249,7 +249,7 @@ impl<'v, V: ValueLike<'v>> Serialize for TupleGen<V> {
         let mut tuple_serializer = serializer.serialize_tuple(self.len)?;
 
         for e in self.content().iter() {
-            tuple_serializer.serialize_element(&e.to_value())?;
+            tuple_serializer.serialize_element(e)?;
         }
 
         tuple_serializer.end()

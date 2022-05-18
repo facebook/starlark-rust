@@ -329,6 +329,6 @@ where
     where
         S: serde::Serializer,
     {
-        self.value.to_value().serialize(serializer)
+        self.value.serialize(serializer)
     }
 }
