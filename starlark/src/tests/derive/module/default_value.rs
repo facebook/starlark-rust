@@ -23,6 +23,10 @@ fn default_value_functions(globals: &mut GlobalsBuilder) {
     fn foo(x @ 75: i32) -> anyhow::Result<i32> {
         Ok(x)
     }
+
+    fn foo_new(#[starlark(default = 75)] x: i32) -> anyhow::Result<i32> {
+        Ok(x)
+    }
 }
 
 #[test]
@@ -31,4 +35,12 @@ fn test_default_value() {
     a.globals_add(default_value_functions);
     a.eq("74", "foo(74)");
     a.eq("75", "foo()");
+}
+
+#[test]
+fn test_default_value_new() {
+    let mut a = Assert::new();
+    a.globals_add(default_value_functions);
+    a.eq("74", "foo_new(74)");
+    a.eq("75", "foo_new()");
 }

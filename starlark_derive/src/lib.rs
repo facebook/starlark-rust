@@ -56,8 +56,8 @@ mod vtable;
 /// * `kwargs` means the argument is the `**kwargs`.
 /// * `ref name` means the argument must be passed by position, not by name.
 /// * A type of `Option` means the argument is optional.
-/// * A pattern `x @ foo : bool` means the argument defaults to `foo` if not
-///   specified.
+/// * A annotation `#[starlark(default = foo)] x : bool` means the argument defaults to `foo`
+///   if not specified.
 ///
 /// During execution there are two local variables injected into scope:
 ///

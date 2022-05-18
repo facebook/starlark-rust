@@ -140,16 +140,19 @@ fn is_attribute_docstring(x: &Attribute) -> Option<String> {
     None
 }
 
-/// Parse `#[starlark(type = expr)]`.
-fn parse_starlark_type_eq(tokens: &Attribute) -> syn::Result<Option<Expr>> {
+/// Parse `#[starlark(...)]` fn param attribute.
+fn parse_starlark_fn_param_attr(tokens: &Attribute, default: &mut Option<Expr>) -> syn::Result<()> {
     assert!(tokens.path.is_ident("starlark"));
-    let parse = |parser: ParseStream| -> syn::Result<Option<Expr>> {
-        if parser.parse::<Token![type]>().is_err() {
-            parser.parse::<TokenStream>()?;
-            return Ok(None);
+    let parse = |parser: ParseStream| -> syn::Result<()> {
+        if parser.parse::<Token![default]>().is_err() {
+            return Err(syn::Error::new(
+                tokens.span(),
+                "Expecting `#[starlark(default = expr)]` attribute",
+            ));
         }
         parser.parse::<Token![=]>()?;
-        parser.parse::<Expr>().map(Some)
+        *default = Some(parser.parse::<Expr>()?);
+        Ok(())
     };
     tokens.parse_args_with(parse)
 }
@@ -423,6 +426,20 @@ fn parse_fn_generics(generics: &Generics) -> syn::Result<bool> {
     Ok(seen_v)
 }
 
+/// Parse `#[starlark(type = expr)]`.
+fn parse_starlark_type_eq(tokens: &Attribute) -> syn::Result<Option<Expr>> {
+    assert!(tokens.path.is_ident("starlark"));
+    let parse = |parser: ParseStream| -> syn::Result<Option<Expr>> {
+        if parser.parse::<Token![type]>().is_err() {
+            parser.parse::<TokenStream>()?;
+            return Ok(None);
+        }
+        parser.parse::<Token![=]>()?;
+        parser.parse::<Expr>().map(Some)
+    };
+    tokens.parse_args_with(parse)
+}
+
 fn parse_arg(x: FnArg, has_v: bool) -> syn::Result<StarArg> {
     let span = x.span();
     match x {
@@ -433,13 +450,21 @@ fn parse_arg(x: FnArg, has_v: bool) -> syn::Result<StarArg> {
             ..
         }) => {
             check_lifetimes_in_type(&ty, has_v)?;
-            let default = ident
+            let mut default = ident
                 .subpat
                 .map(|x| syn::parse2(x.1.to_token_stream()))
                 .transpose()?;
+            let mut unused_attrs = Vec::new();
+            for attr in attrs {
+                if attr.path.is_ident("starlark") {
+                    parse_starlark_fn_param_attr(&attr, &mut default)?;
+                } else {
+                    unused_attrs.push(attr);
+                }
+            }
             Ok(StarArg {
                 span,
-                attrs,
+                attrs: unused_attrs,
                 mutable: ident.mutability.is_some(),
                 name: ident.ident,
                 by_ref: ident.by_ref.is_some(),
