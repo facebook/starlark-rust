@@ -29,7 +29,7 @@ use crate as starlark;
 use crate::{
     collections::{
         symbol_map::{Symbol, SymbolMap},
-        Hashed, SmallMap,
+        Hashed, SmallMap, StarlarkHashValue,
     },
     eval::Evaluator,
     values::{
@@ -376,9 +376,9 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     /// A variant of collect that is always inlined
     /// for Def and NativeFunction that are hot-spots
     #[inline(always)]
-    pub(crate) fn collect_inline(
+    pub(crate) fn collect_inline<S: ArgSymbol>(
         &self,
-        args: &ArgumentsImpl<'v, '_, Symbol>,
+        args: &ArgumentsImpl<'v, '_, S>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -401,9 +401,9 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         self.collect_slow(args, slots, heap)
     }
 
-    fn collect_slow(
+    fn collect_slow<S: ArgSymbol>(
         &self,
-        args: &ArgumentsImpl<'v, '_, Symbol>,
+        args: &ArgumentsImpl<'v, '_, S>,
         slots: &[Cell<Option<Value<'v>>>],
         heap: &'v Heap,
     ) -> anyhow::Result<()> {
@@ -472,13 +472,13 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         if !args.names.is_empty() {
             for ((name, name_value), v) in args.names.iter().zip(args.named) {
                 // Safe to use new_unchecked because hash for the Value and str are the same
-                match self.names.get(name) {
+                match name.get_index_from_param_spec(self) {
                     None => {
                         kwargs.insert(Hashed::new_unchecked(name.small_hash(), *name_value), *v);
                     }
                     Some(i) => {
-                        slots[*i].set(Some(*v));
-                        lowest_name = cmp::min(lowest_name, *i);
+                        slots[i].set(Some(*v));
+                        lowest_name = cmp::min(lowest_name, i);
                     }
                 }
             }
@@ -728,9 +728,27 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 }
 
 /// An object accompanying argument name for faster argument resolution.
-pub(crate) trait ArgSymbol {}
+pub(crate) trait ArgSymbol {
+    fn get_index_from_param_spec<'v, V: ValueLike<'v>>(
+        &self,
+        ps: &ParametersSpec<V>,
+    ) -> Option<usize>;
 
-impl ArgSymbol for Symbol {}
+    fn small_hash(&self) -> StarlarkHashValue;
+}
+
+impl ArgSymbol for Symbol {
+    fn get_index_from_param_spec<'v, V: ValueLike<'v>>(
+        &self,
+        ps: &ParametersSpec<V>,
+    ) -> Option<usize> {
+        ps.names.get(self).copied()
+    }
+
+    fn small_hash(&self) -> StarlarkHashValue {
+        self.small_hash()
+    }
+}
 
 #[derive(Debug, Clone_, Dupe_, Default_)]
 pub(crate) struct ArgNames<'a, 'v, S: ArgSymbol> {
