@@ -727,7 +727,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Dupe, Default)]
+#[derive(Debug, Clone, Dupe, Default)]
 pub(crate) struct ArgNames<'a, 'v> {
     /// Names are not guaranteed to be unique here.
     names: &'a [(Symbol, StringValue<'v>)],
@@ -761,7 +761,7 @@ impl<'a, 'v> ArgNames<'a, 'v> {
 
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
-#[derive(Default, Clone, Copy, Dupe)]
+#[derive(Default, Clone, Dupe)]
 pub(crate) struct ArgumentsImpl<'v, 'a> {
     /// Positional arguments.
     pub(crate) pos: &'a [Value<'v>],
@@ -777,9 +777,9 @@ pub(crate) struct ArgumentsImpl<'v, 'a> {
     pub(crate) kwargs: Option<Value<'v>>,
 }
 
+#[derive(Default, Clone, Dupe)]
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
-#[derive(Default, Clone, Copy, Dupe)]
 pub struct Arguments<'v, 'a>(pub(crate) ArgumentsImpl<'v, 'a>);
 
 impl<'v, 'a> Arguments<'v, 'a> {
