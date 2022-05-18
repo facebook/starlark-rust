@@ -1547,16 +1547,14 @@ pub(crate) struct InstrCallImpl<A: BcCallArgs<Symbol>>(marker::PhantomData<fn(A)
 pub(crate) struct InstrCallFrozenGenericImpl<F: BcFrozenCallable, A: BcCallArgs<Symbol>>(
     marker::PhantomData<(F, A)>,
 );
+pub(crate) struct InstrCallFrozenDefImpl<A: BcCallArgs<Symbol>>(marker::PhantomData<A>);
 pub(crate) struct InstrCallMethodImpl<A: BcCallArgs<Symbol>>(marker::PhantomData<A>);
 pub(crate) struct InstrCallMaybeKnownMethodImpl<A: BcCallArgs<Symbol>>(marker::PhantomData<A>);
 
 pub(crate) type InstrCall = InstrNoFlow<InstrCallImpl<BcCallArgsFull<Symbol>>>;
 pub(crate) type InstrCallPos = InstrNoFlow<InstrCallImpl<BcCallArgsPos>>;
-pub(crate) type InstrCallFrozenDef = InstrNoFlow<
-    InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>, BcCallArgsFull<Symbol>>,
->;
-pub(crate) type InstrCallFrozenDefPos =
-    InstrNoFlow<InstrCallFrozenGenericImpl<FrozenValueTyped<'static, FrozenDef>, BcCallArgsPos>>;
+pub(crate) type InstrCallFrozenDef = InstrNoFlow<InstrCallFrozenDefImpl<BcCallArgsFull<Symbol>>>;
+pub(crate) type InstrCallFrozenDefPos = InstrNoFlow<InstrCallFrozenDefImpl<BcCallArgsPos>>;
 pub(crate) type InstrCallFrozenNative = InstrNoFlow<
     InstrCallFrozenGenericImpl<FrozenValueTyped<'static, NativeFunction>, BcCallArgsFull<Symbol>>,
 >;
@@ -1608,6 +1606,28 @@ impl<F: BcFrozenCallable, A: BcCallArgs<Symbol>> InstrNoFlowImpl
         (fun, args, span): &Self::Arg,
         _pops: (),
     ) -> anyhow::Result<Value<'v>> {
+        let arguments = Arguments(args.pop_from_stack(stack));
+        fun.bc_invoke(*span, &arguments, eval)
+    }
+}
+
+impl<A: BcCallArgs<Symbol>> InstrNoFlowImpl for InstrCallFrozenDefImpl<A> {
+    type Pop<'v> = ();
+    type Push<'v> = Value<'v>;
+    type Arg = (
+        FrozenValueTyped<'static, FrozenDef>,
+        A,
+        FrozenRef<'static, FrozenFileSpan>,
+    );
+
+    #[inline(always)]
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        stack: &mut BcStackPtr<'v, '_>,
+        _ip: BcPtrAddr,
+        (fun, args, span): &Self::Arg,
+        _pops: (),
+    ) -> Result<Value<'v>, anyhow::Error> {
         let arguments = Arguments(args.pop_from_stack(stack));
         fun.bc_invoke(*span, &arguments, eval)
     }
