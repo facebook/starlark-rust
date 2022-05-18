@@ -15,11 +15,12 @@
  * limitations under the License.
  */
 
-use proc_macro2::{Span, TokenStream};
-use quote::{quote, quote_spanned};
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::{format_ident, quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, parse_quote, spanned::Spanned, Attribute, Data,
-    DataEnum, DataStruct, DeriveInput, Fields, GenericParam, Lifetime, LifetimeDef, TypeParamBound,
+    DataEnum, DataStruct, DeriveInput, Field, Fields, GenericParam, Lifetime, LifetimeDef,
+    TypeParamBound, Variant,
 };
 
 pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -123,40 +124,68 @@ fn trace_struct(data: &DataStruct) -> syn::Result<TokenStream> {
     }
 }
 
-fn trace_enum(data: &DataEnum) -> syn::Result<TokenStream> {
-    for variant in &data.variants {
-        if let Fields::Unit = variant.fields {
-            continue;
+fn trace_enum_variant_field(field: &Field, name: &Ident) -> syn::Result<TokenStream> {
+    if is_ignore(&field.attrs) {
+        return Ok(quote! {});
+    }
+    Ok(quote! {
+        starlark::values::Trace::trace(#name, tracer);
+    })
+}
+
+fn trace_enum_variant(variant: &Variant) -> syn::Result<TokenStream> {
+    let variant_name = &variant.ident;
+    match &variant.fields {
+        Fields::Unit => Ok(quote! {
+            Self::#variant_name => {}
+        }),
+        Fields::Named(named) => {
+            let names: Vec<_> = named
+                .named
+                .iter()
+                .map(|f| f.ident.as_ref().unwrap())
+                .collect();
+            let traces: Vec<_> = named
+                .named
+                .iter()
+                .map(|f| trace_enum_variant_field(f, f.ident.as_ref().unwrap()))
+                .collect::<syn::Result<_>>()?;
+            Ok(quote! {
+                Self::#variant_name { #(#names),* } => {
+                    #(#traces)*
+                }
+            })
         }
-        match &variant.fields {
-            Fields::Named(fields) => {
-                for field in &fields.named {
-                    if is_ignore(&field.attrs) {
-                        continue;
-                    }
-                    // TODO: implement
-                    return Err(syn::Error::new_spanned(
-                        fields,
-                        "Can't derive `Trace` for enums",
-                    ));
+        Fields::Unnamed(unnamed) => {
+            let names: Vec<_> = (0..unnamed.unnamed.len())
+                .map(|i| format_ident!("f_{}", i))
+                .collect();
+            let traces: Vec<_> = unnamed
+                .unnamed
+                .iter()
+                .enumerate()
+                .map(|(i, f)| trace_enum_variant_field(f, &names[i]))
+                .collect::<syn::Result<_>>()?;
+            Ok(quote! {
+                Self::#variant_name(#(#names),*) => {
+                    #(#traces)*
                 }
-            }
-            Fields::Unnamed(fields) => {
-                for field in &fields.unnamed {
-                    if is_ignore(&field.attrs) {
-                        continue;
-                    }
-                    // TODO: implement
-                    return Err(syn::Error::new_spanned(
-                        fields,
-                        "Can't derive `Trace` for enums",
-                    ));
-                }
-            }
-            Fields::Unit => {}
+            })
         }
     }
-    Ok(quote!())
+}
+
+fn trace_enum(data: &DataEnum) -> syn::Result<TokenStream> {
+    let variants: Vec<_> = data
+        .variants
+        .iter()
+        .map(trace_enum_variant)
+        .collect::<syn::Result<_>>()?;
+    Ok(quote! {
+        match self {
+            #(#variants)*
+        }
+    })
 }
 
 fn trace_impl(data: &Data) -> syn::Result<TokenStream> {

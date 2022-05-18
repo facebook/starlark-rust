@@ -15,7 +15,12 @@
  * limitations under the License.
  */
 
-mod attrs;
-mod freeze;
-mod module;
-mod trace;
+use crate as starlark;
+use crate::values::Value;
+
+#[allow(dead_code)] // Just check it compiles.
+#[derive(Trace)]
+enum TestEnumForTrace<'v> {
+    Foo(String),
+    Bar(i32, Value<'v>),
+}
