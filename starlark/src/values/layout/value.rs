@@ -935,7 +935,14 @@ impl Serialize for FrozenValue {
 /// For details about each function, see the documentation for [`Value`],
 /// which provides the same functions (and more).
 pub trait ValueLike<'v>:
-    Eq + Copy + Debug + Default + Display + CoerceKey<Value<'v>> + Freeze<Frozen = FrozenValue>
+    Eq
+    + Copy
+    + Debug
+    + Default
+    + Display
+    + Serialize
+    + CoerceKey<Value<'v>>
+    + Freeze<Frozen = FrozenValue>
 {
     /// `StringValue` or `FrozenStringValue`.
     type String: StringValueLike<'v>;
