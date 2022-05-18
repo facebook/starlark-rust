@@ -55,7 +55,7 @@ use gazebo::{
     coerce::{coerce_ref, Coerce},
     prelude::*,
 };
-use serde::{ser::SerializeMap, Serialize};
+use serde::Serialize;
 
 use crate::{
     self as starlark,
@@ -417,10 +417,6 @@ where
     where
         S: serde::Serializer,
     {
-        let mut map_serialize = serializer.serialize_map(Some(self.get_record_fields().len()))?;
-        for (k, v) in self.iter() {
-            map_serialize.serialize_entry(k, &v)?;
-        }
-        map_serialize.end()
+        serializer.collect_map(self.iter())
     }
 }
