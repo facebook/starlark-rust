@@ -22,6 +22,7 @@ use std::convert::TryInto;
 use either::Either;
 
 use crate::{
+    collections::symbol_map::Symbol,
     eval::{
         bc::{
             call::{BcCallArgsFull, BcCallArgsPos},
@@ -49,7 +50,7 @@ use crate::{
 };
 
 impl ArgsCompiledValue {
-    fn write_bc(&self, bc: &mut BcWriter) -> BcCallArgsFull {
+    fn write_bc(&self, bc: &mut BcWriter) -> BcCallArgsFull<Symbol> {
         write_exprs(&self.pos_named, bc);
         write_exprs(&self.args, bc);
         write_exprs(&self.kwargs, bc);
@@ -66,7 +67,7 @@ impl IrSpanned<CallCompiled> {
     fn write_args(
         args: &ArgsCompiledValue,
         bc: &mut BcWriter,
-    ) -> Either<BcCallArgsPos, BcCallArgsFull> {
+    ) -> Either<BcCallArgsPos, BcCallArgsFull<Symbol>> {
         if let Some(pos) = args.pos_only() {
             write_exprs(pos, bc);
             Either::Left(BcCallArgsPos {

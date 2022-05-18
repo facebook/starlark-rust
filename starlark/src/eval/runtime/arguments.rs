@@ -728,7 +728,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
 }
 
 /// An object accompanying argument name for faster argument resolution.
-pub(crate) trait ArgSymbol {
+pub(crate) trait ArgSymbol: Coerce<Self> + 'static {
     fn get_index_from_param_spec<'v, V: ValueLike<'v>>(
         &self,
         ps: &ParametersSpec<V>,

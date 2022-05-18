@@ -36,7 +36,7 @@ use crate::{
             opcode::{BcOpcode, BcOpcodeHandler},
             slow_arg::BcInstrSlowArg,
         },
-        runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
+        runtime::{arguments::ArgSymbol, call_stack::FrozenFileSpan, slots::LocalSlotId},
     },
     values::{
         types::known_methods::KnownMethod, FrozenRef, FrozenValue, FrozenValueTyped, StarlarkValue,
@@ -638,7 +638,7 @@ impl BcInstrArg for InstrDefData {
     }
 }
 
-impl BcInstrArg for BcCallArgsFull {
+impl<S: ArgSymbol> BcInstrArg for BcCallArgsFull<S> {
     fn fmt_append(param: &Self, _ip: BcAddr, f: &mut dyn Write) -> fmt::Result {
         write!(f, " {{{}}}", param)
     }

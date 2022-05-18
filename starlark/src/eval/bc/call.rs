@@ -23,24 +23,23 @@ use std::{
 };
 
 use crate::{
-    collections::symbol_map::Symbol,
     eval::{
         bc::{instr_arg::BcInstrArg, stack_ptr::BcStackPtr},
-        Arguments,
+        runtime::arguments::{ArgSymbol, ArgumentsImpl},
     },
     values::FrozenStringValue,
 };
 
 /// Call arguments.
-pub(crate) trait BcCallArgs: BcInstrArg {
-    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> Arguments<'v, 'a>;
+pub(crate) trait BcCallArgs<S: ArgSymbol>: BcInstrArg {
+    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> ArgumentsImpl<'v, 'a, S>;
 }
 
 /// Full call arguments: positional, named, star and star-star. All taken from the stack.
 #[derive(Debug)]
-pub(crate) struct BcCallArgsFull {
+pub(crate) struct BcCallArgsFull<S: ArgSymbol> {
     pub(crate) pos_named: u32,
-    pub(crate) names: Box<[(Symbol, FrozenStringValue)]>,
+    pub(crate) names: Box<[(S, FrozenStringValue)]>,
     pub(crate) args: bool,
     pub(crate) kwargs: bool,
 }
@@ -52,14 +51,14 @@ pub(crate) struct BcCallArgsPos {
     pub(crate) pos: u32,
 }
 
-impl BcCallArgsFull {
+impl<S: ArgSymbol> BcCallArgsFull<S> {
     fn pos(&self) -> u32 {
         assert!(self.pos_named as usize >= self.names.len());
         self.pos_named - (self.names.len() as u32)
     }
 }
 
-impl Display for BcCallArgsFull {
+impl<S: ArgSymbol> Display for BcCallArgsFull<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut first = true;
         let mut write_sep = |f: &mut Formatter| {
@@ -93,14 +92,14 @@ impl Display for BcCallArgsFull {
     }
 }
 
-impl BcCallArgs for BcCallArgsFull {
-    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> Arguments<'v, 'a> {
+impl<S: ArgSymbol> BcCallArgs<S> for BcCallArgsFull<S> {
+    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> ArgumentsImpl<'v, 'a, S> {
         stack.pop_args(self)
     }
 }
 
-impl BcCallArgs for BcCallArgsPos {
-    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> Arguments<'v, 'a> {
+impl<S: ArgSymbol> BcCallArgs<S> for BcCallArgsPos {
+    fn pop_from_stack<'a, 'v>(&'a self, stack: &'a BcStackPtr<'v, '_>) -> ArgumentsImpl<'v, 'a, S> {
         stack.pop_args_pos(self)
     }
 }
