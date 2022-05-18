@@ -36,8 +36,7 @@ use crate::{
         dict::{Dict, DictRef},
         docs,
         docs::DocString,
-        Freezer, FrozenValue, Heap, StringValue, Trace, Tracer, UnpackValue, Value, ValueError,
-        ValueLike,
+        Freezer, FrozenValue, Heap, StringValue, Trace, UnpackValue, Value, ValueError, ValueLike,
     },
 };
 
@@ -65,7 +64,7 @@ pub(crate) enum FunctionError {
     WrongNumberOfParameters { min: usize, max: usize, got: usize },
 }
 
-#[derive(Debug, Clone, Coerce, PartialEq)]
+#[derive(Debug, Clone, Coerce, PartialEq, Trace)]
 #[repr(C)]
 pub(crate) enum ParameterKind<V> {
     Required,
@@ -77,15 +76,6 @@ pub(crate) enum ParameterKind<V> {
     Defaulted(V),
     Args,
     KWargs,
-}
-
-unsafe impl<'v, T: Trace<'v>> Trace<'v> for ParameterKind<T> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        match self {
-            Self::Defaulted(v) => v.trace(tracer),
-            _ => {}
-        }
-    }
 }
 
 impl<'v> ParameterKind<Value<'v>> {
