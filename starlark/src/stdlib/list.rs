@@ -146,8 +146,8 @@ pub(crate) fn list_methods(builder: &mut MethodsBuilder) {
     fn index(
         this: &ListRef,
         ref needle: Value,
-        ref start @ NoneOr::None: NoneOr<i32>,
-        ref end @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref start: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref end: NoneOr<i32>,
     ) -> anyhow::Result<i32> {
         let (start, end) = convert_indices(this.len() as i32, start, end);
         if let Some(haystack) = this.get(start..end) {

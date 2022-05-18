@@ -236,8 +236,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn count(
         mut this: &str,
         ref needle: &str,
-        ref start @ NoneOr::None: NoneOr<i32>,
-        ref end @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref start: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref end: NoneOr<i32>,
     ) -> anyhow::Result<i32> {
         if let Some(StrIndices { haystack, .. }) = convert_str_indices(this, start, end) {
             Ok(fast_string::count_matches(haystack, needle) as i32)
@@ -295,8 +295,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn find(
         this: &str,
         ref needle: &str,
-        ref start @ NoneOr::None: NoneOr<i32>,
-        ref end @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref start: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref end: NoneOr<i32>,
     ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.find(needle) {
@@ -393,8 +393,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn index(
         this: &str,
         ref needle: &str,
-        ref start @ NoneOr::None: NoneOr<i32>,
-        ref end @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref start: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref end: NoneOr<i32>,
     ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.find(needle) {
@@ -818,8 +818,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn rfind(
         this: &str,
         ref needle: &str,
-        ref start @ NoneOr::None: NoneOr<i32>,
-        ref end @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref start: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref end: NoneOr<i32>,
     ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.rfind(needle) {
@@ -853,8 +853,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     fn rindex(
         this: &str,
         ref needle: &str,
-        ref start @ NoneOr::None: NoneOr<i32>,
-        ref end @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref start: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref end: NoneOr<i32>,
     ) -> anyhow::Result<i32> {
         if let Some(StrIndices { start, haystack }) = convert_str_indices(this, start, end) {
             if let Some(index) = haystack.rfind(needle) {
@@ -921,8 +921,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn rsplit<'v>(
         this: &str,
-        ref sep @ NoneOr::None: NoneOr<&str>,
-        ref maxsplit @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref sep: NoneOr<&str>,
+        #[starlark(default = NoneOr::None)] ref maxsplit: NoneOr<i32>,
     ) -> anyhow::Result<Value<'v>> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
@@ -1010,8 +1010,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     #[starlark(speculative_exec_safe)]
     fn split<'v>(
         this: &str,
-        ref sep @ NoneOr::None: NoneOr<&str>,
-        ref maxsplit @ NoneOr::None: NoneOr<i32>,
+        #[starlark(default = NoneOr::None)] ref sep: NoneOr<&str>,
+        #[starlark(default = NoneOr::None)] ref maxsplit: NoneOr<i32>,
     ) -> anyhow::Result<Value<'v>> {
         let maxsplit = match maxsplit.into_option() {
             None => None,
@@ -1072,7 +1072,10 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn splitlines<'v>(this: &str, ref keepends @ false: bool) -> anyhow::Result<Value<'v>> {
+    fn splitlines<'v>(
+        this: &str,
+        #[starlark(default = false)] ref keepends: bool,
+    ) -> anyhow::Result<Value<'v>> {
         let mut s = this;
         let mut lines = Vec::new();
         loop {

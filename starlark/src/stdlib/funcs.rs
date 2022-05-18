@@ -311,7 +311,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn enumerate<'v>(ref it: Value, start @ 0: i32) -> anyhow::Result<Value<'v>> {
+    fn enumerate<'v>(
+        ref it: Value,
+        #[starlark(default = 0)] start: i32,
+    ) -> anyhow::Result<Value<'v>> {
         let v = it
             .iterate(heap)?
             .enumerate()
@@ -850,7 +853,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(type = Range::TYPE)]
     #[starlark(speculative_exec_safe)]
-    fn range(ref a1: i32, ref a2: Option<i32>, ref step @ 1: i32) -> anyhow::Result<Range> {
+    fn range(
+        ref a1: i32,
+        ref a2: Option<i32>,
+        #[starlark(default = 1)] step: i32,
+    ) -> anyhow::Result<Range> {
         let start = match a2 {
             None => 0,
             Some(_) => a1,
