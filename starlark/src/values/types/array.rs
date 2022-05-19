@@ -29,7 +29,10 @@ use std::{
 use gazebo::any::AnyLifetime;
 use serde::Serialize;
 
-use crate::values::{types::list::display_list, StarlarkValue, Value};
+use crate::{
+    private::Private,
+    values::{types::list::display_list, StarlarkValue, Value},
+};
 
 /// Fixed-capacity list.
 ///
@@ -295,7 +298,7 @@ impl<'a, 'v> Drop for ArrayIter<'a, 'v> {
 impl<'v> StarlarkValue<'v> for Array<'v> {
     starlark_type!("array");
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

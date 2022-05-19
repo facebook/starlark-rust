@@ -414,6 +414,7 @@ pub mod environment;
 pub mod errors;
 pub mod eval;
 pub mod lsp;
+mod private;
 pub mod read_line;
 mod stdlib;
 pub mod syntax;

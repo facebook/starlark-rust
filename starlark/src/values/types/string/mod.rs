@@ -34,6 +34,7 @@ use serde::Serialize;
 use crate::{
     collections::{BorrowHashed, StarlarkHashValue, StarlarkHasher},
     environment::{Methods, MethodsStatic},
+    private::Private,
     values::{
         index::apply_slice,
         string::repr::string_repr,
@@ -341,7 +342,7 @@ impl<'v> StarlarkValue<'v> for str {
 impl<'v> StarlarkValue<'v> for StarlarkStr {
     starlark_type!(STRING_TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

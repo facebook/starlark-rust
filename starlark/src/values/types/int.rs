@@ -36,6 +36,7 @@ use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
+    private::Private,
     values::{
         basic::StarlarkValueBasic, error::ValueError, float::StarlarkFloat, num::Num,
         types::bigint::StarlarkBigInt, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
@@ -114,7 +115,7 @@ impl Display for PointerI32 {
 impl<'v> StarlarkValue<'v> for PointerI32 {
     starlark_type!(INT_TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

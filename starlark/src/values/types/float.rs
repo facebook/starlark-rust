@@ -28,6 +28,7 @@ use serde::Serialize;
 
 use crate::{
     collections::StarlarkHasher,
+    private::Private,
     values::{
         num::Num, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap, StarlarkValue,
         UnpackValue, Value, ValueError, ValueLike,
@@ -232,7 +233,7 @@ impl Display for StarlarkFloat {
 impl<'v> StarlarkValue<'v> for StarlarkFloat {
     starlark_type!(StarlarkFloat::TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

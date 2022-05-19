@@ -31,6 +31,7 @@ use serde::Serialize;
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
+    private::Private,
     values::{
         basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
         StarlarkValue, UnpackValue, Value, ValueError,
@@ -81,7 +82,7 @@ impl UnpackValue<'_> for bool {
 impl StarlarkValue<'_> for StarlarkBool {
     starlark_type!(BOOL_TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

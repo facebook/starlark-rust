@@ -29,6 +29,7 @@ use gazebo::{
 use crate as starlark;
 use crate::{
     eval::{Arguments, Evaluator, ParametersParser, ParametersSpec},
+    private::Private,
     values::{
         docs,
         docs::{DocItem, DocStringKind},
@@ -259,6 +260,7 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
         this: Value<'v>,
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
+        _: Private,
     ) -> anyhow::Result<Value<'v>> {
         (self.function)(eval, this, args)
     }
@@ -299,6 +301,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
         this: Value<'v>,
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
+        _: Private,
     ) -> anyhow::Result<Value<'v>> {
         let method = self.call(this, eval.heap())?;
         method.invoke(args, eval)
@@ -337,7 +340,12 @@ where
         args: &Arguments<'v, '_>,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<Value<'v>> {
-        self.method
-            .invoke_method(self.method.to_value(), self.this.to_value(), args, eval)
+        self.method.invoke_method(
+            self.method.to_value(),
+            self.this.to_value(),
+            args,
+            eval,
+            Private,
+        )
     }
 }

@@ -34,6 +34,7 @@ use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
     environment::Methods,
     eval::{Arguments, Evaluator},
+    private::Private,
     values::{
         docs::DocItem,
         layout::{
@@ -431,6 +432,7 @@ impl<'v> AValueDyn<'v> {
             this,
             args,
             eval,
+            Private,
         )
     }
 

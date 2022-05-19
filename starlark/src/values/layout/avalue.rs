@@ -24,6 +24,7 @@ use serde::{Serialize, Serializer};
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
     eval::compiler::def::FrozenDef,
+    private::Private,
     values::{
         basic::StarlarkValueBasic,
         bool::StarlarkBool,
@@ -198,7 +199,7 @@ pub(crate) fn basic_ref<'v, T: StarlarkValueBasic<'v>>(x: &T) -> AValueDyn<'v> {
 }
 
 pub(crate) fn simple<T: StarlarkValue<'static>>(x: T) -> impl AValue<'static, ExtraElem = ()> {
-    assert!(!T::is_special());
+    assert!(!T::is_special(Private));
     AValueImpl(Simple, x)
 }
 
@@ -207,7 +208,7 @@ where
     C: ComplexValue<'v>,
     C::Frozen: StarlarkValue<'static>,
 {
-    assert!(!C::is_special());
+    assert!(!C::is_special(Private));
     AValueImpl(Complex, x)
 }
 

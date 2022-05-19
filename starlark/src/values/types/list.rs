@@ -39,6 +39,7 @@ use serde::Serialize;
 use crate::{
     self as starlark,
     environment::{Methods, MethodsStatic},
+    private::Private,
     values::{
         array::Array,
         comparison::{compare_slice, equals_slice},
@@ -459,7 +460,7 @@ where
 {
     starlark_type!(List::TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

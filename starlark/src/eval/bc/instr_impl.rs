@@ -51,6 +51,7 @@ use crate::{
         runtime::{call_stack::FrozenFileSpan, slots::LocalSlotId},
         Arguments, DefInfo, Evaluator, ParametersSpec,
     },
+    private::Private,
     values::{
         dict::Dict,
         function::NativeFunction,
@@ -1673,6 +1674,7 @@ fn call_maybe_known_method_common<'v>(
                     this,
                     arguments,
                     eval,
+                    Private,
                 )
             });
         }

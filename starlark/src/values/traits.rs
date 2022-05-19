@@ -42,6 +42,7 @@ use crate::{
     collections::StarlarkHasher,
     environment::Methods,
     eval::{Arguments, Evaluator},
+    private::Private,
     values::{
         docs::DocItem, error::ControlError, function::FUNCTION_TYPE, Freeze, FrozenStringValue,
         Heap, Trace, Value, ValueError,
@@ -229,7 +230,7 @@ pub trait StarlarkValue<'v>:
     ///
     /// This function must not be implemented outside of starlark crate.
     #[doc(hidden)]
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {
@@ -367,6 +368,7 @@ pub trait StarlarkValue<'v>:
         _this: Value<'v>,
         _args: &Arguments<'v, '_>,
         _eval: &mut Evaluator<'v, '_>,
+        _sealed: Private,
     ) -> anyhow::Result<Value<'v>> {
         unreachable!("invoke_method should only be invoked for method or attribute");
     }

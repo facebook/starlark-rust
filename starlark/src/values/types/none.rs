@@ -24,6 +24,7 @@ use serde::{Serialize, Serializer};
 
 use crate::{
     collections::{StarlarkHashValue, StarlarkHasher},
+    private::Private,
     values::{
         basic::StarlarkValueBasic, AllocFrozenValue, AllocValue, FrozenHeap, FrozenValue, Heap,
         StarlarkValue, UnpackValue, Value,
@@ -44,7 +45,7 @@ impl NoneType {
 impl<'v> StarlarkValue<'v> for NoneType {
     starlark_type!(NoneType::TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {

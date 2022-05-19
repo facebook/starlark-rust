@@ -32,6 +32,7 @@ use serde::{ser::SerializeTuple, Serialize};
 
 use crate::{
     collections::StarlarkHasher,
+    private::Private,
     values::{
         comparison::{compare_slice, equals_slice},
         index::{apply_slice, convert_index},
@@ -134,7 +135,7 @@ where
 {
     starlark_type!(Tuple::TYPE);
 
-    fn is_special() -> bool
+    fn is_special(_: Private) -> bool
     where
         Self: Sized,
     {
