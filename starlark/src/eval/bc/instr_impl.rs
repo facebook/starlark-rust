@@ -1484,7 +1484,7 @@ impl InstrNoFlowImpl for InstrDefImpl {
         };
         assert!(pop_index as usize == pop.len());
         Ok(eval.heap().alloc(Def::new(
-            parameters,
+            parameters.finish(),
             parameter_captures,
             parameter_types,
             return_type,

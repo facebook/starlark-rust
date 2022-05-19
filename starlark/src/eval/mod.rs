@@ -22,7 +22,7 @@ use std::{intrinsics::unlikely, mem, time::Instant};
 
 use gazebo::prelude::*;
 pub use runtime::{
-    arguments::{Arguments, ParametersParser, ParametersSpec},
+    arguments::{Arguments, ParametersParser, ParametersSpec, ParametersSpecBuilder},
     call_stack::CallStack,
     evaluator::Evaluator,
     file_loader::{FileLoader, ReturnFileLoader},

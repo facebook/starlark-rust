@@ -90,6 +90,20 @@ impl<'v> ParameterKind<Value<'v>> {
     }
 }
 
+/// Builder for [`ParametersSpec`]
+pub struct ParametersSpecBuilder<V> {
+    function_name: String,
+    kinds: Vec<ParameterKind<V>>,
+    names: SymbolMap<usize>,
+    positional: usize,
+
+    /// Has the no_args been passed
+    no_args: bool,
+
+    args: Option<usize>,
+    kwargs: Option<usize>,
+}
+
 /// Define a list of parameters. This code assumes that all names are distinct and that
 /// `*args`/`**kwargs` occur in well-formed locations.
 // V = Value, or FrozenValue
@@ -111,8 +125,6 @@ pub struct ParametersSpec<V> {
     /// Excludes *args/**kwargs, keyword arguments after *args
     positional: usize,
 
-    /// Has the no_args been passed
-    no_args: bool,
     /// The index at which *args should go
     args: Option<usize>,
     /// The index at which **kwargs should go
@@ -122,25 +134,7 @@ pub struct ParametersSpec<V> {
 // Can't derive this since we don't want ParameterKind to be public
 unsafe impl<From: Coerce<To>, To> Coerce<ParametersSpec<To>> for ParametersSpec<From> {}
 
-impl<V> ParametersSpec<V> {
-    /// Create a new [`ParametersSpec`] with the given function name.
-    pub fn new(function_name: String) -> Self {
-        Self::with_capacity(function_name, 0)
-    }
-
-    /// Create a new [`ParametersSpec`] with the given function name and an advance capacity hint.
-    pub fn with_capacity(function_name: String, capacity: usize) -> Self {
-        Self {
-            function_name,
-            kinds: Vec::with_capacity(capacity),
-            names: SymbolMap::with_capacity(capacity),
-            positional: 0,
-            no_args: false,
-            args: None,
-            kwargs: None,
-        }
-    }
-
+impl<V> ParametersSpecBuilder<V> {
     fn add(&mut self, name: &str, val: ParameterKind<V>) {
         assert!(!matches!(val, ParameterKind::Args | ParameterKind::KWargs));
 
@@ -181,8 +175,10 @@ impl<V> ParametersSpec<V> {
 
     /// Add an `*args` parameter which will be an iterable sequence of parameters,
     /// recorded into a [`Vec`]. A function can only have one `args`
-    /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
-    /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
+    /// parameter. After this call, any subsequent
+    /// [`required`](ParametersSpecBuilder::required),
+    /// [`optional`](ParametersSpecBuilder::optional) or
+    /// [`defaulted`](ParametersSpecBuilder::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn args(&mut self) {
         assert!(self.args.is_none() && !self.no_args && self.kwargs.is_none());
@@ -191,8 +187,10 @@ impl<V> ParametersSpec<V> {
     }
 
     /// This function has no `*args` parameter, corresponds to the Python parameter `*`.
-    /// After this call, any subsequent [`required`](ParametersSpec::required),
-    /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
+    /// After this call, any subsequent
+    /// [`required`](ParametersSpecBuilder::required),
+    /// [`optional`](ParametersSpecBuilder::optional) or
+    /// [`defaulted`](ParametersSpecBuilder::defaulted)
     /// parameters can _only_ be supplied by name.
     pub fn no_args(&mut self) {
         assert!(self.args.is_none() && !self.no_args && self.kwargs.is_none());
@@ -201,13 +199,57 @@ impl<V> ParametersSpec<V> {
 
     /// Add a `**kwargs` parameter which will be a dictionary, recorded into a [`SmallMap`].
     /// A function can only have one `kwargs` parameter.
-    /// parameter. After this call, any subsequent [`required`](ParametersSpec::required),
-    /// [`optional`](ParametersSpec::optional) or [`defaulted`](ParametersSpec::defaulted)
+    /// parameter. After this call, any subsequent
+    /// [`required`](ParametersSpecBuilder::required),
+    /// [`optional`](ParametersSpecBuilder::optional) or
+    /// [`defaulted`](ParametersSpecBuilder::defaulted)
     /// parameters can _only_ be supplied by position.
     pub fn kwargs(&mut self) {
         assert!(self.kwargs.is_none());
         self.kinds.push(ParameterKind::KWargs);
         self.kwargs = Some(self.kinds.len() - 1);
+    }
+
+    /// Construct the parameters specification.
+    pub fn finish(self) -> ParametersSpec<V> {
+        let ParametersSpecBuilder {
+            function_name,
+            positional,
+            args,
+            no_args,
+            kwargs,
+            kinds,
+            names,
+        } = self;
+        let _ = no_args;
+        ParametersSpec {
+            function_name,
+            kinds,
+            names,
+            positional,
+            args,
+            kwargs,
+        }
+    }
+}
+
+impl<V> ParametersSpec<V> {
+    /// Create a new [`ParametersSpec`] with the given function name.
+    pub fn new(function_name: String) -> ParametersSpecBuilder<V> {
+        Self::with_capacity(function_name, 0)
+    }
+
+    /// Create a new [`ParametersSpec`] with the given function name and an advance capacity hint.
+    pub fn with_capacity(function_name: String, capacity: usize) -> ParametersSpecBuilder<V> {
+        ParametersSpecBuilder {
+            function_name,
+            kinds: Vec::with_capacity(capacity),
+            names: SymbolMap::with_capacity(capacity),
+            positional: 0,
+            no_args: false,
+            args: None,
+            kwargs: None,
+        }
     }
 
     /// Produce an approximate signature for the function, combining the name and arguments.
@@ -666,7 +708,6 @@ impl<'v> ParametersSpec<Value<'v>> {
             kinds: self.kinds.try_map(|v| v.freeze(freezer))?,
             names: self.names,
             positional: self.positional,
-            no_args: self.no_args,
             args: self.args,
             kwargs: self.kwargs,
         })
@@ -692,7 +733,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         v.get()
     }
 
-    /// Obtain the next parameter, corresponding to [`ParametersSpec::optional`].
+    /// Obtain the next parameter, corresponding to [`ParametersSpecBuilder::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
     pub fn next_opt<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<Option<T>> {
@@ -702,7 +743,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
         }
     }
 
-    /// Obtain the next parameter, which can't be defined by [`ParametersSpec::optional`].
+    /// Obtain the next parameter, which can't be defined by [`ParametersSpecBuilder::optional`].
     /// It is an error to request more parameters than were specified.
     /// The `name` is only used for error messages.
     pub fn next<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<T> {
@@ -1207,6 +1248,7 @@ mod tests {
         p.no_args();
         p.optional("c");
         p.kwargs();
+        let p = p.finish();
 
         let params: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = p.iter_params().collect();
 
@@ -1224,6 +1266,7 @@ mod tests {
         p.required("a");
         p.args();
         p.kwargs();
+        let p = p.finish();
 
         let params: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = p.iter_params().collect();
 
@@ -1240,6 +1283,7 @@ mod tests {
         p.args();
         p.optional("a");
         p.optional("b");
+        let p = p.finish();
 
         let params: Vec<(usize, &str, &ParameterKind<FrozenValue>)> = p.iter_params().collect();
 
@@ -1259,6 +1303,7 @@ mod tests {
         p.args();
         p.optional("a");
         p.optional("b");
+        let p = p.finish();
 
         use crate::values::docs;
         let expected = vec![

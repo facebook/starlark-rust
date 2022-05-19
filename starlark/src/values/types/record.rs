@@ -180,7 +180,7 @@ impl<'v> RecordType<'v> {
                 parameters.required(name);
             }
         }
-        parameters
+        parameters.finish()
     }
 }
 

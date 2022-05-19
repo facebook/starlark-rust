@@ -365,6 +365,7 @@ fn render_signature(x: &StarFun) -> Option<TokenStream> {
             #[allow(unused_mut)]
             let mut __signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
             #( #sig_args )*
+            let __signature = __signature.finish();
         })
     } else {
         None
@@ -390,12 +391,12 @@ fn render_documentation(x: &StarFun) -> TokenStream {
                 #[allow(unused_mut)]
                 let mut __signature = starlark::eval::ParametersSpec::with_capacity(#name_str.to_owned(), #args_count);
                 #( #sig_args )*
-                __signature
+                __signature.finish()
                 }
             }
         }
         None => {
-            quote_spanned!(span=> starlark::eval::ParametersSpec::<starlark::values::FrozenValue>::new(#name_str.to_owned()))
+            quote_spanned!(span=> starlark::eval::ParametersSpec::<starlark::values::FrozenValue>::new(#name_str.to_owned()).finish())
         }
     };
 
