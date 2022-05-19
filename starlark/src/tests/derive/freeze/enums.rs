@@ -15,8 +15,16 @@
  * limitations under the License.
  */
 
-mod basic;
-mod bounds;
-mod enums;
-mod validator;
-mod validator_order;
+use crate as starlark;
+
+#[allow(dead_code)] // If it compiles, it works.
+#[derive(Freeze)]
+enum TestFreezeEnum<V> {
+    A,
+    B(),
+    C(V),
+    D(V, V),
+    E {},
+    F { a: V },
+    G { a: V, b: V },
+}

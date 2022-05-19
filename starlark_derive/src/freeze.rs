@@ -16,10 +16,10 @@
  */
 
 use proc_macro2::{Ident, TokenStream};
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use syn::{
     parse::ParseStream, parse_macro_input, spanned::Spanned, Attribute, Data, DataEnum, DataStruct,
-    DeriveInput, Error, Fields, GenericParam, Index, LitStr, Token, WherePredicate,
+    DeriveInput, Error, Fields, GenericParam, Index, LitStr, Token, Variant, WherePredicate,
 };
 
 struct Input<'a> {
@@ -250,8 +250,48 @@ fn freeze_struct(name: &Ident, data: &DataStruct) -> syn::Result<TokenStream> {
     Ok(res)
 }
 
-fn freeze_enum(name: &Ident, _data: &DataEnum) -> syn::Result<TokenStream> {
-    Err(Error::new_spanned(name, "Can't derive freeze for enums"))
+fn freeze_enum_variant(name: &Ident, variant: &Variant) -> syn::Result<TokenStream> {
+    let variant_name = &variant.ident;
+    match &variant.fields {
+        Fields::Unit => Ok(quote! {
+            #name::#variant_name => #name::#variant_name,
+        }),
+        Fields::Unnamed(fields) => {
+            let field_names: Vec<_> = (0..fields.unnamed.len())
+                .map(|i| format_ident!("f_{}", i))
+                .collect();
+            Ok(quote! {
+                #name::#variant_name(#(#field_names),*) => {
+                    #name::#variant_name(
+                        #(starlark::values::Freeze::freeze(#field_names, freezer)?),*
+                    )
+                }
+            })
+        }
+        Fields::Named(field) => {
+            let field_names: Vec<_> = field.named.iter().map(|f| &f.ident).collect();
+            Ok(quote! {
+                #name::#variant_name { #(#field_names),* } => {
+                    #name::#variant_name {
+                        #(#field_names: starlark::values::Freeze::freeze(#field_names, freezer)?,)*
+                    }
+                }
+            })
+        }
+    }
+}
+
+fn freeze_enum(name: &Ident, data: &DataEnum) -> syn::Result<TokenStream> {
+    let variants = data
+        .variants
+        .iter()
+        .map(|v| freeze_enum_variant(name, v))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(quote! {
+        match self {
+            #(#variants)*
+        }
+    })
 }
 
 fn freeze_impl(name: &Ident, data: &Data) -> syn::Result<TokenStream> {
