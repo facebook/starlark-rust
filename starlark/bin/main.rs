@@ -30,9 +30,11 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::fmt::Display;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use eval::BazelInfo;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
@@ -214,6 +216,28 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
     }
 }
 
+fn get_bazel_info_path(path_type: &str) -> anyhow::Result<PathBuf> {
+    let output = Command::new("bazel").arg("info").arg(path_type).output()?;
+
+    if !output.status.success() {
+        return Err(anyhow!("Failed running command bazel info"));
+    }
+    let s = std::str::from_utf8(output.stdout.as_slice())?;
+    Ok(PathBuf::from(s.trim()))
+}
+
+fn get_bazel_info() -> Option<BazelInfo> {
+    let workspace_root = get_bazel_info_path("workspace").ok()?;
+    let output_base = get_bazel_info_path("output_base").ok()?;
+    let execroot = get_bazel_info_path("execution_root").ok()?;
+
+    Some(BazelInfo {
+        workspace_root,
+        output_base,
+        execroot,
+    })
+}
+
 fn main() -> anyhow::Result<()> {
     gazebo::terminate_on_panic();
 
@@ -242,6 +266,7 @@ fn main() -> anyhow::Result<()> {
 
         if args.lsp {
             ctx.mode = ContextMode::Check;
+            ctx.bazel_info = get_bazel_info();
             lsp::server::stdio_server(ctx)?;
         } else if is_interactive {
             interactive(&ctx)?;

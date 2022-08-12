@@ -292,8 +292,14 @@ pub trait LspContext {
 }
 
 /// Errors when [`LspContext::resolve_load()`] cannot resolve a given path.
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub enum ResolveLoadError {
+    /// Attempted to resolve a load but the path was malformed
+    #[error("path `{}` provided, but was malformed", .0.display())]
+    PathMalformed(PathBuf),
+    /// Attempted to resolve a bazel dependent load but no bazel info could be found
+    #[error("path `{}` provided, but bazel info could not be determined", .0.display())]
+    MissingBazelInfo(PathBuf),
     /// Attempted to resolve a relative path, but no current_file_path was provided,
     /// so it is not known what to resolve the path against.
     #[error("Relative path `{}` provided, but current_file_path could not be determined", .0.display())]
@@ -301,6 +307,9 @@ pub enum ResolveLoadError {
     /// The scheme provided was not correct or supported.
     #[error("Url `{}` was expected to be of type `{}`", .1, .0)]
     WrongScheme(String, LspUrl),
+    /// Resolved Loaded file does not exist.
+    #[error("Resolved file `{}` did not exist", .0.display())]
+    ResolvedDoesNotExist(PathBuf),
 }
 
 /// Errors when loading contents of a starlark program.
@@ -494,8 +503,7 @@ impl<T: LspContext> Backend<T> {
                         }) => {
                             // If there's an error loading the file to parse it, at least
                             // try to get to the file.
-                            let target_range = self
-                                .get_ast_or_load_from_disk(&url)
+                            self.get_ast_or_load_from_disk(&url)
                                 .and_then(|ast| match ast {
                                     Some(module) => location_finder(&module.ast, &url),
                                     None => Ok(None),
@@ -504,13 +512,20 @@ impl<T: LspContext> Backend<T> {
                                     eprintln!("Error jumping to definition: {:#}", e);
                                 })
                                 .unwrap_or_default()
-                                .unwrap_or_default();
-                            Some(LocationLink {
-                                origin_selection_range: Some(source.into()),
-                                target_uri: url.try_into()?,
-                                target_range,
-                                target_selection_range: target_range,
-                            })
+                                .and_then(|target_range| {
+                                    Some(LocationLink {
+                                        origin_selection_range: Some(source.into()),
+                                        target_uri: url.clone().try_into().ok()?,
+                                        target_range,
+                                        target_selection_range: target_range,
+                                    })
+                                })
+                                .or(Some(LocationLink {
+                                    origin_selection_range: Some(source.into()),
+                                    target_uri: url.try_into()?,
+                                    target_range: Range::default(),
+                                    target_selection_range: Range::default(),
+                                }))
                         }
                         Some(StringLiteralResult {
                             url,
