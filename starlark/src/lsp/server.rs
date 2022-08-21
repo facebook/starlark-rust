@@ -297,9 +297,6 @@ pub enum ResolveLoadError {
     /// Attempted to resolve a load but the path was malformed
     #[error("path `{}` provided, but was malformed", .0.display())]
     PathMalformed(PathBuf),
-    /// Attempted to resolve a bazel dependent load but no bazel info could be found
-    #[error("path `{}` provided, but bazel info could not be determined", .0.display())]
-    MissingBazelInfo(PathBuf),
     /// Attempted to resolve a relative path, but no current_file_path was provided,
     /// so it is not known what to resolve the path against.
     #[error("Relative path `{}` provided, but current_file_path could not be determined", .0.display())]

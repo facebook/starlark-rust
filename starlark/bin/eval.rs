@@ -22,6 +22,8 @@ use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
 
+use bazel::bazel_info::BazelInfo;
+use bazel::label::Label;
 use gazebo::prelude::*;
 use itertools::Either;
 use lsp_types::Diagnostic;
@@ -49,13 +51,6 @@ use starlark::values::docs::DocItem;
 pub(crate) enum ContextMode {
     Check,
     Run,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct BazelInfo {
-    pub(crate) workspace_root: PathBuf,
-    pub(crate) output_base: PathBuf,
-    pub(crate) execroot: PathBuf,
 }
 
 #[derive(Debug)]
@@ -251,139 +246,13 @@ impl Context {
     }
 }
 
-fn handle_local_bazel_repository(
-    info: &Option<BazelInfo>,
-    path: &str,
-    path_buf: PathBuf,
-    current_file_dir: &PathBuf,
-) -> Result<PathBuf, ResolveLoadError> {
-    match info {
-        None => Err(ResolveLoadError::MissingBazelInfo(path_buf)),
-        Some(info) => {
-            let malformed_err = ResolveLoadError::PathMalformed(path_buf.clone());
-            let mut split_parts = path.trim_start_match("//").split(':');
-            let package = split_parts.next().ok_or(malformed_err.clone())?;
-            let target = split_parts.next().ok_or(malformed_err.clone())?;
-            match split_parts.next().is_some() {
-                true => Err(malformed_err.clone()),
-                false => {
-                    let file_path = PathBuf::from(package).join(target);
-                    let root_path = current_file_dir
-                        .ancestors()
-                        .find(|a| match a.read_dir() {
-                            Ok(mut entries) => entries
-                                .find(|f| match f {
-                                    Ok(f) => ["MODULE.bazel", "WORKSPACE", "WORKSPACE.bazel"]
-                                        .contains(&f.file_name().to_str().unwrap_or("")),
-                                    _ => false,
-                                })
-                                .is_some(),
-                            _ => false,
-                        })
-                        .unwrap_or(&info.workspace_root);
-                    Ok(root_path.join(file_path))
-                }
-            }
-        }
-    }
-}
-fn handle_remote_bazel_repository(
-    info: &Option<BazelInfo>,
-    path: &str,
-    path_buf: PathBuf,
-) -> Result<PathBuf, ResolveLoadError> {
-    match info {
-        None => Err(ResolveLoadError::MissingBazelInfo(path_buf)),
-        Some(info) => {
-            let malformed_err = ResolveLoadError::PathMalformed(path_buf.clone());
-            let mut split_parts = path.trim_start_match("@").split("//");
-            let repository = split_parts.next().ok_or(malformed_err.clone())?;
-            split_parts = split_parts.next().ok_or(malformed_err.clone())?.split(":");
-            let package = split_parts.next().ok_or(malformed_err.clone())?;
-            let target = split_parts.next().ok_or(malformed_err.clone())?;
-            match split_parts.next().is_some() {
-                true => Err(malformed_err.clone()),
-                false => {
-                    let execroot_dirname =
-                        info.execroot.file_name().ok_or(malformed_err.clone())?;
-
-                    if repository == execroot_dirname {
-                        Ok(info.workspace_root.join(package).join(target))
-                    } else {
-                        Ok(info
-                            .output_base
-                            .join("external")
-                            .join(repository)
-                            .join(package)
-                            .join(target))
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn get_relative_file(
-    current_file_dir: &PathBuf,
-    path: &str,
-    pathbuf: PathBuf,
-) -> Result<PathBuf, ResolveLoadError> {
-    let malformed_err = ResolveLoadError::MissingCurrentFilePath(pathbuf.clone());
-    let mut split_parts = path.split(":");
-    let package = split_parts.next().ok_or(malformed_err.clone())?;
-    let target = split_parts.next().ok_or(malformed_err.clone())?;
-    match split_parts.next().is_some() {
-        true => Err(malformed_err.clone()),
-        false => Ok(current_file_dir.join(package).join(target)),
-    }
-}
-fn label_into_file(
-    bazel_info: &Option<BazelInfo>,
-    path: &str,
-    current_file_path: &PathBuf,
-) -> Result<PathBuf, ResolveLoadError> {
-    let current_file_dir = current_file_path.parent();
-    let path_buf = PathBuf::from(path);
-
-    if path.starts_with("@") {
-        handle_remote_bazel_repository(bazel_info, path, path_buf.clone())
-    } else if path.starts_with("//") {
-        handle_local_bazel_repository(bazel_info, path, path_buf.clone(), current_file_path)
-    } else if path.contains(":") {
-        match current_file_dir {
-            Some(dir) => get_relative_file(&dir.to_path_buf(), path, path_buf.clone()),
-            None => Err(ResolveLoadError::MissingCurrentFilePath(path_buf)),
-        }
-    } else {
-        match (current_file_dir, path_buf.is_absolute()) {
-            (_, true) => Ok(path_buf),
-            (Some(current_file_dir), false) => Ok(current_file_dir.join(&path_buf)),
-            (None, false) => Err(ResolveLoadError::MissingCurrentFilePath(path_buf)),
-        }
-    }
-}
-
-fn replace_fake_file_with_build_target(fake_file: PathBuf) -> Option<PathBuf> {
-    fake_file.parent().and_then(|p| {
-        let build = p.join("BUILD");
-        let build_bazel = p.join("BUILD.bazel");
-        if build.exists() {
-            Some(build)
-        } else if build_bazel.exists() {
-            Some(build_bazel)
-        } else {
-            None
-        }
-    })
-}
-
 fn find_location_in_build_file(
-    info: Option<BazelInfo>,
+    info: &Option<BazelInfo>,
     literal: String,
     current_file_pathbuf: PathBuf,
     ast: &AstModule,
 ) -> anyhow::Result<Option<Range>> {
-    let resolved_file = label_into_file(&info, literal.as_str(), &current_file_pathbuf)?;
+    let resolved_file = label_into_file(info, literal.as_str(), &current_file_pathbuf, false)?;
     let basename = resolved_file.file_name().and_then(|f| f.to_str()).ok_or(
         ResolveLoadError::ResolvedDoesNotExist(resolved_file.clone()),
     )?;
@@ -392,6 +261,41 @@ fn find_location_in_build_file(
         .and_then(|r| Some(Range::from(r)));
     Ok(resolved_span)
 }
+
+fn label_into_file(
+    bazel_info: &Option<BazelInfo>,
+    path: &str,
+    current_file_path: &PathBuf,
+    replace_build_file: bool,
+) -> Result<PathBuf, ResolveLoadError> {
+    let current_file_dir = current_file_path
+        .parent()
+        .and_then(|x| Some(PathBuf::from(x)));
+    let path_buf = PathBuf::from(path);
+    let label = Label::new(path);
+
+    // TODO: not really malformed should we propogate error from label.resolve or just create a new error: CouldntFind Bazel Label
+    match (bazel_info, label) {
+        (Some(info), Some(label)) => label
+            .resolve(info, current_file_dir)
+            .and_then(|x| {
+                if replace_build_file {
+                    Label::replace_fake_file_with_build_target(x)
+                } else {
+                    Some(x)
+                }
+            })
+            .and_then(|x| Some(x.canonicalize().unwrap_or(x)))
+            .ok_or(ResolveLoadError::PathMalformed(path_buf.clone())),
+
+        _ => match (current_file_dir, path_buf.is_absolute()) {
+            (_, true) => Ok(path_buf),
+            (Some(current_file_dir), false) => Ok(current_file_dir.join(&path_buf)),
+            (None, false) => Err(ResolveLoadError::MissingCurrentFilePath(path_buf)),
+        },
+    }
+}
+
 impl LspContext for Context {
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
@@ -410,20 +314,8 @@ impl LspContext for Context {
     fn resolve_load(&self, path: &str, current_file: &LspUrl) -> anyhow::Result<LspUrl> {
         match current_file {
             LspUrl::File(current_file_path) => {
-                let mut resolved_file = label_into_file(&self.bazel_info, path, current_file_path)?;
-                resolved_file = match resolved_file.canonicalize() {
-                    Ok(f) => {
-                        if f.exists() {
-                            Ok(f)
-                        } else {
-                            replace_fake_file_with_build_target(resolved_file.clone())
-                                .ok_or(ResolveLoadError::ResolvedDoesNotExist(resolved_file))
-                        }
-                    }
-                    _ => replace_fake_file_with_build_target(resolved_file.clone())
-                        .ok_or(ResolveLoadError::ResolvedDoesNotExist(resolved_file)),
-                }?;
-
+                let resolved_file =
+                    label_into_file(&self.bazel_info, path, current_file_path, true)?;
                 Ok(Url::from_file_path(resolved_file).unwrap().try_into()?)
             }
             _ => Err(
@@ -442,13 +334,13 @@ impl LspContext for Context {
             let p = url.path();
             // TODO: we can always give literal location finder
             // TODO: but if its a file it will always try to resolve the location but won't be able to and an error will be printed
-            if p.ends_with("BUILD") || p.ends_with("BUILD.bazel") {
+            if self.bazel_info.is_some() && p.ends_with("BUILD") || p.ends_with("BUILD.bazel") {
                 let info = self.bazel_info.clone();
                 let literal_copy = literal.to_owned();
                 Some(StringLiteralResult {
                     url,
-                    location_finder: Some(box |ast: &AstModule, _url| {
-                        find_location_in_build_file(info, literal_copy, current_file_pathbuf, ast)
+                    location_finder: Some(box move |ast: &AstModule, _url| {
+                        find_location_in_build_file(&info, literal_copy, current_file_pathbuf, ast)
                     }),
                 })
             } else {
