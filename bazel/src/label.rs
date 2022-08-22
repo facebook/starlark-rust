@@ -1,23 +1,27 @@
-
 use std::path::PathBuf;
 
 use crate::bazel_info::BazelInfo;
 
+#[derive(PartialEq, Debug)]
 pub struct ExternalLabel {
     repository: String,
     package: String,
     target: String,
 }
+
+#[derive(PartialEq, Debug)]
 pub struct LocalLabel {
     package: String,
     target: String,
 }
 
+#[derive(PartialEq, Debug)]
 pub struct RelativeLabel {
     sub_package: String,
     target: String,
 }
 
+#[derive(PartialEq, Debug)]
 pub enum Label {
     External(ExternalLabel),
     Local(LocalLabel),
@@ -27,17 +31,32 @@ pub enum Label {
 impl Label {
     fn split_package_target(label: &str) -> Option<(&str, &str)> {
         let mut split_parts = label.split(":");
-        let package = split_parts.next()?;
-        let target = split_parts.next()?;
-        Some((package, target))
+        let package = split_parts.next();
+        let target = split_parts.next();
+        // Support //foo short for //foo:foo
+        match (package, target) {
+            // to avoid // being a valid label
+            // but //:baz being a valid target
+            (Some(""), None) => None,
+            (Some(package), Some(target)) => Some((package, target)),
+            (Some(package), None) => Some((package, package)),
+            _ => None,
+        }
     }
 
     fn split_repository_package_target(label: &str) -> Option<(&str, &str, &str)> {
         let mut split_parts = label.split("//");
         let repository = split_parts.next()?;
-        let package_target = split_parts.next()?;
-        let (package, target) = Self::split_package_target(package_target)?;
-        Some((repository, package, target))
+        match split_parts.next() {
+            // empty package-target could be caused by @foo//  or // which we don't want to support so return None
+            Some("") => None,
+            Some(package_target) => {
+                let (package, target) = Self::split_package_target(package_target)?;
+                Some((repository, package, target))
+            }
+            // @foo shorthand for @foo//:foo
+            None => Some((repository, "", repository)),
+        }
     }
 
     pub fn replace_fake_file_with_build_target(fake_file: PathBuf) -> Option<PathBuf> {
@@ -47,10 +66,10 @@ impl Label {
         fake_file.parent().and_then(|p| {
             let build = p.join("BUILD");
             let build_bazel = p.join("BUILD.bazel");
-            if build.exists() {
-                Some(build)
-            } else if build_bazel.exists() {
+            if build_bazel.exists() {
                 Some(build_bazel)
+            } else if build.exists() {
+                Some(build)
             } else {
                 None
             }
@@ -88,7 +107,8 @@ impl Label {
     }
 
     pub fn new(label: &str) -> Option<Self> {
-        if !label.contains(":") {
+        // to avoid the "" label being valid
+        if label.len() == 0 {
             return None;
         }
 
@@ -109,10 +129,121 @@ impl Label {
             }));
         }
 
-        let (package, target) = Self::split_package_target(label)?;
-        Some(Label::Relative(RelativeLabel {
+        if label.contains(":") {
+            let (package, target) = Self::split_package_target(label)?;
+            Some(Label::Relative(RelativeLabel {
+                sub_package: package.to_owned(),
+                target: target.to_owned(),
+            }))
+        } else {
+            // To support foo being shorthand for :foo
+            Some(Label::Relative(RelativeLabel {
+                sub_package: "".into(),
+                target: label.to_owned(),
+            }))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExternalLabel;
+    use super::Label;
+    use super::LocalLabel;
+    use super::RelativeLabel;
+
+    fn external_label(repository: &str, package: &str, target: &str) -> Label {
+        Label::External(ExternalLabel {
+            repository: repository.to_owned(),
+            package: package.to_owned(),
+            target: target.to_owned(),
+        })
+    }
+
+    fn local_label(package: &str, target: &str) -> Label {
+        Label::Local(LocalLabel {
+            package: package.to_owned(),
+            target: target.to_owned(),
+        })
+    }
+    fn relative_label(package: &str, target: &str) -> Label {
+        Label::Relative(RelativeLabel {
             sub_package: package.to_owned(),
             target: target.to_owned(),
-        }))
+        })
+    }
+
+    #[test]
+    fn external() {
+        assert_eq!(
+            Label::new("@foo//bar:baz"),
+            Some(external_label("foo", "bar", "baz"))
+        )
+    }
+
+    #[test]
+    fn external_no_target() {
+        assert_eq!(
+            Label::new("@foo//bar"),
+            Some(external_label("foo", "bar", "bar"))
+        )
+    }
+
+    #[test]
+    fn external_no_package() {
+        assert_eq!(Label::new("@foo"), Some(external_label("foo", "", "foo")))
+    }
+
+    #[test]
+    fn external_empty_package_with_target() {
+        assert_eq!(
+            Label::new("@foo//:baz"),
+            Some(external_label("foo", "", "baz"))
+        )
+    }
+
+    #[test]
+    fn external_empty_package_invalid() {
+        assert_eq!(Label::new("@foo//"), None)
+    }
+
+    #[test]
+    fn local() {
+        assert_eq!(Label::new("//bar:baz"), Some(local_label("bar", "baz")))
+    }
+
+    #[test]
+    fn local_no_target() {
+        assert_eq!(Label::new("//bar"), Some(local_label("bar", "bar")))
+    }
+
+    #[test]
+    fn local_no_package() {
+        assert_eq!(Label::new("//:baz"), Some(local_label("", "baz")))
+    }
+
+    #[test]
+    fn local_no_package_invalid() {
+        assert_eq!(Label::new("//"), None)
+    }
+
+    #[test]
+    fn relative() {
+        assert_eq!(Label::new("bar:baz"), Some(relative_label("bar", "baz")))
+    }
+
+    #[test]
+    fn relative_no_target() {
+        assert_eq!(Label::new("baz"), Some(relative_label("", "baz")))
+    }
+
+    #[test]
+    fn relative_only_target() {
+        assert_eq!(Label::new(":baz"), Some(relative_label("", "baz")))
+    }
+
+    #[test]
+    fn empty() {
+        assert_eq!(Label::new(""), None)
     }
 }

@@ -274,7 +274,7 @@ fn label_into_file(
     let path_buf = PathBuf::from(path);
     let label = Label::new(path);
 
-    // TODO: not really malformed should we propogate error from label.resolve or just create a new error: CouldntFind Bazel Label
+    // TODO: not really malformed should we propogate error from label.resolve or just create a new error: Couldnt Find Bazel Label
     match (bazel_info, label) {
         (Some(info), Some(label)) => label
             .resolve(info, current_file_dir)

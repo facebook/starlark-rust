@@ -500,29 +500,35 @@ impl<T: LspContext> Backend<T> {
                         }) => {
                             // If there's an error loading the file to parse it, at least
                             // try to get to the file.
-                            self.get_ast_or_load_from_disk(&url)
+                            let location_result = self
+                                .get_ast_or_load_from_disk(&url)
                                 .and_then(|ast| match ast {
                                     Some(module) => location_finder(&module.ast, &url),
                                     None => Ok(None),
                                 })
                                 .inspect_err(|e| {
                                     eprintln!("Error jumping to definition: {:#}", e);
-                                })
-                                .unwrap_or_default()
-                                .and_then(|target_range| {
+                                });
+                            match location_result {
+                                // if the location result was successful
+                                // only return a location link if a location was found
+                                Ok(location) => location.and_then(|target_range| {
                                     Some(LocationLink {
                                         origin_selection_range: Some(source.into()),
                                         target_uri: url.clone().try_into().ok()?,
                                         target_range,
                                         target_selection_range: target_range,
                                     })
-                                })
-                                .or(Some(LocationLink {
+                                }),
+                                // if the location result was an error
+                                // try to at least go to the file
+                                _ => Some(LocationLink {
                                     origin_selection_range: Some(source.into()),
                                     target_uri: url.try_into()?,
                                     target_range: Range::default(),
                                     target_selection_range: Range::default(),
-                                }))
+                                }),
+                            }
                         }
                         Some(StringLiteralResult {
                             url,
