@@ -76,6 +76,33 @@ impl Label {
         })
     }
 
+    fn is_file_root_of_workspace(file: PathBuf) -> bool {
+        match file.file_name().and_then(|name| name.to_str()) {
+            Some(name) => name.starts_with("WORKSPACE") || name == "MODULE.bazel",
+            _ => false,
+        }
+    }
+
+    fn resolve_local(
+        bazel_info: &BazelInfo,
+        current_file_dir: PathBuf,
+        l: LocalLabel,
+    ) -> Option<PathBuf> {
+        for a in current_file_dir.ancestors() {
+            for file in a.read_dir().ok()? {
+                match file {
+                    Ok(file) => {
+                        if Self::is_file_root_of_workspace(file.path()) {
+                            return Some(a.to_path_buf().join(l.package).join(l.target));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Some(bazel_info.workspace_root.join(l.package).join(l.target))
+    }
+
     pub fn resolve(
         self,
         bazel_info: &BazelInfo,
@@ -89,17 +116,33 @@ impl Label {
                 if l.repository == execroot_dirname.to_str()? {
                     Some(bazel_info.workspace_root.join(l.package).join(l.target))
                 } else {
-                    Some(
-                        bazel_info
-                            .output_base
-                            .join("external")
-                            .join(l.repository)
-                            .join(l.package)
-                            .join(l.target),
-                    )
+                    let external_directory = bazel_info.output_base.join("external");
+                    let repositories: Vec<String> = external_directory
+                        .read_dir()
+                        .ok()?
+                        .filter_map(|e| {
+                            e.ok()
+                                .and_then(|f| Some(f.file_name().to_str().unwrap_or("").to_owned()))
+                                .filter(|name| {
+                                    let repository_with_version = l.repository.clone() + ".";
+                                    name == l.repository.as_str()
+                                        || name.starts_with(repository_with_version.as_str())
+                                })
+                        })
+                        .collect();
+
+                    match repositories.len() {
+                        1 => repositories.get(0).and_then(|repo| {
+                            Some(external_directory.join(repo).join(l.package).join(l.target))
+                        }),
+                        _ => None,
+                    }
                 }
             }
-            Label::Local(l) => Some(bazel_info.workspace_root.join(l.package).join(l.target)),
+            Label::Local(l) => {
+                current_file_dir.and_then(|dir| Self::resolve_local(bazel_info, dir, l))
+            }
+
             Label::Relative(l) => {
                 current_file_dir.and_then(|d| Some(d.join(l.sub_package).join(l.target)))
             }
