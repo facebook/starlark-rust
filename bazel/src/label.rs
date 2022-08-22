@@ -117,7 +117,7 @@ impl Label {
                     Some(bazel_info.workspace_root.join(l.package).join(l.target))
                 } else {
                     let external_directory = bazel_info.output_base.join("external");
-                    let repositories: Vec<String> = external_directory
+                    let mut repositories: Vec<String> = external_directory
                         .read_dir()
                         .ok()?
                         .filter_map(|e| {
@@ -131,12 +131,11 @@ impl Label {
                         })
                         .collect();
 
-                    match repositories.len() {
-                        1 => repositories.get(0).and_then(|repo| {
-                            Some(external_directory.join(repo).join(l.package).join(l.target))
-                        }),
-                        _ => None,
-                    }
+                    // TODO: how to pick just one
+                    repositories.sort();
+                    repositories.get(0).and_then(|repo| {
+                        Some(external_directory.join(repo).join(l.package).join(l.target))
+                    })
                 }
             }
             Label::Local(l) => {
