@@ -1,0 +1,23 @@
+bazel-bin: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/execroot/io_bazel/bazel-out/k8-fastbuild/bin
+bazel-genfiles: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/execroot/io_bazel/bazel-out/k8-fastbuild/bin
+bazel-testlogs: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/execroot/io_bazel/bazel-out/k8-fastbuild/testlogs
+character-encoding: file.encoding = ISO-8859-1, defaultCharset = ISO-8859-1
+command_log: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/command.log
+committed-heap-size: 418MB
+execution_root: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/execroot/io_bazel
+gc-count: 11
+gc-time: 42ms
+install_base: /home/user/.cache/bazel/_bazel_user/install/41b71f1bb3ce13f20cfeeb31a9357113
+java-home: /home/user/.cache/bazel/_bazel_user/install/41b71f1bb3ce13f20cfeeb31a9357113/embedded_tools/jdk
+java-runtime: OpenJDK Runtime Environment (build 11.0.6+10-LTS) by Azul Systems, Inc.
+java-vm: OpenJDK 64-Bit Server VM (build 11.0.6+10-LTS, mixed mode) by Azul Systems, Inc.
+max-heap-size: 4175MB
+output_base: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf
+output_path: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/execroot/io_bazel/bazel-out
+package_path: %workspace%
+release: release 5.2.0
+repository_cache: /home/user/.cache/bazel/_bazel_user/cache/repos/v1
+server_log: /home/user/.cache/bazel/_bazel_user/726bdc44ca84ffc53f631c27e313c4cf/java.log.home.user.log.java.20220821-211440.206313
+server_pid: 206313
+used-heap-size: 266MB
+workspace: /home/user/dev/bazel/bazel

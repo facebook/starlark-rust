@@ -33,6 +33,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use bazel::bazel_info::get_bazel_info;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
@@ -46,7 +47,6 @@ use walkdir::WalkDir;
 
 use crate::eval::ContextMode;
 use crate::types::LintMessage;
-
 mod dap;
 mod eval;
 mod types;
@@ -71,6 +71,20 @@ struct Args {
         ],
     )]
     lsp: bool,
+
+    #[structopt(
+        long = "bazel",
+        help = "Configures the LSP server to work with bazel.",
+        conflicts_with_all = &[
+            "interactive",
+            "dap",
+            "check",
+            "json",
+            "evaluate",
+            "files",
+        ],
+    )]
+    bazel: bool,
 
     #[structopt(
         long = "dap",
@@ -242,6 +256,10 @@ fn main() -> anyhow::Result<()> {
 
         if args.lsp {
             ctx.mode = ContextMode::Check;
+            // TODO: workspace dir?
+            if args.bazel {
+                ctx.bazel_info = get_bazel_info(None);
+            }
             lsp::server::stdio_server(ctx)?;
         } else if is_interactive {
             interactive(&ctx)?;

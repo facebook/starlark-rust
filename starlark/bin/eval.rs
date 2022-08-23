@@ -22,9 +22,12 @@ use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
 
+use bazel::bazel_info::BazelInfo;
+use bazel::label::Label;
 use gazebo::prelude::*;
 use itertools::Either;
 use lsp_types::Diagnostic;
+use lsp_types::Range;
 use lsp_types::Url;
 use starlark::environment::FrozenModule;
 use starlark::environment::Globals;
@@ -58,6 +61,7 @@ pub(crate) struct Context {
     pub(crate) module: Option<Module>,
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
     pub(crate) builtin_symbols: HashMap<String, LspUrl>,
+    pub(crate) bazel_info: Option<BazelInfo>,
 }
 
 /// The outcome of evaluating (checking, parsing or running) given starlark code.
@@ -110,6 +114,7 @@ impl Context {
             module,
             builtin_docs,
             builtin_symbols,
+            bazel_info: None,
         })
     }
 
@@ -241,6 +246,56 @@ impl Context {
     }
 }
 
+fn find_location_in_build_file(
+    info: &Option<BazelInfo>,
+    literal: String,
+    current_file_pathbuf: PathBuf,
+    ast: &AstModule,
+) -> anyhow::Result<Option<Range>> {
+    let resolved_file = label_into_file(info, literal.as_str(), &current_file_pathbuf, false)?;
+    let basename = resolved_file.file_name().and_then(|f| f.to_str()).ok_or(
+        ResolveLoadError::ResolvedDoesNotExist(resolved_file.clone()),
+    )?;
+    let resolved_span = ast
+        .find_function_call_with_name(basename)
+        .and_then(|r| Some(Range::from(r)));
+    Ok(resolved_span)
+}
+
+fn label_into_file(
+    bazel_info: &Option<BazelInfo>,
+    path: &str,
+    current_file_path: &PathBuf,
+    replace_build_file: bool,
+) -> Result<PathBuf, ResolveLoadError> {
+    let current_file_dir = current_file_path
+        .parent()
+        .and_then(|x| Some(PathBuf::from(x)));
+    let path_buf = PathBuf::from(path);
+    let label = Label::new(path);
+
+    // TODO: not really malformed should we propogate error from label.resolve or just create a new error: Couldnt Find Bazel Label
+    match (bazel_info, label) {
+        (Some(info), Some(label)) => label
+            .resolve(info, current_file_dir)
+            .and_then(|x| {
+                if replace_build_file {
+                    Label::replace_fake_file_with_build_target(x)
+                } else {
+                    Some(x)
+                }
+            })
+            .and_then(|x| Some(x.canonicalize().unwrap_or(x)))
+            .ok_or(ResolveLoadError::PathMalformed(path_buf.clone())),
+
+        _ => match (current_file_dir, path_buf.is_absolute()) {
+            (_, true) => Ok(path_buf),
+            (Some(current_file_dir), false) => Ok(current_file_dir.join(&path_buf)),
+            (None, false) => Err(ResolveLoadError::MissingCurrentFilePath(path_buf)),
+        },
+    }
+}
+
 impl LspContext for Context {
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
@@ -257,16 +312,11 @@ impl LspContext for Context {
     }
 
     fn resolve_load(&self, path: &str, current_file: &LspUrl) -> anyhow::Result<LspUrl> {
-        let path = PathBuf::from(path);
         match current_file {
             LspUrl::File(current_file_path) => {
-                let current_file_dir = current_file_path.parent();
-                let absolute_path = match (current_file_dir, path.is_absolute()) {
-                    (_, true) => Ok(path),
-                    (Some(current_file_dir), false) => Ok(current_file_dir.join(&path)),
-                    (None, false) => Err(ResolveLoadError::MissingCurrentFilePath(path)),
-                }?;
-                Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
+                let resolved_file =
+                    label_into_file(&self.bazel_info, path, current_file_path, true)?;
+                Ok(Url::from_file_path(resolved_file).unwrap().try_into()?)
             }
             _ => Err(
                 ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone()).into(),
@@ -279,11 +329,26 @@ impl LspContext for Context {
         literal: &str,
         current_file: &LspUrl,
     ) -> anyhow::Result<Option<StringLiteralResult>> {
+        let current_file_pathbuf = current_file.path().to_path_buf();
         self.resolve_load(literal, current_file).map(|url| {
-            Some(StringLiteralResult {
-                url,
-                location_finder: None,
-            })
+            let p = url.path();
+            // TODO: we can always give literal location finder
+            // TODO: but if its a file it will always try to resolve the location but won't be able to and an error will be printed
+            if self.bazel_info.is_some() && p.ends_with("BUILD") || p.ends_with("BUILD.bazel") {
+                let info = self.bazel_info.clone();
+                let literal_copy = literal.to_owned();
+                Some(StringLiteralResult {
+                    url,
+                    location_finder: Some(box move |ast: &AstModule, _url| {
+                        find_location_in_build_file(&info, literal_copy, current_file_pathbuf, ast)
+                    }),
+                })
+            } else {
+                Some(StringLiteralResult {
+                    url,
+                    location_finder: None,
+                })
+            }
         })
     }
 
