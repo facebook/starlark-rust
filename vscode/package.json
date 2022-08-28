@@ -2,7 +2,7 @@
     "name": "starlark",
     "description": "A Starlark language server",
     "extensionKind": [
-      "workspace"
+        "workspace"
     ],
     "author": "Facebook",
     "license": "Apache2",
@@ -113,9 +113,9 @@
                     "description": "Additional arguments that should be passed to the binary at starlark.lspPath"
                 },
                 "starlark.enableGotoDefinition": {
-                  "type": "boolean",
-                  "default": true,
-                  "description": "Whether to ask the LSP server to enable Goto Definition functionality"
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether to ask the LSP server to enable Goto Definition functionality"
                 }
             }
         }
