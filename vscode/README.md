@@ -12,7 +12,7 @@ Based on a combination of:
 
 ## Pre-requisites
 
-You need to have npm v7+ installed. Afterwards, run `npm install` in this folder.
+You need to have npm v7+ installed. Afterwards, run `npm install` in this folder and in `client`.
 
 ## Debugging
 
