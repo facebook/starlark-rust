@@ -65,7 +65,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
-use crate::analysis::DefinitionLocation;
+use crate::analysis::IdentifierDefinition;
 use crate::analysis::LspModule;
 use crate::lsp::server::LoadContentsError::WrongScheme;
 use crate::syntax::AstModule;
@@ -435,7 +435,7 @@ impl<T: LspContext> Backend<T> {
 
         let location = match self.get_ast(&uri) {
             Some(ast) => match ast.find_definition(line, character) {
-                DefinitionLocation::Location {
+                IdentifierDefinition::Location {
                     source,
                     destination: target,
                 } => Some(LocationLink {
@@ -444,7 +444,7 @@ impl<T: LspContext> Backend<T> {
                     target_range: target.into(),
                     target_selection_range: target.into(),
                 }),
-                DefinitionLocation::LoadedLocation {
+                IdentifierDefinition::LoadedLocation {
                     source,
                     destination: location,
                     path,
@@ -469,8 +469,8 @@ impl<T: LspContext> Backend<T> {
                         }),
                     }
                 }
-                DefinitionLocation::NotFound => None,
-                DefinitionLocation::LoadPath { source, path } => {
+                IdentifierDefinition::NotFound => None,
+                IdentifierDefinition::LoadPath { source, path } => {
                     match self.resolve_load_path(&path, &uri) {
                         Ok(load_uri) => Some(LocationLink {
                             origin_selection_range: Some(source.into()),
@@ -481,7 +481,7 @@ impl<T: LspContext> Backend<T> {
                         Err(_) => None,
                     }
                 }
-                DefinitionLocation::StringLiteral { source, literal } => {
+                IdentifierDefinition::StringLiteral { source, literal } => {
                     let literal = self.context.resolve_string_literal(&literal, &uri)?;
                     match literal {
                         Some(StringLiteralResult {
@@ -523,7 +523,7 @@ impl<T: LspContext> Backend<T> {
                         _ => None,
                     }
                 }
-                DefinitionLocation::Unresolved { source, name } => {
+                IdentifierDefinition::Unresolved { source, name } => {
                     match self.context.get_url_for_global_symbol(&uri, &name)? {
                         Some(uri) => {
                             let loaded_location = self

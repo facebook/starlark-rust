@@ -33,9 +33,9 @@ use crate::syntax::ast::Stmt;
 use crate::syntax::uniplate::Visit;
 use crate::syntax::AstModule;
 
-/// The location of a definition for a given symbol. See [`AstModule::find_definition`].
+/// The location of a definition for a given identifier. See [`AstModule::find_definition`].
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum DefinitionLocation {
+pub enum IdentifierDefinition {
     /// The definition was found at this location in the current file.
     Location {
         source: ResolvedSpan,
@@ -68,6 +68,28 @@ pub enum DefinitionLocation {
     NotFound,
 }
 
+/// An inner structure that only holds references and unresolved spans. Used while
+/// finding locations for identifiers. Resolved to a fuller, owned structure
+/// ([`IdentifierDefinition`]) after the entire AST is visited.
+///
+/// This references temporary variables, so cannot be returned to external users directly.
+enum TempIdentifierDefinition<'a> {
+    /// The location of the definition of the symbol at the current line/column
+    Location { source: Span, destination: Span },
+    LoadedLocation {
+        source: Span,
+        destination: Span,
+        path: &'a str,
+        name: &'a str,
+    },
+    /// The definition was not found in the current scope but the name of an identifier
+    /// was found at the given position. This should be checked in outer scopes
+    /// to attempt to find the definition.
+    Name { source: Span, name: &'a str },
+    /// None of the accesses matched the position that was provided.
+    NotFound,
+}
+
 /// Container that holds an AST module and returns things like definition locations,
 /// lists of symbols, etc.
 pub(crate) struct LspModule {
@@ -79,47 +101,24 @@ impl LspModule {
         Self { ast }
     }
 
-    /// Attempts to find the location where a symbol is defined in the module, or `None` if it
-    /// was not defined anywhere in this file.
+    /// Attempts to find the location where a symbol is defined in the module.
     ///
     /// `line` and `col` are zero based indexes of a location of the symbol to attempt to lookup.
     ///
     /// This method also handles scoping properly (i.e. an access of "foo" in a function
     /// will return location of the parameter "foo", even if there is a global called "foo").
-    pub(crate) fn find_definition(&self, line: u32, col: u32) -> DefinitionLocation {
+    pub(crate) fn find_definition(&self, line: u32, col: u32) -> IdentifierDefinition {
         // TODO(nmj): This should probably just store references to all of the AST nodes
         //            when the LSPModule object is created, and then we can do a much faster
         //            lookup, especially in cases where a file has not been changed, so the
         //            LSPModule doesn't need to reparse anything.
 
-        // The inner structure here lets us just hold references, and has some un-resolved
-        // spans and the like. We turn it into a more proper structure at the end.
-        enum Definition<'a> {
-            // The location of the definition of the symbol at the current line/column
-            Location {
-                source: Span,
-                destination: Span,
-            },
-            LoadedLocation {
-                source: Span,
-                destination: Span,
-                path: &'a str,
-                name: &'a str,
-            },
-            // The definition was not found in the current scope but the name of an identifier
-            // was found at the given position. This should be checked in outer scopes
-            // to attempt to find the definition.
-            Name {
-                source: Span,
-                name: &'a str,
-            },
-            // None of the accesses matched the position that was provided.
-            NotFound,
-        }
-
         // Look at the given scope and child scopes to try to find the definition of the symbol
         // accessed at Pos.
-        fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> Definition<'a> {
+        fn find_definition_in_scope<'a>(
+            scope: &'a Scope,
+            pos: Pos,
+        ) -> TempIdentifierDefinition<'a> {
             for bind in &scope.inner {
                 match bind {
                     Bind::Set(_, _) => {}
@@ -127,20 +126,20 @@ impl LspModule {
                         if g.span.contains(pos) {
                             let res = match scope.bound.get(g.node.as_str()) {
                                 Some((Assigner::Load { path, name }, span)) => {
-                                    Definition::LoadedLocation {
+                                    TempIdentifierDefinition::LoadedLocation {
                                         source: g.span,
                                         destination: *span,
                                         path,
                                         name: name.as_str(),
                                     }
                                 }
-                                Some((_, span)) => Definition::Location {
+                                Some((_, span)) => TempIdentifierDefinition::Location {
                                     source: g.span,
                                     destination: *span,
                                 },
                                 // We know the symbol name, but it might only be available in
                                 // an outer scope.
-                                None => Definition::Name {
+                                None => TempIdentifierDefinition::Name {
                                     source: g.span,
                                     name: g.node.as_str(),
                                 },
@@ -150,31 +149,32 @@ impl LspModule {
                     }
                     Bind::Flow => {}
                     Bind::Scope(inner_scope) => match find_definition_in_scope(inner_scope, pos) {
-                        x @ Definition::Location { .. } | x @ Definition::LoadedLocation { .. } => {
+                        x @ TempIdentifierDefinition::Location { .. }
+                        | x @ TempIdentifierDefinition::LoadedLocation { .. } => {
                             return x;
                         }
-                        Definition::Name { source, name } => {
+                        TempIdentifierDefinition::Name { source, name } => {
                             return match scope.bound.get(name) {
-                                None => Definition::Name { source, name },
+                                None => TempIdentifierDefinition::Name { source, name },
                                 Some((Assigner::Load { path, name }, span)) => {
-                                    Definition::LoadedLocation {
+                                    TempIdentifierDefinition::LoadedLocation {
                                         source,
                                         destination: *span,
                                         path,
                                         name: name.as_str(),
                                     }
                                 }
-                                Some((_, span)) => Definition::Location {
+                                Some((_, span)) => TempIdentifierDefinition::Location {
                                     source,
                                     destination: *span,
                                 },
                             };
                         }
-                        Definition::NotFound => {}
+                        TempIdentifierDefinition::NotFound => {}
                     },
                 }
             }
-            Definition::NotFound
+            TempIdentifierDefinition::NotFound
         }
 
         let scope = scope(&self.ast);
@@ -183,38 +183,40 @@ impl LspModule {
 
         // Finalize the results after recursing down from and back up to the the top level scope.
         match find_definition_in_scope(&scope, current_pos) {
-            Definition::Location {
+            TempIdentifierDefinition::Location {
                 source,
                 destination,
-            } => DefinitionLocation::Location {
+            } => IdentifierDefinition::Location {
                 source: self.ast.codemap.resolve_span(source),
                 destination: self.ast.codemap.resolve_span(destination),
             },
-            Definition::Name { source, name } => match scope.bound.get(name) {
-                None => DefinitionLocation::Unresolved {
+            TempIdentifierDefinition::Name { source, name } => match scope.bound.get(name) {
+                None => IdentifierDefinition::Unresolved {
                     source: self.ast.codemap.resolve_span(source),
                     name: name.to_owned(),
                 },
-                Some((Assigner::Load { path, name }, span)) => DefinitionLocation::LoadedLocation {
-                    source: self.ast.codemap.resolve_span(source),
-                    destination: self.ast.codemap.resolve_span(*span),
-                    path: path.node.clone(),
-                    name: name.node.clone(),
-                },
-                Some((_, span)) => DefinitionLocation::Location {
+                Some((Assigner::Load { path, name }, span)) => {
+                    IdentifierDefinition::LoadedLocation {
+                        source: self.ast.codemap.resolve_span(source),
+                        destination: self.ast.codemap.resolve_span(*span),
+                        path: path.node.clone(),
+                        name: name.node.clone(),
+                    }
+                }
+                Some((_, span)) => IdentifierDefinition::Location {
                     source: self.ast.codemap.resolve_span(source),
                     destination: self.ast.codemap.resolve_span(*span),
                 },
             },
             // If we could not find the symbol, see if the current position is within
             // a load statement (these are not exposed as Get/Set in bind).
-            Definition::NotFound => self.find_definition_from_ast(current_pos),
-            Definition::LoadedLocation {
+            TempIdentifierDefinition::NotFound => self.find_definition_from_ast(current_pos),
+            TempIdentifierDefinition::LoadedLocation {
                 source,
                 destination,
                 path,
                 name,
-            } => DefinitionLocation::LoadedLocation {
+            } => IdentifierDefinition::LoadedLocation {
                 source: self.ast.codemap.resolve_span(source),
                 destination: self.ast.codemap.resolve_span(destination),
                 path: path.to_owned(),
@@ -223,7 +225,7 @@ impl LspModule {
         }
     }
 
-    /// Attempt to find the location where an exported symbol is defined.
+    /// Attempt to find the location in this module where an exported symbol is defined.
     pub(crate) fn find_exported_symbol(&self, name: &str) -> Option<ResolvedSpan> {
         self.ast
             .exported_symbols()
@@ -237,11 +239,11 @@ impl LspModule {
             })
     }
 
-    fn find_definition_from_ast(&self, pos: Pos) -> DefinitionLocation {
+    fn find_definition_from_ast(&self, pos: Pos) -> IdentifierDefinition {
         fn visit_node(
             codemap: &CodeMap,
             pos: Pos,
-            ret: &mut Option<DefinitionLocation>,
+            ret: &mut Option<IdentifierDefinition>,
             node: Visit<AstNoPayload>,
         ) {
             if ret.is_some() {
@@ -252,7 +254,7 @@ impl LspModule {
                     node: Expr::Literal(AstLiteral::String(s)),
                     ..
                 }) if s.span.contains(pos) => {
-                    *ret = Some(DefinitionLocation::StringLiteral {
+                    *ret = Some(IdentifierDefinition::StringLiteral {
                         source: codemap.resolve_span(s.span),
                         literal: s.node.to_owned(),
                     });
@@ -262,14 +264,14 @@ impl LspModule {
                     ..
                 }) => {
                     *ret = if load.module.span.contains(pos) {
-                        Some(DefinitionLocation::LoadPath {
+                        Some(IdentifierDefinition::LoadPath {
                             source: codemap.resolve_span(load.module.span),
                             path: load.module.node.to_owned(),
                         })
                     } else {
                         load.args.iter().find_map(|(assign, name)| {
                             if assign.span.contains(pos) || name.span.contains(pos) {
-                                Some(DefinitionLocation::LoadedLocation {
+                                Some(IdentifierDefinition::LoadedLocation {
                                     source: codemap.resolve_span(name.span),
                                     destination: codemap.resolve_span(name.span),
                                     path: load.module.node.to_owned(),
@@ -292,7 +294,7 @@ impl LspModule {
             &mut ret,
             Visit::Stmt(&self.ast.statement),
         );
-        ret.unwrap_or(DefinitionLocation::NotFound)
+        ret.unwrap_or(IdentifierDefinition::NotFound)
     }
 }
 
@@ -542,7 +544,7 @@ mod test {
     use textwrap::dedent;
 
     use super::helpers::FixtureWithRanges;
-    use crate::analysis::DefinitionLocation;
+    use crate::analysis::IdentifierDefinition;
     use crate::analysis::LspModule;
 
     #[test]
@@ -570,7 +572,7 @@ mod test {
         let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
         let module = parsed.module()?;
 
-        let expected = DefinitionLocation::LoadedLocation {
+        let expected = IdentifierDefinition::LoadedLocation {
             source: parsed.span("print_click"),
             destination: parsed.span("print"),
             path: "bar.star".to_owned(),
@@ -616,11 +618,11 @@ mod test {
         let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
         let module = parsed.module()?;
 
-        let expected_add = DefinitionLocation::Location {
+        let expected_add = IdentifierDefinition::Location {
             source: parsed.span("add_click"),
             destination: parsed.span("add"),
         };
-        let expected_invalid = DefinitionLocation::Location {
+        let expected_invalid = IdentifierDefinition::Location {
             source: parsed.span("invalid_symbol_click"),
             destination: parsed.span("invalid_symbol"),
         };
@@ -678,7 +680,7 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            DefinitionLocation::Location {
+            IdentifierDefinition::Location {
                 source: parsed.span("x_param"),
                 destination: parsed.span("x")
             },
@@ -713,14 +715,14 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            DefinitionLocation::Location {
+            IdentifierDefinition::Location {
                 source: parsed.span("x_var"),
                 destination: parsed.span("x")
             },
             module.find_definition(parsed.begin_line("x_var"), parsed.begin_column("x_var"))
         );
         assert_eq!(
-            DefinitionLocation::Location {
+            IdentifierDefinition::Location {
                 source: parsed.span("y_var1"),
                 destination: parsed.span("y2")
             },
@@ -728,14 +730,14 @@ mod test {
         );
 
         assert_eq!(
-            DefinitionLocation::Location {
+            IdentifierDefinition::Location {
                 source: parsed.span("y_var2"),
                 destination: parsed.span("y1")
             },
             module.find_definition(parsed.begin_line("y_var2"), parsed.begin_column("y_var2"))
         );
         assert_eq!(
-            DefinitionLocation::Unresolved {
+            IdentifierDefinition::Unresolved {
                 source: parsed.span("z_var"),
                 name: "z".to_owned()
             },
@@ -770,7 +772,7 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            DefinitionLocation::NotFound,
+            IdentifierDefinition::NotFound,
             module.find_definition(parsed.begin_line("no_def"), parsed.begin_column("no_def"))
         );
 
@@ -826,7 +828,7 @@ mod test {
         let module = parsed.module()?;
 
         fn test(parsed: &FixtureWithRanges, module: &LspModule, name: &str) {
-            let expected = DefinitionLocation::StringLiteral {
+            let expected = IdentifierDefinition::StringLiteral {
                 source: parsed.span(&format!("{}_click", name)),
                 literal: name.to_owned(),
             };
