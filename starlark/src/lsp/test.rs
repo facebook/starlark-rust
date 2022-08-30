@@ -48,7 +48,6 @@ use lsp_types::InitializeParams;
 use lsp_types::InitializeResult;
 use lsp_types::InitializedParams;
 use lsp_types::Position;
-use lsp_types::PublishDiagnosticsParams;
 use lsp_types::Range;
 use lsp_types::TextDocumentClientCapabilities;
 use lsp_types::TextDocumentContentChangeEvent;
@@ -550,11 +549,9 @@ impl TestServer {
     }
 
     /// Send a notification saying that a file was opened with the given contents.
-    pub fn open_file(
-        &mut self,
-        uri: Url,
-        contents: String,
-    ) -> anyhow::Result<PublishDiagnosticsParams> {
+    ///
+    /// This will return an error if there were any diagnostic messages.
+    pub fn open_file(&mut self, uri: Url, contents: String) -> anyhow::Result<()> {
         let open_params = DidOpenTextDocumentParams {
             text_document: TextDocumentItem {
                 uri: uri.clone(),
@@ -572,8 +569,13 @@ impl TestServer {
                 notification.uri,
                 uri
             ))
+        } else if !notification.diagnostics.is_empty() {
+            Err(anyhow::anyhow!(
+                "Got unexpected diagnostic messages when opening {}",
+                uri
+            ))
         } else {
-            Ok(notification)
+            Ok(())
         }
     }
 
