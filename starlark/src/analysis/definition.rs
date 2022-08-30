@@ -69,6 +69,20 @@ pub enum IdentifierDefinition {
     NotFound,
 }
 
+impl IdentifierDefinition {
+    #[allow(unused)]
+    fn source(&self) -> Option<ResolvedSpan> {
+        match self {
+            IdentifierDefinition::Location { source, .. }
+            | IdentifierDefinition::LoadedLocation { source, .. }
+            | IdentifierDefinition::LoadPath { source, .. }
+            | IdentifierDefinition::StringLiteral { source, .. }
+            | IdentifierDefinition::Unresolved { source, .. } => Some(*source),
+            IdentifierDefinition::NotFound => None,
+        }
+    }
+}
+
 /// A definition as in [`IdentifierDefinition`], but the source is within a dot expression.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DottedDefinition {
@@ -157,6 +171,34 @@ impl From<IdentifierDefinition> for Definition {
 impl From<DottedDefinition> for Definition {
     fn from(def: DottedDefinition) -> Self {
         Self::Dotted(def)
+    }
+}
+
+impl Definition {
+    /// Get the "destination" of this location, but only within the current module.
+    ///
+    /// Some definition location types do not have a local definition.
+    #[allow(unused)]
+    fn local_destination(&self) -> Option<ResolvedSpan> {
+        match self {
+            Definition::Identifier(i)
+            | Definition::Dotted(DottedDefinition {
+                root_definition_location: i,
+                ..
+            }) => match i {
+                IdentifierDefinition::Location { destination, .. }
+                | IdentifierDefinition::LoadedLocation { destination, .. } => Some(*destination),
+                _ => None,
+            },
+        }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn source(&self) -> Option<ResolvedSpan> {
+        match self {
+            Definition::Identifier(i) => i.source(),
+            Definition::Dotted(DottedDefinition { source, .. }) => Some(*source),
+        }
     }
 }
 
