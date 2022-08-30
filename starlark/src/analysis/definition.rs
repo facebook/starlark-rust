@@ -113,42 +113,48 @@ impl LspModule {
         //            lookup, especially in cases where a file has not been changed, so the
         //            LSPModule doesn't need to reparse anything.
 
-        // Look at the given scope and child scopes to try to find the definition of the symbol
-        // accessed at Pos.
-        fn find_definition_in_scope<'a>(
-            scope: &'a Scope,
-            pos: Pos,
-        ) -> TempIdentifierDefinition<'a> {
-            for bind in &scope.inner {
-                match bind {
-                    Bind::Set(_, _) => {}
-                    Bind::Get(g) => {
-                        if g.span.contains(pos) {
-                            let res = match scope.bound.get(g.node.as_str()) {
-                                Some((Assigner::Load { path, name }, span)) => {
-                                    TempIdentifierDefinition::LoadedLocation {
-                                        source: g.span,
-                                        destination: *span,
-                                        path,
-                                        name: name.as_str(),
-                                    }
-                                }
-                                Some((_, span)) => TempIdentifierDefinition::Location {
-                                    source: g.span,
-                                    destination: *span,
-                                },
-                                // We know the symbol name, but it might only be available in
-                                // an outer scope.
-                                None => TempIdentifierDefinition::Name {
-                                    source: g.span,
-                                    name: g.node.as_str(),
-                                },
-                            };
-                            return res;
+        let scope = scope(&self.ast);
+        let line_span = self.ast.codemap.line_span(line as usize);
+        let current_pos = std::cmp::min(line_span.begin() + col, line_span.end());
+
+        // Finalize the results after recursing down from and back up to the the top level scope.
+        self.get_definition_location(
+            Self::find_definition_in_scope(&scope, current_pos),
+            &scope,
+            current_pos,
+        )
+    }
+
+    /// Look at the given scope and child scopes to try to find where the identifier
+    /// accessed at Pos is defined.
+    fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> TempIdentifierDefinition<'a> {
+        for bind in &scope.inner {
+            match bind {
+                Bind::Get(g) if g.span.contains(pos) => {
+                    let res = match scope.bound.get(g.node.as_str()) {
+                        Some((Assigner::Load { path, name }, span)) => {
+                            TempIdentifierDefinition::LoadedLocation {
+                                source: g.span,
+                                destination: *span,
+                                path,
+                                name: name.as_str(),
+                            }
                         }
-                    }
-                    Bind::Flow => {}
-                    Bind::Scope(inner_scope) => match find_definition_in_scope(inner_scope, pos) {
+                        Some((_, span)) => TempIdentifierDefinition::Location {
+                            source: g.span,
+                            destination: *span,
+                        },
+                        // We know the symbol name, but it might only be available in
+                        // an outer scope.
+                        None => TempIdentifierDefinition::Name {
+                            source: g.span,
+                            name: g.node.as_str(),
+                        },
+                    };
+                    return res;
+                }
+                Bind::Scope(inner_scope) => {
+                    match Self::find_definition_in_scope(inner_scope, pos) {
                         x @ TempIdentifierDefinition::Location { .. }
                         | x @ TempIdentifierDefinition::LoadedLocation { .. } => {
                             return x;
@@ -171,22 +177,14 @@ impl LspModule {
                             };
                         }
                         TempIdentifierDefinition::NotFound => {}
-                    },
+                    }
                 }
+                // For everything else, just ignore it. Note that the `Get` is ignored
+                // because we already checked the pos above.
+                Bind::Set(_, _) | Bind::Flow | Bind::Get(_) => {}
             }
-            TempIdentifierDefinition::NotFound
         }
-
-        let scope = scope(&self.ast);
-        let line_span = self.ast.codemap.line_span(line as usize);
-        let current_pos = std::cmp::min(line_span.begin() + col, line_span.end());
-
-        // Finalize the results after recursing down from and back up to the the top level scope.
-        self.get_definition_location(
-            find_definition_in_scope(&scope, current_pos),
-            &scope,
-            current_pos,
-        )
+        TempIdentifierDefinition::NotFound
     }
 
     /// Converts a `TempIdentifierDefinition` to an `IdentifierDefinition`, resolving spans
