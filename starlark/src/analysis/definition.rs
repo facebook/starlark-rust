@@ -128,55 +128,47 @@ impl LspModule {
     /// Look at the given scope and child scopes to try to find where the identifier
     /// accessed at Pos is defined.
     fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> TempIdentifierDefinition<'a> {
+        /// Look for a name in the given scope, with a given source, and return the right
+        /// type of `TempIdentifierDefinition` based on whether / how the variable is bound.
+        fn resolve_get_in_scope<'a>(
+            scope: &'a Scope,
+            name: &'a str,
+            source: Span,
+        ) -> TempIdentifierDefinition<'a> {
+            match scope.bound.get(name) {
+                Some((Assigner::Load { path, name }, span)) => {
+                    TempIdentifierDefinition::LoadedLocation {
+                        source,
+                        destination: *span,
+                        path,
+                        name: name.as_str(),
+                    }
+                }
+                Some((_, span)) => TempIdentifierDefinition::Location {
+                    source,
+                    destination: *span,
+                },
+                // We know the symbol name, but it might only be available in
+                // an outer scope.
+                None => TempIdentifierDefinition::Name { source, name },
+            }
+        }
+
         for bind in &scope.inner {
             match bind {
                 Bind::Get(g) if g.span.contains(pos) => {
-                    let res = match scope.bound.get(g.node.as_str()) {
-                        Some((Assigner::Load { path, name }, span)) => {
-                            TempIdentifierDefinition::LoadedLocation {
-                                source: g.span,
-                                destination: *span,
-                                path,
-                                name: name.as_str(),
-                            }
-                        }
-                        Some((_, span)) => TempIdentifierDefinition::Location {
-                            source: g.span,
-                            destination: *span,
-                        },
-                        // We know the symbol name, but it might only be available in
-                        // an outer scope.
-                        None => TempIdentifierDefinition::Name {
-                            source: g.span,
-                            name: g.node.as_str(),
-                        },
-                    };
-                    return res;
+                    return resolve_get_in_scope(scope, g.node.as_str(), g.span);
                 }
                 Bind::Scope(inner_scope) => {
                     match Self::find_definition_in_scope(inner_scope, pos) {
+                        TempIdentifierDefinition::Name { source, name } => {
+                            return resolve_get_in_scope(scope, name, source);
+                        }
+                        TempIdentifierDefinition::NotFound => {}
                         x @ TempIdentifierDefinition::Location { .. }
                         | x @ TempIdentifierDefinition::LoadedLocation { .. } => {
                             return x;
                         }
-                        TempIdentifierDefinition::Name { source, name } => {
-                            return match scope.bound.get(name) {
-                                None => TempIdentifierDefinition::Name { source, name },
-                                Some((Assigner::Load { path, name }, span)) => {
-                                    TempIdentifierDefinition::LoadedLocation {
-                                        source,
-                                        destination: *span,
-                                        path,
-                                        name: name.as_str(),
-                                    }
-                                }
-                                Some((_, span)) => TempIdentifierDefinition::Location {
-                                    source,
-                                    destination: *span,
-                                },
-                            };
-                        }
-                        TempIdentifierDefinition::NotFound => {}
                     }
                 }
                 // For everything else, just ignore it. Note that the `Get` is ignored
