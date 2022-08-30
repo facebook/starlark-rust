@@ -68,6 +68,7 @@ use serde::Serializer;
 use crate::analysis::Definition;
 use crate::analysis::IdentifierDefinition;
 use crate::analysis::LspModule;
+use crate::codemap::ResolvedSpan;
 use crate::lsp::server::LoadContentsError::WrongScheme;
 use crate::syntax::AstModule;
 
@@ -422,6 +423,20 @@ impl<T: LspContext> Backend<T> {
         }
     }
 
+    /// Simple helper to generate `Some(LocationLink)` objects in `resolve_definition_location`
+    fn location_link<R: Into<Range> + Copy>(
+        source: ResolvedSpan,
+        uri: &LspUrl,
+        target_range: R,
+    ) -> anyhow::Result<Option<LocationLink>> {
+        Ok(Some(LocationLink {
+            origin_selection_range: Some(source.into()),
+            target_uri: uri.try_into()?,
+            target_range: target_range.into(),
+            target_selection_range: target_range.into(),
+        }))
+    }
+
     /// Find the ultimate places that an identifier is defined.
     ///
     /// Takes a definition location and if necesary loads other files trying
@@ -437,12 +452,7 @@ impl<T: LspContext> Backend<T> {
             IdentifierDefinition::Location {
                 source,
                 destination: target,
-            } => Some(LocationLink {
-                origin_selection_range: Some(source.into()),
-                target_uri: uri.try_into()?,
-                target_range: target.into(),
-                target_selection_range: target.into(),
-            }),
+            } => Self::location_link(source, &uri, target)?,
             IdentifierDefinition::LoadedLocation {
                 source,
                 destination: location,
@@ -454,29 +464,16 @@ impl<T: LspContext> Backend<T> {
                     .get_ast_or_load_from_disk(&load_uri)?
                     .and_then(|ast| ast.find_exported_symbol(&name));
                 match loaded_location {
-                    None => Some(LocationLink {
-                        origin_selection_range: Some(source.into()),
-                        target_uri: uri.try_into()?,
-                        target_range: location.into(),
-                        target_selection_range: location.into(),
-                    }),
-                    Some(loaded_location) => Some(LocationLink {
-                        origin_selection_range: Some(source.into()),
-                        target_uri: load_uri.try_into()?,
-                        target_range: loaded_location.into(),
-                        target_selection_range: loaded_location.into(),
-                    }),
+                    None => Self::location_link(source, &uri, location)?,
+                    Some(loaded_location) => {
+                        Self::location_link(source, &load_uri, loaded_location)?
+                    }
                 }
             }
             IdentifierDefinition::NotFound => None,
             IdentifierDefinition::LoadPath { source, path } => {
                 match self.resolve_load_path(&path, &uri) {
-                    Ok(load_uri) => Some(LocationLink {
-                        origin_selection_range: Some(source.into()),
-                        target_uri: load_uri.try_into()?,
-                        target_range: Default::default(),
-                        target_selection_range: Default::default(),
-                    }),
+                    Ok(load_uri) => Self::location_link(source, &load_uri, Range::default())?,
                     Err(_) => None,
                 }
             }
@@ -500,25 +497,12 @@ impl<T: LspContext> Backend<T> {
                             })
                             .unwrap_or_default()
                             .unwrap_or_default();
-                        Some(LocationLink {
-                            origin_selection_range: Some(source.into()),
-                            target_uri: url.try_into()?,
-                            target_range,
-                            target_selection_range: target_range,
-                        })
+                        Self::location_link(source, &url, target_range)?
                     }
                     Some(StringLiteralResult {
                         url,
                         location_finder: None,
-                    }) => {
-                        let target_range = Range::default();
-                        Some(LocationLink {
-                            origin_selection_range: Some(source.into()),
-                            target_uri: url.try_into()?,
-                            target_range,
-                            target_selection_range: target_range,
-                        })
-                    }
+                    }) => Self::location_link(source, &url, Range::default())?,
                     _ => None,
                 }
             }
@@ -529,18 +513,10 @@ impl<T: LspContext> Backend<T> {
                             .get_ast_or_load_from_disk(&uri)?
                             .and_then(|ast| ast.find_exported_symbol(&name));
                         match loaded_location {
-                            None => Some(LocationLink {
-                                origin_selection_range: Some(source.into()),
-                                target_uri: uri.try_into()?,
-                                target_range: Range::default(),
-                                target_selection_range: Range::default(),
-                            }),
-                            Some(loaded_location) => Some(LocationLink {
-                                origin_selection_range: Some(source.into()),
-                                target_uri: uri.try_into()?,
-                                target_range: loaded_location.into(),
-                                target_selection_range: loaded_location.into(),
-                            }),
+                            None => Self::location_link(source, &uri, Range::default())?,
+                            Some(loaded_location) => {
+                                Self::location_link(source, &uri, loaded_location)?
+                            }
                         }
                     }
                     None => None,
