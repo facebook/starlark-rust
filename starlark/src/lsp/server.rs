@@ -421,6 +421,134 @@ impl<T: LspContext> Backend<T> {
         }
     }
 
+    /// Find the ultimate places that an identifier is defined.
+    ///
+    /// Takes a definition location and if necesary loads other files trying
+    /// to find where the symbol was defined in a useful way. e.g. pointing to the
+    /// symbol in a "load()" statement isn't useful, but going to the file it is
+    /// loaded from and pointing at a function definition very much is.
+    fn resolve_definition_location(
+        &self,
+        definition: IdentifierDefinition,
+        uri: LspUrl,
+    ) -> anyhow::Result<Option<LocationLink>> {
+        let ret = match definition {
+            IdentifierDefinition::Location {
+                source,
+                destination: target,
+            } => Some(LocationLink {
+                origin_selection_range: Some(source.into()),
+                target_uri: uri.try_into()?,
+                target_range: target.into(),
+                target_selection_range: target.into(),
+            }),
+            IdentifierDefinition::LoadedLocation {
+                source,
+                destination: location,
+                path,
+                name,
+            } => {
+                let load_uri = self.resolve_load_path(&path, &uri)?;
+                let loaded_location = self
+                    .get_ast_or_load_from_disk(&load_uri)?
+                    .and_then(|ast| ast.find_exported_symbol(&name));
+                match loaded_location {
+                    None => Some(LocationLink {
+                        origin_selection_range: Some(source.into()),
+                        target_uri: uri.try_into()?,
+                        target_range: location.into(),
+                        target_selection_range: location.into(),
+                    }),
+                    Some(loaded_location) => Some(LocationLink {
+                        origin_selection_range: Some(source.into()),
+                        target_uri: load_uri.try_into()?,
+                        target_range: loaded_location.into(),
+                        target_selection_range: loaded_location.into(),
+                    }),
+                }
+            }
+            IdentifierDefinition::NotFound => None,
+            IdentifierDefinition::LoadPath { source, path } => {
+                match self.resolve_load_path(&path, &uri) {
+                    Ok(load_uri) => Some(LocationLink {
+                        origin_selection_range: Some(source.into()),
+                        target_uri: load_uri.try_into()?,
+                        target_range: Default::default(),
+                        target_selection_range: Default::default(),
+                    }),
+                    Err(_) => None,
+                }
+            }
+            IdentifierDefinition::StringLiteral { source, literal } => {
+                let literal = self.context.resolve_string_literal(&literal, &uri)?;
+                match literal {
+                    Some(StringLiteralResult {
+                        url,
+                        location_finder: Some(location_finder),
+                    }) => {
+                        // If there's an error loading the file to parse it, at least
+                        // try to get to the file.
+                        let target_range = self
+                            .get_ast_or_load_from_disk(&url)
+                            .and_then(|ast| match ast {
+                                Some(module) => location_finder(&module.ast, &url),
+                                None => Ok(None),
+                            })
+                            .inspect_err(|e| {
+                                eprintln!("Error jumping to definition: {:#}", e);
+                            })
+                            .unwrap_or_default()
+                            .unwrap_or_default();
+                        Some(LocationLink {
+                            origin_selection_range: Some(source.into()),
+                            target_uri: url.try_into()?,
+                            target_range,
+                            target_selection_range: target_range,
+                        })
+                    }
+                    Some(StringLiteralResult {
+                        url,
+                        location_finder: None,
+                    }) => {
+                        let target_range = Range::default();
+                        Some(LocationLink {
+                            origin_selection_range: Some(source.into()),
+                            target_uri: url.try_into()?,
+                            target_range,
+                            target_selection_range: target_range,
+                        })
+                    }
+                    _ => None,
+                }
+            }
+            IdentifierDefinition::Unresolved { source, name } => {
+                match self.context.get_url_for_global_symbol(&uri, &name)? {
+                    Some(uri) => {
+                        let loaded_location = self
+                            .get_ast_or_load_from_disk(&uri)?
+                            .and_then(|ast| ast.find_exported_symbol(&name));
+                        match loaded_location {
+                            None => Some(LocationLink {
+                                origin_selection_range: Some(source.into()),
+                                target_uri: uri.try_into()?,
+                                target_range: Range::default(),
+                                target_selection_range: Range::default(),
+                            }),
+                            Some(loaded_location) => Some(LocationLink {
+                                origin_selection_range: Some(source.into()),
+                                target_uri: uri.try_into()?,
+                                target_range: loaded_location.into(),
+                                target_selection_range: loaded_location.into(),
+                            }),
+                        }
+                    }
+                    None => None,
+                }
+            }
+        };
+        Ok(ret)
+    }
+
     fn find_definition(
         &self,
         params: GotoDefinitionParams,
@@ -434,120 +562,9 @@ impl<T: LspContext> Backend<T> {
         let character = params.text_document_position_params.position.character;
 
         let location = match self.get_ast(&uri) {
-            Some(ast) => match ast.find_definition(line, character) {
-                IdentifierDefinition::Location {
-                    source,
-                    destination: target,
-                } => Some(LocationLink {
-                    origin_selection_range: Some(source.into()),
-                    target_uri: uri.try_into()?,
-                    target_range: target.into(),
-                    target_selection_range: target.into(),
-                }),
-                IdentifierDefinition::LoadedLocation {
-                    source,
-                    destination: location,
-                    path,
-                    name,
-                } => {
-                    let load_uri = self.resolve_load_path(&path, &uri)?;
-                    let loaded_location = self
-                        .get_ast_or_load_from_disk(&load_uri)?
-                        .and_then(|ast| ast.find_exported_symbol(&name));
-                    match loaded_location {
-                        None => Some(LocationLink {
-                            origin_selection_range: Some(source.into()),
-                            target_uri: uri.try_into()?,
-                            target_range: location.into(),
-                            target_selection_range: location.into(),
-                        }),
-                        Some(loaded_location) => Some(LocationLink {
-                            origin_selection_range: Some(source.into()),
-                            target_uri: load_uri.try_into()?,
-                            target_range: loaded_location.into(),
-                            target_selection_range: loaded_location.into(),
-                        }),
-                    }
-                }
-                IdentifierDefinition::NotFound => None,
-                IdentifierDefinition::LoadPath { source, path } => {
-                    match self.resolve_load_path(&path, &uri) {
-                        Ok(load_uri) => Some(LocationLink {
-                            origin_selection_range: Some(source.into()),
-                            target_uri: load_uri.try_into()?,
-                            target_range: Default::default(),
-                            target_selection_range: Default::default(),
-                        }),
-                        Err(_) => None,
-                    }
-                }
-                IdentifierDefinition::StringLiteral { source, literal } => {
-                    let literal = self.context.resolve_string_literal(&literal, &uri)?;
-                    match literal {
-                        Some(StringLiteralResult {
-                            url,
-                            location_finder: Some(location_finder),
-                        }) => {
-                            // If there's an error loading the file to parse it, at least
-                            // try to get to the file.
-                            let target_range = self
-                                .get_ast_or_load_from_disk(&url)
-                                .and_then(|ast| match ast {
-                                    Some(module) => location_finder(&module.ast, &url),
-                                    None => Ok(None),
-                                })
-                                .inspect_err(|e| {
-                                    eprintln!("Error jumping to definition: {:#}", e);
-                                })
-                                .unwrap_or_default()
-                                .unwrap_or_default();
-                            Some(LocationLink {
-                                origin_selection_range: Some(source.into()),
-                                target_uri: url.try_into()?,
-                                target_range,
-                                target_selection_range: target_range,
-                            })
-                        }
-                        Some(StringLiteralResult {
-                            url,
-                            location_finder: None,
-                        }) => {
-                            let target_range = Range::default();
-                            Some(LocationLink {
-                                origin_selection_range: Some(source.into()),
-                                target_uri: url.try_into()?,
-                                target_range,
-                                target_selection_range: target_range,
-                            })
-                        }
-                        _ => None,
-                    }
-                }
-                IdentifierDefinition::Unresolved { source, name } => {
-                    match self.context.get_url_for_global_symbol(&uri, &name)? {
-                        Some(uri) => {
-                            let loaded_location = self
-                                .get_ast_or_load_from_disk(&uri)?
-                                .and_then(|ast| ast.find_exported_symbol(&name));
-                            match loaded_location {
-                                None => Some(LocationLink {
-                                    origin_selection_range: Some(source.into()),
-                                    target_uri: uri.try_into()?,
-                                    target_range: Range::default(),
-                                    target_selection_range: Range::default(),
-                                }),
-                                Some(loaded_location) => Some(LocationLink {
-                                    origin_selection_range: Some(source.into()),
-                                    target_uri: uri.try_into()?,
-                                    target_range: loaded_location.into(),
-                                    target_selection_range: loaded_location.into(),
-                                }),
-                            }
-                        }
-                        None => None,
-                    }
-                }
-            },
+            Some(ast) => {
+                self.resolve_definition_location(ast.find_definition(line, character), uri)?
+            }
             None => None,
         };
 
