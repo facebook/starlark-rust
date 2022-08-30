@@ -567,6 +567,12 @@ impl<T: LspContext> Backend<T> {
                 Definition::Identifier(definition) => {
                     self.resolve_definition_location(definition, uri)?
                 }
+                Definition::Dotted(definition) => {
+                    // TODO(nmj): Pass the right hand side of the dotted access so that
+                    //            we can figure out where specifically in the file the symbol
+                    //            is, rather than just the primary identifier
+                    self.resolve_definition_location(definition.root_definition_location, uri)?
+                }
             },
             None => None,
         };

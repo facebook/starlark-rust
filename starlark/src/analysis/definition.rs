@@ -27,6 +27,7 @@ use crate::codemap::Spanned;
 use crate::syntax::ast::ArgumentP;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::AstNoPayload;
+use crate::syntax::ast::AstString;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::Stmt;
@@ -68,11 +69,27 @@ pub enum IdentifierDefinition {
     NotFound,
 }
 
+/// A definition as in [`IdentifierDefinition`], but the source is within a dot expression.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DottedDefinition {
+    /// The location of the member access that was requested.
+    pub source: ResolvedSpan,
+    /// The [`IdentifierDefinition`] for the left most component of the expression.
+    ///
+    /// For example, this would be the location of `x` if `source` enclosed `y` in `x.y.z`.
+    pub root_definition_location: IdentifierDefinition,
+    /// All of the identifiers up to the one that `source` includes.
+    ///
+    /// For example. if the `y` in `x.y.z` is the source, this would contain `x` and `y`.
+    pub segments: Vec<String>,
+}
+
 /// An inner structure that only holds references and unresolved spans. Used while
 /// finding locations for identifiers. Resolved to a fuller, owned structure
 /// ([`IdentifierDefinition`]) after the entire AST is visited.
 ///
 /// This references temporary variables, so cannot be returned to external users directly.
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum TempIdentifierDefinition<'a> {
     /// The location of the definition of the symbol at the current line/column
     Location { source: Span, destination: Span },
@@ -90,16 +107,56 @@ enum TempIdentifierDefinition<'a> {
     NotFound,
 }
 
+/// Reference version of [`DottedDefinitionLocation`]. Analogous to [`IdentifierDefinition`].
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct TempDottedDefinition<'a> {
+    /// The location of the member access that was requested.
+    source: Span,
+    /// The [`IdentifierDefinition`] for the left most component of the expression.
+    ///
+    /// For example, this would be the location of `x` if `source` enclosed `y` in `x.y.z`.
+    root_definition_location: TempIdentifierDefinition<'a>,
+    /// All of the identifiers up to the one that `source` includes.
+    ///
+    /// For example. if the `y` in `x.y.z` is the source, this would contain `x` and `y`.
+    segments: &'a [AstString],
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+enum TempDefinition<'a> {
+    Identifier(TempIdentifierDefinition<'a>),
+    Dotted(TempDottedDefinition<'a>),
+}
+
+impl<'a> From<TempIdentifierDefinition<'a>> for TempDefinition<'a> {
+    fn from(def: TempIdentifierDefinition<'a>) -> Self {
+        Self::Identifier(def)
+    }
+}
+
+impl<'a> From<TempDottedDefinition<'a>> for TempDefinition<'a> {
+    fn from(def: TempDottedDefinition<'a>) -> Self {
+        Self::Dotted(def)
+    }
+}
+
 /// The container for both definition locations of a standalone identifier, and
 /// for ones that access members (via '.' syntax)
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Definition {
     Identifier(IdentifierDefinition),
+    Dotted(DottedDefinition),
 }
 
 impl From<IdentifierDefinition> for Definition {
     fn from(def: IdentifierDefinition) -> Self {
         Self::Identifier(def)
+    }
+}
+
+impl From<DottedDefinition> for Definition {
+    fn from(def: DottedDefinition) -> Self {
+        Self::Dotted(def)
     }
 }
 
@@ -131,16 +188,26 @@ impl LspModule {
         let current_pos = std::cmp::min(line_span.begin() + col, line_span.end());
 
         // Finalize the results after recursing down from and back up to the the top level scope.
-        Definition::Identifier(self.get_definition_location(
-            Self::find_definition_in_scope(&scope, current_pos),
-            &scope,
-            current_pos,
-        ))
+        match Self::find_definition_in_scope(&scope, current_pos) {
+            TempDefinition::Identifier(def) => self
+                .get_definition_location(def, &scope, current_pos)
+                .into(),
+            TempDefinition::Dotted(def) => DottedDefinition {
+                source: self.ast.codemap.resolve_span(def.source),
+                root_definition_location: self.get_definition_location(
+                    def.root_definition_location,
+                    &scope,
+                    current_pos,
+                ),
+                segments: def.segments.iter().map(|s| s.node.to_owned()).collect(),
+            }
+            .into(),
+        }
     }
 
     /// Look at the given scope and child scopes to try to find where the identifier
     /// accessed at Pos is defined.
-    fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> TempIdentifierDefinition<'a> {
+    fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> TempDefinition<'a> {
         /// Look for a name in the given scope, with a given source, and return the right
         /// type of `TempIdentifierDefinition` based on whether / how the variable is bound.
         fn resolve_get_in_scope<'a>(
@@ -170,28 +237,69 @@ impl LspModule {
         for bind in &scope.inner {
             match bind {
                 Bind::Get(g) if g.span.contains(pos) => {
-                    return resolve_get_in_scope(scope, g.node.as_str(), g.span);
+                    return resolve_get_in_scope(scope, g.node.as_str(), g.span).into();
                 }
                 Bind::Scope(inner_scope) => {
                     match Self::find_definition_in_scope(inner_scope, pos) {
-                        TempIdentifierDefinition::Name { source, name } => {
-                            return resolve_get_in_scope(scope, name, source);
+                        TempDefinition::Identifier(TempIdentifierDefinition::Name {
+                            source,
+                            name,
+                        }) => {
+                            return resolve_get_in_scope(scope, name, source).into();
                         }
-                        TempIdentifierDefinition::NotFound => {}
-                        x @ TempIdentifierDefinition::Location { .. }
-                        | x @ TempIdentifierDefinition::LoadedLocation { .. } => {
+                        TempDefinition::Identifier(TempIdentifierDefinition::NotFound) => {}
+                        TempDefinition::Dotted(TempDottedDefinition {
+                            source,
+                            root_definition_location:
+                                TempIdentifierDefinition::Name {
+                                    source: root_source,
+                                    name: root_name,
+                                },
+                            segments,
+                        }) => {
+                            return TempDefinition::Dotted(TempDottedDefinition {
+                                source,
+                                root_definition_location: resolve_get_in_scope(
+                                    scope,
+                                    root_name,
+                                    root_source,
+                                ),
+                                segments,
+                            });
+                        }
+                        x @ TempDefinition::Identifier(TempIdentifierDefinition::Location {
+                            ..
+                        })
+                        | x @ TempDefinition::Identifier(
+                            TempIdentifierDefinition::LoadedLocation { .. },
+                        )
+                        | x @ TempDefinition::Dotted(_) => {
                             return x;
                         }
                     }
                 }
-                // TODO(nmj): Actually use this
-                Bind::GetDotted(_) => {}
+                Bind::GetDotted(dotted) => {
+                    if let Some((idx, source)) = dotted.contains(pos) {
+                        let root_identifier = dotted.root_identifier();
+                        let root_definition_location = resolve_get_in_scope(
+                            scope,
+                            root_identifier.node.as_str(),
+                            root_identifier.span,
+                        );
+                        return TempDottedDefinition {
+                            source,
+                            root_definition_location,
+                            segments: &dotted.segments()[0..idx + 1],
+                        }
+                        .into();
+                    }
+                }
                 // For everything else, just ignore it. Note that the `Get` is ignored
                 // because we already checked the pos above.
                 Bind::Set(_, _) | Bind::Flow | Bind::Get(_) => {}
             }
         }
-        TempIdentifierDefinition::NotFound
+        TempIdentifierDefinition::NotFound.into()
     }
 
     /// Converts a `TempIdentifierDefinition` to an `IdentifierDefinition`, resolving spans
@@ -564,6 +672,7 @@ mod test {
     use textwrap::dedent;
 
     use super::helpers::FixtureWithRanges;
+    use crate::analysis::definition::DottedDefinition;
     use crate::analysis::Definition;
     use crate::analysis::IdentifierDefinition;
     use crate::analysis::LspModule;
@@ -907,6 +1016,146 @@ mod test {
             module.ast.find_function_call_with_name("foo_name")
         );
         assert_eq!(None, module.ast.find_function_call_with_name("bar_name"));
+        Ok(())
+    }
+
+    #[test]
+    fn find_definition_dot_access_unresolved_root() -> anyhow::Result<()> {
+        let contents = dedent(
+            r#"
+            <foo_root><foo>f<foo_click>o</foo_click>o</foo></foo_root>.bar.baz().quz
+            <bar_root>foo</bar_root>.<bar>b<bar_click>a</bar_click>r</bar>.baz().quz
+            <baz_root>foo</baz_root>.bar.<baz>b<baz_click>a</baz_click>z</baz>().quz
+            <quz_root>foo</quz_root>.bar.baz().<quz>q<quz_click>u</quz_click>z</quz>
+            "#,
+        )
+        .trim()
+        .to_owned();
+
+        let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
+        let module = parsed.module()?;
+
+        let expected = |span_id: &str, segments: &[&str]| -> Definition {
+            DottedDefinition {
+                source: parsed.span(span_id),
+                root_definition_location: IdentifierDefinition::Unresolved {
+                    source: parsed.span(&format!("{}_root", span_id)),
+                    name: "foo".to_owned(),
+                },
+                segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+            }
+            .into()
+        };
+
+        let find_definition = |span_id: &str| {
+            module.find_definition(parsed.begin_line(span_id), parsed.begin_column(span_id))
+        };
+
+        let expected_foo = expected("foo", &["foo"]);
+        let expected_bar = expected("bar", &["foo", "bar"]);
+        let expected_baz = expected("baz", &["foo", "bar", "baz"]);
+        let expected_quz = expected("quz", &["foo", "bar", "baz", "quz"]);
+
+        assert_eq!(expected_foo, find_definition("foo_click"));
+        assert_eq!(expected_bar, find_definition("bar_click"));
+        assert_eq!(expected_baz, find_definition("baz_click"));
+        assert_eq!(expected_quz, find_definition("quz_click"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn find_definition_dot_access_loaded_root() -> anyhow::Result<()> {
+        let contents = dedent(
+            r#"
+            load("defs.bzl", <root>"foo"</root>);
+
+            <foo_root><foo>f<foo_click>o</foo_click>o</foo></foo_root>.bar.baz().quz
+            <bar_root>foo</bar_root>.<bar>b<bar_click>a</bar_click>r</bar>.baz().quz
+            <baz_root>foo</baz_root>.bar.<baz>b<baz_click>a</baz_click>z</baz>().quz
+            <quz_root>foo</quz_root>.bar.baz().<quz>q<quz_click>u</quz_click>z</quz>
+            "#,
+        )
+        .trim()
+        .to_owned();
+
+        let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
+        let module = parsed.module()?;
+
+        let expected = |span_id: &str, segments: &[&str]| -> Definition {
+            DottedDefinition {
+                source: parsed.span(span_id),
+                root_definition_location: IdentifierDefinition::LoadedLocation {
+                    source: parsed.span(&format!("{}_root", span_id)),
+                    destination: parsed.span("root"),
+                    path: "defs.bzl".to_owned(),
+                    name: "foo".to_owned(),
+                },
+                segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+            }
+            .into()
+        };
+
+        let find_definition = |span_id: &str| {
+            module.find_definition(parsed.begin_line(span_id), parsed.begin_column(span_id))
+        };
+
+        let expected_foo = expected("foo", &["foo"]);
+        let expected_bar = expected("bar", &["foo", "bar"]);
+        let expected_baz = expected("baz", &["foo", "bar", "baz"]);
+        let expected_quz = expected("quz", &["foo", "bar", "baz", "quz"]);
+
+        assert_eq!(expected_foo, find_definition("foo_click"));
+        assert_eq!(expected_bar, find_definition("bar_click"));
+        assert_eq!(expected_baz, find_definition("baz_click"));
+        assert_eq!(expected_quz, find_definition("quz_click"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn find_definition_dot_access_local_root() -> anyhow::Result<()> {
+        let contents = dedent(
+            r#"
+            def func_1(<root>foo</root>):
+                <foo_root><foo>f<foo_click>o</foo_click>o</foo></foo_root>.bar.baz().quz
+                <bar_root>foo</bar_root>.<bar>b<bar_click>a</bar_click>r</bar>.baz().quz
+                <baz_root>foo</baz_root>.bar.<baz>b<baz_click>a</baz_click>z</baz>().quz
+                <quz_root>foo</quz_root>.bar.baz().<quz>q<quz_click>u</quz_click>z</quz>
+            "#,
+        )
+        .trim()
+        .to_owned();
+
+        let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
+        let module = parsed.module()?;
+
+        let expected = |span_id: &str, segments: &[&str]| -> Definition {
+            DottedDefinition {
+                source: parsed.span(span_id),
+                root_definition_location: IdentifierDefinition::Location {
+                    source: parsed.span(&format!("{}_root", span_id)),
+                    destination: parsed.span("root"),
+                },
+                segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+            }
+            .into()
+        };
+
+        let find_definition = |span_id: &str| {
+            module.find_definition(parsed.begin_line(span_id), parsed.begin_column(span_id))
+        };
+
+        let expected_foo = expected("foo", &["foo"]);
+        let expected_bar = expected("bar", &["foo", "bar"]);
+        let expected_baz = expected("baz", &["foo", "bar", "baz"]);
+        let expected_quz = expected("quz", &["foo", "bar", "baz", "quz"]);
+
+        assert_eq!(expected_foo, find_definition("foo_click"));
+        assert_eq!(expected_bar, find_definition("bar_click"));
+        assert_eq!(expected_baz, find_definition("baz_click"));
+        assert_eq!(expected_quz, find_definition("quz_click"));
+
         Ok(())
     }
 }

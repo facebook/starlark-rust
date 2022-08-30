@@ -72,6 +72,13 @@ impl GetDotted {
         Self { segments }
     }
 
+    /// All segments of a dotted access expression
+    ///
+    /// e.g. for `x.y.z` this would be `vec!["x", "y", "z"]`
+    pub(crate) fn segments(&self) -> &Vec<AstString> {
+        &self.segments
+    }
+
     /// The identifier at the far left of the expression
     ///
     /// e.g. for `x.y.z` this would be `x`
@@ -83,7 +90,6 @@ impl GetDotted {
     ///
     /// The returned value is the index of the segment where `pos` was found, and
     /// the span that contained it.
-    #[allow(unused)]
     pub(crate) fn contains(&self, pos: Pos) -> Option<(usize, Span)> {
         for (i, s) in self.segments.iter().enumerate() {
             if s.span.contains(pos) {
