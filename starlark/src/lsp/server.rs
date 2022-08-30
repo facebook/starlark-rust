@@ -66,6 +66,7 @@ use serde::Serialize;
 use serde::Serializer;
 
 use crate::analysis::Definition;
+use crate::analysis::DottedDefinition;
 use crate::analysis::IdentifierDefinition;
 use crate::analysis::LspModule;
 use crate::codemap::ResolvedSpan;
@@ -446,23 +447,28 @@ impl<T: LspContext> Backend<T> {
     fn resolve_definition_location(
         &self,
         definition: IdentifierDefinition,
+        source: ResolvedSpan,
+        member: Option<&str>,
         uri: LspUrl,
     ) -> anyhow::Result<Option<LocationLink>> {
         let ret = match definition {
             IdentifierDefinition::Location {
-                source,
                 destination: target,
+                ..
             } => Self::location_link(source, &uri, target)?,
             IdentifierDefinition::LoadedLocation {
-                source,
                 destination: location,
                 path,
                 name,
+                ..
             } => {
                 let load_uri = self.resolve_load_path(&path, &uri)?;
-                let loaded_location = self
-                    .get_ast_or_load_from_disk(&load_uri)?
-                    .and_then(|ast| ast.find_exported_symbol(&name));
+                let loaded_location =
+                    self.get_ast_or_load_from_disk(&load_uri)?
+                        .and_then(|ast| match member {
+                            Some(member) => ast.find_exported_symbol_and_member(&name, member),
+                            None => ast.find_exported_symbol(&name),
+                        });
                 match loaded_location {
                     None => Self::location_link(source, &uri, location)?,
                     Some(loaded_location) => {
@@ -471,13 +477,13 @@ impl<T: LspContext> Backend<T> {
                 }
             }
             IdentifierDefinition::NotFound => None,
-            IdentifierDefinition::LoadPath { source, path } => {
+            IdentifierDefinition::LoadPath { path, .. } => {
                 match self.resolve_load_path(&path, &uri) {
                     Ok(load_uri) => Self::location_link(source, &load_uri, Range::default())?,
                     Err(_) => None,
                 }
             }
-            IdentifierDefinition::StringLiteral { source, literal } => {
+            IdentifierDefinition::StringLiteral { literal, .. } => {
                 let literal = self.context.resolve_string_literal(&literal, &uri)?;
                 match literal {
                     Some(StringLiteralResult {
@@ -506,18 +512,19 @@ impl<T: LspContext> Backend<T> {
                     _ => None,
                 }
             }
-            IdentifierDefinition::Unresolved { source, name } => {
+            IdentifierDefinition::Unresolved { name, .. } => {
                 match self.context.get_url_for_global_symbol(&uri, &name)? {
                     Some(uri) => {
-                        let loaded_location = self
-                            .get_ast_or_load_from_disk(&uri)?
-                            .and_then(|ast| ast.find_exported_symbol(&name));
-                        match loaded_location {
-                            None => Self::location_link(source, &uri, Range::default())?,
-                            Some(loaded_location) => {
-                                Self::location_link(source, &uri, loaded_location)?
-                            }
-                        }
+                        let loaded_location =
+                            self.get_ast_or_load_from_disk(&uri)?
+                                .and_then(|ast| match member {
+                                    Some(member) => {
+                                        ast.find_exported_symbol_and_member(&name, member)
+                                    }
+                                    None => ast.find_exported_symbol(&name),
+                                });
+
+                        Self::location_link(source, &uri, loaded_location.unwrap_or_default())?
                     }
                     None => None,
                 }
@@ -539,17 +546,41 @@ impl<T: LspContext> Backend<T> {
         let character = params.text_document_position_params.position.character;
 
         let location = match self.get_ast(&uri) {
-            Some(ast) => match ast.find_definition(line, character) {
-                Definition::Identifier(definition) => {
-                    self.resolve_definition_location(definition, uri)?
+            Some(ast) => {
+                let location = ast.find_definition(line, character);
+                let source = location.source().unwrap_or_default();
+                match location {
+                    Definition::Identifier(definition) => {
+                        self.resolve_definition_location(definition, source, None, uri)?
+                    }
+                    // In this case we don't pass the name along in the root_definition_location,
+                    // so it's simpler to do the lookup here, rather than threading a ton of
+                    // information through.
+                    Definition::Dotted(DottedDefinition {
+                        root_definition_location: IdentifierDefinition::Location { .. },
+                        segments,
+                        ..
+                    }) => {
+                        let member_location = ast.find_exported_symbol_and_member(
+                            segments.first().expect("at least one segment").as_str(),
+                            segments.get(1).expect("at least two segments").as_str(),
+                        );
+                        Self::location_link(source, &uri, member_location.unwrap_or_default())?
+                    }
+                    Definition::Dotted(definition) => self.resolve_definition_location(
+                        definition.root_definition_location,
+                        source,
+                        Some(
+                            definition
+                                .segments
+                                .last()
+                                .expect("to have at least one component")
+                                .as_str(),
+                        ),
+                        uri,
+                    )?,
                 }
-                Definition::Dotted(definition) => {
-                    // TODO(nmj): Pass the right hand side of the dotted access so that
-                    //            we can figure out where specifically in the file the symbol
-                    //            is, rather than just the primary identifier
-                    self.resolve_definition_location(definition.root_definition_location, uri)?
-                }
-            },
+            }
             None => None,
         };
 
@@ -739,6 +770,7 @@ mod test {
     use std::path::Path;
     use std::path::PathBuf;
 
+    use anyhow::Context;
     use lsp_server::Request;
     use lsp_server::RequestId;
     use lsp_types::request::GotoDefinition;
@@ -1672,6 +1704,107 @@ mod test {
             )),
         }?;
 
+        Ok(())
+    }
+
+    #[test]
+    fn jumps_to_original_member_definition() -> anyhow::Result<()> {
+        let foo_uri = temp_file_uri("foo.star");
+        let bar_uri = temp_file_uri("bar.star");
+
+        let foo_contents = dedent(
+            r#"
+            load("{load}", "loaded")
+
+            def <dest_baz>_baz</dest_baz>():
+                pass
+
+            <dest_quz>_quz</dest_quz> = 6
+
+            <dest_foobar>FooBarModule</dest_foobar> = 5
+            FooModule = struct(<dest_foo>foo</dest_foo> = 5)
+            # Member value does not exist
+            BarModule = struct(<dest_bar>bar</dest_bar> = _bar)
+            BazModule = struct(
+                bar = _bar,
+                baz = _baz,
+            )
+            QuzModule = struct(bar = _bar, baz = _baz, quz = _quz)
+
+            FooBarModule.<foobar>f<foobar_click>o</foobar_click>obar</foobar>
+            FooModule.<foo>f<foo_click>o</foo_click>o</foo>
+            BarModule.<bar>b<bar_click>a</bar_click>r</bar>
+            BazModule.<baz>b<baz_click>a</baz_click>z</baz>
+            QuzModule.<quz>q<quz_click>u</quz_click>z</quz>
+            loaded.<x><x_click>x</x_click></x>
+            loaded.<y><y_click>y</y_click></y>
+            "#,
+        )
+        .replace("{load}", bar_uri.path())
+        .trim()
+        .to_owned();
+
+        let bar_contents = dedent(
+            r#"
+            def <dest_x>_x</dest_x>():
+                pass
+            <dest_y>loaded</dest_y> = struct(x = _x)
+            "#,
+        )
+        .trim()
+        .to_owned();
+
+        let foo = FixtureWithRanges::from_fixture(foo_uri.path(), &foo_contents)?;
+        let bar = FixtureWithRanges::from_fixture(bar_uri.path(), &bar_contents)?;
+
+        let mut server = TestServer::new()?;
+        server.open_file(foo_uri.clone(), foo.program())?;
+        server.open_file(bar_uri.clone(), bar.program())?;
+
+        let cases = [
+            (&foo, &foo_uri, "foobar"),
+            (&foo, &foo_uri, "foo"),
+            (&foo, &foo_uri, "bar"),
+            (&foo, &foo_uri, "baz"),
+            (&foo, &foo_uri, "quz"),
+            (&bar, &bar_uri, "x"),
+            (&bar, &bar_uri, "y"),
+        ];
+
+        let expected_results = cases
+            .iter()
+            .map(|(fixture, uri, id)| {
+                expected_location_link_from_spans(
+                    (*uri).clone(),
+                    foo.span(id),
+                    fixture.span(&format!("dest_{}", id)),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let requests = cases
+            .iter()
+            .map(|(_, _, id)| {
+                goto_definition_request(
+                    &mut server,
+                    foo_uri.clone(),
+                    foo.begin_line(&format!("{}_click", id)),
+                    foo.begin_column(&format!("{}_click", id)),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        for (case, request, expected) in itertools::izip!(cases, requests, expected_results) {
+            let req_id = server.send_request(request)?;
+            let response = goto_definition_response_location(&mut server, req_id)
+                .context(format!("getting response for case `{}`", case.2))?;
+
+            assert_eq!(
+                expected, response,
+                "Incorrect response for case `{}`",
+                case.2
+            );
+        }
         Ok(())
     }
 }

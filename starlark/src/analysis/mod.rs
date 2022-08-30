@@ -18,6 +18,7 @@
 #[cfg(all(test, not(windows)))]
 pub(crate) use definition::helpers::FixtureWithRanges;
 pub(crate) use definition::Definition;
+pub(crate) use definition::DottedDefinition;
 pub(crate) use definition::IdentifierDefinition;
 pub(crate) use definition::LspModule;
 pub use types::EvalMessage;

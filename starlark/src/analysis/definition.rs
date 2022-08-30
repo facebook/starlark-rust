@@ -25,12 +25,14 @@ use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
 use crate::codemap::Spanned;
 use crate::syntax::ast::ArgumentP;
+use crate::syntax::ast::AssignP;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::AstNoPayload;
 use crate::syntax::ast::AstString;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::Stmt;
+use crate::syntax::ast::StmtP;
 use crate::syntax::uniplate::Visit;
 use crate::syntax::AstModule;
 
@@ -70,7 +72,6 @@ pub enum IdentifierDefinition {
 }
 
 impl IdentifierDefinition {
-    #[allow(unused)]
     fn source(&self) -> Option<ResolvedSpan> {
         match self {
             IdentifierDefinition::Location { source, .. }
@@ -178,7 +179,6 @@ impl Definition {
     /// Get the "destination" of this location, but only within the current module.
     ///
     /// Some definition location types do not have a local definition.
-    #[allow(unused)]
     fn local_destination(&self) -> Option<ResolvedSpan> {
         match self {
             Definition::Identifier(i)
@@ -193,7 +193,6 @@ impl Definition {
         }
     }
 
-    #[allow(unused)]
     pub(crate) fn source(&self) -> Option<ResolvedSpan> {
         match self {
             Definition::Identifier(i) => i.source(),
@@ -406,6 +405,92 @@ impl LspModule {
                 } else {
                     None
                 }
+            })
+    }
+
+    /// Attempt to find the location in this module where a member of a struct (named `name`)
+    /// is defined.
+    ///
+    /// This helps with the common idiom of
+    /// ```python
+    /// ...
+    /// Foo = struct(
+    ///     member1 = _member1,
+    /// )
+    /// ```
+    ///
+    /// which is imported by other files and used as `Foo.member1`. Rather than jumping to `Foo`,
+    /// this would jump to `_member1` if it exists.
+    pub(crate) fn find_exported_symbol_and_member(
+        &self,
+        name: &str,
+        member: &str,
+    ) -> Option<ResolvedSpan> {
+        // If we can't fully resolve the symbol, try to get as "close" as possible.
+        // Whether this is the left hand side of an assign statement, or maybe the
+        // left side of a named argument in the struct that matches the member name.
+        let mut arg_span = None;
+        let mut identifier_span = None;
+        let mut symbol_to_lookup = None;
+
+        self.ast.statement.visit_stmt(|v| {
+            if symbol_to_lookup.is_some() {
+                return;
+            }
+
+            if let StmtP::Assign(l, r) = &v.node {
+                let main_assign_span = match &l.node {
+                    AssignP::Identifier(main_assign_id) if main_assign_id.0 == name => {
+                        main_assign_id.span
+                    }
+                    _ => {
+                        return;
+                    }
+                };
+                // If nothing else, go to the left hand of the assignment expression.
+                if identifier_span.is_none() {
+                    identifier_span = Some(main_assign_span);
+                }
+
+                // Look for a function call to `struct`.
+                if let ExprP::Call(function_name, args) = &r.node {
+                    match &function_name.node {
+                        ExprP::Identifier(function_name, _) if function_name.node == "struct" => {}
+                        _ => {
+                            return;
+                        }
+                    }
+
+                    for arg in args {
+                        if let ArgumentP::Named(arg_name, arg_expr) = &arg.node {
+                            if arg_name.node != member {
+                                continue;
+                            }
+                            if arg_span.is_none() {
+                                arg_span = Some(arg_name.span);
+                            }
+                            if let ExprP::Identifier(arg_value_id, _) = &arg_expr.node {
+                                symbol_to_lookup = Some(arg_value_id.span);
+                                return;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Try to find the symbol that is assigned, but if not, try to get to that "closest" span.
+        symbol_to_lookup
+            .and_then(|span| {
+                let resolved = self.ast.codemap.resolve_span(span);
+                self.find_definition(resolved.begin_line as u32, resolved.begin_column as u32)
+                    .local_destination()
+            })
+            .or_else(|| match (arg_span, identifier_span) {
+                (Some(span), _) => Some(self.ast.codemap.resolve_span(span)),
+                (None, Some(span)) => Some(self.ast.codemap.resolve_span(span)),
+                (None, None) => None,
             })
     }
 
