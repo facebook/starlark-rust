@@ -65,6 +65,7 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use crate::analysis::Definition;
 use crate::analysis::IdentifierDefinition;
 use crate::analysis::LspModule;
 use crate::lsp::server::LoadContentsError::WrongScheme;
@@ -562,9 +563,11 @@ impl<T: LspContext> Backend<T> {
         let character = params.text_document_position_params.position.character;
 
         let location = match self.get_ast(&uri) {
-            Some(ast) => {
-                self.resolve_definition_location(ast.find_definition(line, character), uri)?
-            }
+            Some(ast) => match ast.find_definition(line, character) {
+                Definition::Identifier(definition) => {
+                    self.resolve_definition_location(definition, uri)?
+                }
+            },
             None => None,
         };
 

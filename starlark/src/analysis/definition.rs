@@ -90,6 +90,19 @@ enum TempIdentifierDefinition<'a> {
     NotFound,
 }
 
+/// The container for both definition locations of a standalone identifier, and
+/// for ones that access members (via '.' syntax)
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum Definition {
+    Identifier(IdentifierDefinition),
+}
+
+impl From<IdentifierDefinition> for Definition {
+    fn from(def: IdentifierDefinition) -> Self {
+        Self::Identifier(def)
+    }
+}
+
 /// Container that holds an AST module and returns things like definition locations,
 /// lists of symbols, etc.
 pub(crate) struct LspModule {
@@ -107,7 +120,7 @@ impl LspModule {
     ///
     /// This method also handles scoping properly (i.e. an access of "foo" in a function
     /// will return location of the parameter "foo", even if there is a global called "foo").
-    pub(crate) fn find_definition(&self, line: u32, col: u32) -> IdentifierDefinition {
+    pub(crate) fn find_definition(&self, line: u32, col: u32) -> Definition {
         // TODO(nmj): This should probably just store references to all of the AST nodes
         //            when the LSPModule object is created, and then we can do a much faster
         //            lookup, especially in cases where a file has not been changed, so the
@@ -118,11 +131,11 @@ impl LspModule {
         let current_pos = std::cmp::min(line_span.begin() + col, line_span.end());
 
         // Finalize the results after recursing down from and back up to the the top level scope.
-        self.get_definition_location(
+        Definition::Identifier(self.get_definition_location(
             Self::find_definition_in_scope(&scope, current_pos),
             &scope,
             current_pos,
-        )
+        ))
     }
 
     /// Look at the given scope and child scopes to try to find where the identifier
@@ -549,6 +562,7 @@ mod test {
     use textwrap::dedent;
 
     use super::helpers::FixtureWithRanges;
+    use crate::analysis::Definition;
     use crate::analysis::IdentifierDefinition;
     use crate::analysis::LspModule;
 
@@ -577,12 +591,13 @@ mod test {
         let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
         let module = parsed.module()?;
 
-        let expected = IdentifierDefinition::LoadedLocation {
+        let expected: Definition = IdentifierDefinition::LoadedLocation {
             source: parsed.span("print_click"),
             destination: parsed.span("print"),
             path: "bar.star".to_owned(),
             name: "other_print".to_owned(),
-        };
+        }
+        .into();
         assert_eq!(
             expected,
             module.find_definition(parsed.begin_line("p1"), parsed.begin_column("p1"))
@@ -623,14 +638,15 @@ mod test {
         let parsed = FixtureWithRanges::from_fixture("foo.star", &contents)?;
         let module = parsed.module()?;
 
-        let expected_add = IdentifierDefinition::Location {
+        let expected_add = Definition::from(IdentifierDefinition::Location {
             source: parsed.span("add_click"),
             destination: parsed.span("add"),
-        };
-        let expected_invalid = IdentifierDefinition::Location {
+        });
+        let expected_invalid = Definition::from(IdentifierDefinition::Location {
             source: parsed.span("invalid_symbol_click"),
             destination: parsed.span("invalid_symbol"),
-        };
+        });
+
         assert_eq!(
             expected_add,
             module.find_definition(parsed.begin_line("a1"), parsed.begin_column("a1"))
@@ -685,10 +701,10 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            IdentifierDefinition::Location {
+            Definition::from(IdentifierDefinition::Location {
                 source: parsed.span("x_param"),
                 destination: parsed.span("x")
-            },
+            }),
             module.find_definition(parsed.begin_line("x_param"), parsed.begin_column("x_param"))
         );
         Ok(())
@@ -720,32 +736,32 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            IdentifierDefinition::Location {
+            Definition::from(IdentifierDefinition::Location {
                 source: parsed.span("x_var"),
                 destination: parsed.span("x")
-            },
+            }),
             module.find_definition(parsed.begin_line("x_var"), parsed.begin_column("x_var"))
         );
         assert_eq!(
-            IdentifierDefinition::Location {
+            Definition::from(IdentifierDefinition::Location {
                 source: parsed.span("y_var1"),
                 destination: parsed.span("y2")
-            },
+            }),
             module.find_definition(parsed.begin_line("y_var1"), parsed.begin_column("y_var1"))
         );
 
         assert_eq!(
-            IdentifierDefinition::Location {
+            Definition::from(IdentifierDefinition::Location {
                 source: parsed.span("y_var2"),
                 destination: parsed.span("y1")
-            },
+            }),
             module.find_definition(parsed.begin_line("y_var2"), parsed.begin_column("y_var2"))
         );
         assert_eq!(
-            IdentifierDefinition::Unresolved {
+            Definition::from(IdentifierDefinition::Unresolved {
                 source: parsed.span("z_var"),
                 name: "z".to_owned()
-            },
+            }),
             module.find_definition(parsed.begin_line("z_var"), parsed.begin_column("z_var"))
         );
         Ok(())
@@ -777,7 +793,7 @@ mod test {
         let module = parsed.module()?;
 
         assert_eq!(
-            IdentifierDefinition::NotFound,
+            Definition::from(IdentifierDefinition::NotFound),
             module.find_definition(parsed.begin_line("no_def"), parsed.begin_column("no_def"))
         );
 
@@ -833,10 +849,10 @@ mod test {
         let module = parsed.module()?;
 
         fn test(parsed: &FixtureWithRanges, module: &LspModule, name: &str) {
-            let expected = IdentifierDefinition::StringLiteral {
+            let expected = Definition::from(IdentifierDefinition::StringLiteral {
                 source: parsed.span(&format!("{}_click", name)),
                 literal: name.to_owned(),
-            };
+            });
             let actual = module.find_definition(parsed.begin_line(name), parsed.begin_column(name));
 
             assert_eq!(
