@@ -182,7 +182,22 @@ impl LspModule {
         let current_pos = std::cmp::min(line_span.begin() + col, line_span.end());
 
         // Finalize the results after recursing down from and back up to the the top level scope.
-        match find_definition_in_scope(&scope, current_pos) {
+        self.get_definition_location(
+            find_definition_in_scope(&scope, current_pos),
+            &scope,
+            current_pos,
+        )
+    }
+
+    /// Converts a `TempIdentifierDefinition` to an `IdentifierDefinition`, resolving spans
+    /// against the current AST, owning strings, etc.
+    fn get_definition_location(
+        &self,
+        definition: TempIdentifierDefinition,
+        scope: &Scope,
+        current_pos: Pos,
+    ) -> IdentifierDefinition {
+        match definition {
             TempIdentifierDefinition::Location {
                 source,
                 destination,
