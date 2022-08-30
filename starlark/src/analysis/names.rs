@@ -134,6 +134,9 @@ fn duplicate_assign(
             Bind::Get(x) => {
                 warnings.remove(x.node.as_str());
             }
+            Bind::GetDotted(x) => {
+                warnings.remove(x.root_identifier().node.as_str());
+            }
             Bind::Scope(scope) => {
                 duplicate_assign(codemap, scope, false, res);
                 for x in scope.free.keys() {
@@ -163,6 +166,9 @@ fn unused_variable(codemap: &CodeMap, scope: &Scope, top: bool, res: &mut Vec<Li
             Bind::Set(..) => {}
             Bind::Get(x) => {
                 warnings.remove(&x.node);
+            }
+            Bind::GetDotted(x) => {
+                warnings.remove(&x.root_identifier().node);
             }
             Bind::Scope(scope) => {
                 unused_variable(codemap, scope, false, res);
@@ -325,6 +331,16 @@ def magic(no3, f, _allowed):
 def uses_h():
     _h
 _h = []
+def dots(f, g):
+    (d_a, d_b, d_c, d_d, d_e, d_f, d_g, d_h, d_i, d_j) = (20, 21, 22, 23, 24, 25, 26, 27, 28, 29)
+    # Make sure that expressions on dotted accesses are accounted for.
+    # Ignore that the integers referenced aren't functions. They're just names.
+    f.foo[d_a].bar
+    f.foo[d_b].bar[d_c]
+    f.baz(g(["ignore", d_d]))
+    f.foobar.baz(d_e, [d_f], d_g([d_h]))
+    d_i(d_j).blah
+    pass
 def _no6(): pass
 def foo():
     array = [1,2,3]

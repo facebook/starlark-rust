@@ -184,6 +184,8 @@ impl LspModule {
                         }
                     }
                 }
+                // TODO(nmj): Actually use this
+                Bind::GetDotted(_) => {}
                 // For everything else, just ignore it. Note that the `Get` is ignored
                 // because we already checked the pos above.
                 Bind::Set(_, _) | Bind::Flow | Bind::Get(_) => {}
