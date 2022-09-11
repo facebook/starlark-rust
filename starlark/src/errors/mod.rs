@@ -78,8 +78,9 @@ impl Error for Diagnostic {
     }
 
     fn backtrace(&self) -> Option<&std::backtrace::Backtrace> {
-        Some(self.message.backtrace())
+        Some(self.message.backtrace().unwrap())
     }
+
 }
 
 impl Diagnostic {
