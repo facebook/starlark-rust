@@ -1721,7 +1721,7 @@ mod test {
 
             <dest_quz>_quz</dest_quz> = 6
 
-            <dest_foobar>FooBarModule</dest_foobar> = 5
+            <dest_root><dest_foobar>FooBarModule</dest_foobar></dest_root> = 5
             FooModule = struct(<dest_foo>foo</dest_foo> = 5)
             # Member value does not exist
             BarModule = struct(<dest_bar>bar</dest_bar> = _bar)
@@ -1731,7 +1731,7 @@ mod test {
             )
             QuzModule = struct(bar = _bar, baz = _baz, quz = _quz)
 
-            FooBarModule.<foobar>f<foobar_click>o</foobar_click>obar</foobar>
+            <root>Foo<root_click>Bar</root_click>Module</root>.<foobar>f<foobar_click>o</foobar_click>obar</foobar>
             FooModule.<foo>f<foo_click>o</foo_click>o</foo>
             BarModule.<bar>b<bar_click>a</bar_click>r</bar>
             BazModule.<baz>b<baz_click>a</baz_click>z</baz>
@@ -1762,6 +1762,7 @@ mod test {
         server.open_file(bar_uri.clone(), bar.program())?;
 
         let cases = [
+            (&foo, &foo_uri, "root"),
             (&foo, &foo_uri, "foobar"),
             (&foo, &foo_uri, "foo"),
             (&foo, &foo_uri, "bar"),

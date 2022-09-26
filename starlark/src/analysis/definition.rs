@@ -327,12 +327,17 @@ impl LspModule {
                             root_identifier.node.as_str(),
                             root_identifier.span,
                         );
-                        return TempDottedDefinition {
-                            source,
-                            root_definition_location,
-                            segments: &dotted.segments()[0..idx + 1],
+                        // If someone clicks on the "root" identifier, just treat it as a "get"
+                        if idx == 0 {
+                            return root_definition_location.into();
+                        } else {
+                            return TempDottedDefinition {
+                                source,
+                                root_definition_location,
+                                segments: &dotted.segments()[0..idx + 1],
+                            }
+                            .into();
                         }
-                        .into();
                     }
                 }
                 // For everything else, just ignore it. Note that the `Get` is ignored
@@ -1163,15 +1168,20 @@ mod test {
         let module = parsed.module()?;
 
         let expected = |span_id: &str, segments: &[&str]| -> Definition {
-            DottedDefinition {
-                source: parsed.span(span_id),
-                root_definition_location: IdentifierDefinition::Unresolved {
-                    source: parsed.span(&format!("{}_root", span_id)),
-                    name: "foo".to_owned(),
-                },
-                segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+            let root_definition_location = IdentifierDefinition::Unresolved {
+                source: parsed.span(&format!("{}_root", span_id)),
+                name: "foo".to_owned(),
+            };
+            if segments.len() > 1 {
+                DottedDefinition {
+                    source: parsed.span(span_id),
+                    root_definition_location,
+                    segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+                }
+                .into()
+            } else {
+                root_definition_location.into()
             }
-            .into()
         };
 
         let find_definition = |span_id: &str| {
@@ -1210,17 +1220,22 @@ mod test {
         let module = parsed.module()?;
 
         let expected = |span_id: &str, segments: &[&str]| -> Definition {
-            DottedDefinition {
-                source: parsed.span(span_id),
-                root_definition_location: IdentifierDefinition::LoadedLocation {
-                    source: parsed.span(&format!("{}_root", span_id)),
-                    destination: parsed.span("root"),
-                    path: "defs.bzl".to_owned(),
-                    name: "foo".to_owned(),
-                },
-                segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+            let root_definition_location = IdentifierDefinition::LoadedLocation {
+                source: parsed.span(&format!("{}_root", span_id)),
+                destination: parsed.span("root"),
+                path: "defs.bzl".to_owned(),
+                name: "foo".to_owned(),
+            };
+            if segments.len() > 1 {
+                DottedDefinition {
+                    source: parsed.span(span_id),
+                    root_definition_location,
+                    segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+                }
+                .into()
+            } else {
+                root_definition_location.into()
             }
-            .into()
         };
 
         let find_definition = |span_id: &str| {
@@ -1258,15 +1273,20 @@ mod test {
         let module = parsed.module()?;
 
         let expected = |span_id: &str, segments: &[&str]| -> Definition {
-            DottedDefinition {
-                source: parsed.span(span_id),
-                root_definition_location: IdentifierDefinition::Location {
-                    source: parsed.span(&format!("{}_root", span_id)),
-                    destination: parsed.span("root"),
-                },
-                segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+            let root_definition_location = IdentifierDefinition::Location {
+                source: parsed.span(&format!("{}_root", span_id)),
+                destination: parsed.span("root"),
+            };
+            if segments.len() > 1 {
+                DottedDefinition {
+                    source: parsed.span(span_id),
+                    root_definition_location,
+                    segments: segments.iter().map(|s| (*s).to_owned()).collect(),
+                }
+                .into()
+            } else {
+                root_definition_location.into()
             }
-            .into()
         };
 
         let find_definition = |span_id: &str| {
