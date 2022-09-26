@@ -142,15 +142,21 @@ impl AstModule {
 
     /// Return the file names of all the `load` statements in the module.
     /// If the [`Dialect`] had [`enable_load`](Dialect::enable_load) set to [`false`] this will be an empty list.
-    pub fn loads(&self) -> Vec<&str> {
+    pub fn loads(&self) -> Vec<(FileSpan, &str)> {
         // We know that `load` statements must be at the top-level, so no need to descend inside `if`, `for`, `def` etc.
         // There is a suggestion that `load` statements should be at the top of a file, but we tolerate that not being true.
-        fn f<'a>(ast: &'a AstStmt, vec: &mut Vec<&'a str>) {
+        fn f<'a>(ast: &'a AstStmt, codemap: &CodeMap, vec: &mut Vec<(FileSpan, &'a str)>) {
             match &ast.node {
-                Stmt::Load(load) => vec.push(&load.module.node),
+                Stmt::Load(load) => vec.push((
+                    FileSpan {
+                        file: codemap.dupe(),
+                        span: load.module.span,
+                    },
+                    &load.module.node,
+                )),
                 Stmt::Statements(stmts) => {
                     for s in stmts {
-                        f(s, vec);
+                        f(s, codemap, vec);
                     }
                 }
                 _ => {}
@@ -158,7 +164,7 @@ impl AstModule {
         }
 
         let mut loads = Vec::new();
-        f(&self.statement, &mut loads);
+        f(&self.statement, &self.codemap, &mut loads);
         loads
     }
 
