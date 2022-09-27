@@ -604,8 +604,10 @@ impl Heap {
             return FrozenValueTyped::new_repr(VALUE_EMPTY_ARRAY.repr()).to_value_typed();
         }
 
+        let cap: u32 = cap.try_into().expect("capacity overflows u32::MAX");
+
         unsafe {
-            let (avalue, _) = self.arena.borrow().alloc_extra(array_avalue(cap as u32));
+            let (avalue, _) = self.arena.borrow().alloc_extra(array_avalue(cap));
             ValueTyped::new_repr(&*avalue)
         }
     }
