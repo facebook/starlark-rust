@@ -436,11 +436,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// `hasattr(x, name)` reports whether x has an attribute (field or method)
     /// named `name`.
     #[starlark(speculative_exec_safe)]
-    fn hasattr(
-        #[starlark(require = pos)] a: Value,
+    fn hasattr<'v>(
+        #[starlark(require = pos)] a: Value<'v>,
         #[starlark(require = pos)] attr: &str,
+        heap: &'v Heap,
     ) -> anyhow::Result<bool> {
-        Ok(a.has_attr(attr))
+        Ok(a.has_attr(attr, heap))
     }
 
     /// [hash](

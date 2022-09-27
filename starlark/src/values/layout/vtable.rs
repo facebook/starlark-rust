@@ -316,8 +316,8 @@ impl<'v> AValueDyn<'v> {
     }
 
     #[inline]
-    pub(crate) fn has_attr(self, name: &str) -> bool {
-        (self.vtable.starlark_value.has_attr)(StarlarkValueRawPtr::new(self.value), name)
+    pub(crate) fn has_attr(self, name: &str, heap: &'v Heap) -> bool {
+        (self.vtable.starlark_value.has_attr)(StarlarkValueRawPtr::new(self.value), name, heap)
     }
 
     #[inline]

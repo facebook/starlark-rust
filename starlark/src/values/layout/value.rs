@@ -807,14 +807,14 @@ impl<'v> Value<'v> {
 
     /// Query whether an attribute exists on a type. Should be equivalent to whether
     /// [`get_attr`](Value::get_attr) succeeds, but potentially more efficient.
-    pub fn has_attr(self, attribute: &str) -> bool {
+    pub fn has_attr(self, attribute: &str, heap: &'v Heap) -> bool {
         let aref = self.get_ref();
         if let Some(methods) = aref.get_methods() {
             if methods.get(attribute).is_some() {
                 return true;
             }
         }
-        aref.has_attr(attribute)
+        aref.has_attr(attribute, heap)
     }
 
     /// Get a list of all the attributes this function supports, used to implement the

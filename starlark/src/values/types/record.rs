@@ -313,7 +313,7 @@ where
         vec!["type".to_owned()]
     }
 
-    fn has_attr(&self, attribute: &str) -> bool {
+    fn has_attr(&self, attribute: &str, _heap: &'v Heap) -> bool {
         attribute == "type"
     }
 
@@ -414,7 +414,7 @@ where
         Ok(())
     }
 
-    fn has_attr(&self, attribute: &str) -> bool {
+    fn has_attr(&self, attribute: &str, _heap: &'v Heap) -> bool {
         self.get_record_fields().contains_key(attribute)
     }
 

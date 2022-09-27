@@ -329,7 +329,7 @@ where
         }
     }
 
-    fn has_attr(&self, attribute: &str) -> bool {
+    fn has_attr(&self, attribute: &str, _heap: &'v Heap) -> bool {
         attribute == "index" || attribute == "value"
     }
 

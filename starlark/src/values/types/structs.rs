@@ -198,7 +198,7 @@ where
         Ok(())
     }
 
-    fn has_attr(&self, attribute: &str) -> bool {
+    fn has_attr(&self, attribute: &str, _heap: &'v Heap) -> bool {
         coerce(&self.fields).contains_key(attribute)
     }
 
