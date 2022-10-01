@@ -32,7 +32,6 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::AppSettings;
 use clap::StructOpt;
 use eval::Context;
 use gazebo::prelude::*;
@@ -51,11 +50,7 @@ mod eval;
 mod types;
 
 #[derive(Debug, StructOpt)]
-#[structopt(
-    name = "starlark",
-    about = "Evaluate Starlark code",
-    global_settings(&[AppSettings::ColoredHelp]),
-)]
+#[structopt(name = "starlark", about = "Evaluate Starlark code", version)]
 struct Args {
     #[structopt(
         long = "lsp",
@@ -106,7 +101,11 @@ struct Args {
     )]
     extension: Option<String>,
 
-    #[structopt(long = "prelude", help = "Files to load in advance.", multiple = true)]
+    #[structopt(
+        long = "prelude",
+        help = "Files to load in advance.",
+        multiple_values = true
+    )]
     prelude: Vec<PathBuf>,
 
     #[structopt(
@@ -116,7 +115,7 @@ struct Args {
         value_name = "EXPRESSION",
         help = "Expressions to evaluate.",
         conflicts_with_all = &["lsp", "dap"],
-        multiple = true,
+        multiple_values = true,
     )]
     evaluate: Vec<String>,
 
@@ -125,7 +124,7 @@ struct Args {
         value_name = "FILE",
         help = "Files to evaluate.",
         conflicts_with_all = &["lsp", "dap"],
-        multiple = true,
+        multiple_values = true,
     )]
     files: Vec<PathBuf>,
 }
@@ -219,7 +218,7 @@ fn main() -> anyhow::Result<()> {
     gazebo::terminate_on_panic();
 
     let args = argfile::expand_args(argfile::parse_fromfile, argfile::PREFIX)?;
-    let args: Args = Args::from_iter(args);
+    let args: Args = Args::parse_from(args);
     if args.dap {
         dap::server();
     } else {
