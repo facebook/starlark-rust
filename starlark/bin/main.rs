@@ -32,6 +32,8 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::AppSettings;
+use clap::StructOpt;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
@@ -39,8 +41,6 @@ use starlark::errors::EvalMessage;
 use starlark::errors::EvalSeverity;
 use starlark::lsp;
 use starlark::read_line::ReadLine;
-use structopt::clap::AppSettings;
-use structopt::StructOpt;
 use walkdir::WalkDir;
 
 use crate::eval::ContextMode;
@@ -61,7 +61,6 @@ struct Args {
         long = "lsp",
         help = "Start an LSP server.",
         conflicts_with_all = &[
-            "interactive",
             "dap",
             "check",
             "json",
@@ -76,7 +75,6 @@ struct Args {
         help = "Start a DAP server.",
         // Conflicts with all options.
         conflicts_with_all = &[
-            "interactive",
             "lsp",
             "check",
             "json",
@@ -108,22 +106,26 @@ struct Args {
     )]
     extension: Option<String>,
 
-    #[structopt(long = "prelude", help = "Files to load in advance.")]
+    #[structopt(long = "prelude", help = "Files to load in advance.", multiple = true)]
     prelude: Vec<PathBuf>,
 
     #[structopt(
         long = "expression",
-        short = "e",
-        name = "EXPRESSION",
+        short = 'e',
+        id = "evaluate",
+        value_name = "EXPRESSION",
         help = "Expressions to evaluate.",
         conflicts_with_all = &["lsp", "dap"],
+        multiple = true,
     )]
     evaluate: Vec<String>,
 
     #[structopt(
-        name = "FILE",
+        id = "files",
+        value_name = "FILE",
         help = "Files to evaluate.",
         conflicts_with_all = &["lsp", "dap"],
+        multiple = true,
     )]
     files: Vec<PathBuf>,
 }
