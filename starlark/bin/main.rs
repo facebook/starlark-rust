@@ -32,7 +32,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::StructOpt;
+use clap::Parser;
 use eval::Context;
 use gazebo::prelude::*;
 use itertools::Either;
@@ -49,10 +49,10 @@ mod dap;
 mod eval;
 mod types;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "starlark", about = "Evaluate Starlark code", version)]
+#[derive(Debug, Parser)]
+#[command(name = "starlark", about = "Evaluate Starlark code", version)]
 struct Args {
-    #[structopt(
+    #[arg(
         long = "lsp",
         help = "Start an LSP server.",
         conflicts_with_all = &[
@@ -65,7 +65,7 @@ struct Args {
     )]
     lsp: bool,
 
-    #[structopt(
+    #[arg(
         long = "dap",
         help = "Start a DAP server.",
         // Conflicts with all options.
@@ -81,50 +81,45 @@ struct Args {
     )]
     dap: bool,
 
-    #[structopt(
+    #[arg(
         long = "check",
         help = "Run checks and lints.",
         conflicts_with_all = &["lsp", "dap"],
     )]
     check: bool,
 
-    #[structopt(
+    #[arg(
         long = "json",
         help = "Show output as JSON lines.",
         conflicts_with_all = &["lsp", "dap"],
     )]
     json: bool,
 
-    #[structopt(
+    #[arg(
         long = "extension",
         help = "File extension when searching directories."
     )]
     extension: Option<String>,
 
-    #[structopt(
-        long = "prelude",
-        help = "Files to load in advance.",
-        multiple_values = true
-    )]
+    #[arg(long = "prelude", help = "Files to load in advance.", num_args = 1..)]
     prelude: Vec<PathBuf>,
 
-    #[structopt(
+    #[arg(
         long = "expression",
         short = 'e',
         id = "evaluate",
         value_name = "EXPRESSION",
         help = "Expressions to evaluate.",
         conflicts_with_all = &["lsp", "dap"],
-        multiple_values = true,
+        num_args = 1..,
     )]
     evaluate: Vec<String>,
 
-    #[structopt(
+    #[arg(
         id = "files",
         value_name = "FILE",
         help = "Files to evaluate.",
         conflicts_with_all = &["lsp", "dap"],
-        multiple_values = true,
     )]
     files: Vec<PathBuf>,
 }
