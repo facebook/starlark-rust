@@ -38,9 +38,9 @@ use crate::vec_map::iter::VMValuesMut;
 /// Bucket in [`VecMap`].
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) struct Bucket<K, V> {
-    pub(crate) hash: StarlarkHashValue,
-    pub(crate) key: K,
-    pub(crate) value: V,
+    hash: StarlarkHashValue,
+    key: K,
+    value: V,
 }
 
 #[allow(clippy::derive_hash_xor_eq)]
@@ -123,15 +123,17 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &Bucket<K, V> {
+    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> (Hashed<&K>, &V) {
         debug_assert!(index < self.buckets.len());
-        self.buckets.get_unchecked(index)
+        let Bucket { hash, key, value } = self.buckets.get_unchecked(index);
+        (Hashed::new_unchecked(*hash, key), value)
     }
 
     #[inline]
-    pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Bucket<K, V> {
+    pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> (Hashed<&K>, &mut V) {
         debug_assert!(index < self.buckets.len());
-        self.buckets.get_unchecked_mut(index)
+        let Bucket { hash, key, value } = self.buckets.get_unchecked_mut(index);
+        (Hashed::new_unchecked(*hash, key), value)
     }
 
     #[inline]
@@ -162,13 +164,15 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn remove(&mut self, index: usize) -> Bucket<K, V> {
-        self.buckets.remove(index)
+    pub(crate) fn remove(&mut self, index: usize) -> (Hashed<K>, V) {
+        let Bucket { hash, key, value } = self.buckets.remove(index);
+        (Hashed::new_unchecked(hash, key), value)
     }
 
     #[inline]
-    pub(crate) fn pop(&mut self) -> Option<Bucket<K, V>> {
-        self.buckets.pop()
+    pub(crate) fn pop(&mut self) -> Option<(Hashed<K>, V)> {
+        let Bucket { hash, key, value } = self.buckets.pop()?;
+        Some((Hashed::new_unchecked(hash, key), value))
     }
 
     #[inline]

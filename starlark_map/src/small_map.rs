@@ -34,7 +34,6 @@ use hashbrown::raw::RawTable;
 use crate::equivalent::Equivalent;
 use crate::hashed::Hashed;
 use crate::vec_map;
-use crate::vec_map::Bucket;
 use crate::vec_map::VecMap;
 
 /// Max size of map when we do not create index.
@@ -200,7 +199,7 @@ impl<K, V> SmallMap<K, V> {
         Q: Equivalent<K> + ?Sized,
     {
         self.get_index_of_hashed(key)
-            .map(|index| unsafe { &self.entries.get_unchecked(index).value })
+            .map(|index| unsafe { self.entries.get_unchecked(index).1 })
     }
 
     /// Query the map by a given key.
@@ -230,8 +229,8 @@ impl<K, V> SmallMap<K, V> {
         Q: Equivalent<K> + ?Sized,
     {
         self.get_index_of_hashed(key).map(|index| {
-            let Bucket { key, value, .. } = unsafe { self.entries.get_unchecked(index) };
-            (index, key, value)
+            let (key, value) = unsafe { self.entries.get_unchecked(index) };
+            (index, *key.key(), value)
         })
     }
 
@@ -245,7 +244,8 @@ impl<K, V> SmallMap<K, V> {
             None => self.entries.get_index_of_hashed(key),
             Some(index) => index
                 .get(key.hash().promote(), |&index| unsafe {
-                    key.key().equivalent(&self.entries.get_unchecked(index).key)
+                    key.key()
+                        .equivalent(self.entries.get_unchecked(index).0.key())
                 })
                 .copied(),
         }
@@ -274,7 +274,7 @@ impl<K, V> SmallMap<K, V> {
     {
         let i = self.get_index_of_hashed(key)?;
         debug_assert!(i < self.entries.len());
-        Some(unsafe { &mut self.entries.get_unchecked_mut(i).value })
+        Some(unsafe { self.entries.get_unchecked_mut(i).1 })
     }
 
     /// Find the entry by a given key.
@@ -369,7 +369,7 @@ impl<K, V> SmallMap<K, V> {
     fn hasher(entries: &VecMap<K, V>) -> impl Fn(&usize) -> u64 + '_ {
         move |&index| {
             debug_assert!(index < entries.len());
-            unsafe { entries.get_unchecked(index).hash.promote() }
+            unsafe { entries.get_unchecked(index).0.hash().promote() }
         }
     }
 
@@ -388,8 +388,8 @@ impl<K, V> SmallMap<K, V> {
         }
         // SAFETY: We've just inserted an entry, so we know entries is not empty.
         unsafe {
-            let entry = self.entries.get_unchecked_mut(self.entries.len() - 1);
-            (&entry.key, &mut entry.value)
+            let (key, value) = self.entries.get_unchecked_mut(self.entries.len() - 1);
+            (key.key(), value)
         }
     }
 
@@ -406,10 +406,7 @@ impl<K, V> SmallMap<K, V> {
             }
             Some(i) => unsafe {
                 debug_assert!(i < self.entries.len());
-                Some(mem::replace(
-                    &mut self.entries.get_unchecked_mut(i).value,
-                    val,
-                ))
+                Some(mem::replace(self.entries.get_unchecked_mut(i).1, val))
             },
         }
     }
@@ -444,7 +441,7 @@ impl<K, V> SmallMap<K, V> {
         if let Some(index) = &mut self.index {
             let entries = &self.entries;
             let i = index.remove_entry(hash.promote(), |&i| unsafe {
-                key.key().equivalent(&entries.get_unchecked(i).key)
+                key.key().equivalent(entries.get_unchecked(i).0.key())
             })?;
             unsafe {
                 // This updates all the table, which is `O(N)`,
@@ -458,8 +455,8 @@ impl<K, V> SmallMap<K, V> {
                     }
                 }
             }
-            let Bucket { key, value, .. } = self.entries.remove(i);
-            Some((key, value))
+            let (key, value) = self.entries.remove(i);
+            Some((key.into_key(), value))
         } else {
             self.entries.remove_hashed_entry(key)
         }
@@ -489,10 +486,10 @@ impl<K, V> SmallMap<K, V> {
     {
         match self.get_index_of_hashed(key.borrow()) {
             Some(i) => {
-                let entry = unsafe { self.entries.get_unchecked_mut(i) };
+                let (key, value) = unsafe { self.entries.get_unchecked_mut(i) };
                 Entry::Occupied(OccupiedEntry {
-                    key: &entry.key,
-                    value: &mut entry.value,
+                    key: key.key(),
+                    value,
                 })
             }
             None => Entry::Vacant(VacantEntry { key, map: self }),
@@ -503,12 +500,13 @@ impl<K, V> SmallMap<K, V> {
     pub fn pop(&mut self) -> Option<(K, V)> {
         match self.entries.pop() {
             None => None,
-            Some(Bucket { key, value, hash }) => {
+            Some((key, value)) => {
                 if let Some(index) = &mut self.index {
-                    let removed = index.remove_entry(hash.promote(), |&i| i == self.entries.len());
+                    let removed =
+                        index.remove_entry(key.hash().promote(), |&i| i == self.entries.len());
                     debug_assert!(removed.unwrap() == self.entries.len());
                 }
-                Some((key, value))
+                Some((key.into_key(), value))
             }
         }
     }
