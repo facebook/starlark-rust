@@ -60,14 +60,14 @@ pub struct VecMap<K, V> {
 
 impl<K, V> VecMap<K, V> {
     #[inline]
-    pub(crate) const fn new() -> Self {
+    pub const fn new() -> Self {
         VecMap {
             buckets: Vec::new(),
         }
     }
 
     #[inline]
-    pub(crate) fn with_capacity(n: usize) -> Self {
+    pub fn with_capacity(n: usize) -> Self {
         VecMap {
             buckets: Vec::with_capacity(n),
         }
@@ -130,7 +130,7 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn insert_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
+    pub fn insert_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
         self.buckets.push(Bucket {
             hash: key.hash(),
             key: key.into_key(),
@@ -169,12 +169,12 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.buckets.len()
     }
 
     #[inline]
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.buckets.is_empty()
     }
 
@@ -226,7 +226,7 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
+    pub fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
         VMIntoIterHash {
             iter: self.buckets.into_iter(),

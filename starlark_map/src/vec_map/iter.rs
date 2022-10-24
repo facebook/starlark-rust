@@ -183,7 +183,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterMut<'a, K, V> {
     }
 }
 
-pub(crate) struct VMIntoIterHash<K, V> {
+pub struct VMIntoIterHash<K, V> {
     pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
