@@ -142,18 +142,12 @@ impl<K, V> VecMap<K, V> {
     where
         Q: ?Sized + Equivalent<K>,
     {
-        let len = self.buckets.len();
-        if len == 0 {
-            return None;
+        if let Some(index) = self.get_index_of_hashed(key) {
+            let (k, v) = self.remove(index);
+            Some((k.into_key(), v))
+        } else {
+            None
         }
-
-        for i in 0..len {
-            if self.buckets[i].hash == key.hash() && key.key().equivalent(&self.buckets[i].key) {
-                let b = self.buckets.remove(i);
-                return Some((b.key, b.value));
-            }
-        }
-        None
     }
 
     #[inline]
