@@ -28,6 +28,7 @@ pub(crate) struct Keys<'a, K: 'a, V: 'a> {
 }
 
 impl<'a, K: 'a, V: 'a> Keys<'a, K, V> {
+    #[inline]
     fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
         &b.key
     }
@@ -44,6 +45,7 @@ impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Keys<'a, K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for Keys<'a, K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -55,6 +57,7 @@ pub(crate) struct Values<'a, K: 'a, V: 'a> {
 }
 
 impl<'a, K: 'a, V: 'a> Values<'a, K, V> {
+    #[inline]
     fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
         &b.value
     }
@@ -71,6 +74,7 @@ impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Values<'a, K, V> {
 }
 
 impl<'a, K: 'a, V: 'a> ExactSizeIterator for Values<'a, K, V> {
+    #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
@@ -81,6 +85,7 @@ pub(crate) struct ValuesMut<'a, K: 'a, V: 'a> {
 }
 
 impl<'a, K: 'a, V: 'a> ValuesMut<'a, K, V> {
+    #[inline]
     fn map(b: &'a mut Bucket<K, V>) -> <Self as Iterator>::Item {
         &mut b.value
     }
