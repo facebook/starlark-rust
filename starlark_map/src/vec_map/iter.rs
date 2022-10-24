@@ -207,6 +207,10 @@ impl<K, V> ExactSizeIterator for VMIntoIterHash<K, V> {
     }
 }
 
+impl<K, V> DoubleEndedIterator for VMIntoIterHash<K, V> {
+    def_double_ended_iter!();
+}
+
 pub struct IntoIter<K, V> {
     pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
 }
