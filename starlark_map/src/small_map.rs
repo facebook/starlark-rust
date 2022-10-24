@@ -273,8 +273,8 @@ impl<K, V> SmallMap<K, V> {
         Q: Equivalent<K> + ?Sized,
     {
         let i = self.get_index_of_hashed(key)?;
-        debug_assert!(i < self.entries.buckets.len());
-        Some(unsafe { &mut self.entries.buckets.get_unchecked_mut(i).value })
+        debug_assert!(i < self.entries.len());
+        Some(unsafe { &mut self.entries.get_unchecked_mut(i).value })
     }
 
     /// Find the entry by a given key.
@@ -357,9 +357,9 @@ impl<K, V> SmallMap<K, V> {
         debug_assert!(self.index.is_none());
         debug_assert!(capacity >= self.entries.len());
         let mut index = RawTable::with_capacity(capacity);
-        for (i, b) in self.entries.buckets.iter().enumerate() {
+        for (i, (k, _)) in self.entries.iter_hashed().enumerate() {
             // SAFETY: capacity >= self.entries.len()
-            unsafe { index.insert_no_grow(b.hash.promote(), i) };
+            unsafe { index.insert_no_grow(k.hash().promote(), i) };
         }
         self.index = Some(Box::new(index));
     }
@@ -369,7 +369,7 @@ impl<K, V> SmallMap<K, V> {
     fn hasher(entries: &VecMap<K, V>) -> impl Fn(&usize) -> u64 + '_ {
         move |&index| {
             debug_assert!(index < entries.len());
-            unsafe { entries.buckets.get_unchecked(index).hash.promote() }
+            unsafe { entries.get_unchecked(index).hash.promote() }
         }
     }
 
@@ -407,7 +407,7 @@ impl<K, V> SmallMap<K, V> {
             Some(i) => unsafe {
                 debug_assert!(i < self.entries.len());
                 Some(mem::replace(
-                    &mut self.entries.buckets.get_unchecked_mut(i).value,
+                    &mut self.entries.get_unchecked_mut(i).value,
                     val,
                 ))
             },
@@ -458,7 +458,7 @@ impl<K, V> SmallMap<K, V> {
                     }
                 }
             }
-            let Bucket { key, value, .. } = self.entries.buckets.remove(i);
+            let Bucket { key, value, .. } = self.entries.remove(i);
             Some((key, value))
         } else {
             self.entries.remove_hashed_entry(key)
@@ -501,7 +501,7 @@ impl<K, V> SmallMap<K, V> {
 
     /// Remove the last element.
     pub fn pop(&mut self) -> Option<(K, V)> {
-        match self.entries.buckets.pop() {
+        match self.entries.pop() {
             None => None,
             Some(Bucket { key, value, hash }) => {
                 if let Some(index) = &mut self.index {
@@ -577,9 +577,9 @@ impl<K, V> SmallMap<K, V> {
         if let Some(index) = &mut self.index {
             // TODO(nga): no need to rebuild the index if the map was already sorted.
             index.clear();
-            for (i, b) in self.entries.buckets.iter().enumerate() {
+            for (i, (k, _)) in self.entries.iter_hashed().enumerate() {
                 // SAFETY: capacity >= self.entries.len()
-                unsafe { index.insert_no_grow(b.hash.promote(), i) };
+                unsafe { index.insert_no_grow(k.hash().promote(), i) };
             }
         }
     }

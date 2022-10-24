@@ -55,7 +55,7 @@ impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default_)]
 pub struct VecMap<K, V> {
-    pub(crate) buckets: Vec<Bucket<K, V>>,
+    buckets: Vec<Bucket<K, V>>,
 }
 
 impl<K, V> VecMap<K, V> {
@@ -159,6 +159,16 @@ impl<K, V> VecMap<K, V> {
             }
         }
         None
+    }
+
+    #[inline]
+    pub(crate) fn remove(&mut self, index: usize) -> Bucket<K, V> {
+        self.buckets.remove(index)
+    }
+
+    #[inline]
+    pub(crate) fn pop(&mut self) -> Option<Bucket<K, V>> {
+        self.buckets.pop()
     }
 
     #[inline]
