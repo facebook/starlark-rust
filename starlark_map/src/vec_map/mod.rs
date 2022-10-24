@@ -244,7 +244,7 @@ impl<K, V> VecMap<K, V> {
     where
         K: Ord,
     {
-        self.buckets.sort_by(|a, b| a.key.cmp(&b.key));
+        self.buckets.sort_unstable_by(|a, b| a.key.cmp(&b.key));
     }
 
     pub(crate) fn is_sorted_by_key(&self) -> bool
