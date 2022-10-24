@@ -247,6 +247,13 @@ impl<K, V> VecMap<K, V> {
         self.buckets.sort_by(|a, b| a.key.cmp(&b.key));
     }
 
+    pub(crate) fn is_sorted_by_key(&self) -> bool
+    where
+        K: Ord,
+    {
+        self.buckets.windows(2).all(|w| w[0].key <= w[1].key)
+    }
+
     /// Equal if entries are equal in the iterator order.
     pub(crate) fn eq_ordered(&self, other: &Self) -> bool
     where

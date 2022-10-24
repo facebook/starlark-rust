@@ -565,15 +565,27 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
+    fn is_sorted_by_key(&self) -> bool
+    where
+        K: Ord,
+    {
+        self.entries.is_sorted_by_key()
+    }
+
     /// Sort entries by key.
     pub fn sort_keys(&mut self)
     where
         K: Ord,
     {
+        // Check if sorted first, otherwise we may need to rebuild the index
+        // even if the map is already sorted.
+        if self.is_sorted_by_key() {
+            return;
+        }
+
         // TODO(nga): make it panic safe.
         self.entries.sort_keys();
         if let Some(index) = &mut self.index {
-            // TODO(nga): no need to rebuild the index if the map was already sorted.
             index.clear();
             for (i, (k, _)) in self.entries.iter_hashed().enumerate() {
                 // SAFETY: capacity >= self.entries.len()
