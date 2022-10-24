@@ -188,7 +188,13 @@ where
     type Frozen = VecMap<K::Frozen, V::Frozen>;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        self.into_try_map(|k, v| Ok((k.freeze(freezer)?, v.freeze(freezer)?)))
+        let mut result = VecMap::with_capacity(self.len());
+        for (key, value) in self.into_iter_hashed() {
+            let key = key.freeze(freezer)?;
+            let value = value.freeze(freezer)?;
+            result.insert_unique_unchecked(key, value);
+        }
+        Ok(result)
     }
 }
 
