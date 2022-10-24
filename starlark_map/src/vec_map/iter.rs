@@ -187,46 +187,17 @@ pub(crate) struct VMIntoIterHash<K, V> {
     pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
+impl<K, V> VMIntoIterHash<K, V> {
+    #[inline]
+    fn map(b: Bucket<K, V>) -> (Hashed<K>, V) {
+        (Hashed::new_unchecked(b.hash, b.key), b.value)
+    }
+}
+
 impl<K, V> Iterator for VMIntoIterHash<K, V> {
     type Item = (Hashed<K>, V);
 
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter
-            .next()
-            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
-    }
-
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.iter
-            .nth(n)
-            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
-    }
-
-    fn last(mut self) -> Option<Self::Item> {
-        // Since these are all double-ended iterators we can skip to the end quickly
-        self.iter
-            .next_back()
-            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-
-    fn count(self) -> usize {
-        self.iter.len()
-    }
-
-    fn collect<C>(self) -> C
-    where
-        C: std::iter::FromIterator<Self::Item>,
-    {
-        self.iter
-            .map(|b| (Hashed::new_unchecked(b.hash, b.key), b.value))
-            .collect()
-    }
+    def_iter!();
 }
 
 impl<K, V> ExactSizeIterator for VMIntoIterHash<K, V> {
