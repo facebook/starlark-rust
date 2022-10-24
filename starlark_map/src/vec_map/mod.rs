@@ -27,13 +27,13 @@ use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
 use crate::hashed::Hashed;
 pub use crate::vec_map::iter::IntoIter;
+use crate::vec_map::iter::IntoIterHash;
 pub use crate::vec_map::iter::Iter;
+use crate::vec_map::iter::IterHash;
 pub use crate::vec_map::iter::IterMut;
-use crate::vec_map::iter::VMIntoIterHash;
-use crate::vec_map::iter::VMIterHash;
-use crate::vec_map::iter::VMKeys;
-use crate::vec_map::iter::VMValues;
-use crate::vec_map::iter::VMValuesMut;
+use crate::vec_map::iter::Keys;
+use crate::vec_map::iter::Values;
+use crate::vec_map::iter::ValuesMut;
 
 /// Bucket in [`VecMap`].
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -183,22 +183,22 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn values(&self) -> VMValues<K, V> {
-        VMValues {
+    pub(crate) fn values(&self) -> Values<K, V> {
+        Values {
             iter: self.buckets.iter(),
         }
     }
 
     #[inline]
-    pub(crate) fn values_mut(&mut self) -> VMValuesMut<K, V> {
-        VMValuesMut {
+    pub(crate) fn values_mut(&mut self) -> ValuesMut<K, V> {
+        ValuesMut {
             iter: self.buckets.iter_mut(),
         }
     }
 
     #[inline]
-    pub(crate) fn keys(&self) -> VMKeys<K, V> {
-        VMKeys {
+    pub(crate) fn keys(&self) -> Keys<K, V> {
+        Keys {
             iter: self.buckets.iter(),
         }
     }
@@ -218,17 +218,17 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn iter_hashed(&self) -> VMIterHash<K, V> {
-        VMIterHash {
+    pub(crate) fn iter_hashed(&self) -> IterHash<K, V> {
+        IterHash {
             // Values go first since they terminate first and we can short-circuit
             iter: self.buckets.iter(),
         }
     }
 
     #[inline]
-    pub fn into_iter_hashed(self) -> VMIntoIterHash<K, V> {
+    pub fn into_iter_hashed(self) -> IntoIterHash<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
-        VMIntoIterHash {
+        IntoIterHash {
             iter: self.buckets.into_iter(),
         }
     }

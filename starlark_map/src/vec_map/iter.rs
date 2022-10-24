@@ -23,80 +23,80 @@ use crate::vec_map::Bucket;
 use crate::Hashed;
 
 #[derive(Clone_)]
-pub(crate) struct VMKeys<'a, K: 'a, V: 'a> {
+pub(crate) struct Keys<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
-impl<'a, K: 'a, V: 'a> VMKeys<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Keys<'a, K, V> {
     fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
         &b.key
     }
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for VMKeys<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Iterator for Keys<'a, K, V> {
     type Item = &'a K;
 
     def_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> DoubleEndedIterator for VMKeys<'a, K, V> {
+impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Keys<'a, K, V> {
     def_double_ended_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMKeys<'a, K, V> {
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for Keys<'a, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
 #[derive(Clone_)]
-pub(crate) struct VMValues<'a, K: 'a, V: 'a> {
+pub(crate) struct Values<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
-impl<'a, K: 'a, V: 'a> VMValues<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Values<'a, K, V> {
     fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
         &b.value
     }
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for VMValues<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Iterator for Values<'a, K, V> {
     type Item = &'a V;
 
     def_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> DoubleEndedIterator for VMValues<'a, K, V> {
+impl<'a, K: 'a, V: 'a> DoubleEndedIterator for Values<'a, K, V> {
     def_double_ended_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValues<'a, K, V> {
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for Values<'a, K, V> {
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
-pub(crate) struct VMValuesMut<'a, K: 'a, V: 'a> {
+pub(crate) struct ValuesMut<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::IterMut<'a, Bucket<K, V>>,
 }
 
-impl<'a, K: 'a, V: 'a> VMValuesMut<'a, K, V> {
+impl<'a, K: 'a, V: 'a> ValuesMut<'a, K, V> {
     fn map(b: &'a mut Bucket<K, V>) -> <Self as Iterator>::Item {
         &mut b.value
     }
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for VMValuesMut<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Iterator for ValuesMut<'a, K, V> {
     type Item = &'a mut V;
 
     def_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> DoubleEndedIterator for VMValuesMut<'a, K, V> {
+impl<'a, K: 'a, V: 'a> DoubleEndedIterator for ValuesMut<'a, K, V> {
     def_double_ended_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMValuesMut<'a, K, V> {
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for ValuesMut<'a, K, V> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
@@ -127,28 +127,28 @@ impl<'a, K: 'a, V: 'a> Iter<'a, K, V> {
     }
 }
 
-pub(crate) struct VMIterHash<'a, K: 'a, V: 'a> {
+pub(crate) struct IterHash<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
-impl<'a, K: 'a, V: 'a> VMIterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> IterHash<'a, K, V> {
     #[inline]
     fn map(b: &'a Bucket<K, V>) -> (Hashed<&'a K>, &'a V) {
         (Hashed::new_unchecked(b.hash, &b.key), &b.value)
     }
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for VMIterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Iterator for IterHash<'a, K, V> {
     type Item = (Hashed<&'a K>, &'a V);
 
     def_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> DoubleEndedIterator for VMIterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> DoubleEndedIterator for IterHash<'a, K, V> {
     def_double_ended_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> ExactSizeIterator for VMIterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterHash<'a, K, V> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
@@ -183,31 +183,31 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterMut<'a, K, V> {
     }
 }
 
-pub struct VMIntoIterHash<K, V> {
+pub struct IntoIterHash<K, V> {
     pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
-impl<K, V> VMIntoIterHash<K, V> {
+impl<K, V> IntoIterHash<K, V> {
     #[inline]
     fn map(b: Bucket<K, V>) -> (Hashed<K>, V) {
         (Hashed::new_unchecked(b.hash, b.key), b.value)
     }
 }
 
-impl<K, V> Iterator for VMIntoIterHash<K, V> {
+impl<K, V> Iterator for IntoIterHash<K, V> {
     type Item = (Hashed<K>, V);
 
     def_iter!();
 }
 
-impl<K, V> ExactSizeIterator for VMIntoIterHash<K, V> {
+impl<K, V> ExactSizeIterator for IntoIterHash<K, V> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
-impl<K, V> DoubleEndedIterator for VMIntoIterHash<K, V> {
+impl<K, V> DoubleEndedIterator for IntoIterHash<K, V> {
     def_double_ended_iter!();
 }
 
