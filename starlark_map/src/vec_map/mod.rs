@@ -184,36 +184,32 @@ impl<K, V> VecMap<K, V> {
 
     #[inline]
     pub(crate) fn values(&self) -> Values<K, V> {
-        Values {
-            iter: self.buckets.iter(),
-        }
+        Values { iter: self.iter() }
     }
 
     #[inline]
     pub(crate) fn values_mut(&mut self) -> ValuesMut<K, V> {
         ValuesMut {
-            iter: self.buckets.iter_mut(),
+            iter: self.iter_mut(),
         }
     }
 
     #[inline]
     pub(crate) fn keys(&self) -> Keys<K, V> {
-        Keys {
-            iter: self.buckets.iter(),
-        }
+        Keys { iter: self.iter() }
     }
 
     #[inline]
     pub(crate) fn into_iter(self) -> IntoIter<K, V> {
         IntoIter {
-            iter: self.buckets.into_iter(),
+            iter: self.into_iter_hashed(),
         }
     }
 
     #[inline]
     pub(crate) fn iter(&self) -> Iter<K, V> {
         Iter {
-            iter: self.buckets.iter(),
+            iter: self.iter_hashed(),
         }
     }
 

@@ -24,13 +24,13 @@ use crate::Hashed;
 
 #[derive(Clone_)]
 pub(crate) struct Keys<'a, K: 'a, V: 'a> {
-    pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
+    pub(crate) iter: Iter<'a, K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> Keys<'a, K, V> {
     #[inline]
-    fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
-        &b.key
+    fn map((k, _v): (&'a K, &'a V)) -> <Self as Iterator>::Item {
+        k
     }
 }
 
@@ -53,13 +53,13 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for Keys<'a, K, V> {
 
 #[derive(Clone_)]
 pub(crate) struct Values<'a, K: 'a, V: 'a> {
-    pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
+    pub(crate) iter: Iter<'a, K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> Values<'a, K, V> {
     #[inline]
-    fn map(b: &'a Bucket<K, V>) -> <Self as Iterator>::Item {
-        &b.value
+    fn map((_k, v): (&'a K, &'a V)) -> <Self as Iterator>::Item {
+        v
     }
 }
 
@@ -81,13 +81,13 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for Values<'a, K, V> {
 }
 
 pub(crate) struct ValuesMut<'a, K: 'a, V: 'a> {
-    pub(crate) iter: std::slice::IterMut<'a, Bucket<K, V>>,
+    pub(crate) iter: IterMut<'a, K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> ValuesMut<'a, K, V> {
     #[inline]
-    fn map(b: &'a mut Bucket<K, V>) -> <Self as Iterator>::Item {
-        &mut b.value
+    fn map((_k, v): (&'a K, &'a mut V)) -> <Self as Iterator>::Item {
+        v
     }
 }
 
@@ -110,7 +110,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for ValuesMut<'a, K, V> {
 
 #[derive(Clone_)]
 pub struct Iter<'a, K: 'a, V: 'a> {
-    pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
+    pub(crate) iter: IterHash<'a, K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V> {
@@ -127,11 +127,12 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for Iter<'a, K, V> {}
 
 impl<'a, K: 'a, V: 'a> Iter<'a, K, V> {
     #[inline]
-    fn map(b: &Bucket<K, V>) -> (&K, &V) {
-        (&b.key, &b.value)
+    fn map((k, v): (Hashed<&'a K>, &'a V)) -> (&'a K, &'a V) {
+        (k.into_key(), v)
     }
 }
 
+#[derive(Clone_)]
 pub(crate) struct IterHash<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
@@ -217,13 +218,13 @@ impl<K, V> DoubleEndedIterator for IntoIterHash<K, V> {
 }
 
 pub struct IntoIter<K, V> {
-    pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
+    pub(crate) iter: IntoIterHash<K, V>,
 }
 
 impl<K, V> IntoIter<K, V> {
     #[inline]
-    fn map(b: Bucket<K, V>) -> (K, V) {
-        (b.key, b.value)
+    fn map((k, v): (Hashed<K>, V)) -> (K, V) {
+        (k.into_key(), v)
     }
 }
 
