@@ -240,29 +240,6 @@ impl<K, V> VecMap<K, V> {
         }
     }
 
-    /// Apply a function to each element in the map.
-    ///
-    /// # Panics
-    ///
-    /// This function panics if for any key hash is different after function application.
-    pub fn into_try_map<E, K1, V1, F>(self, f: F) -> Result<VecMap<K1, V1>, E>
-    where
-        F: Fn(Hashed<K>, V) -> Result<(Hashed<K1>, V1), E>,
-    {
-        Ok(VecMap {
-            buckets: self.buckets.into_try_map(|Bucket { hash, key, value }| {
-                let hashed_key = Hashed::new_unchecked(hash, key);
-                let (new_hashed_key, new_value) = f(hashed_key, value)?;
-                assert!(hash == new_hashed_key.hash());
-                Ok(Bucket {
-                    hash: new_hashed_key.hash(),
-                    key: new_hashed_key.into_key(),
-                    value: new_value,
-                })
-            })?,
-        })
-    }
-
     pub(crate) fn sort_keys(&mut self)
     where
         K: Ord,
