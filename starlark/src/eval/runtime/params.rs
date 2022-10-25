@@ -411,7 +411,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         /// Lazily initialized `kwargs` object.
         #[derive(Default)]
         struct LazyKwargs<'v> {
-            kwargs: Option<Box<SmallMap<StringValue<'v>, Value<'v>>>>,
+            kwargs: Option<SmallMap<StringValue<'v>, Value<'v>>>,
         }
 
         impl<'v> LazyKwargs<'v> {
@@ -422,7 +422,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                     None => {
                         let mut mp = SmallMap::with_capacity_largest_vec();
                         mp.insert_hashed(key, val);
-                        self.kwargs = Some(box mp);
+                        self.kwargs = Some(mp);
                         false
                     }
                     Some(mp) => mp.insert_hashed(key, val).is_some(),
@@ -431,7 +431,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
             fn alloc(self, heap: &'v Heap) -> Value<'v> {
                 let kwargs = match self.kwargs {
-                    Some(kwargs) => Dict::new(coerce(*kwargs)),
+                    Some(kwargs) => Dict::new(coerce(kwargs)),
                     None => Dict::default(),
                 };
                 heap.alloc(kwargs)
