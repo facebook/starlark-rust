@@ -130,6 +130,16 @@ impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
     def_double_ended_iter!();
 }
 
+fn _assert_iterators_sync_send() {
+    fn assert_sync_send<T: Sync + Send>(_: T) {}
+    fn test_iter(iter: Iter<String, u32>) {
+        assert_sync_send(iter);
+    }
+    fn test_into_iter(iter: IntoIter<String, u32>) {
+        assert_sync_send(iter);
+    }
+}
+
 /// An memory-efficient key-value map with determinstic order.
 ///
 /// Provides the standard container operations, modelled most closely on `indexmap::IndexMap`, plus:
