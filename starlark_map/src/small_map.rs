@@ -33,6 +33,8 @@ use hashbrown::raw::RawTable;
 
 use crate::equivalent::Equivalent;
 use crate::hashed::Hashed;
+use crate::iter::def_double_ended_iter;
+use crate::iter::def_iter;
 use crate::vec_map;
 use crate::vec_map::VecMap;
 
@@ -41,13 +43,92 @@ use crate::vec_map::VecMap;
 const NO_INDEX_THRESHOLD: usize = 12;
 
 /// Iterator over a small map entry references.
-pub type Iter<'a, K, V> = vec_map::Iter<'a, K, V>;
+#[derive(Clone_)]
+pub struct Iter<'a, K, V> {
+    iter: vec_map::Iter<'a, K, V>,
+}
+
+impl<'a, K, V> Iter<'a, K, V> {
+    #[inline]
+    fn map((k, v): (&'a K, &'a V)) -> <Self as Iterator>::Item {
+        (k, v)
+    }
+}
+
+impl<'a, K, V> Iterator for Iter<'a, K, V> {
+    type Item = (&'a K, &'a V);
+
+    def_iter!();
+}
+
+impl<'a, K, V> ExactSizeIterator for Iter<'a, K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Iter<'a, K, V> {
+    def_double_ended_iter!();
+}
 
 /// Iterator over a small map mutable entry references.
-pub type IterMut<'a, K, V> = vec_map::IterMut<'a, K, V>;
+pub struct IterMut<'a, K, V> {
+    iter: vec_map::IterMut<'a, K, V>,
+}
+
+impl<'a, K, V> IterMut<'a, K, V> {
+    #[inline]
+    fn map((k, v): (&'a K, &'a mut V)) -> <Self as Iterator>::Item {
+        (k, v)
+    }
+}
+
+impl<'a, K, V> Iterator for IterMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+
+    def_iter!();
+}
+
+impl<'a, K, V> ExactSizeIterator for IterMut<'a, K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
+    def_double_ended_iter!();
+}
 
 /// Iterator over a small map entries.
-pub type IntoIter<K, V> = vec_map::IntoIter<K, V>;
+pub struct IntoIter<K, V> {
+    iter: vec_map::IntoIter<K, V>,
+}
+
+impl<K, V> IntoIter<K, V> {
+    #[inline]
+    fn map((k, v): (K, V)) -> <Self as Iterator>::Item {
+        (k, v)
+    }
+}
+
+impl<K, V> Iterator for IntoIter<K, V> {
+    type Item = (K, V);
+
+    def_iter!();
+}
+
+impl<K, V> ExactSizeIterator for IntoIter<K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
+    def_double_ended_iter!();
+}
 
 /// An memory-efficient key-value map with determinstic order.
 ///
@@ -165,7 +246,9 @@ impl<K, V> SmallMap<K, V> {
     /// Entry references iterator.
     #[inline]
     pub fn iter(&self) -> Iter<'_, K, V> {
-        self.entries.iter()
+        Iter {
+            iter: self.entries.iter(),
+        }
     }
 
     /// Entry references with hashes iterator.
@@ -183,13 +266,17 @@ impl<K, V> SmallMap<K, V> {
     /// Mutable entry references iterator.
     #[inline]
     pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
-        self.entries.iter_mut()
+        IterMut {
+            iter: self.entries.iter_mut(),
+        }
     }
 
     /// Entries iterator.
     #[inline]
     pub fn into_iter(self) -> IntoIter<K, V> {
-        self.entries.into_iter()
+        IntoIter {
+            iter: self.entries.into_iter(),
+        }
     }
 
     /// Query the map by a prehashed key.
