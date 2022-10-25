@@ -37,6 +37,7 @@ use crate::iter::def_double_ended_iter;
 use crate::iter::def_iter;
 use crate::vec_map;
 use crate::vec_map::VecMap;
+use crate::StarlarkHashValue;
 
 /// Max size of map when we do not create index.
 // TODO: benchmark, is this the right threshold
@@ -331,21 +332,29 @@ impl<K, V> SmallMap<K, V> {
         })
     }
 
+    #[inline]
+    pub(crate) fn get_index_of_hashed_raw(
+        &self,
+        hash: StarlarkHashValue,
+        mut eq: impl FnMut(&K) -> bool,
+    ) -> Option<usize> {
+        match &self.index {
+            None => self.entries.get_index_of_hashed_raw(hash, eq),
+            Some(index) => index
+                .get(hash.promote(), |&index| unsafe {
+                    eq(self.entries.get_unchecked(index).0.key())
+                })
+                .copied(),
+        }
+    }
+
     /// Find the index of the given hashed key.
     #[inline]
     pub fn get_index_of_hashed<Q>(&self, key: Hashed<&Q>) -> Option<usize>
     where
         Q: Equivalent<K> + ?Sized,
     {
-        match &self.index {
-            None => self.entries.get_index_of_hashed(key),
-            Some(index) => index
-                .get(key.hash().promote(), |&index| unsafe {
-                    key.key()
-                        .equivalent(self.entries.get_unchecked(index).0.key())
-                })
-                .copied(),
-        }
+        self.get_index_of_hashed_raw(key.hash(), |k| key.key().equivalent(k))
     }
 
     /// Find an entry by an index.
@@ -496,7 +505,7 @@ impl<K, V> SmallMap<K, V> {
     where
         K: Eq,
     {
-        match self.get_index_of_hashed(key.borrow()) {
+        match self.get_index_of_hashed_raw(key.hash(), |k| key.key().equivalent(k)) {
             None => {
                 self.insert_unique_unchecked(key, val);
                 None
@@ -581,7 +590,7 @@ impl<K, V> SmallMap<K, V> {
     where
         K: Eq,
     {
-        match self.get_index_of_hashed(key.borrow()) {
+        match self.get_index_of_hashed_raw(key.hash(), |k| key.key().equivalent(k)) {
             Some(i) => {
                 let (key, value) = unsafe { self.entries.get_unchecked_mut(i) };
                 Entry::Occupied(OccupiedEntry {

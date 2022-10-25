@@ -180,7 +180,10 @@ impl<T> SmallSet<T> {
         T: Hash + Eq,
     {
         let value = Hashed::new(value);
-        match self.0.get_index_of_hashed(value.borrow()) {
+        match self
+            .0
+            .get_index_of_hashed_raw(value.hash(), |v| value.key().equivalent(v))
+        {
             Some(index) => self.0.get_index(index).unwrap().0,
             None => self.0.insert_unique_unchecked(value, ()).0,
         }
