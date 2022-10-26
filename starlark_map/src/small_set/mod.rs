@@ -161,6 +161,15 @@ impl<T> SmallSet<T> {
         self.0.get_index_of_hashed(value)
     }
 
+    #[inline]
+    pub fn get_index_of_hashed_by_value<Q>(&self, value: Hashed<Q>) -> Option<usize>
+    where
+        Q: Equivalent<T>,
+        T: Eq,
+    {
+        self.0.get_index_of_hashed_by_value(value)
+    }
+
     /// Remove the element from the set if it is present.
     #[inline]
     pub fn remove<Q>(&mut self, key: &Q) -> bool

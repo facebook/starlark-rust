@@ -300,6 +300,17 @@ impl<K, V> SmallMap<K, V> {
             .map(|index| unsafe { self.entries.get_unchecked(index).1 })
     }
 
+    /// Same as `get_hashed`, byt takes key by value instead of by reference.
+    /// Sometimes it generates slightly better code for small values.
+    #[inline]
+    pub fn get_hashed_by_value<Q>(&self, key: Hashed<Q>) -> Option<&V>
+    where
+        Q: Equivalent<K>,
+    {
+        self.get_index_of_hashed_by_value(key)
+            .map(|index| unsafe { self.entries.get_unchecked(index).1 })
+    }
+
     /// Query the map by a given key.
     #[inline]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
@@ -357,6 +368,14 @@ impl<K, V> SmallMap<K, V> {
         self.get_index_of_hashed_raw(key.hash(), |k| key.key().equivalent(k))
     }
 
+    #[inline]
+    pub fn get_index_of_hashed_by_value<Q>(&self, key: Hashed<Q>) -> Option<usize>
+    where
+        Q: Equivalent<K>,
+    {
+        self.get_index_of_hashed_raw(key.hash(), |k| key.key().equivalent(k))
+    }
+
     /// Find an entry by an index.
     #[inline]
     pub fn get_index(&self, index: usize) -> Option<(&K, &V)> {
@@ -399,6 +418,14 @@ impl<K, V> SmallMap<K, V> {
         Q: Equivalent<K> + ?Sized,
     {
         self.get_index_of_hashed(key).is_some()
+    }
+
+    #[inline]
+    pub fn contains_key_hashed_by_value<Q>(&self, key: Hashed<Q>) -> bool
+    where
+        Q: Equivalent<K>,
+    {
+        self.get_index_of_hashed_by_value(key).is_some()
     }
 
     /// Find if an entry by a given key exists.
