@@ -459,7 +459,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// as the results of this execution are required.
     /// Suitable for use with [`add_reference`](FrozenHeap::add_reference)
     /// and [`OwnedFrozenValue::owned_frozen_value`](crate::values::OwnedFrozenValue::owned_frozen_value).
-    pub fn frozen_heap(&self) -> &FrozenHeap {
+    pub fn frozen_heap(&self) -> &'v FrozenHeap {
         self.module_env.frozen_heap()
     }
 
