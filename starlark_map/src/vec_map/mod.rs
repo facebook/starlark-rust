@@ -27,9 +27,9 @@ use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
 use crate::hashed::Hashed;
 pub use crate::vec_map::iter::IntoIter;
-use crate::vec_map::iter::IntoIterHash;
+use crate::vec_map::iter::IntoIterHashed;
 pub use crate::vec_map::iter::Iter;
-use crate::vec_map::iter::IterHash;
+use crate::vec_map::iter::IterHashed;
 pub use crate::vec_map::iter::IterMut;
 use crate::vec_map::iter::Keys;
 use crate::vec_map::iter::Values;
@@ -218,17 +218,17 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn iter_hashed(&self) -> IterHash<K, V> {
-        IterHash {
+    pub(crate) fn iter_hashed(&self) -> IterHashed<K, V> {
+        IterHashed {
             // Values go first since they terminate first and we can short-circuit
             iter: self.buckets.iter(),
         }
     }
 
     #[inline]
-    pub fn into_iter_hashed(self) -> IntoIterHash<K, V> {
+    pub fn into_iter_hashed(self) -> IntoIterHashed<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
-        IntoIterHash {
+        IntoIterHashed {
             iter: self.buckets.into_iter(),
         }
     }

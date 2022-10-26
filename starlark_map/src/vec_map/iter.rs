@@ -110,7 +110,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for ValuesMut<'a, K, V> {
 
 #[derive(Clone_)]
 pub struct Iter<'a, K: 'a, V: 'a> {
-    pub(crate) iter: IterHash<'a, K, V>,
+    pub(crate) iter: IterHashed<'a, K, V>,
 }
 
 impl<'a, K: 'a, V: 'a> Iterator for Iter<'a, K, V> {
@@ -133,28 +133,28 @@ impl<'a, K: 'a, V: 'a> Iter<'a, K, V> {
 }
 
 #[derive(Clone_)]
-pub(crate) struct IterHash<'a, K: 'a, V: 'a> {
+pub(crate) struct IterHashed<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
 }
 
-impl<'a, K: 'a, V: 'a> IterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> IterHashed<'a, K, V> {
     #[inline]
     fn map(b: &'a Bucket<K, V>) -> (Hashed<&'a K>, &'a V) {
         (Hashed::new_unchecked(b.hash, &b.key), &b.value)
     }
 }
 
-impl<'a, K: 'a, V: 'a> Iterator for IterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> Iterator for IterHashed<'a, K, V> {
     type Item = (Hashed<&'a K>, &'a V);
 
     def_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> DoubleEndedIterator for IterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> DoubleEndedIterator for IterHashed<'a, K, V> {
     def_double_ended_iter!();
 }
 
-impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterHash<'a, K, V> {
+impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterHashed<'a, K, V> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
@@ -189,36 +189,36 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterMut<'a, K, V> {
     }
 }
 
-pub struct IntoIterHash<K, V> {
+pub struct IntoIterHashed<K, V> {
     pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
-impl<K, V> IntoIterHash<K, V> {
+impl<K, V> IntoIterHashed<K, V> {
     #[inline]
     fn map(b: Bucket<K, V>) -> (Hashed<K>, V) {
         (Hashed::new_unchecked(b.hash, b.key), b.value)
     }
 }
 
-impl<K, V> Iterator for IntoIterHash<K, V> {
+impl<K, V> Iterator for IntoIterHashed<K, V> {
     type Item = (Hashed<K>, V);
 
     def_iter!();
 }
 
-impl<K, V> ExactSizeIterator for IntoIterHash<K, V> {
+impl<K, V> ExactSizeIterator for IntoIterHashed<K, V> {
     #[inline]
     fn len(&self) -> usize {
         self.iter.len()
     }
 }
 
-impl<K, V> DoubleEndedIterator for IntoIterHash<K, V> {
+impl<K, V> DoubleEndedIterator for IntoIterHashed<K, V> {
     def_double_ended_iter!();
 }
 
 pub struct IntoIter<K, V> {
-    pub(crate) iter: IntoIterHash<K, V>,
+    pub(crate) iter: IntoIterHashed<K, V>,
 }
 
 impl<K, V> IntoIter<K, V> {
