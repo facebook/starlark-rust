@@ -194,7 +194,7 @@ where
         let elements = EnumType::from_value(this)
             .unwrap()
             .either(|x| &x.elements, |x| coerce(&x.elements));
-        match elements.get_hashed(val.get_hashed()?.borrow()) {
+        match elements.get_hashed_by_value(val.get_hashed()?) {
             Some(v) => Ok(*v),
             None => Err(EnumError::InvalidElement(val.to_str(), this.to_repr()).into()),
         }

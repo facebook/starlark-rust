@@ -312,7 +312,7 @@ impl<'v> Dict<'v> {
 
     /// Lookup the value by the given prehashed key.
     pub fn get_hashed(&self, key: Hashed<Value<'v>>) -> Option<Value<'v>> {
-        self.content.get_hashed(key.borrow()).copied()
+        self.content.get_hashed_by_value(key).copied()
     }
 
     /// Get the value associated with a particular string. Equivalent to allocating the
@@ -324,7 +324,7 @@ impl<'v> Dict<'v> {
     /// Like [`Dict::get_str`], but where you already have the hash.
     pub fn get_str_hashed(&self, key: Hashed<&str>) -> Option<Value<'v>> {
         self.content
-            .get_hashed(Hashed::new_unchecked(key.hash(), &ValueStr(key.key())))
+            .get_hashed_by_value(Hashed::new_unchecked(key.hash(), ValueStr(key.key())))
             .copied()
     }
 
@@ -397,7 +397,7 @@ impl FrozenDict {
     /// Get the value associated with a particular key. Will be [`Err`] if the key is not hashable,
     /// and otherwise [`Some`] if the key exists in the dictionary and [`None`] otherwise.
     pub fn get<'v>(&self, key: Value<'v>) -> anyhow::Result<Option<FrozenValue>> {
-        Ok(self.content.get_hashed(key.get_hashed()?.borrow()).copied())
+        Ok(self.content.get_hashed_by_value(key.get_hashed()?).copied())
     }
 
     /// Get the value associated with a particular string. Equivalent to allocating the
@@ -493,7 +493,7 @@ where
     }
 
     fn at(&self, index: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
-        match self.0.content().get_hashed(index.get_hashed()?.borrow()) {
+        match self.0.content().get_hashed_by_value(index.get_hashed()?) {
             Some(v) => Ok(v.to_value()),
             None => Err(ValueError::KeyNotFound(index.to_repr()).into()),
         }
@@ -511,7 +511,7 @@ where
         Ok(self
             .0
             .content()
-            .contains_key_hashed(other.get_hashed()?.borrow()))
+            .contains_key_hashed_by_value(other.get_hashed()?))
     }
 
     fn iterate<'a>(
