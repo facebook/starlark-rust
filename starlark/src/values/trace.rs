@@ -122,6 +122,16 @@ unsafe impl<'v, T: Trace<'v> + ?Sized> Trace<'v> for Box<T> {
     }
 }
 
+unsafe impl<'v> Trace<'v> for () {
+    fn trace(&mut self, _tracer: &Tracer<'v>) {}
+}
+
+unsafe impl<'v, T1: Trace<'v>> Trace<'v> for (T1,) {
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.0.trace(tracer);
+    }
+}
+
 unsafe impl<'v, T1: Trace<'v>, T2: Trace<'v>> Trace<'v> for (T1, T2) {
     fn trace(&mut self, tracer: &Tracer<'v>) {
         self.0.trace(tracer);
