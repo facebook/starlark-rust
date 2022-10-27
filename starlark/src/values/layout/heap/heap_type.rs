@@ -799,6 +799,14 @@ impl<'v> Tracer<'v> {
         *value = self.adjust(*value)
     }
 
+    /// Helper function to annotate that this field has been considered for tracing,
+    /// but is not relevant because it has a static lifetime containing no relevant values.
+    /// Does nothing.
+    pub fn trace_static<T: 'static>(&self, value: &mut T) {
+        // Nothing to do because T can't contain the lifetime 'v
+        let _ = value;
+    }
+
     pub(crate) fn reserve<'a, 'v2: 'v + 'a, T: AValue<'v2, ExtraElem = ()>>(
         &'a self,
     ) -> (Value<'v>, Reservation<'a, 'v2, T>) {
