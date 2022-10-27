@@ -140,7 +140,7 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub fn insert_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
+    pub fn insert_hashed_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
         self.buckets.push(Bucket {
             hash: key.hash(),
             key: key.into_key(),

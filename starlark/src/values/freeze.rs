@@ -192,7 +192,7 @@ where
         for (key, value) in self.into_iter_hashed() {
             let key = key.freeze(freezer)?;
             let value = value.freeze(freezer)?;
-            result.insert_unique_unchecked(key, value);
+            result.insert_hashed_unique_unchecked(key, value);
         }
         Ok(result)
     }

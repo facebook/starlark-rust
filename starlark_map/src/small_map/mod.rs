@@ -412,10 +412,14 @@ impl<K, V> SmallMap<K, V> {
 
     /// Insert an entry into the map without checking for a duplicate key.
     #[inline]
-    pub(crate) fn insert_unique_unchecked(&mut self, key: Hashed<K>, val: V) -> (&K, &mut V) {
+    pub(crate) fn insert_hashed_unique_unchecked(
+        &mut self,
+        key: Hashed<K>,
+        val: V,
+    ) -> (&K, &mut V) {
         let hash = key.hash();
         let entry_index = self.entries.len();
-        self.entries.insert_unique_unchecked(key, val);
+        self.entries.insert_hashed_unique_unchecked(key, val);
         if let Some(index) = &mut self.index {
             index.insert(hash.promote(), entry_index, Self::hasher(&self.entries));
         } else if self.entries.len() == NO_INDEX_THRESHOLD + 1 {
@@ -438,7 +442,7 @@ impl<K, V> SmallMap<K, V> {
     {
         match self.get_index_of_hashed_raw(key.hash(), |k| key.key().equivalent(k)) {
             None => {
-                self.insert_unique_unchecked(key, val);
+                self.insert_hashed_unique_unchecked(key, val);
                 None
             }
             Some(i) => unsafe {
@@ -725,7 +729,7 @@ where
 
     #[inline]
     pub(crate) fn insert_entry(self, value: V) -> (&'a K, &'a mut V) {
-        self.map.insert_unique_unchecked(self.key, value)
+        self.map.insert_hashed_unique_unchecked(self.key, value)
     }
 }
 
