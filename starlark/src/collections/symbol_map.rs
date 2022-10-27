@@ -67,7 +67,6 @@ pub(crate) struct Symbol {
     hash: u64,
     len: u32,
     payload: Box<[usize]>,
-    #[trace(unsafe_ignore)]
     small_hash: StarlarkHashValue,
 }
 

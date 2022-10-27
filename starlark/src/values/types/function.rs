@@ -351,7 +351,6 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
 #[repr(C)]
 #[display(fmt = "{}", method)]
 pub(crate) struct BoundMethodGen<V> {
-    #[trace(unsafe_ignore)]
     pub(crate) method: FrozenValueTyped<'static, NativeMethod>,
     pub(crate) this: V,
 }
