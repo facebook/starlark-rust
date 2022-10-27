@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+use std::collections::HashSet;
+
 use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -26,9 +28,14 @@ use syn::spanned::Spanned;
 use syn::Attribute;
 use syn::Data;
 use syn::DeriveInput;
+use syn::GenericArgument;
 use syn::GenericParam;
+use syn::Generics;
 use syn::Lifetime;
 use syn::LifetimeDef;
+use syn::PathArguments;
+use syn::ReturnType;
+use syn::Type;
 use syn::TypeParamBound;
 
 use crate::for_each_field::for_each_field;
@@ -58,7 +65,7 @@ pub fn derive_trace(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let (impl_generics, _, _) = generics2.split_for_impl();
 
     let name = &input.ident;
-    let body = match trace_impl(&input.data) {
+    let body = match trace_impl(&input.data, &input.generics) {
         Ok(body) => body,
         Err(e) => {
             return e.to_compile_error().into();
@@ -92,10 +99,24 @@ fn is_ignore(attrs: &[Attribute]) -> bool {
     })
 }
 
-fn trace_impl(data: &Data) -> syn::Result<TokenStream> {
+fn trace_impl(data: &Data, generics: &Generics) -> syn::Result<TokenStream> {
+    let generic_types = generics
+        .params
+        .iter()
+        .filter_map(|x| match x {
+            GenericParam::Type(x) => Some(x.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+
     for_each_field(data, |name, field| {
         if is_ignore(&field.attrs) {
             Ok(quote! {})
+        } else if is_static(&field.ty, &generic_types) {
+            Ok(quote_spanned! {
+                field.span()=>
+                starlark::values::Tracer::trace_static(tracer, #name);
+            })
         } else {
             Ok(quote_spanned! {
                 field.span()=>
@@ -103,4 +124,54 @@ fn trace_impl(data: &Data) -> syn::Result<TokenStream> {
             })
         }
     })
+}
+
+/// Return `true` if this type definitely satisfies 'static,
+/// which means it has no lifetimes that aren't 'static and no generic parameters
+/// (as they might have lifetime bounds on them)
+fn is_static(ty: &Type, generics: &HashSet<String>) -> bool {
+    let f = |x| is_static(x, generics);
+
+    match ty {
+        Type::Array(x) => f(&x.elem),
+        Type::BareFn(_) => true,
+        Type::Never(_) => true,
+        Type::Paren(x) => f(&x.elem),
+        Type::Path(x) => {
+            x.qself.is_none()
+                && x.path.segments.iter().all(|x| {
+                    !generics.contains(&x.ident.to_string())
+                        && is_static_path_arguments(&x.arguments, generics)
+                })
+        }
+        Type::Ptr(_) => true,
+        Type::Reference(x) => f(&x.elem) && is_static_lifetime(x.lifetime.as_ref()),
+        Type::Slice(x) => f(&x.elem),
+        Type::Tuple(x) => x.elems.iter().all(f),
+        _ => false,
+    }
+}
+
+fn is_static_path_arguments(x: &PathArguments, generics: &HashSet<String>) -> bool {
+    let f = |x| is_static(x, generics);
+
+    match x {
+        PathArguments::None => true,
+        PathArguments::AngleBracketed(x) => x.args.iter().all(|x| match x {
+            GenericArgument::Type(x) => f(x),
+            GenericArgument::Lifetime(x) => is_static_lifetime(Some(x)),
+            _ => false,
+        }),
+        PathArguments::Parenthesized(x) => match &x.output {
+            ReturnType::Default => false, // An inferred type we can't see
+            ReturnType::Type(_, ty) => f(ty) && x.inputs.iter().all(f),
+        },
+    }
+}
+
+fn is_static_lifetime(x: Option<&Lifetime>) -> bool {
+    match x {
+        None => false,
+        Some(x) => x.ident == "static",
+    }
 }

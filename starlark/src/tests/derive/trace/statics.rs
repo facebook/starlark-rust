@@ -15,5 +15,19 @@
  * limitations under the License.
  */
 
-mod enums;
-mod statics;
+use crate as starlark;
+use crate::values::Value;
+
+#[allow(dead_code)] // Just check it compiles.
+#[derive(Trace)]
+struct TraceWithStatic<'v> {
+    actual_value: Value<'v>,
+    // This field doesn't have a Trace trait, but should be ignored
+    // because it looks like it is static
+    ignored_because_static: StaticType<'static, std::string::String>,
+}
+
+#[allow(dead_code)]
+struct StaticType<'a, T> {
+    inner: &'a T,
+}
