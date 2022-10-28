@@ -38,6 +38,9 @@ pub use crate::small_map::iter::IntoIterHashed;
 pub use crate::small_map::iter::Iter;
 pub use crate::small_map::iter::IterHashed;
 pub use crate::small_map::iter::IterMut;
+pub use crate::small_map::iter::Keys;
+pub use crate::small_map::iter::Values;
+pub use crate::small_map::iter::ValuesMut;
 use crate::vec_map::VecMap;
 use crate::StarlarkHashValue;
 
@@ -142,22 +145,26 @@ impl<K, V> SmallMap<K, V> {
 
     /// Key references iterator.
     #[inline]
-    pub fn keys(
-        &self,
-    ) -> impl ExactSizeIterator<Item = &K> + DoubleEndedIterator<Item = &K> + Clone {
-        self.entries.keys()
+    pub fn keys(&self) -> Keys<K, V> {
+        Keys {
+            iter: self.entries.keys(),
+        }
     }
 
     /// Value references iterator.
     #[inline]
-    pub fn values(&self) -> impl ExactSizeIterator<Item = &V> + Clone {
-        self.entries.values()
+    pub fn values(&self) -> Values<K, V> {
+        Values {
+            iter: self.entries.values(),
+        }
     }
 
     /// Mutable value references iterator.
     #[inline]
-    pub fn values_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> {
-        self.entries.values_mut()
+    pub fn values_mut(&mut self) -> ValuesMut<K, V> {
+        ValuesMut {
+            iter: self.entries.values_mut(),
+        }
     }
 
     /// Entry references iterator.

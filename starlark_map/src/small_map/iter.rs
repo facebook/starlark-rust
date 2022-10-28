@@ -167,6 +167,92 @@ impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
     def_double_ended_iter!();
 }
 
+#[derive(Clone_)]
+pub struct Keys<'a, K, V> {
+    pub(crate) iter: vec_map::Keys<'a, K, V>,
+}
+
+impl<'a, K, V> Keys<'a, K, V> {
+    #[inline]
+    fn map(k: &'a K) -> <Self as Iterator>::Item {
+        k
+    }
+}
+
+impl<'a, K, V> Iterator for Keys<'a, K, V> {
+    type Item = &'a K;
+
+    def_iter!();
+}
+
+impl<'a, K, V> ExactSizeIterator for Keys<'a, K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Keys<'a, K, V> {
+    def_double_ended_iter!();
+}
+
+#[derive(Clone_)]
+pub struct Values<'a, K, V> {
+    pub(crate) iter: vec_map::Values<'a, K, V>,
+}
+
+impl<'a, K, V> Values<'a, K, V> {
+    #[inline]
+    fn map(v: &'a V) -> <Self as Iterator>::Item {
+        v
+    }
+}
+
+impl<'a, K, V> Iterator for Values<'a, K, V> {
+    type Item = &'a V;
+
+    def_iter!();
+}
+
+impl<'a, K, V> ExactSizeIterator for Values<'a, K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for Values<'a, K, V> {
+    def_double_ended_iter!();
+}
+
+pub struct ValuesMut<'a, K, V> {
+    pub(crate) iter: vec_map::ValuesMut<'a, K, V>,
+}
+
+impl<'a, K, V> ValuesMut<'a, K, V> {
+    #[inline]
+    fn map(v: &'a mut V) -> <Self as Iterator>::Item {
+        v
+    }
+}
+
+impl<'a, K, V> Iterator for ValuesMut<'a, K, V> {
+    type Item = &'a mut V;
+
+    def_iter!();
+}
+
+impl<'a, K, V> ExactSizeIterator for ValuesMut<'a, K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for ValuesMut<'a, K, V> {
+    def_double_ended_iter!();
+}
+
 fn _assert_iterators_sync_send() {
     fn assert_sync_send<T: Sync + Send>(_: T) {}
     fn test_iter_hashed(iter: IterHashed<String, u32>) {
@@ -179,6 +265,12 @@ fn _assert_iterators_sync_send() {
         assert_sync_send(iter);
     }
     fn test_into_iter(iter: IntoIter<String, u32>) {
+        assert_sync_send(iter);
+    }
+    fn test_keys(iter: Keys<String, u32>) {
+        assert_sync_send(iter);
+    }
+    fn test_values(iter: Values<String, u32>) {
         assert_sync_send(iter);
     }
 }

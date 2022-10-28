@@ -31,9 +31,9 @@ pub(crate) use crate::vec_map::iter::IntoIterHashed;
 pub use crate::vec_map::iter::Iter;
 pub(crate) use crate::vec_map::iter::IterHashed;
 pub use crate::vec_map::iter::IterMut;
-use crate::vec_map::iter::Keys;
-use crate::vec_map::iter::Values;
-use crate::vec_map::iter::ValuesMut;
+pub(crate) use crate::vec_map::iter::Keys;
+pub(crate) use crate::vec_map::iter::Values;
+pub(crate) use crate::vec_map::iter::ValuesMut;
 
 /// Bucket in [`VecMap`].
 #[derive(Debug, Clone, Eq, PartialEq)]
