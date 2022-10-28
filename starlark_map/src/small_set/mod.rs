@@ -112,6 +112,15 @@ impl<T> SmallSet<T> {
         self.0.insert_hashed(key, ()).is_none()
     }
 
+    /// Insert an entry into the set without checking for a duplicate key.
+    #[inline]
+    pub fn insert_hashed_unique_unchecked(&mut self, key: Hashed<T>)
+    where
+        T: Eq,
+    {
+        self.0.insert_hashed_unique_unchecked(key, ());
+    }
+
     /// Return a reference to the value stored in the set, if it is present,
     /// else `None`.
     ///

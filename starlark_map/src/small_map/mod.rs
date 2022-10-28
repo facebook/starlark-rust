@@ -425,11 +425,7 @@ impl<K, V> SmallMap<K, V> {
 
     /// Insert an entry into the map without checking for a duplicate key.
     #[inline]
-    pub(crate) fn insert_hashed_unique_unchecked(
-        &mut self,
-        key: Hashed<K>,
-        val: V,
-    ) -> (&K, &mut V) {
+    pub fn insert_hashed_unique_unchecked(&mut self, key: Hashed<K>, val: V) -> (&K, &mut V) {
         let hash = key.hash();
         let entry_index = self.entries.len();
         self.entries.insert_hashed_unique_unchecked(key, val);
