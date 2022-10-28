@@ -34,7 +34,9 @@ use hashbrown::raw::RawTable;
 use crate::equivalent::Equivalent;
 use crate::hashed::Hashed;
 pub use crate::small_map::iter::IntoIter;
+pub use crate::small_map::iter::IntoIterHashed;
 pub use crate::small_map::iter::Iter;
+pub use crate::small_map::iter::IterHashed;
 pub use crate::small_map::iter::IterMut;
 use crate::vec_map::VecMap;
 use crate::StarlarkHashValue;
@@ -168,14 +170,18 @@ impl<K, V> SmallMap<K, V> {
 
     /// Entry references with hashes iterator.
     #[inline]
-    pub fn iter_hashed(&self) -> impl ExactSizeIterator<Item = (Hashed<&K>, &V)> {
-        self.entries.iter_hashed()
+    pub fn iter_hashed(&self) -> IterHashed<K, V> {
+        IterHashed {
+            iter: self.entries.iter_hashed(),
+        }
     }
 
     /// Entries with hashes iterator.
     #[inline]
-    pub fn into_iter_hashed(self) -> impl ExactSizeIterator<Item = (Hashed<K>, V)> {
-        self.entries.into_iter_hashed()
+    pub fn into_iter_hashed(self) -> IntoIterHashed<K, V> {
+        IntoIterHashed {
+            iter: self.entries.into_iter_hashed(),
+        }
     }
 
     /// Mutable entry references iterator.

@@ -20,6 +20,36 @@ use gazebo::prelude::*;
 use crate::iter::def_double_ended_iter;
 use crate::iter::def_iter;
 use crate::vec_map;
+use crate::Hashed;
+
+#[derive(Clone_)]
+pub struct IterHashed<'a, K, V> {
+    pub(crate) iter: vec_map::IterHashed<'a, K, V>,
+}
+
+impl<'a, K, V> IterHashed<'a, K, V> {
+    #[inline]
+    fn map((k, v): (Hashed<&'a K>, &'a V)) -> <Self as Iterator>::Item {
+        (k, v)
+    }
+}
+
+impl<'a, K, V> Iterator for IterHashed<'a, K, V> {
+    type Item = (Hashed<&'a K>, &'a V);
+
+    def_iter!();
+}
+
+impl<'a, K, V> ExactSizeIterator for IterHashed<'a, K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<'a, K, V> DoubleEndedIterator for IterHashed<'a, K, V> {
+    def_double_ended_iter!();
+}
 
 /// Iterator over a small map entry references.
 #[derive(Clone_)]
@@ -80,6 +110,34 @@ impl<'a, K, V> DoubleEndedIterator for IterMut<'a, K, V> {
     def_double_ended_iter!();
 }
 
+pub struct IntoIterHashed<K, V> {
+    pub(crate) iter: vec_map::IntoIterHashed<K, V>,
+}
+
+impl<K, V> IntoIterHashed<K, V> {
+    #[inline]
+    fn map((k, v): (Hashed<K>, V)) -> <Self as Iterator>::Item {
+        (k, v)
+    }
+}
+
+impl<K, V> Iterator for IntoIterHashed<K, V> {
+    type Item = (Hashed<K>, V);
+
+    def_iter!();
+}
+
+impl<K, V> ExactSizeIterator for IntoIterHashed<K, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.iter.len()
+    }
+}
+
+impl<K, V> DoubleEndedIterator for IntoIterHashed<K, V> {
+    def_double_ended_iter!();
+}
+
 /// Iterator over a small map entries.
 pub struct IntoIter<K, V> {
     pub(crate) iter: vec_map::IntoIter<K, V>,
@@ -111,7 +169,13 @@ impl<K, V> DoubleEndedIterator for IntoIter<K, V> {
 
 fn _assert_iterators_sync_send() {
     fn assert_sync_send<T: Sync + Send>(_: T) {}
+    fn test_iter_hashed(iter: IterHashed<String, u32>) {
+        assert_sync_send(iter);
+    }
     fn test_iter(iter: Iter<String, u32>) {
+        assert_sync_send(iter);
+    }
+    fn test_into_iter_hashed(iter: IntoIterHashed<String, u32>) {
         assert_sync_send(iter);
     }
     fn test_into_iter(iter: IntoIter<String, u32>) {
