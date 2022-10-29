@@ -421,7 +421,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                 match &mut self.kwargs {
                     None => {
                         let mut mp = SmallMap::with_capacity_largest_vec();
-                        mp.insert_hashed(key, val);
+                        mp.insert_hashed_unique_unchecked(key, val);
                         self.kwargs = Some(mp);
                         false
                     }
