@@ -16,6 +16,7 @@
  */
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::ops::Deref;
@@ -46,6 +47,24 @@ impl<K> Deref for Hashed<K> {
 
     fn deref(&self) -> &Self::Target {
         &self.key
+    }
+}
+
+impl<K: Display> Display for Hashed<K> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.key.fmt(f)
+    }
+}
+
+impl<K: PartialOrd> PartialOrd for Hashed<K> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.key.partial_cmp(&other.key)
+    }
+}
+
+impl<K: Ord> Ord for Hashed<K> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.key.cmp(&other.key)
     }
 }
 
