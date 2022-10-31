@@ -427,8 +427,6 @@ impl Drop for Arena {
             let value = x.payload_ptr() as *mut ();
             x.0.drop_in_place(value);
         });
-        self.non_drop.reset();
-        self.drop.reset();
     }
 }
 
