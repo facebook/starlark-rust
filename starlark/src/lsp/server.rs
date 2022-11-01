@@ -492,17 +492,16 @@ impl<T: LspContext> Backend<T> {
                     }) => {
                         // If there's an error loading the file to parse it, at least
                         // try to get to the file.
-                        let target_range = self
-                            .get_ast_or_load_from_disk(&url)
-                            .and_then(|ast| match ast {
-                                Some(module) => location_finder(&module.ast, &url),
-                                None => Ok(None),
-                            })
-                            .inspect_err(|e| {
-                                eprintln!("Error jumping to definition: {:#}", e);
-                            })
-                            .unwrap_or_default()
-                            .unwrap_or_default();
+                        let result =
+                            self.get_ast_or_load_from_disk(&url)
+                                .and_then(|ast| match ast {
+                                    Some(module) => location_finder(&module.ast, &url),
+                                    None => Ok(None),
+                                });
+                        if let Err(e) = &result {
+                            eprintln!("Error jumping to definition: {:#}", e);
+                        }
+                        let target_range = result.unwrap_or_default().unwrap_or_default();
                         Self::location_link(source, &url, target_range)?
                     }
                     Some(StringLiteralResult {
