@@ -109,6 +109,8 @@ pub(crate) enum TestServerError {
     /// The provided Url was not absolute and it needs to be.
     #[error("Path for URL `{}` was not absolute", .0)]
     NotAbsolute(LspUrl),
+    #[error("Path is directory: `{0}`")]
+    IsADirectory(LspUrl),
 }
 
 struct TestServerContext {
@@ -207,9 +209,7 @@ impl LspContext for TestServerContext {
                 let is_dir = self.dirs.read().unwrap().contains(&path);
                 match (path.is_absolute(), is_dir) {
                     (true, false) => Ok(self.file_contents.read().unwrap().get(&path).cloned()),
-                    (true, true) => {
-                        Err(std::io::Error::from(std::io::ErrorKind::IsADirectory).into())
-                    }
+                    (true, true) => Err(TestServerError::IsADirectory(uri.clone()).into()),
                     (false, _) => Err(TestServerError::NotAbsolute(uri.clone()).into()),
                 }
             }
