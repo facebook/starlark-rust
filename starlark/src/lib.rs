@@ -359,7 +359,6 @@
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(generic_associated_types)]
-#![feature(hash_set_entry)]
 #![feature(maybe_uninit_slice)]
 #![feature(maybe_uninit_write_slice)]
 #![feature(ptr_metadata)]

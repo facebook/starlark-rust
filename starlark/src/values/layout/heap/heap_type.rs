@@ -237,7 +237,10 @@ impl FrozenHeap {
     /// is kept alive. Used if a [`FrozenValue`] in this heap points at values in another
     /// [`FrozenHeap`].
     pub fn add_reference(&self, heap: &FrozenHeapRef) {
-        self.refs.borrow_mut().get_or_insert_owned(heap);
+        let mut refs = self.refs.borrow_mut();
+        if !refs.contains(heap) {
+            refs.insert(heap.dupe());
+        }
     }
 
     fn alloc_raw(&self, x: impl AValue<'static, ExtraElem = ()> + Send + Sync) -> FrozenValue {
