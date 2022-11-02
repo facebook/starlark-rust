@@ -261,18 +261,28 @@ impl<K, V> SmallMap<K, V> {
     }
 
     #[inline]
-    pub(crate) fn get_index_of_hashed_raw(
+    fn get_index_of_hashed_raw_with_index(
         &self,
         hash: StarlarkHashValue,
         mut eq: impl FnMut(&K) -> bool,
+        index: &RawTable<usize>,
+    ) -> Option<usize> {
+        index
+            .get(hash.promote(), |&index| unsafe {
+                eq(self.entries.get_unchecked(index).0.key())
+            })
+            .copied()
+    }
+
+    #[inline]
+    pub(crate) fn get_index_of_hashed_raw(
+        &self,
+        hash: StarlarkHashValue,
+        eq: impl FnMut(&K) -> bool,
     ) -> Option<usize> {
         match &self.index {
             None => self.entries.get_index_of_hashed_raw(hash, eq),
-            Some(index) => index
-                .get(hash.promote(), |&index| unsafe {
-                    eq(self.entries.get_unchecked(index).0.key())
-                })
-                .copied(),
+            Some(index) => self.get_index_of_hashed_raw_with_index(hash, eq, index),
         }
     }
 
