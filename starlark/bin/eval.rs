@@ -31,7 +31,6 @@ use starlark::environment::Globals;
 use starlark::environment::Module;
 use starlark::errors::EvalMessage;
 use starlark::eval::Evaluator;
-use starlark::lsp::server::LoadContentsError;
 use starlark::lsp::server::LspContext;
 use starlark::lsp::server::LspEvalResult;
 use starlark::lsp::server::LspUrl;
@@ -47,6 +46,16 @@ use starlark::values::docs::DocItem;
 pub(crate) enum ContextMode {
     Check,
     Run,
+}
+
+#[derive(Debug, thiserror::Error)]
+enum ContextError {
+    /// The provided Url was not absolute and it needs to be.
+    #[error("Path for URL `{}` was not absolute", .0)]
+    NotAbsolute(LspUrl),
+    /// The scheme provided was not correct or supported.
+    #[error("Url `{}` was expected to be of type `{}`", .1, .0)]
+    WrongScheme(String, LspUrl),
 }
 
 #[derive(Debug)]
@@ -311,10 +320,10 @@ impl LspContext for Context {
                     }
                     Err(e) => Err(e.into()),
                 },
-                false => Err(LoadContentsError::NotAbsolute(uri.clone()).into()),
+                false => Err(ContextError::NotAbsolute(uri.clone()).into()),
             },
             LspUrl::Starlark(_) => Ok(self.builtin_docs.get(uri).cloned()),
-            _ => Err(LoadContentsError::WrongScheme("file://".to_owned(), uri.clone()).into()),
+            _ => Err(ContextError::WrongScheme("file://".to_owned(), uri.clone()).into()),
         }
     }
 

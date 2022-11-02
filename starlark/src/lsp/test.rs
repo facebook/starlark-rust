@@ -59,7 +59,6 @@ use serde::de::DeserializeOwned;
 use crate::errors::EvalMessage;
 use crate::lsp::server::new_notification;
 use crate::lsp::server::server_with_connection;
-use crate::lsp::server::LoadContentsError;
 use crate::lsp::server::LspContext;
 use crate::lsp::server::LspEvalResult;
 use crate::lsp::server::LspServerSettings;
@@ -107,6 +106,9 @@ pub(crate) enum TestServerError {
     ReceivedRequest(lsp_server::Request),
     #[error("Got a duplicate response for request ID {:?}: Existing: {:?}, New: {:?}", .new.id, .existing, .new)]
     DuplicateResponse { new: Response, existing: Response },
+    /// The provided Url was not absolute and it needs to be.
+    #[error("Path for URL `{}` was not absolute", .0)]
+    NotAbsolute(LspUrl),
 }
 
 struct TestServerContext {
@@ -208,7 +210,7 @@ impl LspContext for TestServerContext {
                     (true, true) => {
                         Err(std::io::Error::from(std::io::ErrorKind::IsADirectory).into())
                     }
-                    (false, _) => Err(LoadContentsError::NotAbsolute(uri.clone()).into()),
+                    (false, _) => Err(TestServerError::NotAbsolute(uri.clone()).into()),
                 }
             }
             LspUrl::Starlark(_) => Ok(self.builtin_docs.get(uri).cloned()),

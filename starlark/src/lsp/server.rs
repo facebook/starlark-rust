@@ -304,10 +304,7 @@ enum ResolveLoadError {
 
 /// Errors when loading contents of a starlark program.
 #[derive(thiserror::Error, Debug)]
-pub enum LoadContentsError {
-    /// The provided Url was not absolute and it needs to be.
-    #[error("Path for URL `{}` was not absolute", .0)]
-    NotAbsolute(LspUrl),
+pub(crate) enum LoadContentsError {
     /// The scheme provided was not correct or supported.
     #[error("Url `{}` was expected to be of type `{}`", .1, .0)]
     WrongScheme(String, LspUrl),
