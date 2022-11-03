@@ -36,7 +36,7 @@ use gazebo::prelude::*;
 
 /// A small, `Copy`, value representing a position in a `CodeMap`'s file.
 #[derive(
-    Copy, Clone, Dupe, Hash, Eq, PartialEq, Ord, PartialOrd, Debug, Default
+    Copy, Clone, Dupe, Hash, Eq, PartialEq, PartialOrd, Ord, Debug, Default
 )]
 pub struct Pos(u32);
 

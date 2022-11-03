@@ -64,7 +64,7 @@ pub(crate) mod simd;
 
 /// Index of a char in a string.
 /// This is different from string byte offset.
-#[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Dupe, Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Ord, Copy, Clone, Dupe, Debug)]
 pub(crate) struct CharIndex(pub(crate) usize);
 
 impl Sub for CharIndex {

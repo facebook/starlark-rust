@@ -66,7 +66,7 @@ enum ValidateError {
     TypeAnnotationOnTupleAssign,
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, PartialOrd, Ord)]
 enum ArgsStage {
     Positional,
     Named,

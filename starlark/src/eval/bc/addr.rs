@@ -34,7 +34,7 @@ use crate::eval::bc::repr::BcInstrRepr;
 
 /// Address relative to bytecode start.
 #[derive(
-    Eq, PartialEq, Copy, Clone, Dupe, Debug, Ord, PartialOrd, Display, Hash, Default
+    Eq, PartialEq, Copy, Clone, Dupe, Debug, PartialOrd, Ord, Display, Hash, Default
 )]
 #[display(fmt = "@{}", _0)]
 pub(crate) struct BcAddr(pub(crate) u32);
@@ -204,7 +204,7 @@ impl<'b> BcPtrAddr<'b> {
 }
 
 /// Difference between addresses.
-#[derive(Eq, PartialEq, Copy, Clone, Dupe, Debug, Ord, PartialOrd, Display)]
+#[derive(Eq, PartialEq, Copy, Clone, Dupe, Debug, PartialOrd, Ord, Display)]
 #[display(fmt = "{}", _0)]
 pub(crate) struct BcAddrOffset(pub(crate) u32);
 

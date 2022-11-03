@@ -28,7 +28,7 @@ use crate::eval::bc::instr_impl::*;
 
 /// Bytecode instruction opcode.
 #[starlark_internal_bc]
-#[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Debug, Copy, Clone, Dupe, Eq, PartialEq, PartialOrd, Ord, Hash)]
 #[repr(u32)]
 pub(crate) enum BcOpcode {
     Const,

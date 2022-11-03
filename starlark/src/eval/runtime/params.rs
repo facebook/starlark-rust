@@ -59,7 +59,7 @@ pub(crate) enum ParameterKind<V> {
     KWargs,
 }
 
-#[derive(Debug, Copy, Clone, Dupe, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, Dupe, PartialEq, Eq, PartialOrd, Ord)]
 enum CurrentParameterStyle {
     /// Parameter can be only filled positionally.
     PosOnly,
