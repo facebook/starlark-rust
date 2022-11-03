@@ -21,7 +21,6 @@ use std::marker::PhantomData;
 
 use gazebo::prelude::*;
 use starlark_map::small_map::SmallMap;
-use starlark_map::vec_map::VecMap;
 use starlark_map::Hashed;
 
 use crate::values::Freezer;
@@ -180,24 +179,6 @@ impl<K: Freeze> Freeze for Hashed<K> {
     }
 }
 
-impl<K, V> Freeze for VecMap<K, V>
-where
-    K: Freeze,
-    V: Freeze,
-{
-    type Frozen = VecMap<K::Frozen, V::Frozen>;
-
-    fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        let mut result = VecMap::with_capacity(self.len());
-        for (key, value) in self.into_iter_hashed() {
-            let key = key.freeze(freezer)?;
-            let value = value.freeze(freezer)?;
-            result.insert_hashed_unique_unchecked(key, value);
-        }
-        Ok(result)
-    }
-}
-
 impl<K, V> Freeze for SmallMap<K, V>
 where
     K: Freeze,
@@ -205,11 +186,17 @@ where
 {
     type Frozen = SmallMap<K::Frozen, V::Frozen>;
 
-    fn freeze(mut self, freezer: &Freezer) -> anyhow::Result<SmallMap<K::Frozen, V::Frozen>> {
-        self.maybe_drop_index();
-        let (entries, index) = self.into_raw_parts();
-        let entries = entries.freeze(freezer)?;
-        unsafe { Ok(SmallMap::from_raw_parts(entries, index)) }
+    fn freeze(self, freezer: &Freezer) -> anyhow::Result<SmallMap<K::Frozen, V::Frozen>> {
+        let mut new = SmallMap::with_capacity(self.len());
+        for (key, value) in self.into_iter_hashed() {
+            let hash = key.hash();
+            let key = key.into_key().freeze(freezer)?;
+            // TODO(nga): verify hash unchanged after freeze.
+            let key = Hashed::new_unchecked(hash, key);
+            let value = value.freeze(freezer)?;
+            new.insert_hashed_unique_unchecked(key, value);
+        }
+        Ok(new)
     }
 }
 
