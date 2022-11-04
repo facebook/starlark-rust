@@ -26,11 +26,11 @@ use gazebo::prelude::*;
 use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
 use crate::hashed::Hashed;
-pub use crate::vec_map::iter::IntoIter;
+pub(crate) use crate::vec_map::iter::IntoIter;
 pub(crate) use crate::vec_map::iter::IntoIterHashed;
-pub use crate::vec_map::iter::Iter;
+pub(crate) use crate::vec_map::iter::Iter;
 pub(crate) use crate::vec_map::iter::IterHashed;
-pub use crate::vec_map::iter::IterMut;
+pub(crate) use crate::vec_map::iter::IterMut;
 pub(crate) use crate::vec_map::iter::Keys;
 pub(crate) use crate::vec_map::iter::Values;
 pub(crate) use crate::vec_map::iter::ValuesMut;
@@ -54,20 +54,20 @@ impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Default_)]
-pub struct VecMap<K, V> {
+pub(crate) struct VecMap<K, V> {
     buckets: Vec<Bucket<K, V>>,
 }
 
 impl<K, V> VecMap<K, V> {
     #[inline]
-    pub const fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         VecMap {
             buckets: Vec::new(),
         }
     }
 
     #[inline]
-    pub fn with_capacity(n: usize) -> Self {
+    pub(crate) fn with_capacity(n: usize) -> Self {
         VecMap {
             buckets: Vec::with_capacity(n),
         }
@@ -140,7 +140,7 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub fn insert_hashed_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
+    pub(crate) fn insert_hashed_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
         self.buckets.push(Bucket {
             hash: key.hash(),
             key: key.into_key(),
@@ -173,12 +173,12 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.buckets.len()
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.buckets.is_empty()
     }
 
@@ -226,7 +226,7 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    pub fn into_iter_hashed(self) -> IntoIterHashed<K, V> {
+    pub(crate) fn into_iter_hashed(self) -> IntoIterHashed<K, V> {
         // See the comments on VMIntoIterHash for why this one looks different
         IntoIterHashed {
             iter: self.buckets.into_iter(),

@@ -123,26 +123,6 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    #[inline]
-    pub fn into_raw_parts(self) -> (VecMap<K, V>, Option<Box<RawTable<usize>>>) {
-        (self.entries, self.index)
-    }
-
-    #[inline]
-    pub unsafe fn from_raw_parts(
-        entries: VecMap<K, V>,
-        index: Option<Box<RawTable<usize>>>,
-    ) -> SmallMap<K, V> {
-        if let Some(index) = &index {
-            // Quick smoke test.
-            // We don't validate indices are correct hence this function is unsafe.
-            assert!(entries.len() == index.len());
-        } else {
-            assert!(entries.len() <= NO_INDEX_THRESHOLD);
-        }
-        SmallMap { entries, index }
-    }
-
     /// Key references iterator.
     #[inline]
     pub fn keys(&self) -> Keys<K, V> {

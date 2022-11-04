@@ -109,7 +109,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for ValuesMut<'a, K, V> {
 }
 
 #[derive(Clone_)]
-pub struct Iter<'a, K: 'a, V: 'a> {
+pub(crate) struct Iter<'a, K: 'a, V: 'a> {
     pub(crate) iter: IterHashed<'a, K, V>,
 }
 
@@ -161,7 +161,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterHashed<'a, K, V> {
     }
 }
 
-pub struct IterMut<'a, K: 'a, V: 'a> {
+pub(crate) struct IterMut<'a, K: 'a, V: 'a> {
     pub(crate) iter: std::slice::IterMut<'a, Bucket<K, V>>,
 }
 
@@ -189,7 +189,7 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterMut<'a, K, V> {
     }
 }
 
-pub struct IntoIterHashed<K, V> {
+pub(crate) struct IntoIterHashed<K, V> {
     pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
 }
 
@@ -217,7 +217,7 @@ impl<K, V> DoubleEndedIterator for IntoIterHashed<K, V> {
     def_double_ended_iter!();
 }
 
-pub struct IntoIter<K, V> {
+pub(crate) struct IntoIter<K, V> {
     pub(crate) iter: IntoIterHashed<K, V>,
 }
 

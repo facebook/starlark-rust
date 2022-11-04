@@ -31,7 +31,7 @@ pub mod small_map;
 pub mod small_set;
 // TODO(nga): make private.
 mod iter;
-pub mod vec_map;
+pub(crate) mod vec_map;
 
 pub use equivalent::Equivalent;
 pub use hash_value::StarlarkHashValue;
