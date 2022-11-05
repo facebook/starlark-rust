@@ -352,7 +352,7 @@
 #![feature(box_syntax)]
 #![feature(const_mut_refs)]
 #![feature(const_type_id)]
-#![feature(core_intrinsics)]
+#![cfg_attr(fbcode_build, feature(core_intrinsics))]
 #![feature(generic_associated_types)]
 #![feature(maybe_uninit_slice)]
 #![feature(maybe_uninit_write_slice)]
@@ -411,6 +411,7 @@ mod private;
 pub mod read_line;
 mod sealed;
 
+mod hint;
 mod stdlib;
 pub mod syntax;
 pub mod values;

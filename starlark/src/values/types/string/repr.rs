@@ -17,9 +17,9 @@
 
 //! Implementation of `repr()`.
 
-use std::intrinsics::unlikely;
 use std::mem;
 
+use crate::hint::unlikely;
 use crate::values::types::string::simd::SwitchHaveSimd;
 use crate::values::types::string::simd::Vector;
 

@@ -27,7 +27,6 @@
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
-use std::intrinsics::unlikely;
 
 use gazebo::prelude::*;
 use once_cell::sync::Lazy;
@@ -37,6 +36,7 @@ use crate::codemap::FileSpan;
 use crate::codemap::Span;
 use crate::errors::Frame;
 use crate::eval::runtime::inlined_frame::InlinedFrames;
+use crate::hint::unlikely;
 use crate::values::FrozenRef;
 use crate::values::Trace;
 use crate::values::Tracer;

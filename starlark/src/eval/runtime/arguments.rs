@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-use std::intrinsics::unlikely;
 use std::iter;
 use std::marker::PhantomData;
 
@@ -30,6 +29,7 @@ use crate::collections::Hashed;
 use crate::collections::SmallMap;
 use crate::collections::StarlarkHashValue;
 use crate::eval::runtime::params::ParametersSpec;
+use crate::hint::unlikely;
 use crate::values::dict::Dict;
 use crate::values::dict::DictRef;
 use crate::values::type_repr::StarlarkTypeRepr;

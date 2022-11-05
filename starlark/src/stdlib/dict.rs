@@ -17,11 +17,11 @@
 
 //! Methods for the `dict` type.
 
-use std::intrinsics::unlikely;
 use std::mem;
 
 use crate as starlark;
 use crate::environment::MethodsBuilder;
+use crate::hint::unlikely;
 use crate::values::dict::Dict;
 use crate::values::dict::DictRef;
 use crate::values::none::NoneType;

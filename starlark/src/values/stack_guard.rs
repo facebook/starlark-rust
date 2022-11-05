@@ -18,8 +18,8 @@
 //! Guard to check we don't recurse too deeply with nested operations like Equals.
 
 use std::cell::Cell;
-use std::intrinsics::unlikely;
 
+use crate::hint::unlikely;
 use crate::values::error::ControlError;
 
 // Maximum recursion level for comparison

@@ -22,7 +22,6 @@ pub(crate) mod bc;
 pub(crate) mod compiler;
 pub(crate) mod runtime;
 
-use std::intrinsics::unlikely;
 use std::mem;
 use std::time::Instant;
 
@@ -48,6 +47,7 @@ use crate::eval::compiler::scope::ScopeId;
 use crate::eval::compiler::Compiler;
 use crate::eval::runtime::arguments::ArgNames;
 use crate::eval::runtime::arguments::ArgumentsFull;
+use crate::hint::unlikely;
 use crate::syntax::ast::AstModule;
 use crate::syntax::DialectTypes;
 use crate::values::docs::DocString;

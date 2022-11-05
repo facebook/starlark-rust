@@ -18,9 +18,9 @@
 //! Detect recursion when doing `repr` or `to_json`.
 
 use std::cell::Cell;
-use std::intrinsics::unlikely;
 
 use crate::collections::SmallSet;
+use crate::hint::unlikely;
 use crate::values::layout::pointer::RawPointer;
 use crate::values::Value;
 

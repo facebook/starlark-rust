@@ -20,7 +20,6 @@
 use std::cell::Cell;
 use std::cmp;
 use std::collections::HashMap;
-use std::intrinsics::unlikely;
 
 use gazebo::coerce::coerce;
 use gazebo::coerce::Coerce;
@@ -36,6 +35,7 @@ use crate::eval::runtime::arguments::FunctionError;
 use crate::eval::runtime::arguments::ResolvedArgName;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
+use crate::hint::unlikely;
 use crate::values::dict::Dict;
 use crate::values::docs;
 use crate::values::docs::DocString;
