@@ -21,13 +21,14 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::ops::Deref;
 
+use allocative::Allocative;
 use gazebo::prelude::Dupe;
 
 use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
 
 /// A key and its hash.
-#[derive(PartialEq, Eq, Debug, Clone, Copy, Dupe)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy, Dupe, Allocative)]
 pub struct Hashed<K> {
     hash: StarlarkHashValue,
     key: K,

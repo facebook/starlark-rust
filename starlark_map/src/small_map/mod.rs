@@ -26,6 +26,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::mem;
 
+use allocative::Allocative;
 use gazebo::coerce::Coerce;
 use gazebo::coerce::CoerceKey;
 use gazebo::prelude::*;
@@ -58,7 +59,7 @@ const NO_INDEX_THRESHOLD: usize = 12;
 ///
 /// * Functions which work with the position, e.g. [`get_index_of`](SmallMap::get_index_of).
 #[repr(C)]
-#[derive(Clone, Default_)]
+#[derive(Clone, Default_, Allocative)]
 pub struct SmallMap<K, V> {
     entries: VecMap<K, V>,
     /// Map a key to the index in `entries`.

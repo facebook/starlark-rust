@@ -21,6 +21,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::mem;
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 
 use crate::equivalent::Equivalent;
@@ -36,7 +37,7 @@ pub(crate) use crate::vec_map::iter::Values;
 pub(crate) use crate::vec_map::iter::ValuesMut;
 
 /// Bucket in [`VecMap`].
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Allocative)]
 pub(crate) struct Bucket<K, V> {
     hash: StarlarkHashValue,
     key: K,
@@ -53,7 +54,7 @@ impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Default_)]
+#[derive(Debug, Clone, Eq, PartialEq, Default_, Allocative)]
 pub(crate) struct VecMap<K, V> {
     buckets: Vec<Bucket<K, V>>,
 }
