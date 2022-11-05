@@ -19,10 +19,11 @@ use std::iter::Sum;
 use std::ops::Add;
 use std::ops::AddAssign;
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 
 /// Allocations counters.
-#[derive(Default, Copy, Clone, Dupe, Debug)]
+#[derive(Default, Copy, Clone, Dupe, Debug, Allocative)]
 pub(crate) struct AllocCounts {
     pub(crate) bytes: usize,
     pub(crate) count: usize,

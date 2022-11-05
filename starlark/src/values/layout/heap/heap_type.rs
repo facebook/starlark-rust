@@ -36,6 +36,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::usize;
 
+use allocative::Allocative;
 use either::Either;
 use gazebo::cast;
 use gazebo::prelude::*;
@@ -129,7 +130,7 @@ pub struct FrozenHeap {
 
 /// `FrozenHeap` when it is no longer modified and can be share between threads.
 /// Although, `arena` is not safe to share between threads, but at least `refs` is.
-#[derive(Default)]
+#[derive(Default, Allocative)]
 #[allow(clippy::non_send_fields_in_send_ty)]
 struct FrozenFrozenHeap {
     arena: Arena,
@@ -161,7 +162,7 @@ impl Debug for FrozenFrozenHeap {
 /// A reference to a [`FrozenHeap`] that keeps alive all values on the underlying heap.
 /// Note that the [`Hash`] is consistent for a single [`FrozenHeapRef`], but non-deterministic
 /// across executions and distinct but observably identical [`FrozenHeapRef`] values.
-#[derive(Clone, Dupe, Debug)]
+#[derive(Clone, Dupe, Debug, Allocative)]
 // The Eq/Hash are by pointer rather than value, since we produce unique values
 // given an underlying FrozenHeap.
 pub struct FrozenHeapRef(Arc<FrozenFrozenHeap>);

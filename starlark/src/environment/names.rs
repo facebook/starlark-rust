@@ -17,6 +17,8 @@
 
 use std::cell::RefCell;
 
+use allocative::Allocative;
+
 use crate::collections::Hashed;
 use crate::collections::SmallMap;
 use crate::environment::slots::ModuleSlotId;
@@ -43,8 +45,11 @@ use crate::values::FrozenStringValue;
 #[derive(Debug)]
 pub(crate) struct MutableNames(RefCell<SmallMap<FrozenStringValue, (ModuleSlotId, Visibility)>>);
 
-#[derive(Debug)]
-pub(crate) struct FrozenNames(SmallMap<FrozenStringValue, (ModuleSlotId, Visibility)>);
+#[derive(Debug, Allocative)]
+pub(crate) struct FrozenNames(
+    // TODO(nga): measure.
+    #[allocative(skip)] SmallMap<FrozenStringValue, (ModuleSlotId, Visibility)>,
+);
 
 impl MutableNames {
     pub fn new() -> Self {

@@ -18,6 +18,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::prelude::*;
 use itertools::Itertools;
@@ -52,7 +53,7 @@ use crate::values::Heap;
 use crate::values::Value;
 
 /// The global values available during execution.
-#[derive(Clone, Dupe, Debug, Display)]
+#[derive(Clone, Dupe, Debug, Display, Allocative)]
 #[display(fmt = "globals")]
 pub struct Globals(Arc<GlobalsData>);
 
@@ -61,10 +62,12 @@ pub struct Globals(Arc<GlobalsData>);
 #[display(fmt = "methods")]
 pub struct Methods(Arc<MethodsData>);
 
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
 struct GlobalsData {
     heap: FrozenHeapRef,
+    #[allocative(skip)] // TODO(nga): do not skip.
     variables: SymbolMap<FrozenValue>,
+    #[allocative(skip)]
     variable_names: Vec<FrozenStringValue>,
     docstring: Option<String>,
 }

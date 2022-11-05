@@ -36,6 +36,7 @@ use std::ptr;
 use std::slice;
 use std::time::Instant;
 
+use allocative::Allocative;
 use bumpalo::Bump;
 use either::Either;
 use gazebo::prelude::*;
@@ -74,7 +75,8 @@ pub(crate) const MIN_ALLOC: usize = {
     )
 };
 
-#[derive(Default)]
+#[derive(Default, Allocative)]
+// TODO(nga): implement `Allocative` for heap elements.
 pub(crate) struct Arena {
     /// Arena for things which don't need dropping (e.g. strings)
     non_drop: Bump,

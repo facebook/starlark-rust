@@ -21,16 +21,17 @@ use std::hash::Hasher;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 
-#[derive(Clone, Dupe, Debug)]
+#[derive(Clone, Dupe, Debug, Allocative)]
 enum Inner {
     Arc(Arc<str>),
     Static(&'static str),
 }
 
 /// Wrapper for `Arc<str>`.
-#[derive(Clone, Dupe, Debug, derive_more::Display)]
+#[derive(Clone, Dupe, Debug, derive_more::Display, Allocative)]
 #[display(fmt = "{}", "&**self")]
 pub(crate) struct ArcStr(Inner);
 

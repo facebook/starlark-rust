@@ -17,6 +17,7 @@
 
 use std::fmt::Debug;
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 
 use crate::eval::runtime::profile::data::ProfileData;
@@ -26,7 +27,7 @@ use crate::values::layout::heap::profile::aggregated::AggregateHeapProfileInfo;
 use crate::values::Heap;
 use crate::values::Value;
 
-#[derive(Copy, Clone, Dupe, Debug)]
+#[derive(Copy, Clone, Dupe, Debug, Allocative)]
 pub(crate) enum RetainedHeapProfileMode {
     Flame,
     Summary,

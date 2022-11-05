@@ -28,6 +28,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::prelude::*;
@@ -74,7 +75,7 @@ enum ModuleError {
 /// can be obtained using [`frozen_heap`](FrozenModule::frozen_heap). Be careful not to use
 /// these values after the [`FrozenModule`] has been released unless you obtain a reference
 /// to the frozen heap.
-#[derive(Debug, Clone, Dupe)]
+#[derive(Debug, Clone, Dupe, Allocative)]
 // We store the two elements separately since the FrozenHeapRef contains
 // a copy of the FrozenModuleData inside it.
 // Two Arc's should still be plenty cheap enough to qualify for `Dupe`.
@@ -89,7 +90,7 @@ pub struct FrozenModule {
     pub(crate) eval_duration: Duration,
 }
 
-#[derive(Debug, Clone, Dupe, ProvidesStaticType, Display)]
+#[derive(Debug, Clone, Dupe, ProvidesStaticType, Display, Allocative)]
 #[display(fmt = "{:?}", self)] // Type should not be user visible
 pub(crate) struct FrozenModuleRef(pub(crate) Arc<FrozenModuleData>);
 
@@ -107,7 +108,7 @@ impl FrozenModuleRef {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
 pub(crate) struct FrozenModuleData {
     pub(crate) names: FrozenNames,
     pub(crate) slots: FrozenSlots,

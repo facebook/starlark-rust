@@ -15,18 +15,19 @@
  * limitations under the License.
  */
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 use starlark_map::small_set::SmallSet;
 
 use crate::values::layout::heap::profile::arc_str::ArcStr;
 
 /// Map strings to integers 0, 1, 2, ...
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Allocative)]
 pub(crate) struct StringIndex {
     strings: SmallSet<ArcStr>,
 }
 
-#[derive(Copy, Clone, Dupe, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Dupe, Debug, Eq, PartialEq, Hash, Allocative)]
 pub(crate) struct StringId(
     /// Index in strings index.
     pub(crate) usize,

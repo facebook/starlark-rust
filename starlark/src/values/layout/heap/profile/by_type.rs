@@ -17,11 +17,12 @@
 
 use std::collections::HashMap;
 
+use allocative::Allocative;
 use starlark_map::small_map::SmallMap;
 
 use crate::values::layout::heap::profile::alloc_counts::AllocCounts;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Allocative)]
 /// Information about the data stored on a heap. Accessible through
 /// the function `allocated_summary` available on [`Heap`](crate::values::Heap)
 /// and [`FrozenHeap`](crate::values::FrozenHeap)

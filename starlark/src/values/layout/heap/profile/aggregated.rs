@@ -26,6 +26,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
+use allocative::Allocative;
 use either::Either;
 use gazebo::dupe::Dupe;
 use starlark_map::small_map::SmallMap;
@@ -203,7 +204,7 @@ impl<'v> ArenaVisitor<'v> for StackCollector {
 }
 
 /// Aggregated stack frame data.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Allocative)]
 pub(crate) struct StackFrame {
     /// Aggregated callees.
     pub(crate) callees: SmallMap<StringId, StackFrame>,
@@ -290,7 +291,7 @@ impl<'c> StackFrameWithContext<'c> {
 }
 
 /// `Clone` wrapper.
-#[derive(Default)]
+#[derive(Default, Allocative)]
 pub(crate) struct UnusedCapacity(AtomicUsize);
 
 impl Clone for UnusedCapacity {
@@ -318,7 +319,7 @@ impl UnusedCapacity {
 /// Can be:
 /// * written as CSV or flamegraph
 /// * merged with another data
-#[derive(Clone)]
+#[derive(Clone, Allocative)]
 pub struct AggregateHeapProfileInfo {
     pub(crate) strings: StringIndex,
     pub(crate) root: StackFrame,
@@ -405,7 +406,7 @@ impl AggregateHeapProfileInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
 pub(crate) struct RetainedHeapProfile {
     pub(crate) info: AggregateHeapProfileInfo,
     pub(crate) mode: RetainedHeapProfileMode,

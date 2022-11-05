@@ -62,6 +62,10 @@ num-traits = "0.2"
 inventory = "0.1.10"
 clap = { version = "4.0.7", features = ["derive", "wrap_help"] }
 
+allocative.version = "0.2"
+# @oss-disable: allocative.path = "../../allocative/allocative"
+allocative.features = ["bumpalo"]
+
 [dev-dependencies]
 rand = { version = "0.8.4", features = ["small_rng"] }
 

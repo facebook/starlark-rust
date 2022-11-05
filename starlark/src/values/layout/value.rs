@@ -35,6 +35,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 
+use allocative::Allocative;
 use either::Either;
 use gazebo::any::AnyLifetime;
 use gazebo::any::ProvidesStaticType;
@@ -208,9 +209,12 @@ impl Equivalent<Value<'_>> for FrozenValue {
 /// while a [`FrozenValue`] from it still exists, the program will probably segfault, so be careful
 /// when working directly with [`FrozenValue`]s. See the type [`OwnedFrozenValue`](crate::values::OwnedFrozenValue)
 /// for a little bit more safety.
-#[derive(Clone, Copy, Dupe, ProvidesStaticType)]
+#[derive(Clone, Copy, Dupe, ProvidesStaticType, Allocative)]
 // One possible change: moving from Blackhole during GC
-pub struct FrozenValue(pub(crate) FrozenPointer<'static>);
+pub struct FrozenValue(
+    #[allocative(skip)] // Because it is owned by the heap.
+    pub(crate)  FrozenPointer<'static>,
+);
 
 // These can both be shared, but not obviously, because we hide a fake RefCell in Pointer to stop
 // it having variance.

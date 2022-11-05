@@ -18,6 +18,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 
 pub(crate) mod bc;
@@ -31,7 +32,7 @@ pub(crate) mod time_flame;
 pub(crate) mod typecheck;
 
 /// How to profile starlark code.
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Dupe, Allocative)]
 #[non_exhaustive]
 pub enum ProfileMode {
     /// The heap profile mode provides information about the time spent in each function and allocations

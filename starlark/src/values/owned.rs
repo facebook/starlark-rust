@@ -19,6 +19,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::ops::Deref;
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 
 use crate::values::none::NoneType;
@@ -38,7 +39,7 @@ use crate::values::Value;
 /// [`unchecked_frozen_value`](OwnedFrozenValue::unchecked_frozen_value), that approach
 /// is strongly discouraged. See the other methods which unpack the code, access it as a
 /// [`Value`] (which has a suitable lifetime) or add references to other heaps.
-#[derive(Debug, Clone, Dupe)]
+#[derive(Debug, Clone, Dupe, Allocative)]
 pub struct OwnedFrozenValue {
     owner: FrozenHeapRef,
     // Invariant: this FrozenValue must be kept alive by the `owner` field.

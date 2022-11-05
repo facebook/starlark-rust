@@ -21,10 +21,11 @@ use std::ops::AddAssign;
 use std::ops::Div;
 use std::time::Duration;
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 
 /// Slightly faster than `Duration`.
-#[derive(Copy, Clone, Dupe, Default, Debug)]
+#[derive(Copy, Clone, Dupe, Default, Debug, Allocative)]
 pub(crate) struct SmallDuration {
     /// `u64::MAX` nanos is 500 years.
     pub(crate) nanos: u64,

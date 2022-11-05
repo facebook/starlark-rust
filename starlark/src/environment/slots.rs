@@ -18,6 +18,7 @@
 use std::cell::RefCell;
 use std::cell::RefMut;
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 
 use crate::values::Freezer;
@@ -38,7 +39,7 @@ impl ModuleSlotId {
 pub(crate) struct MutableSlots<'v>(RefCell<Vec<Option<Value<'v>>>>);
 
 // Indexed slots of a module. May contain unassigned values as `None`.
-#[derive(Debug)]
+#[derive(Debug, Allocative)]
 pub(crate) struct FrozenSlots(Vec<Option<FrozenValue>>);
 
 impl<'v> MutableSlots<'v> {
