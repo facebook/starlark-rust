@@ -351,7 +351,6 @@
 #![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(const_mut_refs)]
-#![feature(const_ptr_offset)]
 #![feature(const_type_id)]
 #![feature(core_intrinsics)]
 #![feature(generic_associated_types)]
