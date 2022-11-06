@@ -16,18 +16,18 @@
  */
 
 // TODO(nga): also enable if cargo build and nightly.
-#[cfg(fbcode_build)]
+#[cfg(rust_nightly)]
 pub(crate) use std::intrinsics::likely;
-#[cfg(fbcode_build)]
+#[cfg(rust_nightly)]
 pub(crate) use std::intrinsics::unlikely;
 
-#[cfg(not(fbcode_build))]
+#[cfg(not(rust_nightly))]
 #[inline]
 pub(crate) fn likely(b: bool) -> bool {
     b
 }
 
-#[cfg(not(fbcode_build))]
+#[cfg(not(rust_nightly))]
 #[inline]
 pub(crate) fn unlikely(b: bool) -> bool {
     b
