@@ -144,7 +144,7 @@ impl Alloca {
             for x in data.iter_mut() {
                 x.write(init());
             }
-            let data = unsafe { MaybeUninit::slice_assume_init_mut(data) };
+            let data = unsafe { &mut *(data as *mut [MaybeUninit<T>] as *mut [T]) };
             k(data)
         })
     }
@@ -176,7 +176,7 @@ impl Alloca {
             let _x_drop_guard = DropSliceGuard(x);
             let y = MaybeUninit::write_slice_cloned(y_uninit, y);
             let _y_drop_guard = DropSliceGuard(y);
-            let xy = unsafe { MaybeUninit::slice_assume_init_mut(xy) };
+            let xy = unsafe { &mut *(xy as *mut [MaybeUninit<T>] as *mut [T]) };
             k(xy)
         })
     }
