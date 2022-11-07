@@ -38,5 +38,6 @@ You need to have npm v7+ installed. Afterwards, run `npm install` in this folder
 Every few months security advisories will arrive about pinned versions of packages.
 
 * `npm audit` to see which packages have security updates.
-* `npm update` to update the necessary packages.
+* `npm audit fix` to fix those issues.
+* Try `npm audit`, if it still has issues run `npm udpate`.
 * `npm exec vsce package` to confirm everything still works.
