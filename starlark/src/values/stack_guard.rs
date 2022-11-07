@@ -41,8 +41,9 @@ const MAX_RECURSION: u32 = 3000;
 //   starlark function which calls to_str. We could change all evaluation stack
 //   signatures to accept some "context" parameters, but passing it as
 //   thread-local is easier.
-#[thread_local]
-static STACK_DEPTH: Cell<u32> = Cell::new(0);
+thread_local! {
+    static STACK_DEPTH: Cell<u32> = const { Cell::new(0) };
+}
 
 /// Stored previous stack depth before calling `try_inc`.
 ///
@@ -56,20 +57,24 @@ pub struct StackGuard {
 
 impl Drop for StackGuard {
     fn drop(&mut self) {
-        STACK_DEPTH.set(self.prev_depth);
+        STACK_DEPTH.with(|stack_depth| {
+            stack_depth.set(self.prev_depth);
+        });
     }
 }
 
 /// Increment stack depth.
 fn inc() -> StackGuard {
-    let prev_depth = STACK_DEPTH.get();
-    STACK_DEPTH.set(prev_depth + 1);
-    StackGuard { prev_depth }
+    STACK_DEPTH.with(|stack_depth| {
+        let prev_depth = stack_depth.get();
+        stack_depth.set(prev_depth + 1);
+        StackGuard { prev_depth }
+    })
 }
 
 /// Check stack depth does not exceed configured max stack depth.
 fn check() -> anyhow::Result<()> {
-    if unlikely(STACK_DEPTH.get() >= MAX_RECURSION) {
+    if unlikely(STACK_DEPTH.with(|stack_depth| stack_depth.get()) >= MAX_RECURSION) {
         return Err(ControlError::TooManyRecursionLevel.into());
     }
     Ok(())
