@@ -356,7 +356,6 @@
 #![feature(generic_associated_types)]
 #![feature(maybe_uninit_write_slice)]
 #![feature(ptr_metadata)]
-#![feature(thread_local)]
 // Plugins
 #![cfg_attr(feature = "gazebo_lint", feature(plugin))]
 #![cfg_attr(feature = "gazebo_lint", allow(deprecated))] // :(
