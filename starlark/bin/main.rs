@@ -17,7 +17,6 @@
 
 // Features we use
 #![feature(box_syntax)]
-#![feature(io_error_more)]
 //
 // Plugins
 #![cfg_attr(feature = "gazebo_lint", feature(plugin))]
