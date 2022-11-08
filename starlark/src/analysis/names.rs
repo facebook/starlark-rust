@@ -18,7 +18,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use gazebo::prelude::*;
 use gazebo::variants::VariantName;
 use thiserror::Error;
 
@@ -279,7 +278,7 @@ fn use_ignored(
                         let defined_at_root =
                             || root.bound.contains_key(&x.node) && scope.free.contains_key(&x.node);
                         let shadows = || {
-                            let suffix = x.trim_start_match('_');
+                            let suffix = &x[1..];
                             scope.free.contains_key(suffix) || scope.bound.contains_key(suffix)
                         };
                         if !defined_at_root() && !shadows() {
@@ -300,6 +299,8 @@ fn use_ignored(
 
 #[cfg(test)]
 mod tests {
+    use gazebo::prelude::*;
+
     use super::*;
     use crate::syntax::Dialect;
 

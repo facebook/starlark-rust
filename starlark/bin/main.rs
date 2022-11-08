@@ -221,8 +221,7 @@ fn main() -> anyhow::Result<()> {
         let ext = args
             .extension
             .as_ref()
-            .map_or("bzl", |x| x.as_str())
-            .trim_start_match('.');
+            .map_or("bzl", |x| x.strip_prefix('.').unwrap_or(x.as_str()));
         let mut ctx = Context::new(
             if args.check {
                 ContextMode::Check
