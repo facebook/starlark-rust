@@ -67,65 +67,71 @@ impl Debug for TypeCompiled {
 // information in profiling about the origin of these closures
 impl TypeCompiled {
     fn type_anything() -> TypeCompiled {
-        TypeCompiled(box |_| true)
+        TypeCompiled(Box::new(|_| true))
     }
 
     fn type_none() -> TypeCompiled {
-        TypeCompiled(box |v| v.is_none())
+        TypeCompiled(Box::new(|v| v.is_none()))
     }
 
     fn type_string() -> TypeCompiled {
-        TypeCompiled(box |v| v.unpack_str().is_some() || v.get_ref().matches_type("string"))
+        TypeCompiled(Box::new(|v| {
+            v.unpack_str().is_some() || v.get_ref().matches_type("string")
+        }))
     }
 
     fn type_int() -> TypeCompiled {
-        TypeCompiled(box |v| v.unpack_int().is_some() || v.get_ref().matches_type("int"))
+        TypeCompiled(Box::new(|v| {
+            v.unpack_int().is_some() || v.get_ref().matches_type("int")
+        }))
     }
 
     fn type_bool() -> TypeCompiled {
-        TypeCompiled(box |v| v.unpack_bool().is_some() || v.get_ref().matches_type("bool"))
+        TypeCompiled(Box::new(|v| {
+            v.unpack_bool().is_some() || v.get_ref().matches_type("bool")
+        }))
     }
 
     fn type_concrete(t: &str) -> TypeCompiled {
         let t = t.to_owned();
-        TypeCompiled(box move |v| v.get_ref().matches_type(&t))
+        TypeCompiled(Box::new(move |v| v.get_ref().matches_type(&t)))
     }
 
     fn type_list() -> TypeCompiled {
-        TypeCompiled(box |v| List::from_value(v).is_some())
+        TypeCompiled(Box::new(|v| List::from_value(v).is_some()))
     }
 
     fn type_list_of(t: TypeCompiled) -> TypeCompiled {
-        TypeCompiled(box move |v| match List::from_value(v) {
+        TypeCompiled(Box::new(move |v| match List::from_value(v) {
             None => false,
             Some(v) => v.iter().all(|v| (t.0)(v)),
-        })
+        }))
     }
 
     fn type_any_of_two(t1: TypeCompiled, t2: TypeCompiled) -> TypeCompiled {
-        TypeCompiled(box move |v| (t1.0)(v) || (t2.0)(v))
+        TypeCompiled(Box::new(move |v| (t1.0)(v) || (t2.0)(v)))
     }
 
     fn type_any_of(ts: Vec<TypeCompiled>) -> TypeCompiled {
-        TypeCompiled(box move |v| ts.iter().any(|t| (t.0)(v)))
+        TypeCompiled(Box::new(move |v| ts.iter().any(|t| (t.0)(v))))
     }
 
     fn type_dict() -> TypeCompiled {
-        TypeCompiled(box |v| Dict::from_value(v).is_some())
+        TypeCompiled(Box::new(|v| Dict::from_value(v).is_some()))
     }
 
     fn type_dict_of(kt: TypeCompiled, vt: TypeCompiled) -> TypeCompiled {
-        TypeCompiled(box move |v| match Dict::from_value(v) {
+        TypeCompiled(Box::new(move |v| match Dict::from_value(v) {
             None => false,
             Some(v) => v.iter().all(|(k, v)| (kt.0)(k) && (vt.0)(v)),
-        })
+        }))
     }
 
     fn type_tuple_of(ts: Vec<TypeCompiled>) -> TypeCompiled {
-        TypeCompiled(box move |v| match Tuple::from_value(v) {
+        TypeCompiled(Box::new(move |v| match Tuple::from_value(v) {
             Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| (t.0)(v)),
             _ => false,
-        })
+        }))
     }
 }
 

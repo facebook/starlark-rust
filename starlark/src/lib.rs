@@ -348,7 +348,6 @@
 // Features we use
 #![allow(stable_features)]
 #![feature(bench_black_box)]
-#![feature(box_syntax)]
 #![feature(const_mut_refs)]
 #![feature(const_type_id)]
 #![cfg_attr(rust_nightly, feature(core_intrinsics))]
@@ -381,6 +380,7 @@
 #![allow(clippy::wrong_self_convention)]
 // FIXME: Temporary
 #![allow(clippy::useless_transmute)] // Seems to be a clippy bug, but we should be using less transmute anyway
+#![cfg_attr(feature = "gazebo_lint", allow(gazebo_lint_use_box))]
 #![deny(missing_docs)]
 
 #[macro_use]

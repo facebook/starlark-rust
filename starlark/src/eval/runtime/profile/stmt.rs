@@ -173,7 +173,7 @@ impl StmtProfile {
     }
 
     pub(crate) fn enable(&mut self) {
-        self.0 = Some(box StmtProfileData::new())
+        self.0 = Some(Box::new(StmtProfileData::new()))
     }
 
     pub(crate) fn before_stmt(&mut self, span: FileSpanRef) {

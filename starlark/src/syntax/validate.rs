@@ -152,7 +152,7 @@ impl Expr {
                 }
             }
         }
-        Ok(Expr::Call(box f, args))
+        Ok(Expr::Call(Box::new(f), args))
     }
 }
 
@@ -246,7 +246,7 @@ impl Expr {
         codemap: &CodeMap,
     ) -> anyhow::Result<Expr> {
         check_parameters(&parameters, codemap)?;
-        Ok(Expr::Lambda(parameters, box body, ()))
+        Ok(Expr::Lambda(parameters, Box::new(body), ()))
     }
 }
 
@@ -260,7 +260,13 @@ impl Stmt {
     ) -> anyhow::Result<Stmt> {
         check_parameters(&parameters, codemap)?;
         let name = name.into_map(|s| AssignIdentP(s, ()));
-        Ok(Stmt::Def(name, parameters, return_type, box stmts, ()))
+        Ok(Stmt::Def(
+            name,
+            parameters,
+            return_type,
+            Box::new(stmts),
+            (),
+        ))
     }
 
     pub(crate) fn check_assign(codemap: &CodeMap, x: AstExpr) -> anyhow::Result<AstAssign> {
@@ -314,8 +320,8 @@ impl Stmt {
             }
         }
         Ok(match op {
-            None => Stmt::Assign(lhs, box (ty.map(|x| *x), rhs)),
-            Some(op) => Stmt::AssignModify(lhs, op, box rhs),
+            None => Stmt::Assign(lhs, Box::new((ty.map(|x| *x), rhs))),
+            Some(op) => Stmt::AssignModify(lhs, op, Box::new(rhs)),
         })
     }
 

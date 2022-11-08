@@ -521,9 +521,9 @@ where
     where
         'v: 'a,
     {
-        Ok(box ARefIterator::new(self.0.content(), |x| {
+        Ok(Box::new(ARefIterator::new(self.0.content(), |x| {
             x.keys().copied()
-        }))
+        })))
     }
 
     fn with_iterator(

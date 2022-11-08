@@ -250,7 +250,7 @@ impl<'a> Assert<'a> {
             modules: hashmap!["assert.star".to_owned() => Lazy::force(&ASSERT_STAR).dupe()],
             globals: Lazy::force(&GLOBALS).dupe(),
             gc_strategy: None,
-            setup_eval: box |_| (),
+            setup_eval: Box::new(|_| ()),
             print_handler: None,
         }
     }
@@ -262,7 +262,7 @@ impl<'a> Assert<'a> {
 
     /// Configure a callback which is used to setup evaluator before each evaluation.
     pub fn setup_eval(&mut self, setup: impl Fn(&mut Evaluator) + 'static) {
-        self.setup_eval = box setup;
+        self.setup_eval = Box::new(setup);
     }
 
     /// Configure the handler for `print` function.

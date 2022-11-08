@@ -106,7 +106,7 @@ impl HeapProfile {
         let stacks = AggregateHeapProfileInfo::collect(heap, None);
         ProfileData {
             profile_mode: ProfileMode::HeapFlameAllocated,
-            profile: ProfileDataImpl::AggregateHeapProfileInfo(box stacks),
+            profile: ProfileDataImpl::AggregateHeapProfileInfo(Box::new(stacks)),
         }
     }
 
@@ -114,7 +114,7 @@ impl HeapProfile {
         let stacks = AggregateHeapProfileInfo::collect(heap, None);
         ProfileData {
             profile_mode: ProfileMode::HeapSummaryAllocated,
-            profile: ProfileDataImpl::AggregateHeapProfileInfo(box stacks),
+            profile: ProfileDataImpl::AggregateHeapProfileInfo(Box::new(stacks)),
         }
     }
 }

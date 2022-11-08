@@ -57,9 +57,11 @@ impl BreakpointConsole for RealBreakpointConsole {
 
 impl RealBreakpointConsole {
     pub(crate) fn factory() -> Box<dyn Fn() -> Box<dyn BreakpointConsole>> {
-        box || box RealBreakpointConsole {
-            read_line: ReadLine::new("STARLARK_RUST_DEBUGGER_HISTFILE"),
-        }
+        Box::new(|| {
+            Box::new(RealBreakpointConsole {
+                read_line: ReadLine::new("STARLARK_RUST_DEBUGGER_HISTFILE"),
+            })
+        })
     }
 }
 
@@ -268,7 +270,7 @@ mod tests {
         a.globals_add(global);
         a.setup_eval(move |eval| {
             let printed_lines = printed_lines.dupe();
-            eval.breakpoint_handler = Some(box move || {
+            eval.breakpoint_handler = Some(Box::new(move || {
                 // `Assert` runs tests several times, take only lines from the last iteration.
                 printed_lines.borrow_mut().clear();
 
@@ -293,11 +295,11 @@ mod tests {
                     }
                 }
 
-                box Handler {
+                Box::new(Handler {
                     printed_lines: printed_lines.dupe(),
                     called: false,
-                }
-            });
+                })
+            }));
         });
         a.pass("x = [1,2,3]; breakpoint()");
 

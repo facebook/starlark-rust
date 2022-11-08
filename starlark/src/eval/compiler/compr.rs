@@ -40,7 +40,7 @@ impl Compiler<'_, '_, '_> {
     ) -> ExprCompiled {
         let clauses = self.compile_clauses(for_, clauses);
         let x = self.expr(x);
-        ExprCompiled::compr(ComprCompiled::List(box x, clauses))
+        ExprCompiled::compr(ComprCompiled::List(Box::new(x), clauses))
     }
 
     pub fn dict_comprehension(
@@ -53,7 +53,7 @@ impl Compiler<'_, '_, '_> {
         let clauses = self.compile_clauses(for_, clauses);
         let k = self.expr(k);
         let v = self.expr(v);
-        ExprCompiled::compr(ComprCompiled::Dict(box (k, v), clauses))
+        ExprCompiled::compr(ComprCompiled::Dict(Box::new((k, v)), clauses))
     }
 
     /// Peel the final if's from clauses, and return them (in the order they started), plus the next for you get to
@@ -138,13 +138,13 @@ impl ComprCompiled {
         match self {
             ComprCompiled::List(ref x, ref clauses) => {
                 let clauses = clauses.optimize(ctx);
-                ExprCompiled::compr(ComprCompiled::List(box x.optimize(ctx), clauses))
+                ExprCompiled::compr(ComprCompiled::List(Box::new(x.optimize(ctx)), clauses))
             }
             ComprCompiled::Dict(k_v, ref clauses) => {
                 let (k, v) = &**k_v;
                 let clauses = clauses.optimize(ctx);
                 ExprCompiled::compr(ComprCompiled::Dict(
-                    box (k.optimize(ctx), v.optimize(ctx)),
+                    Box::new((k.optimize(ctx), v.optimize(ctx))),
                     clauses.optimize(ctx),
                 ))
             }

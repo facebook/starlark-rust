@@ -63,7 +63,7 @@ impl CallCompiled {
             }
         }
 
-        ExprCompiled::Call(box IrSpanned {
+        ExprCompiled::Call(Box::new(IrSpanned {
             span,
             node: CallCompiled {
                 fun: IrSpanned {
@@ -72,7 +72,7 @@ impl CallCompiled {
                 },
                 args,
             },
-        })
+        }))
     }
 
     /// If this call expression is `len(x)`, return `x`.
@@ -273,10 +273,10 @@ impl CallCompiled {
             return CallCompiled::new_method(span, (**this).clone(), field, fun.span, args, ctx);
         }
 
-        ExprCompiled::Call(box IrSpanned {
+        ExprCompiled::Call(Box::new(IrSpanned {
             span,
             node: CallCompiled { fun, args },
-        })
+        }))
     }
 }
 

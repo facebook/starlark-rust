@@ -465,7 +465,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
             // Very sad that we allocate into a vector, but I expect calling into a small positional argument
             // with a *args is very rare.
             let args = match x.0.args {
-                None => box None.into_iter(),
+                None => Box::new(None.into_iter()),
                 Some(args) => args.iterate(heap)?,
             };
             let xs = x.0.pos.iter().copied().chain(args).collect::<Vec<_>>();

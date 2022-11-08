@@ -379,7 +379,7 @@ impl Compiler<'_, '_, '_> {
         // scope
         let params = params.into_map(|x| self.parameter(x));
         let params = ParametersCompiled { params };
-        let return_type = self.expr_for_type(return_type).map(|t| box t);
+        let return_type = self.expr_for_type(return_type).map(Box::new);
 
         self.enter_scope(scope_id);
 

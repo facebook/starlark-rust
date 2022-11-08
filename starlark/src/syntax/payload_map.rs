@@ -66,40 +66,43 @@ impl<A: AstPayload> StmtP<A> {
                 let (ty, rhs) = *ty_rhs;
                 StmtP::Assign(
                     lhs.into_map_payload(f),
-                    box (ty.map(|ty| ty.into_map_payload(f)), rhs.into_map_payload(f)),
+                    Box::new((ty.map(|ty| ty.into_map_payload(f)), rhs.into_map_payload(f))),
                 )
             }
-            StmtP::AssignModify(lhs, op, rhs) => {
-                StmtP::AssignModify(lhs.into_map_payload(f), op, box rhs.into_map_payload(f))
-            }
+            StmtP::AssignModify(lhs, op, rhs) => StmtP::AssignModify(
+                lhs.into_map_payload(f),
+                op,
+                Box::new(rhs.into_map_payload(f)),
+            ),
             StmtP::Statements(stmts) => {
                 StmtP::Statements(stmts.into_map(|s| s.into_map_payload(f)))
             }
-            StmtP::If(cond, then_block) => {
-                StmtP::If(cond.into_map_payload(f), box then_block.into_map_payload(f))
-            }
+            StmtP::If(cond, then_block) => StmtP::If(
+                cond.into_map_payload(f),
+                Box::new(then_block.into_map_payload(f)),
+            ),
             StmtP::IfElse(cond, then_block_else_block) => {
                 let (then_block, else_block) = *then_block_else_block;
                 StmtP::IfElse(
                     cond.into_map_payload(f),
-                    box (
+                    Box::new((
                         then_block.into_map_payload(f),
                         else_block.into_map_payload(f),
-                    ),
+                    )),
                 )
             }
             StmtP::For(assign, coll_body) => {
                 let (coll, body) = *coll_body;
                 StmtP::For(
                     assign.into_map_payload(f),
-                    box (coll.into_map_payload(f), body.into_map_payload(f)),
+                    Box::new((coll.into_map_payload(f), body.into_map_payload(f))),
                 )
             }
             StmtP::Def(name, params, ret, body, p) => StmtP::Def(
                 name.into_map_payload(f),
                 params.into_map(|p| p.into_map_payload(f)),
-                ret.map(|ret| box ret.into_map_payload(f)),
-                box body.into_map_payload(f),
+                ret.map(|ret| Box::new(ret.into_map_payload(f))),
+                Box::new(body.into_map_payload(f)),
                 f.map_def(p),
             ),
             StmtP::Load(load) => StmtP::Load(load.into_map_payload(f)),
@@ -114,57 +117,62 @@ impl<A: AstPayload> ExprP<A> {
     ) -> ExprP<B> {
         match self {
             ExprP::Tuple(exprs) => ExprP::Tuple(exprs.into_map(|e| e.into_map_payload(f))),
-            ExprP::Dot(object, field) => ExprP::Dot(box object.into_map_payload(f), field),
+            ExprP::Dot(object, field) => ExprP::Dot(Box::new(object.into_map_payload(f)), field),
             ExprP::Call(ca, args) => ExprP::Call(
-                box ca.into_map_payload(f),
+                Box::new(ca.into_map_payload(f)),
                 args.into_map(|a| a.into_map_payload(f)),
             ),
             ExprP::ArrayIndirection(array_index) => {
                 let (array, index) = *array_index;
-                ExprP::ArrayIndirection(box (array.into_map_payload(f), index.into_map_payload(f)))
+                ExprP::ArrayIndirection(Box::new((
+                    array.into_map_payload(f),
+                    index.into_map_payload(f),
+                )))
             }
             ExprP::Slice(x, a, b, c) => ExprP::Slice(
-                box x.into_map_payload(f),
-                a.map(|e| box e.into_map_payload(f)),
-                b.map(|e| box e.into_map_payload(f)),
-                c.map(|e| box e.into_map_payload(f)),
+                Box::new(x.into_map_payload(f)),
+                a.map(|e| Box::new(e.into_map_payload(f))),
+                b.map(|e| Box::new(e.into_map_payload(f))),
+                c.map(|e| Box::new(e.into_map_payload(f))),
             ),
             ExprP::Identifier(id, p) => ExprP::Identifier(id, f.map_ident(p)),
             ExprP::Lambda(ps, body, p) => ExprP::Lambda(
                 ps.into_map(|p| p.into_map_payload(f)),
-                box body.into_map_payload(f),
+                Box::new(body.into_map_payload(f)),
                 f.map_def(p),
             ),
             ExprP::Literal(l) => ExprP::Literal(l),
-            ExprP::Not(e) => ExprP::Not(box e.into_map_payload(f)),
-            ExprP::Minus(e) => ExprP::Minus(box e.into_map_payload(f)),
-            ExprP::Plus(e) => ExprP::Plus(box e.into_map_payload(f)),
-            ExprP::BitNot(e) => ExprP::BitNot(box e.into_map_payload(f)),
-            ExprP::Op(l, op, r) => {
-                ExprP::Op(box l.into_map_payload(f), op, box r.into_map_payload(f))
-            }
+            ExprP::Not(e) => ExprP::Not(Box::new(e.into_map_payload(f))),
+            ExprP::Minus(e) => ExprP::Minus(Box::new(e.into_map_payload(f))),
+            ExprP::Plus(e) => ExprP::Plus(Box::new(e.into_map_payload(f))),
+            ExprP::BitNot(e) => ExprP::BitNot(Box::new(e.into_map_payload(f))),
+            ExprP::Op(l, op, r) => ExprP::Op(
+                Box::new(l.into_map_payload(f)),
+                op,
+                Box::new(r.into_map_payload(f)),
+            ),
             ExprP::If(a_b_c) => {
                 let (a, b, c) = *a_b_c;
-                ExprP::If(box (
+                ExprP::If(Box::new((
                     a.into_map_payload(f),
                     b.into_map_payload(f),
                     c.into_map_payload(f),
-                ))
+                )))
             }
             ExprP::List(es) => ExprP::List(es.into_map(|e| e.into_map_payload(f))),
             ExprP::Dict(kvs) => {
                 ExprP::Dict(kvs.into_map(|(k, v)| (k.into_map_payload(f), v.into_map_payload(f))))
             }
             ExprP::ListComprehension(e, c0, cs) => ExprP::ListComprehension(
-                box e.into_map_payload(f),
-                box c0.into_map_payload(f),
+                Box::new(e.into_map_payload(f)),
+                Box::new(c0.into_map_payload(f)),
                 cs.into_map(|c| c.into_map_payload(f)),
             ),
             ExprP::DictComprehension(k_v, c0, cs) => {
                 let (k, v) = *k_v;
                 ExprP::DictComprehension(
-                    box (k.into_map_payload(f), v.into_map_payload(f)),
-                    box c0.into_map_payload(f),
+                    Box::new((k.into_map_payload(f), v.into_map_payload(f))),
+                    Box::new(c0.into_map_payload(f)),
                     cs.into_map(|c| c.into_map_payload(f)),
                 )
             }
@@ -181,12 +189,14 @@ impl<A: AstPayload> AssignP<A> {
             AssignP::Tuple(args) => AssignP::Tuple(args.into_map(|a| a.into_map_payload(f))),
             AssignP::ArrayIndirection(array_index) => {
                 let (array, index) = *array_index;
-                AssignP::ArrayIndirection(box (
+                AssignP::ArrayIndirection(Box::new((
                     array.into_map_payload(f),
                     index.into_map_payload(f),
-                ))
+                )))
             }
-            AssignP::Dot(object, field) => AssignP::Dot(box object.into_map_payload(f), field),
+            AssignP::Dot(object, field) => {
+                AssignP::Dot(Box::new(object.into_map_payload(f)), field)
+            }
             AssignP::Identifier(ident) => AssignP::Identifier(ident.into_map_payload(f)),
         }
     }
@@ -210,21 +220,21 @@ impl<A: AstPayload> ParameterP<A> {
         match self {
             ParameterP::Normal(name, ty) => ParameterP::Normal(
                 name.into_map_payload(f),
-                ty.map(|defa| box defa.into_map_payload(f)),
+                ty.map(|defa| Box::new(defa.into_map_payload(f))),
             ),
             ParameterP::WithDefaultValue(name, ty, defa) => ParameterP::WithDefaultValue(
                 name.into_map_payload(f),
-                ty.map(|defa| box defa.into_map_payload(f)),
-                box defa.into_map_payload(f),
+                ty.map(|defa| Box::new(defa.into_map_payload(f))),
+                Box::new(defa.into_map_payload(f)),
             ),
             ParameterP::NoArgs => ParameterP::NoArgs,
             ParameterP::Args(name, ty) => ParameterP::Args(
                 name.into_map_payload(f),
-                ty.map(|defa| box defa.into_map_payload(f)),
+                ty.map(|defa| Box::new(defa.into_map_payload(f))),
             ),
             ParameterP::KwArgs(name, ty) => ParameterP::KwArgs(
                 name.into_map_payload(f),
-                ty.map(|defa| box defa.into_map_payload(f)),
+                ty.map(|defa| Box::new(defa.into_map_payload(f))),
             ),
         }
     }

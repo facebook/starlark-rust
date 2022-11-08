@@ -139,7 +139,7 @@ where
     type Frozen = Box<T::Frozen>;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Self::Frozen> {
-        Ok(box (*self).freeze(freezer)?)
+        Ok(Box::new((*self).freeze(freezer)?))
     }
 }
 

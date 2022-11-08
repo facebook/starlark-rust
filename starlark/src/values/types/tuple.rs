@@ -211,7 +211,7 @@ where
     where
         'v: 'a,
     {
-        Ok(box self.iter())
+        Ok(Box::new(self.iter()))
     }
 
     fn with_iterator(

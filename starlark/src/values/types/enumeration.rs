@@ -222,7 +222,7 @@ where
     where
         'v: 'a,
     {
-        Ok(box self.elements.values().map(|x| x.to_value()))
+        Ok(Box::new(self.elements.values().map(|x| x.to_value())))
     }
 
     fn with_iterator(

@@ -67,9 +67,9 @@ where
     {
         let s = self.string.to_value().unpack_str().unwrap().chars();
         if self.produce_char {
-            Ok(box s.map(move |x| heap.alloc(x)))
+            Ok(Box::new(s.map(move |x| heap.alloc(x))))
         } else {
-            Ok(box s.map(|x| Value::new_int(u32::from(x) as i32)))
+            Ok(Box::new(s.map(|x| Value::new_int(u32::from(x) as i32))))
         }
     }
 

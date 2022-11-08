@@ -537,7 +537,7 @@ impl ExprCompiled {
 
         IrSpanned {
             span,
-            node: ExprCompiled::Builtin2(Builtin2::Equals, box (l, r)),
+            node: ExprCompiled::Builtin2(Builtin2::Equals, Box::new((l, r))),
         }
     }
 
@@ -553,7 +553,7 @@ impl ExprCompiled {
             // Collapse `not not e` to `e` only if `e` is known to produce a boolean.
             ExprCompiled::Builtin1(Builtin1::Not, e) if e.is_definitely_bool() => (*e).clone(),
             _ => IrSpanned {
-                node: ExprCompiled::Builtin1(Builtin1::Not, box expr),
+                node: ExprCompiled::Builtin1(Builtin1::Not, Box::new(expr)),
                 span,
             },
         }
@@ -581,7 +581,7 @@ impl ExprCompiled {
         } else {
             let span = l.span.merge(&r.span);
             IrSpanned {
-                node: ExprCompiled::LogicalBinOp(op, box (l, r)),
+                node: ExprCompiled::LogicalBinOp(op, Box::new((l, r))),
                 span,
             }
         }
@@ -596,7 +596,7 @@ impl ExprCompiled {
         } else {
             let span = l.span.merge(&r.span);
             IrSpanned {
-                node: ExprCompiled::Seq(box (l, r)),
+                node: ExprCompiled::Seq(Box::new((l, r))),
                 span,
             }
         }
@@ -614,7 +614,7 @@ impl ExprCompiled {
                 return ExprCompiled::percent_s_one(before, r, after, ctx);
             }
         }
-        ExprCompiled::Builtin2(Builtin2::Percent, box (l, r))
+        ExprCompiled::Builtin2(Builtin2::Percent, Box::new((l, r)))
     }
 
     fn percent_s_one(
@@ -632,7 +632,7 @@ impl ExprCompiled {
             }
         }
 
-        ExprCompiled::Builtin1(Builtin1::PercentSOne(before, after), box arg)
+        ExprCompiled::Builtin1(Builtin1::PercentSOne(before, after), Box::new(arg))
     }
 
     pub(crate) fn format_one(
@@ -647,7 +647,7 @@ impl ExprCompiled {
             return ExprCompiled::Value(value.to_frozen_value());
         }
 
-        ExprCompiled::Builtin1(Builtin1::FormatOne(before, after), box arg)
+        ExprCompiled::Builtin1(Builtin1::FormatOne(before, after), Box::new(arg))
     }
 
     fn add(l: IrSpanned<ExprCompiled>, r: IrSpanned<ExprCompiled>) -> ExprCompiled {
@@ -663,7 +663,7 @@ impl ExprCompiled {
                 .collect();
             return ExprCompiled::List(lr);
         }
-        ExprCompiled::Builtin2(Builtin2::Add, box (l, r))
+        ExprCompiled::Builtin2(Builtin2::Add, Box::new((l, r)))
     }
 
     pub(crate) fn bin_op(
@@ -688,7 +688,7 @@ impl ExprCompiled {
             Builtin2::Add => ExprCompiled::add(l, r),
             Builtin2::Equals => ExprCompiled::equals(l, r).node,
             Builtin2::ArrayIndex => ExprCompiled::array_indirection(l, r, ctx),
-            bin_op => ExprCompiled::Builtin2(bin_op, box (l, r)),
+            bin_op => ExprCompiled::Builtin2(bin_op, Box::new((l, r))),
         }
     }
 
@@ -715,7 +715,7 @@ impl ExprCompiled {
                     };
                     let span = cond.span.merge(&t.span).merge(&f.span);
                     IrSpanned {
-                        node: ExprCompiled::If(box (cond, t, f)),
+                        node: ExprCompiled::If(Box::new((cond, t, f))),
                         span,
                     }
                 }
@@ -746,7 +746,7 @@ impl ExprCompiled {
             Builtin1::Dot(field) => ExprCompiled::dot(expr, field, ctx),
             Builtin1::TypeIs(t) => ExprCompiled::type_is(expr, *t),
             Builtin1::Not => ExprCompiled::not(span, expr).node,
-            op => ExprCompiled::Builtin1(op.clone(), box expr),
+            op => ExprCompiled::Builtin1(op.clone(), Box::new(expr)),
         }
     }
 
@@ -813,7 +813,7 @@ impl ExprCompiled {
                 if clauses.is_nop() {
                     ExprCompiled::Dict(Vec::new())
                 } else {
-                    ExprCompiled::Compr(ComprCompiled::Dict(box (k, v), clauses))
+                    ExprCompiled::Compr(ComprCompiled::Dict(Box::new((k, v)), clauses))
                 }
             }
         }
@@ -857,7 +857,7 @@ impl ExprCompiled {
             }
         }
 
-        ExprCompiled::Builtin1(Builtin1::Dot(field.clone()), box object)
+        ExprCompiled::Builtin1(Builtin1::Dot(field.clone()), Box::new(object))
     }
 
     fn slice(
@@ -885,7 +885,7 @@ impl ExprCompiled {
                 }
             }
         }
-        ExprCompiled::Slice(box (array, start, stop, step))
+        ExprCompiled::Slice(Box::new((array, start, stop, step)))
     }
 
     pub(crate) fn array_indirection(
@@ -901,7 +901,7 @@ impl ExprCompiled {
                 }
             }
         }
-        ExprCompiled::Builtin2(Builtin2::ArrayIndex, box (array, index))
+        ExprCompiled::Builtin2(Builtin2::ArrayIndex, Box::new((array, index)))
     }
 
     pub(crate) fn typ(span: FrozenFileSpan, v: IrSpanned<ExprCompiled>) -> ExprCompiled {
@@ -923,7 +923,7 @@ impl ExprCompiled {
             {
                 ExprCompiled::Value(StarlarkBool::get_type_value_static().to_frozen_value())
             }
-            _ => ExprCompiled::Call(box IrSpanned {
+            _ => ExprCompiled::Call(Box::new(IrSpanned {
                 span,
                 node: CallCompiled {
                     fun: IrSpanned {
@@ -935,7 +935,7 @@ impl ExprCompiled {
                         ..ArgsCompiledValue::default()
                     },
                 },
-            }),
+            })),
         }
     }
 
@@ -945,7 +945,7 @@ impl ExprCompiled {
                 v.to_value().get_type() == t.as_str(),
             ));
         }
-        ExprCompiled::Builtin1(Builtin1::TypeIs(t), box v)
+        ExprCompiled::Builtin1(Builtin1::TypeIs(t), Box::new(v))
     }
 
     pub(crate) fn len(span: FrozenFileSpan, arg: IrSpanned<ExprCompiled>) -> ExprCompiled {
@@ -954,7 +954,7 @@ impl ExprCompiled {
                 return ExprCompiled::Value(FrozenValue::new_int(len));
             }
         }
-        ExprCompiled::Call(box IrSpanned {
+        ExprCompiled::Call(Box::new(IrSpanned {
             span,
             node: CallCompiled {
                 fun: IrSpanned {
@@ -966,7 +966,7 @@ impl ExprCompiled {
                     ..ArgsCompiledValue::default()
                 },
             },
-        })
+        }))
     }
 }
 

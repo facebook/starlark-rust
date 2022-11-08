@@ -240,17 +240,20 @@ fn test_basic() {
     test_ifs(&TestExpr::Const(false));
     test_ifs(&TestExpr::Count(true));
     test_ifs(&TestExpr::Count(false));
-    test_ifs(&TestExpr::Not(box TestExpr::Const(true)));
-    test_ifs(&TestExpr::Not(box TestExpr::Const(false)));
-    test_ifs(&TestExpr::Not(box TestExpr::Count(true)));
-    test_ifs(&TestExpr::Not(box TestExpr::Count(false)));
+    test_ifs(&TestExpr::Not(Box::new(TestExpr::Const(true))));
+    test_ifs(&TestExpr::Not(Box::new(TestExpr::Const(false))));
+    test_ifs(&TestExpr::Not(Box::new(TestExpr::Count(true))));
+    test_ifs(&TestExpr::Not(Box::new(TestExpr::Count(false))));
 }
 
 #[test]
 fn test_and() {
     for lhs in basic_bool_exprs() {
         for rhs in basic_bool_exprs() {
-            test_ifs(&TestExpr::BinOp(TestBinOp::And, box (lhs.clone(), rhs)));
+            test_ifs(&TestExpr::BinOp(
+                TestBinOp::And,
+                Box::new((lhs.clone(), rhs)),
+            ));
         }
     }
 }
@@ -259,7 +262,10 @@ fn test_and() {
 fn test_or() {
     for lhs in basic_bool_exprs() {
         for rhs in basic_bool_exprs() {
-            test_ifs(&TestExpr::BinOp(TestBinOp::Or, box (lhs.clone(), rhs)));
+            test_ifs(&TestExpr::BinOp(
+                TestBinOp::Or,
+                Box::new((lhs.clone(), rhs)),
+            ));
         }
     }
 }
@@ -272,16 +278,16 @@ fn test_and_or_not() {
                 for negate_rhs in [false, true] {
                     for bin_op in [TestBinOp::And, TestBinOp::Or] {
                         let lhs = if negate_lhs {
-                            TestExpr::Not(box lhs.clone())
+                            TestExpr::Not(Box::new(lhs.clone()))
                         } else {
                             lhs.clone()
                         };
                         let rhs = if negate_rhs {
-                            TestExpr::Not(box rhs.clone())
+                            TestExpr::Not(Box::new(rhs.clone()))
                         } else {
                             rhs.clone()
                         };
-                        test_ifs(&TestExpr::BinOp(bin_op, box (lhs, rhs)));
+                        test_ifs(&TestExpr::BinOp(bin_op, Box::new((lhs, rhs))));
                     }
                 }
             }
@@ -325,20 +331,20 @@ fn random_expr(rng: &mut SmallRng, max_depth: usize) -> TestExpr {
     } else {
         match rng.gen_range(0..4) {
             0 => random_simple_expr(rng),
-            1 => TestExpr::Not(box random_expr(rng, max_depth - 1)),
+            1 => TestExpr::Not(Box::new(random_expr(rng, max_depth - 1))),
             2 => TestExpr::BinOp(
                 TestBinOp::And,
-                box (
+                Box::new((
                     random_expr(rng, max_depth - 1),
                     random_expr(rng, max_depth - 1),
-                ),
+                )),
             ),
             3 => TestExpr::BinOp(
                 TestBinOp::Or,
-                box (
+                Box::new((
                     random_expr(rng, max_depth - 1),
                     random_expr(rng, max_depth - 1),
-                ),
+                )),
             ),
             _ => unreachable!(),
         }

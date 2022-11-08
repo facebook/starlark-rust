@@ -78,7 +78,7 @@ impl ExprCompiledBool {
                     None => IrSpanned {
                         node: ExprCompiledBool::Expr(ExprCompiled::Builtin1(
                             Builtin1::Not,
-                            box x.into_expr(),
+                            Box::new(x.into_expr()),
                         )),
                         span,
                     },
@@ -126,7 +126,7 @@ impl ExprCompiledBool {
                     (op, None, None) => IrSpanned {
                         node: ExprCompiledBool::Expr(ExprCompiled::LogicalBinOp(
                             op,
-                            box (x.into_expr(), y.into_expr()),
+                            Box::new((x.into_expr(), y.into_expr())),
                         )),
                         span,
                     },

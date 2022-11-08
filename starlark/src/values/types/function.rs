@@ -180,7 +180,7 @@ impl NativeFunction {
             + 'static,
     {
         NativeFunction {
-            function: box function,
+            function: Box::new(function),
             name,
             typ: None,
             speculative_exec_safe: false,

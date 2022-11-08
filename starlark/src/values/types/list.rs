@@ -433,7 +433,7 @@ impl<'v> ListLike<'v> for List<'v> {
     where
         'v: 'a,
     {
-        box self.content.get().as_ref().iter()
+        Box::new(self.content.get().as_ref().iter())
     }
 
     fn with_iterator(
@@ -457,7 +457,7 @@ impl<'v> ListLike<'v> for FrozenList {
     where
         'v: 'a,
     {
-        box coerce(self.content()).iter().copied()
+        Box::new(coerce(self.content()).iter().copied())
     }
 
     fn with_iterator(

@@ -122,7 +122,7 @@ impl ProfileData {
                     _ => Err(ProfileDataError::ProfileDataNotConsistent),
                 })?;
                 let profile = BcProfileData::merge(profiles);
-                ProfileDataImpl::Bc(box profile)
+                ProfileDataImpl::Bc(Box::new(profile))
             }
             ProfileMode::BytecodePairs => {
                 let profiles = profiles.try_map(|p| match &p.profile {
@@ -141,7 +141,7 @@ impl ProfileData {
                     _ => Err(ProfileDataError::ProfileDataNotConsistent),
                 })?;
                 let profile = AggregateHeapProfileInfo::merge(profiles);
-                ProfileDataImpl::AggregateHeapProfileInfo(box profile)
+                ProfileDataImpl::AggregateHeapProfileInfo(Box::new(profile))
             }
             ProfileMode::TimeFlame => {
                 let profiles = profiles.try_map(|p| match &p.profile {
@@ -178,7 +178,7 @@ mod tests {
     fn merge_bc() {
         let profile = ProfileData {
             profile_mode: ProfileMode::Bytecode,
-            profile: ProfileDataImpl::Bc(box BcProfileData::default()),
+            profile: ProfileDataImpl::Bc(Box::new(BcProfileData::default())),
         };
         // Smoke.
         ProfileData::merge([&profile, &profile]).unwrap();
@@ -204,9 +204,9 @@ mod tests {
         ] {
             let profile = ProfileData {
                 profile_mode: profile_mode.dupe(),
-                profile: ProfileDataImpl::AggregateHeapProfileInfo(
-                    box AggregateHeapProfileInfo::default(),
-                ),
+                profile: ProfileDataImpl::AggregateHeapProfileInfo(Box::new(
+                    AggregateHeapProfileInfo::default(),
+                )),
             };
             // Smoke.
             ProfileData::merge([&profile, &profile]).unwrap();

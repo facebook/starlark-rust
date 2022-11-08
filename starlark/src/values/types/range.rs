@@ -211,7 +211,7 @@ impl<'v> StarlarkValue<'v> for Range {
     where
         'v: 'a,
     {
-        Ok(box RangeIterator::<'v>(*self, PhantomData))
+        Ok(Box::new(RangeIterator::<'v>(*self, PhantomData)))
     }
 
     fn with_iterator(

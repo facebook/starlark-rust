@@ -113,7 +113,8 @@ impl<'a> AsMarkdown for PropertyDetailsRenderer<'a> {
                 let header = format!(
                     "## {} : {}",
                     self.name,
-                    Code(box TypeRenderer::Type(&self.p.typ)).generate_markdown_or_empty(flavor)
+                    Code(Box::new(TypeRenderer::Type(&self.p.typ)))
+                        .generate_markdown_or_empty(flavor)
                 );
                 let summary =
                     DocStringRenderer(DSOpts::Summary, &self.p.docs).generate_markdown(flavor);
@@ -181,7 +182,7 @@ impl<'a> FunctionDetailsRenderer<'a> {
                     Some((name.clone(), docs))
                 }
             })
-            .map(|(name, docs)| TableRow(vec![box Code(box name), box docs]))
+            .map(|(name, docs)| TableRow(vec![Box::new(Code(Box::new(name))), Box::new(docs)]))
             .collect();
 
         let table = Table(Some("starlark_parameters_table"), header, rows);
@@ -195,12 +196,12 @@ impl<'a> AsMarkdown for FunctionDetailsRenderer<'a> {
             MarkdownFlavor::DocFile => {
                 let prototype = CodeBlock {
                     language: Some("python".to_owned()),
-                    contents: box TypeRenderer::Function {
+                    contents: Box::new(TypeRenderer::Function {
                         function_name: Some(self.name.clone()),
                         max_args_before_multiline: Some(6),
                         show_param_details: true,
                         f: self.f,
-                    },
+                    }),
                 };
                 let header = format!(
                     "## {}\n\n{}",
@@ -326,12 +327,12 @@ impl<'a> AsMarkdown for ObjectRenderer<'a> {
                             ),
                         };
                         let row = TableRow(vec![
-                            box name.clone(),
-                            box DocStringRenderer(DSOpts::Summary, summary),
-                            box CodeBlock {
+                            Box::new(name.clone()),
+                            Box::new(DocStringRenderer(DSOpts::Summary, summary)),
+                            Box::new(CodeBlock {
                                 language: Some("python".to_owned()),
-                                contents: box typ,
-                            },
+                                contents: Box::new(typ),
+                            }),
                         ]);
                         let details = MemberDetails {
                             name: name.clone(),
@@ -699,11 +700,11 @@ mod test {
 
         let no_lang = CodeBlock {
             language: None,
-            contents: box "foo\nbar".to_owned(),
+            contents: Box::new("foo\nbar".to_owned()),
         };
         let python = CodeBlock {
             language: Some("python".to_owned()),
-            contents: box "foo\nbar".to_owned(),
+            contents: Box::new("foo\nbar".to_owned()),
         };
 
         assert_eq!(expected_no_lang, render(&no_lang));
@@ -837,12 +838,12 @@ mod test {
         fn prototype(name: &str, f: &Function) -> String {
             render(&CodeBlock {
                 language: Some("python".to_owned()),
-                contents: box TypeRenderer::Function {
+                contents: Box::new(TypeRenderer::Function {
                     function_name: Some(name.to_owned()),
                     show_param_details: true,
                     max_args_before_multiline: Some(6),
                     f,
-                },
+                }),
             })
         }
         let f1_prototype = prototype("f1", &f1);
@@ -855,20 +856,20 @@ mod test {
             TableHeader(&["Name", "Details"]),
             vec![
                 TableRow(vec![
-                    box Code(box "p1".to_owned()),
-                    box render_ds_combined(&ds),
+                    Box::new(Code(Box::new("p1".to_owned()))),
+                    Box::new(render_ds_combined(&ds)),
                 ]),
                 TableRow(vec![
-                    box Code(box "p2".to_owned()),
-                    box render_ds_combined(&ds),
+                    Box::new(Code(Box::new("p2".to_owned()))),
+                    Box::new(render_ds_combined(&ds)),
                 ]),
                 TableRow(vec![
-                    box Code(box "*p3".to_owned()),
-                    box render_ds_combined(&ds),
+                    Box::new(Code(Box::new("*p3".to_owned()))),
+                    Box::new(render_ds_combined(&ds)),
                 ]),
                 TableRow(vec![
-                    box Code(box "**p4".to_owned()),
-                    box render_ds_combined(&ds),
+                    Box::new(Code(Box::new("**p4".to_owned()))),
+                    Box::new(render_ds_combined(&ds)),
                 ]),
             ],
         ));
@@ -927,7 +928,7 @@ mod test {
 
     #[test]
     fn doc_file_literal() {
-        assert_eq!("`foo`", render(&Code(box "foo".to_owned())));
+        assert_eq!("`foo`", render(&Code(Box::new("foo".to_owned()))));
     }
 
     #[test]
@@ -994,33 +995,33 @@ mod test {
             TableHeader(&["Member", "Description", "Type"]),
             vec![
                 TableRow(vec![
-                    box "f1".to_owned(),
-                    box render_ds_summary(&ds),
-                    box CodeBlock {
+                    Box::new("f1".to_owned()),
+                    Box::new(render_ds_summary(&ds)),
+                    Box::new(CodeBlock {
                         language: Some("python".to_owned()),
-                        contents: box TypeRenderer::Function {
+                        contents: Box::new(TypeRenderer::Function {
                             show_param_details: true,
                             max_args_before_multiline: Some(0),
                             function_name: None,
                             f: &f1,
-                        },
-                    },
+                        }),
+                    }),
                 ]),
                 TableRow(vec![
-                    box "p1".to_owned(),
-                    box render_ds_summary(&ds),
-                    box CodeBlock {
+                    Box::new("p1".to_owned()),
+                    Box::new(render_ds_summary(&ds)),
+                    Box::new(CodeBlock {
                         language: Some("python".to_owned()),
-                        contents: box TypeRenderer::Type(&p1.typ),
-                    },
+                        contents: Box::new(TypeRenderer::Type(&p1.typ)),
+                    }),
                 ]),
                 TableRow(vec![
-                    box "p2".to_owned(),
-                    box render_ds_summary(&ds),
-                    box CodeBlock {
+                    Box::new("p2".to_owned()),
+                    Box::new(render_ds_summary(&ds)),
+                    Box::new(CodeBlock {
                         language: Some("python".to_owned()),
-                        contents: box TypeRenderer::Type(&p2.typ),
-                    },
+                        contents: Box::new(TypeRenderer::Type(&p2.typ)),
+                    }),
                 ]),
             ],
         ));
@@ -1114,15 +1115,18 @@ mod test {
         let ds_no_details = sample_ds_no_details();
         let typ = sample_type();
 
-        let expected_no_docs = format!("## foo1 : {}", render(&Code(box TypeRenderer::Type(&typ))));
+        let expected_no_docs = format!(
+            "## foo1 : {}",
+            render(&Code(Box::new(TypeRenderer::Type(&typ))))
+        );
         let expected_no_details = format!(
             "## foo2 : {}\n\n{}",
-            render(&Code(box TypeRenderer::Type(&typ))),
+            render(&Code(Box::new(TypeRenderer::Type(&typ)))),
             render_ds_summary(&ds_no_details)
         );
         let expected_with_docs = format!(
             "## foo3 : {}\n\n{}\n\n{}",
-            render(&Code(box TypeRenderer::Type(&typ))),
+            render(&Code(Box::new(TypeRenderer::Type(&typ)))),
             render_ds_summary(&ds),
             render_ds_details(&ds)
         );
@@ -1161,14 +1165,14 @@ mod test {
         let header = TableHeader(&["column1", "col2", "column3"]);
         let rows = vec![
             TableRow(vec![
-                box "h1".to_owned(),
-                box "h2".to_owned(),
-                box Code(box "h3".to_owned()),
+                Box::new("h1".to_owned()),
+                Box::new("h2".to_owned()),
+                Box::new(Code(Box::new("h3".to_owned()))),
             ]),
             TableRow(vec![
-                box "h4".to_owned(),
-                box "h5".to_owned(),
-                box Code(box "h6".to_owned()),
+                Box::new("h4".to_owned()),
+                Box::new("h5".to_owned()),
+                Box::new(Code(Box::new("h6".to_owned()))),
             ]),
         ];
         let expected = format!(
@@ -1195,9 +1199,9 @@ mod test {
     fn doc_file_table_row() {
         let expected = "<tr>\n<td>\n\nh1\n\n</td>\n<td>\n\n`h2`\n\n</td>\n<td></td>\n</tr>";
         let row = TableRow(vec![
-            box "h1".to_owned(),
-            box Code(box "h2".to_owned()),
-            box String::new(),
+            Box::new("h1".to_owned()),
+            Box::new(Code(Box::new("h2".to_owned()))),
+            Box::new(String::new()),
         ]);
 
         assert_eq!(expected, render(&row));

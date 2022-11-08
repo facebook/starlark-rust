@@ -319,7 +319,7 @@ impl<'s, 'v, 'a, 'e> InlineDefCallSite<'s, 'v, 'a, 'e> {
                 let c = self.inline_opt(c.as_ref())?;
                 IrSpanned {
                     span,
-                    node: ExprCompiled::Slice(box (l, a, b, c)),
+                    node: ExprCompiled::Slice(Box::new((l, a, b, c))),
                 }
             }
             ExprCompiled::Seq(a_b) => {

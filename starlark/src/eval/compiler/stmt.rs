@@ -322,7 +322,7 @@ impl StmtsCompiled {
                     } else {
                         StmtsCompiled::one(IrSpanned {
                             span,
-                            node: StmtCompiled::If(box (cond, t, f)),
+                            node: StmtCompiled::If(Box::new((cond, t, f))),
                         })
                     }
                 }
@@ -341,7 +341,7 @@ impl StmtsCompiled {
         }
         StmtsCompiled::one(IrSpanned {
             span,
-            node: StmtCompiled::For(box (var, over, body)),
+            node: StmtCompiled::For(Box::new((var, over, body))),
         })
     }
 }
@@ -788,7 +788,7 @@ impl Compiler<'_, '_, '_> {
             StmtP::Assign(lhs, ty_rhs) => {
                 let (ty, rhs) = *ty_rhs;
                 let rhs = self.expr(rhs);
-                let ty = self.expr_for_type(ty.map(|x| box x));
+                let ty = self.expr_for_type(ty.map(Box::new));
                 let lhs = self.assign(lhs);
                 StmtsCompiled::one(IrSpanned {
                     span,

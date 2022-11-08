@@ -191,7 +191,7 @@ impl LspContext for TestServerContext {
                 LspUrl::File(u) => match u.extension() {
                     Some(e) if e == "star" => Some(StringLiteralResult {
                         url,
-                        location_finder: Some(box move |_ast, _url| Ok(range)),
+                        location_finder: Some(Box::new(move |_ast, _url| Ok(range))),
                     }),
                     _ => Some(StringLiteralResult {
                         url,
