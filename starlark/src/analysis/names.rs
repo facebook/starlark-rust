@@ -226,7 +226,8 @@ fn inappropriate_underscore(
             }
             inappropriate_underscore(codemap, x, false, res)
         }
-        Stmt::Assign(lhs, box (_, rhs)) | Stmt::AssignModify(lhs, _, box rhs) if !top => {
+        Stmt::Assign(lhs, type_rhs) if !top => {
+            let (_, rhs) = &**type_rhs;
             match (&**lhs, &**rhs) {
                 (Assign::Identifier(name), Expr::Lambda(..)) if name.0.starts_with('_') => res
                     .push(LintT::new(
@@ -237,6 +238,16 @@ fn inappropriate_underscore(
                 _ => {}
             }
         }
+        Stmt::AssignModify(lhs, _, rhs) if !top => match (&**lhs, &rhs.node) {
+            (Assign::Identifier(name), Expr::Lambda(..)) if name.0.starts_with('_') => {
+                res.push(LintT::new(
+                    codemap,
+                    name.span,
+                    NameWarning::UnderscoreFunction(name.node.0.clone()),
+                ))
+            }
+            _ => {}
+        },
         _ => x.visit_stmt(|x| inappropriate_underscore(codemap, x, top, res)),
     }
 }

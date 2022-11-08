@@ -62,10 +62,13 @@ impl<A: AstPayload> StmtP<A> {
             StmtP::Return(None) => StmtP::Return(None),
             StmtP::Return(Some(e)) => StmtP::Return(Some(e.into_map_payload(f))),
             StmtP::Expression(e) => StmtP::Expression(e.into_map_payload(f)),
-            StmtP::Assign(lhs, box (ty, rhs)) => StmtP::Assign(
-                lhs.into_map_payload(f),
-                box (ty.map(|ty| ty.into_map_payload(f)), rhs.into_map_payload(f)),
-            ),
+            StmtP::Assign(lhs, ty_rhs) => {
+                let (ty, rhs) = *ty_rhs;
+                StmtP::Assign(
+                    lhs.into_map_payload(f),
+                    box (ty.map(|ty| ty.into_map_payload(f)), rhs.into_map_payload(f)),
+                )
+            }
             StmtP::AssignModify(lhs, op, rhs) => {
                 StmtP::AssignModify(lhs.into_map_payload(f), op, box rhs.into_map_payload(f))
             }
@@ -75,17 +78,23 @@ impl<A: AstPayload> StmtP<A> {
             StmtP::If(cond, then_block) => {
                 StmtP::If(cond.into_map_payload(f), box then_block.into_map_payload(f))
             }
-            StmtP::IfElse(cond, box (then_block, else_block)) => StmtP::IfElse(
-                cond.into_map_payload(f),
-                box (
-                    then_block.into_map_payload(f),
-                    else_block.into_map_payload(f),
-                ),
-            ),
-            StmtP::For(assign, box (coll, body)) => StmtP::For(
-                assign.into_map_payload(f),
-                box (coll.into_map_payload(f), body.into_map_payload(f)),
-            ),
+            StmtP::IfElse(cond, then_block_else_block) => {
+                let (then_block, else_block) = *then_block_else_block;
+                StmtP::IfElse(
+                    cond.into_map_payload(f),
+                    box (
+                        then_block.into_map_payload(f),
+                        else_block.into_map_payload(f),
+                    ),
+                )
+            }
+            StmtP::For(assign, coll_body) => {
+                let (coll, body) = *coll_body;
+                StmtP::For(
+                    assign.into_map_payload(f),
+                    box (coll.into_map_payload(f), body.into_map_payload(f)),
+                )
+            }
             StmtP::Def(name, params, ret, body, p) => StmtP::Def(
                 name.into_map_payload(f),
                 params.into_map(|p| p.into_map_payload(f)),
@@ -110,7 +119,8 @@ impl<A: AstPayload> ExprP<A> {
                 box ca.into_map_payload(f),
                 args.into_map(|a| a.into_map_payload(f)),
             ),
-            ExprP::ArrayIndirection(box (array, index)) => {
+            ExprP::ArrayIndirection(array_index) => {
+                let (array, index) = *array_index;
                 ExprP::ArrayIndirection(box (array.into_map_payload(f), index.into_map_payload(f)))
             }
             ExprP::Slice(x, a, b, c) => ExprP::Slice(
@@ -133,11 +143,14 @@ impl<A: AstPayload> ExprP<A> {
             ExprP::Op(l, op, r) => {
                 ExprP::Op(box l.into_map_payload(f), op, box r.into_map_payload(f))
             }
-            ExprP::If(box (a, b, c)) => ExprP::If(box (
-                a.into_map_payload(f),
-                b.into_map_payload(f),
-                c.into_map_payload(f),
-            )),
+            ExprP::If(a_b_c) => {
+                let (a, b, c) = *a_b_c;
+                ExprP::If(box (
+                    a.into_map_payload(f),
+                    b.into_map_payload(f),
+                    c.into_map_payload(f),
+                ))
+            }
             ExprP::List(es) => ExprP::List(es.into_map(|e| e.into_map_payload(f))),
             ExprP::Dict(kvs) => {
                 ExprP::Dict(kvs.into_map(|(k, v)| (k.into_map_payload(f), v.into_map_payload(f))))
@@ -147,11 +160,14 @@ impl<A: AstPayload> ExprP<A> {
                 box c0.into_map_payload(f),
                 cs.into_map(|c| c.into_map_payload(f)),
             ),
-            ExprP::DictComprehension(box (k, v), c0, cs) => ExprP::DictComprehension(
-                box (k.into_map_payload(f), v.into_map_payload(f)),
-                box c0.into_map_payload(f),
-                cs.into_map(|c| c.into_map_payload(f)),
-            ),
+            ExprP::DictComprehension(k_v, c0, cs) => {
+                let (k, v) = *k_v;
+                ExprP::DictComprehension(
+                    box (k.into_map_payload(f), v.into_map_payload(f)),
+                    box c0.into_map_payload(f),
+                    cs.into_map(|c| c.into_map_payload(f)),
+                )
+            }
         }
     }
 }
@@ -163,10 +179,13 @@ impl<A: AstPayload> AssignP<A> {
     ) -> AssignP<B> {
         match self {
             AssignP::Tuple(args) => AssignP::Tuple(args.into_map(|a| a.into_map_payload(f))),
-            AssignP::ArrayIndirection(box (array, index)) => AssignP::ArrayIndirection(box (
-                array.into_map_payload(f),
-                index.into_map_payload(f),
-            )),
+            AssignP::ArrayIndirection(array_index) => {
+                let (array, index) = *array_index;
+                AssignP::ArrayIndirection(box (
+                    array.into_map_payload(f),
+                    index.into_map_payload(f),
+                ))
+            }
             AssignP::Dot(object, field) => AssignP::Dot(box object.into_map_payload(f), field),
             AssignP::Identifier(ident) => AssignP::Identifier(ident.into_map_payload(f)),
         }

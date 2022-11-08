@@ -109,13 +109,15 @@ impl IsSafeToInlineExpr {
                 // TODO: some comprehensions are safe to inline.
                 false
             }
-            ExprCompiled::Slice(box (a, b, c, d)) => {
+            ExprCompiled::Slice(a_b_c_d) => {
+                let (a, b, c, d) = &**a_b_c_d;
                 self.is_safe_to_inline_expr(a)
                     && self.is_safe_to_inline_opt_expr(b)
                     && self.is_safe_to_inline_opt_expr(c)
                     && self.is_safe_to_inline_opt_expr(d)
             }
-            ExprCompiled::Builtin2(bin_op, box (a, b)) => {
+            ExprCompiled::Builtin2(bin_op, a_b) => {
+                let (a, b) = &**a_b;
                 let _: &Builtin2 = bin_op;
                 self.is_safe_to_inline_expr(a) && self.is_safe_to_inline_expr(b)
             }
@@ -129,16 +131,19 @@ impl IsSafeToInlineExpr {
             ExprCompiled::Dict(xs) => xs
                 .iter()
                 .all(|(x, y)| self.is_safe_to_inline_expr(x) && self.is_safe_to_inline_expr(y)),
-            ExprCompiled::If(box (c, t, f)) => {
+            ExprCompiled::If(c_t_f) => {
+                let (c, t, f) = &**c_t_f;
                 self.is_safe_to_inline_expr(c)
                     && self.is_safe_to_inline_expr(t)
                     && self.is_safe_to_inline_expr(f)
             }
-            ExprCompiled::LogicalBinOp(op, box (x, y)) => {
+            ExprCompiled::LogicalBinOp(op, x_y) => {
+                let (x, y) = &**x_y;
                 let _: &ExprLogicalBinOp = op;
                 self.is_safe_to_inline_expr(x) && self.is_safe_to_inline_expr(y)
             }
-            ExprCompiled::Seq(box (x, y)) => {
+            ExprCompiled::Seq(x_y) => {
+                let (x, y) = &**x_y;
                 self.is_safe_to_inline_expr(x) && self.is_safe_to_inline_expr(y)
             }
         }
@@ -247,13 +252,15 @@ impl<'s, 'v, 'a, 'e> InlineDefCallSite<'s, 'v, 'a, 'e> {
                 };
                 IrSpanned { span, node: expr }
             }
-            ExprCompiled::If(box (c, t, f)) => {
+            ExprCompiled::If(c_t_f) => {
+                let (c, t, f) = &**c_t_f;
                 let c = self.inline(c)?;
                 let t = self.inline(t)?;
                 let f = self.inline(f)?;
                 ExprCompiled::if_expr(c, t, f)
             }
-            ExprCompiled::LogicalBinOp(op, box (l, r)) => {
+            ExprCompiled::LogicalBinOp(op, l_r) => {
+                let (l, r) = &**l_r;
                 let l = self.inline(l)?;
                 let r = self.inline(r)?;
                 ExprCompiled::logical_bin_op(*op, l, r)
@@ -288,7 +295,8 @@ impl<'s, 'v, 'a, 'e> InlineDefCallSite<'s, 'v, 'a, 'e> {
                     node: ExprCompiled::Dict(xs),
                 }
             }
-            ExprCompiled::Builtin2(op, box (l, r)) => {
+            ExprCompiled::Builtin2(op, l_r) => {
+                let (l, r) = &**l_r;
                 let l = self.inline(l)?;
                 let r = self.inline(r)?;
                 IrSpanned {
@@ -296,14 +304,15 @@ impl<'s, 'v, 'a, 'e> InlineDefCallSite<'s, 'v, 'a, 'e> {
                     node: ExprCompiled::bin_op(*op, l, r, self.ctx),
                 }
             }
-            ExprCompiled::Builtin1(op, box x) => {
+            ExprCompiled::Builtin1(op, x) => {
                 let x = self.inline(x)?;
                 IrSpanned {
                     span,
                     node: ExprCompiled::un_op(span, op, x, self.ctx),
                 }
             }
-            ExprCompiled::Slice(box (l, a, b, c)) => {
+            ExprCompiled::Slice(l_a_b_c) => {
+                let (l, a, b, c) = &**l_a_b_c;
                 let l = self.inline(l)?;
                 let a = self.inline_opt(a.as_ref())?;
                 let b = self.inline_opt(b.as_ref())?;
@@ -313,7 +322,8 @@ impl<'s, 'v, 'a, 'e> InlineDefCallSite<'s, 'v, 'a, 'e> {
                     node: ExprCompiled::Slice(box (l, a, b, c)),
                 }
             }
-            ExprCompiled::Seq(box (a, b)) => {
+            ExprCompiled::Seq(a_b) => {
+                let (a, b) = &**a_b;
                 let a = self.inline(a)?;
                 let b = self.inline(b)?;
                 ExprCompiled::seq(a, b)

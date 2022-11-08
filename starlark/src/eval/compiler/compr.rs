@@ -136,11 +136,12 @@ impl ComprCompiled {
 
     pub(crate) fn optimize(&self, ctx: &mut OptCtx) -> ExprCompiled {
         match self {
-            ComprCompiled::List(box ref x, ref clauses) => {
+            ComprCompiled::List(ref x, ref clauses) => {
                 let clauses = clauses.optimize(ctx);
                 ExprCompiled::compr(ComprCompiled::List(box x.optimize(ctx), clauses))
             }
-            ComprCompiled::Dict(box (ref k, ref v), ref clauses) => {
+            ComprCompiled::Dict(k_v, ref clauses) => {
+                let (k, v) = &**k_v;
                 let clauses = clauses.optimize(ctx);
                 ExprCompiled::compr(ComprCompiled::Dict(
                     box (k.optimize(ctx), v.optimize(ctx)),

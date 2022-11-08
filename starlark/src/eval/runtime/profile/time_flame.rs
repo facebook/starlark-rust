@@ -153,7 +153,7 @@ impl<'v> FlameProfile<'v> {
     #[cold]
     #[inline(never)]
     pub(crate) fn record_call_enter(&mut self, function: Value<'v>) {
-        if let Some(box x) = &mut self.0 {
+        if let Some(x) = &mut self.0 {
             let ind = match x.map.entry(function.ptr_value()) {
                 Entry::Occupied(e) => *e.get(),
                 Entry::Vacant(e) => {
@@ -170,7 +170,7 @@ impl<'v> FlameProfile<'v> {
     #[cold]
     #[inline(never)]
     pub(crate) fn record_call_exit(&mut self) {
-        if let Some(box x) = &mut self.0 {
+        if let Some(x) = &mut self.0 {
             x.frames.push((Frame::Pop, Instant::now()))
         }
     }

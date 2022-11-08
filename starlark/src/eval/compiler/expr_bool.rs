@@ -71,8 +71,8 @@ impl ExprCompiledBool {
         }
 
         match expr.node {
-            ExprCompiled::Builtin1(Builtin1::Not, box x) => {
-                let x = Self::new(x);
+            ExprCompiled::Builtin1(Builtin1::Not, x) => {
+                let x = Self::new(*x);
                 match x.const_value() {
                     Some(b) => new_bool(span, !b),
                     None => IrSpanned {
@@ -84,7 +84,8 @@ impl ExprCompiledBool {
                     },
                 }
             }
-            ExprCompiled::LogicalBinOp(op, box (x, y)) => {
+            ExprCompiled::LogicalBinOp(op, x_y) => {
+                let (x, y) = *x_y;
                 let x = Self::new(x);
                 let y = Self::new(y);
                 match (op, x.const_value(), y.const_value()) {

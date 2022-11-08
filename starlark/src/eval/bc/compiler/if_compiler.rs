@@ -154,7 +154,8 @@ fn write_cond(
         ExprCompiled::Builtin1(Builtin1::Not, cond) => {
             write_cond(cond, maybe_not.negate(), t, f, bc);
         }
-        ExprCompiled::LogicalBinOp(op, box (x, y)) => {
+        ExprCompiled::LogicalBinOp(op, x_y) => {
+            let (x, y) = &**x_y;
             write_cond_bin_op(x, y, *op, maybe_not, t, f, bc);
         }
         _ => {

@@ -348,7 +348,6 @@
 // Features we use
 #![allow(stable_features)]
 #![feature(bench_black_box)]
-#![feature(box_patterns)]
 #![feature(box_syntax)]
 #![feature(const_mut_refs)]
 #![feature(const_type_id)]

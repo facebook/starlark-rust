@@ -135,16 +135,16 @@ impl AssignModifyLhs {
 impl IrSpanned<StmtCompiled> {
     fn optimize(&self, ctx: &mut OptCtx) -> StmtsCompiled {
         let span = self.span;
-        match self.node {
-            StmtCompiled::Return(ref e) => StmtsCompiled::one(IrSpanned {
+        match &self.node {
+            StmtCompiled::Return(e) => StmtsCompiled::one(IrSpanned {
                 span,
                 node: StmtCompiled::Return(e.optimize(ctx)),
             }),
-            StmtCompiled::Expr(ref expr) => {
+            StmtCompiled::Expr(expr) => {
                 let expr = expr.optimize(ctx);
                 StmtsCompiled::expr(expr)
             }
-            StmtCompiled::Assign(ref lhs, ref ty, ref rhs) => {
+            StmtCompiled::Assign(lhs, ty, rhs) => {
                 let lhs = lhs.optimize(ctx);
                 let ty = ty.as_ref().map(|x| x.optimize(ctx));
                 let rhs = rhs.optimize(ctx);
@@ -153,27 +153,29 @@ impl IrSpanned<StmtCompiled> {
                     node: StmtCompiled::Assign(lhs, ty, rhs),
                 })
             }
-            StmtCompiled::If(box (ref cond, ref t, ref f)) => {
+            StmtCompiled::If(cond_t_f) => {
+                let (cond, t, f) = &**cond_t_f;
                 let cond = cond.optimize(ctx);
                 let t = t.optimize(ctx);
                 let f = f.optimize(ctx);
                 StmtsCompiled::if_stmt(span, cond, t, f)
             }
-            StmtCompiled::For(box (ref var, ref over, ref body)) => {
+            StmtCompiled::For(var_over_body) => {
+                let (var, over, body) = &**var_over_body;
                 let var = var.optimize(ctx);
                 let over = over.optimize(ctx);
                 let body = body.optimize(ctx);
                 StmtsCompiled::for_stmt(span, var, over, body)
             }
-            ref s @ (StmtCompiled::PossibleGc | StmtCompiled::Break | StmtCompiled::Continue) => {
+            s @ (StmtCompiled::PossibleGc | StmtCompiled::Break | StmtCompiled::Continue) => {
                 StmtsCompiled::one(IrSpanned {
                     span,
                     node: s.clone(),
                 })
             }
-            StmtCompiled::AssignModify(ref lhs, op, ref rhs) => StmtsCompiled::one(IrSpanned {
+            StmtCompiled::AssignModify(lhs, op, rhs) => StmtsCompiled::one(IrSpanned {
                 span,
-                node: StmtCompiled::AssignModify(lhs.optimize(ctx), op, rhs.optimize(ctx)),
+                node: StmtCompiled::AssignModify(lhs.optimize(ctx), *op, rhs.optimize(ctx)),
             }),
         }
     }
@@ -273,10 +275,12 @@ impl StmtsCompiled {
             // Unwrap infallible expressions.
             ExprCompiled::Builtin1(Builtin1::Not | Builtin1::TypeIs(_), x) => Self::expr(*x),
             // "And" and "or" for effect are equivalent to `if`.
-            ExprCompiled::LogicalBinOp(ExprLogicalBinOp::And, box (x, y)) => {
+            ExprCompiled::LogicalBinOp(ExprLogicalBinOp::And, x_y) => {
+                let (x, y) = *x_y;
                 Self::if_stmt(expr.span, x, Self::expr(y), StmtsCompiled::empty())
             }
-            ExprCompiled::LogicalBinOp(ExprLogicalBinOp::Or, box (x, y)) => {
+            ExprCompiled::LogicalBinOp(ExprLogicalBinOp::Or, x_y) => {
+                let (x, y) = *x_y;
                 Self::if_stmt(expr.span, x, StmtsCompiled::empty(), Self::expr(y))
             }
             expr => {
@@ -303,8 +307,9 @@ impl StmtsCompiled {
             ExprCompiledBool::Const(true) => t,
             ExprCompiledBool::Const(false) => f,
             ExprCompiledBool::Expr(cond) => match cond {
-                ExprCompiled::Builtin1(Builtin1::Not, box cond) => Self::if_stmt(span, cond, f, t),
-                ExprCompiled::Seq(box (x, cond)) => {
+                ExprCompiled::Builtin1(Builtin1::Not, cond) => Self::if_stmt(span, *cond, f, t),
+                ExprCompiled::Seq(x_cond) => {
+                    let (x, cond) = *x_cond;
                     let mut stmt = StmtsCompiled::empty();
                     stmt.extend(Self::expr(x));
                     stmt.extend(Self::if_stmt(span, cond, t, f));
@@ -403,7 +408,8 @@ impl Compiler<'_, '_, '_> {
                 let s = s.node;
                 AssignCompiledValue::Dot(e, s)
             }
-            AssignP::ArrayIndirection(box (e, idx)) => {
+            AssignP::ArrayIndirection(e_idx) => {
+                let (e, idx) = *e_idx;
                 let e = self.expr(e);
                 let idx = self.expr(idx);
                 AssignCompiledValue::ArrayIndirection(e, idx)
@@ -453,7 +459,8 @@ impl Compiler<'_, '_, '_> {
                     node: StmtCompiled::AssignModify(AssignModifyLhs::Dot(e, s.node), op, rhs),
                 })
             }
-            AssignP::ArrayIndirection(box (e, idx)) => {
+            AssignP::ArrayIndirection(e_idx) => {
+                let (e, idx) = *e_idx;
                 let e = self.expr(e);
                 let idx = self.expr(idx);
                 StmtsCompiled::one(IrSpanned {
@@ -743,7 +750,8 @@ impl Compiler<'_, '_, '_> {
                     node: StmtCompiled::Assign(lhs, None, rhs),
                 })
             }
-            StmtP::For(var, box (over, body)) => {
+            StmtP::For(var, over_body) => {
+                let (over, body) = *over_body;
                 let over = list_to_tuple(over);
                 let var = self.assign(var);
                 let over = self.expr(over);
@@ -761,8 +769,9 @@ impl Compiler<'_, '_, '_> {
                 node: StmtCompiled::Return(self.expr(e)),
                 span,
             }),
-            StmtP::If(cond, box then_block) => self.stmt_if(span, cond, then_block, allow_gc),
-            StmtP::IfElse(cond, box (then_block, else_block)) => {
+            StmtP::If(cond, then_block) => self.stmt_if(span, cond, *then_block, allow_gc),
+            StmtP::IfElse(cond, then_block_else_block) => {
+                let (then_block, else_block) = *then_block_else_block;
                 self.stmt_if_else(span, cond, then_block, else_block, allow_gc)
             }
             StmtP::Statements(stmts) => {
@@ -776,7 +785,8 @@ impl Compiler<'_, '_, '_> {
                 r
             }
             StmtP::Expression(e) => self.stmt_expr(e),
-            StmtP::Assign(lhs, box (ty, rhs)) => {
+            StmtP::Assign(lhs, ty_rhs) => {
+                let (ty, rhs) = *ty_rhs;
                 let rhs = self.expr(rhs);
                 let ty = self.expr_for_type(ty.map(|x| box x));
                 let lhs = self.assign(lhs);

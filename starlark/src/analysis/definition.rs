@@ -443,7 +443,8 @@ impl LspModule {
                 return;
             }
 
-            if let StmtP::Assign(l, box (_ty, r)) = &v.node {
+            if let StmtP::Assign(l, ty_r) = &v.node {
+                let (_ty, r) = &**ty_r;
                 let main_assign_span = match &l.node {
                     AssignP::Identifier(main_assign_id) if main_assign_id.0 == name => {
                         main_assign_id.span

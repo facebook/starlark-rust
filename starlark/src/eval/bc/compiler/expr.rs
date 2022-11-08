@@ -139,12 +139,14 @@ impl ExprCompiled {
                 }
             }
             ExprCompiled::Compr(compr) => compr.mark_definitely_assigned_after(bc),
-            ExprCompiled::If(box (c, _t, _f)) => {
+            ExprCompiled::If(c_t_f) => {
+                let (c, _t, _f) = &**c_t_f;
                 // Condition is executed unconditionally, so we use it to mark definitely assigned.
                 // But we don't know which of the branches will be executed.
                 c.mark_definitely_assigned_after(bc);
             }
-            ExprCompiled::Slice(box (l, a, b, c)) => {
+            ExprCompiled::Slice(l_a_b_c) => {
+                let (l, a, b, c) = &**l_a_b_c;
                 l.mark_definitely_assigned_after(bc);
                 if let Some(a) = a {
                     a.mark_definitely_assigned_after(bc);
@@ -159,17 +161,20 @@ impl ExprCompiled {
             ExprCompiled::Builtin1(_op, expr) => {
                 expr.mark_definitely_assigned_after(bc);
             }
-            ExprCompiled::LogicalBinOp(_op, box (a, b)) => {
+            ExprCompiled::LogicalBinOp(_op, a_b) => {
+                let (a, b) = &**a_b;
                 // `a` is executed unconditionally, but `b` is not,
                 // so we mark only `a` as definitely assigned.
                 a.mark_definitely_assigned_after(bc);
                 let _ = b;
             }
-            ExprCompiled::Seq(box (a, b)) => {
+            ExprCompiled::Seq(a_b) => {
+                let (a, b) = &**a_b;
                 a.mark_definitely_assigned_after(bc);
                 b.mark_definitely_assigned_after(bc);
             }
-            ExprCompiled::Builtin2(_op, box (a, b)) => {
+            ExprCompiled::Builtin2(_op, a_b) => {
+                let (a, b) = &**a_b;
                 a.mark_definitely_assigned_after(bc);
                 b.mark_definitely_assigned_after(bc);
             }
@@ -293,20 +298,20 @@ impl IrSpanned<ExprCompiled> {
 
     pub(crate) fn write_bc(&self, target: BcSlotOut, bc: &mut BcWriter) {
         let span = self.span;
-        match self.node {
+        match &self.node {
             ExprCompiled::Value(v) => {
-                bc.write_const(span, v, target);
+                bc.write_const(span, *v, target);
             }
             ExprCompiled::Local(slot) => {
-                bc.write_load_local(span, slot, target);
+                bc.write_load_local(span, *slot, target);
             }
             ExprCompiled::LocalCaptured(slot) => {
-                bc.write_load_local_captured(span, slot, target);
+                bc.write_load_local_captured(span, *slot, target);
             }
             ExprCompiled::Module(slot) => {
-                bc.write_instr::<InstrLoadModule>(span, (slot, target));
+                bc.write_instr::<InstrLoadModule>(span, (*slot, target));
             }
-            ExprCompiled::Tuple(ref xs) => {
+            ExprCompiled::Tuple(xs) => {
                 write_exprs(xs, bc, |xs, bc| {
                     bc.write_instr::<InstrTupleNPop>(span, (xs, target));
                 });
@@ -325,7 +330,8 @@ impl IrSpanned<ExprCompiled> {
             }
             ExprCompiled::Dict(ref xs) => Self::write_dict(span, xs, target, bc),
             ExprCompiled::Compr(ref compr) => compr.write_bc(span, target, bc),
-            ExprCompiled::Slice(box (ref l, ref start, ref stop, ref step)) => {
+            ExprCompiled::Slice(l_start_stop_step) => {
+                let (l, start, stop, step) = &**l_start_stop_step;
                 l.write_bc_cb(bc, |l, bc| {
                     write_expr_opt(start, bc, |start, bc| {
                         write_expr_opt(stop, bc, |stop, bc| {
@@ -336,10 +342,8 @@ impl IrSpanned<ExprCompiled> {
                     })
                 });
             }
-            ExprCompiled::Builtin1(Builtin1::Not, box ref expr) => {
-                Self::write_not(expr, target, bc)
-            }
-            ExprCompiled::Builtin1(ref op, ref expr) => {
+            ExprCompiled::Builtin1(Builtin1::Not, expr) => Self::write_not(expr, target, bc),
+            ExprCompiled::Builtin1(op, expr) => {
                 expr.write_bc_cb(bc, |expr, bc| {
                     let arg = (expr, target);
                     match op {
@@ -361,7 +365,8 @@ impl IrSpanned<ExprCompiled> {
                     }
                 });
             }
-            ExprCompiled::If(box (ref cond, ref t, ref f)) => {
+            ExprCompiled::If(cond_t_f) => {
+                let (cond, t, f) = &**cond_t_f;
                 write_if_else(
                     cond,
                     |bc| t.write_bc(target, bc),
@@ -369,7 +374,8 @@ impl IrSpanned<ExprCompiled> {
                     bc,
                 );
             }
-            ExprCompiled::LogicalBinOp(op, box (ref l, ref r)) => {
+            ExprCompiled::LogicalBinOp(op, l_r) => {
+                let (l, r) = &**l_r;
                 l.write_bc_cb(bc, |l_slot, bc| {
                     let maybe_not = match op {
                         ExprLogicalBinOp::And => MaybeNot::Id,
@@ -384,14 +390,17 @@ impl IrSpanned<ExprCompiled> {
                     );
                 });
             }
-            ExprCompiled::Seq(box (ref l, ref r)) => {
+            ExprCompiled::Seq(l_r) => {
+                let (l, r) = &**l_r;
                 l.write_bc_for_effect(bc);
                 r.write_bc(target, bc);
             }
-            ExprCompiled::Builtin2(Builtin2::Equals, box (ref l, ref r)) => {
+            ExprCompiled::Builtin2(Builtin2::Equals, l_r) => {
+                let (l, r) = &**l_r;
                 Self::write_equals(span, l, r, target, bc)
             }
-            ExprCompiled::Builtin2(op, box (ref l, ref r)) => {
+            ExprCompiled::Builtin2(op, l_r) => {
+                let (l, r) = &**l_r;
                 write_n_exprs([l, r], bc, |[l, r], bc| {
                     let arg = (l, r, target);
                     match op {

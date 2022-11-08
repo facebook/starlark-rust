@@ -425,7 +425,10 @@ impl Display for Expr {
                 }
                 f.write_str(")")
             }
-            Expr::ArrayIndirection(box (e, i)) => write!(f, "{}[{}]", e.node, i.node),
+            Expr::ArrayIndirection(e_i) => {
+                let (e, i) = &**e_i;
+                write!(f, "{}[{}]", e.node, i.node)
+            }
             Expr::Slice(e, i1, i2, i3) => {
                 write!(f, "{}[]", e.node)?;
                 if let Some(x) = i1 {
@@ -447,7 +450,8 @@ impl Display for Expr {
             Expr::Plus(e) => write!(f, "+{}", e.node),
             Expr::BitNot(e) => write!(f, "~{}", e.node),
             Expr::Op(l, op, r) => write!(f, "({}{}{})", l.node, op, r.node),
-            Expr::If(box (cond, v1, v2)) => {
+            Expr::If(cond_v1_v2) => {
+                let (cond, v1, v2) = &**cond_v1_v2;
                 write!(f, "({} if {} else {})", v1.node, cond.node, v2.node)
             }
             Expr::List(v) => {
@@ -468,7 +472,8 @@ impl Display for Expr {
                 }
                 f.write_str("]")
             }
-            Expr::DictComprehension(box (k, v), for_, c) => {
+            Expr::DictComprehension(k_v, for_, c) => {
+                let (k, v) = &**k_v;
                 write!(f, "{{{}: {}", k.node, v.node)?;
                 write!(f, "{}", for_)?;
                 for x in c {
@@ -490,7 +495,10 @@ impl Display for Assign {
                 f.write_str(")")
             }
             Assign::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
-            Assign::ArrayIndirection(box (e, i)) => write!(f, "{}[{}]", e.node, i.node),
+            Assign::ArrayIndirection(e_i) => {
+                let (e, i) = &**e_i;
+                write!(f, "{}[{}]", e.node, i.node)
+            }
             Assign::Identifier(s) => write!(f, "{}", s.node),
         }
     }
@@ -557,7 +565,8 @@ impl Stmt {
             Stmt::Return(Some(e)) => writeln!(f, "{}return {}", tab, e.node),
             Stmt::Return(None) => writeln!(f, "{}return", tab),
             Stmt::Expression(e) => writeln!(f, "{}{}", tab, e.node),
-            Stmt::Assign(l, box (ty, r)) => {
+            Stmt::Assign(l, ty_r) => {
+                let (ty, r) = &**ty_r;
                 write!(f, "{}{} ", tab, l.node)?;
                 if let Some(ty) = ty {
                     write!(f, ": {} ", ty.node)?;
@@ -571,17 +580,19 @@ impl Stmt {
                 }
                 Ok(())
             }
-            Stmt::If(cond, box suite) => {
+            Stmt::If(cond, suite) => {
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::IfElse(cond, box (suite1, suite2)) => {
+            Stmt::IfElse(cond, suite_1_2) => {
+                let (suite1, suite2) = &**suite_1_2;
                 writeln!(f, "{}if {}:", tab, cond.node)?;
                 suite1.node.fmt_with_tab(f, tab.clone() + "  ")?;
                 writeln!(f, "{}else:", tab)?;
                 suite2.node.fmt_with_tab(f, tab + "  ")
             }
-            Stmt::For(bind, box (coll, suite)) => {
+            Stmt::For(bind, coll_suite) => {
+                let (coll, suite) = &**coll_suite;
                 writeln!(f, "{}for {} in {}:", tab, bind.node, coll.node)?;
                 suite.node.fmt_with_tab(f, tab + "  ")
             }

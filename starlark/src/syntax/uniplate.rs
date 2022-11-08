@@ -55,11 +55,12 @@ impl<P: AstPayload> StmtP<P> {
     pub(crate) fn visit_children<'a>(&'a self, mut f: impl FnMut(Visit<'a, P>)) {
         match self {
             StmtP::Statements(xs) => xs.iter().for_each(|x| f(Visit::Stmt(x))),
-            StmtP::If(condition, box then_block) => {
+            StmtP::If(condition, then_block) => {
                 f(Visit::Expr(condition));
                 f(Visit::Stmt(then_block));
             }
-            StmtP::IfElse(condition, box (then_block, else_block)) => {
+            StmtP::IfElse(condition, then_block_else_block) => {
+                let (then_block, else_block) = &**then_block_else_block;
                 f(Visit::Expr(condition));
                 f(Visit::Stmt(then_block));
                 f(Visit::Stmt(else_block));
@@ -71,7 +72,8 @@ impl<P: AstPayload> StmtP<P> {
                 ret_type.iter().for_each(|x| f(Visit::Expr(x)));
                 f(Visit::Stmt(body));
             }
-            StmtP::For(lhs, box (over, body)) => {
+            StmtP::For(lhs, over_body) => {
+                let (over, body) = &**over_body;
                 lhs.visit_expr(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(over));
                 f(Visit::Stmt(body));
@@ -84,7 +86,8 @@ impl<P: AstPayload> StmtP<P> {
                 ret.iter().for_each(|x| f(Visit::Expr(x)));
             }
             StmtP::Expression(e) => f(Visit::Expr(e)),
-            StmtP::Assign(lhs, box (ty, rhs)) => {
+            StmtP::Assign(lhs, ty_rhs) => {
+                let (ty, rhs) = &**ty_rhs;
                 lhs.visit_expr(|x| f(Visit::Expr(x)));
                 ty.iter().for_each(|x| f(Visit::Expr(x)));
                 f(Visit::Expr(rhs));
@@ -100,11 +103,12 @@ impl<P: AstPayload> StmtP<P> {
     pub(crate) fn visit_children_mut<'a>(&'a mut self, mut f: impl FnMut(VisitMut<'a, P>)) {
         match self {
             StmtP::Statements(xs) => xs.iter_mut().for_each(|x| f(VisitMut::Stmt(x))),
-            StmtP::If(condition, box then_block) => {
+            StmtP::If(condition, then_block) => {
                 f(VisitMut::Expr(condition));
                 f(VisitMut::Stmt(then_block));
             }
-            StmtP::IfElse(condition, box (then_block, else_block)) => {
+            StmtP::IfElse(condition, then_block_else_block) => {
+                let (then_block, else_block) = &mut **then_block_else_block;
                 f(VisitMut::Expr(condition));
                 f(VisitMut::Stmt(then_block));
                 f(VisitMut::Stmt(else_block));
@@ -116,7 +120,8 @@ impl<P: AstPayload> StmtP<P> {
                 ret_type.iter_mut().for_each(|x| f(VisitMut::Expr(x)));
                 f(VisitMut::Stmt(body));
             }
-            StmtP::For(lhs, box (over, body)) => {
+            StmtP::For(lhs, over_body) => {
+                let (over, body) = &mut **over_body;
                 lhs.visit_expr_mut(|x| f(VisitMut::Expr(x)));
                 f(VisitMut::Expr(over));
                 f(VisitMut::Stmt(body));
@@ -129,7 +134,8 @@ impl<P: AstPayload> StmtP<P> {
                 ret.iter_mut().for_each(|x| f(VisitMut::Expr(x)));
             }
             StmtP::Expression(e) => f(VisitMut::Expr(e)),
-            StmtP::Assign(lhs, box (ty, rhs)) => {
+            StmtP::Assign(lhs, ty_rhs) => {
+                let (ty, rhs) = &mut **ty_rhs;
                 lhs.visit_expr_mut(|x| f(VisitMut::Expr(x)));
                 ty.iter_mut().for_each(|x| f(VisitMut::Expr(x)));
                 f(VisitMut::Expr(rhs));
@@ -248,7 +254,8 @@ impl<P: AstPayload> ExprP<P> {
                 f(a);
                 b.iter().for_each(|x| f(x.expr()));
             }
-            ExprP::ArrayIndirection(box (a, b)) => {
+            ExprP::ArrayIndirection(a_b) => {
+                let (a, b) = &**a_b;
                 f(a);
                 f(b);
             }
@@ -272,7 +279,8 @@ impl<P: AstPayload> ExprP<P> {
                 f(x);
                 f(y);
             }
-            ExprP::If(box (a, b, c)) => {
+            ExprP::If(a_b_c) => {
+                let (a, b, c) = &**a_b_c;
                 f(a);
                 f(b);
                 f(c);
@@ -304,7 +312,8 @@ impl<P: AstPayload> ExprP<P> {
                 f(a);
                 b.iter_mut().for_each(|x| f(x.expr_mut()));
             }
-            ExprP::ArrayIndirection(box (a, b)) => {
+            ExprP::ArrayIndirection(a_b) => {
+                let (a, b) = &mut **a_b;
                 f(a);
                 f(b);
             }
@@ -328,7 +337,8 @@ impl<P: AstPayload> ExprP<P> {
                 f(x);
                 f(y);
             }
-            ExprP::If(box (a, b, c)) => {
+            ExprP::If(a_b_c) => {
+                let (a, b, c) = &mut **a_b_c;
                 f(a);
                 f(b);
                 f(c);
@@ -359,7 +369,8 @@ impl<P: AstPayload> AssignP<P> {
             match x {
                 AssignP::Tuple(xs) => xs.iter().for_each(|x| recurse(x, f)),
                 AssignP::Dot(a, _) => f(a),
-                AssignP::ArrayIndirection(box (a, b)) => {
+                AssignP::ArrayIndirection(a_b) => {
+                    let (a, b) = &**a_b;
                     f(a);
                     f(b);
                 }
@@ -377,7 +388,8 @@ impl<P: AstPayload> AssignP<P> {
             match x {
                 AssignP::Tuple(ref mut xs) => xs.iter_mut().for_each(|x| recurse(&mut *x, f)),
                 AssignP::Dot(a, _) => f(a),
-                AssignP::ArrayIndirection(box (a, b)) => {
+                AssignP::ArrayIndirection(a_b) => {
+                    let (a, b) = &mut **a_b;
                     f(a);
                     f(b);
                 }

@@ -112,7 +112,10 @@ impl TestExpr {
                 count.calls.set(count.calls.get() + 1);
                 *x
             }
-            TestExpr::BinOp(op, box (x, y)) => op.eval(x.eval(count), || y.eval(count)),
+            TestExpr::BinOp(op, x_y) => {
+                let (x, y) = &**x_y;
+                op.eval(x.eval(count), || y.eval(count))
+            }
             TestExpr::Not(x) => !x.eval(count),
         }
     }
@@ -129,7 +132,10 @@ impl Display for TestExpr {
                 true => write!(f, "true()"),
                 false => write!(f, "false()"),
             },
-            TestExpr::BinOp(op, box (x, y)) => write!(f, "({} {} {})", x, op, y),
+            TestExpr::BinOp(op, x_y) => {
+                let (x, y) = &**x_y;
+                write!(f, "({} {} {})", x, op, y)
+            }
             TestExpr::Not(x) => write!(f, "(not {})", x),
         }
     }

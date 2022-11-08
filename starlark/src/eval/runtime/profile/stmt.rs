@@ -177,7 +177,7 @@ impl StmtProfile {
     }
 
     pub(crate) fn before_stmt(&mut self, span: FileSpanRef) {
-        if let Some(box data) = &mut self.0 {
+        if let Some(data) = &mut self.0 {
             data.before_stmt(span.span, span.file)
         }
     }

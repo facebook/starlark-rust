@@ -384,9 +384,16 @@ impl ExprCompiled {
             Self::List(xs) | Self::Tuple(xs) => xs.iter().all(|x| x.is_pure_infallible()),
             Self::Dict(xs) => xs.is_empty(),
             Self::Builtin1(Builtin1::Not | Builtin1::TypeIs(_), x) => x.is_pure_infallible(),
-            Self::Seq(box (x, y)) => x.is_pure_infallible() && y.is_pure_infallible(),
-            Self::LogicalBinOp(_op, box (x, y)) => x.is_pure_infallible() && y.is_pure_infallible(),
-            Self::If(box (cond, x, y)) => {
+            Self::Seq(x_y) => {
+                let (x, y) = &**x_y;
+                x.is_pure_infallible() && y.is_pure_infallible()
+            }
+            Self::LogicalBinOp(_op, x_y) => {
+                let (x, y) = &**x_y;
+                x.is_pure_infallible() && y.is_pure_infallible()
+            }
+            Self::If(cond_x_y) => {
+                let (cond, x, y) = &**cond_x_y;
                 cond.is_pure_infallible() && x.is_pure_infallible() && y.is_pure_infallible()
             }
             Self::Call(call) => call.is_pure_infallible(),
@@ -407,7 +414,8 @@ impl ExprCompiled {
             // TODO(nga): if keys are unique hashable constants, we can fold this to constant too.
             ExprCompiled::Dict(xs) if xs.is_empty() => Some(false),
             ExprCompiled::Builtin1(Builtin1::Not, x) => x.is_pure_infallible_to_bool().map(|x| !x),
-            ExprCompiled::LogicalBinOp(op, box (x, y)) => {
+            ExprCompiled::LogicalBinOp(op, x_y) => {
+                let (x, y) = &**x_y;
                 match (
                     op,
                     x.is_pure_infallible_to_bool(),
@@ -436,63 +444,68 @@ impl ExprCompiled {
 impl IrSpanned<ExprCompiled> {
     pub(crate) fn optimize(&self, ctx: &mut OptCtx) -> IrSpanned<ExprCompiled> {
         let span = self.span;
-        let expr = match self.node {
-            ref e @ (ExprCompiled::Value(..)
+        let expr = match &self.node {
+            e @ (ExprCompiled::Value(..)
             | ExprCompiled::Local(..)
             | ExprCompiled::LocalCaptured(..)) => e.clone(),
             ExprCompiled::Module(slot) => {
                 match ctx
                     .frozen_module()
-                    .and_then(|m| m.get_module_data().get_slot(slot))
+                    .and_then(|m| m.get_module_data().get_slot(*slot))
                 {
                     None => {
                         // Let if fail at runtime.
-                        ExprCompiled::Module(slot)
+                        ExprCompiled::Module(*slot)
                     }
                     Some(v) => ExprCompiled::Value(v),
                 }
             }
-            ExprCompiled::Tuple(ref xs) => {
+            ExprCompiled::Tuple(xs) => {
                 ExprCompiled::tuple(xs.map(|e| e.optimize(ctx)), ctx.frozen_heap())
             }
-            ExprCompiled::List(ref xs) => ExprCompiled::List(xs.map(|e| e.optimize(ctx))),
-            ExprCompiled::Dict(ref kvs) => {
+            ExprCompiled::List(xs) => ExprCompiled::List(xs.map(|e| e.optimize(ctx))),
+            ExprCompiled::Dict(kvs) => {
                 ExprCompiled::Dict(kvs.map(|(k, v)| (k.optimize(ctx), v.optimize(ctx))))
             }
-            ExprCompiled::Compr(ref compr) => compr.optimize(ctx),
-            ExprCompiled::If(box (ref cond, ref t, ref f)) => {
+            ExprCompiled::Compr(compr) => compr.optimize(ctx),
+            ExprCompiled::If(cond_t_f) => {
+                let (cond, t, f) = &**cond_t_f;
                 let cond = cond.optimize(ctx);
                 let t = t.optimize(ctx);
                 let f = f.optimize(ctx);
                 return ExprCompiled::if_expr(cond, t, f);
             }
-            ExprCompiled::Slice(box (ref v, ref start, ref stop, ref step)) => {
+            ExprCompiled::Slice(v_start_stop_step) => {
+                let (v, start, stop, step) = &**v_start_stop_step;
                 let v = v.optimize(ctx);
                 let start = start.as_ref().map(|x| x.optimize(ctx));
                 let stop = stop.as_ref().map(|x| x.optimize(ctx));
                 let step = step.as_ref().map(|x| x.optimize(ctx));
                 ExprCompiled::slice(span, v, start, stop, step, ctx)
             }
-            ExprCompiled::Builtin1(ref op, ref e) => {
+            ExprCompiled::Builtin1(op, e) => {
                 let e = e.optimize(ctx);
                 ExprCompiled::un_op(span, op, e, ctx)
             }
-            ExprCompiled::LogicalBinOp(op, box (ref l, ref r)) => {
+            ExprCompiled::LogicalBinOp(op, l_r) => {
+                let (l, r) = &**l_r;
                 let l = l.optimize(ctx);
                 let r = r.optimize(ctx);
-                return ExprCompiled::logical_bin_op(op, l, r);
+                return ExprCompiled::logical_bin_op(*op, l, r);
             }
-            ExprCompiled::Seq(box (ref l, ref r)) => {
+            ExprCompiled::Seq(l_r) => {
+                let (l, r) = &**l_r;
                 let l = l.optimize(ctx);
                 let r = r.optimize(ctx);
                 return ExprCompiled::seq(l, r);
             }
-            ExprCompiled::Builtin2(op, box (ref l, ref r)) => {
+            ExprCompiled::Builtin2(op, l_r) => {
+                let (l, r) = &**l_r;
                 let l = l.optimize(ctx);
                 let r = r.optimize(ctx);
-                ExprCompiled::bin_op(op, l, r, ctx)
+                ExprCompiled::bin_op(*op, l, r, ctx)
             }
-            ref d @ ExprCompiled::Def(..) => d.clone(),
+            d @ ExprCompiled::Def(..) => (*d).clone(),
             ExprCompiled::Call(ref call) => call.optimize(ctx),
         };
         IrSpanned { node: expr, span }
@@ -538,7 +551,7 @@ impl ExprCompiled {
                 span,
             },
             // Collapse `not not e` to `e` only if `e` is known to produce a boolean.
-            ExprCompiled::Builtin1(Builtin1::Not, box ref e) if e.is_definitely_bool() => e.clone(),
+            ExprCompiled::Builtin1(Builtin1::Not, e) if e.is_definitely_bool() => (*e).clone(),
             _ => IrSpanned {
                 node: ExprCompiled::Builtin1(Builtin1::Not, box expr),
                 span,
@@ -690,10 +703,9 @@ impl ExprCompiled {
             ExprCompiledBool::Const(true) => t,
             ExprCompiledBool::Const(false) => f,
             ExprCompiledBool::Expr(cond) => match cond {
-                ExprCompiled::Builtin1(Builtin1::Not, box cond) => {
-                    ExprCompiled::if_expr(cond, f, t)
-                }
-                ExprCompiled::Seq(box (x, cond)) => {
+                ExprCompiled::Builtin1(Builtin1::Not, cond) => ExprCompiled::if_expr(*cond, f, t),
+                ExprCompiled::Seq(x_cond) => {
+                    let (x, cond) = *x_cond;
                     ExprCompiled::seq(x, ExprCompiled::if_expr(cond, t, f))
                 }
                 cond => {
@@ -789,14 +801,15 @@ impl ExprCompiled {
 
     pub(crate) fn compr(compr: ComprCompiled) -> ExprCompiled {
         match compr {
-            ComprCompiled::List(box x, clauses) => {
+            ComprCompiled::List(x, clauses) => {
                 if clauses.is_nop() {
                     ExprCompiled::List(Vec::new())
                 } else {
-                    ExprCompiled::Compr(ComprCompiled::List(box x, clauses))
+                    ExprCompiled::Compr(ComprCompiled::List(x, clauses))
                 }
             }
-            ComprCompiled::Dict(box (k, v), clauses) => {
+            ComprCompiled::Dict(k_v, clauses) => {
+                let (k, v) = *k_v;
                 if clauses.is_nop() {
                     ExprCompiled::Dict(Vec::new())
                 } else {
@@ -1163,10 +1176,10 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
         let span = FrozenFileSpan::new(self.codemap, expr.span);
         let expr = match expr.node {
             ExprP::Identifier(ident, resolved_ident) => self.expr_ident(ident, resolved_ident),
-            ExprP::Lambda(params, box inner, scope_id) => {
+            ExprP::Lambda(params, inner, scope_id) => {
                 let suite = Spanned {
                     span: expr.span,
-                    node: StmtP::Return(Some(inner)),
+                    node: StmtP::Return(Some(*inner)),
                 };
                 self.function("lambda", scope_id, params, None, suite)
             }
@@ -1182,7 +1195,8 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                 let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
                 ExprCompiled::Dict(xs)
             }
-            ExprP::If(box (cond, then_expr, else_expr)) => {
+            ExprP::If(cond_then_expr_else_expr) => {
+                let (cond, then_expr, else_expr) = *cond_then_expr_else_expr;
                 let cond = self.expr(cond);
                 let then_expr = self.expr(then_expr);
                 let else_expr = self.expr(else_expr);
@@ -1194,12 +1208,13 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
 
                 ExprCompiled::dot(left, &s, &mut self.opt_ctx())
             }
-            ExprP::Call(box left, args) => {
-                let left = self.expr(left);
+            ExprP::Call(left, args) => {
+                let left = self.expr(*left);
                 let args = self.args(args);
                 CallCompiled::call(span, left, args, &mut self.opt_ctx())
             }
-            ExprP::ArrayIndirection(box (array, index)) => {
+            ExprP::ArrayIndirection(array_index) => {
+                let (array, index) = *array_index;
                 let array = self.expr(array);
                 let index = self.expr(index);
                 ExprCompiled::array_indirection(array, index, &mut self.opt_ctx())
@@ -1326,11 +1341,12 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                     }
                 }
             }
-            ExprP::ListComprehension(x, box for_, clauses) => {
-                self.list_comprehension(*x, for_, clauses)
+            ExprP::ListComprehension(x, for_, clauses) => {
+                self.list_comprehension(*x, *for_, clauses)
             }
-            ExprP::DictComprehension(box (k, v), box for_, clauses) => {
-                self.dict_comprehension(k, v, for_, clauses)
+            ExprP::DictComprehension(k_v, for_, clauses) => {
+                let (k, v) = *k_v;
+                self.dict_comprehension(k, v, *for_, clauses)
             }
             ExprP::Literal(x) => {
                 let val = x.compile(self.eval.module_env.frozen_heap());

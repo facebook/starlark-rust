@@ -271,7 +271,7 @@ impl Stmt {
                     Assign::Tuple(xs.into_try_map(|x| Self::check_assign(codemap, x))?)
                 }
                 Expr::Dot(a, b) => Assign::Dot(a, b),
-                Expr::ArrayIndirection(box (a, b)) => Assign::ArrayIndirection(box (a, b)),
+                Expr::ArrayIndirection(a_b) => Assign::ArrayIndirection(a_b),
                 Expr::Identifier(x, ()) => Assign::Identifier(x.into_map(|s| AssignIdentP(s, ()))),
                 _ => {
                     return Err(Diagnostic::new(ValidateError::InvalidLhs, x.span, codemap));
@@ -341,7 +341,8 @@ impl Stmt {
 
             match &stmt.node {
                 Stmt::Def(_, _, _, body, _payload) => f(codemap, dialect, body, false, false, true),
-                Stmt::For(_, box (_, body)) => {
+                Stmt::For(_, over_body) => {
+                    let (_, body) = &**over_body;
                     if top_level && !dialect.enable_top_level_stmt {
                         err(ValidateError::NoTopLevelFor)
                     } else {

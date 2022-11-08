@@ -255,13 +255,14 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             flow(res)
         }
         Stmt::Expression(x) => expr(x, res),
-        Stmt::If(a, box b) => {
+        Stmt::If(a, b) => {
             expr(a, res);
             flow(res);
             stmt(b, res);
             flow(res);
         }
-        Stmt::IfElse(a, box (b, c)) => {
+        Stmt::IfElse(a, b_c) => {
+            let (b, c) = &**b_c;
             expr(a, res);
             flow(res);
             stmt(b, res);
@@ -277,7 +278,8 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             stmt(body, &mut inner);
             res.push(Bind::Scope(Scope::new(inner)));
         }
-        Stmt::Assign(lhs, box (ty, rhs)) => {
+        Stmt::Assign(lhs, ty_rhs) => {
+            let (ty, rhs) = &**ty_rhs;
             opt_expr(ty.as_ref(), res);
             expr(rhs, res);
             expr_lvalue(lhs, res);
@@ -292,7 +294,8 @@ fn stmt(x: &AstStmt, res: &mut Vec<Bind>) {
             expr(rhs, res);
             expr_lvalue(lhs, res);
         }
-        Stmt::For(dest, box (inner, body)) => {
+        Stmt::For(dest, inner_body) => {
+            let (inner, body) = &**inner_body;
             expr(inner, res);
             expr_lvalue(dest, res);
             flow(res);

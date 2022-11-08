@@ -104,7 +104,8 @@ impl StmtCompiled {
                 rhs.mark_definitely_assigned_after(bc);
                 lhs.mark_definitely_assigned_after(bc);
             }
-            StmtCompiled::If(box (cond, t, f)) => {
+            StmtCompiled::If(cond_t_f) => {
+                let (cond, t, f) = &**cond_t_f;
                 cond.mark_definitely_assigned_after(bc);
                 // We could merge `t` and `f` definitely assigned, e. g.
                 // ```
@@ -116,7 +117,8 @@ impl StmtCompiled {
                 // we could mark `x` as definitely assigned.
                 let _ = (t, f);
             }
-            StmtCompiled::For(box (_var, over, _body)) => {
+            StmtCompiled::For(var_over_body) => {
+                let (_var, over, _body) = &**var_over_body;
                 over.mark_definitely_assigned_after(bc);
             }
             StmtCompiled::Break => {}
@@ -212,13 +214,13 @@ impl IrSpanned<StmtCompiled> {
 
     fn write_bc_inner(&self, compiler: &StmtCompileContext, bc: &mut BcWriter) {
         let span = self.span;
-        match self.node {
+        match &self.node {
             StmtCompiled::PossibleGc => bc.write_instr::<InstrPossibleGc>(span, ()),
-            StmtCompiled::Return(ref expr) => Self::write_return(span, expr, compiler, bc),
-            StmtCompiled::Expr(ref expr) => {
+            StmtCompiled::Return(expr) => Self::write_return(span, expr, compiler, bc),
+            StmtCompiled::Expr(expr) => {
                 expr.write_bc_for_effect(bc);
             }
-            StmtCompiled::Assign(ref lhs, ref ty, ref rhs) => {
+            StmtCompiled::Assign(lhs, ty, rhs) => {
                 fn check_type(
                     ty: &Option<IrSpanned<ExprCompiled>>,
                     slot_expr: BcSlotIn,
@@ -242,13 +244,15 @@ impl IrSpanned<StmtCompiled> {
                     });
                 }
             }
-            StmtCompiled::AssignModify(ref lhs, op, ref rhs) => {
-                lhs.write_bc(span, op, rhs, bc);
+            StmtCompiled::AssignModify(lhs, op, rhs) => {
+                lhs.write_bc(span, *op, rhs, bc);
             }
-            StmtCompiled::If(box (ref c, ref t, ref f)) => {
+            StmtCompiled::If(c_t_f) => {
+                let (c, t, f) = &**c_t_f;
                 Self::write_if_else(c, t, f, compiler, bc);
             }
-            StmtCompiled::For(box (ref assign, ref over, ref body)) => {
+            StmtCompiled::For(assign_over_body) => {
+                let (assign, over, body) = &**assign_over_body;
                 write_for(over, assign, span, bc, |bc| body.write_bc(compiler, bc));
             }
             StmtCompiled::Break => {
