@@ -570,12 +570,15 @@ fn parse_arg(
 
     let span = x.span();
     match x {
-        FnArg::Typed(PatType {
-            attrs,
-            pat: box Pat::Ident(ident),
-            ty: box ty,
-            ..
-        }) => {
+        FnArg::Typed(PatType { attrs, pat, ty, .. }) => {
+            let ident = if let Pat::Ident(ident) = *pat {
+                ident
+            } else {
+                return Err(syn::Error::new(
+                    pat.span(),
+                    "Function parameter pattern must be identifier",
+                ));
+            };
             if let Some(heap) = is_heap(&ident.ident, &ty)? {
                 if this {
                     return Err(syn::Error::new(
@@ -672,15 +675,11 @@ fn parse_arg(
                 mutable: ident.mutability.is_some(),
                 name: ident.ident,
                 pass_style,
-                ty,
+                ty: *ty,
                 default: param_attrs.default,
                 source: StarArgSource::Unknown,
             }))
         }
-        FnArg::Typed(PatType { .. }) => Err(syn::Error::new(
-            span,
-            "Function parameter pattern must be identifier",
-        )),
         FnArg::Receiver(..) => Err(syn::Error::new(
             span,
             "Function cannot have `self` parameters",

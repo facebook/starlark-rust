@@ -20,7 +20,6 @@
 #![cfg_attr(feature = "gazebo_lint", feature(plugin))]
 #![cfg_attr(feature = "gazebo_lint", allow(deprecated))] // :(
 #![cfg_attr(feature = "gazebo_lint", plugin(gazebo_lint))]
-#![feature(box_patterns)]
 
 #[allow(unused_extern_crates)] // proc_macro is very special
 extern crate proc_macro;
