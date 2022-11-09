@@ -15,9 +15,7 @@ gazebo = { workspace = true }
 gazebo_lint.version = "0.1"
 gazebo_lint.optional = true
 # @oss-disable: gazebo_lint.path = "../../gazebo_lint/gazebo_lint"
-allocative.version = "0.2"
-# @oss-disable: allocative.path = "../../allocative/allocative"
-allocative.features = ["hashbrown"]
+allocative = { workspace = true }
 
 fnv = "1.0.7"
 hashbrown = { version = "0.12.3", features = ["raw"] }
