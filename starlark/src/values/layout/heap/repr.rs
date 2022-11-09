@@ -179,7 +179,9 @@ impl AValueOrForward {
             }
         };
         let n = mem::size_of::<AValueHeader>() + n;
-        cmp::max(n, MIN_ALLOC)
+        let size = cmp::max(n, MIN_ALLOC);
+        debug_assert!(size % AValueHeader::ALIGN == 0);
+        size
     }
 }
 

@@ -163,11 +163,12 @@ pub(crate) trait AValue<'v>: StarlarkValueDyn<'v> + Sized {
             Self::offset_of_extra() % mem::align_of::<Self::ExtraElem>() == 0,
             "extra must be aligned"
         );
-        cmp::max(
+        let size = cmp::max(
             mem::size_of::<Self::StarlarkValue>(),
             // Content is not necessarily aligned to end of `A`.
             Self::offset_of_extra() + (mem::size_of::<Self::ExtraElem>() * extra_len),
-        )
+        );
+        AValueHeader::align_up(size)
     }
 
     unsafe fn heap_freeze(

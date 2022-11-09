@@ -132,8 +132,6 @@ impl<'c> Iterator for ChunkIter<'c> {
                 let or_forward = &*(self.chunk.as_ptr() as *const AValueOrForward);
                 let n = or_forward.alloc_size();
                 debug_assert!(n <= self.chunk.len());
-                let n = AValueHeader::align_up(n);
-                let n = cmp::min(n, self.chunk.len());
                 self.chunk = self.chunk.split_at(n).1;
                 Some(or_forward)
             }
@@ -174,6 +172,7 @@ impl Arena {
             mem::size_of::<AValueHeader>() + T::memory_size_for_extra_len(extra_len),
             MIN_ALLOC,
         );
+        debug_assert!(size % AValueHeader::ALIGN == 0);
         let layout = Layout::from_size_align(size, mem::align_of::<AValueHeader>()).unwrap();
         let p = bump.alloc_layout(layout).as_ptr();
         unsafe {

@@ -223,7 +223,9 @@ pub(crate) struct AValueDyn<'v> {
 impl<'v> AValueDyn<'v> {
     #[inline]
     pub(crate) fn memory_size(self) -> usize {
-        (self.vtable.memory_size)(self.value as *const ())
+        let size = (self.vtable.memory_size)(self.value as *const ());
+        debug_assert!(size % AValueHeader::ALIGN == 0);
+        size
     }
 
     pub(crate) fn total_memory(self) -> usize {
