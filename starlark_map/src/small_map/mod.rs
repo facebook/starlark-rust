@@ -1128,4 +1128,16 @@ mod tests {
             assert_eq!(i * 10, *map.get(&i).unwrap());
         }
     }
+
+    #[test]
+    fn test_eq_ordered() {
+        let m0 = SmallMap::from_iter([(1, 2), (3, 4)]);
+        let m1 = SmallMap::from_iter([(1, 2), (3, 4)]);
+        let m2 = SmallMap::from_iter([(3, 4), (1, 2)]);
+        let m3 = SmallMap::from_iter([(3, 4)]);
+        assert!(m0.eq_ordered(&m0));
+        assert!(m0.eq_ordered(&m1));
+        assert!(!m0.eq_ordered(&m2));
+        assert!(!m0.eq_ordered(&m3));
+    }
 }
