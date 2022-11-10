@@ -15,12 +15,15 @@
  * limitations under the License.
  */
 
+use core::slice;
+
 use gazebo::prelude::Clone_;
 
 use crate::iter::def_double_ended_iter;
 use crate::iter::def_iter;
-use crate::vec_map::Bucket;
+use crate::vec2;
 use crate::Hashed;
+use crate::StarlarkHashValue;
 
 #[derive(Clone_)]
 pub(crate) struct Keys<'a, K: 'a, V: 'a> {
@@ -134,13 +137,13 @@ impl<'a, K: 'a, V: 'a> Iter<'a, K, V> {
 
 #[derive(Clone_)]
 pub(crate) struct IterHashed<'a, K: 'a, V: 'a> {
-    pub(crate) iter: std::slice::Iter<'a, Bucket<K, V>>,
+    pub(crate) iter: vec2::iter::Iter<'a, (K, V), StarlarkHashValue>,
 }
 
 impl<'a, K: 'a, V: 'a> IterHashed<'a, K, V> {
     #[inline]
-    fn map(b: &'a Bucket<K, V>) -> (Hashed<&'a K>, &'a V) {
-        (Hashed::new_unchecked(b.hash, &b.key), &b.value)
+    fn map(((k, v), hash): (&'a (K, V), &'a StarlarkHashValue)) -> (Hashed<&'a K>, &'a V) {
+        (Hashed::new_unchecked(*hash, k), v)
     }
 }
 
@@ -162,13 +165,13 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterHashed<'a, K, V> {
 }
 
 pub(crate) struct IterMut<'a, K: 'a, V: 'a> {
-    pub(crate) iter: std::slice::IterMut<'a, Bucket<K, V>>,
+    pub(crate) iter: slice::IterMut<'a, (K, V)>,
 }
 
 impl<'a, K: 'a, V: 'a> IterMut<'a, K, V> {
     #[inline]
-    fn map(b: &mut Bucket<K, V>) -> (&K, &mut V) {
-        (&b.key, &mut b.value)
+    fn map((k, v): &mut (K, V)) -> (&K, &mut V) {
+        (k, v)
     }
 }
 
@@ -190,13 +193,13 @@ impl<'a, K: 'a, V: 'a> ExactSizeIterator for IterMut<'a, K, V> {
 }
 
 pub(crate) struct IntoIterHashed<K, V> {
-    pub(crate) iter: std::vec::IntoIter<Bucket<K, V>>,
+    pub(crate) iter: vec2::iter::IntoIter<(K, V), StarlarkHashValue>,
 }
 
 impl<K, V> IntoIterHashed<K, V> {
     #[inline]
-    fn map(b: Bucket<K, V>) -> (Hashed<K>, V) {
-        (Hashed::new_unchecked(b.hash, b.key), b.value)
+    fn map(((k, v), hash): ((K, V), StarlarkHashValue)) -> (Hashed<K>, V) {
+        (Hashed::new_unchecked(hash, k), v)
     }
 }
 

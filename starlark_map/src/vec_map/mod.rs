@@ -27,6 +27,7 @@ use gazebo::prelude::*;
 use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
 use crate::hashed::Hashed;
+pub(crate) use crate::vec2::Vec2;
 pub(crate) use crate::vec_map::iter::IntoIter;
 pub(crate) use crate::vec_map::iter::IntoIterHashed;
 pub(crate) use crate::vec_map::iter::Iter;
@@ -56,21 +57,21 @@ impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
 
 #[derive(Debug, Clone, Eq, PartialEq, Default_, Allocative)]
 pub(crate) struct VecMap<K, V> {
-    buckets: Vec<Bucket<K, V>>,
+    buckets: Vec2<(K, V), StarlarkHashValue>,
 }
 
 impl<K, V> VecMap<K, V> {
     #[inline]
     pub(crate) const fn new() -> Self {
         VecMap {
-            buckets: Vec::new(),
+            buckets: Vec2::new(),
         }
     }
 
     #[inline]
     pub(crate) fn with_capacity(n: usize) -> Self {
         VecMap {
-            buckets: Vec::with_capacity(n),
+            buckets: Vec2::with_capacity(n),
         }
     }
 
@@ -95,9 +96,9 @@ impl<K, V> VecMap<K, V> {
     ) -> Option<(usize, &K, &V)> {
         let mut i = 0;
         #[allow(clippy::explicit_counter_loop)] // we are paranoid about performance
-        for b in &self.buckets {
-            if b.hash == hash && eq(&b.key) {
-                return Some((i, &b.key, &b.value));
+        for ((k, v), b_hash) in &self.buckets {
+            if *b_hash == hash && eq(k) {
+                return Some((i, k, v));
             }
             i += 1;
         }
@@ -123,30 +124,28 @@ impl<K, V> VecMap<K, V> {
 
     #[inline]
     pub(crate) fn get_index(&self, index: usize) -> Option<(&K, &V)> {
-        self.buckets.get(index).map(|x| (&x.key, &x.value))
+        let ((k, v), _hash) = self.buckets.get(index)?;
+        Some((k, v))
     }
 
     #[inline]
     pub(crate) unsafe fn get_unchecked(&self, index: usize) -> (Hashed<&K>, &V) {
         debug_assert!(index < self.buckets.len());
-        let Bucket { hash, key, value } = self.buckets.get_unchecked(index);
+        let ((key, value), hash) = self.buckets.get_unchecked(index);
         (Hashed::new_unchecked(*hash, key), value)
     }
 
     #[inline]
     pub(crate) unsafe fn get_unchecked_mut(&mut self, index: usize) -> (Hashed<&K>, &mut V) {
         debug_assert!(index < self.buckets.len());
-        let Bucket { hash, key, value } = self.buckets.get_unchecked_mut(index);
+        let ((key, value), hash) = self.buckets.get_unchecked_mut(index);
         (Hashed::new_unchecked(*hash, key), value)
     }
 
     #[inline]
     pub(crate) fn insert_hashed_unique_unchecked(&mut self, key: Hashed<K>, value: V) {
-        self.buckets.push(Bucket {
-            hash: key.hash(),
-            key: key.into_key(),
-            value,
-        });
+        let hash = key.hash();
+        self.buckets.push((key.into_key(), value), hash);
     }
 
     pub(crate) fn remove_hashed_entry<Q>(&mut self, key: Hashed<&Q>) -> Option<(K, V)>
@@ -163,13 +162,13 @@ impl<K, V> VecMap<K, V> {
 
     #[inline]
     pub(crate) fn remove(&mut self, index: usize) -> (Hashed<K>, V) {
-        let Bucket { hash, key, value } = self.buckets.remove(index);
+        let ((key, value), hash) = self.buckets.remove(index);
         (Hashed::new_unchecked(hash, key), value)
     }
 
     #[inline]
     pub(crate) fn pop(&mut self) -> Option<(Hashed<K>, V)> {
-        let Bucket { hash, key, value } = self.buckets.pop()?;
+        let ((key, value), hash) = self.buckets.pop()?;
         Some((Hashed::new_unchecked(hash, key), value))
     }
 
@@ -237,7 +236,7 @@ impl<K, V> VecMap<K, V> {
     #[inline]
     pub(crate) fn iter_mut(&mut self) -> IterMut<K, V> {
         IterMut {
-            iter: self.buckets.iter_mut(),
+            iter: self.buckets.keys_mut().iter_mut(),
         }
     }
 
@@ -245,14 +244,14 @@ impl<K, V> VecMap<K, V> {
     where
         K: Ord,
     {
-        self.buckets.sort_unstable_by(|a, b| a.key.cmp(&b.key));
+        self.buckets.sort_by(|(a, _ah), (b, _bh)| a.0.cmp(&b.0));
     }
 
     pub(crate) fn is_sorted_by_key(&self) -> bool
     where
         K: Ord,
     {
-        self.buckets.windows(2).all(|w| w[0].key <= w[1].key)
+        self.buckets.keys().windows(2).all(|w| w[0].0 <= w[1].0)
     }
 
     /// Equal if entries are equal in the iterator order.
@@ -261,7 +260,10 @@ impl<K, V> VecMap<K, V> {
         K: PartialEq,
         V: PartialEq,
     {
-        self.buckets.eq(&other.buckets)
+        // We compare hashes before comparing keys and values because it is faster
+        // (fewer branches, and no comparison of the rest it at lest one hash is different).
+        self.buckets.values() == other.buckets.values()
+            && self.buckets.keys() == other.buckets.keys()
     }
 
     /// Hash entries in the iterator order.
@@ -272,6 +274,8 @@ impl<K, V> VecMap<K, V> {
         K: Hash,
         V: Hash,
     {
-        self.buckets.hash(state);
+        for e in self.iter_hashed() {
+            e.hash(state);
+        }
     }
 }
