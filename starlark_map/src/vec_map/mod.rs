@@ -55,7 +55,7 @@ impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Default_, Allocative)]
+#[derive(Debug, Clone, Default_, Allocative)]
 pub(crate) struct VecMap<K, V> {
     buckets: Vec2<(K, V), StarlarkHashValue>,
 }

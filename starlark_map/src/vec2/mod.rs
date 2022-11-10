@@ -83,14 +83,6 @@ pub(crate) struct Vec2<K, V> {
 unsafe impl<K: Send, V: Send> Send for Vec2<K, V> {}
 unsafe impl<K: Sync, V: Sync> Sync for Vec2<K, V> {}
 
-impl<K: PartialEq, V: PartialEq> PartialEq for Vec2<K, V> {
-    fn eq(&self, other: &Self) -> bool {
-        self.len == other.len && self.iter().eq(other.iter())
-    }
-}
-
-impl<K: Eq, V: Eq> Eq for Vec2<K, V> {}
-
 impl<K, V> Default for Vec2<K, V> {
     #[inline]
     fn default() -> Vec2<K, V> {
