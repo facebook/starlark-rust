@@ -351,7 +351,6 @@
 #![feature(const_mut_refs)]
 #![feature(const_type_id)]
 #![cfg_attr(rust_nightly, feature(core_intrinsics))]
-#![feature(generic_associated_types)]
 #![feature(maybe_uninit_write_slice)]
 #![feature(ptr_metadata)]
 // Plugins
