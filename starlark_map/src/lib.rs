@@ -31,6 +31,7 @@ pub mod small_map;
 pub mod small_set;
 // TODO(nga): make private.
 mod iter;
+pub(crate) mod vec2;
 pub(crate) mod vec_map;
 
 pub use equivalent::Equivalent;
