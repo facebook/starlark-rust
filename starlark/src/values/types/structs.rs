@@ -41,6 +41,7 @@ use std::hash::Hash;
 use std::marker;
 use std::marker::PhantomData;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::coerce::coerce;
 use gazebo::coerce::Coerce;
@@ -96,7 +97,16 @@ impl<'v, V: ValueLike<'v>> StructGen<'v, V> {
 starlark_complex_value!(pub Struct<'v>);
 
 /// The result of calling `struct()`.
-#[derive(Clone, Default, Debug, Trace, Freeze, ProvidesStaticType, StarlarkDocs)]
+#[derive(
+    Clone,
+    Default,
+    Debug,
+    Trace,
+    Freeze,
+    ProvidesStaticType,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(builtin = "extension")]
 #[repr(C)]
 pub struct StructGen<'v, V: ValueLike<'v>> {
@@ -154,7 +164,7 @@ where
     starlark_type!(Struct::TYPE);
 
     fn extra_memory(&self) -> usize {
-        self.fields.extra_memory()
+        allocative::size_of_unique_allocated_data(self)
     }
 
     fn collect_repr_cycle(&self, collector: &mut String) {

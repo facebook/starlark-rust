@@ -21,6 +21,7 @@ use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use allocative::Allocative;
 use gazebo::coerce::Coerce;
 use gazebo::coerce::CoerceKey;
 use gazebo::prelude::*;
@@ -161,6 +162,7 @@ pub trait StringValueLike<'v>:
     + Clone
     + Dupe
     + Serialize
+    + Allocative
     + Sealed
 {
     /// Convert to a [`StringValue`].

@@ -1082,6 +1082,7 @@ pub trait ValueLike<'v>:
     + Serialize
     + CoerceKey<Value<'v>>
     + Freeze<Frozen = FrozenValue>
+    + Allocative
     + Sealed
 {
     /// `StringValue` or `FrozenStringValue`.
