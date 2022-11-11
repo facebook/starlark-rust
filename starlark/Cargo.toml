@@ -60,7 +60,7 @@ num-traits = "0.2"
 inventory = "0.1.10"
 clap = { version = "4.0.7", features = ["derive", "wrap_help"] }
 
-allocative = { workspace = true, features = ["bumpalo", "hashbrown"] }
+allocative = { workspace = true, features = ["bumpalo", "hashbrown", "num-bigint"] }
 
 [dev-dependencies]
 rand = { version = "0.8.4", features = ["small_rng"] }

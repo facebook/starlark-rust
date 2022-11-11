@@ -23,6 +23,7 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::ops::Not;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use num_bigint::BigInt;
 use num_bigint::Sign;
@@ -51,7 +52,8 @@ use crate::values::ValueError;
     Ord,
     PartialOrd,
     Eq,
-    PartialEq
+    PartialEq,
+    Allocative
 )]
 #[display(fmt = "{}", value)]
 pub struct StarlarkBigInt {
@@ -398,8 +400,7 @@ impl<'v> StarlarkValue<'v> for StarlarkBigInt {
     }
 
     fn extra_memory(&self) -> usize {
-        // We don't know the capacity, but this is a good approximation.
-        self.value.magnitude().iter_u64_digits().len() * 8
+        allocative::size_of_unique_allocated_data(self)
     }
 }
 
