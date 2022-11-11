@@ -39,6 +39,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 
+use allocative::Allocative;
 use derivative::Derivative;
 use either::Either;
 use gazebo::any::ProvidesStaticType;
@@ -84,7 +85,8 @@ enum EnumError {
     Freeze,
     NoSerialize,
     ProvidesStaticType,
-    StarlarkDocs
+    StarlarkDocs,
+    Allocative
 )]
 #[starlark_docs_attrs(builtin = "extension")]
 #[repr(C)]
@@ -178,7 +180,7 @@ impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
 impl<'v, Typ: 'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for EnumTypeGen<V, Typ>
 where
     Self: ProvidesStaticType,
-    Typ: AsARef<Option<String>> + Debug,
+    Typ: AsARef<Option<String>> + Debug + Allocative,
 {
     starlark_type!(FUNCTION_TYPE);
 
@@ -201,8 +203,7 @@ where
     }
 
     fn extra_memory(&self) -> usize {
-        let typ = AsARef::as_aref(&self.typ);
-        typ.as_ref().map_or(0, |s| s.capacity()) + self.elements.extra_memory()
+        allocative::size_of_unique_allocated_data(self)
     }
 
     fn length(&self) -> anyhow::Result<i32> {
