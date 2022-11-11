@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+mod hint;
 mod iter;
 
 use std::hash::Hash;
@@ -27,6 +28,7 @@ use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
 use crate::hashed::Hashed;
 pub(crate) use crate::vec2::Vec2;
+use crate::vec_map::hint::likely;
 pub(crate) use crate::vec_map::iter::IntoIter;
 pub(crate) use crate::vec_map::iter::IntoIterHashed;
 pub(crate) use crate::vec_map::iter::Iter;
@@ -94,7 +96,7 @@ impl<K, V> VecMap<K, V> {
         for b_hash in self.buckets.values() {
             if *b_hash == hash {
                 let k = unsafe { &self.buckets.keys().get_unchecked(i).0 };
-                if eq(k) {
+                if likely(eq(k)) {
                     return Some(i);
                 }
             }

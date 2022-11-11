@@ -15,27 +15,10 @@
  * limitations under the License.
  */
 
-//! Ordered map optimized for starlark-rust use cases.
-
-// TODO(nga): fix.
-#![allow(clippy::should_implement_trait)]
-// Hints we disagree with
-#![allow(clippy::missing_safety_doc)]
-#![cfg_attr(rust_nightly, feature(core_intrinsics))]
-
-mod equivalent;
-mod hash_value;
-mod hashed;
-mod hasher;
-mod mix_u32;
-pub mod small_map;
-pub mod small_set;
-// TODO(nga): make private.
-mod iter;
-pub(crate) mod vec2;
-pub(crate) mod vec_map;
-
-pub use equivalent::Equivalent;
-pub use hash_value::StarlarkHashValue;
-pub use hashed::Hashed;
-pub use hasher::StarlarkHasher;
+#[cfg(rust_nightly)]
+pub(crate) use std::intrinsics::likely;
+#[cfg(not(rust_nightly))]
+#[inline(always)]
+pub(crate) fn likely(x: bool) -> bool {
+    x
+}
