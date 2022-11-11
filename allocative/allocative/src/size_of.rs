@@ -20,27 +20,18 @@ use crate::Visitor;
 /// * For unique pointers, include the size of the pointee plus this function recursively
 pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
     struct SizeOfUniqueAllocatedDataVisitor {
-        /// Element added each time unique is entered,
-        /// and element is incremented each time inline is entered.
-        // TODO(nga): use smallvec.
-        inlines_per_unique: Vec<u32>,
         /// Size we return.
         size: usize,
     }
 
     impl VisitorImpl for SizeOfUniqueAllocatedDataVisitor {
-        fn enter_inline_impl<'a>(&'a mut self, _name: Key, size: usize, _parent: NodeKind) {
-            if let Some(last) = self.inlines_per_unique.last_mut() {
-                if *last == 0 {
-                    self.size += size;
-                }
-                *last += 1;
+        fn enter_inline_impl<'a>(&'a mut self, _name: Key, size: usize, parent: NodeKind) {
+            if let NodeKind::Unique = parent {
+                self.size += size;
             }
         }
 
-        fn enter_unique_impl(&mut self, _name: Key, _size: usize, _parent: NodeKind) {
-            self.inlines_per_unique.push(0);
-        }
+        fn enter_unique_impl(&mut self, _name: Key, _size: usize, _parent: NodeKind) {}
 
         fn enter_shared_impl(
             &mut self,
@@ -52,16 +43,9 @@ pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
             false
         }
 
-        fn exit_inline_impl(&mut self) {
-            if let Some(last) = self.inlines_per_unique.last_mut() {
-                *last = last.checked_sub(1).unwrap();
-            }
-        }
+        fn exit_inline_impl(&mut self) {}
 
-        fn exit_unique_impl(&mut self) {
-            let inlines = self.inlines_per_unique.pop().unwrap();
-            assert_eq!(inlines, 0);
-        }
+        fn exit_unique_impl(&mut self) {}
 
         fn exit_shared_impl(&mut self) {
             unreachable!("shared pointers are not visited")
@@ -70,10 +54,7 @@ pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
         fn exit_root_impl(&mut self) {}
     }
 
-    let mut visitor_impl = SizeOfUniqueAllocatedDataVisitor {
-        size: 0,
-        inlines_per_unique: Vec::new(),
-    };
+    let mut visitor_impl = SizeOfUniqueAllocatedDataVisitor { size: 0 };
     let mut visitor = Visitor {
         visitor: &mut visitor_impl,
         node_kind: NodeKind::Root,
