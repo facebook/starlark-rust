@@ -41,6 +41,7 @@ use crate::values::demand::Demand;
 use crate::values::docs::DocItem;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::BlackHole;
+use crate::values::layout::const_type_id::ConstTypeId;
 use crate::values::layout::heap::repr::AValueHeader;
 use crate::values::layout::heap::repr::AValueRepr;
 use crate::values::traits::StarlarkValueVTable;
@@ -120,7 +121,7 @@ impl<'v, T: Display + Debug + AnyLifetime<'v> + erased_serde::Serialize> GetDynM
 
 pub(crate) struct AValueVTable {
     // Common `AValue` fields.
-    static_type_of_value: TypeId,
+    static_type_of_value: ConstTypeId,
     type_name: &'static str,
     get_hash: fn(*const ()) -> anyhow::Result<StarlarkHashValue>,
     /// Cache `type_name` here to avoid computing hash.
@@ -151,7 +152,7 @@ pub(crate) struct AValueVTable {
 struct GetTypeId<T: ?Sized + 'static>(PhantomData<&'static T>);
 
 impl<T: ?Sized + 'static> GetTypeId<T> {
-    const TYPE_ID: TypeId = TypeId::of::<T>();
+    const TYPE_ID: ConstTypeId = ConstTypeId::of::<T>();
 }
 
 struct GetAllocativeKey<'v, T: StarlarkValue<'v>>(PhantomData<&'v T>);
@@ -283,7 +284,7 @@ impl<'v> AValueDyn<'v> {
 
     #[inline]
     pub(crate) fn static_type_of_value(self) -> TypeId {
-        self.vtable.static_type_of_value
+        self.vtable.static_type_of_value.get()
     }
 
     #[inline]

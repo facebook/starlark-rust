@@ -350,7 +350,7 @@
 #![allow(stable_features)]
 #![feature(bench_black_box)]
 #![feature(const_mut_refs)]
-#![feature(const_type_id)]
+#![cfg_attr(rust_nightly, feature(const_type_id))]
 #![cfg_attr(rust_nightly, feature(core_intrinsics))]
 #![feature(maybe_uninit_write_slice)]
 #![feature(ptr_metadata)]

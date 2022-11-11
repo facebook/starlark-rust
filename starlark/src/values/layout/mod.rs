@@ -20,6 +20,7 @@
 
 mod avalue;
 mod const_frozen_string;
+pub(crate) mod const_type_id;
 pub(crate) mod heap;
 pub(crate) mod identity;
 pub(crate) mod pointer;
