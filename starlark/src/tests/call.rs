@@ -17,8 +17,6 @@
 
 //! Test call expression and parameter binding.
 
-use std::hint;
-
 use crate as starlark;
 use crate::assert;
 use crate::assert::Assert;
@@ -257,10 +255,8 @@ fn test_frame_size() {
         fn stack_ptr(args: Vec<Value>) -> anyhow::Result<usize> {
             drop(args);
 
-            // Taking a pointer of a stack variable is UB or something, I don't know.
-            // So pass it through `black_box` to skip compiler optimizations.
             let x = 1;
-            let ptr = hint::black_box(&x);
+            let ptr = &x;
             Ok(ptr as *const i32 as usize)
         }
     }
