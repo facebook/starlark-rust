@@ -48,11 +48,12 @@ enum TypingError {
     PerhapsYouMeant(String, String),
 }
 
+trait TypeCompiledImpl: Allocative + Send + Sync + 'static {
+    fn matches(&self, value: Value) -> bool;
+}
+
 #[derive(Allocative)]
-pub(crate) struct TypeCompiled(
-    #[allocative(skip)] // TODO(nga): measure this.
-    Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>,
-);
+pub(crate) struct TypeCompiled(Box<dyn TypeCompiledImpl>);
 
 unsafe impl Coerce<TypeCompiled> for TypeCompiled {}
 
@@ -71,72 +72,191 @@ impl Debug for TypeCompiled {
 // These functions are small, but are deliberately out-of-line so we get better
 // information in profiling about the origin of these closures
 impl TypeCompiled {
+    #[inline]
+    pub(crate) fn matches(&self, value: Value) -> bool {
+        self.0.matches(value)
+    }
+
     fn type_anything() -> TypeCompiled {
-        TypeCompiled(Box::new(|_| true))
+        #[derive(Allocative)]
+        struct Anything;
+
+        impl TypeCompiledImpl for Anything {
+            fn matches(&self, _value: Value) -> bool {
+                true
+            }
+        }
+
+        TypeCompiled(Box::new(Anything))
     }
 
     fn type_none() -> TypeCompiled {
-        TypeCompiled(Box::new(|v| v.is_none()))
+        #[derive(Allocative)]
+        struct IsNone;
+
+        impl TypeCompiledImpl for IsNone {
+            fn matches(&self, value: Value) -> bool {
+                value.is_none()
+            }
+        }
+
+        TypeCompiled(Box::new(IsNone))
     }
 
     fn type_string() -> TypeCompiled {
-        TypeCompiled(Box::new(|v| {
-            v.unpack_str().is_some() || v.get_ref().matches_type("string")
-        }))
+        #[derive(Allocative)]
+        struct IsString;
+
+        impl TypeCompiledImpl for IsString {
+            fn matches(&self, value: Value) -> bool {
+                value.unpack_str().is_some() || value.get_ref().matches_type("string")
+            }
+        }
+
+        TypeCompiled(Box::new(IsString))
     }
 
     fn type_int() -> TypeCompiled {
-        TypeCompiled(Box::new(|v| {
-            v.unpack_int().is_some() || v.get_ref().matches_type("int")
-        }))
+        #[derive(Allocative)]
+        struct IsInt;
+
+        impl TypeCompiledImpl for IsInt {
+            fn matches(&self, value: Value) -> bool {
+                value.unpack_int().is_some() || value.get_ref().matches_type("int")
+            }
+        }
+
+        TypeCompiled(Box::new(IsInt))
     }
 
     fn type_bool() -> TypeCompiled {
-        TypeCompiled(Box::new(|v| {
-            v.unpack_bool().is_some() || v.get_ref().matches_type("bool")
-        }))
+        #[derive(Allocative)]
+        struct IsBool;
+
+        impl TypeCompiledImpl for IsBool {
+            fn matches(&self, value: Value) -> bool {
+                value.unpack_bool().is_some() || value.get_ref().matches_type("bool")
+            }
+        }
+
+        TypeCompiled(Box::new(IsBool))
     }
 
     fn type_concrete(t: &str) -> TypeCompiled {
-        let t = t.to_owned();
-        TypeCompiled(Box::new(move |v| v.get_ref().matches_type(&t)))
+        #[derive(Allocative)]
+        struct IsConcrete(String);
+
+        impl TypeCompiledImpl for IsConcrete {
+            fn matches(&self, value: Value) -> bool {
+                value.get_ref().matches_type(&self.0)
+            }
+        }
+
+        TypeCompiled(Box::new(IsConcrete(t.to_owned())))
     }
 
     fn type_list() -> TypeCompiled {
-        TypeCompiled(Box::new(|v| List::from_value(v).is_some()))
+        #[derive(Allocative)]
+        struct IsList;
+
+        impl TypeCompiledImpl for IsList {
+            fn matches(&self, value: Value) -> bool {
+                List::from_value(value).is_some()
+            }
+        }
+
+        TypeCompiled(Box::new(IsList))
     }
 
     fn type_list_of(t: TypeCompiled) -> TypeCompiled {
-        TypeCompiled(Box::new(move |v| match List::from_value(v) {
-            None => false,
-            Some(v) => v.iter().all(|v| (t.0)(v)),
-        }))
+        #[derive(Allocative)]
+        struct IsListOf(TypeCompiled);
+
+        impl TypeCompiledImpl for IsListOf {
+            fn matches(&self, value: Value) -> bool {
+                match List::from_value(value) {
+                    None => false,
+                    Some(list) => list.iter().all(|v| self.0.matches(v)),
+                }
+            }
+        }
+
+        TypeCompiled(Box::new(IsListOf(t)))
     }
 
     fn type_any_of_two(t1: TypeCompiled, t2: TypeCompiled) -> TypeCompiled {
-        TypeCompiled(Box::new(move |v| (t1.0)(v) || (t2.0)(v)))
+        #[derive(Allocative)]
+        struct IsAnyOfTwo(TypeCompiled, TypeCompiled);
+
+        impl TypeCompiledImpl for IsAnyOfTwo {
+            fn matches(&self, value: Value) -> bool {
+                self.0.matches(value) || self.1.matches(value)
+            }
+        }
+
+        TypeCompiled(Box::new(IsAnyOfTwo(t1, t2)))
     }
 
     fn type_any_of(ts: Vec<TypeCompiled>) -> TypeCompiled {
-        TypeCompiled(Box::new(move |v| ts.iter().any(|t| (t.0)(v))))
+        #[derive(Allocative)]
+        struct IsAnyOf(Vec<TypeCompiled>);
+
+        impl TypeCompiledImpl for IsAnyOf {
+            fn matches(&self, value: Value) -> bool {
+                self.0.iter().any(|t| t.matches(value))
+            }
+        }
+
+        TypeCompiled(Box::new(IsAnyOf(ts)))
     }
 
     fn type_dict() -> TypeCompiled {
-        TypeCompiled(Box::new(|v| Dict::from_value(v).is_some()))
+        #[derive(Allocative)]
+        struct IsDict;
+
+        impl TypeCompiledImpl for IsDict {
+            fn matches(&self, value: Value) -> bool {
+                Dict::from_value(value).is_some()
+            }
+        }
+
+        TypeCompiled(Box::new(IsDict))
     }
 
     fn type_dict_of(kt: TypeCompiled, vt: TypeCompiled) -> TypeCompiled {
-        TypeCompiled(Box::new(move |v| match Dict::from_value(v) {
-            None => false,
-            Some(v) => v.iter().all(|(k, v)| (kt.0)(k) && (vt.0)(v)),
-        }))
+        #[derive(Allocative)]
+        struct IsDictOf(TypeCompiled, TypeCompiled);
+
+        impl TypeCompiledImpl for IsDictOf {
+            fn matches(&self, value: Value) -> bool {
+                match Dict::from_value(value) {
+                    None => false,
+                    Some(dict) => dict
+                        .iter()
+                        .all(|(k, v)| self.0.matches(k) && self.1.matches(v)),
+                }
+            }
+        }
+
+        TypeCompiled(Box::new(IsDictOf(kt, vt)))
     }
 
     fn type_tuple_of(ts: Vec<TypeCompiled>) -> TypeCompiled {
-        TypeCompiled(Box::new(move |v| match Tuple::from_value(v) {
-            Some(v) if v.len() == ts.len() => v.iter().zip(ts.iter()).all(|(v, t)| (t.0)(v)),
-            _ => false,
-        }))
+        #[derive(Allocative)]
+        struct IsTupleOf(Vec<TypeCompiled>);
+
+        impl TypeCompiledImpl for IsTupleOf {
+            fn matches(&self, value: Value) -> bool {
+                match Tuple::from_value(value) {
+                    Some(v) if v.len() == self.0.len() => {
+                        v.iter().zip(self.0.iter()).all(|(v, t)| t.matches(v))
+                    }
+                    _ => false,
+                }
+            }
+        }
+
+        TypeCompiled(Box::new(IsTupleOf(ts)))
     }
 }
 
@@ -251,7 +371,7 @@ fn invalid_type_annotation<'v>(ty: Value<'v>, heap: &'v Heap) -> TypingError {
 
 impl<'v> Value<'v> {
     pub(crate) fn is_type(self, ty: Value<'v>, heap: &'v Heap) -> anyhow::Result<bool> {
-        Ok(TypeCompiled::new(ty, heap)?.0(self))
+        Ok(TypeCompiled::new(ty, heap)?.matches(self))
     }
 
     #[cold]
@@ -288,7 +408,7 @@ impl<'v> Value<'v> {
         ty_compiled: &TypeCompiled,
         arg_name: Option<&str>,
     ) -> anyhow::Result<()> {
-        if ty_compiled.0(self) {
+        if ty_compiled.matches(self) {
             Ok(())
         } else {
             Self::check_type_error(self, ty, arg_name)
