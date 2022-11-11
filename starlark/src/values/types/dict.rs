@@ -30,6 +30,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::cell::ARef;
 use gazebo::coerce::coerce;
@@ -64,7 +65,15 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 
-#[derive(Clone, Default, Trace, Debug, ProvidesStaticType, StarlarkDocs)]
+#[derive(
+    Clone,
+    Default,
+    Trace,
+    Debug,
+    ProvidesStaticType,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(builtin = "standard")]
 struct DictGen<T>(T);
 
@@ -90,7 +99,7 @@ impl<'v> Display for Dict<'v> {
 }
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
-#[derive(Clone, Default, Trace, Debug, ProvidesStaticType)]
+#[derive(Clone, Default, Trace, Debug, ProvidesStaticType, Allocative)]
 #[repr(transparent)]
 pub struct Dict<'v> {
     /// The data stored by the dictionary. The keys must all be hashable values.
@@ -104,7 +113,7 @@ impl<'v> StarlarkTypeRepr for Dict<'v> {
 }
 
 /// Define the list type. See [`Dict`] and [`FrozenDict`] as the two possible representations.
-#[derive(Clone, Default, Debug, ProvidesStaticType)]
+#[derive(Clone, Default, Debug, ProvidesStaticType, Allocative)]
 #[repr(transparent)]
 pub struct FrozenDict {
     /// The data stored by the dictionary. The keys must all be hashable values.
@@ -415,7 +424,7 @@ impl<'v> Freeze for DictGen<RefCell<Dict<'v>>> {
     }
 }
 
-trait DictLike<'v>: Debug {
+trait DictLike<'v>: Debug + Allocative {
     fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>>;
     fn set_at(&self, index: Hashed<Value<'v>>, value: Value<'v>) -> anyhow::Result<()>;
 }
@@ -500,7 +509,7 @@ where
     }
 
     fn extra_memory(&self) -> usize {
-        self.0.content().extra_memory()
+        allocative::size_of_unique_allocated_data(self)
     }
 
     fn length(&self) -> anyhow::Result<i32> {
