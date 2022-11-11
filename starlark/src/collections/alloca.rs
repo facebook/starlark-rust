@@ -25,6 +25,7 @@ use std::mem::MaybeUninit;
 use std::ptr;
 use std::slice;
 
+use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice_cloned;
 use crate::hint::likely;
 use crate::hint::unlikely;
 
@@ -172,9 +173,9 @@ impl Alloca {
 
         self.alloca_uninit(x.len() + y.len(), |xy| {
             let (x_uninit, y_uninit) = xy.split_at_mut(x.len());
-            let x = MaybeUninit::write_slice_cloned(x_uninit, x);
+            let x = maybe_uninit_write_slice_cloned(x_uninit, x);
             let _x_drop_guard = DropSliceGuard(x);
-            let y = MaybeUninit::write_slice_cloned(y_uninit, y);
+            let y = maybe_uninit_write_slice_cloned(y_uninit, y);
             let _y_drop_guard = DropSliceGuard(y);
             let xy = unsafe { &mut *(xy as *mut [MaybeUninit<T>] as *mut [T]) };
             k(xy)

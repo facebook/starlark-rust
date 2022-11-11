@@ -20,7 +20,6 @@ use std::any::TypeId;
 use std::cmp;
 use std::fmt::Debug;
 use std::mem;
-use std::mem::MaybeUninit;
 
 use allocative::Allocative;
 use derive_more::Display;
@@ -30,6 +29,7 @@ use gazebo::prelude::*;
 use serde::Serialize;
 use serde::Serializer;
 
+use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::eval::compiler::def::FrozenDef;
@@ -434,7 +434,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Tuple<'v>> {
         // TODO: this allocation is unnecessary
         let frozen_values = content.try_map(|v| freezer.freeze(*v))?;
         r.fill(AValueImpl(Direct, FrozenTuple::new(content.len())));
-        MaybeUninit::write_slice(extra, &frozen_values);
+        maybe_uninit_write_slice(extra, &frozen_values);
 
         Ok(fv)
     }
@@ -460,7 +460,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Tuple<'v>> {
             tracer.trace(elem);
         }
         r.fill(x);
-        MaybeUninit::write_slice(extra, content);
+        maybe_uninit_write_slice(extra, content);
         v
     }
 }
@@ -608,7 +608,7 @@ impl<'v> AValue<'v> for AValueImpl<Direct, Array<'v>> {
             Direct,
             Array::new(content.len() as u32, content.len() as u32),
         ));
-        MaybeUninit::write_slice(extra, content);
+        maybe_uninit_write_slice(extra, content);
         v
     }
 }

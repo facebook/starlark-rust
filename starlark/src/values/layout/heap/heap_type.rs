@@ -42,6 +42,8 @@ use gazebo::cast;
 use gazebo::prelude::*;
 use once_cell::sync::Lazy;
 
+use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice;
+use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice_cloned;
 use crate::collections::Hashed;
 use crate::collections::StarlarkHashValue;
 use crate::eval::compiler::def::FrozenDef;
@@ -307,7 +309,7 @@ impl FrozenHeap {
             let (avalue, extra) = self
                 .arena
                 .alloc_extra::<_>(frozen_tuple_avalue(elems.len()));
-            MaybeUninit::write_slice(extra, elems);
+            maybe_uninit_write_slice(extra, elems);
             FrozenValue::new_repr(&*avalue)
         }
     }
@@ -320,7 +322,7 @@ impl FrozenHeap {
 
         unsafe {
             let (avalue, elem_places) = self.arena.alloc_extra(frozen_list_avalue(elems.len()));
-            MaybeUninit::write_slice(elem_places, elems);
+            maybe_uninit_write_slice(elem_places, elems);
             FrozenValue::new_repr(&*avalue)
         }
     }
@@ -381,7 +383,7 @@ impl FrozenHeap {
         let (_any_array, content) = self.arena.alloc_extra(any_array_avalue(values.len()));
         // Drop lifetime.
         let content = unsafe { transmute!(&mut [MaybeUninit<T>], &mut [MaybeUninit<T>], content) };
-        FrozenRef::new(&*MaybeUninit::write_slice_cloned(content, values))
+        FrozenRef::new(&*maybe_uninit_write_slice_cloned(content, values))
     }
 
     /// Allocate a slice in the frozen heap.
@@ -611,7 +613,7 @@ impl Heap {
         unsafe {
             let arena = self.arena.borrow();
             let (avalue, extra) = arena.alloc_extra(tuple_avalue(elems.len()));
-            MaybeUninit::write_slice(extra, elems);
+            maybe_uninit_write_slice(extra, elems);
             Value::new_repr(&*avalue)
         }
     }
