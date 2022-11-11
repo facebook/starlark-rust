@@ -26,6 +26,7 @@ use std::ops::Deref;
 use std::ptr;
 use std::sync::atomic;
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 
 use crate::values::Freeze;
@@ -38,7 +39,8 @@ use crate::values::Tracer;
 /// However, this keeps the type of the type `T` of the actual
 /// [`FrozenValue`](crate::values::FrozenValue) as a
 /// reference, allowing manipulation of the actual typed data.
-#[derive(Clone_, Dupe_, Copy_, Debug)]
+#[derive(Clone_, Dupe_, Copy_, Debug, Allocative)]
+#[allocative(bound = "", skip)] // Data is owned by heap.
 pub struct FrozenRef<'f, T: 'f + ?Sized> {
     pub(crate) value: &'f T,
 }
