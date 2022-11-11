@@ -84,29 +84,20 @@ impl<K, V> VecMap<K, V> {
     }
 
     #[inline]
-    fn get_full_raw(
+    pub(crate) fn get_index_of_hashed_raw(
         &self,
         hash: StarlarkHashValue,
         mut eq: impl FnMut(&K) -> bool,
-    ) -> Option<(usize, &K, &V)> {
+    ) -> Option<usize> {
         let mut i = 0;
         #[allow(clippy::explicit_counter_loop)] // we are paranoid about performance
-        for ((k, v), b_hash) in &self.buckets {
+        for ((k, _v), b_hash) in &self.buckets {
             if *b_hash == hash && eq(k) {
-                return Some((i, k, v));
+                return Some(i);
             }
             i += 1;
         }
         None
-    }
-
-    #[inline]
-    pub(crate) fn get_index_of_hashed_raw(
-        &self,
-        hash: StarlarkHashValue,
-        eq: impl FnMut(&K) -> bool,
-    ) -> Option<usize> {
-        self.get_full_raw(hash, eq).map(|(i, _, _)| i)
     }
 
     #[inline]
