@@ -15,7 +15,7 @@ use std::collections::HashSet;
 use crate::allocative_trait::Allocative;
 use crate::impls::common::visit_generic_map;
 use crate::impls::common::visit_generic_set;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<K: Allocative, V: Allocative> Allocative for BTreeMap<K, V> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

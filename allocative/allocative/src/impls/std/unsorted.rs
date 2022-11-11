@@ -28,7 +28,7 @@ use crate::impls::common::DATA_NAME;
 use crate::impls::common::PTR_NAME;
 use crate::impls::common::UNUSED_CAPACITY_NAME;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<T: Allocative + ?Sized> Allocative for &'static T {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

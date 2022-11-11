@@ -14,7 +14,7 @@ use parking_lot::lock_api::RawMutex;
 
 use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<R: RawMutex + 'static, T: Allocative> Allocative for Mutex<R, T> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

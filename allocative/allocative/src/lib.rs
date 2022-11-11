@@ -14,15 +14,15 @@ mod allocative_trait;
 mod flamegraph;
 mod impls;
 mod key;
-mod measure;
 mod rc_str;
 mod size_of;
 mod test_derive;
+mod visitor;
 
 pub use allocative_derive::Allocative;
 
 pub use crate::allocative_trait::Allocative;
 pub use crate::flamegraph::FlameGraphBuilder;
 pub use crate::key::Key;
-pub use crate::measure::Visitor;
 pub use crate::size_of::size_of_unique_allocated_data;
+pub use crate::visitor::Visitor;

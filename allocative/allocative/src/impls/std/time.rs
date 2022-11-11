@@ -12,7 +12,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 
 use crate::allocative_trait::Allocative;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl Allocative for Instant {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

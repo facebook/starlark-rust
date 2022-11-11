@@ -11,7 +11,7 @@ use std::mem;
 
 use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 /// "Field" describing allocated but unused capacity (e.g. in `Vec`).
 pub(crate) const UNUSED_CAPACITY_NAME: Key = Key::new("unused_capacity");

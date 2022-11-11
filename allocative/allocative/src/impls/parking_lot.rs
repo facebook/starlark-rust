@@ -12,7 +12,7 @@
 use parking_lot::RawMutex;
 
 use crate::allocative_trait::Allocative;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl Allocative for RawMutex {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

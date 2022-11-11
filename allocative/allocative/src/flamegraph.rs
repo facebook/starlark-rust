@@ -17,9 +17,9 @@ use std::mem;
 use std::rc::Rc;
 
 use crate::key::Key;
-use crate::measure::MeasureVisitorImpl;
-use crate::measure::NodeKind;
-use crate::measure::Visitor;
+use crate::visitor::NodeKind;
+use crate::visitor::Visitor;
+use crate::visitor::VisitorImpl;
 use crate::Allocative;
 
 #[derive(Debug)]
@@ -245,7 +245,7 @@ impl FlameGraphBuilder {
     }
 }
 
-impl MeasureVisitorImpl for FlameGraphBuilder {
+impl VisitorImpl for FlameGraphBuilder {
     fn enter_inline_impl(&mut self, name: Key, size: usize) {
         self.current.down(name);
         self.current.tree.borrow_mut().size += size;

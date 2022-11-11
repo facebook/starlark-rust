@@ -16,7 +16,7 @@ use dashmap::DashMap;
 
 use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<K: Allocative + Eq + Hash, V: Allocative> Allocative for DashMap<K, V> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

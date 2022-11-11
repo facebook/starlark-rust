@@ -16,7 +16,7 @@ use futures::future::Shared;
 
 use crate::allocative_trait::Allocative;
 use crate::impls::common::PTR_NAME;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<F: Future + 'static> Allocative for Shared<F>
 where

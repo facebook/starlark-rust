@@ -13,7 +13,7 @@ use prost_types::Duration;
 use prost_types::Timestamp;
 
 use crate::allocative_trait::Allocative;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl Allocative for Timestamp {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

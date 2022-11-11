@@ -16,7 +16,7 @@ use sequence_trie::SequenceTrie;
 use crate::allocative_trait::Allocative;
 use crate::impls::common::visit_generic_map;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<K: Allocative + Eq + Hash, V: Allocative> Allocative for SequenceTrie<K, V> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

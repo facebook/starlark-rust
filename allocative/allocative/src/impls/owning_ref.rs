@@ -13,7 +13,7 @@ use owning_ref::OwningRef;
 
 use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<O: Allocative, X> Allocative for OwningRef<O, X> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

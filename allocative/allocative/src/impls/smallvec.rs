@@ -15,7 +15,7 @@ use smallvec::SmallVec;
 use crate::allocative_trait::Allocative;
 use crate::impls::common::PTR_NAME;
 use crate::key::Key;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<A> Allocative for SmallVec<A>
 where

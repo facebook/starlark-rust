@@ -17,7 +17,7 @@ use crate::allocative_trait::Allocative;
 use crate::impls::common::DATA_NAME;
 use crate::impls::common::PTR_NAME;
 use crate::impls::common::UNUSED_CAPACITY_NAME;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 struct BumpCounters {
     used: usize,

@@ -17,7 +17,7 @@ use crate::key::Key;
 ///
 /// At the moment there's only one implementation, the one which generates flame graph,
 /// and this trait is crate-private. This may change in the future.
-pub(crate) trait MeasureVisitorImpl {
+pub(crate) trait VisitorImpl {
     /// Enter simple field like `u32`.
     /// All sizes are in bytes.
     fn enter_inline_impl<'a>(&'a mut self, name: Key, size: usize);
@@ -46,7 +46,7 @@ pub(crate) enum NodeKind {
 
 #[must_use] // Must call `.exit()`.
 pub struct Visitor<'a> {
-    pub(crate) visitor: &'a mut dyn MeasureVisitorImpl,
+    pub(crate) visitor: &'a mut dyn VisitorImpl,
     pub(crate) node_kind: NodeKind,
 }
 

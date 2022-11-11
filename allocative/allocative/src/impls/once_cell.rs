@@ -12,7 +12,7 @@
 use once_cell::sync::OnceCell;
 
 use crate::allocative_trait::Allocative;
-use crate::measure::Visitor;
+use crate::visitor::Visitor;
 
 impl<T: Allocative> Allocative for OnceCell<T> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {

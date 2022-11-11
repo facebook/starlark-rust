@@ -7,8 +7,8 @@
  * of this source tree.
  */
 
-use crate::measure::MeasureVisitorImpl;
-use crate::measure::NodeKind;
+use crate::visitor::NodeKind;
+use crate::visitor::VisitorImpl;
 use crate::Allocative;
 use crate::Key;
 use crate::Visitor;
@@ -28,7 +28,7 @@ pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
         size: usize,
     }
 
-    impl MeasureVisitorImpl for SizeOfUniqueAllocatedDataVisitor {
+    impl VisitorImpl for SizeOfUniqueAllocatedDataVisitor {
         fn enter_inline_impl<'a>(&'a mut self, _name: Key, size: usize) {
             if let Some(last) = self.inlines_per_unique.last_mut() {
                 if *last == 0 {
