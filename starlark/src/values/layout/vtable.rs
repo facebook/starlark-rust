@@ -17,13 +17,11 @@
 
 use std::any::TypeId;
 use std::cmp::Ordering;
-use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::marker::PhantomData;
 use std::mem;
 use std::ptr;
-use std::ptr::DynMetadata;
 
 use allocative::Allocative;
 use gazebo::any::AnyLifetime;
@@ -79,38 +77,6 @@ impl<'a, 'v> StarlarkValueRawPtr<'a, 'v> {
     }
 }
 
-struct GetDynMetadata<T>(PhantomData<T>);
-
-/// Obtain vtables for supertraits of `StarlarkValue`.
-///
-/// These shoud be `const fn`, but currently rust does not allow it,
-/// but allows associated consts.
-impl<'v, T: Display + Debug + AnyLifetime<'v> + erased_serde::Serialize> GetDynMetadata<T> {
-    const DISPLAY_DYN_METADATA: DynMetadata<dyn Display> = unsafe {
-        ptr::metadata(transmute!(
-            *const dyn Display,
-            *const (dyn Display + 'static),
-            ptr::null::<T>() as *const dyn Display
-        ))
-    };
-
-    const DEBUG_DYN_METADATA: DynMetadata<dyn Debug> = unsafe {
-        ptr::metadata(transmute!(
-            *const dyn Debug,
-            *const (dyn Debug + 'static),
-            ptr::null::<T>() as *const dyn Debug
-        ))
-    };
-
-    const ERASED_SERDE_SERIALIZE_DYN_METADATA: DynMetadata<dyn erased_serde::Serialize> = unsafe {
-        ptr::metadata(transmute!(
-            *const dyn erased_serde::Serialize,
-            *const (dyn erased_serde::Serialize + 'static),
-            ptr::null::<T>() as *const dyn erased_serde::Serialize
-        ))
-    };
-}
-
 pub(crate) struct AValueVTable {
     // Common `AValue` fields.
     static_type_of_value: ConstTypeId,
@@ -131,12 +97,10 @@ pub(crate) struct AValueVTable {
     heap_freeze: fn(*mut (), &Freezer) -> anyhow::Result<FrozenValue>,
     heap_copy: for<'v> fn(*mut (), &Tracer<'v>) -> Value<'v>,
 
-    // `StarlarkValue` supertraits
-    // If we display often, we can optimize this by storing
-    // a pointer to `Display::fmt` instead of a pointer to vtable.
-    display: DynMetadata<dyn Display>,
-    debug: DynMetadata<dyn Debug>,
-    erased_serde_serialize: DynMetadata<dyn erased_serde::Serialize>,
+    // `StarlarkValue` supertraits.
+    display: unsafe fn(*const ()) -> *const dyn Display,
+    debug: unsafe fn(*const ()) -> *const dyn Debug,
+    erased_serde_serialize: unsafe fn(*const ()) -> *const dyn erased_serde::Serialize,
     allocative: unsafe fn(*const ()) -> *const dyn Allocative,
 }
 
@@ -168,10 +132,18 @@ impl AValueVTable {
             type_name: "BlackHole",
             type_as_allocative_key: BLACKHOLE_ALLOCATIVE_KEY,
 
-            display: GetDynMetadata::<BlackHole>::DISPLAY_DYN_METADATA,
-            debug: GetDynMetadata::<BlackHole>::DEBUG_DYN_METADATA,
-            erased_serde_serialize:
-                GetDynMetadata::<BlackHole>::ERASED_SERDE_SERIALIZE_DYN_METADATA,
+            display: |this| {
+                let this = unsafe { &*(this as *const BlackHole) };
+                this as *const dyn Display
+            },
+            debug: |this| {
+                let this = unsafe { &*(this as *const BlackHole) };
+                this as *const dyn Debug
+            },
+            erased_serde_serialize: |this| {
+                let this = unsafe { &*(this as *const BlackHole) };
+                this as *const dyn erased_serde::Serialize
+            },
             allocative: |this| {
                 let this = unsafe { &*(this as *const BlackHole) };
                 this as *const dyn Allocative
@@ -207,10 +179,24 @@ impl AValueVTable {
             },
             type_name: T::StarlarkValue::TYPE,
             type_as_allocative_key: GetAllocativeKey::<T::StarlarkValue>::ALLOCATIVE_KEY,
-            display: GetDynMetadata::<T::StarlarkValue>::DISPLAY_DYN_METADATA,
-            debug: GetDynMetadata::<T::StarlarkValue>::DEBUG_DYN_METADATA,
-            erased_serde_serialize:
-                GetDynMetadata::<T::StarlarkValue>::ERASED_SERDE_SERIALIZE_DYN_METADATA,
+            display: |this| {
+                let this = unsafe { &*(this as *const T::StarlarkValue) };
+                let display = this as *const dyn Display;
+                // Drop lifetime.
+                unsafe { mem::transmute(display) }
+            },
+            debug: |this| {
+                let this = unsafe { &*(this as *const T::StarlarkValue) };
+                let debug = this as *const dyn Debug;
+                // Drop lifetime.
+                unsafe { mem::transmute(debug) }
+            },
+            erased_serde_serialize: |this| {
+                let this = unsafe { &*(this as *const T::StarlarkValue) };
+                let serialize = this as *const dyn erased_serde::Serialize;
+                // Drop lifetime.
+                unsafe { mem::transmute(serialize) }
+            },
             allocative: |this| {
                 let this = unsafe { &*(this as *const T::StarlarkValue) };
                 let allocative = this as *const dyn Allocative;
@@ -572,19 +558,17 @@ impl<'v> AValueDyn<'v> {
 
     #[inline]
     pub(crate) fn as_display(self) -> &'v dyn Display {
-        unsafe { &*ptr::from_raw_parts(self.value as *const (), self.vtable.display) }
+        unsafe { &*(self.vtable.display)(self.value) }
     }
 
     #[inline]
-    pub(crate) fn as_debug(self) -> &'v dyn fmt::Debug {
-        unsafe { &*ptr::from_raw_parts(self.value as *const (), self.vtable.debug) }
+    pub(crate) fn as_debug(self) -> &'v dyn Debug {
+        unsafe { &*(self.vtable.debug)(self.value) }
     }
 
     #[inline]
     pub(crate) fn as_serialize(self) -> &'v dyn erased_serde::Serialize {
-        unsafe {
-            &*ptr::from_raw_parts(self.value as *const (), self.vtable.erased_serde_serialize)
-        }
+        unsafe { &*(self.vtable.erased_serde_serialize)(self.value) }
     }
 
     #[inline]
