@@ -17,7 +17,7 @@
 
 //! Statically allocated strings.
 
-use std::ptr;
+use std::mem;
 use std::sync::atomic::AtomicU32;
 
 use crate::values::layout::avalue::VALUE_STR_A_VALUE_PTR;
@@ -53,7 +53,20 @@ impl<const N: usize> StarlarkStrNRepr<N> {
         assert!(N == StarlarkStr::payload_len_for_len(s.len()));
         assert!(s.len() as u32 as usize == s.len());
         let mut payload = [0usize; N];
-        unsafe { ptr::copy_nonoverlapping(s.as_ptr(), payload.as_mut_ptr() as *mut u8, s.len()) };
+
+        // This can be as simple as:
+        // ```
+        // unsafe { ptr::copy_nonoverlapping(s.as_ptr(), payload.as_mut_ptr() as *mut u8, s.len()) };
+        // ```
+        // when `const_mut_refs` is stabilized (https://github.com/rust-lang/rust/issues/57349).
+        // Anyway, this code is only called at compile time.
+        let mut i = 0;
+        while i != s.len() {
+            payload[i / mem::size_of::<usize>()] |=
+                usize::from_le((s.as_bytes()[i] as usize) << (8 * (i % mem::size_of::<usize>())));
+            i += 1;
+        }
+
         Self {
             repr: AValueRepr {
                 header: VALUE_STR_A_VALUE_PTR,

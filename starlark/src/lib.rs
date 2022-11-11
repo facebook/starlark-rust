@@ -348,7 +348,6 @@
 
 // Features we use
 #![allow(stable_features)]
-#![feature(const_mut_refs)]
 #![cfg_attr(rust_nightly, feature(const_type_id))]
 #![cfg_attr(rust_nightly, feature(core_intrinsics))]
 #![feature(maybe_uninit_write_slice)]
