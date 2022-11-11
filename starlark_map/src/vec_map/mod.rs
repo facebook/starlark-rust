@@ -91,9 +91,12 @@ impl<K, V> VecMap<K, V> {
     ) -> Option<usize> {
         let mut i = 0;
         #[allow(clippy::explicit_counter_loop)] // we are paranoid about performance
-        for ((k, _v), b_hash) in &self.buckets {
-            if *b_hash == hash && eq(k) {
-                return Some(i);
+        for b_hash in self.buckets.values() {
+            if *b_hash == hash {
+                let k = unsafe { &self.buckets.keys().get_unchecked(i).0 };
+                if eq(k) {
+                    return Some(i);
+                }
             }
             i += 1;
         }
