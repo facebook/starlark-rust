@@ -25,6 +25,7 @@ use std::mem;
 use std::ptr;
 use std::ptr::DynMetadata;
 
+use allocative::Allocative;
 use gazebo::any::AnyLifetime;
 use gazebo::any::ProvidesStaticType;
 use gazebo::dupe::Dupe;
@@ -144,6 +145,7 @@ pub(crate) struct AValueVTable {
     debug: DynMetadata<dyn Debug>,
     erased_serde_serialize: DynMetadata<dyn erased_serde::Serialize>,
     any_lifetime: DynMetadata<dyn AnyLifetime<'static>>,
+    allocative: unsafe fn(*const ()) -> *const dyn Allocative,
 }
 
 struct GetTypeId<T: ?Sized + 'static>(PhantomData<&'static T>);
@@ -179,6 +181,10 @@ impl AValueVTable {
             erased_serde_serialize:
                 GetDynMetadata::<BlackHole>::ERASED_SERDE_SERIALIZE_DYN_METADATA,
             any_lifetime: GetDynMetadata::<BlackHole>::ANY_LIFETIME_DYN_METADATA,
+            allocative: |this| {
+                let this = unsafe { &*(this as *const BlackHole) };
+                this as *const dyn Allocative
+            },
             starlark_value: StarlarkValueVTable::BLACK_HOLE,
         }
     }
@@ -215,6 +221,12 @@ impl AValueVTable {
             erased_serde_serialize:
                 GetDynMetadata::<T::StarlarkValue>::ERASED_SERDE_SERIALIZE_DYN_METADATA,
             any_lifetime: GetDynMetadata::<T::StarlarkValue>::ANY_LIFETIME_DYN_METADATA,
+            allocative: |this| {
+                let this = unsafe { &*(this as *const T::StarlarkValue) };
+                let allocative = this as *const dyn Allocative;
+                // Drop lifetime.
+                unsafe { mem::transmute(allocative) }
+            },
             starlark_value: StarlarkValueVTableGet::<'v, T::StarlarkValue>::VTABLE,
         }
     }
@@ -239,10 +251,14 @@ impl<'v> AValueDyn<'v> {
         size
     }
 
+    fn as_allocative(self) -> &'v dyn Allocative {
+        unsafe { &*(self.vtable.allocative)(self.value) }
+    }
+
     pub(crate) fn total_memory(self) -> usize {
         mem::size_of::<AValueHeader>()
             + self.memory_size()
-            + (self.vtable.starlark_value.extra_memory)(StarlarkValueRawPtr::new(self.value))
+            + allocative::size_of_unique_allocated_data(self.as_allocative())
     }
 
     #[inline]

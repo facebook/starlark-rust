@@ -22,6 +22,7 @@ use std::fmt::Debug;
 use std::mem;
 use std::mem::MaybeUninit;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::cast;
@@ -771,7 +772,7 @@ where
     }
 }
 
-#[derive(Debug, Display, ProvidesStaticType)]
+#[derive(Debug, Display, ProvidesStaticType, Allocative)]
 #[display(fmt = "BlackHole")]
 pub(crate) struct BlackHole(pub(crate) usize);
 
