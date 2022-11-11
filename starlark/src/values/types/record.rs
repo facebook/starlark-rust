@@ -47,6 +47,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 
+use allocative::Allocative;
 use either::Either;
 use gazebo::any::ProvidesStaticType;
 use gazebo::cell::AsARef;
@@ -84,7 +85,8 @@ use crate::values::ValueLike;
     Freeze,
     NoSerialize,
     ProvidesStaticType,
-    StarlarkDocs
+    StarlarkDocs,
+    Allocative
 )]
 #[starlark_docs_attrs(builtin = "extension")]
 pub struct FieldGen<V> {
@@ -108,7 +110,14 @@ impl<V: Display> Display for FieldGen<V> {
 unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 
 /// The result of `record()`, being the type of records.
-#[derive(Debug, Trace, NoSerialize, ProvidesStaticType, StarlarkDocs)]
+#[derive(
+    Debug,
+    Trace,
+    NoSerialize,
+    ProvidesStaticType,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(builtin = "extension")]
 pub struct RecordTypeGen<V, Typ> {
     /// The name of this type, e.g. MyRecord
@@ -254,7 +263,7 @@ impl<'v, Typ: 'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for RecordTypeGen<V, 
 where
     Self: ProvidesStaticType,
     FieldGen<V>: ProvidesStaticType,
-    Typ: AsARef<Option<String>> + Debug,
+    Typ: AsARef<Option<String>> + Debug + Allocative,
 {
     starlark_type!(FUNCTION_TYPE);
 
@@ -303,10 +312,7 @@ where
     }
 
     fn extra_memory(&self) -> usize {
-        // We don't capture the memory beneath the TypeCompiled, since we don't know how big
-        // those closures are.
-        let typ = AsARef::as_aref(&self.typ);
-        typ.as_ref().map_or(0, |s| s.capacity()) + self.fields.extra_memory()
+        allocative::size_of_unique_allocated_data(self)
     }
 
     fn dir_attr(&self) -> Vec<String> {

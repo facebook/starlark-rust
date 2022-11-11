@@ -39,6 +39,7 @@ use std::mem;
 use std::slice;
 use std::str;
 
+use allocative::Allocative;
 use gazebo::coerce::Coerce;
 use hashbrown::raw::RawTable;
 
@@ -50,7 +51,7 @@ use crate::values::Trace;
 
 // We use a RawTable (the thing that underlies HashMap) so we can look up efficiently
 // and easily by Symbol and str, without being limited by `Borrow` traits.
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Allocative)]
 pub(crate) struct SymbolMap<T>(RawTable<(Symbol, T)>);
 
 impl<T: Debug> Debug for SymbolMap<T> {
@@ -62,7 +63,7 @@ impl<T: Debug> Debug for SymbolMap<T> {
 }
 
 /// A pre-hashed string used for efficient dictionary lookup.
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Allocative)]
 pub(crate) struct Symbol {
     hash: u64,
     len: u32,

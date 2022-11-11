@@ -21,6 +21,7 @@ use std::cell::Cell;
 use std::cmp;
 use std::collections::HashMap;
 
+use allocative::Allocative;
 use gazebo::coerce::coerce;
 use gazebo::coerce::Coerce;
 use gazebo::dupe::Dupe;
@@ -45,7 +46,7 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 
-#[derive(Debug, Copy, Clone, Dupe, Coerce, PartialEq, Trace, Freeze)]
+#[derive(Debug, Copy, Clone, Dupe, Coerce, PartialEq, Trace, Freeze, Allocative)]
 #[repr(C)]
 pub(crate) enum ParameterKind<V> {
     Required,
@@ -88,7 +89,7 @@ pub struct ParametersSpecBuilder<V> {
 /// Define a list of parameters. This code assumes that all names are distinct and that
 /// `*args`/`**kwargs` occur in well-formed locations.
 // V = Value, or FrozenValue
-#[derive(Debug, Clone, Trace, Freeze)]
+#[derive(Debug, Clone, Trace, Freeze, Allocative)]
 #[repr(C)]
 pub struct ParametersSpec<V> {
     /// Only used in error messages

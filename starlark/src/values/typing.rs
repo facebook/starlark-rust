@@ -18,6 +18,7 @@
 use std::fmt;
 use std::fmt::Debug;
 
+use allocative::Allocative;
 use gazebo::coerce::Coerce;
 use gazebo::prelude::*;
 use thiserror::Error;
@@ -47,7 +48,11 @@ enum TypingError {
     PerhapsYouMeant(String, String),
 }
 
-pub(crate) struct TypeCompiled(Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>);
+#[derive(Allocative)]
+pub(crate) struct TypeCompiled(
+    #[allocative(skip)] // TODO(nga): measure this.
+    Box<dyn for<'v> Fn(Value<'v>) -> bool + Send + Sync>,
+);
 
 unsafe impl Coerce<TypeCompiled> for TypeCompiled {}
 
