@@ -9,6 +9,7 @@
 
 use std::mem;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::UNUSED_CAPACITY_NAME;
 use crate::key::Key;
 
@@ -184,11 +185,4 @@ impl<'a> Visitor<'a> {
         // Prevent `drop`.
         mem::forget(self);
     }
-}
-
-/// This trait allows traveral of object graph.
-///
-/// Typically implemented with proc macro.
-pub trait Allocative {
-    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>);
 }

@@ -9,8 +9,8 @@
 
 use std::mem;
 
+use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 /// "Field" describing allocated but unused capacity (e.g. in `Vec`).

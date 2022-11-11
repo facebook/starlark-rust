@@ -13,9 +13,9 @@ use std::mem;
 
 use relative_path::RelativePathBuf;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::PTR_NAME;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl Allocative for RelativePathBuf {

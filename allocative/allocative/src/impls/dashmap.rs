@@ -14,8 +14,8 @@ use std::mem;
 
 use dashmap::DashMap;
 
+use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<K: Allocative + Eq + Hash, V: Allocative> Allocative for DashMap<K, V> {

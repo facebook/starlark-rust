@@ -11,8 +11,8 @@
 
 use owning_ref::OwningRef;
 
+use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<O: Allocative, X> Allocative for OwningRef<O, X> {

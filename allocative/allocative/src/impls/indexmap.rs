@@ -14,10 +14,10 @@ use std::mem;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::UNUSED_CAPACITY_NAME;
 use crate::impls::hashbrown_util::raw_table_alloc_size_for_len;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 /// Add approximate allocations for hashbrown `RawTable`.

@@ -12,9 +12,9 @@
 use sorted_vector_map::SortedVectorMap;
 use sorted_vector_map::SortedVectorSet;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::visit_generic_map;
 use crate::impls::common::visit_generic_set;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<K: Allocative + Ord, V: Allocative> Allocative for SortedVectorMap<K, V> {

@@ -12,9 +12,9 @@
 use smallvec::Array;
 use smallvec::SmallVec;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::PTR_NAME;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<A> Allocative for SmallVec<A>

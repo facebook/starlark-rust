@@ -7,8 +7,8 @@
  * of this source tree.
  */
 
+use crate::allocative_trait::Allocative;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl Allocative for () {

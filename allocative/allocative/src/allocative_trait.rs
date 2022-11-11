@@ -7,15 +7,11 @@
  * of this source tree.
  */
 
-#![cfg(feature = "parking_lot")]
+use crate::Visitor;
 
-use parking_lot::RawMutex;
-
-use crate::allocative_trait::Allocative;
-use crate::measure::Visitor;
-
-impl Allocative for RawMutex {
-    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
-        visitor.enter_self_sized::<Self>().exit();
-    }
+/// This trait allows traveral of object graph.
+///
+/// Typically implemented with proc macro.
+pub trait Allocative {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>);
 }

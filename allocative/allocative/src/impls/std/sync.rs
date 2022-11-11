@@ -22,9 +22,9 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::Weak;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::PTR_NAME;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<T: Allocative> Allocative for RwLock<T> {

@@ -11,7 +11,7 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 
-use crate::measure::Allocative;
+use crate::allocative_trait::Allocative;
 use crate::measure::Visitor;
 
 impl Allocative for Instant {

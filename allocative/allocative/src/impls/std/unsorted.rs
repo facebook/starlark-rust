@@ -23,11 +23,11 @@ use std::num::NonZeroU8;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::DATA_NAME;
 use crate::impls::common::PTR_NAME;
 use crate::impls::common::UNUSED_CAPACITY_NAME;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<T: Allocative + ?Sized> Allocative for &'static T {

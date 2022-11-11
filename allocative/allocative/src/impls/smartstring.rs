@@ -12,10 +12,10 @@
 use smartstring::SmartString;
 use smartstring::SmartStringMode;
 
+use crate::allocative_trait::Allocative;
 use crate::impls::common::PTR_NAME;
 use crate::impls::common::UNUSED_CAPACITY_NAME;
 use crate::key::Key;
-use crate::measure::Allocative;
 use crate::measure::Visitor;
 
 impl<M: SmartStringMode + 'static> Allocative for SmartString<M> {

@@ -11,7 +11,7 @@
 
 use once_cell::sync::OnceCell;
 
-use crate::measure::Allocative;
+use crate::allocative_trait::Allocative;
 use crate::measure::Visitor;
 
 impl<T: Allocative> Allocative for OnceCell<T> {
