@@ -246,12 +246,12 @@ impl FlameGraphBuilder {
 }
 
 impl VisitorImpl for FlameGraphBuilder {
-    fn enter_inline_impl(&mut self, name: Key, size: usize) {
+    fn enter_inline_impl(&mut self, name: Key, size: usize, _parent: NodeKind) {
         self.current.down(name);
         self.current.tree.borrow_mut().size += size;
     }
 
-    fn enter_unique_impl(&mut self, name: Key, size: usize) {
+    fn enter_unique_impl(&mut self, name: Key, size: usize, _parent: NodeKind) {
         self.current.down(name);
         self.current.tree.borrow_mut().size += size;
         // TODO: deal with potential issue when node is both unique and not.
@@ -260,7 +260,13 @@ impl VisitorImpl for FlameGraphBuilder {
     }
 
     #[must_use]
-    fn enter_shared_impl(&mut self, name: Key, size: usize, _ptr: *const ()) -> bool {
+    fn enter_shared_impl(
+        &mut self,
+        name: Key,
+        size: usize,
+        _ptr: *const (),
+        _parent: NodeKind,
+    ) -> bool {
         self.current.down(name);
         self.current.tree.borrow_mut().size += size;
 

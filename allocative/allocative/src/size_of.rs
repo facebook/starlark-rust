@@ -29,7 +29,7 @@ pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
     }
 
     impl VisitorImpl for SizeOfUniqueAllocatedDataVisitor {
-        fn enter_inline_impl<'a>(&'a mut self, _name: Key, size: usize) {
+        fn enter_inline_impl<'a>(&'a mut self, _name: Key, size: usize, _parent: NodeKind) {
             if let Some(last) = self.inlines_per_unique.last_mut() {
                 if *last == 0 {
                     self.size += size;
@@ -38,11 +38,17 @@ pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
             }
         }
 
-        fn enter_unique_impl(&mut self, _name: Key, _size: usize) {
+        fn enter_unique_impl(&mut self, _name: Key, _size: usize, _parent: NodeKind) {
             self.inlines_per_unique.push(0);
         }
 
-        fn enter_shared_impl(&mut self, _name: Key, _size: usize, _ptr: *const ()) -> bool {
+        fn enter_shared_impl(
+            &mut self,
+            _name: Key,
+            _size: usize,
+            _ptr: *const (),
+            _parent: NodeKind,
+        ) -> bool {
             false
         }
 

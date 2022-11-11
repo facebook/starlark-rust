@@ -20,13 +20,19 @@ use crate::key::Key;
 pub(crate) trait VisitorImpl {
     /// Enter simple field like `u32`.
     /// All sizes are in bytes.
-    fn enter_inline_impl<'a>(&'a mut self, name: Key, size: usize);
+    fn enter_inline_impl<'a>(&'a mut self, name: Key, size: usize, parent: NodeKind);
     /// Enter field which points to heap-allocated unique memory (e.g. `Box<T>`).
-    fn enter_unique_impl(&mut self, name: Key, size: usize);
+    fn enter_unique_impl(&mut self, name: Key, size: usize, parent: NodeKind);
     /// Enter field which points to heap-allocated shared memory (e.g. `Arc<T>`).
     /// This function returns `false` if pointee already visited.
     #[must_use]
-    fn enter_shared_impl(&mut self, name: Key, size: usize, ptr: *const ()) -> bool;
+    fn enter_shared_impl(
+        &mut self,
+        name: Key,
+        size: usize,
+        ptr: *const (),
+        parent: NodeKind,
+    ) -> bool;
 
     /// Exit the field. Each `enter_` must be matched by `exit_`.
     /// `Visitor` wrapper guarantees that.
@@ -37,6 +43,7 @@ pub(crate) trait VisitorImpl {
     fn exit_root_impl(&mut self);
 }
 
+#[derive(Copy, Clone)]
 pub(crate) enum NodeKind {
     Inline,
     Unique,
@@ -61,7 +68,7 @@ impl<'a> Visitor<'a> {
     where
         'a: 'b,
     {
-        self.visitor.enter_inline_impl(name, size);
+        self.visitor.enter_inline_impl(name, size, self.node_kind);
         Visitor {
             visitor: self.visitor,
             node_kind: NodeKind::Inline,
@@ -72,7 +79,7 @@ impl<'a> Visitor<'a> {
     where
         'a: 'b,
     {
-        self.visitor.enter_unique_impl(name, size);
+        self.visitor.enter_unique_impl(name, size, self.node_kind);
         Visitor {
             visitor: self.visitor,
             node_kind: NodeKind::Unique,
@@ -88,7 +95,10 @@ impl<'a> Visitor<'a> {
     where
         'a: 'b,
     {
-        if self.visitor.enter_shared_impl(name, size, ptr) {
+        if self
+            .visitor
+            .enter_shared_impl(name, size, ptr, self.node_kind)
+        {
             Some(Visitor {
                 visitor: self.visitor,
                 node_kind: NodeKind::Shared,
