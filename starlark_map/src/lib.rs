@@ -22,6 +22,7 @@
 // Hints we disagree with
 #![allow(clippy::missing_safety_doc)]
 #![cfg_attr(rust_nightly, feature(core_intrinsics))]
+#![cfg_attr(rust_nightly, feature(portable_simd))]
 
 mod equivalent;
 mod hash_value;

@@ -17,9 +17,11 @@
 
 mod hint;
 mod iter;
+mod simd;
 
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::mem;
 
 use allocative::Allocative;
 use gazebo::prelude::*;
@@ -37,6 +39,7 @@ pub(crate) use crate::vec_map::iter::IterMut;
 pub(crate) use crate::vec_map::iter::Keys;
 pub(crate) use crate::vec_map::iter::Values;
 pub(crate) use crate::vec_map::iter::ValuesMut;
+use crate::vec_map::simd::find_hash_in_array;
 
 /// Bucket in [`VecMap`].
 #[derive(Debug, Clone, Eq, PartialEq, Allocative)]
@@ -91,17 +94,19 @@ impl<K, V> VecMap<K, V> {
         hash: StarlarkHashValue,
         mut eq: impl FnMut(&K) -> bool,
     ) -> Option<usize> {
+        const _: () = assert!(mem::size_of::<StarlarkHashValue>() == mem::size_of::<u32>());
+        let hashes_ints =
+            unsafe { &*(self.buckets.values() as *const [StarlarkHashValue] as *const [u32]) };
         let mut i = 0;
-        #[allow(clippy::explicit_counter_loop)] // we are paranoid about performance
-        for b_hash in self.buckets.values() {
-            if *b_hash == hash {
-                let k = unsafe { &self.buckets.keys().get_unchecked(i).0 };
-                if likely(eq(k)) {
-                    return Some(i);
-                }
+        while i < hashes_ints.len() {
+            i += find_hash_in_array(&hashes_ints[i..], hash.get())?;
+            let k = unsafe { &self.buckets.keys().get_unchecked(i).0 };
+            if likely(eq(k)) {
+                return Some(i);
             }
             i += 1;
         }
+        debug_assert!(i == hashes_ints.len());
         None
     }
 
