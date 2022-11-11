@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "allocative",
+    "allocative_derive",
+]
+
+[workspace.dependencies]
+proc-macro2 = "1.0"
+syn = { version = "1.0", features = ["extra-traits"] }
+quote = "1.0.3"
