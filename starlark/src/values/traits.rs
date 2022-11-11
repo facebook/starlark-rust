@@ -327,6 +327,7 @@ pub trait StarlarkValue<'v>: 'v + ProvidesStaticType + Debug + Display + Seriali
     /// Return how much extra memory is consumed by this data type, in bytes, in addition to the
     /// direct `size_of` measurements. Used for profiling, so best effort rather than precise. Defaults to 0.
     /// Should not reported any memory held on to by a [`Value`].
+    // TODO(nga): require `Allocative` and remove this function.
     fn extra_memory(&self) -> usize {
         0
     }
