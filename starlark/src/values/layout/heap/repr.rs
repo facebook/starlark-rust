@@ -277,6 +277,15 @@ impl AValueHeader {
         );
         &*(self as *const AValueHeader as *const AValueRepr<A>)
     }
+
+    fn as_avalue_or_header(&self) -> &AValueOrForward {
+        unsafe { &*(self as *const AValueHeader as *const AValueOrForward) }
+    }
+
+    /// Size of allocation for this object: following object is allocated at `self + alloc_size`.
+    pub(crate) fn alloc_size(&self) -> usize {
+        self.as_avalue_or_header().alloc_size()
+    }
 }
 
 impl<T> AValueRepr<T> {

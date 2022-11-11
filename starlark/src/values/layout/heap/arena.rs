@@ -37,6 +37,7 @@ use std::slice;
 use std::time::Instant;
 
 use allocative::Allocative;
+use allocative::Visitor;
 use bumpalo::Bump;
 use either::Either;
 use gazebo::prelude::*;
@@ -75,8 +76,7 @@ pub(crate) const MIN_ALLOC: usize = {
     )
 };
 
-#[derive(Default, Allocative)]
-// TODO(nga): implement `Allocative` for heap elements.
+#[derive(Default)]
 pub(crate) struct Arena {
     /// Arena for things which don't need dropping (e.g. strings)
     non_drop: Bump,
@@ -374,19 +374,23 @@ impl Arena {
         }
     }
 
+    fn for_each_unordered_in_bump<'a>(bump: &'a Bump, mut f: impl FnMut(&'a AValueHeader)) {
+        // SAFETY: We're consuming the iterator immediately and not allocating from the arena during.
+        unsafe {
+            bump.iter_allocated_chunks_raw().for_each(|(data, len)| {
+                for x in Arena::iter_chunk(slice::from_raw_parts(data as *const _, len)) {
+                    if let Some(x) = x.unpack_header() {
+                        f(x);
+                    }
+                }
+            })
+        }
+    }
+
     // Iterate over the values in the both bumps in any order
     fn for_each_unordered<'a>(&'a self, mut f: impl FnMut(&'a AValueHeader)) {
         for bump in [&self.drop, &self.non_drop] {
-            // SAFE: We're consuming the iterator immediately and not allocating from the arena during.
-            unsafe {
-                bump.iter_allocated_chunks_raw().for_each(|(data, len)| {
-                    for x in Arena::iter_chunk(slice::from_raw_parts(data as *const _, len)) {
-                        if let Some(x) = x.unpack_header() {
-                            f(x);
-                        }
-                    }
-                })
-            }
+            Self::for_each_unordered_in_bump(bump, &mut f);
         }
     }
 
@@ -428,6 +432,41 @@ impl Drop for Arena {
             let value = x.payload_ptr() as *mut ();
             x.0.drop_in_place(value);
         });
+    }
+}
+
+impl Allocative for Arena {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut allocative::Visitor<'b>) {
+        let Arena { drop, non_drop } = self;
+
+        fn visit_bump<'a, 'b: 'a>(bump: &Bump, visitor: &'a mut Visitor<'b>) {
+            let mut visitor =
+                visitor.enter_unique(allocative::Key::new("data"), mem::size_of::<*const ()>());
+            let mut allocated_visitor =
+                visitor.enter(allocative::Key::new("allocated"), bump.allocated_bytes());
+            Arena::for_each_unordered_in_bump(bump, |x| {
+                let key = x.unpack().type_as_allocative_key();
+                let size = x.alloc_size();
+                // TODO(nga): visit the value for non-starlark allocations.
+                allocated_visitor.visit_simple(key, size);
+            });
+            allocated_visitor.exit();
+            visitor.exit();
+        }
+
+        let mut visitor = visitor.enter_self_sized::<Self>();
+        {
+            let mut visitor = visitor.enter(allocative::Key::new("drop"), mem::size_of::<Bump>());
+            visit_bump(drop, &mut visitor);
+            visitor.exit();
+        }
+        {
+            let mut visitor =
+                visitor.enter(allocative::Key::new("non_drop"), mem::size_of::<Bump>());
+            visit_bump(non_drop, &mut visitor);
+            visitor.exit();
+        }
+        visitor.exit();
     }
 }
 

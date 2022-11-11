@@ -122,6 +122,8 @@ pub(crate) struct AValueVTable {
     static_type_of_value: TypeId,
     type_name: &'static str,
     get_hash: fn(*const ()) -> anyhow::Result<StarlarkHashValue>,
+    /// Cache `type_name` here to avoid computing hash.
+    type_as_allocative_key: allocative::Key,
 
     // `StarlarkValue`
     starlark_value: StarlarkValueVTable,
@@ -150,8 +152,15 @@ impl<T: ?Sized + 'static> GetTypeId<T> {
     const TYPE_ID: TypeId = TypeId::of::<T>();
 }
 
+struct GetAllocativeKey<'v, T: StarlarkValue<'v>>(PhantomData<&'v T>);
+
+impl<'v, T: StarlarkValue<'v>> GetAllocativeKey<'v, T> {
+    const ALLOCATIVE_KEY: allocative::Key = allocative::Key::new(T::TYPE);
+}
+
 impl AValueVTable {
     pub(crate) fn new_black_hole() -> &'static AValueVTable {
+        const BLACKHOLE_ALLOCATIVE_KEY: allocative::Key = allocative::Key::new("BlackHole");
         &AValueVTable {
             drop_in_place: |_| {},
 
@@ -163,6 +172,7 @@ impl AValueVTable {
             heap_copy: |_, _| panic!("BlackHole"),
             get_hash: |_| panic!("BlackHole"),
             type_name: "BlackHole",
+            type_as_allocative_key: BLACKHOLE_ALLOCATIVE_KEY,
 
             display: GetDynMetadata::<BlackHole>::DISPLAY_DYN_METADATA,
             debug: GetDynMetadata::<BlackHole>::DEBUG_DYN_METADATA,
@@ -199,6 +209,7 @@ impl AValueVTable {
                 T::get_hash(p)
             },
             type_name: T::StarlarkValue::TYPE,
+            type_as_allocative_key: GetAllocativeKey::<T::StarlarkValue>::ALLOCATIVE_KEY,
             display: GetDynMetadata::<T::StarlarkValue>::DISPLAY_DYN_METADATA,
             debug: GetDynMetadata::<T::StarlarkValue>::DEBUG_DYN_METADATA,
             erased_serde_serialize:
@@ -247,6 +258,11 @@ impl<'v> AValueDyn<'v> {
     #[inline]
     pub(crate) fn get_type_value(self) -> FrozenStringValue {
         (self.vtable.starlark_value.get_type_value_static)()
+    }
+
+    #[inline]
+    pub(crate) fn type_as_allocative_key(self) -> allocative::Key {
+        self.vtable.type_as_allocative_key.clone()
     }
 
     #[inline]
