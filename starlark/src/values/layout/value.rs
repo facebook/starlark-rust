@@ -948,16 +948,6 @@ impl FrozenValue {
         self.to_value().unpack_str()
     }
 
-    /// Get a pointer to the [`AValue`] object this value represents.
-    pub(crate) fn get_ref<'v>(self) -> AValueDyn<'v> {
-        unsafe {
-            match self.0.unpack() {
-                Either::Left(x) => x.unpack_header_unchecked().unpack(),
-                Either::Right(x) => basic_ref(x),
-            }
-        }
-    }
-
     /// Convert a [`FrozenValue`] back to a [`Value`].
     #[inline]
     pub fn to_value<'v>(self) -> Value<'v> {
@@ -1091,9 +1081,6 @@ pub trait ValueLike<'v>:
     /// Produce a [`Value`] regardless of the type you are starting with.
     fn to_value(self) -> Value<'v>;
 
-    /// Get referenced [`StarlarkValue`] a value as [`AnyLifetime`].
-    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v>;
-
     /// Call this value as a function with given arguments.
     fn invoke(
         self,
@@ -1203,10 +1190,6 @@ impl<'v> ValueLike<'v> for Value<'v> {
         let _guard = stack_guard::stack_guard()?;
         self.get_ref().compare(other)
     }
-
-    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
-        self.get_ref().value_as_dyn_any()
-    }
 }
 
 impl Sealed for FrozenValue {}
@@ -1242,10 +1225,6 @@ impl<'v> ValueLike<'v> for FrozenValue {
     #[inline]
     fn compare(self, other: Value<'v>) -> anyhow::Result<Ordering> {
         self.to_value().compare(other)
-    }
-
-    fn as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
-        self.get_ref().value_as_dyn_any()
     }
 }
 

@@ -109,14 +109,6 @@ impl<'v, T: Display + Debug + AnyLifetime<'v> + erased_serde::Serialize> GetDynM
             ptr::null::<T>() as *const dyn erased_serde::Serialize
         ))
     };
-
-    const ANY_LIFETIME_DYN_METADATA: DynMetadata<dyn AnyLifetime<'static>> = unsafe {
-        ptr::metadata(transmute!(
-            *const dyn AnyLifetime<'v>,
-            *const (dyn AnyLifetime<'static> + 'static),
-            ptr::null::<T>() as *const dyn AnyLifetime<'v>
-        ))
-    };
 }
 
 pub(crate) struct AValueVTable {
@@ -145,7 +137,6 @@ pub(crate) struct AValueVTable {
     display: DynMetadata<dyn Display>,
     debug: DynMetadata<dyn Debug>,
     erased_serde_serialize: DynMetadata<dyn erased_serde::Serialize>,
-    any_lifetime: DynMetadata<dyn AnyLifetime<'static>>,
     allocative: unsafe fn(*const ()) -> *const dyn Allocative,
 }
 
@@ -181,7 +172,6 @@ impl AValueVTable {
             debug: GetDynMetadata::<BlackHole>::DEBUG_DYN_METADATA,
             erased_serde_serialize:
                 GetDynMetadata::<BlackHole>::ERASED_SERDE_SERIALIZE_DYN_METADATA,
-            any_lifetime: GetDynMetadata::<BlackHole>::ANY_LIFETIME_DYN_METADATA,
             allocative: |this| {
                 let this = unsafe { &*(this as *const BlackHole) };
                 this as *const dyn Allocative
@@ -221,7 +211,6 @@ impl AValueVTable {
             debug: GetDynMetadata::<T::StarlarkValue>::DEBUG_DYN_METADATA,
             erased_serde_serialize:
                 GetDynMetadata::<T::StarlarkValue>::ERASED_SERDE_SERIALIZE_DYN_METADATA,
-            any_lifetime: GetDynMetadata::<T::StarlarkValue>::ANY_LIFETIME_DYN_METADATA,
             allocative: |this| {
                 let this = unsafe { &*(this as *const T::StarlarkValue) };
                 let allocative = this as *const dyn Allocative;
@@ -596,18 +585,6 @@ impl<'v> AValueDyn<'v> {
         unsafe {
             &*ptr::from_raw_parts(self.value as *const (), self.vtable.erased_serde_serialize)
         }
-    }
-
-    #[inline]
-    pub(crate) fn value_as_dyn_any(self) -> &'v dyn AnyLifetime<'v> {
-        let any_lifetime = unsafe {
-            transmute!(
-                DynMetadata<dyn AnyLifetime<'static>>,
-                DynMetadata::<dyn AnyLifetime<'v>>,
-                self.vtable.any_lifetime
-            )
-        };
-        unsafe { &*ptr::from_raw_parts(self.value as *const (), any_lifetime) }
     }
 
     #[inline]

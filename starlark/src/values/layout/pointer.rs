@@ -299,11 +299,6 @@ impl<'p> FrozenPointer<'p> {
     }
 
     #[inline]
-    pub(crate) fn unpack(self) -> Either<&'p AValueOrForward, &'static PointerI32> {
-        self.to_pointer().unpack()
-    }
-
-    #[inline]
     pub(crate) fn unpack_int(self) -> Option<i32> {
         self.to_pointer().unpack_int()
     }
