@@ -111,12 +111,6 @@ impl<K, V> SmallMap<K, V> {
         }
     }
 
-    /// Create with largest capacity which is represented by `Vec`.
-    #[inline]
-    pub fn with_capacity_largest_vec() -> Self {
-        Self::with_capacity(NO_INDEX_THRESHOLD)
-    }
-
     /// Drop the index if the map is too small, and the index is not really needed.
     ///
     /// We don't allocate index prematurely when we add entries the map,
