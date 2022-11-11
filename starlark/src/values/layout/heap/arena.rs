@@ -447,8 +447,12 @@ impl Allocative for Arena {
             Arena::for_each_unordered_in_bump(bump, |x| {
                 let key = x.unpack().type_as_allocative_key();
                 let size = x.alloc_size();
-                // TODO(nga): visit the value for non-starlark allocations.
-                allocated_visitor.visit_simple(key, size);
+                let mut object_visitor = allocated_visitor.enter(key, size);
+                // We visit both drop and non-drop bumps, because although
+                // non-drop `Bump` cannot contain malloc pointers, it can still provide
+                // useful information about headers/payload/padding.
+                x.unpack().as_allocative().visit(&mut object_visitor);
+                object_visitor.exit();
             });
             allocated_visitor.exit();
             visitor.exit();

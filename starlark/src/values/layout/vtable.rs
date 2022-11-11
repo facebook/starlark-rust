@@ -251,7 +251,7 @@ impl<'v> AValueDyn<'v> {
         size
     }
 
-    fn as_allocative(self) -> &'v dyn Allocative {
+    pub(crate) fn as_allocative(self) -> &'v dyn Allocative {
         unsafe { &*(self.vtable.allocative)(self.value) }
     }
 
