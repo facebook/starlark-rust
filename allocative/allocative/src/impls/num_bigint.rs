@@ -7,6 +7,8 @@
  * of this source tree.
  */
 
+#![cfg(feature = "num-bigint")]
+
 use std::mem;
 
 use num_bigint::BigInt;
