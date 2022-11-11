@@ -399,10 +399,6 @@ impl<'v> StarlarkValue<'v> for StarlarkBigInt {
         Num::BigInt(self).get_hash_64().hash(hasher);
         Ok(())
     }
-
-    fn extra_memory(&self) -> usize {
-        allocative::size_of_unique_allocated_data(self)
-    }
 }
 
 #[cfg(test)]

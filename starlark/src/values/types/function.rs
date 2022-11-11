@@ -235,10 +235,6 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         self.function.invoke(eval, args)
     }
 
-    fn extra_memory(&self) -> usize {
-        self.name.capacity()
-    }
-
     fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
         if let Some(s) = &self.typ {
             if attribute == "type" {

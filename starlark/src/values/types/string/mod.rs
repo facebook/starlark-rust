@@ -252,13 +252,6 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         true
     }
 
-    fn extra_memory(&self) -> usize {
-        // We don't include the extra_memory for the size because it is
-        // allocated inline in the Starlark heap (which knows about it),
-        // not on the malloc heap.
-        0
-    }
-
     fn get_methods() -> Option<&'static Methods> {
         str_methods()
     }

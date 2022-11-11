@@ -329,14 +329,6 @@ pub trait StarlarkValue<'v>:
         }
     }
 
-    /// Return how much extra memory is consumed by this data type, in bytes, in addition to the
-    /// direct `size_of` measurements. Used for profiling, so best effort rather than precise. Defaults to 0.
-    /// Should not reported any memory held on to by a [`Value`].
-    // TODO(nga): not used, remove.
-    fn extra_memory(&self) -> usize {
-        0
-    }
-
     /// Compare `self` with `other` for equality.
     /// Should only return an error on excessive recursion.
     ///

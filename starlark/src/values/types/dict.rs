@@ -508,10 +508,6 @@ where
         }
     }
 
-    fn extra_memory(&self) -> usize {
-        allocative::size_of_unique_allocated_data(self)
-    }
-
     fn length(&self) -> anyhow::Result<i32> {
         Ok(self.0.content().len() as i32)
     }

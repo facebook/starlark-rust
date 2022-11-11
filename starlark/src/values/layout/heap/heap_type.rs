@@ -198,7 +198,7 @@ impl Eq for FrozenHeapRef {}
 
 impl FrozenHeapRef {
     /// Number of bytes allocated on this heap, not including any memory
-    /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
+    /// allocated outside of the starlark heap.
     pub fn allocated_bytes(&self) -> usize {
         self.0.arena.allocated_bytes()
     }
@@ -405,7 +405,7 @@ impl FrozenHeap {
     }
 
     /// Number of bytes allocated on this heap, not including any memory
-    /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
+    /// allocated outside of the starlark heap.
     pub fn allocated_bytes(&self) -> usize {
         self.arena.allocated_bytes()
     }
@@ -505,7 +505,7 @@ impl Heap {
     }
 
     /// Number of bytes allocated on this heap, not including any memory
-    /// represented by [`extra_memory`](crate::values::StarlarkValue::extra_memory).
+    /// allocated outside of the starlark heap.
     pub fn allocated_bytes(&self) -> usize {
         self.arena.borrow().allocated_bytes()
     }

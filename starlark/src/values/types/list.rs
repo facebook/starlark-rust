@@ -549,10 +549,6 @@ where
         Ok(self.0.content()[i])
     }
 
-    fn extra_memory(&self) -> usize {
-        0
-    }
-
     fn length(&self) -> anyhow::Result<i32> {
         Ok(self.0.content().len() as i32)
     }

@@ -163,10 +163,6 @@ where
 {
     starlark_type!(Struct::TYPE);
 
-    fn extra_memory(&self) -> usize {
-        allocative::size_of_unique_allocated_data(self)
-    }
-
     fn collect_repr_cycle(&self, collector: &mut String) {
         collector.push_str("struct(...)");
     }

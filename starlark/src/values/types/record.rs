@@ -311,10 +311,6 @@ where
             })
     }
 
-    fn extra_memory(&self) -> usize {
-        allocative::size_of_unique_allocated_data(self)
-    }
-
     fn dir_attr(&self) -> Vec<String> {
         vec!["type".to_owned()]
     }
