@@ -19,7 +19,6 @@ mod iter;
 
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::mem;
 
 use allocative::Allocative;
 use gazebo::prelude::*;
@@ -82,10 +81,6 @@ impl<K, V> VecMap<K, V> {
     #[inline]
     pub(crate) fn capacity(&self) -> usize {
         self.buckets.capacity()
-    }
-
-    pub(crate) fn extra_memory(&self) -> usize {
-        self.buckets.capacity() * mem::size_of::<Bucket<K, V>>()
     }
 
     #[inline]

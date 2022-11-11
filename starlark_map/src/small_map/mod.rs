@@ -365,24 +365,6 @@ impl<K, V> SmallMap<K, V> {
         self.entries.capacity()
     }
 
-    /// Give a best guess as to how much heap memory is being used.
-    /// Used internally, but not exported as this isn't a usual API.
-    pub fn extra_memory(&self) -> usize {
-        self.entries.extra_memory()
-            + match &self.index {
-                None => 0,
-                Some(index) => {
-                    // We estimate the size of the hashtable (for this we just use hashbrown's code), and it
-                    // contains usizes as well (the indices) so that goes in too. Finally, there are
-                    // control bytes for each of the buckets. There is one control byte per entry, but
-                    // also an implementation-dependent extra padding. When SSE2 is enabled, that's 16
-                    // bytes.
-
-                    index.buckets() * (mem::size_of::<usize>() + 1) + 16
-                }
-            }
-    }
-
     /// Returns a reference to the first key-value pair.
     pub fn first(&self) -> Option<(&K, &V)> {
         self.iter().next()
