@@ -23,6 +23,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::cell::AsARef;
@@ -60,7 +61,8 @@ fn test_export_as() {
     use crate::values::Trace;
     use crate::values::Value;
 
-    #[derive(Debug, Trace, ProvidesStaticType, NoSerialize)]
+    #[derive(Debug, Trace, ProvidesStaticType, NoSerialize, Allocative)]
+    #[allocative(bound = "", skip)] // TODO(nga): ignore bounds if skip.
     struct Exporter<T> {
         // Either String or a RefCell therefore
         named: T,
@@ -194,7 +196,8 @@ fn test_load_symbols_extra() -> anyhow::Result<()> {
         Trace,
         Debug,
         derive_more::Display,
-        NoSerialize
+        NoSerialize,
+        Allocative
     )]
     #[display(fmt = "{:?}", self)]
     struct Extra<'v>(Arc<Mutex<SmallMap<String, Value<'v>>>>);

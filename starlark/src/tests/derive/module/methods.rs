@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 
 use crate as starlark;
@@ -29,7 +30,13 @@ use crate::values::StarlarkValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 
-#[derive(Debug, derive_more::Display, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Debug,
+    derive_more::Display,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative
+)]
 #[display(fmt = "{:?}", self)]
 struct Applaud {
     value: i32,

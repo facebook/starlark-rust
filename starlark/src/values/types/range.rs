@@ -22,6 +22,7 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::num::NonZeroI32;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::prelude::*;
 
@@ -42,7 +43,8 @@ use crate::values::ValueLike;
     Debug,
     ProvidesStaticType,
     NoSerialize,
-    StarlarkDocs
+    StarlarkDocs,
+    Allocative
 )]
 #[starlark_docs_attrs(builtin = "standard")]
 pub struct Range {

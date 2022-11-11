@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use allocative::Allocative;
 use gazebo::dupe::Dupe;
 
 use crate::eval::Arguments;
@@ -27,7 +28,7 @@ use crate::values::FrozenValueTyped;
 use crate::values::Value;
 
 /// Pointer to a native function optimized for bytecode execution.
-#[derive(Copy, Clone, Dupe)]
+#[derive(Copy, Clone, Dupe, Allocative)]
 pub(crate) struct BcNativeFunction {
     fun: FrozenValueTyped<'static, NativeFunction>,
     /// Copy function here from `fun` to avoid extra dereference when calling.

@@ -148,7 +148,7 @@ pub type RecordType<'v> = RecordTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenRecordType = RecordTypeGen<FrozenValue, Option<String>>;
 
 /// An actual record.
-#[derive(Clone, Debug, Trace, Coerce, Freeze, ProvidesStaticType)]
+#[derive(Clone, Debug, Trace, Coerce, Freeze, ProvidesStaticType, Allocative)]
 #[repr(C)]
 pub struct RecordGen<V> {
     typ: V, // Must be RecordType
@@ -259,7 +259,7 @@ impl<'v> Freeze for RecordType<'v> {
     }
 }
 
-impl<'v, Typ: 'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for RecordTypeGen<V, Typ>
+impl<'v, Typ: Allocative + 'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for RecordTypeGen<V, Typ>
 where
     Self: ProvidesStaticType,
     FieldGen<V>: ProvidesStaticType,

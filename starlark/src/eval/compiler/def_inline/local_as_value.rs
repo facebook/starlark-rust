@@ -21,6 +21,7 @@
 
 use std::array;
 
+use allocative::Allocative;
 use once_cell::sync::Lazy;
 
 use crate as starlark;
@@ -33,9 +34,16 @@ use crate::values::StarlarkValue;
 
 /// Local slot id as `FrozenValue`. This object only using during compilation
 /// and never appears in the executed program.
-#[derive(derive_more::Display, Debug, ProvidesStaticType, NoSerialize)]
+#[derive(
+    derive_more::Display,
+    Debug,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative
+)]
 #[display(fmt = "{:?}", self)]
 pub(crate) struct LocalAsValue {
+    #[allocative(skip)]
     pub(crate) local: LocalSlotId,
 }
 

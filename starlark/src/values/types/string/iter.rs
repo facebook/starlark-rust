@@ -17,6 +17,7 @@
 
 //! Implementation of iterators for string type.
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::coerce::Coerce;
@@ -28,7 +29,16 @@ use crate::values::Value;
 use crate::values::ValueLike;
 
 /// An opaque iterator over a string, produced by elems/codepoints
-#[derive(Debug, Trace, Coerce, Display, Freeze, NoSerialize, ProvidesStaticType)]
+#[derive(
+    Debug,
+    Trace,
+    Coerce,
+    Display,
+    Freeze,
+    NoSerialize,
+    ProvidesStaticType,
+    Allocative
+)]
 #[display(fmt = "iterator")]
 #[repr(C)]
 struct StringIteratorGen<V> {

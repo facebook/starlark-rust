@@ -18,6 +18,7 @@
 //! The `None` type.
 use std::hash::Hasher;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::prelude::*;
@@ -40,7 +41,15 @@ use crate::values::UnpackValue;
 use crate::values::Value;
 
 /// Define the None type, use [`NoneType`] in Rust.
-#[derive(Debug, Clone, Dupe, ProvidesStaticType, Display, StarlarkDocs)]
+#[derive(
+    Debug,
+    Clone,
+    Dupe,
+    ProvidesStaticType,
+    Display,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(builtin = "standard")]
 #[display(fmt = "None")]
 pub struct NoneType;

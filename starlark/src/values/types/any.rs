@@ -73,6 +73,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 
 use crate as starlark;
@@ -85,8 +86,12 @@ use crate::values::ValueLike;
 /// A type that can be passed around as a Starlark [`Value`], but in most
 /// ways is uninteresting/opaque to Starlark. Constructed with
 /// [`new`](StarlarkAny::new) and decomposed with [`get`](StarlarkAny::get).
-#[derive(ProvidesStaticType, NoSerialize)]
-pub struct StarlarkAny<T: Debug + Display + Send + Sync + 'static>(pub T);
+#[derive(ProvidesStaticType, NoSerialize, Allocative)]
+#[allocative(bound = "")]
+pub struct StarlarkAny<T: Debug + Display + Send + Sync + 'static>(
+    #[allocative(skip)] // TODO(nga): do not skip.
+    pub  T,
+);
 
 impl<'v, T: Debug + Display + Send + Sync + 'static> StarlarkValue<'v> for StarlarkAny<T> {
     starlark_type!("any");

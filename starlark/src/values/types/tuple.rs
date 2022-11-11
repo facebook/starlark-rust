@@ -26,6 +26,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::slice;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::coerce::coerce;
 use gazebo::coerce::Coerce;
@@ -52,7 +53,7 @@ use crate::values::ValueLike;
 
 /// Define the tuple type. See [`Tuple`] and [`FrozenTuple`] as the two aliases.
 #[repr(C)]
-#[derive(ProvidesStaticType, StarlarkDocs)]
+#[derive(ProvidesStaticType, StarlarkDocs, Allocative)]
 #[starlark_docs_attrs(builtin = "standard")]
 pub struct TupleGen<V> {
     len: usize,

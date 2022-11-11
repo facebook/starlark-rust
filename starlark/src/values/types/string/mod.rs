@@ -32,6 +32,7 @@ use std::slice;
 use std::str;
 use std::sync::atomic;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::prelude::*;
 use serde::Serialize;
@@ -87,7 +88,7 @@ impl Add for CharIndex {
 pub const STRING_TYPE: &str = "string";
 
 #[repr(C)] // We want the body to come after len
-#[derive(ProvidesStaticType)]
+#[derive(ProvidesStaticType, Allocative)]
 pub(crate) struct StarlarkStrN<const N: usize> {
     // Lazily-initialized cached hash code.
     pub(crate) hash: atomic::AtomicU32,
@@ -101,7 +102,7 @@ pub(crate) struct StarlarkStrN<const N: usize> {
 
 /// A pointer to this type represents a Starlark string.
 /// Use of this type is discouraged and not considered stable.
-#[derive(ProvidesStaticType, StarlarkDocs)]
+#[derive(ProvidesStaticType, StarlarkDocs, Allocative)]
 #[starlark_docs_attrs(builtin = "standard")]
 #[repr(C)]
 pub struct StarlarkStr {

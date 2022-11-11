@@ -60,6 +60,7 @@ pub(crate) fn request_value_impl<'v, T: AnyLifetime<'v>>(value: Value<'v>) -> Op
 
 #[cfg(test)]
 mod tests {
+    use allocative::Allocative;
     use gazebo::any::ProvidesStaticType;
 
     use crate as starlark;
@@ -76,7 +77,13 @@ mod tests {
         type StaticType = &'static dyn SomeTrait;
     }
 
-    #[derive(ProvidesStaticType, derive_more::Display, Debug, NoSerialize)]
+    #[derive(
+        ProvidesStaticType,
+        derive_more::Display,
+        Debug,
+        NoSerialize,
+        Allocative
+    )]
     #[display(fmt = "SomeType")]
     struct MyValue {
         payload: u32,

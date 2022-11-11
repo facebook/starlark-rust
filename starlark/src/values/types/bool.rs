@@ -25,6 +25,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hasher;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use serde::Serialize;
 
@@ -48,7 +49,7 @@ use crate::values::ValueError;
 pub const BOOL_TYPE: &str = "bool";
 
 // We have to alias bool so we can have a Display that uses True/False.
-#[derive(ProvidesStaticType, Debug, Serialize, StarlarkDocs)]
+#[derive(ProvidesStaticType, Debug, Serialize, StarlarkDocs, Allocative)]
 #[starlark_docs_attrs(builtin = "standard")]
 #[serde(transparent)]
 pub(crate) struct StarlarkBool(pub(crate) bool);

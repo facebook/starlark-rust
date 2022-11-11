@@ -18,6 +18,7 @@
 use std::cell::RefCell;
 use std::fmt::Write;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 
@@ -286,7 +287,7 @@ xs[1] += 1
 fn test_radd() {
     // We want select append to always produce a select, much like the
     // Bazel/Buck `select` function.
-    #[derive(Debug, Display, Clone, ProvidesStaticType, NoSerialize)]
+    #[derive(Debug, Display, Clone, ProvidesStaticType, NoSerialize, Allocative)]
     #[display(fmt = "${:?}", _0)]
     struct Select(Vec<i32>);
     starlark_simple_value!(Select);
@@ -671,7 +672,7 @@ fn test_label_assign() {
     // Test the a.b = c construct.
     // No builtin Starlark types support it, so we have to define a custom type (wapping a dictionary)
 
-    #[derive(Debug, Trace, ProvidesStaticType, Display, NoSerialize)]
+    #[derive(Debug, Trace, ProvidesStaticType, Display, NoSerialize, Allocative)]
     #[display(fmt = "{:?}", self)]
     struct Wrapper<'v>(RefCell<SmallMap<String, Value<'v>>>);
 
@@ -688,7 +689,7 @@ fn test_label_assign() {
         }
     }
 
-    #[derive(Debug, ProvidesStaticType, Display, NoSerialize)]
+    #[derive(Debug, ProvidesStaticType, Display, NoSerialize, Allocative)]
     #[display(fmt = "FrozenWrapper")]
     struct FrozenWrapper;
 

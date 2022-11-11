@@ -61,6 +61,7 @@ pub struct StarlarkBigInt {
     /// Many operation implementations depend on this fact.
     /// For example, `non_zero_int << positive_big_int` is considered to be overflow
     /// without checking the actual value of `positive_big_int`.
+    #[allocative(skip)] // TODO(nga): do not skip.
     value: BigInt,
 }
 

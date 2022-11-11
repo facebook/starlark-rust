@@ -22,16 +22,19 @@ use std::fmt::Debug;
 use std::mem;
 use std::ptr;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 
 use crate as starlark;
 use crate::values::StarlarkValue;
 
-#[derive(derive_more::Display, ProvidesStaticType, NoSerialize)]
+#[derive(derive_more::Display, ProvidesStaticType, NoSerialize, Allocative)]
 #[repr(C)]
 #[display(fmt = "{:?}", self)]
+#[allocative(bound = "")]
 pub(crate) struct AnyArray<T: Debug + 'static> {
     pub(crate) len: usize,
+    #[allocative(skip)] // TODO(nga): do not skip.
     content: [T; 0],
 }
 

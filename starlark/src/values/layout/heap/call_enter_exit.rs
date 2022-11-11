@@ -20,6 +20,7 @@
 use std::fmt::Debug;
 use std::time::Instant;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 
 use crate as starlark;
@@ -28,10 +29,10 @@ use crate::values::Trace;
 use crate::values::Value;
 
 /// A type which is either drop or non-drop.
-pub(crate) trait MaybeDrop: Debug + Sync + Send + 'static {}
+pub(crate) trait MaybeDrop: Debug + Sync + Send + Allocative + 'static {}
 
 /// Type which has `Drop`.
-#[derive(ProvidesStaticType, Debug, Trace)]
+#[derive(ProvidesStaticType, Debug, Trace, Allocative)]
 pub(crate) struct NeedsDrop;
 impl Drop for NeedsDrop {
     fn drop(&mut self) {
@@ -42,13 +43,20 @@ impl Drop for NeedsDrop {
 }
 
 /// Type which doesn't have `Drop`.
-#[derive(ProvidesStaticType, Debug, Trace)]
+#[derive(ProvidesStaticType, Debug, Trace, Allocative)]
 pub(crate) struct NoDrop;
 
 impl MaybeDrop for NeedsDrop {}
 impl MaybeDrop for NoDrop {}
 
-#[derive(Trace, Debug, derive_more::Display, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Trace,
+    Debug,
+    derive_more::Display,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative
+)]
 #[display(fmt = "CallEnter")]
 pub(crate) struct CallEnter<'v, D: MaybeDrop + 'static> {
     pub(crate) function: Value<'v>,
@@ -60,7 +68,13 @@ impl<'v, D: MaybeDrop + Trace<'v> + 'v> StarlarkValue<'v> for CallEnter<'v, D> {
     starlark_type!("call_enter");
 }
 
-#[derive(Debug, derive_more::Display, ProvidesStaticType, NoSerialize)]
+#[derive(
+    Debug,
+    derive_more::Display,
+    ProvidesStaticType,
+    NoSerialize,
+    Allocative
+)]
 #[display(fmt = "CallExit")]
 pub(crate) struct CallExit<D: MaybeDrop + 'static> {
     pub(crate) time: Instant,

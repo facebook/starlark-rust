@@ -33,6 +33,7 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Write;
 
+use allocative::Allocative;
 use erased_serde::Serialize;
 use gazebo::any::ProvidesStaticType;
 
@@ -71,8 +72,9 @@ use crate::values::ValueError;
 /// use starlark::values::{ProvidesStaticType, ComplexValue, Coerce, Freezer, FrozenValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze, NoSerialize};
 /// use starlark::{starlark_complex_value, starlark_type};
 /// use derive_more::Display;
+/// use allocative::Allocative;
 ///
-/// #[derive(Debug, Trace, Coerce, Display, ProvidesStaticType, NoSerialize)]
+/// #[derive(Debug, Trace, Coerce, Display, ProvidesStaticType, NoSerialize, Allocative)]
 /// #[repr(C)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
@@ -181,8 +183,9 @@ where
 /// # use starlark::starlark_simple_value;
 /// use starlark::starlark_type;
 /// use derive_more::Display;
+/// use allocative::Allocative;
 ///
-/// #[derive(Debug, Display, ProvidesStaticType, NoSerialize)]
+/// #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative)]
 /// #[display(fmt = "Foo")]
 /// struct Foo;
 /// # starlark_simple_value!(Foo);
@@ -199,7 +202,9 @@ where
 /// [`StarlarkValue`] implementation in `crate::values::layout::avalue::Wrapper`. Otherwise,
 /// any implementations other than the default implementation will not be run.
 #[starlark_internal_vtable]
-pub trait StarlarkValue<'v>: 'v + ProvidesStaticType + Debug + Display + Serialize + Sized {
+pub trait StarlarkValue<'v>:
+    'v + ProvidesStaticType + Allocative + Debug + Display + Serialize + Sized
+{
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///

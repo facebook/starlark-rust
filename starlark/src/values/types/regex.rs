@@ -19,6 +19,7 @@
 use std::fmt;
 use std::fmt::Display;
 
+use allocative::Allocative;
 use fancy_regex::Regex;
 use gazebo::any::ProvidesStaticType;
 
@@ -30,9 +31,9 @@ use crate::values::StarlarkValue;
 
 /// A type that can be passed around as a StarlarkRegex, which wraps Rust value
 /// fancy_regex::Regex.
-#[derive(ProvidesStaticType, Debug, NoSerialize, StarlarkDocs)]
+#[derive(ProvidesStaticType, Debug, NoSerialize, StarlarkDocs, Allocative)]
 #[starlark_docs_attrs(builtin = "extension")]
-pub struct StarlarkRegex(pub Regex);
+pub struct StarlarkRegex(#[allocative(skip)] pub Regex);
 
 impl StarlarkValue<'_> for StarlarkRegex {
     starlark_type!(StarlarkRegex::TYPE);

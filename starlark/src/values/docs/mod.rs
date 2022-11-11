@@ -862,6 +862,7 @@ mod tests {
     use std::fmt::Display;
     use std::fmt::Formatter;
 
+    use allocative::Allocative;
     use gazebo::any::ProvidesStaticType;
     use starlark_derive::starlark_module;
 
@@ -944,7 +945,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, ProvidesStaticType, NoSerialize)]
+    #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
     struct SomeValue {}
 
     impl Display for SomeValue {

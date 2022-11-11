@@ -19,6 +19,7 @@
 
 use std::collections::HashMap;
 
+use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
@@ -123,6 +124,7 @@ impl<T> NativeAttr for T where
 
 /// Enough details to get the documentation for a callable ([`NativeFunction`] or [`NativeMethod`])
 #[doc(hidden)]
+#[derive(Allocative)]
 pub struct NativeCallableRawDocs {
     pub rust_docstring: Option<&'static str>,
     pub signature: ParametersSpec<FrozenValue>,
@@ -148,11 +150,12 @@ impl NativeCallableRawDocs {
 /// Starlark representation of native (Rust) functions.
 ///
 /// Almost always created with [`#[starlark_module]`](macro@starlark_module).
-#[derive(Derivative, ProvidesStaticType, Display, NoSerialize)]
+#[derive(Derivative, ProvidesStaticType, Display, NoSerialize, Allocative)]
 #[derivative(Debug)]
 #[display(fmt = "{}", name)]
 pub struct NativeFunction {
     #[derivative(Debug = "ignore")]
+    #[allocative(skip)]
     pub(crate) function: Box<dyn NativeFunc>,
     pub(crate) name: String,
     pub(crate) typ: Option<FrozenValue>,
@@ -265,11 +268,12 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
     }
 }
 
-#[derive(Derivative, Display, NoSerialize, ProvidesStaticType)]
+#[derive(Derivative, Display, NoSerialize, ProvidesStaticType, Allocative)]
 #[derivative(Debug)]
 #[display(fmt = "{}", name)]
 pub(crate) struct NativeMethod {
     #[derivative(Debug = "ignore")]
+    #[allocative(skip)]
     pub(crate) function: Box<dyn NativeMeth>,
     pub(crate) name: String,
     pub(crate) typ: Option<FrozenValue>,
@@ -301,11 +305,12 @@ impl<'v> StarlarkValue<'v> for NativeMethod {
 
 /// Used by the `#[starlark(attribute)]` tag of [`#[starlark_module]`](macro@starlark_module)
 /// to define a function that pretends to be an attribute.
-#[derive(Derivative, Display, NoSerialize, ProvidesStaticType)]
+#[derive(Derivative, Display, NoSerialize, ProvidesStaticType, Allocative)]
 #[display(fmt = "Attribute")]
 #[derivative(Debug)]
 pub(crate) struct NativeAttribute {
     #[derivative(Debug = "ignore")]
+    #[allocative(skip)]
     pub(crate) function: Box<dyn NativeAttr>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
@@ -346,7 +351,8 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
     Display,
     Freeze,
     NoSerialize,
-    ProvidesStaticType
+    ProvidesStaticType,
+    Allocative
 )]
 #[repr(C)]
 #[display(fmt = "{}", method)]

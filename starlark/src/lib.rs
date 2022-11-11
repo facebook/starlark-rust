@@ -295,9 +295,10 @@
 //! use starlark::values::{Heap, StarlarkValue, Value, ValueError, ValueLike, ProvidesStaticType, NoSerialize};
 //! use starlark::{starlark_type, starlark_simple_value};
 //! use std::fmt::{self, Display, Write};
+//! use allocative::Allocative;
 //!
 //! // Define complex numbers
-//! #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize)]
+//! #[derive(Debug, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
 //! struct Complex {
 //!     real: i32,
 //!     imaginary: i32,

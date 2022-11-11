@@ -23,6 +23,7 @@ use std::fmt::Display;
 use std::fmt::Write;
 use std::hash::Hasher;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::prelude::*;
 use serde::Serialize;
@@ -153,7 +154,16 @@ pub(crate) fn write_compact<W: fmt::Write>(
 }
 
 /// Runtime representation of Starlark `float` type.
-#[derive(Clone, Dupe, Copy, Debug, ProvidesStaticType, Serialize, StarlarkDocs)]
+#[derive(
+    Clone,
+    Dupe,
+    Copy,
+    Debug,
+    ProvidesStaticType,
+    Serialize,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(builtin = "standard")]
 #[serde(transparent)]
 pub struct StarlarkFloat(pub f64);

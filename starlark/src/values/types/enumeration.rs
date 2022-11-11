@@ -112,7 +112,15 @@ pub type EnumType<'v> = EnumTypeGen<Value<'v>, RefCell<Option<String>>>;
 pub type FrozenEnumType = EnumTypeGen<FrozenValue, Option<String>>;
 
 /// A value from an enumeration.
-#[derive(Clone, Derivative, Trace, Coerce, Freeze, ProvidesStaticType)]
+#[derive(
+    Clone,
+    Derivative,
+    Trace,
+    Coerce,
+    Freeze,
+    ProvidesStaticType,
+    Allocative
+)]
 #[repr(C)]
 #[derivative(Debug)]
 pub struct EnumValueGen<V> {
@@ -177,7 +185,7 @@ impl<'v, V: ValueLike<'v>> EnumValueGen<V> {
     }
 }
 
-impl<'v, Typ: 'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for EnumTypeGen<V, Typ>
+impl<'v, Typ: Allocative + 'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for EnumTypeGen<V, Typ>
 where
     Self: ProvidesStaticType,
     Typ: AsARef<Option<String>> + Debug + Allocative,

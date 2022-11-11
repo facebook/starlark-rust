@@ -29,6 +29,7 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::slice;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::coerce::coerce;
 use gazebo::coerce::Coerce;
@@ -61,7 +62,15 @@ use crate::values::Value;
 use crate::values::ValueLike;
 use crate::values::ValueTyped;
 
-#[derive(Clone, Default, Trace, Debug, ProvidesStaticType, StarlarkDocs)]
+#[derive(
+    Clone,
+    Default,
+    Trace,
+    Debug,
+    ProvidesStaticType,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(builtin = "standard")]
 #[repr(transparent)]
 pub(crate) struct ListGen<T>(pub(crate) T);
@@ -76,14 +85,15 @@ impl FrozenList {
 }
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(Trace, Debug, ProvidesStaticType)]
+#[derive(Trace, Debug, ProvidesStaticType, Allocative)]
 pub struct List<'v> {
     /// The data stored by the list.
+    #[allocative(skip)]
     pub(crate) content: Cell<ValueTyped<'v, Array<'v>>>,
 }
 
 /// Define the list type. See [`List`] and [`FrozenList`] as the two possible representations.
-#[derive(ProvidesStaticType)]
+#[derive(ProvidesStaticType, Allocative)]
 #[repr(C)]
 pub struct FrozenList {
     len: usize,
@@ -406,7 +416,7 @@ impl FrozenList {
 }
 
 // This trait need to be `pub(crate)` because `ListGen<T>` is.
-pub(crate) trait ListLike<'v>: Debug {
+pub(crate) trait ListLike<'v>: Debug + Allocative {
     fn content(&self) -> &[Value<'v>];
     fn set_at(&self, i: usize, v: Value<'v>) -> anyhow::Result<()>;
     fn iterate<'a>(&'a self) -> Box<dyn Iterator<Item = Value<'v>> + 'a>

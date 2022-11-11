@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 
@@ -25,7 +26,14 @@ use crate::values::StarlarkValue;
 
 #[test]
 fn test_derive_attrs() {
-    #[derive(Debug, StarlarkAttrs, Display, ProvidesStaticType, NoSerialize)]
+    #[derive(
+        Debug,
+        StarlarkAttrs,
+        Display,
+        ProvidesStaticType,
+        NoSerialize,
+        Allocative
+    )]
     #[display(fmt = "{:?}", self)]
     struct Example {
         hello: String,
@@ -40,7 +48,15 @@ fn test_derive_attrs() {
         starlark_attrs!();
     }
 
-    #[derive(Debug, Clone, StarlarkAttrs, Display, ProvidesStaticType, NoSerialize)]
+    #[derive(
+        Debug,
+        Clone,
+        StarlarkAttrs,
+        Display,
+        ProvidesStaticType,
+        NoSerialize,
+        Allocative
+    )]
     #[display(fmt = "{}", foo)]
     struct Nested {
         foo: String,

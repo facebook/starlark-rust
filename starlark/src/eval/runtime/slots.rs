@@ -15,13 +15,24 @@
  * limitations under the License.
  */
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 
 use crate as starlark;
 use crate::eval::bc::stack_ptr::BcSlot;
 
 /// Not captured.
-#[derive(Clone, Copy, Dupe, Debug, PartialEq, Eq, Trace, VisitSpanMut)]
+#[derive(
+    Clone,
+    Copy,
+    Dupe,
+    Debug,
+    PartialEq,
+    Eq,
+    Trace,
+    VisitSpanMut,
+    Allocative
+)]
 pub(crate) struct LocalSlotId(pub(crate) u32);
 
 impl LocalSlotId {

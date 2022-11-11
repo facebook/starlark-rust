@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::coerce::Coerce;
@@ -44,7 +45,14 @@ fn object_docs_1(_: &mut MethodsBuilder) {
     }
 }
 
-#[derive(Debug, Display, ProvidesStaticType, NoSerialize, StarlarkDocs)]
+#[derive(
+    Debug,
+    Display,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkDocs,
+    Allocative
+)]
 struct TestExample {}
 
 starlark_simple_value!(TestExample);
@@ -69,7 +77,8 @@ impl<'v> StarlarkValue<'v> for TestExample {
     Trace,
     Freeze,
     ProvidesStaticType,
-    StarlarkDocs
+    StarlarkDocs,
+    Allocative
 )]
 #[repr(C)]
 struct ComplexTestExampleGen<V>(V);
@@ -164,7 +173,14 @@ fn test_derive_docs_on_complex_values() {
 #[starlark_module]
 fn object_docs_2(_: &mut MethodsBuilder) {}
 
-#[derive(Debug, Display, ProvidesStaticType, NoSerialize, StarlarkDocs)]
+#[derive(
+    Debug,
+    Display,
+    ProvidesStaticType,
+    NoSerialize,
+    StarlarkDocs,
+    Allocative
+)]
 #[starlark_docs_attrs(key = "value", key2 = "value2")]
 struct TestAttrExample {}
 

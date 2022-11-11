@@ -25,6 +25,7 @@ use std::fmt::Write;
 use std::ptr;
 use std::time::Instant;
 
+use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
@@ -435,7 +436,7 @@ impl Compiler<'_, '_, '_> {
 
 /// Starlark function internal representation and implementation of
 /// [`StarlarkValue`].
-#[derive(Derivative, NoSerialize, ProvidesStaticType, Trace)]
+#[derive(Derivative, NoSerialize, ProvidesStaticType, Trace, Allocative)]
 #[derivative(Debug)]
 pub(crate) struct DefGen<V> {
     pub(crate) parameters: ParametersSpec<V>, // The parameters, **kwargs etc including defaults (which are evaluated afresh each time)
@@ -458,9 +459,11 @@ pub(crate) struct DefGen<V> {
     /// A reference to the module where the function is defined after the module has been frozen.
     /// When the module is not frozen yet, this field contains `None`, and function's module
     /// can be accessed from evaluator's module.
+    #[allocative(skip)]
     module: AtomicFrozenRefOption<FrozenModuleRef>,
     /// This field is only used in `FrozenDef`. It is populated in `post_freeze`.
     #[derivative(Debug = "ignore")]
+    #[allocative(skip)]
     optimized_on_freeze_stmt: StmtCompiledCell,
 }
 

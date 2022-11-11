@@ -19,6 +19,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Display;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use gazebo::coerce::coerce;
 use gazebo::coerce::Coerce;
@@ -216,7 +217,7 @@ pub fn abs(builder: &mut GlobalsBuilder) {
     }
 }
 
-#[derive(Debug, Coerce, Trace, NoSerialize, ProvidesStaticType)]
+#[derive(Debug, Coerce, Trace, NoSerialize, ProvidesStaticType, Allocative)]
 #[repr(C)]
 struct PartialGen<V, S> {
     func: V,

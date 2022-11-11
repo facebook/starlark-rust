@@ -611,7 +611,7 @@ mod tests {
 
     #[test]
     fn test_set_attribute() {
-        #[derive(Debug, Display, ProvidesStaticType, NoSerialize)]
+        #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative)]
         #[display(fmt = "Magic")]
         struct Magic;
         starlark_simple_value!(Magic);

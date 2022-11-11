@@ -27,6 +27,7 @@ use std::fmt::Formatter;
 use std::ptr;
 use std::slice;
 
+use allocative::Allocative;
 use gazebo::any::ProvidesStaticType;
 use serde::Serialize;
 
@@ -38,13 +39,14 @@ use crate::values::Value;
 /// Fixed-capacity list.
 ///
 /// Mutation operations (like `insert`) panic if there's not enough remaining capacity.
-#[derive(ProvidesStaticType)]
+#[derive(ProvidesStaticType, Allocative)]
 #[repr(C)]
 pub(crate) struct Array<'v> {
     // We use `u32` to save some space.
     // `UnsafeCell` is to make this type `Sync` to put an empty array instance into
     // a static variable.
     /// Current number of elements in the array.
+    #[allocative(skip)]
     len: UnsafeCell<u32>,
     /// Fixed capacity.
     capacity: u32,
@@ -55,6 +57,7 @@ pub(crate) struct Array<'v> {
     //   `iter_count_cap >= 0` means capacity
     //   `iter_count_cap < 0` means `-iter_count_cap` active iterators,
     //     and iterator object holds the capacity.
+    #[allocative(skip)]
     iter_count: UnsafeCell<u32>,
     content: [Value<'v>; 0],
 }

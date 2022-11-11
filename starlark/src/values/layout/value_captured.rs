@@ -22,6 +22,7 @@
 
 use std::cell::Cell;
 
+use allocative::Allocative;
 use derive_more::Display;
 use gazebo::any::ProvidesStaticType;
 use gazebo::prelude::*;
@@ -34,12 +35,13 @@ use crate::values::StarlarkValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 
-#[derive(Debug, Trace, ProvidesStaticType, Display, NoSerialize)]
+#[derive(Debug, Trace, ProvidesStaticType, Display, NoSerialize, Allocative)]
 #[display(fmt = "{:?}", self)] // This type should never be user visible
 #[repr(transparent)]
+#[allocative(skip)]
 pub(crate) struct ValueCaptured<'v>(pub Cell<Option<Value<'v>>>);
 
-#[derive(Debug, ProvidesStaticType, Display, NoSerialize)]
+#[derive(Debug, ProvidesStaticType, Display, NoSerialize, Allocative)]
 #[display(fmt = "{:?}", self)] // Type is not user visible
 #[repr(transparent)]
 pub(crate) struct FrozenValueCaptured(Option<FrozenValue>);

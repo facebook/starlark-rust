@@ -127,6 +127,7 @@ impl LibraryExtension {
 
 #[cfg(test)]
 mod tests {
+    use allocative::Allocative;
     use derive_more::Display;
     use gazebo::any::ProvidesStaticType;
     use gazebo::prelude::*;
@@ -166,7 +167,8 @@ mod tests {
             PartialEq,
             Display,
             ProvidesStaticType,
-            NoSerialize
+            NoSerialize,
+            Allocative
         )]
         #[display(fmt = "{}", _0)]
         struct Bool2(bool);

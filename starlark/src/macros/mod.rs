@@ -137,8 +137,9 @@ macro_rules! starlark_complex_values {
 /// use starlark::values::{Heap, StarlarkValue, Value, ProvidesStaticType, NoSerialize};
 /// use starlark::{starlark_simple_value, starlark_type};
 /// use derive_more::Display;
+/// use allocative::Allocative;
 ///
-/// #[derive(Debug, Display, ProvidesStaticType, NoSerialize)]
+/// #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative)]
 /// struct MyObject(String);
 /// starlark_simple_value!(MyObject);
 /// impl<'v> StarlarkValue<'v> for MyObject {

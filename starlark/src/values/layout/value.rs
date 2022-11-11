@@ -115,8 +115,8 @@ use crate::values::ValueIdentity;
 /// Many of the methods simply forward to the underlying [`StarlarkValue`](crate::values::StarlarkValue).
 /// The [`Display`](std::fmt::Display) trait is equivalent to the `repr()` function in Starlark.
 #[derive(Clone_, Copy_, Dupe_, ProvidesStaticType, Allocative)]
+#[allocative(skip)] // Value is owned by heap.
 // One possible change: moving to Forward during GC.
-#[allocative(skip)] // Data is owned by heap.
 pub struct Value<'v>(pub(crate) Pointer<'v>);
 
 unsafe impl<'v> Coerce<Value<'v>> for Value<'v> {}

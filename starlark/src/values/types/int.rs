@@ -30,6 +30,7 @@ use std::fmt::Display;
 use std::hash::Hasher;
 use std::ptr;
 
+use allocative::Allocative;
 use gazebo::any::AnyLifetime;
 use gazebo::any::ProvidesStaticType;
 use gazebo::cast;
@@ -86,7 +87,7 @@ impl UnpackValue<'_> for i32 {
 // WARNING: This type isn't a real type, a pointer to this is secretly an i32.
 // Therefore, don't derive stuff on it, since it will be wrong.
 // However, `ProvidesStaticType` promises not to peek at its value, so that's fine.
-#[derive(ProvidesStaticType, StarlarkDocs)]
+#[derive(ProvidesStaticType, StarlarkDocs, Allocative)]
 #[starlark_docs_attrs(builtin = "standard")]
 #[repr(C)]
 pub(crate) struct PointerI32 {
