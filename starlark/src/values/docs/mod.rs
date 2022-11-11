@@ -27,6 +27,7 @@ pub mod markdown;
 
 use std::collections::HashMap;
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
@@ -57,7 +58,16 @@ fn indent_trimmed(s: &str, prefix: &str) -> String {
 }
 
 /// The documentation provided by a user for a specific module, object, function, etc.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Trace, Default)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    Trace,
+    Default,
+    Allocative
+)]
 pub struct DocString {
     /// The first line of a doc string. This has whitespace trimmed from it.
     pub summary: String,
@@ -385,14 +395,14 @@ pub struct Identifier {
 }
 
 /// The type of a given parameter, field, etc.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
 pub struct Type {
     /// The type string that one would find in a starlark expression.
     pub raw_type: String,
 }
 
 /// Documents a full module.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
 pub struct Module {
     /// In general, this should be the first statement of a loaded file, if that statement is
     /// a string literal.
@@ -409,7 +419,7 @@ impl Module {
 }
 
 /// Documents a single function.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
 pub struct Function {
     /// Documentation for the function. If parsed, this should generally be the first statement
     /// of a function's body if that statement is a string literal. Any sections like "Args:",
@@ -605,7 +615,7 @@ impl Function {
 }
 
 /// A single parameter of a function.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Param {
     /// A regular parameter that may or may not have a default value.
@@ -672,7 +682,7 @@ impl Param {
 }
 
 /// Details about the return value of a function.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
 pub struct Return {
     /// Extra semantic details around the returned value's meaning.
     pub docs: Option<DocString>,
@@ -687,7 +697,7 @@ impl Return {
 }
 
 /// A single property of an object. These are explicitly not functions (see [`Member`]).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
 pub struct Property {
     pub docs: Option<DocString>,
     #[serde(rename = "type")]
@@ -719,7 +729,7 @@ impl Property {
 }
 
 /// A named member of an object.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Member {
     Property(Property),
@@ -727,7 +737,7 @@ pub enum Member {
 }
 
 /// An object with named functions/properties.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
 pub struct Object {
     pub docs: Option<DocString>,
     /// Name and details of each member of this object.
@@ -775,7 +785,7 @@ impl Object {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DocItem {
     Module(Module),

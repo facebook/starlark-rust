@@ -32,11 +32,12 @@ use std::ops::DerefMut;
 use std::ptr;
 use std::sync::Arc;
 
+use allocative::Allocative;
 use gazebo::prelude::*;
 
 /// A small, `Copy`, value representing a position in a `CodeMap`'s file.
 #[derive(
-    Copy, Clone, Dupe, Hash, Eq, PartialEq, PartialOrd, Ord, Debug, Default
+    Copy, Clone, Dupe, Hash, Eq, PartialEq, PartialOrd, Ord, Debug, Default, Allocative
 )]
 pub struct Pos(u32);
 
@@ -55,7 +56,7 @@ impl Add<u32> for Pos {
 }
 
 /// A range of text within a CodeMap.
-#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug, Default)]
+#[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug, Default, Allocative)]
 pub(crate) struct Span {
     /// The position in the codemap representing the first byte of the span.
     begin: Pos,
@@ -158,17 +159,19 @@ impl CodeMapId {
     pub(crate) const EMPTY: CodeMapId = CodeMapId(ptr::null());
 }
 
-#[derive(Clone, Dupe)]
+#[derive(Clone, Dupe, Allocative)]
 enum CodeMapImpl {
     Real(Arc<CodeMapData>),
+    #[allocative(skip)]
     Native(&'static NativeCodeMap),
 }
 
 /// A data structure recording a source code file for position lookup.
-#[derive(Clone, Dupe)]
+#[derive(Clone, Dupe, Allocative)]
 pub(crate) struct CodeMap(CodeMapImpl);
 
 /// A `CodeMap`'s record of a source file.
+#[derive(Allocative)]
 struct CodeMapData {
     /// The filename as it would be displayed in an error message.
     filename: String,
@@ -398,7 +401,7 @@ pub struct FileSpanRef<'a> {
 }
 
 /// A file, and a line and column range within it.
-#[derive(Clone, Dupe, Eq, PartialEq, Debug, Hash)]
+#[derive(Clone, Dupe, Eq, PartialEq, Debug, Hash, Allocative)]
 pub struct FileSpan {
     pub(crate) file: CodeMap,
     pub(crate) span: Span,
