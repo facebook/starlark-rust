@@ -20,6 +20,7 @@ mod size_of;
 mod test_derive;
 mod visitor;
 
+pub use allocative_derive::root;
 pub use allocative_derive::Allocative;
 
 pub use crate::allocative_trait::Allocative;
@@ -28,3 +29,8 @@ pub use crate::global_root::register_root;
 pub use crate::key::Key;
 pub use crate::size_of::size_of_unique_allocated_data;
 pub use crate::visitor::Visitor;
+
+#[doc(hidden)]
+pub mod __macro_refs {
+    pub use ctor;
+}

@@ -10,8 +10,14 @@
 use proc_macro::TokenStream;
 
 mod derive_allocative;
+mod root;
 
 #[proc_macro_derive(Allocative, attributes(allocative))]
 pub fn derive_allocative(input: TokenStream) -> TokenStream {
     derive_allocative::derive_allocative(input)
+}
+
+#[proc_macro_attribute]
+pub fn root(attr: TokenStream, input: TokenStream) -> TokenStream {
+    root::root(attr, input)
 }
