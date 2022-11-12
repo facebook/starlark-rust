@@ -386,13 +386,18 @@ impl<K: Allocative, V: Allocative> Allocative for Vec2<K, V> {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         let mut visitor = visitor.enter_self_sized::<Self>();
         if self.cap != 0 {
-            let mut visitor = visitor.enter_unique(
-                allocative::Key::new("ptr"),
-                Vec2Layout::<K, V>::new(self.cap).layout.size(),
-            );
-            for (k, v) in self {
-                k.visit(&mut visitor);
-                v.visit(&mut visitor);
+            let mut visitor =
+                visitor.enter_unique(allocative::Key::new("ptr"), mem::size_of::<*const ()>());
+            {
+                let mut visitor = visitor.enter(
+                    allocative::Key::new("data"),
+                    Vec2Layout::<K, V>::new(self.cap).layout.size(),
+                );
+                for (k, v) in self {
+                    k.visit(&mut visitor);
+                    v.visit(&mut visitor);
+                }
+                visitor.exit();
             }
             visitor.exit();
         }
