@@ -9,6 +9,7 @@
 
 mod cell;
 mod collections;
+mod function;
 mod primitive;
 mod sync;
 mod time;
