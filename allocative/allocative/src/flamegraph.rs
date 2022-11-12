@@ -146,6 +146,32 @@ impl TreeStack {
     }
 }
 
+/// Build a flamegraph from given root objects.
+///
+/// # Example
+///
+/// ```
+/// use allocative::FlameGraphBuilder;
+/// use allocative::Allocative;
+///
+/// #[derive(Allocative)]
+/// struct Foo {
+///     data: String,
+/// };
+///
+/// let foo1 = Foo { data: "Hello, world!".to_owned() };
+/// let foo2 = Foo { data: "Another message!".to_owned() };
+///
+/// let mut  flamegraph = FlameGraphBuilder::default();
+/// flamegraph.visit_root(&foo1);
+/// flamegraph.visit_root(&foo2);
+/// let flamegraph_src = flamegraph.finish().flamegraph();
+/// ```
+///
+/// And now `flamegraph_src` can be fed to either [flamegraph.pl] or [inferno].
+///
+/// [flamegraph.pl]: https://github.com/brendangregg/FlameGraph
+/// [inferno]: https://github.com/jonhoo/inferno
 #[derive(Debug)]
 pub struct FlameGraphBuilder {
     /// Visited shared pointers.

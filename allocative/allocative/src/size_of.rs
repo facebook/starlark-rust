@@ -18,6 +18,19 @@ use crate::Visitor;
 /// * Exclude self
 /// * Exclude shared pointers
 /// * For unique pointers, include the size of the pointee plus this function recursively
+///
+/// # Example
+///
+/// ```
+/// use allocative::Allocative;
+///
+/// #[derive(Allocative)]
+/// struct Foo {
+///     data: Vec<u8>,
+/// }
+///
+/// assert_eq!(3, allocative::size_of_unique_allocated_data(&Foo { data: vec![10, 20, 30] }));
+/// ```
 pub fn size_of_unique_allocated_data(root: &dyn Allocative) -> usize {
     struct SizeOfUniqueAllocatedDataVisitor {
         /// Size we return.

@@ -7,8 +7,43 @@
  * of this source tree.
  */
 
+//! # Allocative
+//!
+//! Crate implements lightweight memory profiler which allows
+//! object traversal and size introspection.
+//!
+//! An object implementing [`Allocative`] trait is introspectable, and this crate
+//! provides two utilities to work with such objects:
+//! * [`FlameGraphBuilder`] to build a flame graph of object tree
+//! * [`size_of_unique_allocated_data`] provides estimation
+//!    of how much allocated memory the value holds
+//!
+//! ## Allocative overhead
+//!
+//! When allocative is used, binary size is slightly increased due to implementations
+//! of [`Allocative`] trait, but it has no runtime/memory overhead when it is not used.
+//!
+//! ## How it is different from other call-stack malloc profilers like jemalloc heap profiler
+//!
+//! Allocative is not a substitute for call stack malloc profiler,
+//! it provides a different view on memory usage.
+//!
+//! Here are some differences between allocative and call-stack malloc profiler:
+//!
+//! * Allocative requires implementation of [`Allocative`] trait for each type
+//!   which needs to be measured, and some setup in the program to enable it
+//! * Allocative flamegraph shows object by object tree, not by call stack
+//! * Allocative shows gaps in allocated memory,
+//!   e.g. spare capacity of collections or too large padding in structs or enums
+//! * Allocative allows profiling non-malloc allocations (for example, allocations within [bumpalo])
+//! * Allocative allows profiling of memory for subset of the process data
+//!   (for example, measure the size of RPC response before serialization)
+//!
+//! [bumpalo]: https://github.com/fitzgen/bumpalo
+
 #![cfg_attr(rust_nightly, feature(const_type_name))]
 #![cfg_attr(rust_nightly, feature(never_type))]
+#![deny(rustdoc::broken_intra_doc_links)]
 
 mod allocative_trait;
 mod flamegraph;
