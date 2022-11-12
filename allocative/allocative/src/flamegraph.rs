@@ -16,6 +16,7 @@ use std::fmt::Write as _;
 use std::mem;
 use std::rc::Rc;
 
+use crate::global_root::roots;
 use crate::key::Key;
 use crate::visitor::NodeKind;
 use crate::visitor::Visitor;
@@ -190,6 +191,14 @@ impl FlameGraphBuilder {
         let mut visitor = self.root_visitor();
         root.visit(&mut visitor);
         visitor.exit();
+    }
+
+    /// Collect data from global roots registered with
+    /// [`register_root`](crate::register_root).
+    pub fn visit_global_roots(&mut self) {
+        for root in roots() {
+            self.visit_root(root);
+        }
     }
 
     fn finish_impl(self) -> Tree {
