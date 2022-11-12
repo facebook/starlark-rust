@@ -15,12 +15,10 @@
  * limitations under the License.
  */
 
-// Features we use
-#![feature(box_syntax)]
-//
 // Plugins
 #![cfg_attr(feature = "gazebo_lint", feature(plugin))]
 #![cfg_attr(feature = "gazebo_lint", allow(deprecated))] // :(
+#![cfg_attr(feature = "gazebo_lint", allow(gazebo_lint_use_box))]
 #![cfg_attr(feature = "gazebo_lint", plugin(gazebo_lint))]
 // Disagree these are good hints
 #![allow(clippy::type_complexity)]
@@ -139,7 +137,7 @@ fn expand_dirs(extension: &str, xs: Vec<PathBuf>) -> impl Iterator<Item = PathBu
                     .map(|e| e.into_path()),
             )
         } else {
-            Either::Right(box vec![x].into_iter())
+            Either::Right(Box::new(vec![x].into_iter()))
         }
     })
 }

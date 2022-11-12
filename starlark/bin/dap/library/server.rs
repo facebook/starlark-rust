@@ -37,14 +37,14 @@ fn server(dap: impl DebugServer) {
     // Because of the eval we're running in, we probably can't see panics.
     // So mirror them to the log file.
     let orig_hook = std::panic::take_hook();
-    std::panic::set_hook(box move |panic_info| {
+    std::panic::set_hook(Box::new(move |panic_info| {
         if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
             log(&format!("Panic occurred: {:?}", s));
         } else {
             log("Panic occurred: Unknown message");
         }
         orig_hook(panic_info);
-    });
+    }));
 
     log("DEBUG ADAPTER STARTING");
     loop {

@@ -72,24 +72,26 @@ impl Backend {
     ) -> T {
         let (sender, receiver) = channel();
         self.sender
-            .send(box move |span, eval| {
+            .send(Box::new(move |span, eval| {
                 let (next, res) = f(span, eval);
                 sender.send(res).unwrap();
                 next
-            })
+            }))
             .unwrap();
         receiver.recv().unwrap()
     }
 
     fn inject_continue(&self) {
-        self.inject(box |_, _| (Next::Continue, ()))
+        self.inject(Box::new(|_, _| (Next::Continue, ())))
     }
 
     fn with_ctx<T: 'static + Send>(
         &self,
         f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> T + Send>,
     ) -> T {
-        self.inject(box move |span, eval| (Next::RemainPaused, f(span, eval)))
+        self.inject(Box::new(move |span, eval| {
+            (Next::RemainPaused, f(span, eval))
+        }))
     }
 
     fn execute(&self, path: &str) {
@@ -295,7 +297,7 @@ impl DebugServer for Backend {
         // Our model of a Frame and the debugger model are a bit different.
         // We record the location of the call, but DAP wants the location we are at.
         // We also have them in the wrong order
-        self.with_ctx(box |span, eval| {
+        self.with_ctx(Box::new(|span, eval| {
             let frames = eval.call_stack().into_frames();
             let mut next = Some(span.to_file_span());
             let mut res = Vec::with_capacity(frames.len() + 1);
@@ -308,11 +310,11 @@ impl DebugServer for Backend {
                 total_frames: Some(res.len() as i64),
                 stack_frames: res,
             })
-        })
+        }))
     }
 
     fn scopes(&self, _: ScopesArguments) -> anyhow::Result<ScopesResponseBody> {
-        self.with_ctx(box |_, eval| {
+        self.with_ctx(Box::new(|_, eval| {
             let vars = eval.local_variables();
             Ok(ScopesResponseBody {
                 scopes: vec![Scope {
@@ -328,11 +330,11 @@ impl DebugServer for Backend {
                     source: None,
                 }],
             })
-        })
+        }))
     }
 
     fn variables(&self, _: VariablesArguments) -> anyhow::Result<VariablesResponseBody> {
-        self.with_ctx(box |_, eval| {
+        self.with_ctx(Box::new(|_, eval| {
             let vars = eval.local_variables();
             Ok(VariablesResponseBody {
                 variables: vars
@@ -349,7 +351,7 @@ impl DebugServer for Backend {
                     })
                     .collect(),
             })
-        })
+        }))
     }
 
     fn continue_(&self, _: ContinueArguments) -> anyhow::Result<ContinueResponseBody> {
@@ -359,7 +361,7 @@ impl DebugServer for Backend {
 
     fn evaluate(&self, x: EvaluateArguments) -> anyhow::Result<EvaluateResponseBody> {
         let disable_breakpoints = self.disable_breakpoints.dupe();
-        self.with_ctx(box move |_, eval| {
+        self.with_ctx(Box::new(move |_, eval| {
             // We don't want to trigger breakpoints during an evaluate,
             // not least because we currently don't allow reenterant evaluate
             disable_breakpoints.fetch_add(1, Ordering::SeqCst);
@@ -377,7 +379,7 @@ impl DebugServer for Backend {
                 type_: None,
                 variables_reference: 0.0,
             })
-        })
+        }))
     }
 }
 
