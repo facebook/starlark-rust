@@ -10,11 +10,18 @@
 #![cfg(feature = "parking_lot")]
 
 use parking_lot::RawMutex;
+use parking_lot::RawRwLock;
 
 use crate::allocative_trait::Allocative;
 use crate::visitor::Visitor;
 
 impl Allocative for RawMutex {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
+        visitor.enter_self_sized::<Self>().exit();
+    }
+}
+
+impl Allocative for RawRwLock {
     fn visit<'a, 'b: 'a>(&self, visitor: &'a mut Visitor<'b>) {
         visitor.enter_self_sized::<Self>().exit();
     }
