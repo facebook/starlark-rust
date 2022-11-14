@@ -65,7 +65,7 @@ fn impl_generics(
         impl_generics.push(match p {
             GenericParam::Type(tp) => {
                 let mut tp = tp.clone();
-                if attrs.bound.is_none() {
+                if attrs.bound.is_none() && !attrs.skip {
                     tp.bounds.push(syn::parse2(quote_spanned! { tp.span() =>
                         allocative::Allocative
                     })?);

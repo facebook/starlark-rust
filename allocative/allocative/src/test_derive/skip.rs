@@ -52,3 +52,14 @@ struct IgnoreBound<T> {
 struct TestBoundIgnored {
     ignore_bound: IgnoreBound<Unsupported>,
 }
+
+#[derive(Allocative)]
+#[allocative(skip)]
+struct TypeLevelSkipImpliesNoBounds<T> {
+    t: T,
+}
+
+#[derive(Allocative)]
+struct TestTypeLevelSkipImpliesNoBounds {
+    type_level_skip: TypeLevelSkipImpliesNoBounds<Unsupported>,
+}
