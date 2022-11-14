@@ -62,7 +62,7 @@ fn test_export_as() {
     use crate::values::Value;
 
     #[derive(Debug, Trace, ProvidesStaticType, NoSerialize, Allocative)]
-    #[allocative(bound = "", skip)] // TODO(nga): ignore bounds if skip.
+    #[allocative(skip)]
     struct Exporter<T> {
         // Either String or a RefCell therefore
         named: T,
