@@ -35,7 +35,6 @@
 // and if necessary we can always switch to the enum representation.
 
 use std::cell::BorrowError;
-use std::cell::Cell;
 use std::cell::Ref;
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -43,71 +42,48 @@ use std::fmt;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::mem;
 use std::ops::Deref;
 
-use crate::cast;
+#[derive(Debug)]
+enum ARefImpl<'a, T: ?Sized + 'a> {
+    Ptr(&'a T),
+    Ref(Ref<'a, T>),
+}
 
 /// A [`Ref`](Ref) that might not actually be borrowed.
 /// Either a `Ptr` (a normal & style reference), or a `Ref` (like from
 /// [`RefCell`](std::cell::RefCell)), but exposes all the methods available on [`Ref`](Ref).
 #[derive(Debug)]
-pub struct ARef<'a, T: ?Sized + 'a> {
-    value: &'a T,
-    borrow: Option<&'a Cell<isize>>,
-}
-
-impl<T: ?Sized> Drop for ARef<'_, T> {
-    fn drop(&mut self) {
-        if self.borrow.is_some() {
-            let me: ARef<T> = ARef {
-                value: self.value,
-                borrow: self.borrow,
-            };
-            // The transmute forgets me, so I won't get called recursively
-            let them: Ref<T> = unsafe { cast::transmute_unchecked(me) };
-            // But we can now drop on the Ref
-            mem::drop(them);
-        }
-    }
-}
+pub struct ARef<'a, T: ?Sized + 'a>(ARefImpl<'a, T>);
 
 impl<T: ?Sized> Deref for ARef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &T {
-        self.value
+        match &self.0 {
+            ARefImpl::Ptr(p) => p,
+            ARefImpl::Ref(r) => r.deref(),
+        }
     }
 }
 
 impl<'a, T: ?Sized + 'a> ARef<'a, T> {
     /// Create a new [`ARef`] from a pointer.
     pub fn new_ptr(x: &'a T) -> Self {
-        ARef {
-            value: x,
-            borrow: None,
-        }
+        ARef(ARefImpl::Ptr(x))
     }
 
     /// Create a new [`ARef`] from a reference.
     pub fn new_ref(x: Ref<'a, T>) -> Self {
-        // This is safe if the representation is the same as we expect,
-        // which we check for in a test below.
-        // Unfortunately, we can't directly transmute between Ref<T> and ARef<T>
-        // as the type T is generic. So we have to transmute between an intermediate (usize, usize)
-        let v: ARef<T> = unsafe { cast::transmute_unchecked(x) };
-        debug_assert!(v.borrow.is_some());
-        v
+        ARef(ARefImpl::Ref(x))
     }
 
     /// See [`Ref.clone`](Ref::clone). Not a self method since that interferes with the [`Deref`](Deref).
     #[allow(clippy::should_implement_trait)]
     pub fn clone(orig: &Self) -> Self {
-        if orig.borrow.is_none() {
-            ARef::new_ptr(orig.value)
-        } else {
-            let orig: &Ref<T> = unsafe { cast::ptr(orig) };
-            Self::new_ref(Ref::clone(orig))
+        match &orig.0 {
+            ARefImpl::Ptr(p) => ARef(ARefImpl::Ptr(p)),
+            ARefImpl::Ref(r) => ARef(ARefImpl::Ref(Ref::clone(r))),
         }
     }
 
@@ -116,16 +92,10 @@ impl<'a, T: ?Sized + 'a> ARef<'a, T> {
     where
         F: FnOnce(&T) -> &U,
     {
-        // The `map` implementation for Ref doesn't touch the borrow, so we just use the pointer.
-        let res = ARef {
-            value: f(orig.value),
-            borrow: orig.borrow,
-        };
-        // We have to make sure we don't accidentally free the original value, since its drop will change
-        // the borrow flag.
-        #[allow(clippy::mem_forget)]
-        mem::forget(orig);
-        res
+        match orig.0 {
+            ARefImpl::Ptr(p) => ARef(ARefImpl::Ptr(f(p))),
+            ARefImpl::Ref(r) => ARef(ARefImpl::Ref(Ref::map(r, f))),
+        }
     }
 
     /// See [`Ref.map_split`](Ref::map_split). Not a self method since that interferes with the
@@ -134,13 +104,15 @@ impl<'a, T: ?Sized + 'a> ARef<'a, T> {
     where
         F: FnOnce(&T) -> (&U, &V),
     {
-        if orig.borrow.is_none() {
-            let (a, b) = f(orig.value);
-            (ARef::new_ptr(a), ARef::new_ptr(b))
-        } else {
-            let orig: Ref<T> = unsafe { cast::transmute_unchecked(orig) };
-            let (a, b) = Ref::map_split(orig, f);
-            (ARef::new_ref(a), ARef::new_ref(b))
+        match orig.0 {
+            ARefImpl::Ptr(p) => {
+                let (u, v) = f(p);
+                (ARef(ARefImpl::Ptr(u)), ARef(ARefImpl::Ptr(v)))
+            }
+            ARefImpl::Ref(r) => {
+                let (u, v) = Ref::map_split(r, f);
+                (ARef(ARefImpl::Ref(u)), ARef(ARefImpl::Ref(v)))
+            }
         }
     }
 
@@ -150,19 +122,15 @@ impl<'a, T: ?Sized + 'a> ARef<'a, T> {
     where
         F: FnOnce(&T) -> Option<&U>,
     {
-        match f(orig.value) {
-            Some(value) => {
-                let res = Ok(ARef {
-                    value,
-                    borrow: orig.borrow,
-                });
-                // We have to make sure we don't accidentally free the original value, since its drop will change
-                // the borrow flag.
-                #[allow(clippy::mem_forget)]
-                mem::forget(orig);
-                res
-            }
-            None => Err(orig),
+        match orig.0 {
+            ARefImpl::Ptr(p) => match f(p) {
+                Some(u) => Ok(ARef(ARefImpl::Ptr(u))),
+                None => Err(ARef(ARefImpl::Ptr(p))),
+            },
+            ARefImpl::Ref(r) => match Ref::filter_map(r, f) {
+                Ok(u) => Ok(ARef(ARefImpl::Ref(u))),
+                Err(r) => Err(ARef(ARefImpl::Ref(r))),
+            },
         }
     }
 }
