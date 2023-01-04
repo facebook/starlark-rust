@@ -67,7 +67,7 @@ pub(crate) fn indented<'a, D: ?Sized>(f: &'a mut D, indentation: &'static str) -
 
 #[cfg(test)]
 mod tests {
-    use core::fmt::Write as _;
+    use std::fmt::Write as _;
 
     use super::*;
 
