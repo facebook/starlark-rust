@@ -21,10 +21,21 @@ use crate::syntax::ast::DefP;
 use crate::syntax::ast::Stmt;
 use crate::syntax::AstModule;
 
+pub enum ExportedSymbolKind {
+    Variable,
+    Method,
+}
+
+pub struct ExportedSymbol<'a> {
+    pub name: &'a str,
+    pub span: FileSpan,
+    pub kind: ExportedSymbolKind,
+}
+
 impl AstModule {
     /// Which symbols are exported by this module. These are the top-level assignments,
     /// including function definitions. Any symbols that start with `_` are not exported.
-    pub fn exported_symbols(&self) -> Vec<(FileSpan, &str)> {
+    pub fn exported_symbols(&self) -> Vec<ExportedSymbol> {
         // Map since we only want to store the first of each export
         // IndexMap since we want the order to match the order they were defined in
         let mut result: SmallMap<&str, _> = SmallMap::new();
@@ -32,11 +43,19 @@ impl AstModule {
             match &**x {
                 Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
                     dest.visit_lvalue(|name| {
-                        result.entry(&name.0).or_insert(name.span);
+                        result.entry(&name.0).or_insert(ExportedSymbol {
+                            name: &name.0,
+                            span: self.file_span(name.span),
+                            kind: ExportedSymbolKind::Variable,
+                        });
                     });
                 }
                 Stmt::Def(DefP { name, .. }) => {
-                    result.entry(&name.0).or_insert(name.span);
+                    result.entry(&name.0).or_insert(ExportedSymbol {
+                        name: &name.0,
+                        span: self.file_span(name.span),
+                        kind: ExportedSymbolKind::Method,
+                    });
                 }
                 _ => {}
             }
@@ -44,7 +63,7 @@ impl AstModule {
         result
             .into_iter()
             .filter(|(name, _)| !name.starts_with('_'))
-            .map(|(name, span)| (self.file_span(span), name))
+            .map(|(_, exported_symbol)| exported_symbol)
             .collect()
     }
 }
@@ -73,7 +92,7 @@ d = 2
         );
         let res = modu.exported_symbols();
         assert_eq!(
-            res.map(|(loc, name)| format!("{} {}", loc, name)),
+            res.map(|symbol| format!("{} {}", symbol.span, symbol.name)),
             &["X:3:5-6 b", "X:4:1-2 d"]
         );
     }

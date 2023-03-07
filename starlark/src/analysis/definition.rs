@@ -21,6 +21,7 @@ use crate::analysis::bind::scope;
 use crate::analysis::bind::Assigner;
 use crate::analysis::bind::Bind;
 use crate::analysis::bind::Scope;
+use crate::analysis::exported::ExportedSymbol;
 use crate::codemap::CodeMap;
 use crate::codemap::Pos;
 use crate::codemap::ResolvedSpan;
@@ -417,26 +418,19 @@ impl LspModule {
     }
 
     /// Get the list of symbols exported by this module.
-    pub(crate) fn get_exported_symbols(&self) -> Vec<&str> {
-        self.ast
-            .exported_symbols()
-            .into_iter()
-            .map(|(_span, name)| name)
-            .collect()
+    pub(crate) fn get_exported_symbols(&self) -> Vec<ExportedSymbol> {
+        self.ast.exported_symbols()
     }
 
     /// Attempt to find the location in this module where an exported symbol is defined.
     pub(crate) fn find_exported_symbol(&self, name: &str) -> Option<ResolvedSpan> {
-        self.ast
-            .exported_symbols()
-            .iter()
-            .find_map(|(span, symbol)| {
-                if *symbol == name {
-                    Some(span.resolve_span())
-                } else {
-                    None
-                }
-            })
+        self.ast.exported_symbols().iter().find_map(|symbol| {
+            if symbol.name == name {
+                Some(symbol.span.resolve_span())
+            } else {
+                None
+            }
+        })
     }
 
     /// Attempt to find the location in this module where a member of a struct (named `name`)

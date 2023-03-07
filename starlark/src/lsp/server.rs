@@ -82,6 +82,7 @@ use crate::analysis::definition::Definition;
 use crate::analysis::definition::DottedDefinition;
 use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
+use crate::analysis::exported::ExportedSymbolKind;
 use crate::codemap::CodeMap;
 use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
@@ -679,8 +680,8 @@ impl<T: LspContext> Backend<T> {
                         let load_symbols: Vec<_> = doc
                             .get_exported_symbols()
                             .into_iter()
-                            .filter(|&name| !symbols.contains_key(name))
-                            .map(|name| {
+                            .filter(|symbol| !symbols.contains_key(symbol.name))
+                            .map(|symbol| {
                                 // Construct the text edit to insert a load for this exported symbol.
                                 let text_edit = if let Some(existing_load) = loads.get(&load_path) {
                                     // We're already loading a symbol from this module path, construct
@@ -694,7 +695,7 @@ impl<T: LspContext> Backend<T> {
                                                 (assign.0.as_str(), name.node.as_str())
                                             })
                                             .collect();
-                                    load_args.push((name, name));
+                                    load_args.push((symbol.name, symbol.name));
                                     load_args.sort_by(|(_, a), (_, b)| a.cmp(b));
 
                                     TextEdit::new(
@@ -746,18 +747,24 @@ impl<T: LspContext> Backend<T> {
                                             "{}load(\"{}\", \"{}\")",
                                             if last_load.is_some() { "\n" } else { "" },
                                             &load_path,
-                                            name
+                                            symbol.name
                                         ),
                                     )
                                 };
 
                                 (
-                                    name.to_string(),
+                                    symbol.name.to_string(),
                                     CompletionItem {
-                                        label: name.to_string(),
+                                        label: symbol.name.to_string(),
                                         detail: Some(format!("Load from {load_path}")),
-                                        // TODO: Should be based on actual type of exported symbol.
-                                        kind: Some(CompletionItemKind::METHOD),
+                                        kind: Some(match symbol.kind {
+                                            ExportedSymbolKind::Variable => {
+                                                CompletionItemKind::CONSTANT
+                                            }
+                                            ExportedSymbolKind::Method => {
+                                                CompletionItemKind::METHOD
+                                            }
+                                        }),
                                         additional_text_edits: Some(vec![text_edit]),
                                         ..Default::default()
                                     },
