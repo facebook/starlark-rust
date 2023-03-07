@@ -29,6 +29,7 @@ use derive_more::Display;
 use dupe::Dupe;
 use dupe::OptionDupedExt;
 use gazebo::prelude::SliceExt;
+use itertools::Itertools;
 use logos::Source;
 use lsp_server::Connection;
 use lsp_server::Message;
@@ -83,7 +84,6 @@ use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
 use crate::codemap::ResolvedSpan;
 use crate::lsp::server::LoadContentsError::WrongScheme;
-use crate::syntax::ast::AstNoPayload;
 use crate::syntax::ast::AstStmt;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::ParameterP;
@@ -647,10 +647,11 @@ impl<T: LspContext> Backend<T> {
                 if docs.len() > 1 {
                     // Find the position of the last load in the current file.
                     let mut last_load = None;
+                    let mut loads = HashMap::new();
                     ast.ast.statement.visit_stmt(|node| {
-                        if matches!(&node.node, StmtP::Load(_)) {
-                            // if let StmtP::Load(load) = &node.node {
+                        if let StmtP::Load(load) = &node.node {
                             last_load = Some(node.span);
+                            loads.insert(load.module.node.clone(), (load.args.clone(), node.span));
                         }
                     });
                     let last_load = last_load.map(|span| ast.ast.codemap.resolve_span(span));
@@ -662,30 +663,86 @@ impl<T: LspContext> Backend<T> {
                         .iter()
                         .filter(|(&ref doc_uri, _)| doc_uri != &uri)
                     {
-                        symbols.extend(doc.get_exported_symbols().map(|name| CompletionItem {
-                            label: name.to_string(),
-                            detail: Some(format!("Load from {doc_uri}")),
-                            // TODO: Should be based on actual type of exported symbol.
-                            kind: Some(CompletionItemKind::METHOD),
-                            additional_text_edits: Some(vec![TextEdit::new(
-                                match last_load {
-                                    Some(span) => Range::new(
-                                        Position::new(span.end_line as u32, span.end_column as u32),
-                                        Position::new(span.end_line as u32, span.end_column as u32),
+                        let load_path = self.format_load_path(
+                            &initialize_params.workspace_folders,
+                            doc_uri.path().to_str().unwrap(),
+                        );
+                        symbols.extend(doc.get_exported_symbols().map(|name| {
+                            // Construct the text edit to insert a load for this exported symbol.
+                            let text_edit = if let Some(existing_load) = loads.get(&load_path) {
+                                // We're already loading a symbol from this module path, construct
+                                // a text edit that amends the existing load.
+                                let (previously_loaded_symbols, load_span) = existing_load;
+                                let load_span = ast.ast.codemap.resolve_span(*load_span);
+                                let mut load_args: Vec<(&str, &str)> = previously_loaded_symbols
+                                    .iter()
+                                    .map(|(assign, name)| (assign.0.as_str(), name.node.as_str()))
+                                    .collect();
+                                load_args.push((name, name));
+                                load_args.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+                                TextEdit::new(
+                                    Range::new(
+                                        Position::new(
+                                            load_span.begin_line as u32,
+                                            load_span.begin_column as u32,
+                                        ),
+                                        Position::new(
+                                            load_span.end_line as u32,
+                                            load_span.end_column as u32,
+                                        ),
                                     ),
-                                    None => Range::new(Position::new(0, 0), Position::new(0, 0)),
-                                },
-                                format!(
-                                    "{}load(\"{}\", \"{}\")",
-                                    if last_load.is_some() { "\n" } else { "" },
-                                    self.format_load_path(
-                                        &initialize_params.workspace_folders,
-                                        doc_uri.path().to_str().unwrap()
+                                    format!(
+                                        "load(\"{}\", {})",
+                                        &load_path,
+                                        load_args
+                                            .into_iter()
+                                            .map(|(assign, import)| {
+                                                if assign == import {
+                                                    format!("\"{}\"", import)
+                                                } else {
+                                                    format!("{} = \"{}\"", assign, import)
+                                                }
+                                            })
+                                            .join(", ")
                                     ),
-                                    name
-                                ),
-                            )]),
-                            ..Default::default()
+                                )
+                            } else {
+                                // We're not yet loading from this module, construct a text edit that
+                                // inserts a new load statement after the last one we found.
+                                TextEdit::new(
+                                    match last_load {
+                                        Some(span) => Range::new(
+                                            Position::new(
+                                                span.end_line as u32,
+                                                span.end_column as u32,
+                                            ),
+                                            Position::new(
+                                                span.end_line as u32,
+                                                span.end_column as u32,
+                                            ),
+                                        ),
+                                        None => {
+                                            Range::new(Position::new(0, 0), Position::new(0, 0))
+                                        }
+                                    },
+                                    format!(
+                                        "{}load(\"{}\", \"{}\")",
+                                        if last_load.is_some() { "\n" } else { "" },
+                                        &load_path,
+                                        name
+                                    ),
+                                )
+                            };
+
+                            CompletionItem {
+                                label: name.to_string(),
+                                detail: Some(format!("Load from {doc_uri}")),
+                                // TODO: Should be based on actual type of exported symbol.
+                                kind: Some(CompletionItemKind::METHOD),
+                                additional_text_edits: Some(vec![text_edit]),
+                                ..Default::default()
+                            }
                         }));
                     }
                 }
