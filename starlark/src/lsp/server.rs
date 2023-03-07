@@ -640,7 +640,7 @@ impl<T: LspContext> Backend<T> {
                 let mut symbols = Vec::new();
 
                 // Scan through current document
-                self.collect_symbols(&ast.ast.statement, &mut symbols);
+                Self::collect_symbols(&ast.ast.statement, &mut symbols);
 
                 // Discover exported symbols from other documents
                 let docs = self.last_valid_parse.read().unwrap();
@@ -756,7 +756,7 @@ impl<T: LspContext> Backend<T> {
     }
 
     /// Walk the AST recursively and discover symbols.
-    fn collect_symbols(&self, ast: &AstStmt, mut symbols: &mut Vec<CompletionItem>) {
+    fn collect_symbols(ast: &AstStmt, symbols: &mut Vec<CompletionItem>) {
         match &ast.node {
             StmtP::Assign(dest, rhs) => {
                 let source = &rhs.as_ref().1;
@@ -790,7 +790,7 @@ impl<T: LspContext> Backend<T> {
                         ..Default::default()
                     })
                 });
-                self.collect_symbols(body, &mut symbols);
+                Self::collect_symbols(body, symbols);
             }
             StmtP::Def(def) => {
                 symbols.push(CompletionItem {
@@ -808,7 +808,7 @@ impl<T: LspContext> Backend<T> {
                     }
                     _ => None,
                 }));
-                self.collect_symbols(&def.body, &mut symbols);
+                Self::collect_symbols(&def.body, symbols);
             }
             StmtP::Load(load) => symbols.extend(load.args.iter().map(|(name, _)| CompletionItem {
                 label: name.0.clone(),
@@ -818,7 +818,7 @@ impl<T: LspContext> Backend<T> {
                 ..Default::default()
             })),
 
-            stmt => stmt.visit_stmt(|x| self.collect_symbols(x, &mut symbols)),
+            stmt => stmt.visit_stmt(|x| Self::collect_symbols(x, symbols)),
         }
     }
 
@@ -842,7 +842,7 @@ impl<T: LspContext> Backend<T> {
         } else {
             target_file
         }
-        .strip_prefix("/")
+        .strip_prefix('/')
         .unwrap();
 
         let default_suffixes = ["/BUILD", "/BUILD.bzl", "/BUILD.bazel"];
