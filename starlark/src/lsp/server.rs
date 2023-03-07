@@ -28,6 +28,8 @@ use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
 use dupe::OptionDupedExt;
+use gazebo::prelude::SliceExt;
+use logos::Source;
 use lsp_server::Connection;
 use lsp_server::Message;
 use lsp_server::Notification;
@@ -40,7 +42,13 @@ use lsp_types::notification::DidCloseTextDocument;
 use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::notification::LogMessage;
 use lsp_types::notification::PublishDiagnostics;
+use lsp_types::request::Completion;
 use lsp_types::request::GotoDefinition;
+use lsp_types::CompletionItem;
+use lsp_types::CompletionItemKind;
+use lsp_types::CompletionOptions;
+use lsp_types::CompletionParams;
+use lsp_types::CompletionResponse;
 use lsp_types::DefinitionOptions;
 use lsp_types::Diagnostic;
 use lsp_types::DidChangeTextDocumentParams;
@@ -53,13 +61,16 @@ use lsp_types::LocationLink;
 use lsp_types::LogMessageParams;
 use lsp_types::MessageType;
 use lsp_types::OneOf;
+use lsp_types::Position;
 use lsp_types::PublishDiagnosticsParams;
 use lsp_types::Range;
 use lsp_types::ServerCapabilities;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
+use lsp_types::TextEdit;
 use lsp_types::Url;
 use lsp_types::WorkDoneProgressOptions;
+use lsp_types::WorkspaceFolder;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -72,6 +83,11 @@ use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
 use crate::codemap::ResolvedSpan;
 use crate::lsp::server::LoadContentsError::WrongScheme;
+use crate::syntax::ast::AstNoPayload;
+use crate::syntax::ast::AstStmt;
+use crate::syntax::ast::ExprP;
+use crate::syntax::ast::ParameterP;
+use crate::syntax::ast::StmtP;
 use crate::syntax::AstModule;
 
 /// The request to get the file contents for a starlark: URI
@@ -332,6 +348,17 @@ impl<T: LspContext> Backend<T> {
         ServerCapabilities {
             text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
             definition_provider,
+            completion_provider: Some(CompletionOptions {
+                trigger_characters: Some(vec![
+                    "(".to_string(),
+                    ",".to_string(),
+                    "=".to_string(),
+                    "[".to_string(),
+                ]),
+
+                // all_commit_characters: Some(vec![" ".to_string()]),
+                ..Default::default()
+            }),
             ..ServerCapabilities::default()
         }
     }
@@ -399,6 +426,19 @@ impl<T: LspContext> Backend<T> {
     /// be slightly incorrect.
     fn goto_definition(&self, id: RequestId, params: GotoDefinitionParams) {
         self.send_response(new_response(id, self.find_definition(params)));
+    }
+
+    /// Offers completion of known symbols in the current file.
+    fn completion(
+        &self,
+        id: RequestId,
+        params: CompletionParams,
+        initialize_params: &InitializeParams,
+    ) {
+        self.send_response(new_response(
+            id,
+            self.completion_options(params, initialize_params),
+        ));
     }
 
     /// Get the file contents of a starlark: URI.
@@ -587,6 +627,187 @@ impl<T: LspContext> Backend<T> {
         };
         Ok(GotoDefinitionResponse::Link(response))
     }
+
+    fn completion_options(
+        &self,
+        params: CompletionParams,
+        initialize_params: &InitializeParams,
+    ) -> anyhow::Result<CompletionResponse> {
+        let uri = params.text_document_position.text_document.uri.try_into()?;
+
+        let symbols: Option<Vec<_>> = match self.get_ast(&uri) {
+            Some(ast) => {
+                let mut symbols = Vec::new();
+
+                // Scan through current document
+                self.collect_symbols(&ast.ast.statement, &mut symbols);
+
+                // Discover exported symbols from other documents
+                let docs = self.last_valid_parse.read().unwrap();
+                if docs.len() > 1 {
+                    // Find the position of the last load in the current file.
+                    let mut last_load = None;
+                    ast.ast.statement.visit_stmt(|node| {
+                        if matches!(&node.node, StmtP::Load(_)) {
+                            // if let StmtP::Load(load) = &node.node {
+                            last_load = Some(node.span);
+                        }
+                    });
+                    let last_load = last_load.map(|span| ast.ast.codemap.resolve_span(span));
+
+                    for (doc_uri, doc) in self
+                        .last_valid_parse
+                        .read()
+                        .unwrap()
+                        .iter()
+                        .filter(|(&ref doc_uri, _)| doc_uri != &uri)
+                    {
+                        symbols.extend(doc.get_exported_symbols().map(|name| CompletionItem {
+                            label: name.to_string(),
+                            detail: Some(format!("Load from {doc_uri}")),
+                            // TODO: Should be based on actual type of exported symbol.
+                            kind: Some(CompletionItemKind::METHOD),
+                            additional_text_edits: Some(vec![TextEdit::new(
+                                match last_load {
+                                    Some(span) => Range::new(
+                                        Position::new(span.end_line as u32, span.end_column as u32),
+                                        Position::new(span.end_line as u32, span.end_column as u32),
+                                    ),
+                                    None => Range::new(Position::new(0, 0), Position::new(0, 0)),
+                                },
+                                format!(
+                                    "{}load(\"{}\", \"{}\")",
+                                    if last_load.is_some() { "\n" } else { "" },
+                                    self.format_load_path(
+                                        &initialize_params.workspace_folders,
+                                        doc_uri.path().to_str().unwrap()
+                                    ),
+                                    name
+                                ),
+                            )]),
+                            ..Default::default()
+                        }));
+                    }
+                }
+
+                Some(symbols)
+            }
+            None => None,
+        };
+
+        Ok(CompletionResponse::Array(symbols.unwrap_or_default()))
+    }
+
+    /// Walk the AST recursively and discover symbols.
+    fn collect_symbols(&self, ast: &AstStmt, mut symbols: &mut Vec<CompletionItem>) {
+        match &ast.node {
+            StmtP::Assign(dest, rhs) => {
+                let source = &rhs.as_ref().1;
+                dest.visit_lvalue(|x| {
+                    symbols.push(CompletionItem {
+                        label: x.0.to_string(),
+                        kind: Some(match source.node {
+                            ExprP::Lambda(_) => CompletionItemKind::METHOD,
+                            _ => CompletionItemKind::VARIABLE,
+                        }),
+                        ..Default::default()
+                    })
+                })
+            }
+            StmtP::AssignModify(dest, _, source) => dest.visit_lvalue(|x| {
+                symbols.push(CompletionItem {
+                    label: x.0.to_string(),
+                    kind: Some(match source.node {
+                        ExprP::Lambda(_) => CompletionItemKind::METHOD,
+                        _ => CompletionItemKind::VARIABLE,
+                    }),
+                    ..Default::default()
+                })
+            }),
+            StmtP::For(dest, over_body) => {
+                let (_, body) = &**over_body;
+                dest.visit_lvalue(|x| {
+                    symbols.push(CompletionItem {
+                        label: x.0.to_string(),
+                        kind: Some(CompletionItemKind::VARIABLE),
+                        ..Default::default()
+                    })
+                });
+                self.collect_symbols(body, &mut symbols);
+            }
+            StmtP::Def(def) => {
+                symbols.push(CompletionItem {
+                    label: def.name.to_string(),
+                    kind: Some(CompletionItemKind::METHOD),
+                    ..Default::default()
+                });
+                symbols.extend(def.params.iter().filter_map(|param| match &param.node {
+                    ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => {
+                        Some(CompletionItem {
+                            label: p.0.clone(),
+                            kind: Some(CompletionItemKind::VARIABLE),
+                            ..Default::default()
+                        })
+                    }
+                    _ => None,
+                }));
+                self.collect_symbols(&def.body, &mut symbols);
+            }
+            StmtP::Load(load) => symbols.extend(load.args.iter().map(|(name, _)| CompletionItem {
+                label: name.0.clone(),
+                detail: Some(format!("Loaded from {}", load.module.node)),
+                // TODO: This should be dynamic based on the actual loaded value.
+                kind: Some(CompletionItemKind::METHOD),
+                ..Default::default()
+            })),
+
+            stmt => stmt.visit_stmt(|x| self.collect_symbols(x, &mut symbols)),
+        }
+    }
+
+    /// Given the workspace root and a target file, format the path as a path that load() understands.
+    /// TODO: Handle cases other than Bazel, Windows paths, other repositories, other workspaces.
+    fn format_load_path(
+        &self,
+        workspace_roots: &Option<Vec<WorkspaceFolder>>,
+        target_file: &str,
+    ) -> String {
+        let target = if let Some(roots) = workspace_roots {
+            let mut result = target_file;
+            for root in roots {
+                if let Some(stripped) = target_file.strip_prefix(root.uri.path()) {
+                    result = stripped;
+                    break;
+                }
+            }
+
+            result
+        } else {
+            target_file
+        }
+        .strip_prefix("/")
+        .unwrap();
+
+        let default_suffixes = ["/BUILD", "/BUILD.bzl", "/BUILD.bazel"];
+        for s in default_suffixes {
+            if let Some(p) = target.strip_suffix(s) {
+                return p.to_string();
+            }
+        }
+
+        let last_slash = target.rfind('/');
+        if let Some(pos) = last_slash {
+            let mut result = "//".to_string();
+            result.push_str(target.slice(0..pos).unwrap());
+            result.push(':');
+            result.push_str(target.slice((pos + 1)..target.len()).unwrap());
+
+            result
+        } else {
+            // Must be a file in the root of the workspace
+            format!("//:{target}")
+        }
+    }
 }
 
 /// The library style pieces
@@ -615,7 +836,7 @@ impl<T: LspContext> Backend<T> {
         ));
     }
 
-    fn main_loop(&self, _params: InitializeParams) -> anyhow::Result<()> {
+    fn main_loop(&self, initialize_params: InitializeParams) -> anyhow::Result<()> {
         self.log_message(MessageType::INFO, "Starlark server initialised");
         for msg in &self.connection.receiver {
             match msg {
@@ -626,6 +847,8 @@ impl<T: LspContext> Backend<T> {
                         self.goto_definition(req.id, params);
                     } else if let Some(params) = as_request::<StarlarkFileContentsRequest>(&req) {
                         self.get_starlark_file_contents(req.id, params);
+                    } else if let Some(params) = as_request::<Completion>(&req) {
+                        self.completion(req.id, params, &initialize_params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }
