@@ -637,7 +637,7 @@ impl<T: LspContext> Backend<T> {
 
         let symbols: Option<Vec<_>> = match self.get_ast(&uri) {
             Some(ast) => {
-                let mut symbols = Vec::new();
+                let mut symbols = HashMap::new();
 
                 // Scan through current document
                 Self::collect_symbols(&ast.ast.statement, &mut symbols);
@@ -667,87 +667,99 @@ impl<T: LspContext> Backend<T> {
                             &initialize_params.workspace_folders,
                             doc_uri.path().to_str().unwrap(),
                         );
-                        symbols.extend(doc.get_exported_symbols().map(|name| {
-                            // Construct the text edit to insert a load for this exported symbol.
-                            let text_edit = if let Some(existing_load) = loads.get(&load_path) {
-                                // We're already loading a symbol from this module path, construct
-                                // a text edit that amends the existing load.
-                                let (previously_loaded_symbols, load_span) = existing_load;
-                                let load_span = ast.ast.codemap.resolve_span(*load_span);
-                                let mut load_args: Vec<(&str, &str)> = previously_loaded_symbols
-                                    .iter()
-                                    .map(|(assign, name)| (assign.0.as_str(), name.node.as_str()))
-                                    .collect();
-                                load_args.push((name, name));
-                                load_args.sort_by(|(_, a), (_, b)| a.cmp(b));
-
-                                TextEdit::new(
-                                    Range::new(
-                                        Position::new(
-                                            load_span.begin_line as u32,
-                                            load_span.begin_column as u32,
-                                        ),
-                                        Position::new(
-                                            load_span.end_line as u32,
-                                            load_span.end_column as u32,
-                                        ),
-                                    ),
-                                    format!(
-                                        "load(\"{}\", {})",
-                                        &load_path,
-                                        load_args
-                                            .into_iter()
-                                            .map(|(assign, import)| {
-                                                if assign == import {
-                                                    format!("\"{}\"", import)
-                                                } else {
-                                                    format!("{} = \"{}\"", assign, import)
-                                                }
+                        let load_symbols: Vec<_> = doc
+                            .get_exported_symbols()
+                            .into_iter()
+                            .filter(|&name| !symbols.contains_key(name))
+                            .map(|name| {
+                                // Construct the text edit to insert a load for this exported symbol.
+                                let text_edit = if let Some(existing_load) = loads.get(&load_path) {
+                                    // We're already loading a symbol from this module path, construct
+                                    // a text edit that amends the existing load.
+                                    let (previously_loaded_symbols, load_span) = existing_load;
+                                    let load_span = ast.ast.codemap.resolve_span(*load_span);
+                                    let mut load_args: Vec<(&str, &str)> =
+                                        previously_loaded_symbols
+                                            .iter()
+                                            .map(|(assign, name)| {
+                                                (assign.0.as_str(), name.node.as_str())
                                             })
-                                            .join(", ")
-                                    ),
-                                )
-                            } else {
-                                // We're not yet loading from this module, construct a text edit that
-                                // inserts a new load statement after the last one we found.
-                                TextEdit::new(
-                                    match last_load {
-                                        Some(span) => Range::new(
+                                            .collect();
+                                    load_args.push((name, name));
+                                    load_args.sort_by(|(_, a), (_, b)| a.cmp(b));
+
+                                    TextEdit::new(
+                                        Range::new(
                                             Position::new(
-                                                span.end_line as u32,
-                                                span.end_column as u32,
+                                                load_span.begin_line as u32,
+                                                load_span.begin_column as u32,
                                             ),
                                             Position::new(
-                                                span.end_line as u32,
-                                                span.end_column as u32,
+                                                load_span.end_line as u32,
+                                                load_span.end_column as u32,
                                             ),
                                         ),
-                                        None => {
-                                            Range::new(Position::new(0, 0), Position::new(0, 0))
-                                        }
-                                    },
-                                    format!(
-                                        "{}load(\"{}\", \"{}\")",
-                                        if last_load.is_some() { "\n" } else { "" },
-                                        &load_path,
-                                        name
-                                    ),
-                                )
-                            };
+                                        format!(
+                                            "load(\"{}\", {})",
+                                            &load_path,
+                                            load_args
+                                                .into_iter()
+                                                .map(|(assign, import)| {
+                                                    if assign == import {
+                                                        format!("\"{}\"", import)
+                                                    } else {
+                                                        format!("{} = \"{}\"", assign, import)
+                                                    }
+                                                })
+                                                .join(", ")
+                                        ),
+                                    )
+                                } else {
+                                    // We're not yet loading from this module, construct a text edit that
+                                    // inserts a new load statement after the last one we found.
+                                    TextEdit::new(
+                                        match last_load {
+                                            Some(span) => Range::new(
+                                                Position::new(
+                                                    span.end_line as u32,
+                                                    span.end_column as u32,
+                                                ),
+                                                Position::new(
+                                                    span.end_line as u32,
+                                                    span.end_column as u32,
+                                                ),
+                                            ),
+                                            None => {
+                                                Range::new(Position::new(0, 0), Position::new(0, 0))
+                                            }
+                                        },
+                                        format!(
+                                            "{}load(\"{}\", \"{}\")",
+                                            if last_load.is_some() { "\n" } else { "" },
+                                            &load_path,
+                                            name
+                                        ),
+                                    )
+                                };
 
-                            CompletionItem {
-                                label: name.to_string(),
-                                detail: Some(format!("Load from {doc_uri}")),
-                                // TODO: Should be based on actual type of exported symbol.
-                                kind: Some(CompletionItemKind::METHOD),
-                                additional_text_edits: Some(vec![text_edit]),
-                                ..Default::default()
-                            }
-                        }));
+                                (
+                                    name.to_string(),
+                                    CompletionItem {
+                                        label: name.to_string(),
+                                        detail: Some(format!("Load from {load_path}")),
+                                        // TODO: Should be based on actual type of exported symbol.
+                                        kind: Some(CompletionItemKind::METHOD),
+                                        additional_text_edits: Some(vec![text_edit]),
+                                        ..Default::default()
+                                    },
+                                )
+                            })
+                            .collect();
+                        symbols.extend(load_symbols);
                     }
                 }
 
-                Some(symbols)
+                Some(symbols.into_values().collect())
             }
             None => None,
         };
@@ -756,66 +768,80 @@ impl<T: LspContext> Backend<T> {
     }
 
     /// Walk the AST recursively and discover symbols.
-    fn collect_symbols(ast: &AstStmt, symbols: &mut Vec<CompletionItem>) {
+    fn collect_symbols(ast: &AstStmt, symbols: &mut HashMap<String, CompletionItem>) {
         match &ast.node {
             StmtP::Assign(dest, rhs) => {
                 let source = &rhs.as_ref().1;
                 dest.visit_lvalue(|x| {
-                    symbols.push(CompletionItem {
+                    symbols
+                        .entry(x.0.to_string())
+                        .or_insert_with(|| CompletionItem {
+                            label: x.0.to_string(),
+                            kind: Some(match source.node {
+                                ExprP::Lambda(_) => CompletionItemKind::METHOD,
+                                _ => CompletionItemKind::VARIABLE,
+                            }),
+                            ..Default::default()
+                        });
+                })
+            }
+            StmtP::AssignModify(dest, _, source) => dest.visit_lvalue(|x| {
+                symbols
+                    .entry(x.0.to_string())
+                    .or_insert_with(|| CompletionItem {
                         label: x.0.to_string(),
                         kind: Some(match source.node {
                             ExprP::Lambda(_) => CompletionItemKind::METHOD,
                             _ => CompletionItemKind::VARIABLE,
                         }),
                         ..Default::default()
-                    })
-                })
-            }
-            StmtP::AssignModify(dest, _, source) => dest.visit_lvalue(|x| {
-                symbols.push(CompletionItem {
-                    label: x.0.to_string(),
-                    kind: Some(match source.node {
-                        ExprP::Lambda(_) => CompletionItemKind::METHOD,
-                        _ => CompletionItemKind::VARIABLE,
-                    }),
-                    ..Default::default()
-                })
+                    });
             }),
             StmtP::For(dest, over_body) => {
                 let (_, body) = &**over_body;
                 dest.visit_lvalue(|x| {
-                    symbols.push(CompletionItem {
-                        label: x.0.to_string(),
-                        kind: Some(CompletionItemKind::VARIABLE),
-                        ..Default::default()
-                    })
+                    symbols
+                        .entry(x.0.to_string())
+                        .or_insert_with(|| CompletionItem {
+                            label: x.0.to_string(),
+                            kind: Some(CompletionItemKind::VARIABLE),
+                            ..Default::default()
+                        });
                 });
                 Self::collect_symbols(body, symbols);
             }
             StmtP::Def(def) => {
-                symbols.push(CompletionItem {
-                    label: def.name.to_string(),
-                    kind: Some(CompletionItemKind::METHOD),
-                    ..Default::default()
-                });
+                symbols
+                    .entry(def.name.0.to_string())
+                    .or_insert_with(|| CompletionItem {
+                        label: def.name.to_string(),
+                        kind: Some(CompletionItemKind::METHOD),
+                        ..Default::default()
+                    });
                 symbols.extend(def.params.iter().filter_map(|param| match &param.node {
-                    ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => {
-                        Some(CompletionItem {
+                    ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => Some((
+                        p.0.to_string(),
+                        CompletionItem {
                             label: p.0.clone(),
                             kind: Some(CompletionItemKind::VARIABLE),
                             ..Default::default()
-                        })
-                    }
+                        },
+                    )),
                     _ => None,
                 }));
                 Self::collect_symbols(&def.body, symbols);
             }
-            StmtP::Load(load) => symbols.extend(load.args.iter().map(|(name, _)| CompletionItem {
-                label: name.0.clone(),
-                detail: Some(format!("Loaded from {}", load.module.node)),
-                // TODO: This should be dynamic based on the actual loaded value.
-                kind: Some(CompletionItemKind::METHOD),
-                ..Default::default()
+            StmtP::Load(load) => symbols.extend(load.args.iter().map(|(name, _)| {
+                (
+                    name.0.to_string(),
+                    CompletionItem {
+                        label: name.0.clone(),
+                        detail: Some(format!("Loaded from {}", load.module.node)),
+                        // TODO: This should be dynamic based on the actual loaded value.
+                        kind: Some(CompletionItemKind::METHOD),
+                        ..Default::default()
+                    },
+                )
             })),
 
             stmt => stmt.visit_stmt(|x| Self::collect_symbols(x, symbols)),
