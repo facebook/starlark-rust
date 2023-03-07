@@ -392,7 +392,7 @@ impl CodeMap {
 
 /// A line and column.
 #[derive(Copy, Clone, Dupe, Hash, Eq, PartialEq, Debug)]
-struct LineCol {
+pub(crate) struct LineCol {
     /// The line number within the file (0-indexed).
     pub line: usize,
 
@@ -542,6 +542,13 @@ impl From<ResolvedSpan> for lsp_types::Range {
 }
 
 impl ResolvedSpan {
+    pub(crate) fn contains(&self, pos: LineCol) -> bool {
+        (self.begin_line < pos.line
+            || (self.begin_line == pos.line && self.begin_column <= pos.column))
+            && (self.end_line > pos.line
+                || (self.end_line == pos.line && self.end_column >= pos.column))
+    }
+
     fn from_span(begin: LineCol, end: LineCol) -> Self {
         Self {
             begin_line: begin.line,

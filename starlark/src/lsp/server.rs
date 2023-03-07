@@ -82,6 +82,8 @@ use crate::analysis::definition::Definition;
 use crate::analysis::definition::DottedDefinition;
 use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
+use crate::codemap::CodeMap;
+use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
 use crate::lsp::server::LoadContentsError::WrongScheme;
 use crate::syntax::ast::AstStmt;
@@ -640,7 +642,16 @@ impl<T: LspContext> Backend<T> {
                 let mut symbols = HashMap::new();
 
                 // Scan through current document
-                Self::collect_symbols(&ast.ast.statement, &mut symbols);
+                let cursor_position = LineCol {
+                    line: params.text_document_position.position.line as usize,
+                    column: params.text_document_position.position.character as usize,
+                };
+                Self::collect_symbols(
+                    &ast.ast.codemap,
+                    &ast.ast.statement,
+                    cursor_position,
+                    &mut symbols,
+                );
 
                 // Discover exported symbols from other documents
                 let docs = self.last_valid_parse.read().unwrap();
@@ -768,7 +779,12 @@ impl<T: LspContext> Backend<T> {
     }
 
     /// Walk the AST recursively and discover symbols.
-    fn collect_symbols(ast: &AstStmt, symbols: &mut HashMap<String, CompletionItem>) {
+    fn collect_symbols(
+        codemap: &CodeMap,
+        ast: &AstStmt,
+        cursor_position: LineCol,
+        symbols: &mut HashMap<String, CompletionItem>,
+    ) {
         match &ast.node {
             StmtP::Assign(dest, rhs) => {
                 let source = &rhs.as_ref().1;
@@ -808,7 +824,7 @@ impl<T: LspContext> Backend<T> {
                             ..Default::default()
                         });
                 });
-                Self::collect_symbols(body, symbols);
+                Self::collect_symbols(codemap, body, cursor_position, symbols);
             }
             StmtP::Def(def) => {
                 symbols
@@ -818,18 +834,25 @@ impl<T: LspContext> Backend<T> {
                         kind: Some(CompletionItemKind::METHOD),
                         ..Default::default()
                     });
-                symbols.extend(def.params.iter().filter_map(|param| match &param.node {
-                    ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => Some((
-                        p.0.to_string(),
-                        CompletionItem {
-                            label: p.0.clone(),
-                            kind: Some(CompletionItemKind::VARIABLE),
-                            ..Default::default()
-                        },
-                    )),
-                    _ => None,
-                }));
-                Self::collect_symbols(&def.body, symbols);
+
+                // Only recurse into method if the cursor is in it.
+                if codemap
+                    .resolve_span(def.body.span)
+                    .contains(cursor_position)
+                {
+                    symbols.extend(def.params.iter().filter_map(|param| match &param.node {
+                        ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => Some((
+                            p.0.to_string(),
+                            CompletionItem {
+                                label: p.0.clone(),
+                                kind: Some(CompletionItemKind::VARIABLE),
+                                ..Default::default()
+                            },
+                        )),
+                        _ => None,
+                    }));
+                    Self::collect_symbols(codemap, &def.body, cursor_position, symbols);
+                }
             }
             StmtP::Load(load) => symbols.extend(load.args.iter().map(|(name, _)| {
                 (
@@ -843,8 +866,9 @@ impl<T: LspContext> Backend<T> {
                     },
                 )
             })),
-
-            stmt => stmt.visit_stmt(|x| Self::collect_symbols(x, symbols)),
+            stmt => {
+                stmt.visit_stmt(|x| Self::collect_symbols(codemap, x, cursor_position, symbols))
+            }
         }
     }
 
