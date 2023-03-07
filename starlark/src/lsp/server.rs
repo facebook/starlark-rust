@@ -674,10 +674,8 @@ impl<T: LspContext> Backend<T> {
                         .iter()
                         .filter(|(&ref doc_uri, _)| doc_uri != &uri)
                     {
-                        let load_path = self.format_load_path(
-                            &initialize_params.workspace_folders,
-                            doc_uri.path().to_str().unwrap(),
-                        );
+                        let load_path = self
+                            .format_load_path(&initialize_params.workspace_folders, doc_uri.path());
                         let load_symbols: Vec<_> = doc
                             .get_exported_symbols()
                             .into_iter()
@@ -873,16 +871,16 @@ impl<T: LspContext> Backend<T> {
     }
 
     /// Given the workspace root and a target file, format the path as a path that load() understands.
-    /// TODO: Handle cases other than Bazel, Windows paths, other repositories, other workspaces.
+    /// TODO: Handle cases other than Bazel, other repositories, other workspaces.
     fn format_load_path(
         &self,
         workspace_roots: &Option<Vec<WorkspaceFolder>>,
-        target_file: &str,
+        target_file: &Path,
     ) -> String {
         let target = if let Some(roots) = workspace_roots {
             let mut result = target_file;
             for root in roots {
-                if let Some(stripped) = target_file.strip_prefix(root.uri.path()) {
+                if let Ok(stripped) = target_file.strip_prefix(root.uri.path()) {
                     result = stripped;
                     break;
                 }
@@ -891,28 +889,24 @@ impl<T: LspContext> Backend<T> {
             result
         } else {
             target_file
-        }
-        .strip_prefix('/')
-        .unwrap();
+        };
 
-        let default_suffixes = ["/BUILD", "/BUILD.bzl", "/BUILD.bazel"];
-        for s in default_suffixes {
-            if let Some(p) = target.strip_suffix(s) {
-                return p.to_string();
-            }
-        }
-
-        let last_slash = target.rfind('/');
-        if let Some(pos) = last_slash {
+        if let Some(file) = target.file_name() {
             let mut result = "//".to_string();
-            result.push_str(target.slice(0..pos).unwrap());
+            result.push_str(
+                &*target
+                    .parent()
+                    .expect("parent() should succeed if there's a file_name()")
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
             result.push(':');
-            result.push_str(target.slice((pos + 1)..target.len()).unwrap());
+            result.push_str(&*file.to_string_lossy());
 
             result
         } else {
             // Must be a file in the root of the workspace
-            format!("//:{target}")
+            format!("//:{}", target.display())
         }
     }
 }
