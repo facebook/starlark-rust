@@ -18,6 +18,7 @@ dupe = { version = "0.8.1", path = "gazebo/dupe" }
 display_container = { version = "0.8.1", path = "gazebo/display_container" }
 gazebo = { version = "0.8.1", path = "gazebo/gazebo" }
 gazebo_derive = { version = "0.8.1", path = "gazebo/gazebo_derive" }
+indenter = "0.3.3"
 
 ctor = "0.1.26"
 proc-macro2 = "1.0"
