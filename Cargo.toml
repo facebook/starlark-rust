@@ -23,5 +23,5 @@ indenter = "0.3.3"
 
 ctor = "0.1.26"
 proc-macro2 = "1.0"
-syn = "1.0"
+syn = "2"
 quote = "1.0.3"
