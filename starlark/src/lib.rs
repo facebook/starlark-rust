@@ -396,8 +396,10 @@ pub mod docs;
 pub mod environment;
 pub mod errors;
 pub mod eval;
+#[cfg(feature = "lsp")]
 pub mod lsp;
 mod private;
+#[cfg(feature = "console")]
 pub mod read_line;
 mod sealed;
 pub(crate) mod slice_vec_ext;

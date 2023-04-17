@@ -41,9 +41,9 @@ walkdir = "2.3"
 serde = { version = "1.0", features = ["derive"] }
 logos = "0.12"
 serde_json = "1.0"
-rustyline = "7.1"
+rustyline = {version = "7.1", optional = true}
 maplit = "1.0.2"
-lsp-server = "0.5"
+lsp-server = {version = "0.5", optional = true}
 lsp-types = "0.93.0"
 memchr = "2.4.1"
 debugserver-types = "0.5.0"
@@ -56,9 +56,14 @@ argfile = "0.1.0"
 num-bigint = "0.4.3"
 num-traits = "0.2"
 inventory = "0.1.9"
-clap = { version = "4.0.7", features = ["derive", "wrap_help"] }
+clap = { version = "4.0.7", features = ["derive", "wrap_help"], optional = true }
 
 allocative = { workspace = true, features = ["bumpalo", "hashbrown", "num-bigint"] }
+
+[features]
+default = ["console"]
+console = ["dep:rustyline"]
+lsp = ["dep:lsp-server", "dep:clap"]
 
 [dev-dependencies]
 rand = { version = "0.8.4", features = ["small_rng"] }
@@ -66,3 +71,4 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 [[bin]]
 name = "starlark"
 path = "bin/main.rs"
+required-features = ["console", "lsp"]

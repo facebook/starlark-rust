@@ -61,7 +61,6 @@ use crate::eval::runtime::slots::LocalSlotId;
 use crate::eval::CallStack;
 use crate::eval::FileLoader;
 use crate::stdlib::breakpoint::BreakpointConsole;
-use crate::stdlib::breakpoint::RealBreakpointConsole;
 use crate::stdlib::extra::PrintHandler;
 use crate::stdlib::extra::StderrPrintHandler;
 use crate::values::function::NativeFunction;
@@ -359,7 +358,9 @@ impl<'v, 'a> Evaluator<'v, 'a> {
     /// Enable interactive `breakpoint()`. When enabled, `breakpoint()`
     /// reads commands from stdin and write to stdout.
     /// When disabled (default), `breakpoint()` function results in error.
+    #[cfg(feature = "console")]
     pub fn enable_terminal_breakpoint_console(&mut self) {
+        use crate::read_line::RealBreakpointConsole;
         self.breakpoint_handler = Some(RealBreakpointConsole::factory());
     }
 

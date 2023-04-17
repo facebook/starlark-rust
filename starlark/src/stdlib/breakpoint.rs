@@ -25,7 +25,6 @@ use thiserror::Error;
 use crate as starlark;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Evaluator;
-use crate::read_line::ReadLine;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::values::none::NoneType;
@@ -39,31 +38,6 @@ pub(crate) trait BreakpointConsole {
     /// Return `None` on EOF.
     fn read_line(&mut self) -> anyhow::Result<Option<String>>;
     fn println(&mut self, line: &str);
-}
-
-/// Breakpoint handler implemented with `rustyline`.
-pub(crate) struct RealBreakpointConsole {
-    read_line: ReadLine,
-}
-
-impl BreakpointConsole for RealBreakpointConsole {
-    fn read_line(&mut self) -> anyhow::Result<Option<String>> {
-        self.read_line.read_line("$> ")
-    }
-
-    fn println(&mut self, line: &str) {
-        eprintln!("{}", line);
-    }
-}
-
-impl RealBreakpointConsole {
-    pub(crate) fn factory() -> Box<dyn Fn() -> anyhow::Result<Box<dyn BreakpointConsole>>> {
-        Box::new(|| {
-            Ok(Box::new(RealBreakpointConsole {
-                read_line: ReadLine::new("STARLARK_RUST_DEBUGGER_HISTFILE")?,
-            }))
-        })
-    }
 }
 
 /// Is debugging allowed or not? After the user hits Ctrl-C they probably

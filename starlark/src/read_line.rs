@@ -24,6 +24,8 @@ use std::io;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
+use crate::stdlib::breakpoint::BreakpointConsole;
+
 /// Wrapper for the readline library, whichever we are using at the moment.
 pub struct ReadLine {
     editor: Editor<()>,
@@ -63,5 +65,30 @@ impl ReadLine {
             Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+}
+
+/// Breakpoint handler implemented with `rustyline`.
+pub(crate) struct RealBreakpointConsole {
+    read_line: ReadLine,
+}
+
+impl BreakpointConsole for RealBreakpointConsole {
+    fn read_line(&mut self) -> anyhow::Result<Option<String>> {
+        self.read_line.read_line("$> ")
+    }
+
+    fn println(&mut self, line: &str) {
+        eprintln!("{}", line);
+    }
+}
+
+impl RealBreakpointConsole {
+    pub(crate) fn factory() -> Box<dyn Fn() -> anyhow::Result<Box<dyn BreakpointConsole>>> {
+        Box::new(|| {
+            Ok(Box::new(RealBreakpointConsole {
+                read_line: ReadLine::new("STARLARK_RUST_DEBUGGER_HISTFILE")?,
+            }))
+        })
     }
 }
