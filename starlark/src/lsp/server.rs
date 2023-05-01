@@ -354,8 +354,6 @@ impl<T: LspContext> Backend<T> {
                     "=".to_string(),
                     "[".to_string(),
                 ]),
-
-                // all_commit_characters: Some(vec![" ".to_string()]),
                 ..Default::default()
             }),
             ..ServerCapabilities::default()
