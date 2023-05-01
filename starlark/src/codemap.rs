@@ -542,6 +542,7 @@ impl From<ResolvedSpan> for lsp_types::Range {
 }
 
 impl ResolvedSpan {
+    /// Check that the given position is entirely contained within this span.
     pub(crate) fn contains(&self, pos: LineCol) -> bool {
         (self.begin_line < pos.line
             || (self.begin_line == pos.line && self.begin_column <= pos.column))
