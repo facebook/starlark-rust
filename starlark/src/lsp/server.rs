@@ -28,9 +28,7 @@ use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
 use dupe::OptionDupedExt;
-use gazebo::prelude::SliceExt;
 use itertools::Itertools;
-use logos::Source;
 use lsp_server::Connection;
 use lsp_server::Message;
 use lsp_server::Notification;
@@ -83,14 +81,12 @@ use crate::analysis::definition::DottedDefinition;
 use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
 use crate::analysis::exported::ExportedSymbolKind;
-use crate::codemap::CodeMap;
 use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
 use crate::lsp::server::LoadContentsError::WrongScheme;
-use crate::syntax::ast::AstStmt;
-use crate::syntax::ast::ExprP;
-use crate::syntax::ast::ParameterP;
 use crate::syntax::ast::StmtP;
+use crate::syntax::symbols::find_symbols_at_location;
+use crate::syntax::symbols::SymbolKind;
 use crate::syntax::AstModule;
 
 /// The request to get the file contents for a starlark: URI
@@ -640,19 +636,29 @@ impl<T: LspContext> Backend<T> {
 
         let symbols: Option<Vec<_>> = match self.get_ast(&uri) {
             Some(ast) => {
-                let mut symbols = HashMap::new();
-
                 // Scan through current document
                 let cursor_position = LineCol {
                     line: params.text_document_position.position.line as usize,
                     column: params.text_document_position.position.character as usize,
                 };
-                Self::collect_symbols(
-                    &ast.ast.codemap,
-                    &ast.ast.statement,
-                    cursor_position,
-                    &mut symbols,
-                );
+                let mut symbols: HashMap<_, _> =
+                    find_symbols_at_location(&ast.ast.codemap, &ast.ast.statement, cursor_position)
+                        .into_iter()
+                        .map(|(key, value)| {
+                            (
+                                key,
+                                CompletionItem {
+                                    label: value.name,
+                                    kind: Some(match value.kind {
+                                        SymbolKind::Method => CompletionItemKind::METHOD,
+                                        SymbolKind::Variable => CompletionItemKind::VARIABLE,
+                                    }),
+                                    detail: value.detail,
+                                    ..Default::default()
+                                },
+                            )
+                        })
+                        .collect();
 
                 // Discover exported symbols from other documents
                 let docs = self.last_valid_parse.read().unwrap();
@@ -781,100 +787,6 @@ impl<T: LspContext> Backend<T> {
         };
 
         Ok(CompletionResponse::Array(symbols.unwrap_or_default()))
-    }
-
-    /// Walk the AST recursively and discover symbols.
-    fn collect_symbols(
-        codemap: &CodeMap,
-        ast: &AstStmt,
-        cursor_position: LineCol,
-        symbols: &mut HashMap<String, CompletionItem>,
-    ) {
-        match &ast.node {
-            StmtP::Assign(dest, rhs) => {
-                let source = &rhs.as_ref().1;
-                dest.visit_lvalue(|x| {
-                    symbols
-                        .entry(x.0.to_string())
-                        .or_insert_with(|| CompletionItem {
-                            label: x.0.to_string(),
-                            kind: Some(match source.node {
-                                ExprP::Lambda(_) => CompletionItemKind::METHOD,
-                                _ => CompletionItemKind::VARIABLE,
-                            }),
-                            ..Default::default()
-                        });
-                })
-            }
-            StmtP::AssignModify(dest, _, source) => dest.visit_lvalue(|x| {
-                symbols
-                    .entry(x.0.to_string())
-                    .or_insert_with(|| CompletionItem {
-                        label: x.0.to_string(),
-                        kind: Some(match source.node {
-                            ExprP::Lambda(_) => CompletionItemKind::METHOD,
-                            _ => CompletionItemKind::VARIABLE,
-                        }),
-                        ..Default::default()
-                    });
-            }),
-            StmtP::For(dest, over_body) => {
-                let (_, body) = &**over_body;
-                dest.visit_lvalue(|x| {
-                    symbols
-                        .entry(x.0.to_string())
-                        .or_insert_with(|| CompletionItem {
-                            label: x.0.to_string(),
-                            kind: Some(CompletionItemKind::VARIABLE),
-                            ..Default::default()
-                        });
-                });
-                Self::collect_symbols(codemap, body, cursor_position, symbols);
-            }
-            StmtP::Def(def) => {
-                symbols
-                    .entry(def.name.0.to_string())
-                    .or_insert_with(|| CompletionItem {
-                        label: def.name.to_string(),
-                        kind: Some(CompletionItemKind::METHOD),
-                        ..Default::default()
-                    });
-
-                // Only recurse into method if the cursor is in it.
-                if codemap
-                    .resolve_span(def.body.span)
-                    .contains(cursor_position)
-                {
-                    symbols.extend(def.params.iter().filter_map(|param| match &param.node {
-                        ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => Some((
-                            p.0.to_string(),
-                            CompletionItem {
-                                label: p.0.clone(),
-                                kind: Some(CompletionItemKind::VARIABLE),
-                                ..Default::default()
-                            },
-                        )),
-                        _ => None,
-                    }));
-                    Self::collect_symbols(codemap, &def.body, cursor_position, symbols);
-                }
-            }
-            StmtP::Load(load) => symbols.extend(load.args.iter().map(|(name, _)| {
-                (
-                    name.0.to_string(),
-                    CompletionItem {
-                        label: name.0.clone(),
-                        detail: Some(format!("Loaded from {}", load.module.node)),
-                        // TODO: This should be dynamic based on the actual loaded value.
-                        kind: Some(CompletionItemKind::METHOD),
-                        ..Default::default()
-                    },
-                )
-            })),
-            stmt => {
-                stmt.visit_stmt(|x| Self::collect_symbols(codemap, x, cursor_position, symbols))
-            }
-        }
     }
 
     /// Given the workspace root and a target file, format the path as a path that load() understands.
