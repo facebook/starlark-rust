@@ -17,15 +17,21 @@
 
 use crate::codemap::FileSpan;
 use crate::collections::SmallMap;
+use crate::syntax::ast::AstAssignIdentP;
+use crate::syntax::ast::AstExprP;
+use crate::syntax::ast::AstNoPayload;
 use crate::syntax::ast::DefP;
+use crate::syntax::ast::ExprP;
 use crate::syntax::ast::Stmt;
 use crate::syntax::AstModule;
 
+#[derive(Debug)]
 pub enum ExportedSymbolKind {
     Variable,
     Method,
 }
 
+#[derive(Debug)]
 pub struct ExportedSymbol<'a> {
     pub name: &'a str,
     pub span: FileSpan,
@@ -41,13 +47,19 @@ impl AstModule {
         let mut result: SmallMap<&str, _> = SmallMap::new();
         for x in self.top_level_statements() {
             match &**x {
-                Stmt::Assign(dest, _) | Stmt::AssignModify(dest, _, _) => {
+                Stmt::Assign(dest, rhs) => {
+                    let source = &rhs.as_ref().1;
                     dest.visit_lvalue(|name| {
-                        result.entry(&name.0).or_insert(ExportedSymbol {
-                            name: &name.0,
-                            span: self.file_span(name.span),
-                            kind: ExportedSymbolKind::Variable,
-                        });
+                        result
+                            .entry(&name.0)
+                            .or_insert(self.get_exported_symbol_from_assignment(name, source));
+                    });
+                }
+                Stmt::AssignModify(dest, _, source) => {
+                    dest.visit_lvalue(|name| {
+                        result
+                            .entry(&name.0)
+                            .or_insert(self.get_exported_symbol_from_assignment(name, source));
                     });
                 }
                 Stmt::Def(DefP { name, .. }) => {
@@ -65,6 +77,22 @@ impl AstModule {
             .filter(|(name, _)| !name.starts_with('_'))
             .map(|(_, exported_symbol)| exported_symbol)
             .collect()
+    }
+
+    /// Construct an [`ExportedSymbol`] based on the given assignment components.
+    fn get_exported_symbol_from_assignment<'a>(
+        &self,
+        name: &'a AstAssignIdentP<AstNoPayload>,
+        source: &AstExprP<AstNoPayload>,
+    ) -> ExportedSymbol<'a> {
+        ExportedSymbol {
+            name: &name.0,
+            span: self.file_span(name.span),
+            kind: match source.node {
+                ExprP::Lambda(_) => ExportedSymbolKind::Method,
+                _ => ExportedSymbolKind::Variable,
+            },
+        }
     }
 }
 
