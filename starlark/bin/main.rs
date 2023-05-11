@@ -218,7 +218,7 @@ fn drain(xs: impl Iterator<Item = EvalMessage>, json: bool, stats: &mut Stats) {
 }
 
 fn interactive(ctx: &Context) -> anyhow::Result<()> {
-    let mut rl = ReadLine::new("STARLARK_RUST_HISTFILE");
+    let mut rl = ReadLine::new("STARLARK_RUST_HISTFILE")?;
     loop {
         match rl.read_line("$> ")? {
             Some(line) => {
@@ -231,8 +231,18 @@ fn interactive(ctx: &Context) -> anyhow::Result<()> {
     }
 }
 
+/// starlark-rust does not support panic.
+/// Terminate on panic even if compiled without `-Cpanic=abort`.
+fn terminate_on_panic() {
+    let orig_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        orig_hook(panic_info);
+        std::process::exit(1);
+    }));
+}
+
 fn main() -> anyhow::Result<()> {
-    gazebo::terminate_on_panic();
+    terminate_on_panic();
 
     let args = argfile::expand_args(argfile::parse_fromfile, argfile::PREFIX)?;
     let args: Args = Args::parse_from(args);

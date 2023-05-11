@@ -17,6 +17,7 @@
 
 //! Starlark heap implementation.
 
+pub(crate) mod allocator;
 pub(crate) mod arena;
 pub(crate) mod call_enter_exit;
 mod fast_cell;

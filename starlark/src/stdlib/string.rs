@@ -19,16 +19,17 @@
 
 use std::cmp;
 
-use gazebo::prelude::*;
+use starlark_derive::starlark_module;
 
 use crate as starlark;
 use crate::environment::MethodsBuilder;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
+use crate::slice_vec_ext::SliceExt;
 use crate::stdlib::string::fast_string::convert_str_indices;
 use crate::values::none::NoneOr;
+use crate::values::string::dot_format;
 use crate::values::string::fast_string;
-use crate::values::string::interpolation;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::types::string::fast_string::StrIndices;
 use crate::values::types::string::iter::iterate_chars;
@@ -140,10 +141,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// To materialize the entire sequence of bytes, apply `list(...)` to the
     /// result.
     ///
-    /// Example:
-    ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::is_true(r#"
     /// list("Hello, 世界".elems()) == [
@@ -157,8 +154,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
 
     /// string.capitalize: returns a copy of string S, where the first character (if any) is converted to uppercase;
     /// all other characters are converted to lowercase.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -193,10 +188,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// is deferred until actually needed; apply `list(...)` to the result to
     /// materialize the entire sequence.
     ///
-    /// Example:
-    ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// list("Hello, 世界".codepoints()) == [72, 101, 108, 108, 111, 44, 32, 19990, 30028]
@@ -217,13 +208,11 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// They are interpreted according to Skylark's [indexing conventions](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#indexing).
     ///
-    /// This implementation does not count occurence of `sub` in the string `S`
-    /// that overlap other occurence of S (which can happen if some suffix of S
+    /// This implementation does not count occurrence of `sub` in the string `S`
+    /// that overlap other occurrence of S (which can happen if some suffix of S
     /// is a prefix of S). For instance, `"abababa".count("aba")` returns 2
-    /// for `[aba]a[aba]`, not counting the middle occurence: `ab[aba]ba`
+    /// for `[aba]a[aba]`, not counting the middle occurrence: `ab[aba]ba`
     /// (this is following Python behavior).
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -252,8 +241,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `S.endswith(suffix)` reports whether the string S has the specified
     /// suffix.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -284,8 +271,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// conventions](#indexing).
     ///
     /// If no occurrence is found, `found` returns -1.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -350,8 +335,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// alignment, padding, and numeric precision.
     /// Currently it must be empty, but it is reserved for future use.
     ///
-    /// Examples:
-    ///
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// "a {} c".format(3) == "a 3 c"
@@ -368,7 +351,7 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<StringValue<'v>> {
         let iter = args.positions(eval.heap())?;
-        interpolation::format(
+        dot_format::format(
             this,
             iter,
             args.names()?,
@@ -384,8 +367,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.index(sub[, start[, end]])` returns the index of the first
     /// occurrence of the substring `sub` within S, like `S.find`, except
     /// that if the substring is not found, the operation fails.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -423,8 +404,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.isalnum()` reports whether the string S is non-empty and consists
     /// only Unicode letters and digits.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "base64".isalnum() == True
@@ -450,8 +429,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `S.isalpha()` reports whether the string S is non-empty and consists
     /// only of Unicode letters.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -480,8 +457,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.isdigit()` reports whether the string S is non-empty and consists
     /// only of Unicode digits.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "123".isdigit() == True
@@ -508,8 +483,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `S.islower()` reports whether the string S contains at least one cased
     /// Unicode letter, and all such letters are lowercase.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -538,8 +511,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.isspace()` reports whether the string S is non-empty and consists
     /// only of Unicode spaces.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "    ".isspace() == True
@@ -567,8 +538,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.istitle()` reports whether the string S contains at least one cased
     /// Unicode letter, and all such letters that begin a word are in title
     /// case.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -610,8 +579,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.isupper()` reports whether the string S contains at least one cased
     /// Unicode letter, and all such letters are uppercase.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "HAL-9000".isupper() == True
@@ -639,8 +606,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.lower()` returns a copy of the string S with letters converted to
     /// lowercase.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "Hello, World!".lower() == "hello, world!"
@@ -659,8 +624,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// element of its argument, with a copy of the string S between
     /// successive elements. The argument must be an iterable whose elements
     /// are strings.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -681,38 +644,37 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
             <&str>::unpack_named_param(x, "to_join")
         }
 
-        to_join.with_iterator(heap, |it| {
-            match it.next() {
-                None => Ok(Value::new_empty_string()),
-                Some(x1) => {
-                    match it.next() {
-                        None => {
-                            as_str(x1)?;
-                            // If there is a singleton we can avoid reallocation
-                            Ok(x1)
-                        }
-                        Some(x2) => {
-                            let s1 = as_str(x1)?;
-                            let s2 = as_str(x2)?;
-                            // guess towards the upper bound, since we throw away over-allocations quickly
-                            // include a buffer (20 bytes)
-                            let n = it.size_hint().0 + 2;
-                            let guess =
-                                (cmp::max(s1.len(), s2.len()) * n) + (this.len() * (n - 1)) + 20;
-                            let mut r = String::with_capacity(guess);
-                            r.push_str(s1);
+        let mut it = to_join.iterate(heap)?;
+        match it.next() {
+            None => Ok(Value::new_empty_string()),
+            Some(x1) => {
+                match it.next() {
+                    None => {
+                        as_str(x1)?;
+                        // If there is a singleton we can avoid reallocation
+                        Ok(x1)
+                    }
+                    Some(x2) => {
+                        let s1 = as_str(x1)?;
+                        let s2 = as_str(x2)?;
+                        // guess towards the upper bound, since we throw away over-allocations quickly
+                        // include a buffer (20 bytes)
+                        let n = it.size_hint().0 + 2;
+                        let guess =
+                            (cmp::max(s1.len(), s2.len()) * n) + (this.len() * (n - 1)) + 20;
+                        let mut r = String::with_capacity(guess);
+                        r.push_str(s1);
+                        r.push_str(this);
+                        r.push_str(s2);
+                        for x in it {
                             r.push_str(this);
-                            r.push_str(s2);
-                            for x in it {
-                                r.push_str(this);
-                                r.push_str(as_str(x)?);
-                            }
-                            Ok(heap.alloc(r))
+                            r.push_str(as_str(x)?);
                         }
+                        Ok(heap.alloc(r))
                     }
                 }
             }
-        })?
+        }
     }
 
     /// [string.lstrip](
@@ -721,8 +683,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `S.lstrip()` returns a copy of the string S with leading whitespace removed.
     /// In most cases instead of passing an argument you should use `removeprefix`.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -758,8 +718,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `partition` fails if `x` is not a string, or is the empty string.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "one/two/three".partition("/") == ("one", "/", "two/three")
@@ -792,14 +750,12 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
 
     /// [string.replace](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·replace
-    /// ): replace all occurences of a subtring.
+    /// ): replace all occurrences of a substring.
     ///
     /// `S.replace(old, new[, count])` returns a copy of string S with all
     /// occurrences of substring `old` replaced by `new`. If the optional
     /// argument `count`, which must be an `int`, is non-negative, it
     /// specifies a maximum number of occurrences to replace.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -859,8 +815,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// within S, like `S.find`, except that `rfind` returns the index of
     /// the substring's _last_ occurrence.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "bonbon".rfind("on") == 4
@@ -891,8 +845,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.rindex(sub[, start[, end]])` returns the index of the substring `sub`
     /// within S, like `S.index`, except that `rindex` returns the index of
     /// the substring's _last_ occurrence.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -929,8 +881,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `S.rpartition([x = ' '])` is like `partition`, but splits `S` at the
     /// last occurrence of `x`.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -969,8 +919,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.rsplit([sep[, maxsplit]])` splits a string into substrings like
     /// `S.split`, except that when a maximum number of splits is specified,
     /// `rsplit` chooses the rightmost splits.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -1019,8 +967,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.rstrip()` returns a copy of the string S with trailing whitespace removed.
     /// In most cases instead of passing an argument you should use `removesuffix`.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "  hello  ".rstrip() == "  hello"
@@ -1066,8 +1012,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// If `maxsplit` is given and non-negative, it specifies a maximum number
     /// of splits.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -1134,8 +1078,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// If true, line terminators are preserved in the result, though
     /// the final element does not necessarily end with a line terminator.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "one\n\ntwo".splitlines() == ["one", "", "two"]
@@ -1178,12 +1120,10 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
 
     /// [string.startswith](
     /// https://github.com/google/skylark/blob/3705afa472e466b8b061cce44b47c9ddc6db696d/doc/spec.md#string·startswith
-    /// ): test wether a string starts with a given prefix.
+    /// ): test whether a string starts with a given prefix.
     ///
     /// `S.startswith(suffix)` reports whether the string S has the specified
     /// prefix.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -1211,8 +1151,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// `S.strip()` returns a copy of the string S with leading and trailing
     /// whitespace removed.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -1247,8 +1185,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// Letters are converted to uppercase at the start of words, lowercase
     /// elsewhere.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "hElLo, WoRlD!".title() == "Hello, World!"
@@ -1281,8 +1217,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// `S.lower()` returns a copy of the string S with letters converted to
     /// lowercase.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "Hello, World!".upper() == "HELLO, WORLD!"
@@ -1299,8 +1233,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// If the string starts with the prefix string, return `string[len(prefix):]`.
     /// Otherwise, return a copy of the original string:
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -1329,8 +1261,6 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     ///
     /// If the string starts with the prefix string, return `string[len(prefix):]`.
     /// Otherwise, return a copy of the original string:
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::all_true(r#"

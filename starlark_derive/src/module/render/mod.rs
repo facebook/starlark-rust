@@ -19,10 +19,10 @@ mod fun;
 
 use std::collections::HashSet;
 
-use gazebo::prelude::*;
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote_spanned;
+use syn::Expr;
 
 use crate::module::render::fun::render_fun;
 use crate::module::typ::SpecialParam;
@@ -45,7 +45,10 @@ pub(crate) fn render(x: StarModule) -> syn::Result<TokenStream> {
         module_kind,
     } = x;
     let statics = format_ident!("{}", module_kind.statics_type_name());
-    let stmts = stmts.into_try_map(render_stmt)?;
+    let stmts: Vec<_> = stmts
+        .into_iter()
+        .map(render_stmt)
+        .collect::<syn::Result<_>>()?;
     let set_docstring =
         docstring.map(|ds| quote_spanned!(span=> globals_builder.set_docstring(#ds);));
     Ok(quote_spanned! {
@@ -210,7 +213,7 @@ pub(crate) fn render_starlark_type(
     span: proc_macro2::Span,
     typ: &syn::Type,
     // If the user supplied a Starlark version of the string, pass it along
-    starlark_type: &Option<String>,
+    starlark_type: &Option<Expr>,
 ) -> TokenStream {
     match starlark_type {
         None => {
@@ -226,7 +229,7 @@ pub(crate) fn render_starlark_type(
             }
         }
         Some(t) => {
-            quote_spanned! {span=> #t.to_owned()}
+            quote_spanned! {span=> (#t).to_owned()}
         }
     }
 }
@@ -234,7 +237,7 @@ pub(crate) fn render_starlark_type(
 pub(crate) fn render_starlark_return_type(
     fun: &StarFun,
     // If the user supplied a Starlark version of the string, pass it along
-    starlark_type: &Option<String>,
+    starlark_type: &Option<Expr>,
 ) -> TokenStream {
     match starlark_type {
         None => {
@@ -244,7 +247,7 @@ pub(crate) fn render_starlark_return_type(
             }
         }
         Some(t) => {
-            quote_spanned! {fun.span()=> #t.to_owned()}
+            quote_spanned! {fun.span()=> (#t).to_owned()}
         }
     }
 }

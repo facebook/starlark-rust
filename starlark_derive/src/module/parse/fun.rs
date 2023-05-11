@@ -28,7 +28,6 @@ use syn::GenericParam;
 use syn::Generics;
 use syn::ItemFn;
 use syn::Lifetime;
-use syn::LitStr;
 use syn::Pat;
 use syn::PatType;
 use syn::PathArguments;
@@ -54,7 +53,7 @@ use crate::module::typ::StarStmt;
 struct FnAttrs {
     is_attribute: bool,
     type_attribute: Option<Expr>,
-    starlark_return_type: Option<String>,
+    starlark_return_type: Option<Expr>,
     speculative_exec_safe: bool,
     docstring: Option<String>,
     /// Rest attributes
@@ -69,7 +68,7 @@ struct FnParamAttrs {
     named_only: bool,
     args: bool,
     kwargs: bool,
-    starlark_type: Option<String>,
+    starlark_type: Option<Expr>,
     unused_attrs: Vec<Attribute>,
 }
 
@@ -78,7 +77,7 @@ fn parse_starlark_fn_param_attr(
     tokens: &Attribute,
     param_attrs: &mut FnParamAttrs,
 ) -> syn::Result<()> {
-    assert!(tokens.path.is_ident("starlark"));
+    assert!(tokens.path().is_ident("starlark"));
     let parse = |parser: ParseStream| -> syn::Result<()> {
         let mut first = true;
         while !parser.is_empty() {
@@ -93,7 +92,7 @@ fn parse_starlark_fn_param_attr(
 
             if parser.parse::<Token![type]>().is_ok() {
                 parser.parse::<Token![=]>()?;
-                param_attrs.starlark_type = Some(parser.parse::<LitStr>()?.value());
+                param_attrs.starlark_type = Some(parser.parse::<Expr>()?);
                 continue;
             } else {
                 let ident = parser.parse::<Ident>()?;
@@ -141,7 +140,7 @@ fn parse_starlark_fn_param_attr(
 fn parse_fn_param_attrs(attrs: Vec<Attribute>) -> syn::Result<FnParamAttrs> {
     let mut param_attrs = FnParamAttrs::default();
     for attr in attrs {
-        if attr.path.is_ident("starlark") {
+        if attr.path().is_ident("starlark") {
             parse_starlark_fn_param_attr(&attr, &mut param_attrs)?;
         } else {
             param_attrs.unused_attrs.push(attr);
@@ -152,7 +151,7 @@ fn parse_fn_param_attrs(attrs: Vec<Attribute>) -> syn::Result<FnParamAttrs> {
 
 /// Parse `#[starlark(...)]` fn attribute.
 fn parse_starlark_fn_attr(tokens: &Attribute, attrs: &mut FnAttrs) -> syn::Result<()> {
-    assert!(tokens.path.is_ident("starlark"));
+    assert!(tokens.path().is_ident("starlark"));
     let parse = |parser: ParseStream| -> syn::Result<()> {
         let mut first = true;
         while !parser.is_empty() {
@@ -179,7 +178,7 @@ fn parse_starlark_fn_attr(tokens: &Attribute, attrs: &mut FnAttrs) -> syn::Resul
                     continue;
                 } else if ident == "return_type" {
                     parser.parse::<Token![=]>()?;
-                    attrs.starlark_return_type = Some(parser.parse::<LitStr>()?.value());
+                    attrs.starlark_return_type = Some(parser.parse::<Expr>()?);
                     continue;
                 }
                 return Err(syn::Error::new(
@@ -202,7 +201,7 @@ fn parse_starlark_fn_attr(tokens: &Attribute, attrs: &mut FnAttrs) -> syn::Resul
 fn parse_fn_attrs(span: Span, xs: Vec<Attribute>) -> syn::Result<FnAttrs> {
     let mut res = FnAttrs::default();
     for x in xs {
-        if x.path.is_ident("starlark") {
+        if x.path().is_ident("starlark") {
             parse_starlark_fn_attr(&x, &mut res)?;
         } else if let Some(ds) = is_attribute_docstring(&x) {
             match &mut res.docstring {

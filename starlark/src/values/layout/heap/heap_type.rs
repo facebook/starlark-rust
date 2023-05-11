@@ -36,11 +36,13 @@ use std::time::Instant;
 use std::usize;
 
 use allocative::Allocative;
+use bumpalo::Bump;
 use dupe::Dupe;
 use either::Either;
-use gazebo::cast;
 use starlark_map::small_set::SmallSet;
 
+use crate::cast;
+use crate::cast::transmute;
 use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice;
 use crate::collections::maybe_uninit_backport::maybe_uninit_write_slice_cloned;
 use crate::collections::Hashed;
@@ -61,7 +63,6 @@ use crate::values::layout::avalue::tuple_avalue;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::VALUE_EMPTY_ARRAY;
 use crate::values::layout::avalue::VALUE_EMPTY_FROZEN_LIST;
-use crate::values::layout::avalue::VALUE_EMPTY_TUPLE;
 use crate::values::layout::heap::arena::Arena;
 use crate::values::layout::heap::arena::ArenaVisitor;
 use crate::values::layout::heap::arena::Reservation;
@@ -104,7 +105,7 @@ pub(crate) enum HeapKind {
 pub struct Heap {
     /// Peak memory seen when a garbage collection takes place (may be lower than currently allocated)
     peak_allocated: Cell<usize>,
-    arena: FastCell<Arena>,
+    arena: FastCell<Arena<Bump>>,
 }
 
 impl Debug for Heap {
@@ -123,7 +124,7 @@ impl Debug for Heap {
 #[derive(Default)]
 pub struct FrozenHeap {
     /// My memory.
-    arena: Arena,
+    arena: Arena<Bump>,
     /// Memory I depend on.
     refs: RefCell<SmallSet<FrozenHeapRef>>,
     /// String interner.
@@ -135,7 +136,7 @@ pub struct FrozenHeap {
 #[derive(Default, Allocative)]
 #[allow(clippy::non_send_fields_in_send_ty)]
 struct FrozenFrozenHeap {
-    arena: Arena,
+    arena: Arena<Bump>,
     refs: Box<[FrozenHeapRef]>,
 }
 
@@ -229,7 +230,10 @@ impl FrozenHeap {
     /// [`FrozenHeapRef`] which can be [`clone`](Clone::clone)d, shared between threads,
     /// and ensures the underlying values allocated on the [`FrozenHeap`] remain valid.
     pub fn into_ref(self) -> FrozenHeapRef {
-        let FrozenHeap { arena, refs, .. } = self;
+        let FrozenHeap {
+            mut arena, refs, ..
+        } = self;
+        arena.finish();
         let refs = refs.into_inner();
         if arena.is_empty() && refs.is_empty() {
             FrozenHeapRef::default()
@@ -311,7 +315,7 @@ impl FrozenHeap {
     /// Allocate a tuple with the given elements on this heap.
     pub(crate) fn alloc_tuple<'v>(&'v self, elems: &[FrozenValue]) -> FrozenValue {
         if elems.is_empty() {
-            return FrozenValue::new_repr(&VALUE_EMPTY_TUPLE);
+            return FrozenValue::new_empty_tuple();
         }
 
         unsafe {
@@ -332,7 +336,7 @@ impl FrozenHeap {
         let (lower, upper) = elems.size_hint();
         if Some(lower) == upper {
             if lower == 0 {
-                return FrozenValue::new_repr(&VALUE_EMPTY_TUPLE);
+                return FrozenValue::new_empty_tuple();
             }
 
             unsafe {
@@ -663,7 +667,7 @@ impl Heap {
     /// Allocate a tuple with the given elements.
     pub(crate) fn alloc_tuple<'v>(&'v self, elems: &[Value<'v>]) -> Value<'v> {
         if elems.is_empty() {
-            return FrozenValue::new_repr(&VALUE_EMPTY_TUPLE).to_value();
+            return Value::new_empty_tuple();
         }
 
         unsafe {
@@ -682,7 +686,7 @@ impl Heap {
         let (lower, upper) = elems.size_hint();
         if Some(lower) == upper {
             if lower == 0 {
-                return FrozenValue::new_repr(&VALUE_EMPTY_TUPLE).to_value();
+                return Value::new_empty_tuple();
             }
 
             unsafe {
@@ -876,7 +880,7 @@ impl Heap {
 
 /// Used to perform garbage collection by [`Trace::trace`](crate::values::Trace::trace).
 pub struct Tracer<'v> {
-    arena: Arena,
+    arena: Arena<Bump>,
     phantom: PhantomData<&'v ()>,
 }
 

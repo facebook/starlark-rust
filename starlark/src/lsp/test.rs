@@ -26,7 +26,6 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use dupe::Dupe;
-use gazebo::prelude::*;
 use lsp_server::Connection;
 use lsp_server::Message;
 use lsp_server::RequestId;
@@ -55,12 +54,13 @@ use lsp_types::TextDocumentContentChangeEvent;
 use lsp_types::TextDocumentItem;
 use lsp_types::Url;
 use lsp_types::VersionedTextDocumentIdentifier;
+use maplit::hashmap;
 use serde::de::DeserializeOwned;
 
 use crate::docs::render_docs_as_code;
 use crate::docs::Doc;
+use crate::docs::DocFunction;
 use crate::docs::DocItem;
-use crate::docs::Function;
 use crate::docs::Identifier;
 use crate::docs::Location;
 use crate::errors::EvalMessage;
@@ -71,6 +71,7 @@ use crate::lsp::server::LspEvalResult;
 use crate::lsp::server::LspServerSettings;
 use crate::lsp::server::LspUrl;
 use crate::lsp::server::StringLiteralResult;
+use crate::slice_vec_ext::VecExt;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 
@@ -298,7 +299,7 @@ impl TestServer {
                         name: "native_function1".to_owned(),
                         location: None,
                     },
-                    item: DocItem::Function(Function::default()),
+                    item: DocItem::Function(DocFunction::default()),
                     custom_attrs: Default::default(),
                 },
                 Doc {
@@ -306,7 +307,7 @@ impl TestServer {
                         name: "native_function2".to_owned(),
                         location: None,
                     },
-                    item: DocItem::Function(Function::default()),
+                    item: DocItem::Function(DocFunction::default()),
                     custom_attrs: Default::default(),
                 },
             ],
@@ -319,7 +320,7 @@ impl TestServer {
                             position: None,
                         }),
                     },
-                    item: DocItem::Function(Function::default()),
+                    item: DocItem::Function(DocFunction::default()),
                     custom_attrs: Default::default(),
                 },
             ]

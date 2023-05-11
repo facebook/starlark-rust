@@ -21,10 +21,10 @@ use std::mem::MaybeUninit;
 use std::path::Path;
 
 use dupe::Dupe;
-use gazebo::cast;
 use thiserror::Error;
 
 use crate::any::AnyLifetime;
+use crate::cast;
 use crate::codemap::FileSpan;
 use crate::codemap::FileSpanRef;
 use crate::codemap::ResolvedFileSpan;
@@ -35,12 +35,19 @@ use crate::environment::EnvironmentError;
 use crate::environment::FrozenModuleData;
 use crate::environment::Module;
 use crate::errors::Diagnostic;
+use crate::errors::Frame;
+use crate::eval::bc::addr::BcPtrAddr;
+use crate::eval::bc::bytecode::Bc;
 use crate::eval::bc::frame::BcFramePtr;
+use crate::eval::bc::opcode::BcOpcode;
+use crate::eval::bc::writer::BcStatementLocations;
 use crate::eval::compiler::def::CopySlotFromParent;
 use crate::eval::compiler::def::Def;
 use crate::eval::compiler::def::DefInfo;
 use crate::eval::compiler::def::FrozenDef;
+use crate::eval::compiler::EvalException;
 use crate::eval::runtime::before_stmt::BeforeStmt;
+use crate::eval::runtime::before_stmt::BeforeStmtFunc;
 use crate::eval::runtime::call_stack::CheapCallStack;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::inlined_frame::InlinedFrames;
@@ -90,10 +97,6 @@ pub(crate) enum EvaluatorError {
     ProfileOrInstrumentationAlreadyEnabled,
     #[error("Top frame is not def (internal error)")]
     TopFrameNotDef,
-    #[error("Top second frame is not def (internal error)")]
-    TopSecondFrameNotDef,
-    #[error("Top frame is not native (internal error)")]
-    TopFrameNotNative,
     #[error(
         "Coverage profile generation not implemented (but can be obtained with `.coverage()` function)"
     )]
@@ -135,12 +138,10 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) next_gc_level: usize,
     // Profiling or instrumentation enabled.
     pub(crate) profile_or_instrumentation_mode: ProfileOrInstrumentationMode,
-    // Extra functions to run on each statement, usually empty
-    pub(crate) before_stmt: BeforeStmt<'a>,
     // Used for line profiling
     stmt_profile: StmtProfile,
-    // Bytecode profile.
-    pub(crate) bc_profile: BcProfile,
+    // Holds things that require hooking into evaluation.
+    eval_instrumentation: EvaluationInstrumentation<'a>,
     // Total time spent in runtime typechecking.
     // Filled only if runtime typechecking profiling is enabled.
     pub(crate) typecheck_profile: TypecheckProfile,
@@ -152,7 +153,8 @@ pub struct Evaluator<'v, 'a> {
     /// Typically accessed via native functions you also define.
     pub extra: Option<&'a dyn AnyLifetime<'a>>,
     /// Called to perform console IO each time `breakpoint` function is called.
-    pub(crate) breakpoint_handler: Option<Box<dyn Fn() -> Box<dyn BreakpointConsole>>>,
+    pub(crate) breakpoint_handler:
+        Option<Box<dyn Fn() -> anyhow::Result<Box<dyn BreakpointConsole>>>>,
     /// Use in implementation of `print` function.
     pub(crate) print_handler: &'a (dyn PrintHandler + 'a),
     // The Starlark-level call-stack of functions.
@@ -160,13 +162,35 @@ pub struct Evaluator<'v, 'a> {
     pub(crate) call_stack: CheapCallStack<'v>,
 }
 
-unsafe impl<'v> Trace<'v> for Evaluator<'v, '_> {
-    fn trace(&mut self, tracer: &Tracer<'v>) {
-        self.module_env.trace(tracer);
-        self.current_frame.trace(tracer);
-        self.call_stack.trace(tracer);
-        self.flame_profile.trace(tracer);
+/// Just holds things that require using EvaluationCallbacksEnabled so that we can cache whether that needs to be enabled or not.
+struct EvaluationInstrumentation<'a> {
+    // Bytecode profile.
+    bc_profile: BcProfile,
+    // Extra functions to run on each statement, usually empty
+    before_stmt: BeforeStmt<'a>,
+    // Whether we need to instrument evaluation or not, should be set if before_stmt or bc_profile are enabled.
+    enabled: bool,
+}
+
+impl<'a> EvaluationInstrumentation<'a> {
+    fn new() -> EvaluationInstrumentation<'a> {
+        Self {
+            bc_profile: BcProfile::new(),
+            before_stmt: BeforeStmt::default(),
+            enabled: false,
+        }
     }
+
+    fn change<F: FnOnce(&mut EvaluationInstrumentation<'a>)>(&mut self, f: F) {
+        f(self);
+        self.enabled = self.bc_profile.enabled() || self.before_stmt.enabled();
+    }
+}
+
+// Implementing this forces users to be more careful about lifetimes that the Evaluator captures such that we could
+// add captures of types that implement Drop without needing changes to client code.
+impl Drop for Evaluator<'_, '_> {
+    fn drop(&mut self) {}
 }
 
 impl<'v, 'a> Evaluator<'v, 'a> {
@@ -188,11 +212,10 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             profile_or_instrumentation_mode: ProfileOrInstrumentationMode::None,
             heap_profile: HeapProfile::new(),
             stmt_profile: StmtProfile::new(),
-            bc_profile: BcProfile::new(),
             typecheck_profile: TypecheckProfile::default(),
             flame_profile: FlameProfile::new(),
             heap_or_flame_profile: false,
-            before_stmt: BeforeStmt::default(),
+            eval_instrumentation: EvaluationInstrumentation::new(),
             module_def_info: DefInfo::empty(), // Will be replaced before it is used
             string_pool: StringPool::default(),
             breakpoint_handler: None,
@@ -253,17 +276,19 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             }
             ProfileMode::Statement | ProfileMode::Coverage => {
                 self.stmt_profile.enable();
-                self.before_stmt(&|span, eval| eval.stmt_profile.before_stmt(span));
+                self.before_stmt_fn(&|span, eval| eval.stmt_profile.before_stmt(span));
             }
             ProfileMode::TimeFlame => {
                 self.flame_profile.enable();
                 self.heap_or_flame_profile = true;
             }
             ProfileMode::Bytecode => {
-                self.bc_profile.enable_1();
+                self.eval_instrumentation
+                    .change(|v| v.bc_profile.enable_1());
             }
             ProfileMode::BytecodePairs => {
-                self.bc_profile.enable_2();
+                self.eval_instrumentation
+                    .change(|v| v.bc_profile.enable_2());
             }
             ProfileMode::Typecheck => {
                 self.typecheck_profile.enabled = true;
@@ -286,10 +311,12 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 
         match mode {
             ProfileMode::Bytecode | ProfileMode::BytecodePairs => {
-                self.bc_profile.enable_1();
+                self.eval_instrumentation
+                    .change(|v| v.bc_profile.enable_1());
             }
             ProfileMode::Statement | ProfileMode::Coverage => {
-                self.before_stmt.instrument = true;
+                self.eval_instrumentation
+                    .change(|v| v.before_stmt.instrument = true);
             }
             ProfileMode::HeapSummaryAllocated
             | ProfileMode::HeapSummaryRetained
@@ -337,8 +364,8 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             }
             ProfileMode::Statement => self.stmt_profile.gen(),
             ProfileMode::Coverage => Err(EvaluatorError::CoverageNotImplemented.into()),
-            ProfileMode::Bytecode => self.bc_profile.gen_bc_profile(),
-            ProfileMode::BytecodePairs => self.bc_profile.gen_bc_pairs_profile(),
+            ProfileMode::Bytecode => self.gen_bc_profile(),
+            ProfileMode::BytecodePairs => self.gen_bc_pairs_profile(),
             ProfileMode::TimeFlame => self.flame_profile.gen(),
             ProfileMode::Typecheck => self.typecheck_profile.gen(),
         }
@@ -373,27 +400,40 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             .to_diagnostic_frames(InlinedFrames::default())
     }
 
+    /// Obtain the top frame on the call-stack. May be [`None`] if the
+    /// call happened via native functions.
+    pub fn call_stack_top_frame(&self) -> Option<Frame> {
+        self.call_stack.top_frame()
+    }
+
+    /// Current size (in frames) of the stack.
+    pub fn call_stack_count(&self) -> usize {
+        self.call_stack.count()
+    }
+
     /// Obtain the top location on the call-stack. May be [`None`] if the
     /// call happened via native functions.
     pub fn call_stack_top_location(&self) -> Option<FileSpan> {
         self.call_stack.top_location()
     }
 
-    pub(crate) fn before_stmt(
+    pub(crate) fn before_stmt_fn(
         &mut self,
         f: &'a dyn for<'v1> Fn(FileSpanRef, &mut Evaluator<'v1, 'a>),
     ) {
-        self.before_stmt.before_stmt.push(f)
+        self.before_stmt(f.into())
+    }
+
+    pub(crate) fn before_stmt(&mut self, f: BeforeStmtFunc<'a>) {
+        self.eval_instrumentation
+            .change(|v| v.before_stmt.before_stmt.push(f))
     }
 
     /// This function is used by DAP, and it is not public API.
     // TODO(nga): pull DAP into the crate, and hide this function.
     #[doc(hidden)]
-    pub fn before_stmt_for_dap(
-        &mut self,
-        f: &'a dyn for<'v1> Fn(FileSpanRef, &mut Evaluator<'v1, 'a>),
-    ) {
-        self.before_stmt(f);
+    pub fn before_stmt_for_dap(&mut self, f: BeforeStmtFunc<'a>) {
+        self.before_stmt(f)
     }
 
     /// Set the handler invoked when `print` function is used.
@@ -625,31 +665,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
     }
 
-    pub(crate) fn top_frame_def_info(&self) -> anyhow::Result<FrozenRef<DefInfo>> {
-        let func = self.call_stack.top_nth_function(0)?;
-        if let Some(func) = func.downcast_ref::<Def>() {
-            Ok(func.def_info)
-        } else if let Some(func) = func.downcast_ref::<FrozenDef>() {
-            Ok(func.def_info)
-        } else if func.is_none() {
-            // For module, top frame is `None`.
-            Ok(self.module_def_info)
-        } else {
-            Err(EvaluatorError::TopFrameNotDef.into())
-        }
-    }
-
-    /// When top frame is `breakpoint` or `debug_evaluate` function, skip it.
-    pub(crate) fn top_second_frame_def_info_for_debugger(
-        &self,
-    ) -> anyhow::Result<FrozenRef<DefInfo>> {
-        // Self-check: we are in `breakpoint` or `debug_evaluate` function.
-        let breakpoint = self.call_stack.top_nth_function(0)?;
-        breakpoint
-            .downcast_ref::<NativeFunction>()
-            .ok_or(EvaluatorError::TopFrameNotNative)?;
-
-        let func = self.call_stack.top_nth_function(1)?;
+    fn func_to_def_info(&self, func: Value<'_>) -> anyhow::Result<FrozenRef<DefInfo>> {
         if let Some(func) = func.downcast_ref::<Def>() {
             Ok(func.def_info)
         } else if let Some(func) = func.downcast_ref::<FrozenDef>() {
@@ -658,14 +674,42 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             // For module, it is `None`.
             Ok(self.module_def_info)
         } else {
-            Err(EvaluatorError::TopSecondFrameNotDef.into())
+            Err(EvaluatorError::TopFrameNotDef.into())
         }
+    }
+
+    pub(crate) fn top_frame_def_info(&self) -> anyhow::Result<FrozenRef<DefInfo>> {
+        let func = self.call_stack.top_nth_function(0)?;
+        self.func_to_def_info(func)
+    }
+
+    /// Gets the "top frame" for debugging. If the real top frame is `breakpoint` or `debug_evaluate`
+    /// it will be skipped. This should only be used for the starlark debugger.
+    pub(crate) fn top_frame_def_info_for_debugger(&self) -> anyhow::Result<FrozenRef<DefInfo>> {
+        let func = {
+            let top = self.call_stack.top_nth_function(0)?;
+            if top.downcast_ref::<NativeFunction>().is_some() {
+                // we are in `breakpoint` or `debug_evaluate` function, get the next frame.
+                self.call_stack.top_nth_function(1)?
+            } else {
+                top
+            }
+        };
+
+        self.func_to_def_info(func)
     }
 
     /// Cause a GC to be triggered next time it's possible.
     pub(crate) fn trigger_gc(&mut self) {
         // We will GC next time we can, since the threshold is if 0 or more bytes are allocated
         self.next_gc_level = 0;
+    }
+
+    fn trace(&mut self, tracer: &Tracer<'v>) {
+        self.module_env.trace(tracer);
+        self.current_frame.trace(tracer);
+        self.call_stack.trace(tracer);
+        self.flame_profile.trace(tracer);
     }
 
     /// Perform a garbage collection.
@@ -720,4 +764,94 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         let alloca = unsafe { cast::ptr_lifetime(&self.alloca) };
         alloca.alloca_concat(x, y, |xs| k(xs, self))
     }
+
+    pub(crate) fn gen_bc_profile(&mut self) -> anyhow::Result<ProfileData> {
+        self.eval_instrumentation.bc_profile.gen_bc_profile()
+    }
+
+    pub(crate) fn gen_bc_pairs_profile(&mut self) -> anyhow::Result<ProfileData> {
+        self.eval_instrumentation.bc_profile.gen_bc_pairs_profile()
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn eval_bc_with_callbacks(&mut self, bc: &Bc) -> Result<Value<'v>, EvalException> {
+        bc.run(
+            self,
+            &mut EvalCallbacksEnabled {
+                bc_profile: self.eval_instrumentation.bc_profile.enabled(),
+                before_stmt: self.eval_instrumentation.before_stmt.enabled(),
+                stmt_locs: &bc.instrs.stmt_locs,
+                bc_start_ptr: bc.instrs.start_ptr(),
+            },
+        )
+    }
+
+    #[inline(always)]
+    pub(crate) fn eval_bc(&mut self, bc: &Bc) -> Result<Value<'v>, EvalException> {
+        if self.eval_instrumentation.enabled {
+            self.eval_bc_with_callbacks(bc)
+        } else {
+            bc.run(self, &mut EvalCallbacksDisabled)
+        }
+    }
+}
+
+pub(crate) trait EvaluationCallbacks {
+    fn before_instr(&mut self, _eval: &mut Evaluator, _ip: BcPtrAddr, _opcode: BcOpcode);
+}
+
+pub(crate) struct EvalCallbacksDisabled;
+
+impl EvaluationCallbacks for EvalCallbacksDisabled {
+    #[inline(always)]
+    fn before_instr(&mut self, _eval: &mut Evaluator, _ip: BcPtrAddr, _opcode: BcOpcode) {}
+}
+
+pub(crate) struct EvalCallbacksEnabled<'a> {
+    pub(crate) bc_profile: bool,
+    pub(crate) before_stmt: bool,
+    pub(crate) stmt_locs: &'a BcStatementLocations,
+    pub(crate) bc_start_ptr: BcPtrAddr<'a>,
+}
+
+impl<'a> EvalCallbacksEnabled<'a> {
+    fn before_stmt(&mut self, eval: &mut Evaluator, ip: BcPtrAddr) {
+        let offset = ip.offset_from(self.bc_start_ptr);
+        if let Some(loc) = self.stmt_locs.stmt_at(offset) {
+            before_stmt(loc.span, eval);
+        }
+    }
+}
+
+impl<'a> EvaluationCallbacks for EvalCallbacksEnabled<'a> {
+    #[inline(always)]
+    fn before_instr(&mut self, eval: &mut Evaluator, ip: BcPtrAddr, opcode: BcOpcode) {
+        if self.bc_profile {
+            eval.eval_instrumentation.bc_profile.before_instr(opcode)
+        }
+        if self.before_stmt {
+            self.before_stmt(eval, ip);
+        }
+    }
+}
+
+// This function should be called before every meaningful statement.
+// The purposes are GC, profiling and debugging.
+//
+// This function is called only if `before_stmt` is set before compilation start.
+pub(crate) fn before_stmt(span: FrameSpan, eval: &mut Evaluator) {
+    assert!(
+        eval.eval_instrumentation.before_stmt.enabled(),
+        "this code should only be called if `before_stmt` is set"
+    );
+    let mut fs = mem::take(&mut eval.eval_instrumentation.before_stmt.before_stmt);
+    for f in &mut fs {
+        f.call(span.span.file_span_ref(), eval)
+    }
+    let added = mem::replace(&mut eval.eval_instrumentation.before_stmt.before_stmt, fs);
+    assert!(
+        added.is_empty(),
+        "`before_stmt` cannot be modified during evaluation"
+    );
 }

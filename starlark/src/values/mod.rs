@@ -28,7 +28,7 @@
 //! * To define your own Rust data type that can live in a [`Value`] it must implement the [`StarlarkValue`]
 //!   trait.
 //! * All the nested modules represent the built-in Starlark values. These are all defined using [`StarlarkValue`],
-//!   so may serve as interesting inspiration for writing your own values, in addition to occuring in Starlark programs.
+//!   so may serve as interesting inspiration for writing your own values, in addition to occurring in Starlark programs.
 
 pub use starlark_derive::starlark_attrs;
 pub use starlark_derive::Freeze;
@@ -45,6 +45,7 @@ pub use crate::values::demand::Demand;
 pub use crate::values::error::ValueError;
 pub use crate::values::freeze::Freeze;
 pub use crate::values::frozen_ref::FrozenRef;
+pub use crate::values::iter::StarlarkIterator;
 pub use crate::values::layout::heap::heap_type::Freezer;
 pub use crate::values::layout::heap::heap_type::FrozenHeap;
 pub use crate::values::layout::heap::heap_type::FrozenHeapRef;
@@ -72,6 +73,7 @@ pub use crate::values::types::array;
 pub use crate::values::types::bool;
 pub use crate::values::types::dict;
 pub use crate::values::types::enumeration;
+pub use crate::values::types::exported_name;
 pub use crate::values::types::float;
 pub use crate::values::types::function;
 pub use crate::values::types::int;

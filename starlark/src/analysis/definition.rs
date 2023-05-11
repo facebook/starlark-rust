@@ -21,7 +21,7 @@ use crate::analysis::bind::scope;
 use crate::analysis::bind::Assigner;
 use crate::analysis::bind::Bind;
 use crate::analysis::bind::Scope;
-use crate::analysis::exported::ExportedSymbol;
+use crate::analysis::exported::Symbol;
 use crate::codemap::CodeMap;
 use crate::codemap::Pos;
 use crate::codemap::ResolvedSpan;
@@ -418,7 +418,7 @@ impl LspModule {
     }
 
     /// Get the list of symbols exported by this module.
-    pub(crate) fn get_exported_symbols(&self) -> Vec<ExportedSymbol> {
+    pub(crate) fn get_exported_symbols(&self) -> Vec<Symbol<'_>> {
         self.ast.exported_symbols()
     }
 

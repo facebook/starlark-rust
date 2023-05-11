@@ -25,8 +25,9 @@
 use std::collections::HashMap;
 
 use dupe::Dupe;
-use gazebo::prelude::*;
+use maplit::hashmap;
 use once_cell::sync::Lazy;
+use starlark_derive::starlark_module;
 
 use crate as starlark;
 use crate::codemap::CodeMap;
@@ -40,6 +41,7 @@ use crate::environment::Module;
 use crate::errors::Diagnostic;
 use crate::eval::Evaluator;
 use crate::eval::ReturnFileLoader;
+use crate::slice_vec_ext::SliceExt;
 use crate::stdlib::PrintHandler;
 use crate::syntax::lexer::Lexer;
 use crate::syntax::lexer::Token;
@@ -297,20 +299,19 @@ impl<'a> Assert<'a> {
         }
         let loader = ReturnFileLoader { modules: &modules };
         let ast = AstModule::parse(path, program.to_owned(), &self.dialect)?;
+        let gc_always = |_span: FileSpanRef, eval: &mut Evaluator| {
+            eval.trigger_gc();
+        };
         let mut eval = Evaluator::new(module);
         (self.setup_eval)(&mut eval);
         if let Some(print_handler) = self.print_handler {
             eval.set_print_handler(print_handler);
         }
 
-        let gc_always = |_span: FileSpanRef, eval: &mut Evaluator| {
-            eval.trigger_gc();
-        };
-
         match gc {
             GcStrategy::Never => eval.disable_gc(),
             GcStrategy::Auto => {}
-            GcStrategy::Always => eval.before_stmt(&gc_always),
+            GcStrategy::Always => eval.before_stmt_fn(&gc_always),
         }
         eval.set_loader(&loader);
         eval.eval_module(ast, &self.globals)
@@ -589,7 +590,7 @@ impl<'a> Assert<'a> {
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap_or_else(|e|
                     panic!(
-                        "starlark::assert::lex_tokens, expected lex sucess but failed\nCode: {}\nError: {}",
+                        "starlark::assert::lex_tokens, expected lex success but failed\nCode: {}\nError: {}",
                         program, e
                     )
                 )

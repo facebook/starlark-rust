@@ -20,8 +20,6 @@ use std::fmt::Display;
 use std::path::Path;
 
 use dupe::Dupe;
-use gazebo::variants::VariantName;
-use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
 use lsp_types::NumberOrString;
 use lsp_types::Range;
@@ -31,10 +29,11 @@ use crate::codemap::CodeMap;
 use crate::codemap::FileSpan;
 use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
-use crate::errors::Diagnostic as StarlarkDiagnostic;
+use crate::errors::Diagnostic;
 
-pub(crate) trait LintWarning: Display + VariantName {
+pub(crate) trait LintWarning: Display {
     fn is_serious(&self) -> bool;
+    fn short_name(&self) -> &'static str;
 }
 
 /// A private version of lint without the inner trait erased, useful so we can test
@@ -86,7 +85,7 @@ impl<T: LintWarning> LintT<T> {
     pub(crate) fn erase(self) -> Lint {
         Lint {
             location: self.location,
-            short_name: kebab(self.problem.variant_name()),
+            short_name: self.problem.short_name().to_owned(),
             serious: self.problem.is_serious(),
             problem: self.problem.to_string(),
             original: self.original,
@@ -162,9 +161,9 @@ impl Display for EvalMessage {
 impl EvalMessage {
     /// Convert from an `anyhow::Error`, including some type checking, to an `EvalMessage`
     pub fn from_anyhow(file: &Path, x: &anyhow::Error) -> Self {
-        match x.downcast_ref::<StarlarkDiagnostic>() {
+        match x.downcast_ref::<Diagnostic>() {
             Some(
-                d @ StarlarkDiagnostic {
+                d @ Diagnostic {
                     message,
                     span: Some(span),
                     ..
@@ -214,13 +213,13 @@ impl From<Lint> for EvalMessage {
     }
 }
 
-impl From<EvalMessage> for Diagnostic {
+impl From<EvalMessage> for lsp_types::Diagnostic {
     fn from(x: EvalMessage) -> Self {
         let range = match x.span {
             Some(s) => s.into(),
             _ => Range::default(),
         };
-        Diagnostic::new(
+        lsp_types::Diagnostic::new(
             range,
             Some(x.severity.into()),
             Some(NumberOrString::String(x.name)),
@@ -229,41 +228,5 @@ impl From<EvalMessage> for Diagnostic {
             None,
             None,
         )
-    }
-}
-
-fn kebab(xs: &str) -> String {
-    let mut res = String::new();
-    for x in xs.chars() {
-        if x.is_uppercase() {
-            if !res.is_empty() {
-                res.push('-');
-            }
-            for y in x.to_lowercase() {
-                res.push(y);
-            }
-        } else {
-            res.push(x);
-        }
-    }
-    res
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_lint_kebab() {
-        assert_eq!(kebab("Unreachable"), "unreachable");
-        assert_eq!(kebab("UsingIgnored"), "using-ignored");
-        assert_eq!(
-            kebab("MissingReturnExpression"),
-            "missing-return-expression"
-        );
-        assert_eq!(
-            kebab("DuplicateTopLevelAssign"),
-            "duplicate-top-level-assign"
-        );
     }
 }

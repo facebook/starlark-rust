@@ -24,16 +24,20 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::marker::PhantomData;
 use std::mem;
 
 use allocative::Allocative;
-use gazebo::prelude::*;
 use hashbrown::raw::RawTable;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::equivalent::Equivalent;
 use crate::hashed::Hashed;
 pub use crate::small_map::iter::IntoIter;
 pub use crate::small_map::iter::IntoIterHashed;
+pub use crate::small_map::iter::IntoKeys;
+pub use crate::small_map::iter::IntoValues;
 pub use crate::small_map::iter::Iter;
 pub use crate::small_map::iter::IterHashed;
 pub use crate::small_map::iter::IterMut;
@@ -55,7 +59,7 @@ const NO_INDEX_THRESHOLD: usize = 32;
 #[cfg(not(rust_nightly))]
 const NO_INDEX_THRESHOLD: usize = 16;
 
-/// An memory-efficient key-value map with determinstic order.
+/// An memory-efficient key-value map with deterministic order.
 ///
 /// Provides the standard container operations, modelled most closely on `indexmap::IndexMap`, plus:
 ///
@@ -63,12 +67,19 @@ const NO_INDEX_THRESHOLD: usize = 16;
 ///
 /// * Functions which work with the position, e.g. [`get_index_of`](SmallMap::get_index_of).
 #[repr(C)]
-#[derive(Clone, Default_, Allocative)]
+#[derive(Clone, Allocative)]
 pub struct SmallMap<K, V> {
     entries: VecMap<K, V>,
     /// Map a key to the index in `entries`.
     /// This field is initialized when the size of the map exceeds `NO_INDEX_THRESHOLD`.
     index: Option<Box<RawTable<usize>>>,
+}
+
+impl<K, V> Default for SmallMap<K, V> {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<K: Debug, V: Debug> Debug for SmallMap<K, V> {
@@ -149,6 +160,22 @@ impl<K, V> SmallMap<K, V> {
     pub fn values(&self) -> Values<K, V> {
         Values {
             iter: self.entries.values(),
+        }
+    }
+
+    /// Key owned iterator.
+    #[inline]
+    pub fn into_keys(self) -> IntoKeys<K, V> {
+        IntoKeys {
+            iter: self.entries.into_iter(),
+        }
+    }
+
+    /// Value owned iterator.
+    #[inline]
+    pub fn into_values(self) -> IntoValues<K, V> {
+        IntoValues {
+            iter: self.entries.into_iter(),
         }
     }
 
@@ -919,6 +946,59 @@ macro_rules! smallmap {
     };
 }
 
+impl<K: Serialize, V: Serialize> Serialize for SmallMap<K, V> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_map(self.iter())
+    }
+}
+
+impl<'de, K, V> Deserialize<'de> for SmallMap<K, V>
+where
+    K: Deserialize<'de> + Hash + Eq,
+    V: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct MapVisitor<K, V> {
+            marker: PhantomData<SmallMap<K, V>>,
+        }
+
+        impl<'de, K, V> serde::de::Visitor<'de> for MapVisitor<K, V>
+        where
+            K: Deserialize<'de> + Hash + Eq,
+            V: Deserialize<'de>,
+        {
+            type Value = SmallMap<K, V>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a map")
+            }
+
+            #[inline]
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut values = SmallMap::with_capacity(map.size_hint().unwrap_or(0));
+                while let Some((key, value)) = map.next_entry()? {
+                    values.insert(key, value);
+                }
+                Ok(values)
+            }
+        }
+
+        let visitor = MapVisitor {
+            marker: PhantomData,
+        };
+        deserializer.deserialize_map(visitor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::cmp::Ordering;
@@ -1050,7 +1130,7 @@ mod tests {
         // A type which always gives hash collisions
         #[derive(PartialEq, Eq, Debug)]
         struct K(i32);
-        #[allow(clippy::derive_hash_xor_eq)]
+        #[allow(clippy::derived_hash_with_manual_eq)]
         impl Hash for K {
             fn hash<H: Hasher>(&self, _state: &mut H) {}
         }
@@ -1230,5 +1310,19 @@ mod tests {
         assert_eq!(Some((99, 990)), m.remove_entry(&99));
         assert_eq!(Some(&980), m.get(&98));
         m.assert_invariants();
+    }
+
+    #[test]
+    fn test_json() {
+        let mp = smallmap! {"a".to_owned() => 1, "b".to_owned() => 2};
+        let expected = serde_json::json!({
+            "a": 1,
+            "b": 2,
+        });
+        assert_eq!(serde_json::to_value(&mp).unwrap(), expected);
+        assert_eq!(
+            serde_json::from_value::<SmallMap<String, i32>>(expected).unwrap(),
+            mp
+        );
     }
 }

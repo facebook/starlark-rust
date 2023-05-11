@@ -20,7 +20,7 @@
 use std::cmp::Ordering;
 
 use dupe::Dupe;
-use gazebo::prelude::*;
+use starlark_derive::VisitSpanMut;
 use thiserror::Error;
 
 use crate::codemap::Spanned;
@@ -47,6 +47,8 @@ use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
+use crate::slice_vec_ext::SliceExt;
+use crate::slice_vec_ext::VecExt;
 use crate::syntax::ast::AstExprP;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::AstPayload;
@@ -68,7 +70,7 @@ use crate::values::types::float::StarlarkFloat;
 use crate::values::types::list::value::FrozenListData;
 use crate::values::types::list::value::ListData;
 use crate::values::types::range::Range;
-use crate::values::types::string::interpolation::format_one;
+use crate::values::types::string::dot_format::format_one;
 use crate::values::types::string::interpolation::percent_s_one;
 use crate::values::types::tuple::value::Tuple;
 use crate::values::types::unbound::MaybeUnboundValue;

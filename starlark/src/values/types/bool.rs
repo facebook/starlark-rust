@@ -27,12 +27,14 @@ use std::hash::Hasher;
 
 use allocative::Allocative;
 use serde::Serialize;
+use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
+use crate::starlark_type;
 use crate::values::basic::StarlarkValueBasic;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
@@ -78,7 +80,7 @@ impl AllocFrozenValue for bool {
 
 impl StarlarkTypeRepr for bool {
     fn starlark_type_repr() -> String {
-        format!("{}.type", BOOL_TYPE)
+        StarlarkBool::get_type_starlark_repr()
     }
 }
 
@@ -91,6 +93,10 @@ impl UnpackValue<'_> for bool {
 /// Define the bool type
 impl StarlarkValue<'_> for StarlarkBool {
     starlark_type!(BOOL_TYPE);
+
+    fn get_type_starlark_repr() -> String {
+        "bool.type".to_owned()
+    }
 
     fn is_special(_: Private) -> bool
     where

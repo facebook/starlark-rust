@@ -22,18 +22,25 @@ use std::collections::HashMap;
 use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
+use starlark_derive::NoSerialize;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::Coerce;
-use crate::docs;
+use crate::docs::DocFunction;
 use crate::docs::DocItem;
+use crate::docs::DocProperty;
+use crate::docs::DocString;
 use crate::docs::DocStringKind;
+use crate::docs::DocType;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
 use crate::eval::ParametersParser;
 use crate::eval::ParametersSpec;
 use crate::private::Private;
+use crate::starlark_complex_value;
+use crate::starlark_simple_value;
+use crate::starlark_type;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::Freeze;
@@ -128,14 +135,14 @@ impl<T> NativeAttr for T where
 pub struct NativeCallableRawDocs {
     pub rust_docstring: Option<&'static str>,
     pub signature: ParametersSpec<FrozenValue>,
-    pub parameter_types: HashMap<usize, docs::Type>,
-    pub return_type: Option<docs::Type>,
+    pub parameter_types: HashMap<usize, DocType>,
+    pub return_type: Option<DocType>,
 }
 
 #[doc(hidden)]
 impl NativeCallableRawDocs {
-    pub fn documentation(&self) -> docs::Function {
-        docs::Function::from_docstring(
+    pub fn documentation(&self) -> DocFunction {
+        DocFunction::from_docstring(
             DocStringKind::Rust,
             self.signature
                 .documentation(self.parameter_types.clone(), HashMap::new()),
@@ -147,7 +154,7 @@ impl NativeCallableRawDocs {
 
 /// Starlark representation of native (Rust) functions.
 ///
-/// Almost always created with [`#[starlark_module]`](macro@starlark_module).
+/// Almost always created with [`#[starlark_module]`](macro@crate::starlark_module).
 #[derive(Derivative, ProvidesStaticType, Display, NoSerialize, Allocative)]
 #[derivative(Debug)]
 #[display(fmt = "{}", name)]
@@ -333,6 +340,17 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
     ) -> anyhow::Result<Value<'v>> {
         let method = self.call(this, eval.heap())?;
         method.invoke(args, eval)
+    }
+
+    fn documentation(&self) -> Option<DocItem> {
+        let ds = self
+            .docstring
+            .as_ref()
+            .and_then(|ds| DocString::from_docstring(DocStringKind::Rust, ds));
+        let typ = Some(DocType {
+            raw_type: self.typ.to_owned(),
+        });
+        Some(DocItem::Property(DocProperty { docs: ds, typ }))
     }
 }
 

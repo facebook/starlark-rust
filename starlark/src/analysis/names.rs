@@ -18,7 +18,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use gazebo::variants::VariantName;
 use thiserror::Error;
 
 use crate::analysis::bind;
@@ -31,7 +30,7 @@ use crate::codemap::CodeMap;
 use crate::codemap::Span;
 use crate::syntax::AstModule;
 
-#[derive(Error, Debug, VariantName)]
+#[derive(Error, Debug)]
 pub(crate) enum NameWarning {
     #[error("Unused `load` of `{0}`")]
     UnusedLoad(String),
@@ -50,6 +49,16 @@ impl LintWarning for NameWarning {
         match self {
             Self::UsingUnassigned(..) => true,
             _ => false,
+        }
+    }
+
+    fn short_name(&self) -> &'static str {
+        match self {
+            Self::UnusedLoad(..) => "unused-load",
+            Self::UnusedAssign(..) => "unused-assign",
+            Self::UnusedArgument(..) => "unused-argument",
+            Self::UsingUnassigned(..) => "using-unassigned",
+            Self::UsingUndefined(..) => "using-undefined",
         }
     }
 }
@@ -198,9 +207,8 @@ fn unassigned_variable(codemap: &CodeMap, scope: &Scope, res: &mut Vec<LintT<Nam
 
 #[cfg(test)]
 mod tests {
-    use gazebo::prelude::*;
-
     use super::*;
+    use crate::slice_vec_ext::SliceExt;
     use crate::syntax::Dialect;
 
     impl NameWarning {

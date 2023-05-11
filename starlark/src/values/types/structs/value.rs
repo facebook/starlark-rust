@@ -22,8 +22,11 @@ use std::hash::Hash;
 use std::hash::Hasher;
 
 use allocative::Allocative;
-use gazebo::display::display_keyed_container;
+use display_container::fmt_keyed_container;
 use serde::Serialize;
+use starlark_derive::Freeze;
+use starlark_derive::StarlarkDocs;
+use starlark_derive::Trace;
 use starlark_map::small_map::SmallMap;
 use starlark_map::Hashed;
 use starlark_map::StarlarkHasher;
@@ -32,8 +35,12 @@ use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::coerce;
 use crate::coerce::Coerce;
-use crate::docs;
 use crate::docs::DocItem;
+use crate::docs::DocMember;
+use crate::docs::DocObject;
+use crate::docs::DocProperty;
+use crate::starlark_complex_value;
+use crate::starlark_type;
 use crate::values::comparison::compare_small_map;
 use crate::values::comparison::equals_small_map;
 use crate::values::structs::unordered_hasher::UnorderedHasher;
@@ -90,7 +97,7 @@ unsafe impl<'v> Coerce<StructGen<'v, Value<'v>>> for StructGen<'static, FrozenVa
 
 impl<'v, V: ValueLike<'v>> Display for StructGen<'v, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_keyed_container(
+        fmt_keyed_container(
             f,
             "struct(",
             ")",
@@ -169,10 +176,10 @@ where
             .map(|(k, v)| {
                 let name = k.as_str().to_owned();
                 match v.to_value().documentation() {
-                    Some(DocItem::Function(f)) => (name, docs::Member::Function(f)),
+                    Some(DocItem::Function(f)) => (name, DocMember::Function(f)),
                     _ => (
                         name,
-                        docs::Member::Property(docs::Property {
+                        DocMember::Property(DocProperty {
                             docs: None,
                             typ: None,
                         }),
@@ -180,7 +187,7 @@ where
                 }
             })
             .collect();
-        Some(DocItem::Object(docs::Object {
+        Some(DocItem::Object(DocObject {
             docs: None,
             members,
         }))
@@ -198,11 +205,8 @@ impl<'v, V: ValueLike<'v>> Serialize for StructGen<'v, V> {
 
 #[cfg(test)]
 mod tests {
+
     use crate::assert;
-    use crate::docs;
-    use crate::docs::DocItem;
-    use crate::docs::DocString;
-    use crate::docs::DocStringKind;
 
     #[test]
     fn test_repr() {
@@ -253,57 +257,6 @@ json.encode(struct(foo = ["bar/", "some"])) == '{"foo":["bar/","some"]}'
 json.encode(struct(foo = [struct(bar = "some")])) == '{"foo":[{"bar":"some"}]}'
 "#,
         );
-    }
-
-    #[test]
-    fn test_docs() {
-        let expected = DocItem::Object(docs::Object {
-            docs: None,
-            members: vec![
-                (
-                    "member".to_owned(),
-                    docs::Member::Property(docs::Property {
-                        docs: None,
-                        typ: None,
-                    }),
-                ),
-                (
-                    "some_func".to_owned(),
-                    docs::Member::Function(docs::Function {
-                        docs: DocString::from_docstring(DocStringKind::Starlark, "some_func docs"),
-                        params: vec![docs::Param::Arg {
-                            name: "v".to_owned(),
-                            docs: None,
-                            typ: Some(docs::Type {
-                                raw_type: "\"x\"".to_owned(),
-                            }),
-                            default_value: None,
-                        }],
-                        ret: docs::Return {
-                            docs: None,
-                            typ: Some(docs::Type {
-                                raw_type: "\"y\"".to_owned(),
-                            }),
-                        },
-                    }),
-                ),
-            ],
-        });
-
-        let s = assert::pass(
-            r#"
-def some_func(v: "x") -> "y":
-    """ some_func docs """
-    return v
-
-struct(
-    member = "some string",
-    some_func = some_func,
-)"#,
-        );
-        let docs = s.value().documentation().expect("some docs");
-
-        assert_eq!(expected, docs);
     }
 
     #[test]

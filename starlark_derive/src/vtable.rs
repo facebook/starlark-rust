@@ -25,7 +25,7 @@ use syn::ItemTrait;
 use syn::Pat;
 use syn::ReturnType;
 use syn::TraitItem;
-use syn::TraitItemMethod;
+use syn::TraitItemFn;
 
 struct Gen {
     starlark_value: ItemTrait,
@@ -38,7 +38,7 @@ struct VTableEntry {
 }
 
 impl Gen {
-    fn vtable_entry(&self, method: &TraitItemMethod) -> syn::Result<VTableEntry> {
+    fn vtable_entry(&self, method: &TraitItemFn) -> syn::Result<VTableEntry> {
         let fn_name = &method.sig.ident;
         let fn_ret_type = &method.sig.output;
         let mut field_fn_param_types = Vec::new();
@@ -141,13 +141,14 @@ impl Gen {
         let mut init_black_holes = Vec::new();
         for item in &self.starlark_value.items {
             let m = match item {
-                TraitItem::Method(m) => m,
+                TraitItem::Fn(m) => m,
                 _ => continue,
             };
             // Don't need it.
             if m.sig.ident == "is_special"
                 || m.sig.ident == "please_use_starlark_type_macro"
                 || m.sig.ident == "extra_memory"
+                || m.sig.ident == "iterate_collect"
             {
                 continue;
             }

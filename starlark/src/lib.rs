@@ -149,11 +149,13 @@
 //! // We build our globals adding some functions we wrote
 //! let globals = GlobalsBuilder::new().with(starlark_emit).build();
 //! let module = Module::new();
-//! let mut eval = Evaluator::new(&module);
-//! // We add a reference to our store
 //! let store = Store::default();
-//! eval.extra = Some(&store);
-//! eval.eval_module(ast, &globals)?;
+//! {
+//!     let mut eval = Evaluator::new(&module);
+//!     // We add a reference to our store
+//!     eval.extra = Some(&store);
+//!     eval.eval_module(ast, &globals)?;
+//! }
 //! assert_eq!(&*store.0.borrow(), &["1", "[\"test\"]", "{\"x\":\"y\"}"]);
 //! # Ok(())
 //! # }
@@ -232,9 +234,11 @@
 //!
 //!    let globals = Globals::standard();
 //!    let module = Module::new();
-//!    let mut eval = Evaluator::new(&module);
-//!    eval.set_loader(&mut loader);
-//!    eval.eval_module(ast, &globals)?;
+//!    {
+//!        let mut eval = Evaluator::new(&module);
+//!        eval.set_loader(&mut loader);
+//!        eval.eval_module(ast, &globals)?;
+//!    }
 //!    // After creating a module we freeze it, preventing further mutation.
 //!    // It can now be used as the input for other Starlark modules.
 //!    Ok(module.freeze()?)
@@ -376,13 +380,6 @@
 #![allow(clippy::useless_transmute)] // Seems to be a clippy bug, but we should be using less transmute anyway
 #![deny(missing_docs)]
 
-#[macro_use]
-extern crate gazebo;
-#[macro_use]
-extern crate starlark_derive;
-#[macro_use]
-extern crate maplit;
-#[macro_use]
 mod macros;
 
 pub use starlark_derive::starlark_module;
@@ -394,7 +391,7 @@ pub mod any;
 pub mod assert;
 pub mod codemap;
 pub mod collections;
-mod debug;
+pub mod debug;
 pub mod docs;
 pub mod environment;
 pub mod errors;
@@ -403,8 +400,10 @@ pub mod lsp;
 mod private;
 pub mod read_line;
 mod sealed;
+pub(crate) mod slice_vec_ext;
 pub mod typing;
 
+pub(crate) mod cast;
 mod hint;
 mod stdlib;
 pub mod syntax;

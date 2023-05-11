@@ -28,6 +28,7 @@ pub(crate) mod enumeration;
 pub(crate) mod extra;
 mod funcs;
 pub(crate) mod json;
+pub(crate) mod partial;
 
 pub(crate) mod list;
 pub(crate) mod record;
@@ -111,7 +112,7 @@ impl LibraryExtension {
             EnumType => enumeration::global(builder),
             Map => extra::map(builder),
             Filter => extra::filter(builder),
-            Partial => extra::partial(builder),
+            Partial => partial::partial(builder),
             ExperimentalRegex => extra::regex(builder),
             Debug => extra::debug(builder),
             Print => extra::print(builder),
@@ -128,6 +129,8 @@ mod tests {
     use allocative::Allocative;
     use derive_more::Display;
     use dupe::Dupe;
+    use starlark_derive::starlark_module;
+    use starlark_derive::NoSerialize;
 
     use crate as starlark;
     use crate::any::ProvidesStaticType;
@@ -136,6 +139,8 @@ mod tests {
     use crate::environment::Methods;
     use crate::environment::MethodsBuilder;
     use crate::environment::MethodsStatic;
+    use crate::starlark_simple_value;
+    use crate::starlark_type;
     use crate::values::none::NoneType;
     use crate::values::StarlarkValue;
     use crate::values::UnpackValue;

@@ -20,6 +20,7 @@
 use std::fmt::Write;
 
 use crate::eval::bc::addr::BcPtrAddr;
+use crate::eval::bc::for_loop::LoopDepth;
 use crate::eval::bc::frame::BcFramePtr;
 use crate::eval::bc::instr::BcInstr;
 use crate::eval::bc::instr::InstrControl;
@@ -31,6 +32,7 @@ use crate::eval::bc::slow_arg::BcInstrEndArg;
 use crate::eval::bc::slow_arg::BcInstrSlowArg;
 use crate::eval::compiler::add_span_to_expr_error;
 use crate::eval::compiler::EvalException;
+use crate::eval::runtime::evaluator::EvaluationCallbacks;
 use crate::eval::Evaluator;
 use crate::values::Value;
 
@@ -42,6 +44,8 @@ pub(crate) struct Bc {
     pub(crate) local_count: u32,
     /// Max stack size in values (`Value`).
     pub(crate) max_stack_size: u32,
+    /// Max depth of loops.
+    pub(crate) max_loop_depth: LoopDepth,
 }
 
 impl Bc {
@@ -87,21 +91,14 @@ impl Bc {
     ///
     /// Frame must be allocated properly, otherwise it will likely result in memory corruption.
     #[inline(always)]
-    pub(crate) fn run<'v>(&self, eval: &mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException> {
+    pub(crate) fn run<'v, EC: EvaluationCallbacks>(
+        &self,
+        eval: &mut Evaluator<'v, '_>,
+        ec: &mut EC,
+    ) -> Result<Value<'v>, EvalException> {
         debug_assert!(eval.current_frame.is_inititalized());
         debug_assert_eq!(self.max_stack_size, eval.current_frame.max_stack_size());
-        self.run_with_stack(eval)
-    }
-
-    #[inline(always)]
-    fn run_with_stack<'v>(&self, eval: &mut Evaluator<'v, '_>) -> Result<Value<'v>, EvalException> {
-        // println!("{}", self.bc);
-        match run_block(eval, self.instrs.start_ptr()) {
-            RunBlockResult::Return(v) => Ok(v),
-            RunBlockResult::Err(e) => Err(e),
-            RunBlockResult::Break => unreachable!("break outside of loop"),
-            RunBlockResult::Continue => unreachable!("continue outside of loop"),
-        }
+        run_block(eval, ec, self.instrs.start_ptr())
     }
 
     pub(crate) fn dump_debug(&self) -> String {
@@ -118,8 +115,9 @@ impl Bc {
 
 /// Execute one instruction.
 #[cfg_attr(not(debug_assertions), inline(always))]
-fn step<'v, 'b>(
+fn step<'v, 'b, EC: EvaluationCallbacks>(
     eval: &mut Evaluator<'v, '_>,
+    ec: &mut EC,
     frame: BcFramePtr<'v>,
     ip: BcPtrAddr<'b>,
 ) -> InstrControl<'v, 'b> {
@@ -141,24 +139,17 @@ fn step<'v, 'b>(
         }
     }
 
+    ec.before_instr(eval, ip, opcode);
     opcode.dispatch(HandlerImpl { eval, frame, ip })
-}
-
-/// Result of instruction block evaluation.
-pub(crate) enum RunBlockResult<'v> {
-    /// Go to the next loop iteration.
-    Continue,
-    /// Break off the loop.
-    Break,
-    /// Return from the function.
-    Return(Value<'v>),
-    /// Error.
-    Err(EvalException),
 }
 
 /// Execute the code block, either a module, a function body or a loop body.
 // Do not inline this function because it is called from two places: function and loop.
-pub(crate) fn run_block<'v>(eval: &mut Evaluator<'v, '_>, mut ip: BcPtrAddr) -> RunBlockResult<'v> {
+pub(crate) fn run_block<'v, EC: EvaluationCallbacks>(
+    eval: &mut Evaluator<'v, '_>,
+    ec: &mut EC,
+    mut ip: BcPtrAddr,
+) -> Result<Value<'v>, EvalException> {
     // Copy frame pointer to local variable to generate more efficient code.
     let frame = eval.current_frame;
 
@@ -168,14 +159,10 @@ pub(crate) fn run_block<'v>(eval: &mut Evaluator<'v, '_>, mut ip: BcPtrAddr) -> 
         //
         // We do inline always only in release mode because otherwise
         // generated stack frame is too large which leads to C stack overflow in debug more.
-        ip = match step(eval, frame, ip) {
+        ip = match step(eval, ec, frame, ip) {
             InstrControl::Next(ip) => ip,
-            InstrControl::Return(v) => return RunBlockResult::Return(v),
-            InstrControl::LoopContinue => return RunBlockResult::Continue,
-            InstrControl::LoopBreak => return RunBlockResult::Break,
-            InstrControl::Err(e) => {
-                return RunBlockResult::Err(Bc::wrap_error_for_instr_ptr(ip, e, eval));
-            }
+            InstrControl::Return(v) => return Ok(v),
+            InstrControl::Err(e) => return Err(Bc::wrap_error_for_instr_ptr(ip, e, eval)),
         }
     }
 }

@@ -22,12 +22,14 @@ use derive_more::Display;
 use dupe::Dupe;
 use serde::Serialize;
 use serde::Serializer;
+use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
+use crate::starlark_type;
 use crate::values::basic::StarlarkValueBasic;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;

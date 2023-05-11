@@ -15,13 +15,16 @@
  * limitations under the License.
  */
 
-use gazebo::prelude::*;
 use proc_macro2::Ident;
 use proc_macro2::TokenStream;
 use quote::format_ident;
+use quote::quote;
 use quote::quote_spanned;
 use syn::spanned::Spanned;
 use syn::Attribute;
+use syn::Expr;
+use syn::ExprLit;
+use syn::Lit;
 use syn::Type;
 
 use crate::module::render::render_starlark_return_type;
@@ -130,9 +133,9 @@ impl StarFun {
         Vec<TokenStream>,
     ) {
         let Bindings { prepare, bindings } = render_binding(self);
-        let binding_params: Vec<_> = bindings.map(|b| b.render_param());
-        let binding_param_types: Vec<_> = bindings.map(|b| b.render_param_type());
-        let binding_args: Vec<_> = bindings.map(|b| b.render_arg());
+        let binding_params: Vec<_> = bindings.iter().map(|b| b.render_param()).collect();
+        let binding_param_types: Vec<_> = bindings.iter().map(|b| b.render_param_type()).collect();
+        let binding_args: Vec<_> = bindings.iter().map(|b| b.render_arg()).collect();
         (binding_params, binding_param_types, prepare, binding_args)
     }
 
@@ -155,7 +158,7 @@ impl StarFun {
     /// Fields and field initializers for the struct implementing the trait.
     fn struct_fields(&self) -> syn::Result<(TokenStream, TokenStream)> {
         let signature = if let StarFunSource::Signature { .. } = self.source {
-            Some(render_signature(self)?)
+            Some(render_signature(self, Purpose::Parsing)?)
         } else {
             None
         };
@@ -360,7 +363,7 @@ fn render_binding(x: &StarFun) -> Bindings {
             }
         }
         StarFunSource::Signature { count } => {
-            let bind_args: Vec<BindingArg> = x.args.map(render_binding_arg);
+            let bind_args: Vec<BindingArg> = x.args.iter().map(render_binding_arg).collect();
             Bindings {
                 prepare: quote_spanned! { span=>
                     let __args: [_; #count] = self.signature.collect_into(parameters, eval.heap())?;
@@ -369,7 +372,7 @@ fn render_binding(x: &StarFun) -> Bindings {
             }
         }
         StarFunSource::Positional { required, optional } => {
-            let bind_args = x.args.map(render_binding_arg);
+            let bind_args = x.args.iter().map(render_binding_arg).collect();
             if optional == 0 {
                 Bindings {
                     prepare: quote_spanned! {
@@ -481,13 +484,19 @@ fn render_binding_arg(arg: &StarArg) -> BindingArg {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum Purpose {
+    Documentation,
+    Parsing,
+}
+
 // Given the arguments, create a variable `signature` with a `ParametersSpec` object.
 // Or return None if you don't need a signature
-fn render_signature(x: &StarFun) -> syn::Result<TokenStream> {
+fn render_signature(x: &StarFun, purpose: Purpose) -> syn::Result<TokenStream> {
     let span = x.args_span();
     let name_str = ident_string(&x.name);
     let signature_var = format_ident!("__signature");
-    let sig_args = render_signature_args(&x.args, &signature_var)?;
+    let sig_args = render_signature_args(&x.args, &signature_var, purpose)?;
     Ok(quote_spanned! {
         span=> {
             #[allow(unused_mut)]
@@ -509,7 +518,7 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
         StarFunSource::Arguments | StarFunSource::ThisArguments => false,
     };
     let documentation_signature = if need_render_signature {
-        render_signature(x)?
+        render_signature(x, Purpose::Documentation)?
     } else {
         // An Arguments can take anything, so give the most generic documentation signature
         quote_spanned! {
@@ -537,8 +546,8 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
         .enumerate()
         .filter(|(_, a)| a.pass_style != StarArgPassStyle::Args) // these aren't coerced according to their type (Vec vs tuple)
         .map(|(i, arg)| {
-            let typ_str = render_starlark_type(span, &arg.ty, &arg.starlark_type);
-            quote_spanned!(span=> (#i, starlark::docs::Type { raw_type: #typ_str }) )
+            let typ_str = render_starlark_type(span, arg.without_option(), &arg.starlark_type);
+            quote_spanned!(span=> (#i, starlark::docs::DocType { raw_type: #typ_str }) )
         })
         .collect();
 
@@ -549,7 +558,7 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
             let signature = #documentation_signature;
             let parameter_types = std::collections::HashMap::from([#(#parameter_types),*]);
             let return_type = Some(
-                starlark::docs::Type {
+                starlark::docs::DocType {
                     raw_type: #return_type_str
                 }
             );
@@ -564,7 +573,11 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
     Ok((var_name, documentation))
 }
 
-fn render_signature_args(args: &[StarArg], signature_var: &Ident) -> syn::Result<TokenStream> {
+fn render_signature_args(
+    args: &[StarArg],
+    signature_var: &Ident,
+    purpose: Purpose,
+) -> syn::Result<TokenStream> {
     #[derive(PartialEq, Eq, PartialOrd, Ord)]
     enum CurrentParamStyle {
         PosOnly,
@@ -628,13 +641,17 @@ fn render_signature_args(args: &[StarArg], signature_var: &Ident) -> syn::Result
                 ));
             }
         }
-        sig_args.extend(render_signature_arg(arg, signature_var)?);
+        sig_args.extend(render_signature_arg(arg, signature_var, purpose)?);
     }
     Ok(sig_args)
 }
 
 // Generate a statement that modifies signature to add a new argument in.
-fn render_signature_arg(arg: &StarArg, signature_var: &Ident) -> syn::Result<TokenStream> {
+fn render_signature_arg(
+    arg: &StarArg,
+    signature_var: &Ident,
+    purpose: Purpose,
+) -> syn::Result<TokenStream> {
     let span = arg.span;
 
     let name_str = ident_string(&arg.name);
@@ -657,6 +674,14 @@ fn render_signature_arg(arg: &StarArg, signature_var: &Ident) -> syn::Result<Tok
             Ok(quote_spanned! { span=>
                 #signature_var.defaulted(#name_str, globals_builder.alloc(#default));
             })
+        } else if purpose == Purpose::Documentation
+            && render_default_as_frozen_value(default).is_some()
+        {
+            // We want the repr of the default arugment to show up, so pass it along
+            let frozen = render_default_as_frozen_value(default).unwrap();
+            Ok(quote_spanned! { span=>
+                #signature_var.defaulted(#name_str, #frozen);
+            })
         } else {
             Ok(quote_spanned! { span=>
                 #signature_var.optional(#name_str);
@@ -666,5 +691,34 @@ fn render_signature_arg(arg: &StarArg, signature_var: &Ident) -> syn::Result<Tok
         Ok(quote_spanned! { span=>
             #signature_var.required(#name_str);
         })
+    }
+}
+
+/// We have an argument that the user wants to use as a default.
+/// That _might_ have a valid `FrozenValue` representation, if so, it would be great to use for documentation.
+/// Try and synthesise it if we can.
+fn render_default_as_frozen_value(default: &Expr) -> Option<TokenStream> {
+    let x = quote!(#default).to_string();
+    if let Ok(x) = x.trim_end_matches("i32").parse::<i32>() {
+        Some(quote! { starlark::values::FrozenValue::new_int(#x) })
+    } else if let Ok(x) = x.parse::<bool>() {
+        Some(quote! { starlark::values::FrozenValue::new_bool(#x) })
+    } else if x == "NoneOr :: None" {
+        Some(quote! { starlark::values::FrozenValue::new_none() })
+    } else if matches!(
+        default,
+        Expr::Lit(ExprLit {
+            lit: Lit::Str(_),
+            ..
+        })
+    ) {
+        // Make sure we don't splice in `x` again, or we double quote the string
+        Some(quote! { globals_builder.alloc(#default) })
+    } else if x == "Vec :: new()" {
+        Some(quote! { globals_builder.alloc(starlark::values::list::AllocList::EMPTY) })
+    } else if x == "SmallMap :: new()" {
+        Some(quote! { globals_builder.alloc(starlark::values::dict::AllocDict::EMPTY) })
+    } else {
+        None
     }
 }

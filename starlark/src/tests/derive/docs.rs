@@ -17,21 +17,29 @@
 
 use allocative::Allocative;
 use derive_more::Display;
+use maplit::hashmap;
 use serde::Serialize;
 use serde::Serializer;
+use starlark_derive::starlark_module;
+use starlark_derive::Freeze;
+use starlark_derive::NoSerialize;
 use starlark_derive::StarlarkDocs;
+use starlark_derive::Trace;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::Coerce;
 use crate::docs::get_registered_starlark_docs;
 use crate::docs::DocItem;
+use crate::docs::DocMember;
 use crate::docs::DocString;
 use crate::docs::DocStringKind;
-use crate::docs::Member;
 use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
+use crate::starlark_complex_value;
+use crate::starlark_simple_value;
+use crate::starlark_type;
 use crate::values::StarlarkValue;
 use crate::values::ValueLike;
 
@@ -132,7 +140,7 @@ fn test_derive_docs() {
         obj.members
             .iter()
             .find_map(|(name, m)| match m {
-                Member::Property(p) if name == "foo" => Some(p.docs.clone()),
+                DocMember::Property(p) if name == "foo" => Some(p.docs.clone()),
                 _ => None,
             })
             .unwrap()
@@ -161,7 +169,7 @@ fn test_derive_docs_on_complex_values() {
             .members
             .iter()
             .find_map(|(name, m)| match m {
-                Member::Property(p) if name == "foo" => Some(p.docs.clone()),
+                DocMember::Property(p) if name == "foo" => Some(p.docs.clone()),
                 _ => None,
             })
             .unwrap()

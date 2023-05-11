@@ -18,10 +18,7 @@
 use crate::eval::bc::bytecode::Bc;
 use crate::eval::bc::compiler::if_compiler::write_if_else;
 use crate::eval::bc::compiler::if_compiler::write_if_then;
-use crate::eval::bc::instr_impl::InstrBeforeStmt;
-use crate::eval::bc::instr_impl::InstrBreak;
 use crate::eval::bc::instr_impl::InstrCheckType;
-use crate::eval::bc::instr_impl::InstrContinue;
 use crate::eval::bc::instr_impl::InstrPossibleGc;
 use crate::eval::bc::instr_impl::InstrReturn;
 use crate::eval::bc::instr_impl::InstrReturnCheckType;
@@ -137,12 +134,7 @@ impl StmtCompiled {
 
 impl IrSpanned<StmtCompiled> {
     fn write_bc(&self, compiler: &StmtCompileContext, bc: &mut BcWriter) {
-        if compiler.has_before_stmt {
-            match self.node {
-                StmtCompiled::PossibleGc => {}
-                _ => bc.write_instr::<InstrBeforeStmt>(self.span, self.span),
-            }
-        }
+        bc.mark_before_stmt(self.span);
         self.write_bc_inner(compiler, bc);
         self.mark_definitely_assigned_after(bc);
     }
@@ -190,13 +182,13 @@ impl IrSpanned<StmtCompiled> {
         }
     }
 
-    #[allow(clippy::collapsible_else_if)]
     fn write_return(
         span: FrameSpan,
         expr: &IrSpanned<ExprCompiled>,
         compiler: &StmtCompileContext,
         bc: &mut BcWriter,
     ) {
+        bc.write_iter_stop(span);
         if compiler.has_return_type {
             expr.write_bc_cb(bc, |slot, bc| {
                 bc.write_instr::<InstrReturnCheckType>(span, slot);
@@ -256,10 +248,10 @@ impl IrSpanned<StmtCompiled> {
                 write_for(over, assign, span, bc, |bc| body.write_bc(compiler, bc));
             }
             StmtCompiled::Break => {
-                bc.write_instr::<InstrBreak>(span, ());
+                bc.write_break(span);
             }
             StmtCompiled::Continue => {
-                bc.write_instr::<InstrContinue>(span, ());
+                bc.write_continue(span);
             }
         }
     }
@@ -274,7 +266,6 @@ impl StmtsCompiled {
         heap: &FrozenHeap,
     ) -> Bc {
         let mut bc = BcWriter::new(
-            compiler.bc_profile,
             compiler.record_call_enter_exit,
             local_names,
             param_count,

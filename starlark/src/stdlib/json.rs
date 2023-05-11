@@ -17,13 +17,14 @@
 
 use std::str::FromStr;
 
-use gazebo::prelude::*;
 use num_bigint::BigInt;
+use starlark_derive::starlark_module;
 use thiserror::Error;
 
 use crate as starlark;
 use crate::collections::SmallMap;
 use crate::environment::GlobalsBuilder;
+use crate::slice_vec_ext::VecExt;
 use crate::values::dict::Dict;
 use crate::values::list::AllocList;
 use crate::values::types::bigint::StarlarkBigInt;

@@ -31,18 +31,20 @@ use std::hash::Hasher;
 use std::ptr;
 
 use allocative::Allocative;
-use gazebo::cast;
 use num_bigint::BigInt;
 use num_traits::Signed;
 use serde::Serialize;
 use serde::Serializer;
+use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
 use crate::any::AnyLifetime;
 use crate::any::ProvidesStaticType;
+use crate::cast;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
+use crate::starlark_type;
 use crate::values::basic::StarlarkValueBasic;
 use crate::values::error::ValueError;
 use crate::values::float::StarlarkFloat;
@@ -356,7 +358,6 @@ impl<'v> StarlarkValue<'v> for PointerI32 {
         }
     }
 
-    #[allow(clippy::collapsible_else_if)]
     fn right_shift(&self, other: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_num() {
             None | Some(Num::Float(_)) => ValueError::unsupported_with(self, ">>", other),

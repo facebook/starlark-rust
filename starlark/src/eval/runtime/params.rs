@@ -23,6 +23,8 @@ use std::collections::HashMap;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use starlark_derive::Freeze;
+use starlark_derive::Trace;
 use starlark_map::small_map::SmallMap;
 use starlark_map::Hashed;
 
@@ -30,8 +32,9 @@ use crate as starlark;
 use crate::coerce::coerce;
 use crate::coerce::Coerce;
 use crate::collections::symbol_map::SymbolMap;
-use crate::docs;
+use crate::docs::DocParam;
 use crate::docs::DocString;
+use crate::docs::DocType;
 use crate::eval::runtime::arguments::ArgSymbol;
 use crate::eval::runtime::arguments::ArgumentsImpl;
 use crate::eval::runtime::arguments::FunctionError;
@@ -489,18 +492,17 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
         // Next up are the *args parameters
         if let Some(param_args) = args.args() {
-            param_args
-                .with_iterator(heap, |it| {
-                    for v in it {
-                        if next_position < (self.positional as usize) {
-                            slots[next_position].set(Some(v));
-                            next_position += 1;
-                        } else {
-                            star_args.push(v);
-                        }
-                    }
-                })
-                .map_err(|_| FunctionError::ArgsArrayIsNotIterable)?;
+            for v in param_args
+                .iterate(heap)
+                .map_err(|_| FunctionError::ArgsArrayIsNotIterable)?
+            {
+                if next_position < (self.positional as usize) {
+                    slots[next_position].set(Some(v));
+                    next_position += 1;
+                } else {
+                    star_args.push(v);
+                }
+            }
         }
 
         // Check if the named arguments clashed with the positional arguments
@@ -576,7 +578,7 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
 
         // Now set the kwargs/args slots, if they are requested, and fail it they are absent but used
         // Note that we deliberately give warnings about missing parameters _before_ giving warnings
-        // about unexpected extra parameters, so if a user mis-spells an argument they get a better error.
+        // about unexpected extra parameters, so if a user misspells an argument they get a better error.
         if let Some(args_pos) = self.args {
             slots[args_pos as usize].set(Some(heap.alloc_tuple(&star_args)));
         } else if unlikely(!star_args.is_empty()) {
@@ -654,10 +656,10 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
     ///                    that parameter
     pub fn documentation(
         &self,
-        mut parameter_types: HashMap<usize, docs::Type>,
+        mut parameter_types: HashMap<usize, DocType>,
         mut parameter_docs: HashMap<String, Option<DocString>>,
-    ) -> Vec<docs::Param> {
-        let mut params: Vec<docs::Param> = self
+    ) -> Vec<DocParam> {
+        let mut params: Vec<DocParam> = self
             .iter_params()
             .enumerate()
             .map(|(i, (name, kind))| {
@@ -665,33 +667,33 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
                 let docs = parameter_docs.remove(name).flatten();
                 let name = name.to_owned();
                 match kind {
-                    ParameterKind::Required => docs::Param::Arg {
+                    ParameterKind::Required => DocParam::Arg {
                         name,
                         docs,
                         typ,
                         default_value: None,
                     },
-                    ParameterKind::Optional => docs::Param::Arg {
+                    ParameterKind::Optional => DocParam::Arg {
                         name,
                         docs,
                         typ,
-                        default_value: Some("None".to_owned()),
+                        default_value: Some("_".to_owned()),
                     },
-                    ParameterKind::Defaulted(v) => docs::Param::Arg {
+                    ParameterKind::Defaulted(v) => DocParam::Arg {
                         name,
                         docs,
                         typ,
                         default_value: Some(v.to_value().to_repr()),
                     },
-                    ParameterKind::Args => docs::Param::Args { name, docs, typ },
-                    ParameterKind::KWargs => docs::Param::Kwargs { name, docs, typ },
+                    ParameterKind::Args => DocParam::Args { name, docs, typ },
+                    ParameterKind::KWargs => DocParam::Kwargs { name, docs, typ },
                 }
             })
             .collect();
 
         // Go back and add the "*" arg if it's present
         if let Some(i) = self.no_args_param_index() {
-            params.insert(i, docs::Param::NoArgs);
+            params.insert(i, DocParam::NoArgs);
         }
 
         params
@@ -754,7 +756,7 @@ impl<'v, 'a> ParametersParser<'v, 'a> {
     pub fn next<T: UnpackValue<'v>>(&mut self, name: &str) -> anyhow::Result<T> {
         // After ParametersCollect.done() all variables will be Some,
         // apart from those where we called ParametersSpec.optional(),
-        // and for those we chould call next_opt()
+        // and for those we should call next_opt()
 
         // This is definitely not unassigned because ParametersCollect.done checked
         // that.
@@ -768,7 +770,10 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::assert::Assert;
+    use crate::docs::DocParam;
     use crate::docs::DocString;
+    use crate::docs::DocStringKind;
+    use crate::docs::DocType;
     use crate::eval::compiler::def::FrozenDef;
     use crate::eval::runtime::params::ParameterKind;
     use crate::eval::ParametersSpec;
@@ -839,32 +844,31 @@ mod tests {
         p.optional("b");
         let p = p.finish();
 
-        use crate::docs;
         let expected = vec![
-            docs::Param::Args {
+            DocParam::Args {
                 name: "*args".to_owned(),
                 docs: None,
                 typ: None,
             },
-            docs::Param::Arg {
+            DocParam::Arg {
                 name: "a".to_owned(),
                 docs: None,
-                typ: Some(docs::Type {
+                typ: Some(DocType {
                     raw_type: "int".to_owned(),
                 }),
-                default_value: Some("None".to_owned()),
+                default_value: Some("_".to_owned()),
             },
-            docs::Param::Arg {
+            DocParam::Arg {
                 name: "b".to_owned(),
-                docs: DocString::from_docstring(docs::DocStringKind::Rust, "param b docs"),
+                docs: DocString::from_docstring(DocStringKind::Rust, "param b docs"),
                 typ: None,
-                default_value: Some("None".to_owned()),
+                default_value: Some("_".to_owned()),
             },
         ];
         let mut types = HashMap::new();
         types.insert(
             1,
-            docs::Type {
+            DocType {
                 raw_type: "int".to_owned(),
             },
         );
@@ -872,7 +876,7 @@ mod tests {
         docs.insert("a".to_owned(), None);
         docs.insert(
             "b".to_owned(),
-            DocString::from_docstring(docs::DocStringKind::Rust, "param b docs"),
+            DocString::from_docstring(DocStringKind::Rust, "param b docs"),
         );
 
         let params = p.documentation(types, docs);

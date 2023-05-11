@@ -17,7 +17,6 @@
 
 use std::collections::HashMap;
 
-use gazebo::variants::VariantName;
 use num_bigint::BigInt;
 use thiserror::Error;
 
@@ -28,20 +27,31 @@ use crate::codemap::FileSpan;
 use crate::codemap::Span;
 use crate::syntax::ast::AstExpr;
 use crate::syntax::ast::AstLiteral;
+use crate::syntax::ast::AstStmt;
 use crate::syntax::ast::Expr;
+use crate::syntax::ast::Stmt;
 use crate::syntax::lexer::TokenInt;
 use crate::syntax::AstModule;
 use crate::values::num::Num;
 
-#[derive(Error, Debug, VariantName)]
+#[derive(Error, Debug)]
 pub(crate) enum Dubious {
     #[error("Duplicate dictionary key `{0}`, also used at {1}")]
     DuplicateKey(String, FileSpan),
+    #[error("Variable `{0}` will either do nothing or fail if uninitialised")]
+    IdentifierAsStatement(String),
 }
 
 impl LintWarning for Dubious {
     fn is_serious(&self) -> bool {
         true
+    }
+
+    fn short_name(&self) -> &'static str {
+        match self {
+            Dubious::DuplicateKey(..) => "duplicate-key",
+            Dubious::IdentifierAsStatement(..) => "ident-as-statement",
+        }
     }
 }
 
@@ -110,17 +120,35 @@ fn duplicate_dictionary_key(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
         .visit_expr(|x| expr(x, &module.codemap, res))
 }
 
+fn identifier_as_statement(module: &AstModule, res: &mut Vec<LintT<Dubious>>) {
+    fn stmt<'a>(x: &'a AstStmt, codemap: &CodeMap, res: &mut Vec<LintT<Dubious>>) {
+        match &**x {
+            Stmt::Expression(x) => match &**x {
+                Expr::Identifier(x, _) => res.push(LintT::new(
+                    codemap,
+                    x.span,
+                    Dubious::IdentifierAsStatement(x.node.clone()),
+                )),
+                _ => {}
+            },
+            _ => x.visit_stmt(|x| stmt(x, codemap, res)),
+        }
+    }
+
+    stmt(&module.statement, &module.codemap, res)
+}
+
 pub(crate) fn lint(module: &AstModule) -> Vec<LintT<Dubious>> {
     let mut res = Vec::new();
     duplicate_dictionary_key(module, &mut res);
+    identifier_as_statement(module, &mut res);
     res
 }
 
 #[cfg(test)]
 mod tests {
-    use gazebo::prelude::*;
-
     use super::*;
+    use crate::slice_vec_ext::SliceExt;
     use crate::syntax::Dialect;
 
     fn module(x: &str) -> AstModule {
@@ -131,6 +159,7 @@ mod tests {
         fn about(&self) -> &String {
             match self {
                 Dubious::DuplicateKey(x, _) => x,
+                Dubious::IdentifierAsStatement(x) => x,
             }
         }
     }
@@ -160,5 +189,20 @@ mod tests {
                 "\"no1\"", "42", "\"no2\"", "123", "0.25", "no3", "no3", "no4"
             ]
         );
+    }
+
+    #[test]
+    fn test_lint_identifier_as_statement() {
+        let m = module(
+            r#"
+no1
+def foo():
+    f(yes)
+    no2
+"#,
+        );
+        let mut res = Vec::new();
+        identifier_as_statement(&m, &mut res);
+        assert_eq!(res.map(|x| x.problem.about()), &["no1", "no2"]);
     }
 }

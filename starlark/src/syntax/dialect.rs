@@ -68,9 +68,6 @@ pub struct Dialect {
     /// Are expressions allowed in type positions as per [PEP 484](https://www.python.org/dev/peps/pep-0484/).
     /// Only enabled in [`Extended`](Dialect::Extended).
     pub enable_types: DialectTypes,
-    /// Are tabs permitted for indentation. If permitted, tabs are equivalent to 8 spaces.
-    /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended).
-    pub enable_tabs: bool,
     /// Do `load()` statements reexport their definition.
     /// Enabled in both [`Standard`](Dialect::Standard) and [`Extended`](Dialect::Extended),
     /// but may change in future definitions of the standard.
@@ -78,6 +75,16 @@ pub struct Dialect {
     /// Are `for`, `if` and other statements allowed at the top level.
     /// Only enabled in [`Extended`](Dialect::Extended).
     pub enable_top_level_stmt: bool,
+    /// Like `#[non_exhaustive]`, but allows struct expression.
+    ///
+    /// [Explanation](https://github.com/rust-lang/rust-clippy/issues/6559).
+    pub _non_exhaustive: (),
+}
+
+impl Default for Dialect {
+    fn default() -> Dialect {
+        Dialect::Standard
+    }
 }
 
 // These are morally enumerations, so give them enumeration-like names
@@ -85,15 +92,17 @@ pub struct Dialect {
 #[allow(non_upper_case_globals)]
 impl Dialect {
     /// Follow the [Starlark language standard](https://github.com/bazelbuild/starlark/blob/master/spec.md) as much as possible.
+    ///
+    /// This is also returned by [`Dialect::default()`](Dialect::default).
     pub const Standard: Self = Self {
         enable_def: true,
         enable_lambda: true,
         enable_load: true,
         enable_keyword_only_arguments: false,
         enable_types: DialectTypes::Disable,
-        enable_tabs: true,
         enable_load_reexport: true, // But they plan to change it
         enable_top_level_stmt: false,
+        _non_exhaustive: (),
     };
 
     /// A superset of [`Standard`](Dialect::Standard), including extra features (types, top-level statements etc).
@@ -103,9 +112,9 @@ impl Dialect {
         enable_load: true,
         enable_keyword_only_arguments: true,
         enable_types: DialectTypes::Enable,
-        enable_tabs: true,
         enable_load_reexport: true,
         enable_top_level_stmt: true,
+        _non_exhaustive: (),
     };
 }
 

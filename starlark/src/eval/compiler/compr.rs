@@ -17,7 +17,7 @@
 
 //! List/dict/set comprenension evaluation.
 
-use gazebo::prelude::*;
+use starlark_derive::VisitSpanMut;
 
 use crate::eval::compiler::expr::ExprCompiled;
 use crate::eval::compiler::expr_bool::ExprCompiledBool;
@@ -28,6 +28,7 @@ use crate::eval::compiler::scope::CstPayload;
 use crate::eval::compiler::span::IrSpanned;
 use crate::eval::compiler::stmt::AssignCompiledValue;
 use crate::eval::compiler::Compiler;
+use crate::slice_vec_ext::SliceExt;
 use crate::syntax::ast::ClauseP;
 use crate::syntax::ast::ForClauseP;
 

@@ -19,7 +19,9 @@ use std::cell::RefCell;
 use std::fmt::Write;
 
 use allocative::Allocative;
+use anyhow::Context;
 use derive_more::Display;
+use starlark_derive::starlark_module;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -31,8 +33,11 @@ use crate::environment::GlobalsBuilder;
 use crate::environment::Module;
 use crate::errors::Diagnostic;
 use crate::eval::Evaluator;
+use crate::starlark_simple_value;
+use crate::starlark_type;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
+use crate::values::none::NoneType;
 use crate::values::Freeze;
 use crate::values::Freezer;
 use crate::values::Heap;
@@ -79,19 +84,9 @@ def foo(x):
 
 #[test]
 fn test_tabs_fail() {
-    let mut a = Assert::new();
-    a.dialect_set(|d| d.enable_tabs = false);
+    let a = Assert::new();
     a.fail("def f():\n\tpass", "Parse error");
     a.fail("def f():\n x\t=3", "Parse error");
-}
-
-#[test]
-fn test_tabs_pass() {
-    assert::pass("def f():\n '\t'");
-    let mut a = Assert::new();
-    a.dialect(&Dialect::Standard);
-    a.pass("def f():\n\tpass");
-    a.pass("def f():\n x\t=3");
 }
 
 #[test]
@@ -405,6 +400,111 @@ assert_eq(names[str], "str")
 }
 
 #[test]
+// Tests diagnostics error display.
+//
+// > EYEBALL=1 cargo test -p starlark diagnostics_display -- --nocapture
+fn test_diagnostics_display() {
+    fn fail1() -> anyhow::Result<()> {
+        Err(anyhow::anyhow!("fail 1"))
+    }
+
+    fn fail2() -> anyhow::Result<()> {
+        fail1().context("fail 2")
+    }
+
+    fn fail3() -> anyhow::Result<()> {
+        fail2().context("fail 3")
+    }
+
+    #[starlark_module]
+    fn module(builder: &mut GlobalsBuilder) {
+        fn rust_failure() -> anyhow::Result<NoneType> {
+            fail3().context("rust failure")?;
+            Ok(NoneType)
+        }
+    }
+
+    let display = std::env::var("EYEBALL") == Ok("1".to_owned());
+    let mut a = Assert::new();
+    a.globals_add(module);
+
+    a.module(
+        "imported",
+        r#"
+# blank lines to make line numbers bigger and more obvious
+#
+#
+#
+#
+x = []
+def should_fail():
+    rust_failure()"#,
+    );
+
+    let err = a.fail(
+        r#"
+load('imported', 'should_fail')
+should_fail()"#,
+        "rust failure",
+    );
+
+    if display {
+        Diagnostic::eprint(&err);
+    }
+
+    let diag = err.downcast::<Diagnostic>().unwrap();
+
+    // Checking using `contains()` because `RUST_BACKTRACE` is set to `full` for CI, and we
+    // only want to validate that the `Caused by` is printed out here.
+    assert!(format!("\n{}", diag).contains(
+        r#"
+Traceback (most recent call last):
+  * assert.bzl:3, in <module>
+      should_fail()
+  * imported.bzl:9, in should_fail
+      rust_failure()
+error: rust failure
+ --> imported.bzl:9:5
+  |
+9 |     rust_failure()
+  |     ^^^^^^^^^^^^^^
+  |
+
+
+rust failure
+
+Caused by:
+    0: fail 3
+    1: fail 2
+    2: fail 1
+"#
+    ));
+    assert!(format!("\n{:#}", diag).contains(
+        r#"
+Traceback (most recent call last):
+  * assert.bzl:3, in <module>
+      should_fail()
+  * imported.bzl:9, in should_fail
+      rust_failure()
+error: rust failure
+ --> imported.bzl:9:5
+  |
+9 |     rust_failure()
+  |     ^^^^^^^^^^^^^^
+  |
+
+
+rust failure
+
+Caused by:
+    0: fail 3
+    1: fail 2
+    2: fail 1
+"#
+    ));
+}
+
+#[test]
 // Check that errors print out "nicely" - can be used to view it.
 // First set `display` to `true` then run:
 //
@@ -512,34 +612,40 @@ fn test_module_visibility_preserved_by_evaluator() -> anyhow::Result<()> {
         Value::new_int(2),
     );
 
-    let mut eval = Evaluator::new(&import);
-    let ast = AstModule::parse("prelude.bzl", "c = 3".to_owned(), &Dialect::Standard).unwrap();
-    // This mutates the original module named `import`
-    let _: Value = eval.eval_module(ast, &globals)?;
+    {
+        let mut eval = Evaluator::new(&import);
+        let ast = AstModule::parse("prelude.bzl", "c = 3".to_owned(), &Dialect::Standard).unwrap();
+        // This mutates the original module named `import`
+        let _: Value = eval.eval_module(ast, &globals)?;
+    }
     let frozen_import = import.freeze()?;
 
     let m_uses_public = Module::new();
     m_uses_public.import_public_symbols(&frozen_import);
-    let mut eval = Evaluator::new(&m_uses_public);
-    let ast = AstModule::parse("code.bzl", "d = a".to_owned(), &Dialect::Standard).unwrap();
-    let _: Value = eval.eval_module(ast, &globals)?;
+    {
+        let mut eval = Evaluator::new(&m_uses_public);
+        let ast = AstModule::parse("code.bzl", "d = a".to_owned(), &Dialect::Standard).unwrap();
+        let _: Value = eval.eval_module(ast, &globals)?;
+    }
 
     let m_uses_private = Module::new();
     m_uses_private.import_public_symbols(&frozen_import);
-    let mut eval = Evaluator::new(&m_uses_private);
-    let ast = AstModule::parse("code.bzl", "d = b".to_owned(), &Dialect::Standard).unwrap();
-    let err = eval
-        .eval_module(ast, &globals)
-        .expect_err("Evaluation should have failed using a private symbol");
+    {
+        let mut eval = Evaluator::new(&m_uses_private);
+        let ast = AstModule::parse("code.bzl", "d = b".to_owned(), &Dialect::Standard).unwrap();
+        let err = eval
+            .eval_module(ast, &globals)
+            .expect_err("Evaluation should have failed using a private symbol");
 
-    let msg = err.to_string();
-    let expected_msg = "Variable `b` not found";
-    assert!(
-        msg.contains(expected_msg),
-        "Expected `{}` to be in error message `{}`",
-        expected_msg,
-        msg
-    );
+        let msg = err.to_string();
+        let expected_msg = "Variable `b` not found";
+        assert!(
+            msg.contains(expected_msg),
+            "Expected `{}` to be in error message `{}`",
+            expected_msg,
+            msg
+        );
+    }
 
     Ok(())
 }

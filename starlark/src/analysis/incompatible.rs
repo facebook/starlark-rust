@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use gazebo::variants::VariantName;
+use maplit::hashmap;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 
@@ -37,7 +37,7 @@ use crate::syntax::ast::Expr;
 use crate::syntax::ast::Stmt;
 use crate::syntax::AstModule;
 
-#[derive(Error, Debug, VariantName)]
+#[derive(Error, Debug)]
 pub(crate) enum Incompatibility {
     #[error("Type check `{0}` should be written `{1}`")]
     IncompatibleTypeCheck(String, String),
@@ -48,6 +48,13 @@ pub(crate) enum Incompatibility {
 impl LintWarning for Incompatibility {
     fn is_serious(&self) -> bool {
         true
+    }
+
+    fn short_name(&self) -> &'static str {
+        match self {
+            Incompatibility::IncompatibleTypeCheck(..) => "incompatible-type-check",
+            Incompatibility::DuplicateTopLevelAssign(..) => "duplicate-top-level-assign",
+        }
     }
 }
 
@@ -198,9 +205,8 @@ pub(crate) fn lint(module: &AstModule) -> Vec<LintT<Incompatibility>> {
 
 #[cfg(test)]
 mod tests {
-    use gazebo::prelude::*;
-
     use super::*;
+    use crate::slice_vec_ext::SliceExt;
     use crate::syntax::Dialect;
 
     fn module(x: &str) -> AstModule {

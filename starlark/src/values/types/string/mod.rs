@@ -35,6 +35,7 @@ use std::sync::atomic;
 use allocative::Allocative;
 use dupe::Dupe;
 use serde::Serialize;
+use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -45,6 +46,7 @@ use crate::collections::StarlarkHasher;
 use crate::environment::Methods;
 use crate::environment::MethodsStatic;
 use crate::private::Private;
+use crate::starlark_type;
 use crate::values::index::apply_slice;
 use crate::values::string::repr::string_repr;
 use crate::values::types::none::NoneOr;
@@ -56,6 +58,7 @@ use crate::values::Value;
 use crate::values::ValueError;
 
 mod alloc_unpack;
+pub(crate) mod dot_format;
 pub(crate) mod fast_string;
 pub(crate) mod intern;
 pub(crate) mod interpolation;

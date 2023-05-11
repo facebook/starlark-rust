@@ -13,14 +13,14 @@
 //!
 //! ```
 //! use std::fmt;
-//! use gazebo::display::*;
+//! use display_container::*;
 //!
 //! struct MyItems(Vec<(String, i32)>);
 //!
 //! impl fmt::Display for MyItems {
 //!     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//!         display_container(f, "{", "}",
-//!             display_chain(
+//!         fmt_container(f, "{", "}",
+//!             iter_display_chain(
 //!                 &["magic"],
 //!                 self.0.iter().map(|(k, v)| display_pair(k, "=", v))
 //!             )
@@ -60,14 +60,14 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Write;
 
-use crate::indenter;
+use either::Either;
 
 const INDENT: &str = "  ";
 
 /// Used to indent a displayed item for alternate display. This helps us pretty-print deep data structures.
 fn subwriter<T: Display>(indent: &'static str, f: &mut fmt::Formatter, v: T) -> fmt::Result {
     if f.alternate() {
-        write!(indenter::indented(f, indent), "{:#}", &v)
+        write!(indenter::indented(f).with_str(indent), "{:#}", &v)
     } else {
         Display::fmt(&v, f)
     }
@@ -166,7 +166,7 @@ impl<'a, 'b> ContainerDisplayHelper<'a, 'b> {
 }
 
 /// Helper for display implementation of container-y types (like list, tuple).
-pub fn display_container<T: Display, Iter: IntoIterator<Item = T>>(
+pub fn fmt_container<T: Display, Iter: IntoIterator<Item = T>>(
     f: &mut fmt::Formatter,
     prefix: &str,
     suffix: &str,
@@ -197,15 +197,15 @@ pub fn display_container<T: Display, Iter: IntoIterator<Item = T>>(
 
 /// Helper for display implementation of container-y types (like dict, struct).
 ///
-/// Equivalent to [`display_container`] where the items have [`display_pair`] applied to them.
-pub fn display_keyed_container<K: Display, V: Display, Iter: IntoIterator<Item = (K, V)>>(
+/// Equivalent to [`fmt_container`] where the items have [`display_pair`] applied to them.
+pub fn fmt_keyed_container<K: Display, V: Display, Iter: IntoIterator<Item = (K, V)>>(
     f: &mut fmt::Formatter,
     prefix: &str,
     suffix: &str,
     separator: &str,
     items: Iter,
 ) -> fmt::Result {
-    display_container(
+    fmt_container(
         f,
         prefix,
         suffix,
@@ -215,51 +215,18 @@ pub fn display_keyed_container<K: Display, V: Display, Iter: IntoIterator<Item =
     )
 }
 
-enum Either<A, B> {
-    Left(A),
-    Right(B),
-}
-
-impl<A: Display, B: Display> Display for Either<A, B> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Either::Left(a) => Display::fmt(a, f),
-            Either::Right(b) => Display::fmt(b, f),
-        }
-    }
-}
-
-struct EitherIter<A: Iterator, B: Iterator> {
-    pub(crate) a: Option<A>,
-    pub(crate) b: B,
-}
-
-impl<A: Iterator, B: Iterator> Iterator for EitherIter<A, B> {
-    type Item = Either<A::Item, B::Item>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(a) = &mut self.a {
-            if let Some(v) = a.next() {
-                return Some(Either::Left(v));
-            }
-            self.a = None;
-        }
-        self.b.next().map(Either::Right)
-    }
-}
-
 /// Chain two iterators together that produce `Display` items.
-pub fn display_chain<A, B>(first: A, second: B) -> impl Iterator<Item = impl Display>
+pub fn iter_display_chain<A, B>(first: A, second: B) -> impl Iterator<Item = impl Display>
 where
     A: IntoIterator,
     A::Item: Display,
     B: IntoIterator,
     B::Item: Display,
 {
-    EitherIter {
-        a: Some(first.into_iter()),
-        b: second.into_iter(),
-    }
+    first
+        .into_iter()
+        .map(Either::Left)
+        .chain(second.into_iter().map(Either::Right))
 }
 
 #[cfg(test)]
@@ -273,7 +240,7 @@ mod tests {
         struct Wrapped(Vec<u32>);
         impl fmt::Display for Wrapped {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                display_container(f, "prefix[", "]", self.0.iter())
+                fmt_container(f, "prefix[", "]", self.0.iter())
             }
         }
 
@@ -299,7 +266,7 @@ mod tests {
         struct Wrapped(Vec<(u32, &'static str)>);
         impl fmt::Display for Wrapped {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                display_keyed_container(
+                fmt_keyed_container(
                     f,
                     "prefix[",
                     "]",
@@ -341,11 +308,11 @@ mod tests {
         struct MyItems(Vec<(String, i32)>);
         impl fmt::Display for MyItems {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                display_container(
+                fmt_container(
                     f,
                     "{",
                     "}",
-                    display_chain(
+                    iter_display_chain(
                         &["magic"],
                         self.0.iter().map(|(k, v)| display_pair(k, "=", v)),
                     ),

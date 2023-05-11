@@ -24,15 +24,18 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::mem;
+use std::ops::Deref;
 
 use allocative::Allocative;
-use gazebo::cell::ARef;
-use gazebo::display::display_keyed_container;
+use display_container::fmt_keyed_container;
 use serde::Serialize;
+use starlark_derive::StarlarkDocs;
 use starlark_map::Equivalent;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
+use crate::cast::transmute;
 use crate::coerce::coerce;
 use crate::coerce::Coerce;
 use crate::collections::Hashed;
@@ -40,11 +43,12 @@ use crate::collections::SmallMap;
 use crate::environment::Methods;
 use crate::environment::MethodsStatic;
 use crate::hint::unlikely;
+use crate::starlark_type;
 use crate::values::comparison::equals_small_map;
+use crate::values::dict::refcell::unleak_borrow;
 use crate::values::dict::DictOf;
 use crate::values::dict::DictRef;
 use crate::values::error::ValueError;
-use crate::values::iter::ARefIterator;
 use crate::values::layout::avalue::VALUE_EMPTY_FROZEN_DICT;
 use crate::values::string::hash_string_value;
 use crate::values::type_repr::StarlarkTypeRepr;
@@ -77,13 +81,13 @@ pub(crate) struct DictGen<T>(pub(crate) T);
 
 impl<'v, T: DictLike<'v>> Display for DictGen<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_keyed_container(f, "{", "}", ": ", self.0.content().iter())
+        fmt_keyed_container(f, "{", "}", ": ", self.0.content().iter())
     }
 }
 
 impl<'v> Display for Dict<'v> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        display_keyed_container(f, "{", "}", ": ", self.iter())
+        fmt_keyed_container(f, "{", "}", ": ", self.iter())
     }
 }
 
@@ -299,13 +303,40 @@ impl<'v> Freeze for DictGen<RefCell<Dict<'v>>> {
 }
 
 trait DictLike<'v>: Debug + Allocative {
-    fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>>;
+    type ContentRef<'a>: Deref<Target = SmallMap<Value<'v>, Value<'v>>>
+    where
+        Self: 'a,
+        'v: 'a;
+    fn content<'a>(&'a self) -> Self::ContentRef<'a>;
+    // These functions are unsafe for the same reason
+    // `StarlarkValue` iterator functions are unsafe.
+    unsafe fn iter_start(&self);
+    unsafe fn content_unchecked(&self) -> &SmallMap<Value<'v>, Value<'v>>;
+    unsafe fn iter_stop(&self);
     fn set_at(&self, index: Hashed<Value<'v>>, value: Value<'v>) -> anyhow::Result<()>;
 }
 
 impl<'v> DictLike<'v> for RefCell<Dict<'v>> {
-    fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>> {
-        ARef::new_ref(Ref::map(self.borrow(), |x| &x.content))
+    type ContentRef<'a> = Ref<'a, SmallMap<Value<'v>, Value<'v>>> where Self: 'a, 'v: 'a;
+
+    fn content<'a>(&'a self) -> Ref<'a, SmallMap<Value<'v>, Value<'v>>> {
+        Ref::map(self.borrow(), |x| &x.content)
+    }
+
+    #[inline]
+    unsafe fn iter_start(&self) {
+        mem::forget(self.borrow());
+    }
+
+    #[inline]
+    unsafe fn iter_stop(&self) {
+        unleak_borrow(self);
+    }
+
+    #[inline]
+    unsafe fn content_unchecked(&self) -> &SmallMap<Value<'v>, Value<'v>> {
+        // SAFETY: this function contract is, caller must ensure that the value is borrowed.
+        &self.try_borrow_unguarded().ok().unwrap_unchecked().content
     }
 
     fn set_at(&self, index: Hashed<Value<'v>>, alloc_value: Value<'v>) -> anyhow::Result<()> {
@@ -320,8 +351,18 @@ impl<'v> DictLike<'v> for RefCell<Dict<'v>> {
 }
 
 impl<'v> DictLike<'v> for FrozenDictData {
-    fn content(&self) -> ARef<SmallMap<Value<'v>, Value<'v>>> {
-        ARef::new_ptr(coerce(&self.content))
+    type ContentRef<'a> = &'a SmallMap<Value<'v>, Value<'v>> where Self: 'a, 'v: 'a;
+
+    fn content<'a>(&'a self) -> &'a SmallMap<Value<'v>, Value<'v>> {
+        coerce(&self.content)
+    }
+
+    unsafe fn iter_start(&self) {}
+
+    unsafe fn iter_stop(&self) {}
+
+    unsafe fn content_unchecked(&self) -> &SmallMap<Value<'v>, Value<'v>> {
+        coerce(&self.content)
     }
 
     fn set_at(&self, _index: Hashed<Value<'v>>, _value: Value<'v>) -> anyhow::Result<()> {
@@ -393,24 +434,23 @@ where
             .contains_key_hashed_by_value(other.get_hashed()?))
     }
 
-    fn iterate<'a>(
-        &'a self,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
-    where
-        'v: 'a,
-    {
-        Ok(Box::new(ARefIterator::new(self.0.content(), |x| {
-            x.keys().copied()
-        })))
+    unsafe fn iterate(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        self.0.iter_start();
+        Ok(me)
     }
 
-    fn with_iterator(
-        &self,
-        _heap: &'v Heap,
-        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        f(&mut self.0.content().keys().copied())
+    unsafe fn iter_size_hint(&self, index: usize) -> (usize, Option<usize>) {
+        debug_assert!(index <= self.0.content().len());
+        let rem = self.0.content().len() - index;
+        (rem, Some(rem))
+    }
+
+    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
+        self.0.content_unchecked().keys().nth(index).copied()
+    }
+
+    unsafe fn iter_stop(&self) {
+        self.0.iter_stop();
     }
 
     fn set_at(&self, index: Value<'v>, alloc_value: Value<'v>) -> anyhow::Result<()> {

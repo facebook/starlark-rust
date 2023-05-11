@@ -24,10 +24,12 @@ use std::cell::Cell;
 
 use allocative::Allocative;
 use derive_more::Display;
-use gazebo::prelude::*;
+use starlark_derive::NoSerialize;
+use starlark_derive::Trace;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
+use crate::starlark_type;
 use crate::values::Freeze;
 use crate::values::Freezer;
 use crate::values::FrozenValue;
@@ -74,9 +76,7 @@ impl<'v> Freeze for ValueCaptured<'v> {
     type Frozen = FrozenValueCaptured;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<FrozenValueCaptured> {
-        Ok(FrozenValueCaptured(
-            self.0.get().try_map(|v| freezer.freeze(v))?,
-        ))
+        Ok(FrozenValueCaptured(self.0.get().freeze(freezer)?))
     }
 }
 

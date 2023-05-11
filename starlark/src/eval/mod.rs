@@ -26,8 +26,8 @@ use std::mem;
 use std::time::Instant;
 
 use dupe::Dupe;
-use gazebo::prelude::*;
 pub use runtime::arguments::Arguments;
+pub use runtime::before_stmt::BeforeStmtFuncDyn;
 pub use runtime::call_stack::CallStack;
 pub use runtime::evaluator::Evaluator;
 pub use runtime::file_loader::FileLoader;
@@ -50,6 +50,7 @@ use crate::eval::compiler::Compiler;
 use crate::eval::runtime::arguments::ArgNames;
 use crate::eval::runtime::arguments::ArgumentsFull;
 use crate::hint::unlikely;
+use crate::slice_vec_ext::SliceExt;
 use crate::syntax::ast::AstModule;
 use crate::syntax::DialectTypes;
 use crate::values::Value;
@@ -135,8 +136,6 @@ impl<'v, 'a> Evaluator<'v, 'a> {
             locals: Vec::new(),
             globals,
             codemap,
-            has_before_stmt: self.before_stmt.enabled(),
-            bc_profile: self.bc_profile.enabled(),
             eval: self,
             check_types: dialect.enable_types == DialectTypes::Enable,
         };

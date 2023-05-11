@@ -23,7 +23,6 @@ use std::iter;
 use std::path::Path;
 use std::path::PathBuf;
 
-use gazebo::prelude::*;
 use itertools::Either;
 use lsp_types::Diagnostic;
 use lsp_types::Url;
@@ -98,14 +97,18 @@ impl Context {
         module: bool,
     ) -> anyhow::Result<Self> {
         let globals = globals();
-        let prelude = prelude.try_map(|x| {
-            let env = Module::new();
-
-            let mut eval = Evaluator::new(&env);
-            let module = AstModule::parse_file(x, &dialect())?;
-            eval.eval_module(module, &globals)?;
-            env.freeze()
-        })?;
+        let prelude: Vec<_> = prelude
+            .iter()
+            .map(|x| {
+                let env = Module::new();
+                {
+                    let mut eval = Evaluator::new(&env);
+                    let module = AstModule::parse_file(x, &dialect())?;
+                    eval.eval_module(module, &globals)?;
+                }
+                env.freeze()
+            })
+            .collect::<anyhow::Result<_>>()?;
 
         let module = if module {
             Some(Self::new_module(&prelude))
@@ -140,7 +143,9 @@ impl Context {
             DocItem::Object(_) => {
                 Url::parse(&format!("starlark:/native/builtins/{}.bzl", doc.id.name)).unwrap()
             }
-            DocItem::Function(_) => Url::parse("starlark:/native/builtins.bzl").unwrap(),
+            DocItem::Function(_) | DocItem::Property(_) => {
+                Url::parse("starlark:/native/builtins.bzl").unwrap()
+            }
         };
         LspUrl::try_from(url).unwrap()
     }

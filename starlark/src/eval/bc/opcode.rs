@@ -22,6 +22,7 @@ use std::any::TypeId;
 use std::marker;
 
 use dupe::Dupe;
+use starlark_derive::starlark_internal_bc;
 
 use crate::eval::bc::instr::BcInstr;
 use crate::eval::bc::instr_impl::*;
@@ -93,9 +94,10 @@ pub(crate) enum BcOpcode {
     Br,
     IfBr,
     IfNotBr,
-    ForLoop,
-    Break,
+    Iter,
     Continue,
+    Break,
+    IterStop,
     Return,
     ReturnConst,
     ReturnCheckType,
@@ -113,8 +115,6 @@ pub(crate) enum BcOpcode {
     CallMaybeKnownMethodPos,
     Def,
     PossibleGc,
-    BeforeStmt,
-    ProfileBc,
     RecordCallEnter,
     RecordCallExit,
     End,

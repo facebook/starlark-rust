@@ -29,13 +29,13 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 use dupe::Dupe;
-use gazebo::prelude::*;
 
 use crate::codemap::FileSpan;
 use crate::errors::Frame;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::inlined_frame::InlinedFrames;
 use crate::hint::unlikely;
+use crate::slice_vec_ext::SliceExt;
 use crate::values::FrozenRef;
 use crate::values::Trace;
 use crate::values::Tracer;
@@ -59,10 +59,14 @@ impl CheapFrame<'_> {
         if let Some(span) = self.span {
             span.inlined_frames.extend_frames(frames);
         }
-        frames.push(Frame {
+        frames.push(self.to_frame());
+    }
+
+    fn to_frame(&self) -> Frame {
+        Frame {
             name: self.function.name_for_call_stack(),
             location: self.location(),
-        });
+        }
     }
 }
 
@@ -122,7 +126,7 @@ unsafe impl<'v> Trace<'v> for CheapCallStack<'v> {
         for x in used {
             x.function.trace(tracer);
         }
-        // Not required, but since we are chosing not to walk those above
+        // Not required, but since we are choosing not to walk those above
         // the current stack depth, it's good practice to blank those values out
         for x in unused {
             x.function = Value::new_none();
@@ -152,6 +156,18 @@ impl<'v> CheapCallStack<'v> {
         debug_assert!(self.count >= 1);
         // We could clear the elements, but don't need to bother
         self.count -= 1;
+    }
+
+    /// Current size (in frames) of the stack.
+    pub(crate) fn count(&self) -> usize {
+        self.count
+    }
+
+    /// The frame at the top of the stack. May be `None` if
+    /// either there the stack is empty, or the top of the stack lacks location
+    /// information (e.g. called from Rust).
+    pub(crate) fn top_frame(&self) -> Option<Frame> {
+        Some(self.stack.last().as_ref()?.to_frame())
     }
 
     /// The location at the top of the stack. May be `None` if

@@ -21,9 +21,9 @@ use std::marker::PhantomData;
 use dupe::Clone_;
 use dupe::Dupe_;
 use either::Either;
-use gazebo::prelude::*;
 use thiserror::Error;
 
+use crate::cast::transmute;
 use crate::coerce::coerce;
 use crate::coerce::Coerce;
 use crate::collections::symbol_map::Symbol;
@@ -34,6 +34,7 @@ use crate::eval::runtime::params::ParametersSpec;
 use crate::hint::unlikely;
 use crate::values::dict::Dict;
 use crate::values::dict::DictRef;
+use crate::values::iter::StarlarkIterator;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::Heap;
 use crate::values::StringValue;
@@ -112,10 +113,16 @@ impl ArgSymbol for ResolvedArgName {
 
 unsafe impl Coerce<ResolvedArgName> for ResolvedArgName {}
 
-#[derive(Debug, Clone_, Dupe_, Default_)]
+#[derive(Debug, Clone_, Dupe_)]
 pub(crate) struct ArgNames<'a, 'v, S: ArgSymbol> {
     /// Names are not guaranteed to be unique here.
     names: &'a [(S, StringValue<'v>)],
+}
+
+impl<'a, 'v, S: ArgSymbol> Default for ArgNames<'a, 'v, S> {
+    fn default() -> Self {
+        ArgNames { names: &[] }
+    }
 }
 
 impl<'a, 'v, S: ArgSymbol> Copy for ArgNames<'a, 'v, S> {}
@@ -157,7 +164,7 @@ pub(crate) trait ArgumentsImpl<'v, 'a> {
 
 /// Arguments object is passed from the starlark interpreter to function implementation
 /// when evaluation function or method calls.
-#[derive(Default_, Clone_, Dupe_)]
+#[derive(Clone_, Dupe_)]
 pub(crate) struct ArgumentsFull<'v, 'a, S: ArgSymbol> {
     /// Positional arguments.
     pub(crate) pos: &'a [Value<'v>],
@@ -171,6 +178,18 @@ pub(crate) struct ArgumentsFull<'v, 'a, S: ArgSymbol> {
     pub(crate) args: Option<Value<'v>>,
     /// `**kwargs` argument.
     pub(crate) kwargs: Option<Value<'v>>,
+}
+
+impl<'v, 'a, S: ArgSymbol> Default for ArgumentsFull<'v, 'a, S> {
+    fn default() -> Self {
+        ArgumentsFull {
+            pos: &[],
+            named: &[],
+            names: ArgNames::default(),
+            args: None,
+            kwargs: None,
+        }
+    }
 }
 
 impl<'v, 'a, S: ArgSymbol> ArgumentsImpl<'v, 'a> for ArgumentsFull<'v, 'a, S> {
@@ -467,7 +486,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
             // Very sad that we allocate into a vector, but I expect calling into a small positional argument
             // with a *args is very rare.
             let args = match x.0.args {
-                None => Box::new(None.into_iter()),
+                None => StarlarkIterator::empty(heap),
                 Some(args) => args.iterate(heap)?,
             };
             let xs = x.0.pos.iter().copied().chain(args).collect::<Vec<_>>();

@@ -35,6 +35,7 @@ use regex::RegexBuilder;
 use serde::Deserialize;
 use serde::Serialize;
 pub use starlark_derive::StarlarkDocs;
+use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
 use crate::codemap::Spanned;
@@ -45,6 +46,7 @@ use crate::syntax::ast::ExprP;
 use crate::syntax::ast::StmtP;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
+use crate::values::Value;
 
 /// There have been bugs around line endings in the textwrap crate. Just join
 /// into a single string, and trim the line endings.
@@ -89,7 +91,7 @@ impl DocString {
     }
 
     /// Render the docstring as in `render_as_code`, but surround it in triple quotes,
-    /// a common convetion in starlark docstrings.
+    /// a common convention in starlark docstrings.
     fn render_as_quoted_code(&self) -> String {
         format!("\"\"\"\n{}\n\"\"\"", self.render_as_code())
     }
@@ -240,55 +242,6 @@ impl DocString {
         textwrap::dedent(&lines.join("\n")).trim().to_owned()
     }
 
-    /// Parse out parameter docs from an "Args:" section of a docstring
-    ///
-    /// `args_section` should be dedented, and generally should just be the `args` key of
-    /// the `DocString::parse_params()` function call. This is done as a separate function
-    /// to reduce the number of times that sections are parsed out of docstring (e.g. if
-    /// a user wants both the `Args:` and `Returns:` sections)
-    pub fn parse_params(kind: DocStringKind, args_section: &str) -> HashMap<String, String> {
-        static STARLARK_ARG_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^(\*{0,2}\w+):\s*(.*)").unwrap());
-        static RUST_ARG_RE: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^(?:\* )?`(\w+)`:?\s*(.*)").unwrap());
-
-        static INDENTED_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:\s|$)").unwrap());
-
-        let arg_re = match kind {
-            DocStringKind::Starlark => &STARLARK_ARG_RE,
-            DocStringKind::Rust => &RUST_ARG_RE,
-        };
-
-        let mut ret = HashMap::new();
-        let mut current_arg = None;
-        let mut current_text = vec![];
-
-        for line in args_section.lines() {
-            if let Some(matches) = arg_re.captures(line) {
-                if let Some(a) = current_arg.take() {
-                    ret.insert(a, Self::join_and_dedent_lines(&current_text));
-                }
-
-                current_arg = Some(matches.get(1).unwrap().as_str().to_owned());
-
-                let doc_match = matches.get(2).unwrap();
-                current_text = vec![format!(
-                    "{}{}",
-                    " ".repeat(doc_match.start()),
-                    doc_match.as_str()
-                )];
-            } else if current_arg.is_some() && INDENTED_RE.is_match(line) {
-                current_text.push(line.to_owned());
-            }
-        }
-
-        if let Some(a) = current_arg.take() {
-            ret.insert(a, Self::join_and_dedent_lines(&current_text));
-        }
-
-        ret
-    }
-
     /// Parse the sections out of a docstring's `details` text, and remove the requested sections from the text.
     ///
     /// "sections" are the various things in doc strings like "Arguments:", "Returns:", etc
@@ -396,31 +349,50 @@ pub struct Identifier {
 
 /// The type of a given parameter, field, etc.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
-pub struct Type {
+pub struct DocType {
     /// The type string that one would find in a starlark expression.
     pub raw_type: String,
 }
 
 /// Documents a full module.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
-pub struct Module {
+pub struct DocModule {
     /// In general, this should be the first statement of a loaded file, if that statement is
     /// a string literal.
     pub docs: Option<DocString>,
+    /// A mapping of top level symbols to their documentation, if any.
+    pub members: SmallMap<String, DocMember>,
 }
 
-impl Module {
+impl DocModule {
     fn render_as_code(&self) -> String {
-        self.docs
+        let mut res = self
+            .docs
             .as_ref()
             .map(DocString::render_as_quoted_code)
-            .unwrap_or_default()
+            .unwrap_or_default();
+        for (k, v) in &self.members {
+            res.push('\n');
+            res.push_str(
+                &(Doc {
+                    id: Identifier {
+                        name: k.clone(),
+                        location: None,
+                    },
+                    item: v.clone().to_doc_item(),
+                    custom_attrs: HashMap::new(),
+                }
+                .render_as_code()),
+            );
+            res.push('\n');
+        }
+        res
     }
 }
 
 /// Documents a single function.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
-pub struct Function {
+pub struct DocFunction {
     /// Documentation for the function. If parsed, this should generally be the first statement
     /// of a function's body if that statement is a string literal. Any sections like "Args:",
     /// "Returns", etc are kept intact. It is up to the consumer to remove these sections if
@@ -428,12 +400,12 @@ pub struct Function {
     pub docs: Option<DocString>,
     /// The parameters that this function takes. Docs for these parameters should generally be
     /// extracted from the main docstring's details.
-    pub params: Vec<Param>,
+    pub params: Vec<DocParam>,
     /// Details about what this function returns.
-    pub ret: Return,
+    pub ret: DocReturn,
 }
 
-impl Function {
+impl DocFunction {
     fn starlark_docstring(&self) -> Option<String> {
         let mut docs = String::new();
         if let Some(main_docs) = self.docs.as_ref().map(DocString::render_as_code) {
@@ -444,10 +416,10 @@ impl Function {
             .params
             .iter()
             .map(|p| match p {
-                Param::NoArgs => 0,
-                Param::Arg { name, .. } | Param::Args { name, .. } | Param::Kwargs { name, .. } => {
-                    name.len() + 2
-                }
+                DocParam::NoArgs => 0,
+                DocParam::Arg { name, .. }
+                | DocParam::Args { name, .. }
+                | DocParam::Kwargs { name, .. } => name.len() + 2,
             })
             .max()
             .unwrap_or_default();
@@ -478,7 +450,7 @@ impl Function {
     }
 
     fn render_as_code(&self, name: &str) -> String {
-        let params: Vec<_> = self.params.iter().map(Param::render_as_code).collect();
+        let params: Vec<_> = self.params.iter().map(DocParam::render_as_code).collect();
         let spacer_len = if params.is_empty() {
             0
         } else {
@@ -519,8 +491,8 @@ impl Function {
     ///                    The format is determined by `kind`.
     pub fn from_docstring(
         kind: DocStringKind,
-        mut params: Vec<Param>,
-        return_type: Option<Type>,
+        mut params: Vec<DocParam>,
+        return_type: Option<DocType>,
         raw_docstring: Option<&str>,
     ) -> Self {
         match raw_docstring.and_then(|raw| DocString::from_docstring(kind, raw)) {
@@ -533,9 +505,9 @@ impl Function {
                         let entries = Self::parse_params(kind, args);
                         for x in &mut params {
                             match x {
-                                Param::Arg { name, docs, .. }
-                                | Param::Args { name, docs, .. }
-                                | Param::Kwargs { name, docs, .. } => match entries.get(name) {
+                                DocParam::Arg { name, docs, .. }
+                                | DocParam::Args { name, docs, .. }
+                                | DocParam::Kwargs { name, docs, .. } => match entries.get(name) {
                                     Some(raw) => *docs = DocString::from_docstring(kind, raw),
                                     _ => (),
                                 },
@@ -551,19 +523,19 @@ impl Function {
                     .or_else(|| sections.get("returns"))
                     .and_then(|raw| DocString::from_docstring(kind, raw));
 
-                Function {
+                DocFunction {
                     docs: Some(function_docstring),
                     params,
-                    ret: Return {
+                    ret: DocReturn {
                         docs: return_docs,
                         typ: return_type,
                     },
                 }
             }
-            None => Function {
+            None => DocFunction {
                 docs: None,
                 params,
-                ret: Return {
+                ret: DocReturn {
                     docs: None,
                     typ: return_type,
                 },
@@ -624,13 +596,13 @@ impl Function {
 /// A single parameter of a function.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Param {
+pub enum DocParam {
     /// A regular parameter that may or may not have a default value.
     Arg {
         name: String,
         docs: Option<DocString>,
         #[serde(rename = "type")]
-        typ: Option<Type>,
+        typ: Option<DocType>,
         /// If present, this parameter has a default value. This is the `repr()` of that value.
         default_value: Option<String>,
     },
@@ -641,24 +613,24 @@ pub enum Param {
         name: String,
         docs: Option<DocString>,
         #[serde(rename = "type")]
-        typ: Option<Type>,
+        typ: Option<DocType>,
     },
     /// Represents the "**kwargs" style of argument.
     Kwargs {
         name: String,
         docs: Option<DocString>,
         #[serde(rename = "type")]
-        typ: Option<Type>,
+        typ: Option<DocType>,
     },
 }
 
-impl Param {
+impl DocParam {
     fn starlark_docstring(&self, max_indentation: &str) -> Option<String> {
         let (name, docs) = match self {
-            Param::Arg { name, docs, .. } => Some((name, docs)),
-            Param::NoArgs => None,
-            Param::Args { name, docs, .. } => Some((name, docs)),
-            Param::Kwargs { name, docs, .. } => Some((name, docs)),
+            DocParam::Arg { name, docs, .. } => Some((name, docs)),
+            DocParam::NoArgs => None,
+            DocParam::Args { name, docs, .. } => Some((name, docs)),
+            DocParam::Kwargs { name, docs, .. } => Some((name, docs)),
         }?;
         let rendered_docs = docs.as_ref()?.render_as_code();
         let mut indented = indent_trimmed(&rendered_docs, max_indentation);
@@ -668,7 +640,7 @@ impl Param {
 
     fn render_as_code(&self) -> String {
         match self {
-            Param::Arg {
+            DocParam::Arg {
                 name,
                 typ,
                 default_value,
@@ -679,39 +651,41 @@ impl Param {
                 (None, Some(default)) => format!("{} = {}", name, default),
                 (None, None) => name.clone(),
             },
-            Param::NoArgs => "*".to_owned(),
-            Param::Args { name, typ, .. } | Param::Kwargs { name, typ, .. } => match typ.as_ref() {
-                Some(typ) => format!("{}: {}", name, typ.raw_type),
-                None => name.clone(),
-            },
+            DocParam::NoArgs => "*".to_owned(),
+            DocParam::Args { name, typ, .. } | DocParam::Kwargs { name, typ, .. } => {
+                match typ.as_ref() {
+                    Some(typ) => format!("{}: {}", name, typ.raw_type),
+                    None => name.clone(),
+                }
+            }
         }
     }
 }
 
 /// Details about the return value of a function.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
-pub struct Return {
+pub struct DocReturn {
     /// Extra semantic details around the returned value's meaning.
     pub docs: Option<DocString>,
     #[serde(rename = "type")]
-    pub typ: Option<Type>,
+    pub typ: Option<DocType>,
 }
 
-impl Return {
+impl DocReturn {
     fn starlark_docstring(&self) -> Option<String> {
         self.docs.as_ref().map(DocString::render_as_code)
     }
 }
 
-/// A single property of an object. These are explicitly not functions (see [`Member`]).
+/// A single property of an object. These are explicitly not functions (see [`DocMember`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
-pub struct Property {
+pub struct DocProperty {
     pub docs: Option<DocString>,
     #[serde(rename = "type")]
-    pub typ: Option<Type>,
+    pub typ: Option<DocType>,
 }
 
-impl Property {
+impl DocProperty {
     fn render_as_code(&self, name: &str) -> String {
         match (
             self.typ.as_ref(),
@@ -738,20 +712,44 @@ impl Property {
 /// A named member of an object.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum Member {
-    Property(Property),
-    Function(Function),
+pub enum DocMember {
+    Property(DocProperty),
+    Function(DocFunction),
+}
+
+impl DocMember {
+    pub(crate) fn from_value(value: Value) -> Self {
+        // If we have a value which is a complex type, the right type to put in the docs is not the type
+        // it represents, but it's just a property we should point at
+        match value.documentation() {
+            Some(DocItem::Function(x)) => DocMember::Function(x),
+            Some(DocItem::Property(x)) => DocMember::Property(x),
+            _ => DocMember::Property(DocProperty {
+                docs: None,
+                typ: Some(DocType {
+                    raw_type: value.get_type_starlark_repr(),
+                }),
+            }),
+        }
+    }
+
+    pub fn to_doc_item(self) -> DocItem {
+        match self {
+            DocMember::Property(x) => DocItem::Property(x),
+            DocMember::Function(x) => DocItem::Function(x),
+        }
+    }
 }
 
 /// An object with named functions/properties.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
-pub struct Object {
+pub struct DocObject {
     pub docs: Option<DocString>,
     /// Name and details of each member of this object.
-    pub members: Vec<(String, Member)>,
+    pub members: SmallMap<String, DocMember>,
 }
 
-impl Object {
+impl DocObject {
     fn render_as_code(&self, name: &str) -> String {
         let summary = self
             .docs
@@ -767,8 +765,8 @@ impl Object {
             .members
             .iter()
             .map(|(name, member)| match member {
-                Member::Property(p) => p.render_as_code(name),
-                Member::Function(f) => f.render_as_code(&format!("_{}", name)),
+                DocMember::Property(p) => p.render_as_code(name),
+                DocMember::Function(f) => f.render_as_code(&format!("_{}", name)),
             })
             .join("\n\n");
 
@@ -795,9 +793,10 @@ impl Object {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DocItem {
-    Module(Module),
-    Object(Object),
-    Function(Function),
+    Module(DocModule),
+    Object(DocObject),
+    Function(DocFunction),
+    Property(DocProperty),
 }
 
 /// The main structure that represents the documentation for a given symbol / module.
@@ -820,6 +819,7 @@ impl Doc {
             DocItem::Module(m) => m.render_as_code(),
             DocItem::Object(o) => o.render_as_code(&self.id.name),
             DocItem::Function(f) => f.render_as_code(&self.id.name),
+            DocItem::Property(p) => p.render_as_code(&self.id.name),
         }
     }
 }
@@ -886,268 +886,8 @@ impl RegisteredDoc {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Display;
-    use std::fmt::Formatter;
-
-    use allocative::Allocative;
-    use starlark_derive::starlark_module;
 
     use super::*;
-    use crate as starlark;
-    use crate::any::ProvidesStaticType;
-    use crate::environment::GlobalsBuilder;
-    use crate::environment::GlobalsStatic;
-    use crate::environment::Methods;
-    use crate::environment::MethodsBuilder;
-    use crate::environment::MethodsStatic;
-    use crate::values::NoSerialize;
-    use crate::values::StarlarkValue;
-    use crate::values::Value;
-
-    /// These are where the module docs go
-    ///
-    /// This is what is passed to users for an object, so be careful
-    /// not to register two modules for a single object.
-    #[starlark_module]
-    fn add_some_value(builder: &mut MethodsBuilder) {
-        /// Docs for attr1
-        #[starlark(attribute)]
-        fn attr1<'v>(this: Value<'v>) -> anyhow::Result<String> {
-            Ok("attr1".to_owned())
-        }
-
-        #[starlark(attribute)]
-        fn attr2<'v>(this: Value<'v>) -> anyhow::Result<String> {
-            Ok("attr2".to_owned())
-        }
-
-        /// Docs for func1
-        ///
-        /// # Arguments
-        ///     * `foo`: Docs for foo
-        ///
-        /// # Returns
-        /// The string 'func1'
-        fn func1<'v>(this: Value<'v>, foo: String) -> anyhow::Result<String> {
-            let _ignore = (this, foo);
-            Ok("func1".to_owned())
-        }
-
-        fn func2<'v>(this: Value<'v>) -> anyhow::Result<String> {
-            let _ = this;
-            Ok("func2".to_owned())
-        }
-    }
-
-    /// These are where the module docs go
-    ///
-    /// This is what is passed to users for an object, so be careful
-    /// not to register two modules for a single object.
-    #[starlark_module]
-    fn add_some_global_value(builder: &mut GlobalsBuilder) {
-        /// Docs for func1
-        ///
-        /// # Arguments
-        ///     * `foo`: Docs for foo
-        ///
-        /// # Returns
-        /// The string 'func1'
-        fn func1(foo: String) -> anyhow::Result<String> {
-            let _ignore = foo;
-            Ok("func1".to_owned())
-        }
-
-        fn func2() -> anyhow::Result<String> {
-            Ok("func2".to_owned())
-        }
-
-        /// A function with only positional arguments.
-        fn func3(
-            #[starlark(require = pos)] a1: i32,
-            #[starlark(require = pos)] a2: Option<i32>,
-            #[starlark(require = pos, default = 1)] step: i32,
-        ) -> anyhow::Result<String> {
-            let _x = (a1, a2, step);
-            Ok("func3".to_owned())
-        }
-    }
-
-    #[derive(Debug, ProvidesStaticType, NoSerialize, Allocative)]
-    struct SomeValue {}
-
-    impl Display for SomeValue {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            f.write_str("SomeValue()")
-        }
-    }
-
-    starlark_simple_value!(SomeValue);
-
-    impl<'v> StarlarkValue<'v> for SomeValue {
-        starlark_type!("some_value");
-
-        fn get_methods() -> Option<&'static Methods> {
-            static RES: MethodsStatic = MethodsStatic::new();
-            RES.methods(add_some_value)
-        }
-    }
-
-    #[test]
-    fn globals_docs_work() {
-        let mut globals_builder = GlobalsBuilder::new();
-        static RES: GlobalsStatic = GlobalsStatic::new();
-        RES.populate(add_some_global_value, &mut globals_builder);
-        let globals = globals_builder.build();
-        let docs = globals.documentation();
-
-        let string_typ = Some(Type {
-            raw_type: "str.type".to_owned(),
-        });
-        let expected_object = super::Object {
-            docs: DocString::from_docstring(
-                DocStringKind::Rust,
-                "These are where the module docs go\n\nThis is what is passed to users for an object, so be careful\nnot to register two modules for a single object.",
-            ),
-            members: vec![
-                (
-                    "func1".to_owned(),
-                    super::Member::Function(super::Function {
-                        docs: DocString::from_docstring(DocStringKind::Rust, "Docs for func1"),
-                        params: vec![Param::Arg {
-                            name: "foo".to_owned(),
-                            docs: DocString::from_docstring(DocStringKind::Rust, "Docs for foo"),
-                            typ: string_typ.clone(),
-                            default_value: None,
-                        }],
-                        ret: Return {
-                            docs: DocString::from_docstring(
-                                DocStringKind::Rust,
-                                "The string 'func1'",
-                            ),
-                            typ: string_typ.clone(),
-                        },
-                    }),
-                ),
-                (
-                    "func2".to_owned(),
-                    super::Member::Function(super::Function {
-                        docs: None,
-                        params: vec![],
-                        ret: Return {
-                            docs: None,
-                            typ: string_typ.clone(),
-                        },
-                    }),
-                ),
-                (
-                    "func3".to_owned(),
-                    super::Member::Function(super::Function {
-                        docs: DocString::from_docstring(
-                            DocStringKind::Rust,
-                            "A function with only positional arguments.",
-                        ),
-                        params: vec![
-                            Param::Arg {
-                                name: "a1".to_owned(),
-                                docs: None,
-                                typ: Some(Type {
-                                    raw_type: "int.type".to_owned(),
-                                }),
-                                default_value: None,
-                            },
-                            Param::Arg {
-                                name: "a2".to_owned(),
-                                docs: None,
-                                typ: Some(Type {
-                                    raw_type: "[None, int.type]".to_owned(),
-                                }),
-                                default_value: Some("None".to_owned()),
-                            },
-                            Param::Arg {
-                                name: "step".to_owned(),
-                                docs: None,
-                                typ: Some(Type {
-                                    raw_type: "int.type".to_owned(),
-                                }),
-                                // TODO: This should actually show '1'...
-                                default_value: Some("None".to_owned()),
-                            },
-                        ],
-                        ret: Return {
-                            docs: None,
-                            typ: string_typ,
-                        },
-                    }),
-                ),
-            ],
-        };
-        let expected = DocItem::Object(expected_object);
-
-        assert_eq!(expected, docs);
-    }
-
-    #[test]
-    fn methods_docs_work() {
-        let docs = SomeValue {}.documentation();
-        let string_typ = Some(Type {
-            raw_type: "str.type".to_owned(),
-        });
-        let expected_object = super::Object {
-            docs: DocString::from_docstring(
-                DocStringKind::Rust,
-                "These are where the module docs go\n\nThis is what is passed to users for an object, so be careful\nnot to register two modules for a single object.",
-            ),
-            members: vec![
-                (
-                    "attr1".to_owned(),
-                    super::Member::Property(super::Property {
-                        docs: DocString::from_docstring(DocStringKind::Rust, "Docs for attr1"),
-                        typ: string_typ.clone(),
-                    }),
-                ),
-                (
-                    "attr2".to_owned(),
-                    super::Member::Property(super::Property {
-                        docs: None,
-                        typ: string_typ.clone(),
-                    }),
-                ),
-                (
-                    "func1".to_owned(),
-                    super::Member::Function(super::Function {
-                        docs: DocString::from_docstring(DocStringKind::Rust, "Docs for func1"),
-                        params: vec![Param::Arg {
-                            name: "foo".to_owned(),
-                            docs: DocString::from_docstring(DocStringKind::Rust, "Docs for foo"),
-                            typ: string_typ.clone(),
-                            default_value: None,
-                        }],
-                        ret: Return {
-                            docs: DocString::from_docstring(
-                                DocStringKind::Rust,
-                                "The string 'func1'",
-                            ),
-                            typ: string_typ.clone(),
-                        },
-                    }),
-                ),
-                (
-                    "func2".to_owned(),
-                    super::Member::Function(super::Function {
-                        docs: None,
-                        params: vec![],
-                        ret: Return {
-                            docs: None,
-                            typ: string_typ,
-                        },
-                    }),
-                ),
-            ],
-        };
-        let expected = Some(DocItem::Object(expected_object));
-
-        assert_eq!(expected, docs);
-    }
 
     #[test]
     fn parses_starlark_docstring() {
@@ -1399,8 +1139,8 @@ mod tests {
         assert_eq!(sections, expected_sections);
     }
 
-    fn arg(name: &str) -> Param {
-        Param::Arg {
+    fn arg(name: &str) -> DocParam {
+        DocParam::Arg {
             name: name.to_owned(),
             docs: None,
             typ: None,
@@ -1427,25 +1167,25 @@ mod tests {
         "#;
 
         let kind = DocStringKind::Starlark;
-        let return_type = Some(Type {
+        let return_type = Some(DocType {
             raw_type: "int".to_owned(),
         });
-        let expected = Function {
+        let expected = DocFunction {
             docs: DocString::from_docstring(kind, "This is an example docstring\n\nDetails here"),
             params: vec![
-                Param::Arg {
+                DocParam::Arg {
                     name: "**kwargs".to_owned(),
                     docs: DocString::from_docstring(kind, "Docs for kwargs"),
                     typ: None,
                     default_value: None,
                 },
-                Param::Arg {
+                DocParam::Arg {
                     name: "*args".to_owned(),
                     docs: DocString::from_docstring(kind, "Docs for args"),
                     typ: None,
                     default_value: None,
                 },
-                Param::Arg {
+                DocParam::Arg {
                     name: "arg_bar".to_owned(),
                     docs: DocString::from_docstring(
                         kind,
@@ -1458,20 +1198,20 @@ mod tests {
                     typ: None,
                     default_value: None,
                 },
-                Param::Arg {
+                DocParam::Arg {
                     name: "arg_foo".to_owned(),
                     docs: DocString::from_docstring(kind, "The argument named foo"),
                     typ: None,
                     default_value: None,
                 },
             ],
-            ret: Return {
+            ret: DocReturn {
                 docs: DocString::from_docstring(kind, "A value"),
                 typ: return_type.clone(),
             },
         };
 
-        let function_docs = Function::from_docstring(
+        let function_docs = DocFunction::from_docstring(
             kind,
             vec![
                 arg("**kwargs"),
@@ -1503,13 +1243,13 @@ mod tests {
         "#;
 
         let kind = DocStringKind::Rust;
-        let return_type = Some(Type {
+        let return_type = Some(DocType {
             raw_type: "int".to_owned(),
         });
-        let expected = Function {
+        let expected = DocFunction {
             docs: DocString::from_docstring(kind, "This is an example docstring\n\nDetails here"),
             params: vec![
-                Param::Arg {
+                DocParam::Arg {
                     name: "arg_bar".to_owned(),
                     docs: DocString::from_docstring(
                         kind,
@@ -1522,20 +1262,20 @@ mod tests {
                     typ: None,
                     default_value: None,
                 },
-                Param::Arg {
+                DocParam::Arg {
                     name: "arg_foo".to_owned(),
                     docs: DocString::from_docstring(kind, "The argument named foo"),
                     typ: None,
                     default_value: None,
                 },
             ],
-            ret: Return {
+            ret: DocReturn {
                 docs: DocString::from_docstring(kind, "A value"),
                 typ: return_type.clone(),
             },
         };
 
-        let function_docs = Function::from_docstring(
+        let function_docs = DocFunction::from_docstring(
             kind,
             vec![arg("arg_bar"), arg("arg_foo")],
             return_type,
@@ -1543,184 +1283,5 @@ mod tests {
         );
 
         assert_eq!(expected, function_docs);
-    }
-
-    #[test]
-    fn renders_starlark() {
-        let ds = DocString::from_docstring(DocStringKind::Rust, "Summary\n\nSome details");
-        let typ = Some(Type {
-            raw_type: "\"int\"".to_owned(),
-        });
-
-        let docs = vec![
-            Doc {
-                id: Identifier {
-                    name: "MyObject".to_owned(),
-                    location: None,
-                },
-                item: DocItem::Object(Object {
-                    docs: ds.clone(),
-                    members: vec![
-                        (
-                            "prop1".to_owned(),
-                            Member::Property(Property {
-                                docs: ds.clone(),
-                                typ: typ.clone(),
-                            }),
-                        ),
-                        (
-                            "prop2".to_owned(),
-                            Member::Property(Property {
-                                docs: None,
-                                typ: None,
-                            }),
-                        ),
-                        (
-                            "func1".to_owned(),
-                            Member::Function(Function {
-                                docs: ds.clone(),
-                                params: vec![],
-                                ret: Return {
-                                    docs: ds.clone(),
-                                    typ: typ.clone(),
-                                },
-                            }),
-                        ),
-                    ],
-                }),
-                custom_attrs: Default::default(),
-            },
-            Doc {
-                id: Identifier {
-                    name: "function1".to_owned(),
-                    location: None,
-                },
-                item: DocItem::Function(Function {
-                    docs: ds.clone(),
-                    params: vec![
-                        Param::Arg {
-                            name: "arg1".to_owned(),
-                            docs: ds.clone(),
-                            typ: typ.clone(),
-                            default_value: Some("1".to_owned()),
-                        },
-                        Param::Arg {
-                            name: "arg2".to_owned(),
-                            docs: ds.clone(),
-                            typ: typ.clone(),
-                            default_value: None,
-                        },
-                        Param::NoArgs,
-                        Param::Args {
-                            name: "*args".to_owned(),
-                            docs: ds.clone(),
-                            typ: typ.clone(),
-                        },
-                        Param::Args {
-                            name: "*kwargs".to_owned(),
-                            docs: ds.clone(),
-                            typ: typ.clone(),
-                        },
-                    ],
-                    ret: Return {
-                        docs: ds.clone(),
-                        typ,
-                    },
-                }),
-                custom_attrs: Default::default(),
-            },
-            Doc {
-                id: Identifier {
-                    name: "some_module".to_owned(),
-                    location: None,
-                },
-                item: DocItem::Module(Module { docs: ds }),
-                custom_attrs: Default::default(),
-            },
-        ];
-
-        let expected = format!(
-            r#"
-        """
-        {summary}
-
-        {details}
-        """
-
-        """
-        {summary}
-
-        {details}
-        """
-        # type: "int"
-        _prop1 = None
-
-        _prop2 = None
-
-        def _func1() -> "int":
-            """
-            {summary}
-
-            {details}
-
-            Ret:
-                {summary}
-
-                {details}
-            """
-            pass
-
-        """
-        {summary}
-
-        {details}
-        """
-        MyObject = struct(
-            prop1 = _prop1,
-            prop2 = _prop2,
-            func1 = _func1,
-        )
-
-        def function1(
-            arg1: "int" = 1,
-            arg2: "int",
-            *,
-            *args: "int",
-            *kwargs: "int"
-        ) -> "int":
-            """
-            {summary}
-
-            {details}
-
-            Args:
-                arg1:    {summary}
-
-                         {details}
-                arg2:    {summary}
-
-                         {details}
-                *args:   {summary}
-
-                         {details}
-                *kwargs: {summary}
-
-                         {details}
-
-            Ret:
-                {summary}
-
-                {details}
-            """
-            pass
-        "#,
-            summary = "Summary",
-            details = "Some details"
-        );
-        let expected = textwrap::dedent(&expected).trim().to_owned();
-
-        let rendered = render_docs_as_code(&docs);
-
-        assert_eq!(expected, rendered);
     }
 }

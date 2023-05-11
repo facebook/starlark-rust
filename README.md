@@ -6,11 +6,9 @@
 [![docs.rs availability](https://img.shields.io/docsrs/starlark?label=docs.rs)](https://docs.rs/starlark/)
 [![Build status](https://img.shields.io/github/workflow/status/facebookexperimental/starlark-rust/ci.svg)](https://github.com/facebookexperimental/starlark-rust/actions)
 
-_**NOTE:** Version 0.4.0 of this library changes maintainer from [Google](https://github.com/google/starlark-rust) to Facebook._
-
 There are several copies of this repo on GitHub, [facebookexperimental/starlark-rust](https://github.com/facebookexperimental/starlark-rust) is the canonical one.
 
-This project provides a Rust implementation of the [Starlark language](https://github.com/bazelbuild/starlark/blob/master/spec.md). Starlark (formerly codenamed Skylark) is a deterministic language inspired by Python3, used for configuration in the build systems [Bazel](https://bazel.build) and [Buck](https://buck.build). This project was originally developed [in this repo](https://github.com/google/starlark-rust), which contains a more extensive history.
+This project provides a Rust implementation of the [Starlark language](https://github.com/bazelbuild/starlark/blob/master/spec.md). Starlark (formerly codenamed Skylark) is a deterministic language inspired by Python3, used for configuration in the build systems [Bazel](https://bazel.build), [Buck](https://buck.build) and [Buck2](https://buck2.build), of which Buck2 depends on this library. This project was originally developed [in this repo](https://github.com/google/starlark-rust), which contains a more extensive history.
 
 There are at least three implementations of Starlark, [one in Java](https://github.com/bazelbuild/starlark), [one in Go](https://github.com/google/starlark-go), and this one in Rust. We mostly follow the Starlark standard. If you are interested in trying out Rust Starlark, you can clone this repo and run:
 
@@ -20,6 +18,8 @@ $ cargo run
 $> 1+2
 3
 ```
+
+This project was started by [Damien Martin-Guillerez](https://github.com/damienmg). Version 0.4.0 of this library changed ownership [from Google](https://github.com/google/starlark-rust) to Facebook.
 
 ## Learn More
 
@@ -43,7 +43,6 @@ This project also has three non-goals:
 
 * We do _not_ aim for API stability between releases, preferring to iterate quickly and refine the API as much as possible. But we do [follow SemVer](https://doc.rust-lang.org/cargo/reference/semver.html).
 * We do _not_ aim for minimal dependencies, preferring to keep one package with lots of power. But if some dependencies prove tricky, we might add feature flags.
-* We do _not_ aim to work with Rust stable, preferring to take advantage of the unstable features in Rust to improve our code as much as possible. We hope that eventually enough features will be stabilised that using stable is reasonable again.
 
 ## Components
 
@@ -52,6 +51,8 @@ There are three components:
 * `starlark_derive`, a proc-macro crate that defines the necessary macros for Starlark. This library is a dependency of `starlark` the library, which reexports all the relevant pieces, and should not be used directly.
 * `starlark` the library, a library that defines the parser, evaluator and standard library. Projects wishing to embed Starlark in their environment (with additional types, library functions and features) will make use of this library.
 * `starlark` the binary, which provides interactive evaluation, IDE features and linter, exposed through a command line. Useful if you want to use vanilla Starlark (but if you do, consider Python3 instead) or as a test-bed for experimenting. Most projects will end up implementing some of this functionality themselves over the `starlark` library, incorporating their specific extra types etc.
+
+In particular the `starlark` binary _can_ be effectively used as a linter. But for the REPL, evaluator and IDE features the `starlark` binary is only aware of standard Starlark. Most Starlark embeddings supply extra functions and data types to work with domain-specific concerns, and the lack of these bindings will cause the REPL/evaluator to fail if they are used, and will give a subpar IDE experience. In most cases you should write your own binary depending on the `starlark` library, integrating your domain-specific pieces, and then using the bundled LSP functions to produce your own IDE/REPL/evaluator on top of those. You should still be able to use the [VS Code extension](vscode/README.md).
 
 ## Compatibility
 

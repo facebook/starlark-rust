@@ -19,10 +19,14 @@
 
 use allocative::Allocative;
 use derive_more::Display;
+use starlark_derive::Freeze;
+use starlark_derive::NoSerialize;
+use starlark_derive::Trace;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::Coerce;
+use crate::starlark_type;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::StringValue;
@@ -43,56 +47,43 @@ use crate::values::ValueLike;
 )]
 #[display(fmt = "iterator")]
 #[repr(C)]
-struct StringIteratorGen<'v, V: ValueLike<'v>> {
+struct StringIterableGen<'v, V: ValueLike<'v>> {
     string: V::String,
     produce_char: bool, // if not char, then int
 }
 
 pub(crate) fn iterate_chars<'v>(string: StringValue<'v>, heap: &'v Heap) -> Value<'v> {
-    heap.alloc_complex(StringIteratorGen::<'v, Value<'v>> {
+    heap.alloc_complex(StringIterableGen::<'v, Value<'v>> {
         string,
         produce_char: true,
     })
 }
 
 pub(crate) fn iterate_codepoints<'v>(string: StringValue<'v>, heap: &'v Heap) -> Value<'v> {
-    heap.alloc_complex(StringIteratorGen::<'v, Value<'v>> {
+    heap.alloc_complex(StringIterableGen::<'v, Value<'v>> {
         string,
         produce_char: false,
     })
 }
 
-impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for StringIteratorGen<'v, V>
+impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for StringIterableGen<'v, V>
 where
     Self: ProvidesStaticType,
 {
     starlark_type!("iterator");
 
-    fn iterate<'a>(
-        &'a self,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
-    where
-        'v: 'a,
-    {
-        let s = self.string.as_str().chars();
-        if self.produce_char {
-            Ok(Box::new(s.map(move |x| heap.alloc(x))))
+    unsafe fn iterate(&self, _me: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        // Lazy implementation: we allocate a tuple and then iterate over it.
+        let iter = if self.produce_char {
+            heap.alloc_tuple_iter(self.string.as_str().chars().map(|c| heap.alloc(c)))
         } else {
-            Ok(Box::new(s.map(|x| Value::new_int(u32::from(x) as i32))))
-        }
-    }
-
-    fn with_iterator(
-        &self,
-        heap: &'v Heap,
-        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        let s = self.string.as_str().chars();
-        if self.produce_char {
-            f(&mut s.map(|x| heap.alloc(x)))
-        } else {
-            f(&mut s.map(|x| Value::new_int(u32::from(x) as i32)))
-        }
+            heap.alloc_tuple_iter(
+                self.string
+                    .as_str()
+                    .chars()
+                    .map(|c| Value::new_int(u32::from(c) as i32)),
+            )
+        };
+        Ok(iter)
     }
 }

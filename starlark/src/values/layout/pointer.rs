@@ -24,6 +24,7 @@
 // We group our bytes based on the tag info, not traditional alignment.
 #![allow(clippy::unusual_byte_groupings)]
 
+use std::cell::Cell;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem;
@@ -31,10 +32,9 @@ use std::num::NonZeroUsize;
 
 use dupe::Dupe;
 use either::Either;
-use gazebo::cast;
-use gazebo::phantom::PhantomDataInvariant;
 use static_assertions::assert_eq_size;
 
+use crate::cast;
 use crate::values::int::PointerI32;
 use crate::values::layout::heap::repr::AValueHeader;
 use crate::values::layout::heap::repr::AValueOrForward;
@@ -100,7 +100,7 @@ pub(crate) struct Pointer<'p> {
     pointer: RawPointer,
     // Make sure we are invariant in all the types/lifetimes.
     // See https://stackoverflow.com/questions/62659221/why-does-a-program-compile-despite-an-apparent-lifetime-mismatch
-    phantom: PhantomDataInvariant<&'p AValueHeader>,
+    _phantom: PhantomData<Cell<&'p AValueHeader>>,
 }
 
 // Similar to `Pointer` but allows widening lifetime, which is valid operation for frozen pointers.
@@ -155,9 +155,11 @@ fn untag_int(x: usize) -> i32 {
 impl<'p> Pointer<'p> {
     #[inline]
     fn new(pointer: usize) -> Self {
-        let phantom = PhantomDataInvariant::new();
         let pointer = unsafe { RawPointer::new_unchecked(pointer) };
-        Self { pointer, phantom }
+        Self {
+            pointer,
+            _phantom: PhantomData,
+        }
     }
 
     #[inline]
@@ -241,7 +243,7 @@ impl<'p> Pointer<'p> {
     pub unsafe fn cast_lifetime<'p2>(self) -> Pointer<'p2> {
         Pointer {
             pointer: self.pointer,
-            phantom: PhantomDataInvariant::new(),
+            _phantom: PhantomData,
         }
     }
 
@@ -297,7 +299,7 @@ impl<'p> FrozenPointer<'p> {
     pub(crate) fn to_pointer(self) -> Pointer<'p> {
         Pointer {
             pointer: self.pointer,
-            phantom: PhantomDataInvariant::new(),
+            _phantom: PhantomData,
         }
     }
 

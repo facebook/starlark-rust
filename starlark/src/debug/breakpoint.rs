@@ -45,9 +45,8 @@ impl AstModule {
 
 #[cfg(test)]
 mod tests {
-    use gazebo::prelude::*;
-
     use crate::assert;
+    use crate::slice_vec_ext::SliceExt;
 
     #[test]
     fn test_locations() {

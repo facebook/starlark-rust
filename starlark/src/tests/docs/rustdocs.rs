@@ -17,12 +17,13 @@
 
 use std::collections::HashMap;
 
+use starlark_derive::starlark_module;
 use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
 use crate::assert;
 use crate::docs::DocItem;
-use crate::docs::Member;
+use crate::docs::DocMember;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
@@ -87,7 +88,7 @@ fn test_rustdoc() {
         r#"
 def args_kwargs(*args, **kwargs: "") -> None: pass
 def custom_types(arg1: str.type, arg2: "input") -> "output": pass
-def default_arg(arg1: [None, ""] = None, arg2: "" = None) -> [str.type]: pass
+def default_arg(arg1 = "_", arg2: "" = None) -> [str.type]: pass
 def pos_named(arg1: int.type, *, arg2: int.type) -> int.type: pass
 def simple(arg_int: int.type, arg_bool: bool.type, arg_vec: [str.type], arg_dict: {str.type: (bool.type, int.type)}) -> None: pass
 def with_arguments(*args, **kwargs) -> int.type: pass
@@ -96,12 +97,12 @@ def with_arguments(*args, **kwargs) -> int.type: pass
 
     fn unpack(x: DocItem) -> HashMap<String, DocItem> {
         match x {
-            DocItem::Object(obj) => obj
+            DocItem::Module(obj) => obj
                 .members
                 .into_iter()
                 .filter_map(|(name, member)| match member {
-                    Member::Property(_) => None,
-                    Member::Function(f) => Some((name, DocItem::Function(f))),
+                    DocMember::Property(_) => None,
+                    DocMember::Function(f) => Some((name, DocItem::Function(f))),
                 })
                 .collect(),
             _ => HashMap::new(),
@@ -112,16 +113,17 @@ def with_arguments(*args, **kwargs) -> int.type: pass
         x.replace("\\\"int\\\"", "int.type")
             .replace("\\\"bool\\\"", "bool.type")
             .replace("\\\"string\\\"", "str.type")
-            .replace("Some(Type { raw_type: \"\\\"\\\"\" })", "None")
+            .replace("Some(DocType { raw_type: \"\\\"\\\"\" })", "None")
+            .replace("\\\"_\\\"", "_")
     }
 
-    let expected = expected.module_documentation().members;
+    let expected = expected.documentation().members;
     let got = unpack(got.documentation());
     assert_eq!(expected.len(), got.len());
     for (name, expected1) in expected.iter() {
         let got1 = got.get(name).unwrap();
         assert_eq!(
-            cleanup_types(&format!("{:?}", expected1.as_ref().unwrap())),
+            cleanup_types(&format!("{:?}", expected1)),
             cleanup_types(&format!("{:?}", got1)),
             "Function {}",
             name

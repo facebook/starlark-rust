@@ -29,8 +29,10 @@ use crate::collections::symbol_map::Symbol;
 use crate::collections::symbol_map::SymbolMap;
 use crate::collections::Hashed;
 use crate::collections::SmallMap;
-use crate::docs;
 use crate::docs::DocItem;
+use crate::docs::DocMember;
+use crate::docs::DocModule;
+use crate::docs::DocObject;
 use crate::docs::DocString;
 use crate::docs::DocStringKind;
 use crate::stdlib;
@@ -39,7 +41,6 @@ use crate::values::function::NativeAttribute;
 use crate::values::function::NativeCallableRawDocs;
 use crate::values::function::NativeFunc;
 use crate::values::function::NativeMeth;
-use crate::values::layout::value::ValueLike;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
 use crate::values::structs::AllocStruct;
 use crate::values::types::function::NativeFunction;
@@ -163,12 +164,13 @@ impl Globals {
             .join("\n")
     }
 
-    /// Get the documentation for both the object itself, and its members. Returned as an `Object`
+    /// Get the documentation for both the object itself, and its members. Returned as a `Module`.
     pub fn documentation(&self) -> DocItem {
-        common_documentation(
+        let DocObject { docs, members } = common_documentation(
             &self.0.docstring,
             self.0.variables.iter().map(|(n, v)| (n.as_str(), *v)),
-        )
+        );
+        DocItem::Module(DocModule { docs, members })
     }
 
     /// Get the documentation for each member. Useful when loading a number of objects into
@@ -215,15 +217,15 @@ impl Methods {
             .map(|(k, v)| (k.as_str(), v.to_frozen_value()))
     }
 
-    /// Fetch the documentation.
+    /// Fetch the documentation. Returned as an `Object`.
     pub fn documentation(&self) -> DocItem {
-        common_documentation(
+        DocItem::Object(common_documentation(
             &self.0.docstring,
             self.0
                 .members
                 .iter()
                 .map(|(n, v)| (n.as_str(), v.to_frozen_value())),
-        )
+        ))
     }
 }
 
@@ -553,39 +555,20 @@ impl MethodsStatic {
 fn common_documentation<'a>(
     docstring: &Option<String>,
     members: impl IntoIterator<Item = (&'a str, FrozenValue)>,
-) -> DocItem {
+) -> DocObject {
     let main_docs = docstring
         .as_ref()
         .and_then(|ds| DocString::from_docstring(DocStringKind::Rust, ds));
     let member_docs = members
         .into_iter()
-        .filter_map(|(name, val)| {
-            let m = match val.downcast_ref::<NativeAttribute>() {
-                Some(attr) => {
-                    let ds = attr
-                        .docstring
-                        .as_ref()
-                        .and_then(|ds| DocString::from_docstring(DocStringKind::Rust, ds));
-                    let typ = Some(docs::Type {
-                        raw_type: attr.typ.to_owned(),
-                    });
-                    // TODO(nmj): Pull the starlark type up here
-                    Some(docs::Member::Property(docs::Property { docs: ds, typ }))
-                }
-                None => val.to_value().documentation().and_then(|d| match d {
-                    DocItem::Module(_) | DocItem::Object(_) => None,
-                    DocItem::Function(f) => Some(docs::Member::Function(f)),
-                }),
-            };
-            m.map(|member| (name.to_owned(), member))
-        })
+        .map(|(name, val)| (name.to_owned(), DocMember::from_value(val.to_value())))
         .sorted_by(|(l, _), (r, _)| Ord::cmp(l, r))
         .collect();
 
-    DocItem::Object(docs::Object {
+    DocObject {
         docs: main_docs,
         members: member_docs,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -596,6 +579,7 @@ mod tests {
     use crate as starlark;
     use crate::any::ProvidesStaticType;
     use crate::assert::Assert;
+    use crate::starlark_simple_value;
     use crate::starlark_type;
     use crate::values::NoSerialize;
     use crate::values::StarlarkValue;

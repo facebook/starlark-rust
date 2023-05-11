@@ -21,5 +21,6 @@ mod and_or;
 mod compr;
 mod definitely_assigned;
 mod expr;
+mod for_stmt;
 pub(crate) mod golden;
 mod if_stmt;

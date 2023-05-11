@@ -23,9 +23,7 @@
 //! Bazel's .bzl files) or the BUILD file dialect (i.e. used to interpret
 //! Bazel's BUILD file). The BUILD dialect does not allow `def` statements.
 
-use std::mem;
-
-use gazebo::prelude::*;
+use starlark_derive::VisitSpanMut;
 use thiserror::Error;
 
 use crate::codemap::Span;
@@ -52,6 +50,8 @@ use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
+use crate::slice_vec_ext::SliceExt;
+use crate::slice_vec_ext::VecExt;
 use crate::syntax::ast::AssignOp;
 use crate::syntax::ast::AssignP;
 use crate::syntax::ast::DefP;
@@ -102,10 +102,6 @@ pub(crate) enum StmtCompiled {
 pub(crate) struct StmtCompileContext {
     /// Current function has return type.
     pub(crate) has_return_type: bool,
-    /// Insert `BeforeStmt` instruction before statement.
-    pub(crate) has_before_stmt: bool,
-    /// Instert bytecode profiling instructions.
-    pub(crate) bc_profile: bool,
     /// `RecordCallEnter`/`RecordCallExit` instructions for heap or flame profile.
     pub(crate) record_call_enter_exit: bool,
 }
@@ -517,26 +513,6 @@ impl Compiler<'_, '_, '_> {
     }
 }
 
-// This function should be called before every meaningful statement.
-// The purposes are GC, profiling and debugging.
-//
-// This function is called only if `before_stmt` is set before compilation start.
-pub(crate) fn before_stmt(span: FrameSpan, eval: &mut Evaluator) {
-    assert!(
-        eval.before_stmt.enabled(),
-        "this code should not be called if `before_stmt` is set"
-    );
-    let fs = mem::take(&mut eval.before_stmt.before_stmt);
-    for f in &fs {
-        f(span.span.file_span_ref(), eval)
-    }
-    let added = mem::replace(&mut eval.before_stmt.before_stmt, fs);
-    assert!(
-        added.is_empty(),
-        "`before_stmt` cannot be modified during evaluation"
-    );
-}
-
 // There are two requirements to perform a GC:
 //
 // 1. We can't be profiling, since profiling relies on the redundant heap
@@ -642,7 +618,7 @@ pub(crate) fn add_assign<'v>(
                 list.double(heap);
             } else {
                 // TODO: if RHS is list, consider calling `List::extend_from_slice`.
-                rhs.with_iterator(heap, |it| list.extend(it, heap))?;
+                list.extend(rhs.iterate(heap)?, heap);
             }
             Ok(lhs)
         }
@@ -655,8 +631,6 @@ impl Compiler<'_, '_, '_> {
     pub(crate) fn compile_context(&self, has_return_type: bool) -> StmtCompileContext {
         StmtCompileContext {
             has_return_type,
-            has_before_stmt: self.has_before_stmt,
-            bc_profile: self.bc_profile,
             record_call_enter_exit: self.eval.heap_or_flame_profile,
         }
     }

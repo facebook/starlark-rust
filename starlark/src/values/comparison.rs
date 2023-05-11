@@ -18,7 +18,6 @@
 use std::cmp::Ordering;
 use std::hash::Hash;
 
-use gazebo::prelude::*;
 use itertools::Itertools;
 use starlark_map::Equivalent;
 
@@ -29,10 +28,15 @@ pub(crate) fn equals_slice<E, X1, X2>(
     ys: &[X2],
     f: impl Fn(&X1, &X2) -> Result<bool, E>,
 ) -> Result<bool, E> {
-    Ok(eq_chain! {
-        xs.len() == ys.len(),
-        xs.iter().try_eq_by(ys, f)?,
-    })
+    if xs.len() != ys.len() {
+        return Ok(false);
+    }
+    for (x, y) in xs.iter().zip(ys) {
+        if !f(x, y)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 pub(crate) fn equals_small_map<E, K1: Eq, K2: Eq, V1, V2>(
@@ -43,12 +47,20 @@ pub(crate) fn equals_small_map<E, K1: Eq, K2: Eq, V1, V2>(
 where
     K1: Equivalent<K2>,
 {
-    Ok(eq_chain! {
-        x.len() == y.len(),
-        x.iter_hashed().try_all(
-            |(xk, xv)| y.get_hashed(xk).map_or(Ok(false), |yv| f(xv, yv))
-        )?,
-    })
+    if x.len() != y.len() {
+        return Ok(false);
+    }
+    for (xk, xv) in x.iter_hashed() {
+        match y.get_hashed(xk) {
+            None => return Ok(false),
+            Some(yv) => {
+                if !f(xv, yv)? {
+                    return Ok(false);
+                }
+            }
+        }
+    }
+    Ok(true)
 }
 
 pub(crate) fn compare_slice<E, X1, X2>(
@@ -56,10 +68,13 @@ pub(crate) fn compare_slice<E, X1, X2>(
     ys: &[X2],
     f: impl Fn(&X1, &X2) -> Result<Ordering, E>,
 ) -> Result<Ordering, E> {
-    Ok(cmp_chain! {
-        xs.len().cmp(&ys.len()),
-        xs.iter().try_cmp_by(ys, f)?,
-    })
+    for (x, y) in xs.iter().zip(ys) {
+        let cmp = f(x, y)?;
+        if cmp != Ordering::Equal {
+            return Ok(cmp);
+        }
+    }
+    Ok(xs.len().cmp(&ys.len()))
 }
 
 pub(crate) fn compare_small_map<E, K, K2: Ord + Hash, V1, V2>(
@@ -68,19 +83,29 @@ pub(crate) fn compare_small_map<E, K, K2: Ord + Hash, V1, V2>(
     key: impl Fn(&K) -> K2,
     f: impl Fn(&V1, &V2) -> Result<Ordering, E>,
 ) -> Result<Ordering, E> {
-    Ok(cmp_chain! {
-        // TODO(nga): this function is only used to compare structs,
-        //   and it compares them incorrectly. This code is supposed to return `False`:
-        //   ```
-        //   struct(b=1) < struct(a=1, x=1)
-        //   ```
-        //   It returns `True`.
-        x.len().cmp(&y.len()),
-        x.iter()
-            .sorted_by_key(|(k, _)| key(k))
-            .try_cmp_by(
-                y.iter().sorted_by_key(|(k, _)| key(k)),
-                |(xk, xv), (yk, yv)| Ok(cmp_chain! { key(xk).cmp(&key(yk)), f(xv, yv)? })
-            )?
-    })
+    // TODO(nga): this function is only used to compare structs,
+    //   and it compares them incorrectly. This code is supposed to return `False`:
+    //   ```
+    //   struct(b=1) < struct(a=1, x=1)
+    //   ```
+    //   It returns `True`.
+    let cmp = x.len().cmp(&y.len());
+    if cmp != Ordering::Equal {
+        return Ok(cmp);
+    }
+    for ((xk, xv), (yk, yv)) in x
+        .iter()
+        .sorted_by_key(|(k, _)| key(k))
+        .zip(y.iter().sorted_by_key(|(k, _)| key(k)))
+    {
+        let key_cmp = key(xk).cmp(&key(yk));
+        if key_cmp != Ordering::Equal {
+            return Ok(key_cmp);
+        }
+        let value_cmp = f(xv, yv)?;
+        if value_cmp != Ordering::Equal {
+            return Ok(value_cmp);
+        }
+    }
+    Ok(Ordering::Equal)
 }

@@ -27,6 +27,7 @@ use syn::Visibility;
 
 use crate::module::parse::ModuleKind;
 use crate::module::util::is_type_name;
+use crate::module::util::unpack_option;
 
 #[derive(Debug)]
 pub(crate) struct StarModule {
@@ -105,7 +106,7 @@ pub(crate) struct StarFun {
     pub eval: Option<SpecialParam>,
     /// `anyhow::Result<T>`.
     pub return_type: Type,
-    pub starlark_return_type: Option<String>,
+    pub starlark_return_type: Option<Expr>,
     pub speculative_exec_safe: bool,
     pub body: Block,
     pub source: StarFunSource,
@@ -151,7 +152,7 @@ pub(crate) struct StarAttr {
     pub return_type: Type,
     /// `T`.
     pub return_type_arg: Type,
-    pub starlark_return_type: Option<String>,
+    pub starlark_return_type: Option<Expr>,
     pub speculative_exec_safe: bool,
     pub body: Block,
     pub docstring: Option<String>,
@@ -192,7 +193,7 @@ pub(crate) struct StarArg {
     pub pass_style: StarArgPassStyle,
     pub name: Ident,
     pub ty: Type,
-    pub starlark_type: Option<String>,
+    pub starlark_type: Option<Expr>,
     pub default: Option<Expr>,
     pub source: StarArgSource,
 }
@@ -223,6 +224,11 @@ pub(crate) enum StarFunSource {
 impl StarArg {
     pub fn is_option(&self) -> bool {
         is_type_name(&self.ty, "Option")
+    }
+
+    /// Remove the `Option` if it exists, otherwise return the real type.
+    pub fn without_option(&self) -> &Type {
+        unpack_option(&self.ty).unwrap_or(&self.ty)
     }
 
     pub fn is_value(&self) -> bool {

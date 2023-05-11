@@ -34,6 +34,7 @@ use serde::Serialize;
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::collections::StarlarkHasher;
+use crate::starlark_type;
 use crate::values::float::StarlarkFloat;
 use crate::values::num::Num;
 use crate::values::FrozenHeap;
@@ -371,7 +372,6 @@ impl<'v> StarlarkValue<'v> for StarlarkBigInt {
         }
     }
 
-    #[allow(clippy::collapsible_else_if)]
     fn right_shift(&self, other: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         match other.unpack_num() {
             None | Some(Num::Float(_)) => ValueError::unsupported_with(self, ">>", other),

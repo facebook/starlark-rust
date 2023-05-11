@@ -19,8 +19,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use gazebo::prelude::*;
-use gazebo::variants::VariantName;
 use thiserror::Error;
 
 use crate::codemap::CodeMap;
@@ -31,6 +29,8 @@ use crate::eval::compiler::scope::CstAssign;
 use crate::eval::compiler::scope::CstExpr;
 use crate::eval::compiler::scope::CstPayload;
 use crate::eval::compiler::scope::ResolvedIdent;
+use crate::slice_vec_ext::SliceExt;
+use crate::slice_vec_ext::VecExt;
 use crate::syntax::ast::ArgumentP;
 use crate::syntax::ast::AssignP;
 use crate::syntax::ast::AstLiteral;
@@ -324,7 +324,7 @@ impl TypingContext<'_> {
                 let span = lhs.span;
                 let rhs = self.expression_type(rhs);
                 let lhs = self.expression_assign(lhs);
-                self.expression_primitive_ty(op.variant_name(), lhs, vec![rhs], span)
+                self.expression_primitive_ty(&format!("{:?}", op), lhs, vec![rhs], span)
             }
             BindExpr::SetIndex(id, index, e) => {
                 let span = index.span;
@@ -496,7 +496,7 @@ impl TypingContext<'_> {
                         self.expression_primitive_ty("less", lhs, vec![rhs], span);
                         bool_ret
                     }
-                    _ => self.expression_primitive_ty(op.variant_name(), lhs, vec![rhs], span),
+                    _ => self.expression_primitive_ty(&format!("{:?}", op), lhs, vec![rhs], span),
                 }
             }
             ExprP::If(c_t_f) => {

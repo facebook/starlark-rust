@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-use gazebo::prelude::*;
+use starlark_derive::VisitSpanMut;
 
 use crate::coerce::coerce;
 use crate::collections::symbol_map::Symbol;
@@ -27,6 +27,7 @@ use crate::eval::compiler::Compiler;
 use crate::eval::runtime::arguments::ArgNames;
 use crate::eval::runtime::arguments::ArgumentsFull;
 use crate::eval::Arguments;
+use crate::slice_vec_ext::SliceExt;
 use crate::syntax::ast::ArgumentP;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
@@ -93,12 +94,14 @@ impl ArgsCompiledValue {
         let args = self
             .args
             .as_ref()
-            .try_map(|args| expr_to_value(args).ok_or(()))
+            .map(|args| expr_to_value(args).ok_or(()))
+            .transpose()
             .ok()?;
         let kwargs = self
             .kwargs
             .as_ref()
-            .try_map(|kwargs| expr_to_value(kwargs).ok_or(()))
+            .map(|kwargs| expr_to_value(kwargs).ok_or(()))
+            .transpose()
             .ok()?;
         Some(handler(&Arguments(ArgumentsFull {
             pos: &pos,

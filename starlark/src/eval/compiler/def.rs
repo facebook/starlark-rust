@@ -29,18 +29,20 @@ use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
-use gazebo::prelude::*;
 use once_cell::sync::Lazy;
+use starlark_derive::NoSerialize;
+use starlark_derive::VisitSpanMut;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::codemap::CodeMap;
 use crate::collections::Hashed;
 use crate::const_frozen_string;
-use crate::docs;
+use crate::docs::DocFunction;
 use crate::docs::DocItem;
 use crate::docs::DocString;
 use crate::docs::DocStringKind;
+use crate::docs::DocType;
 use crate::environment::FrozenModuleData;
 use crate::environment::Globals;
 use crate::eval::bc::bytecode::Bc;
@@ -70,6 +72,10 @@ use crate::eval::runtime::params::ParametersSpec;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
 use crate::eval::Arguments;
+use crate::slice_vec_ext::SliceExt;
+use crate::slice_vec_ext::VecExt;
+use crate::starlark_complex_values;
+use crate::starlark_type;
 use crate::syntax::ast::ParameterP;
 use crate::values::frozen_ref::AtomicFrozenRefOption;
 use crate::values::function::FUNCTION_TYPE;
@@ -507,7 +513,7 @@ pub(crate) struct DefGen<V> {
     /// `lambda` functions can be instantiated multiple times.
     pub(crate) def_info: FrozenRef<'static, DefInfo>,
     /// Any variables captured from the outer scope (nested def/lambda).
-    /// Values are either [`Value`] or [`FrozenValu`] pointing respectively to
+    /// Values are either [`Value`] or [`FrozenValue`] pointing respectively to
     /// [`ValueCaptured`] or [`FrozenValueCaptured`].
     captured: Vec<V>,
     // Important to ignore these field as it probably references DefGen in a cycle
@@ -561,24 +567,24 @@ impl<'v> Def<'v> {
 
 impl<'v, T1: ValueLike<'v>> DefGen<T1> {
     fn docs(&self) -> Option<DocItem> {
-        let parameter_types: HashMap<usize, docs::Type> = self
+        let parameter_types: HashMap<usize, DocType> = self
             .parameter_types
             .iter()
             .map(|(idx, _, v, _)| {
                 (
                     idx.0 as usize,
-                    docs::Type {
+                    DocType {
                         raw_type: v.to_value().to_repr(),
                     },
                 )
             })
             .collect();
 
-        let return_type = self.return_type.as_ref().map(|r| docs::Type {
+        let return_type = self.return_type.as_ref().map(|r| DocType {
             raw_type: r.0.to_value().to_repr(),
         });
 
-        let function_docs = docs::Function::from_docstring(
+        let function_docs = DocFunction::from_docstring(
             DocStringKind::Starlark,
             self.parameters
                 .documentation(parameter_types, HashMap::new()),
@@ -598,9 +604,7 @@ impl<'v> Freeze for Def<'v> {
         let parameter_types = self
             .parameter_types
             .into_try_map(|(i, s, v, t)| anyhow::Ok((i, s, v.freeze(freezer)?, t)))?;
-        let return_type = self
-            .return_type
-            .try_map(|(v, t)| anyhow::Ok((v.freeze(freezer)?, t)))?;
+        let return_type = self.return_type.freeze(freezer)?;
         let captured = self.captured.try_map(|x| x.freeze(freezer))?;
         let module = AtomicFrozenRefOption::new(self.module.load_relaxed());
         Ok(FrozenDef {
@@ -717,11 +721,17 @@ where
         'v: 'a,
     {
         let bc = self.bc();
-        alloca_frame(eval, bc.local_count, bc.max_stack_size, |eval| {
-            let slots = eval.current_frame.locals();
-            self.parameters.collect_inline(args, slots, eval.heap())?;
-            self.invoke_raw(eval)
-        })
+        alloca_frame(
+            eval,
+            bc.local_count,
+            bc.max_stack_size,
+            bc.max_loop_depth,
+            |eval| {
+                let slots = eval.current_frame.locals();
+                self.parameters.collect_inline(args, slots, eval.heap())?;
+                self.invoke_raw(eval)
+            },
+        )
     }
 
     pub(crate) fn invoke_with_args<'a, A: ArgumentsImpl<'v, 'a>>(
@@ -769,7 +779,7 @@ where
             debug_assert!(self.module.load_relaxed().is_some());
         }
         let res =
-            eval.with_function_context(self.module.load_relaxed(), |eval| self.bc().run(eval));
+            eval.with_function_context(self.module.load_relaxed(), |eval| eval.eval_bc(self.bc()));
 
         res.map_err(|EvalException(e)| e)
     }

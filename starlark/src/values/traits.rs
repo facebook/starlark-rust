@@ -35,6 +35,7 @@ use std::fmt::Write;
 
 use allocative::Allocative;
 use erased_serde::Serialize;
+use starlark_derive::starlark_internal_vtable;
 
 use crate::any::ProvidesStaticType;
 use crate::collections::Hashed;
@@ -65,7 +66,8 @@ use crate::values::ValueError;
 /// A Starlark type containing values will need to exist in two states: one containing [`Value`]
 /// and one containing [`FrozenValue`](crate::values::FrozenValue). To deal with that, if we are defining the type
 /// containing a single value, let's call it `One`, we'd define `OneGen`
-/// (for the general version), and then have the [`starlark_complex_value!`] macro
+/// (for the general version), and then have the
+/// [`starlark_complex_value!`](crate::starlark_complex_value!) macro
 /// generate `One` and `FrozenOne` aliases.
 ///
 /// ```
@@ -96,8 +98,8 @@ use crate::values::ValueError;
 /// }
 /// ```
 ///
-/// The [`starlark_complex_value!`] requires that the type have an instance for `Coerce`,
-/// then the macro defines two type aliases.
+/// The [`starlark_complex_value!`](crate::starlark_complex_value!) requires that
+/// the type have an instance for `Coerce`, then the macro defines two type aliases.
 ///
 /// ```
 /// # use crate::starlark::values::*;
@@ -137,12 +139,14 @@ use crate::values::ValueError;
 ///
 /// If the types are different between the frozen and non-frozen values you can define your own
 /// type specialisations as `type One<'v> = OneGen<Value<'v>>` and `type FrozenOne = OneGen<String>`
-/// and use [`starlark_complex_values!`] which will provide similar facilities to [`starlark_complex_value!`].
+/// and use [`starlark_complex_values!`](crate::starlark_complex_values!) which will provide similar facilities to
+/// [`starlark_complex_value!`](crate::starlark_type!).
 ///
 /// ## Other types
 ///
-/// The macro [`starlark_complex_value!`] is applicable when there is a single base type,
-/// `FooGen<V>`, with specialisations `FooGen<Value<'v>>` and `FooGen<FrozenValue>`.
+/// The macro [`starlark_complex_value!`](crate::starlark_complex_value!) is applicable
+/// when there is a single base type, `FooGen<V>`, with specialisations
+/// `FooGen<Value<'v>>` and `FooGen<FrozenValue>`.
 /// If you have a type where the difference between frozen and non-frozen does not follow this
 /// pattern then you will have to write instances of the traits you need manually.
 /// Examples of cases where the macro doesn't work include:
@@ -174,7 +178,7 @@ where
 /// There are only two required members of [`StarlarkValue`], namely
 /// [`TYPE`](StarlarkValue::TYPE)
 /// and [`get_type_value_static`](StarlarkValue::get_type_value_static).
-/// Both these should be implemented with the [`starlark_type!`] macro:
+/// Both these should be implemented with the [`starlark_type!`](crate::starlark_type!) macro:
 ///
 /// ```
 /// use starlark::values::StarlarkValue;
@@ -208,21 +212,21 @@ pub trait StarlarkValue<'v>:
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///
-    /// This can be only implemented by the [`starlark_type!`] macro.
+    /// This can be only implemented by the [`starlark_type!`](crate::starlark_type!) macro.
     const TYPE: &'static str;
 
     /// Like [`TYPE`](Self::TYPE), but returns a reusable [`FrozenStringValue`]
     /// pointer to it. This function deliberately doesn't take a heap,
     /// as it would not be performant to allocate a new value each time.
     ///
-    /// This can be only implemented by the [`starlark_type!`] macro.
+    /// This can be only implemented by the [`starlark_type!`](crate::starlark_type!) macro.
     fn get_type_value_static() -> FrozenStringValue;
 
     /// Return a string that is the representation of a type that a user would use in
     /// type annotations. This often will be the same as [`Self::TYPE`], but in
     /// some instances it might be slightly different than what is returned by `TYPE`.
     ///
-    /// This can be only implemented by the [`starlark_type!`] macro.
+    /// This can be only implemented by the [`starlark_type!`](crate::starlark_type!) macro.
     fn get_type_starlark_repr() -> String {
         format!("\"{}\"", Self::get_type_value_static().as_str())
     }
@@ -271,7 +275,6 @@ pub trait StarlarkValue<'v>:
     /// In many cases the `repr()` representation will also be a Starlark expression
     /// for creating the value.
     ///
-    /// # Examples:
     /// ```rust
     /// # starlark::assert::all_true(r#"
     /// repr("test") == '"test"'
@@ -418,28 +421,76 @@ pub trait StarlarkValue<'v>:
         ValueError::unsupported(self, "[::]")
     }
 
-    /// Returns an iterable over the value of this container if this value holds
-    /// an iterable container.
-    fn iterate<'a>(
-        &'a self,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
-    where
-        'v: 'a,
-    {
+    /// Implement iteration over the value of this container by providing
+    /// the values in a `Vec`.
+    fn iterate_collect(&self, _heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
         ValueError::unsupported(self, "(iter)")
     }
 
-    /// Call a function with the same iterator as would be returned from [`iterate`](StarlarkValue::iterate).
-    /// The one advantage is that the iterator does not need to be allocated in a [`Box`].
-    /// If you implement this function you must also implement [`iterate`](StarlarkValue::iterate),
-    /// but the reverse is not true (this function has a sensible default).
-    fn with_iterator(
-        &self,
-        heap: &'v Heap,
-        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        f(&mut *self.iterate(heap)?)
+    /// Returns an iterator over the value of this container if this value holds
+    /// an iterable container.
+    ///
+    /// **This function is hard to implement correctly.**
+    /// For example, returning a list from this function is memory violation,
+    /// because the list object acting as an iterator is assumed
+    /// to have the iteration lock acquired.
+    ///
+    /// Consider implementing [`iterate_collect`](Self::iterate_collect) instead
+    /// when possible.
+    ///
+    /// This function calls [`iterate_collect`](Self::iterate_collect) by default.
+    ///
+    /// Returned iterator value must implement
+    /// [`iter_next`](Self::iter_next) and [`iter_stop`](Self::iter_stop).
+    /// Default implementations of these functions panic.
+    ///
+    /// Starlark-rust guarantees that
+    /// * `iter_next` and `iter_stop` are only called on the value returned from `iterate`
+    /// * `iter_next` is called only before `iter_stop`
+    /// * `iter_stop` is called exactly once
+    ///
+    /// So implementations of iterators may acquire mutation lock in `iterate`,
+    /// assume that it is held in `iter_next`, and release it in `iter_stop`.
+    /// Obviously, there are no such guarantees if these functions are called directly.
+    unsafe fn iterate(&self, _me: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        Ok(heap.alloc_tuple(&self.iterate_collect(heap)?))
+    }
+
+    /// Returns the size hint for the iterator.
+    unsafe fn iter_size_hint(&self, _index: usize) -> (usize, Option<usize>) {
+        (0, None)
+    }
+
+    /// Yield the next value from the iterator.
+    ///
+    /// This function is called on the iterator value returned by [`iterate`](Self::iterate).
+    /// This function accepts an index, which starts at 0 and is incremented by 1
+    /// for each call to `iter_next`. The index can be used to implement
+    /// cheap iteration over simple containers like lists:
+    /// list [`iterate`](Self::iterate) just returns the list itself,
+    /// and the passed index is used to access the list elements.
+    ///
+    /// Default implementation panics.
+    ///
+    /// This function is only called before [`iter_stop`](Self::iter_stop).
+    unsafe fn iter_next(&self, _index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
+        panic!(
+            "iter_next called on non-iterable value of type {}",
+            Self::TYPE
+        )
+    }
+
+    /// Indicate that the iteration is finished.
+    ///
+    /// This function is typically used to release mutation lock.
+    /// The function must be implemented for iterators even if it does nothing.
+    ///
+    /// This function is called exactly once for the iterator.
+    unsafe fn iter_stop(&self) {
+        panic!(
+            "iter_stop called on non-iterable value of type {}",
+            Self::TYPE
+        )
     }
 
     /// Returns the length of the value, if this value is a sequence.
@@ -554,7 +605,7 @@ pub trait StarlarkValue<'v>:
         None
     }
 
-    /// Substract `other` from the current value.
+    /// Subtract `other` from the current value.
     ///
     /// # Examples
     ///

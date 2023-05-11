@@ -19,6 +19,8 @@
 
 use std::mem;
 
+use starlark_derive::starlark_module;
+
 use crate as starlark;
 use crate::environment::MethodsBuilder;
 use crate::hint::unlikely;
@@ -36,11 +38,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     ///
     /// `D.clear()` removes all the entries of dictionary D and returns `None`.
     /// It fails if the dictionary is frozen or if there are active iterators.
-    ///
-    ///
-    /// `dict·clear` is not provided by the Java implementation.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
@@ -65,8 +62,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// present.
     ///
     /// `get` fails if `key` is unhashable.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
@@ -99,8 +94,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// dictionary D, in the same order as they would be returned by a `for`
     /// loop.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::is_true(r#"
     /// x = {"one": 1, "two": 2}
@@ -118,8 +111,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     ///
     /// `D.keys()` returns a new list containing the keys of dictionary D, in
     /// the same order as they would be returned by a `for` loop.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
@@ -143,8 +134,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     ///
     /// `pop` fails if `key` is unhashable, or the dictionary is frozen or has
     /// active iterators.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
@@ -199,8 +188,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// `popitem` fails if the dictionary is empty, frozen, or has active
     /// iterators.
     ///
-    /// Examples:
-    ///
     /// ```
     /// # starlark::assert::is_true(r#"
     /// x = {"one": 1, "two": 2}
@@ -243,8 +230,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     ///
     /// `setdefault` fails if the key is unhashable or if the dictionary is
     /// frozen.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
@@ -295,8 +280,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// corresponding value being `value`.
     ///
     /// `update` fails if the dictionary is frozen.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"
@@ -356,8 +339,6 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     /// `D.values()` returns a new list containing the dictionary's values, in
     /// the same order as they would be returned by a `for` loop over the
     /// dictionary.
-    ///
-    /// Examples:
     ///
     /// ```
     /// # starlark::assert::is_true(r#"

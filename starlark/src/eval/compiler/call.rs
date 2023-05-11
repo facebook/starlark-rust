@@ -19,7 +19,7 @@
 
 use std::cell::Cell;
 
-use gazebo::prelude::*;
+use starlark_derive::VisitSpanMut;
 
 use crate::collections::symbol_map::Symbol;
 use crate::eval::compiler::args::ArgsCompiledValue;
@@ -33,8 +33,9 @@ use crate::eval::compiler::span::IrSpanned;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::runtime::inlined_frame::InlinedFrameAlloc;
 use crate::eval::runtime::visit_span::VisitSpanMut;
+use crate::slice_vec_ext::VecExt;
 use crate::values::enumeration::FrozenEnumType;
-use crate::values::string::interpolation::parse_format_one;
+use crate::values::string::dot_format::parse_format_one;
 use crate::values::FrozenStringValue;
 use crate::values::Value;
 

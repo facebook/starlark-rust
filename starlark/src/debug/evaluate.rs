@@ -81,7 +81,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
         }
 
         let orig_module_variables = mem::replace(&mut self.module_variables, None);
-        let globals = self.top_second_frame_def_info_for_debugger()?.globals;
+        let globals = self.top_frame_def_info_for_debugger()?.globals;
         let res = self.eval_module(statements, &globals);
         self.module_variables = orig_module_variables;
 
@@ -110,6 +110,7 @@ impl<'v, 'a> Evaluator<'v, 'a> {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
+    use starlark_derive::starlark_module;
 
     use super::*;
     use crate as starlark;

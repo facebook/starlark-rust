@@ -23,9 +23,10 @@ use std::fmt::Formatter;
 use std::slice;
 
 use allocative::Allocative;
-use gazebo::display::display_container;
+use display_container::fmt_container;
 use serde::ser::SerializeTuple;
 use serde::Serialize;
+use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -33,6 +34,7 @@ use crate::coerce::coerce;
 use crate::coerce::Coerce;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
+use crate::starlark_type;
 use crate::values::comparison::compare_slice;
 use crate::values::comparison::equals_slice;
 use crate::values::index::apply_slice;
@@ -65,7 +67,7 @@ impl<'v, V: ValueLike<'v>> Display for TupleGen<V> {
                 write!(f, "({},)", self.content()[0])
             }
         } else {
-            display_container(f, "(", ")", self.content().iter())
+            fmt_container(f, "(", ")", self.content().iter())
         }
     }
 }
@@ -199,23 +201,21 @@ where
         Ok(heap.alloc_tuple(&apply_slice(coerce(self.content()), start, stop, stride)?))
     }
 
-    fn iterate<'a>(
-        &'a self,
-        _heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'a>>
-    where
-        'v: 'a,
-    {
-        Ok(Box::new(self.iter()))
+    unsafe fn iterate(&self, me: Value<'v>, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        Ok(me)
     }
 
-    fn with_iterator(
-        &self,
-        _heap: &'v Heap,
-        f: &mut dyn FnMut(&mut dyn Iterator<Item = Value<'v>>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        f(&mut self.iter())
+    unsafe fn iter_size_hint(&self, index: usize) -> (usize, Option<usize>) {
+        debug_assert!(index <= self.len());
+        let rem = self.len() - index;
+        (rem, Some(rem))
     }
+
+    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
+        self.content().get(index).map(|v| v.to_value())
+    }
+
+    unsafe fn iter_stop(&self) {}
 
     fn add(&self, other: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
         if let Some(other) = Tuple::from_value(other) {

@@ -15,10 +15,9 @@
  * limitations under the License.
  */
 
-use gazebo::prelude::*;
-
 use crate::assert;
 use crate::assert::Assert;
+use crate::slice_vec_ext::SliceExt;
 use crate::syntax::ast::Stmt;
 
 #[test]
@@ -30,6 +29,22 @@ fn test_empty() {
     // Empty trailing bits
     assert_eq!(assert::parse("x = 1\n   "), "x = 1\n");
     assert_eq!(assert::parse("x = 1\n   \n"), "x = 1\n");
+}
+
+#[test]
+fn test_assign_op() {
+    assert_eq!(assert::parse("x = 1\n"), "x = 1\n");
+    assert_eq!(assert::parse("x += 1\n"), "x += 1\n");
+    assert_eq!(assert::parse("x -= 1\n"), "x -= 1\n");
+    assert_eq!(assert::parse("x *= 1\n"), "x *= 1\n");
+    assert_eq!(assert::parse("x /= 1\n"), "x /= 1\n");
+    assert_eq!(assert::parse("x //= 1\n"), "x //= 1\n");
+    assert_eq!(assert::parse("x %= 1\n"), "x %= 1\n");
+    assert_eq!(assert::parse("x &= 1\n"), "x &= 1\n");
+    assert_eq!(assert::parse("x |= 1\n"), "x |= 1\n");
+    assert_eq!(assert::parse("x ^= 1\n"), "x ^= 1\n");
+    assert_eq!(assert::parse("x <<= 1\n"), "x <<= 1\n");
+    assert_eq!(assert::parse("x >>= 1\n"), "x >>= 1\n");
 }
 
 #[test]

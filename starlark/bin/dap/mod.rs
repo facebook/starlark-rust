@@ -15,32 +15,26 @@
  * limitations under the License.
  */
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
 use debugserver_types::*;
 use dupe::Dupe;
-use dupe::OptionDupedExt;
-use gazebo::prelude::*;
 pub(crate) use library::*;
 use serde_json::Map;
 use serde_json::Value;
-use starlark::codemap::FileSpan;
-use starlark::codemap::FileSpanRef;
+use starlark::debug::dap_capabilities;
+use starlark::debug::prepare_dap_adapter;
+use starlark::debug::resolve_breakpoints;
+use starlark::debug::DapAdapter;
+use starlark::debug::DapAdapterClient;
+use starlark::debug::DapAdapterEvalHook;
 use starlark::environment::Module;
 use starlark::eval::Evaluator;
 use starlark::syntax::AstModule;
-use starlark::syntax::Dialect;
 
 use crate::eval::dialect;
 use crate::eval::globals;
@@ -49,60 +43,38 @@ mod library;
 
 #[derive(Debug)]
 struct Backend {
+    adapter: Arc<dyn DapAdapter>,
+    eval_wrapper: Mutex<Option<Box<dyn DapAdapterEvalHook>>>,
     client: Client,
     file: Mutex<Option<String>>,
-
-    // These breakpoints must all match statements as per before_stmt.
-    // Those values for which we abort the execution.
-    breakpoints: Arc<Mutex<HashMap<String, HashSet<FileSpan>>>>,
-    // Set while we are doing evaluate calls (>= 1 means disable)
-    disable_breakpoints: Arc<AtomicUsize>,
-
-    sender: Sender<Box<dyn Fn(FileSpanRef, &mut Evaluator) -> Next + Send>>,
-    receiver: Arc<Mutex<Receiver<Box<dyn Fn(FileSpanRef, &mut Evaluator) -> Next + Send>>>>,
 }
 
-enum Next {
-    Continue,
-    RemainPaused,
+impl DapAdapterClient for Client {
+    fn event_stopped(&self) {
+        self.event_stopped(StoppedEventBody {
+            reason: "breakpoint".to_owned(),
+            thread_id: Some(0),
+            description: Some("Hello".to_owned()),
+            all_threads_stopped: Some(true),
+            preserve_focus_hint: None,
+            text: None,
+        });
+    }
+}
+
+fn get_ast(source: &str) -> anyhow::Result<Arc<AstModule>> {
+    Ok(Arc::new(AstModule::parse_file(
+        Path::new(source),
+        &dialect(),
+    )?))
 }
 
 impl Backend {
-    fn inject<T: 'static + Send>(
-        &self,
-        f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> (Next, T) + Send>,
-    ) -> T {
-        let (sender, receiver) = channel();
-        self.sender
-            .send(Box::new(move |span, eval| {
-                let (next, res) = f(span, eval);
-                sender.send(res).unwrap();
-                next
-            }))
-            .unwrap();
-        receiver.recv().unwrap()
-    }
-
-    fn inject_continue(&self) {
-        self.inject(Box::new(|_, _| (Next::Continue, ())))
-    }
-
-    fn with_ctx<T: 'static + Send>(
-        &self,
-        f: Box<dyn Fn(FileSpanRef, &mut Evaluator) -> T + Send>,
-    ) -> T {
-        self.inject(Box::new(move |span, eval| {
-            (Next::RemainPaused, f(span, eval))
-        }))
-    }
-
     fn execute(&self, path: &str) {
         let client = self.client.dupe();
         let client2 = self.client.dupe();
+        let wrapper = self.eval_wrapper.lock().unwrap().take().unwrap();
         let path = PathBuf::from(path);
-        let breakpoints = self.breakpoints.dupe();
-        let disable_breakpoints = self.disable_breakpoints.dupe();
-        let receiver = self.receiver.dupe();
 
         let go = move || -> anyhow::Result<String> {
             client.log(&format!("EVALUATION PREPARE: {}", path.display()));
@@ -110,35 +82,8 @@ impl Backend {
             let module = Module::new();
             let globals = globals();
             let mut eval = Evaluator::new(&module);
-            let fun = |span_loc: FileSpanRef, eval: &mut Evaluator| {
-                let stop = if disable_breakpoints.load(Ordering::SeqCst) > 0 {
-                    false
-                } else {
-                    let breaks = breakpoints.lock().unwrap();
-                    breaks
-                        .get(span_loc.filename())
-                        .map(|set| set.contains(&span_loc.to_file_span()))
-                        .unwrap_or_default()
-                };
-                if stop {
-                    client.event_stopped(StoppedEventBody {
-                        reason: "breakpoint".to_owned(),
-                        thread_id: Some(0),
-                        description: Some("Hello".to_owned()),
-                        all_threads_stopped: Some(true),
-                        preserve_focus_hint: None,
-                        text: None,
-                    });
-                    loop {
-                        let msg = receiver.lock().unwrap().recv().unwrap();
-                        match msg(span_loc, eval) {
-                            Next::Continue => break,
-                            Next::RemainPaused => continue,
-                        }
-                    }
-                }
-            };
-            eval.before_stmt_for_dap(&fun);
+            wrapper.add_dap_hooks(&mut eval);
+
             // No way to pass back success/failure to the caller
             client.log(&format!("EVALUATION START: {}", path.display()));
             let v = eval.eval_module(ast, &globals)?;
@@ -170,68 +115,20 @@ impl Backend {
     }
 }
 
-fn breakpoint(verified: bool) -> Breakpoint {
-    Breakpoint {
-        column: None,
-        end_column: None,
-        end_line: None,
-        id: None,
-        line: None,
-        message: None,
-        source: None,
-        verified,
-    }
-}
-
 impl DebugServer for Backend {
     fn initialize(&self, _: InitializeRequestArguments) -> anyhow::Result<Option<Capabilities>> {
         self.client.event_initialized(None);
-        Ok(Some(Capabilities {
-            supports_configuration_done_request: Some(true),
-            supports_evaluate_for_hovers: Some(true),
-            supports_set_variable: Some(true),
-            supports_step_in_targets_request: Some(true),
-            ..Capabilities::default()
-        }))
+        Ok(Some(dap_capabilities()))
     }
 
     fn set_breakpoints(
         &self,
         x: SetBreakpointsArguments,
     ) -> anyhow::Result<SetBreakpointsResponseBody> {
-        let breakpoints = x.breakpoints.unwrap_or_default();
-        let source = x.source.path.unwrap();
-
-        if breakpoints.is_empty() {
-            self.breakpoints.lock().unwrap().remove(&source);
-            Ok(SetBreakpointsResponseBody {
-                breakpoints: Vec::new(),
-            })
-        } else {
-            match AstModule::parse_file(Path::new(&source), &dialect()) {
-                Err(_) => {
-                    self.breakpoints.lock().unwrap().remove(&source);
-                    Ok(SetBreakpointsResponseBody {
-                        breakpoints: vec![breakpoint(false); breakpoints.len()],
-                    })
-                }
-                Ok(ast) => {
-                    let poss: HashMap<usize, FileSpan> = ast
-                        .stmt_locations()
-                        .iter()
-                        .map(|span| (span.resolve_span().begin_line, span.dupe()))
-                        .collect();
-                    let list = breakpoints.map(|x| poss.get(&(x.line as usize - 1)));
-                    self.breakpoints
-                        .lock()
-                        .unwrap()
-                        .insert(source, list.iter().filter_map(|x| x.duped()).collect());
-                    Ok(SetBreakpointsResponseBody {
-                        breakpoints: list.map(|x| breakpoint(x.is_some())),
-                    })
-                }
-            }
-        }
+        let source = x.source.path.as_ref().unwrap();
+        let resolved = resolve_breakpoints(&x, &*get_ast(source)?)?;
+        self.adapter.set_breakpoints(source, &resolved)?;
+        Ok(resolved.to_response())
     }
 
     fn set_exception_breakpoints(&self, _: SetExceptionBreakpointsArguments) -> anyhow::Result<()> {
@@ -269,130 +166,57 @@ impl DebugServer for Backend {
         Ok(())
     }
 
-    fn stack_trace(&self, _: StackTraceArguments) -> anyhow::Result<StackTraceResponseBody> {
-        fn convert_frame(id: usize, name: String, location: Option<FileSpan>) -> StackFrame {
-            let mut s = StackFrame {
-                id: id as i64,
-                name,
-                column: 0,
-                line: 0,
-                end_column: None,
-                end_line: None,
-                module_id: None,
-                presentation_hint: None,
-                source: None,
-            };
-            if let Some(loc) = location {
-                let span = loc.resolve_span();
-                s.line = span.begin_line as i64 + 1;
-                s.column = span.begin_column as i64 + 1;
-                s.end_line = Some(span.end_line as i64 + 1);
-                s.end_column = Some(span.end_column as i64 + 1);
-                s.source = Some(Source {
-                    path: Some(loc.filename().to_owned()),
-                    ..Source::default()
-                })
-            }
-            s
-        }
-
-        // Our model of a Frame and the debugger model are a bit different.
-        // We record the location of the call, but DAP wants the location we are at.
-        // We also have them in the wrong order
-        self.with_ctx(Box::new(|span, eval| {
-            let frames = eval.call_stack().into_frames();
-            let mut next = Some(span.to_file_span());
-            let mut res = Vec::with_capacity(frames.len() + 1);
-            for (i, x) in frames.iter().rev().enumerate() {
-                res.push(convert_frame(i, x.name.clone(), next));
-                next = x.location.dupe();
-            }
-            res.push(convert_frame(10000, "Root".to_owned(), next));
-            Ok(StackTraceResponseBody {
-                total_frames: Some(res.len() as i64),
-                stack_frames: res,
-            })
-        }))
+    fn stack_trace(&self, v: StackTraceArguments) -> anyhow::Result<StackTraceResponseBody> {
+        self.adapter.stack_trace(v)
     }
 
     fn scopes(&self, _: ScopesArguments) -> anyhow::Result<ScopesResponseBody> {
-        self.with_ctx(Box::new(|_, eval| {
-            let vars = eval.local_variables();
-            Ok(ScopesResponseBody {
-                scopes: vec![Scope {
-                    name: "Locals".to_owned(),
-                    named_variables: Some(vars.len() as i64),
-                    variables_reference: 2000,
-                    expensive: false,
-                    column: None,
-                    end_column: None,
-                    end_line: None,
-                    indexed_variables: None,
-                    line: None,
-                    source: None,
-                }],
-            })
-        }))
+        let scopes_info = self.adapter.scopes()?;
+        Ok(ScopesResponseBody {
+            scopes: vec![Scope {
+                name: "Locals".to_owned(),
+                named_variables: Some(scopes_info.num_locals as i64),
+                variables_reference: 2000,
+                expensive: false,
+                column: None,
+                end_column: None,
+                end_line: None,
+                indexed_variables: None,
+                line: None,
+                source: None,
+            }],
+        })
     }
 
     fn variables(&self, _: VariablesArguments) -> anyhow::Result<VariablesResponseBody> {
-        self.with_ctx(Box::new(|_, eval| {
-            let vars = eval.local_variables();
-            Ok(VariablesResponseBody {
-                variables: vars
-                    .into_iter()
-                    .map(|(name, value)| Variable {
-                        name,
-                        value: value.to_string(),
-                        type_: Some(value.get_type().to_owned()),
-                        evaluate_name: None,
-                        indexed_variables: None,
-                        named_variables: None,
-                        presentation_hint: None,
-                        variables_reference: 0,
-                    })
-                    .collect(),
-            })
-        }))
-    }
-
-    fn continue_(&self, _: ContinueArguments) -> anyhow::Result<ContinueResponseBody> {
-        self.inject_continue();
-        Ok(ContinueResponseBody::default())
+        let vars_info = self.adapter.variables()?;
+        Ok(VariablesResponseBody {
+            variables: vars_info
+                .locals
+                .into_iter()
+                .map(|var| var.to_dap())
+                .collect(),
+        })
     }
 
     fn evaluate(&self, x: EvaluateArguments) -> anyhow::Result<EvaluateResponseBody> {
-        let disable_breakpoints = self.disable_breakpoints.dupe();
-        self.with_ctx(Box::new(move |_, eval| {
-            // We don't want to trigger breakpoints during an evaluate,
-            // not least because we currently don't allow reenterant evaluate
-            disable_breakpoints.fetch_add(1, Ordering::SeqCst);
-            let ast = AstModule::parse("interactive", x.expression.clone(), &Dialect::Extended);
-            let s = match ast.and_then(|ast| eval.eval_statements(ast)) {
-                Err(e) => format!("{:#}", e),
-                Ok(v) => v.to_string(),
-            };
-            disable_breakpoints.fetch_sub(1, Ordering::SeqCst);
-            Ok(EvaluateResponseBody {
-                indexed_variables: None,
-                named_variables: None,
-                presentation_hint: None,
-                result: s,
-                type_: None,
-                variables_reference: 0.0,
-            })
-        }))
+        self.adapter.evaluate(&x.expression)
+    }
+
+    fn continue_(&self, _: ContinueArguments) -> anyhow::Result<ContinueResponseBody> {
+        self.adapter.continue_()?;
+        Ok(ContinueResponseBody::default())
     }
 }
 
 pub(crate) fn server() {
-    let (sender, receiver) = channel();
-    DapService::run(|client| Backend {
-        client,
-        breakpoints: Default::default(),
-        disable_breakpoints: Default::default(),
-        file: Default::default(),
-        sender,
-        receiver: Arc::new(Mutex::new(receiver)),
+    DapService::run(|client| {
+        let (adapter, wrapper) = prepare_dap_adapter(Box::new(client.dupe()));
+        Backend {
+            adapter: Arc::new(adapter),
+            eval_wrapper: Mutex::new(Some(Box::new(wrapper))),
+            client,
+            file: Default::default(),
+        }
     })
 }

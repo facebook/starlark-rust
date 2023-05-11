@@ -17,8 +17,13 @@
 
 use std::collections::HashMap;
 
+use starlark_map::small_map::SmallMap;
+
 use crate::docs::Doc;
 use crate::docs::DocItem;
+use crate::docs::DocMember;
+use crate::docs::DocModule;
+use crate::docs::DocObject;
 use crate::typing::Ty;
 use crate::typing::TypingOracle;
 
@@ -43,14 +48,20 @@ impl OracleDocs {
 
     /// Like [`Self::new`], but adding to an existing oracle (overwriting any duplicates).
     pub fn add_doc(&mut self, doc: &Doc) {
+        fn add_members(me: &mut OracleDocs, doc: &Doc, members: &SmallMap<String, DocMember>) {
+            let mut items = HashMap::with_capacity(members.len());
+            for (name, member) in members {
+                items.insert(name.clone(), Ty::from_docs_member(member));
+            }
+            me.objects.insert(doc.id.name.clone(), items);
+        }
+
         match &doc.item {
-            DocItem::Module(_) => {} // These don't have any useful info
-            DocItem::Object(obj) => {
-                let mut items = HashMap::with_capacity(obj.members.len());
-                for (name, member) in &obj.members {
-                    items.insert(name.clone(), Ty::from_docs_member(member));
-                }
-                self.objects.insert(doc.id.name.clone(), items);
+            DocItem::Module(modu) => add_members(self, doc, &modu.members),
+            DocItem::Object(obj) => add_members(self, doc, &obj.members),
+            DocItem::Property(x) => {
+                self.functions
+                    .insert(doc.id.name.clone(), Ty::from_docs_property(x));
             }
             DocItem::Function(x) => {
                 self.functions
@@ -61,7 +72,7 @@ impl OracleDocs {
 
     /// Create a new [`OracleDocs`] given the documentation, usually from
     /// [`Globals::documentation`](crate::environment::Globals::documentation).
-    /// Only produces interesting content if the result is an [`Object`](crate::docs::Object) (which it is for those two).
+    /// Only produces interesting content if the result is an [`Object`](crate::docs::DocObject) (which it is for those two).
     pub fn new_object(docs: &DocItem) -> Self {
         let mut res = Self::default();
         res.add_object(docs);
@@ -70,11 +81,15 @@ impl OracleDocs {
 
     /// Like [`Self::new_object`], but adding to an existing oracle (overwriting any duplicates).
     pub fn add_object(&mut self, docs: &DocItem) {
-        if let DocItem::Object(obj) = docs {
-            for (name, member) in &obj.members {
-                self.functions
-                    .insert(name.clone(), Ty::from_docs_member(member));
+        match docs {
+            DocItem::Object(DocObject { members, .. })
+            | DocItem::Module(DocModule { members, .. }) => {
+                for (name, member) in members {
+                    self.functions
+                        .insert(name.clone(), Ty::from_docs_member(member));
+                }
             }
+            _ => {}
         }
     }
 }

@@ -80,7 +80,7 @@ use crate::analysis::definition::Definition;
 use crate::analysis::definition::DottedDefinition;
 use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
-use crate::analysis::exported::ExportedSymbolKind;
+use crate::analysis::exported::SymbolKind as ExportedSymbolKind;
 use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
 use crate::lsp::server::LoadContentsError::WrongScheme;
@@ -121,7 +121,7 @@ pub enum LspUrlError {
     NotAbsolute(Url),
     /// For some reason the PathBuf/Url in the LspUrl could not be converted back to a URL.
     #[error("`{}` could not be converted back to a URL", .0)]
-    Unparseable(LspUrl),
+    Unparsable(LspUrl),
 }
 
 /// A URL that represents the two types (plus an "Other") of URIs that are supported.
@@ -214,10 +214,10 @@ impl TryFrom<&LspUrl> for Url {
     fn try_from(url: &LspUrl) -> Result<Self, Self::Error> {
         match &url {
             LspUrl::File(p) => {
-                Url::from_file_path(p).map_err(|_| LspUrlError::Unparseable(url.clone()))
+                Url::from_file_path(p).map_err(|_| LspUrlError::Unparsable(url.clone()))
             }
             LspUrl::Starlark(p) => Url::parse(&format!("starlark:{}", p.display()))
-                .map_err(|_| LspUrlError::Unparseable(url.clone())),
+                .map_err(|_| LspUrlError::Unparsable(url.clone())),
             LspUrl::Other(u) => Ok(u.clone()),
         }
     }
@@ -475,7 +475,7 @@ impl<T: LspContext> Backend<T> {
 
     /// Find the ultimate places that an identifier is defined.
     ///
-    /// Takes a definition location and if necesary loads other files trying
+    /// Takes a definition location and if necessary loads other files trying
     /// to find where the symbol was defined in a useful way. e.g. pointing to the
     /// symbol in a "load()" statement isn't useful, but going to the file it is
     /// loaded from and pointing at a function definition very much is.
@@ -762,10 +762,8 @@ impl<T: LspContext> Backend<T> {
                                         label: symbol.name.to_string(),
                                         detail: Some(format!("Load from {load_path}")),
                                         kind: Some(match symbol.kind {
-                                            ExportedSymbolKind::Variable => {
-                                                CompletionItemKind::CONSTANT
-                                            }
-                                            ExportedSymbolKind::Method => {
+                                            ExportedSymbolKind::Any => CompletionItemKind::CONSTANT,
+                                            ExportedSymbolKind::Function => {
                                                 CompletionItemKind::METHOD
                                             }
                                         }),

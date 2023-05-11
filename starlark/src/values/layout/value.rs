@@ -41,7 +41,6 @@ use dupe::Copy_;
 use dupe::Dupe;
 use dupe::Dupe_;
 use either::Either;
-use gazebo::cast;
 use num_bigint::BigInt;
 use serde::Serialize;
 use serde::Serializer;
@@ -50,6 +49,7 @@ use starlark_map::Equivalent;
 use crate as starlark;
 use crate::any::AnyLifetime;
 use crate::any::ProvidesStaticType;
+use crate::cast::transmute;
 use crate::coerce::coerce;
 use crate::coerce::Coerce;
 use crate::coerce::CoerceKey;
@@ -74,9 +74,11 @@ use crate::values::function::FrozenBoundMethod;
 use crate::values::function::NativeFunction;
 use crate::values::function::FUNCTION_TYPE;
 use crate::values::int::PointerI32;
+use crate::values::iter::StarlarkIterator;
 use crate::values::layout::avalue::basic_ref;
 use crate::values::layout::avalue::AValue;
 use crate::values::layout::avalue::StarlarkStrAValue;
+use crate::values::layout::avalue::VALUE_EMPTY_TUPLE;
 use crate::values::layout::avalue::VALUE_FALSE;
 use crate::values::layout::avalue::VALUE_NONE;
 use crate::values::layout::avalue::VALUE_TRUE;
@@ -272,6 +274,12 @@ impl<'v> Value<'v> {
         FrozenValue::new_empty_string().to_value()
     }
 
+    /// Create a new empty tuple.
+    #[inline]
+    pub(crate) fn new_empty_tuple() -> Self {
+        FrozenValue::new_empty_tuple().to_value()
+    }
+
     /// Turn a [`FrozenValue`] into a [`Value`]. See the safety warnings on
     /// [`OwnedFrozenValue`](crate::values::OwnedFrozenValue).
     #[inline]
@@ -301,8 +309,7 @@ impl<'v> Value<'v> {
     /// Is this value `None`.
     #[inline]
     pub fn is_none(self) -> bool {
-        // Safe because frozen values never have a tag
-        self.0.raw().ptr_value() == cast::ptr_to_usize(&VALUE_NONE)
+        self.ptr_eq(Value::new_none())
     }
 
     /// Obtain the underlying numerical value, if it is one.
@@ -332,11 +339,11 @@ impl<'v> Value<'v> {
     }
 
     /// Obtain the underlying `bool` if it is a boolean.
+    #[inline]
     pub fn unpack_bool(self) -> Option<bool> {
-        let p = self.0.raw().ptr_value();
-        if p == cast::ptr_to_usize(&VALUE_TRUE) {
+        if self.ptr_eq(Value::new_bool(true)) {
             Some(true)
-        } else if p == cast::ptr_to_usize(&VALUE_FALSE) {
+        } else if self.ptr_eq(Value::new_bool(false)) {
             Some(false)
         } else {
             None
@@ -400,6 +407,7 @@ impl<'v> Value<'v> {
     }
 
     /// Get a pointer to a [`AValue`].
+    #[inline]
     pub(crate) fn get_ref(self) -> AValueDyn<'v> {
         unsafe {
             match self.0.unpack() {
@@ -448,7 +456,7 @@ impl<'v> Value<'v> {
     /// Returns an identity for this [`Value`], derived from its pointer. This function is
     /// low-level and provides two guarantees. Those are valid until the next GC:
     ///
-    /// 1. Calling it mulitple times on the same [`Value`]  will return [`ValueIdentity`] that
+    /// 1. Calling it multiple times on the same [`Value`]  will return [`ValueIdentity`] that
     ///    compare equal.
     /// 2. If two [`Value]` have [`ValueIdentity`]  that compare equal, then [`Value::ptr_eq`] and
     ///    [`Value::equals`]  will also consider them to be equal.
@@ -721,35 +729,11 @@ impl<'v> Value<'v> {
         self.get_ref().documentation()
     }
 
-    /// Return the contents of an iterable collection, as an owned vector.
-    pub fn iterate_collect(self, heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
-        // You might reasonably think this is mostly called on lists (I think it is),
-        // and thus that a fast-path here would speed things up. But in my experiments
-        // it's completely irrelevant (you pay a bit for the check, you save a bit on each step).
-        self.with_iterator(heap, |it| it.collect())
-    }
-
-    /// Operate over an iterable for a value.
-    pub fn with_iterator<T>(
-        self,
-        heap: &'v Heap,
-        mut f: impl FnMut(&mut dyn Iterator<Item = Value<'v>>) -> T,
-    ) -> anyhow::Result<T> {
-        let mut res = None;
-        self.get_ref().with_iterator(heap, &mut |it| {
-            res = Some(f(it));
-            Ok(())
-        })?;
-        // Safe because if we ran the iterator, we should have called it and set `res`
-        Ok(res.take().expect("with_iterator to call the callback"))
-    }
-
     /// Produce an iterable from a value.
-    pub fn iterate(
-        self,
-        heap: &'v Heap,
-    ) -> anyhow::Result<Box<dyn Iterator<Item = Value<'v>> + 'v>> {
-        self.get_ref().iterate(heap)
+    #[inline]
+    pub fn iterate(self, heap: &'v Heap) -> anyhow::Result<StarlarkIterator<'v>> {
+        let iter = self.get_ref().iterate(self, heap)?;
+        Ok(StarlarkIterator::new(iter, heap))
     }
 
     /// Get the [`Hashed`] version of this [`Value`].
@@ -902,6 +886,12 @@ impl FrozenValue {
         VALUE_EMPTY_STRING.unpack()
     }
 
+    /// Create a new empty tuple.
+    #[inline]
+    pub(crate) fn new_empty_tuple() -> Self {
+        FrozenValue::new_repr(&VALUE_EMPTY_TUPLE)
+    }
+
     #[inline]
     pub(crate) fn ptr_value(self) -> RawPointer {
         self.0.raw()
@@ -910,20 +900,13 @@ impl FrozenValue {
     /// Is a value a Starlark `None`.
     #[inline]
     pub fn is_none(self) -> bool {
-        // Safe because frozen values never have a tag
-        self.0.raw().ptr_value() == cast::ptr_to_usize(&VALUE_NONE)
+        self.to_value().is_none()
     }
 
     /// Return the [`bool`] if the value is a boolean, otherwise [`None`].
+    #[inline]
     pub fn unpack_bool(self) -> Option<bool> {
-        let p = self.0.raw().ptr_value();
-        if p == cast::ptr_to_usize(&VALUE_TRUE) {
-            Some(true)
-        } else if p == cast::ptr_to_usize(&VALUE_FALSE) {
-            Some(false)
-        } else {
-            None
-        }
+        self.to_value().unpack_bool()
     }
 
     /// Return the int if the value is an integer, otherwise [`None`].

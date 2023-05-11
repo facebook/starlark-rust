@@ -24,7 +24,6 @@ use std::hash::Hasher;
 use std::mem;
 
 use allocative::Allocative;
-use gazebo::prelude::*;
 
 use crate::equivalent::Equivalent;
 use crate::hash_value::StarlarkHashValue;
@@ -50,7 +49,7 @@ pub(crate) struct Bucket<K, V> {
     value: V,
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.hash.hash(state);
@@ -60,9 +59,16 @@ impl<K: Hash, V: Hash> Hash for Bucket<K, V> {
     }
 }
 
-#[derive(Debug, Clone, Default_, Allocative)]
+#[derive(Debug, Clone, Allocative)]
 pub(crate) struct VecMap<K, V> {
     buckets: Vec2<(K, V), StarlarkHashValue>,
+}
+
+impl<K, V> Default for VecMap<K, V> {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<K, V> VecMap<K, V> {

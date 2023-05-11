@@ -17,7 +17,6 @@
 
 use std::collections::HashSet;
 
-use gazebo::variants::VariantName;
 use thiserror::Error;
 
 use crate::analysis::types::LintT;
@@ -31,7 +30,7 @@ use crate::syntax::ast::Expr;
 use crate::syntax::ast::Stmt;
 use crate::syntax::AstModule;
 
-#[derive(Error, Debug, VariantName)]
+#[derive(Error, Debug)]
 pub(crate) enum UnderscoreWarning {
     #[error("Underscore definitions should be simple `{0}`")]
     UnderscoreDefinition(String),
@@ -42,6 +41,13 @@ pub(crate) enum UnderscoreWarning {
 impl LintWarning for UnderscoreWarning {
     fn is_serious(&self) -> bool {
         false
+    }
+
+    fn short_name(&self) -> &'static str {
+        match self {
+            UnderscoreWarning::UnderscoreDefinition(..) => "underscore-definition",
+            UnderscoreWarning::UsingIgnored(..) => "using-ignored",
+        }
     }
 }
 
@@ -150,9 +156,8 @@ fn use_ignored(codemap: &CodeMap, x: &AstStmt, res: &mut Vec<LintT<UnderscoreWar
 
 #[cfg(test)]
 mod tests {
-    use gazebo::prelude::*;
-
     use super::*;
+    use crate::slice_vec_ext::SliceExt;
     use crate::syntax::Dialect;
 
     impl UnderscoreWarning {

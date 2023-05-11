@@ -19,11 +19,11 @@ use std::cell::RefCell;
 use std::marker;
 use std::marker::PhantomData;
 
-use gazebo::prelude::*;
 use starlark_map::small_map::SmallMap;
 use starlark_map::small_set::SmallSet;
 use starlark_map::Hashed;
 
+use crate::slice_vec_ext::VecExt;
 use crate::values::Freezer;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
@@ -164,7 +164,7 @@ where
     type Frozen = Option<T::Frozen>;
 
     fn freeze(self, freezer: &Freezer) -> anyhow::Result<Option<T::Frozen>> {
-        self.try_map(|v| v.freeze(freezer))
+        self.map(|v| v.freeze(freezer)).transpose()
     }
 }
 

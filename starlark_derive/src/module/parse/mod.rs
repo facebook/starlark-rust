@@ -18,9 +18,10 @@
 mod fun;
 
 use dupe::Dupe;
-use gazebo::prelude::*;
 use syn::spanned::Spanned;
 use syn::Attribute;
+use syn::Expr;
+use syn::ExprLit;
 use syn::FnArg;
 use syn::Item;
 use syn::ItemConst;
@@ -93,16 +94,22 @@ pub(crate) fn parse(mut input: ItemFn) -> syn::Result<StarModule> {
         stmts: input
             .block
             .stmts
-            .into_try_map(|stmt| parse_stmt(stmt, module_kind))?,
+            .into_iter()
+            .map(|stmt| parse_stmt(stmt, module_kind))
+            .collect::<syn::Result<_>>()?,
     })
 }
 
 fn is_attribute_docstring(x: &Attribute) -> Option<String> {
-    if x.path.is_ident("doc") {
-        if let Ok(Meta::NameValue(MetaNameValue {
-            lit: syn::Lit::Str(s),
+    if x.path().is_ident("doc") {
+        if let Meta::NameValue(MetaNameValue {
+            value:
+                Expr::Lit(ExprLit {
+                    lit: syn::Lit::Str(s),
+                    ..
+                }),
             ..
-        })) = x.parse_meta()
+        }) = &x.meta
         {
             return Some(s.value());
         }

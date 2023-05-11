@@ -22,7 +22,6 @@
 
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::mem;
 use std::time::Duration;
 use std::time::Instant;
@@ -31,9 +30,10 @@ use allocative::Allocative;
 use dupe::Dupe;
 use itertools::Itertools;
 
+use crate::cast::transmute;
 use crate::collections::Hashed;
-use crate::docs;
-use crate::docs::DocItem;
+use crate::docs::DocMember;
+use crate::docs::DocModule;
 use crate::docs::DocString;
 use crate::docs::DocStringKind;
 use crate::environment::names::FrozenNames;
@@ -97,15 +97,6 @@ pub(crate) struct FrozenModuleData {
     docstring: Option<String>,
     /// When heap profile enabled, this field stores retained memory info.
     heap_profile: Option<RetainedHeapProfile>,
-}
-
-/// Container for the documentation for a module
-#[derive(Clone, Debug, PartialEq)]
-pub struct ModuleDocs {
-    /// The documentation for the module itself
-    pub module: Option<DocItem>,
-    /// A mapping of top level symbols to their documentation, if any.
-    pub members: HashMap<String, Option<DocItem>>,
 }
 
 /// A container for user values, used during execution.
@@ -210,27 +201,18 @@ impl FrozenModule {
         self.module.all_items()
     }
 
-    /// Fetch the documentation for the module.
-    pub fn documentation(&self) -> Option<DocItem> {
-        self.module.documentation()
-    }
-
     /// The documentation for the module, and all of its top level values
     ///
     /// Returns `(<module documentation>, { <symbol> : <that symbol's documentation> })`
-    pub fn module_documentation(&self) -> ModuleDocs {
+    pub fn documentation(&self) -> DocModule {
         let members = self
-            .names()
-            .filter(|n| Module::default_visibility(n) == Visibility::Public)
-            .filter_map(|n| {
-                self.get(&n)
-                    .ok()
-                    .map(|fv| (n.as_str().to_owned(), fv.value().get_ref().documentation()))
-            })
+            .all_items()
+            .filter(|n| Module::default_visibility(n.0.as_str()) == Visibility::Public)
+            .map(|(k, v)| (k.as_str().to_owned(), DocMember::from_value(v.to_value())))
             .collect();
 
-        ModuleDocs {
-            module: self.documentation(),
+        DocModule {
+            docs: self.module.documentation(),
             members,
         }
     }
@@ -301,12 +283,10 @@ impl FrozenModuleData {
         None
     }
 
-    pub(crate) fn documentation(&self) -> Option<DocItem> {
-        self.docstring.as_ref().map(|d| {
-            DocItem::Module(docs::Module {
-                docs: DocString::from_docstring(DocStringKind::Starlark, d),
-            })
-        })
+    pub(crate) fn documentation(&self) -> Option<DocString> {
+        self.docstring
+            .as_ref()
+            .and_then(|d| DocString::from_docstring(DocStringKind::Starlark, d))
     }
 }
 
@@ -541,25 +521,27 @@ mod tests {
     #[test]
     fn test_gen_heap_summary_profile() {
         let module = Module::new();
-        let mut eval = Evaluator::new(&module);
-        eval.enable_profile(&ProfileMode::HeapSummaryRetained)
-            .unwrap();
-        eval.eval_module(
-            AstModule::parse(
-                "x.star",
-                r"
+        {
+            let mut eval = Evaluator::new(&module);
+            eval.enable_profile(&ProfileMode::HeapSummaryRetained)
+                .unwrap();
+            eval.eval_module(
+                AstModule::parse(
+                    "x.star",
+                    r"
 def f(x):
     return list([x])
 
 x = f(1)
 "
-                .to_owned(),
-                &Dialect::Extended,
+                    .to_owned(),
+                    &Dialect::Extended,
+                )
+                .unwrap(),
+                &Globals::standard(),
             )
-            .unwrap(),
-            &Globals::standard(),
-        )
-        .unwrap();
+            .unwrap();
+        }
         let module = module.freeze().unwrap();
         let profile_info = module.aggregated_heap_profile_info().unwrap();
         let heap_summary = profile_info.gen_summary_csv();
