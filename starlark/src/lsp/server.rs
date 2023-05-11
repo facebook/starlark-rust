@@ -779,12 +779,35 @@ impl<T: LspContext> Backend<T> {
                     }
                 }
 
-                Some(symbols.into_values().collect())
+                Some(
+                    symbols
+                        .into_values()
+                        .chain(Self::get_keyword_completion_items())
+                        .collect(),
+                )
             }
             None => None,
         };
 
         Ok(CompletionResponse::Array(symbols.unwrap_or_default()))
+    }
+
+    /// Get completion items for each language keyword.
+    fn get_keyword_completion_items() -> impl Iterator<Item = CompletionItem> {
+        [
+            // Actual keywords
+            "and", "else", "load", "break", "for", "not", "continue", "if", "or", "def", "in",
+            "pass", "elif", "return", "lambda", //
+            // Reserved words
+            "as", "import", "is", "class", "nonlocal", "del", "raise", "except", "try", "finally",
+            "while", "from", "with", "global", "yield",
+        ]
+        .into_iter()
+        .map(|keyword| CompletionItem {
+            label: keyword.to_string(),
+            kind: Some(CompletionItemKind::KEYWORD),
+            ..Default::default()
+        })
     }
 
     /// Given the workspace root and a target file, format the path as a path that load() understands.
