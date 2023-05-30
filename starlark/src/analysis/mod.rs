@@ -31,6 +31,7 @@ pub(crate) mod exported;
 mod find_call_name;
 mod flow;
 mod incompatible;
+pub(crate) mod loaded;
 mod names;
 mod performance;
 mod types;
