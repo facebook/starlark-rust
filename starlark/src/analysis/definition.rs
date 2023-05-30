@@ -17,6 +17,7 @@
 
 use std::iter;
 
+use super::loaded::LoadedSymbol;
 use crate::analysis::bind::scope;
 use crate::analysis::bind::Assigner;
 use crate::analysis::bind::Bind;
@@ -420,6 +421,11 @@ impl LspModule {
     /// Get the list of symbols exported by this module.
     pub(crate) fn get_exported_symbols(&self) -> Vec<Symbol<'_>> {
         self.ast.exported_symbols()
+    }
+
+    /// Get the list of symbols loaded by this module.
+    pub(crate) fn get_loaded_symbols(&self) -> Vec<LoadedSymbol<'_>> {
+        self.ast.loaded_symbols()
     }
 
     /// Attempt to find the location in this module where an exported symbol is defined.
