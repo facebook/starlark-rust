@@ -54,11 +54,14 @@ use lsp_types::Diagnostic;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
+use lsp_types::Documentation;
 use lsp_types::GotoDefinitionParams;
 use lsp_types::GotoDefinitionResponse;
 use lsp_types::InitializeParams;
 use lsp_types::LocationLink;
 use lsp_types::LogMessageParams;
+use lsp_types::MarkupContent;
+use lsp_types::MarkupKind;
 use lsp_types::MessageType;
 use lsp_types::OneOf;
 use lsp_types::Position;
@@ -86,6 +89,9 @@ use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
 use crate::codemap::Spanned;
+use crate::docs::DocItem;
+use crate::environment::GlobalSymbol;
+use crate::environment::GlobalSymbolKind;
 use crate::lsp::server::LoadContentsError::WrongScheme;
 use crate::syntax::ast::AssignIdentP;
 use crate::syntax::ast::AstPayload;
@@ -303,6 +309,9 @@ pub trait LspContext {
             .map(|content| self.parse_file_with_contents(uri, content));
         Ok(result)
     }
+
+    /// Get a list of all known global symbols.
+    fn get_global_symbols(&self) -> Vec<GlobalSymbol>;
 
     /// Get the LSPUrl for a global symbol if possible.
     ///
@@ -700,6 +709,7 @@ impl<T: LspContext> Backend<T> {
                 Some(
                     symbols
                         .into_values()
+                        .chain(self.get_global_symbol_completion_items())
                         .chain(Self::get_keyword_completion_items())
                         .collect(),
                 )
@@ -780,6 +790,36 @@ impl<T: LspContext> Backend<T> {
         }
 
         result
+    }
+
+    fn get_global_symbol_completion_items(&self) -> impl Iterator<Item = CompletionItem> + '_ {
+        self.context
+            .get_global_symbols()
+            .into_iter()
+            .map(|symbol| CompletionItem {
+                label: symbol.name.to_owned(),
+                kind: Some(match symbol.kind {
+                    GlobalSymbolKind::Function => CompletionItemKind::FUNCTION,
+                    GlobalSymbolKind::Constant => CompletionItemKind::CONSTANT,
+                }),
+                documentation: symbol.documentation.map(|docs| {
+                    Documentation::MarkupContent(MarkupContent {
+                        // The doc item is rendered as code, so embed it in markdown, indicating
+                        // the syntax, in order to render correctly.
+                        kind: MarkupKind::Markdown,
+                        value: format!(
+                            "```starlark\n{}\n```",
+                            match docs {
+                                DocItem::Module(m) => m.render_as_code(),
+                                DocItem::Object(o) => o.render_as_code(symbol.name),
+                                DocItem::Function(f) => f.render_as_code(symbol.name),
+                                DocItem::Property(p) => p.render_as_code(symbol.name),
+                            }
+                        ),
+                    })
+                }),
+                ..Default::default()
+            })
     }
 
     fn get_load_text_edit<P>(

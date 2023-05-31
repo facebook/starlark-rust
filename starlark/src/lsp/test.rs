@@ -63,6 +63,8 @@ use crate::docs::DocFunction;
 use crate::docs::DocItem;
 use crate::docs::Identifier;
 use crate::docs::Location;
+use crate::environment::GlobalSymbol;
+use crate::environment::GlobalSymbolKind;
 use crate::errors::EvalMessage;
 use crate::lsp::server::new_notification;
 use crate::lsp::server::server_with_connection;
@@ -226,6 +228,17 @@ impl LspContext for TestServerContext {
         symbol: &str,
     ) -> anyhow::Result<Option<LspUrl>> {
         Ok(self.builtin_symbols.get(symbol).cloned())
+    }
+
+    fn get_global_symbols(&self) -> Vec<GlobalSymbol> {
+        self.builtin_symbols
+            .keys()
+            .map(|name| GlobalSymbol {
+                name,
+                kind: GlobalSymbolKind::Function,
+                documentation: None,
+            })
+            .collect()
     }
 }
 

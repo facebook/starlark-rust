@@ -41,6 +41,7 @@ use crate::values::function::NativeAttribute;
 use crate::values::function::NativeCallableRawDocs;
 use crate::values::function::NativeFunc;
 use crate::values::function::NativeMeth;
+use crate::values::function::FUNCTION_TYPE;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
 use crate::values::structs::AllocStruct;
 use crate::values::types::function::NativeFunction;
@@ -104,6 +105,24 @@ pub struct MethodsBuilder {
     docstring: Option<String>,
 }
 
+/// A globally available symbol, e.g. `True` or `dict`.
+pub struct GlobalSymbol<'a> {
+    /// The name of the symbol.
+    pub(crate) name: &'a str,
+    /// The type of the symbol.
+    pub(crate) kind: GlobalSymbolKind,
+    /// The description of this symbol.
+    pub(crate) documentation: Option<DocItem>,
+}
+
+/// A kind of globally available symbol.
+pub enum GlobalSymbolKind {
+    /// A global function, e.g. `dict`.
+    Function,
+    /// A constant, e.g. `True`.
+    Constant,
+}
+
 impl Globals {
     /// Create an empty [`Globals`], with no functions in scope.
     pub fn new() -> Self {
@@ -149,6 +168,22 @@ impl Globals {
     /// Get all the names defined in this environment.
     pub fn names(&self) -> impl Iterator<Item = FrozenStringValue> + '_ {
         self.0.variable_names.iter().copied()
+    }
+
+    /// Get all symbols defined in this environment.
+    pub fn symbols(&self) -> impl Iterator<Item = GlobalSymbol<'_>> {
+        self.0
+            .variables
+            .iter()
+            .map(|(name, variable)| GlobalSymbol {
+                name: name.as_str(),
+                kind: if variable.to_value().get_type() == FUNCTION_TYPE {
+                    GlobalSymbolKind::Function
+                } else {
+                    GlobalSymbolKind::Constant
+                },
+                documentation: variable.to_value().documentation(),
+            })
     }
 
     pub(crate) fn heap(&self) -> &FrozenHeapRef {

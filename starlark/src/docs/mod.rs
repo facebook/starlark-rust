@@ -365,7 +365,7 @@ pub struct DocModule {
 }
 
 impl DocModule {
-    fn render_as_code(&self) -> String {
+    pub(crate) fn render_as_code(&self) -> String {
         let mut res = self
             .docs
             .as_ref()
@@ -449,7 +449,7 @@ impl DocFunction {
         }
     }
 
-    fn render_as_code(&self, name: &str) -> String {
+    pub(crate) fn render_as_code(&self, name: &str) -> String {
         let params: Vec<_> = self.params.iter().map(DocParam::render_as_code).collect();
         let spacer_len = if params.is_empty() {
             0
@@ -686,7 +686,7 @@ pub struct DocProperty {
 }
 
 impl DocProperty {
-    fn render_as_code(&self, name: &str) -> String {
+    pub(crate) fn render_as_code(&self, name: &str) -> String {
         match (
             self.typ.as_ref(),
             self.docs.as_ref().map(DocString::render_as_quoted_code),
@@ -750,7 +750,7 @@ pub struct DocObject {
 }
 
 impl DocObject {
-    fn render_as_code(&self, name: &str) -> String {
+    pub(crate) fn render_as_code(&self, name: &str) -> String {
         let summary = self
             .docs
             .as_ref()

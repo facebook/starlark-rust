@@ -31,6 +31,7 @@ use starlark::docs::render_docs_as_code;
 use starlark::docs::Doc;
 use starlark::docs::DocItem;
 use starlark::environment::FrozenModule;
+use starlark::environment::GlobalSymbol;
 use starlark::environment::Globals;
 use starlark::environment::Module;
 use starlark::errors::EvalMessage;
@@ -66,6 +67,7 @@ pub(crate) struct Context {
     pub(crate) module: Option<Module>,
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
     pub(crate) builtin_symbols: HashMap<String, LspUrl>,
+    pub(crate) globals: Globals,
 }
 
 /// The outcome of evaluating (checking, parsing or running) given starlark code.
@@ -134,6 +136,7 @@ impl Context {
             module,
             builtin_docs,
             builtin_symbols,
+            globals,
         })
     }
 
@@ -344,6 +347,10 @@ impl LspContext for Context {
         symbol: &str,
     ) -> anyhow::Result<Option<LspUrl>> {
         Ok(self.builtin_symbols.get(symbol).cloned())
+    }
+
+    fn get_global_symbols(&self) -> Vec<GlobalSymbol> {
+        self.globals.symbols().collect()
     }
 }
 
