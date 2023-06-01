@@ -818,21 +818,40 @@ impl<T: LspContext> Backend<T> {
             }
         }
 
-        for symbol in all_documents
+        for (doc_uri, symbol) in all_documents
             .iter()
             .filter(|&(doc_uri, _)| match except_from {
                 Some(uri) => doc_uri != uri,
                 None => true,
             })
-            .flat_map(|(_, doc)| doc.get_loaded_symbols())
-            .filter(|symbol| !symbols.contains_key(symbol.name))
+            .flat_map(|(doc_uri, doc)| {
+                doc.get_loaded_symbols()
+                    .into_iter()
+                    .map(move |symbol| (doc_uri, symbol))
+            })
+            .filter(|(_, symbol)| !symbols.contains_key(symbol.name))
         {
-            if seen.insert(format!("{}:{}", symbol.module, symbol.name)) {
+            let workspace_root =
+                Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri);
+            let Ok(url) = self.context
+                    .resolve_load(symbol.loaded_from, doc_uri, workspace_root)
+            else {
+                continue;
+            };
+            let Ok(load_path) = self.context.render_as_load(
+                &url,
+                current_document,
+                workspace_root
+            ) else {
+                continue;
+            };
+
+            if seen.insert(format!("{}:{}", &load_path, symbol.name)) {
                 result.push(CompletionItem {
                     label: symbol.name.to_string(),
-                    detail: Some(format!("Load from {}", symbol.module)),
+                    detail: Some(format!("Load from {}", &load_path)),
                     kind: Some(CompletionItemKind::CONSTANT),
-                    additional_text_edits: Some(vec![format_text_edit(symbol.module, symbol.name)]),
+                    additional_text_edits: Some(vec![format_text_edit(&load_path, symbol.name)]),
                     ..Default::default()
                 })
             }
@@ -885,7 +904,6 @@ impl<T: LspContext> Backend<T> {
             Some((previously_loaded_symbols, load_span)) => {
                 // We're already loading a symbol from this module path, construct
                 // a text edit that amends the existing load.
-                // let (previously_loaded_symbols, load_span) = existing_load;
                 let load_span = ast.ast.codemap.resolve_span(*load_span);
                 let mut load_args: Vec<(&str, &str)> = previously_loaded_symbols
                     .iter()

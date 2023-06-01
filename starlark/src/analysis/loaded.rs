@@ -25,8 +25,9 @@ use crate::syntax::AstModule;
 pub struct LoadedSymbol<'a> {
     /// The name of the symbol.
     pub name: &'a str,
-    /// The file it's loaded from.
-    pub module: &'a str,
+    /// The file it's loaded from. Note that this is an unresolved path, so it
+    /// might be a relative load.
+    pub loaded_from: &'a str,
 }
 
 impl AstModule {
@@ -42,7 +43,7 @@ impl AstModule {
             .flat_map(|l| {
                 l.args.iter().map(|symbol| LoadedSymbol {
                     name: &symbol.1,
-                    module: &l.module,
+                    loaded_from: &l.module,
                 })
             })
             .collect()
@@ -69,7 +70,7 @@ load("foo", "bar")
         );
         let res = modu.loaded_symbols();
         assert_eq!(
-            res.map(|symbol| format!("{}:{}", symbol.module, symbol.name)),
+            res.map(|symbol| format!("{}:{}", symbol.loaded_from, symbol.name)),
             &["test:a", "test:c", "foo:bar"]
         );
     }
