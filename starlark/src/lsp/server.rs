@@ -703,6 +703,7 @@ impl<T: LspContext> Backend<T> {
                             Some(&uri),
                             &symbols,
                             initialize_params,
+                            &uri,
                             |module, symbol| {
                                 Self::get_load_text_edit(
                                     module,
@@ -741,6 +742,7 @@ impl<T: LspContext> Backend<T> {
         except_from: Option<&LspUrl>,
         symbols: &HashMap<String, S>,
         initialize_params: &InitializeParams,
+        current_document: &LspUrl,
         format_text_edit: F,
     ) -> Vec<CompletionItem>
     where
@@ -758,8 +760,13 @@ impl<T: LspContext> Backend<T> {
                 None => true,
             })
         {
-            let load_path =
-                self.format_load_path(&initialize_params.workspace_folders, doc_uri.path());
+            let Ok(load_path) = self.context.render_as_load(
+                doc_uri,
+                current_document,
+                Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri),
+            ) else {
+                continue;
+            };
 
             for symbol in doc
                 .get_exported_symbols()
@@ -915,44 +922,19 @@ impl<T: LspContext> Backend<T> {
         })
     }
 
-    /// Given the workspace root and a target file, format the path as a path that load() understands.
-    /// TODO: Handle cases other than Bazel, other repositories, other workspaces.
-    fn format_load_path(
-        &self,
-        workspace_roots: &Option<Vec<WorkspaceFolder>>,
-        target_file: &Path,
-    ) -> String {
-        let target = if let Some(roots) = workspace_roots {
-            let mut result = target_file;
-            for root in roots {
-                if let Ok(stripped) = target_file.strip_prefix(root.uri.path()) {
-                    result = stripped;
-                    break;
-                }
-            }
-
-            result
-        } else {
-            target_file
+    fn get_workspace_root<'a>(
+        workspace_roots: Option<&'_ Vec<WorkspaceFolder>>,
+        target: &'a LspUrl,
+    ) -> Option<&'a Path> {
+        let LspUrl::File(target) = target else {
+            return None;
         };
 
-        if let Some(file) = target.file_name() {
-            let mut result = "//".to_string();
-            result.push_str(
-                &target
-                    .parent()
-                    .expect("parent() should succeed if there's a file_name()")
-                    .to_string_lossy()
-                    .replace('\\', "/"),
-            );
-            result.push(':');
-            result.push_str(&file.to_string_lossy());
-
-            result
-        } else {
-            // Must be a file in the root of the workspace
-            format!("//:{}", target.display())
-        }
+        workspace_roots.and_then(|roots| {
+            roots
+                .iter()
+                .find_map(|root| target.strip_prefix(root.uri.path()).ok())
+        })
     }
 }
 
