@@ -640,7 +640,7 @@ impl<T: LspContext> Backend<T> {
                         source,
                         None,
                         &uri,
-                        workspace_root,
+                        workspace_root.as_deref(),
                     )?,
                     // In this case we don't pass the name along in the root_definition_location,
                     // so it's simpler to do the lookup here, rather than threading a ton of
@@ -667,7 +667,7 @@ impl<T: LspContext> Backend<T> {
                                 .as_str(),
                         ),
                         &uri,
-                        workspace_root,
+                        workspace_root.as_deref(),
                     )?,
                 }
             }
@@ -793,7 +793,7 @@ impl<T: LspContext> Backend<T> {
             let Ok(load_path) = self.context.render_as_load(
                 doc_uri,
                 current_document,
-                Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri),
+                Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri).as_deref(),
             ) else {
                 continue;
             };
@@ -834,14 +834,14 @@ impl<T: LspContext> Backend<T> {
             let workspace_root =
                 Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri);
             let Ok(url) = self.context
-                    .resolve_load(symbol.loaded_from, doc_uri, workspace_root)
+                    .resolve_load(symbol.loaded_from, doc_uri, workspace_root.as_deref())
             else {
                 continue;
             };
             let Ok(load_path) = self.context.render_as_load(
                 &url,
                 current_document,
-                workspace_root
+                workspace_root.as_deref()
             ) else {
                 continue;
             };
@@ -970,19 +970,19 @@ impl<T: LspContext> Backend<T> {
         })
     }
 
-    fn get_workspace_root<'a>(
-        workspace_roots: Option<&'_ Vec<WorkspaceFolder>>,
-        target: &'a LspUrl,
-    ) -> Option<&'a Path> {
-        let LspUrl::File(target) = target else {
-            return None;
-        };
-
-        workspace_roots.and_then(|roots| {
-            roots
-                .iter()
-                .find_map(|root| target.strip_prefix(root.uri.path()).ok())
-        })
+    fn get_workspace_root(
+        workspace_roots: Option<&Vec<WorkspaceFolder>>,
+        target: &LspUrl,
+    ) -> Option<PathBuf> {
+        match target {
+            LspUrl::File(target) => workspace_roots.and_then(|roots| {
+                roots
+                    .iter()
+                    .filter_map(|root| root.uri.to_file_path().ok())
+                    .find(|root| target.starts_with(root))
+            }),
+            _ => None,
+        }
     }
 }
 
