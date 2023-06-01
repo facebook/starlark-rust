@@ -287,6 +287,18 @@ pub trait LspContext {
     ///                if `path` is "relative" in a semantic sense.
     fn resolve_load(&self, path: &str, current_file: &LspUrl) -> anyhow::Result<LspUrl>;
 
+    /// Render the target URL to use as a path in a `load()` statement. If `target` is
+    /// in the same package as `current_file`, the result is a relative path.
+    ///
+    /// `target` is the file that should be loaded by `load()`.
+    /// `current_file` is the file that the `load()` statement will be inserted into.
+    fn render_as_load(
+        &self,
+        target: &LspUrl,
+        current_file: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<String>;
+
     /// Resolve a string literal into a Url and a function that specifies a locaction within that
     /// target file.
     ///

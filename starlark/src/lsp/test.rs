@@ -98,6 +98,14 @@ enum ResolveLoadError {
 }
 
 #[derive(thiserror::Error, Debug)]
+enum RenderLoadError {
+    #[error("Path `{}` provided, which does not seem to contain a filename", .0.display())]
+    MissingTargetFilename(PathBuf),
+    #[error("Urls `{}` and `{}` was expected to be of type `{}`", .1, .2, .0)]
+    WrongScheme(String, LspUrl, LspUrl),
+}
+
+#[derive(thiserror::Error, Debug)]
 pub(crate) enum TestServerError {
     #[error("Attempted to set the contents of a file with a non-absolute path `{}`", .0.display())]
     SetFileNotAbsolute(PathBuf),
@@ -164,6 +172,51 @@ impl LspContext for TestServerContext {
             _ => Err(
                 ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone()).into(),
             ),
+        }
+    }
+
+    fn render_as_load(
+        &self,
+        target: &LspUrl,
+        current_file: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<String> {
+        match (target, current_file) {
+            (LspUrl::File(target_path), LspUrl::File(current_file_path)) => {
+                let target_package = target_path.parent();
+                let current_file_package = current_file_path.parent();
+                let target_filename = target_path.file_name();
+
+                // If both are in the same package, return a relative path.
+                if matches!((target_package, current_file_package), (Some(a), Some(b)) if a == b) {
+                    return match target_filename {
+                        Some(filename) => Ok(format!(":{}", filename.to_string_lossy())),
+                        None => {
+                            Err(RenderLoadError::MissingTargetFilename(target_path.clone()).into())
+                        }
+                    };
+                }
+
+                let target_path = workspace_root
+                    .and_then(|root| target_path.strip_prefix(root).ok())
+                    .unwrap_or(target_path);
+
+                Ok(format!(
+                    "//{}:{}",
+                    target_package
+                        .map(|path| path.to_string_lossy())
+                        .unwrap_or_default(),
+                    target_filename
+                        .unwrap_or(target_path.as_os_str())
+                        .to_string_lossy()
+                ))
+            }
+            _ => Err(RenderLoadError::WrongScheme(
+                "file://".to_owned(),
+                target.clone(),
+                current_file.clone(),
+            )
+            .into()),
         }
     }
 
