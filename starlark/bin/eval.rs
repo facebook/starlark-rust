@@ -89,6 +89,13 @@ enum ResolveLoadError {
     /// The scheme provided was not correct or supported.
     #[error("Url `{}` was expected to be of type `{}`", .1, .0)]
     WrongScheme(String, LspUrl),
+    /// Received a load for an absolute path from the root of the workspace, but the
+    /// path to the workspace root was not provided.
+    #[error("Path `//{}` is absolute from the root of the workspace, but no workspace root was provided", .0)]
+    MissingWorkspaceRoot(String),
+    /// Unable to parse the given path.
+    #[error("Unable to parse the load path `{}`", .0)]
+    CannotParsePath(String),
 }
 
 /// Errors when [`LspContext::render_as_load()`] cannot render a given path.
@@ -306,21 +313,45 @@ impl LspContext for Context {
         }
     }
 
-    fn resolve_load(&self, path: &str, current_file: &LspUrl) -> anyhow::Result<LspUrl> {
-        let path = PathBuf::from(path);
-        match current_file {
-            LspUrl::File(current_file_path) => {
-                let current_file_dir = current_file_path.parent();
-                let absolute_path = match (current_file_dir, path.is_absolute()) {
-                    (_, true) => Ok(path),
-                    (Some(current_file_dir), false) => Ok(current_file_dir.join(&path)),
-                    (None, false) => Err(ResolveLoadError::MissingCurrentFilePath(path)),
-                }?;
-                Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
+    fn resolve_load(
+        &self,
+        path: &str,
+        current_file: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<LspUrl> {
+        if let Some(path) = path.strip_prefix(':') {
+            // Resolve relative paths from the current file.
+            let path = PathBuf::from(path);
+            match current_file {
+                LspUrl::File(current_file_path) => {
+                    let current_file_dir = current_file_path.parent();
+                    let absolute_path = match current_file_dir {
+                        Some(current_file_dir) => Ok(current_file_dir.join(&path)),
+                        None => Err(ResolveLoadError::MissingCurrentFilePath(path)),
+                    }?;
+                    Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
+                }
+                _ => Err(
+                    ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone())
+                        .into(),
+                ),
             }
-            _ => Err(
-                ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone()).into(),
-            ),
+        } else if let Some(path) = path.strip_prefix("//") {
+            // Resolve from the root of the workspace.
+            match (path.split_once(':'), workspace_root) {
+                (Some((subfolder, filename)), Some(workspace_root)) => {
+                    let mut result = workspace_root.to_owned();
+                    result.push(subfolder);
+                    result.push(filename);
+                    Ok(Url::from_file_path(result).unwrap().try_into()?)
+                }
+                (Some(_), None) => {
+                    Err(ResolveLoadError::MissingWorkspaceRoot(path.to_owned()).into())
+                }
+                (None, _) => Err(ResolveLoadError::CannotParsePath(format!("//{path}")).into()),
+            }
+        } else {
+            Err(ResolveLoadError::CannotParsePath(path.to_owned()).into())
         }
     }
 
@@ -352,7 +383,8 @@ impl LspContext for Context {
 
                 Ok(format!(
                     "//{}:{}",
-                    target_package
+                    target_path
+                        .parent()
                         .map(|path| path.to_string_lossy())
                         .unwrap_or_default(),
                     target_filename
@@ -373,13 +405,15 @@ impl LspContext for Context {
         &self,
         literal: &str,
         current_file: &LspUrl,
+        workspace_root: Option<&Path>,
     ) -> anyhow::Result<Option<StringLiteralResult>> {
-        self.resolve_load(literal, current_file).map(|url| {
-            Some(StringLiteralResult {
-                url,
-                location_finder: None,
+        self.resolve_load(literal, current_file, workspace_root)
+            .map(|url| {
+                Some(StringLiteralResult {
+                    url,
+                    location_finder: None,
+                })
             })
-        })
     }
 
     fn get_load_contents(&self, uri: &LspUrl) -> anyhow::Result<Option<String>> {
@@ -416,4 +450,106 @@ pub(crate) fn globals() -> Globals {
 
 pub(crate) fn dialect() -> Dialect {
     Dialect::Extended
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_context() -> Context {
+        Context::new(ContextMode::Run, false, &[], false).unwrap()
+    }
+
+    #[test]
+    fn resolve_load() {
+        let context = make_context();
+
+        // Successful cases
+        let current_file = LspUrl::File(PathBuf::from("/absolute/path/from.star"));
+        assert_eq!(
+            context
+                .resolve_load(":relative.star", &current_file, None,)
+                .unwrap(),
+            LspUrl::File(PathBuf::from("/absolute/path/relative.star"))
+        );
+        assert_eq!(
+            context
+                .resolve_load("//:root.star", &current_file, Some(Path::new("/foo/bar")),)
+                .unwrap(),
+            LspUrl::File(PathBuf::from("/foo/bar/root.star"))
+        );
+        assert_eq!(
+            context
+                .resolve_load(
+                    "//baz:root.star",
+                    &current_file,
+                    Some(Path::new("/foo/bar")),
+                )
+                .unwrap(),
+            LspUrl::File(PathBuf::from("/foo/bar/baz/root.star"))
+        );
+
+        // Error cases
+        let starlark_url = LspUrl::Starlark(PathBuf::new());
+        assert!(matches!(
+            context
+                .resolve_load(":relative.star", &starlark_url, None)
+                .expect_err("should return an error")
+                .downcast::<ResolveLoadError>()
+                .expect("should return correct error type"),
+            ResolveLoadError::WrongScheme(scheme, url) if scheme == "file://" && url == starlark_url
+        ));
+        assert!(matches!(
+            context
+                .resolve_load("//something-absolute", &starlark_url, Some(Path::new("/foo/bar")))
+                .expect_err("should return an error")
+                .downcast::<ResolveLoadError>()
+                .expect("should return correct error type"),
+            ResolveLoadError::CannotParsePath(url) if url == "//something-absolute"
+        ));
+        assert!(matches!(
+            context
+                .resolve_load("//something:absolute.star", &starlark_url, None)
+                .expect_err("should return an error")
+                .downcast::<ResolveLoadError>()
+                .expect("should return correct error type"),
+            ResolveLoadError::MissingWorkspaceRoot(_)
+        ));
+    }
+
+    #[test]
+    fn render_as_load() {
+        let context = make_context();
+
+        assert_eq!(
+            context
+                .render_as_load(
+                    &LspUrl::File(PathBuf::from("/foo/bar/baz/target.star")),
+                    &LspUrl::File(PathBuf::from("/foo/bar/baz/current.star")),
+                    None
+                )
+                .expect("should succeed"),
+            ":target.star"
+        );
+        assert_eq!(
+            context
+                .render_as_load(
+                    &LspUrl::File(PathBuf::from("/foo/bar/baz/target.star")),
+                    &LspUrl::File(PathBuf::from("/foo/bar/current.star")),
+                    Some(Path::new("/foo/bar"))
+                )
+                .expect("should succeed"),
+            "//baz:target.star"
+        );
+        assert_eq!(
+            context
+                .render_as_load(
+                    &LspUrl::File(PathBuf::from("/foo/bar/target.star")),
+                    &LspUrl::File(PathBuf::from("/foo/bar/baz/current.star")),
+                    Some(Path::new("/foo/bar"))
+                )
+                .expect("should succeed"),
+            "//:target.star"
+        );
+    }
 }
