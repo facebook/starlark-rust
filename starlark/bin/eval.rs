@@ -84,8 +84,8 @@ pub(crate) struct EvalResult<T: Iterator<Item = EvalMessage>> {
 enum ResolveLoadError {
     /// Attempted to resolve a relative path, but no current_file_path was provided,
     /// so it is not known what to resolve the path against.
-    #[error("Relative path `{}` provided, but current_file_path could not be determined", .0.display())]
-    MissingCurrentFilePath(PathBuf),
+    #[error("Relative path `{}` provided, but current_file_path could not be determined", .0)]
+    MissingCurrentFilePath(String),
     /// The scheme provided was not correct or supported.
     #[error("Url `{}` was expected to be of type `{}`", .1, .0)]
     WrongScheme(String, LspUrl),
@@ -319,24 +319,7 @@ impl LspContext for Context {
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<LspUrl> {
-        if let Some(path) = path.strip_prefix(':') {
-            // Resolve relative paths from the current file.
-            let path = PathBuf::from(path);
-            match current_file {
-                LspUrl::File(current_file_path) => {
-                    let current_file_dir = current_file_path.parent();
-                    let absolute_path = match current_file_dir {
-                        Some(current_file_dir) => Ok(current_file_dir.join(&path)),
-                        None => Err(ResolveLoadError::MissingCurrentFilePath(path)),
-                    }?;
-                    Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
-                }
-                _ => Err(
-                    ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone())
-                        .into(),
-                ),
-            }
-        } else if let Some(path) = path.strip_prefix("//") {
+        if let Some(path) = path.strip_prefix("//") {
             // Resolve from the root of the workspace.
             match (path.split_once(':'), workspace_root) {
                 (Some((subfolder, filename)), Some(workspace_root)) => {
@@ -349,6 +332,27 @@ impl LspContext for Context {
                     Err(ResolveLoadError::MissingWorkspaceRoot(path.to_owned()).into())
                 }
                 (None, _) => Err(ResolveLoadError::CannotParsePath(format!("//{path}")).into()),
+            }
+        } else if let Some((folder, filename)) = path.split_once(':') {
+            // Resolve relative paths from the current file.
+            match current_file {
+                LspUrl::File(current_file_path) => {
+                    let current_file_dir = current_file_path.parent();
+                    let absolute_path = match current_file_dir {
+                        Some(current_file_dir) => {
+                            let mut result = current_file_dir.to_owned();
+                            result.push(folder);
+                            result.push(filename);
+                            Ok(result)
+                        }
+                        None => Err(ResolveLoadError::MissingCurrentFilePath(path.to_owned())),
+                    }?;
+                    Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
+                }
+                _ => Err(
+                    ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone())
+                        .into(),
+                ),
             }
         } else {
             Err(ResolveLoadError::CannotParsePath(path.to_owned()).into())
@@ -471,6 +475,12 @@ mod tests {
                 .resolve_load(":relative.star", &current_file, None,)
                 .unwrap(),
             LspUrl::File(PathBuf::from("/absolute/path/relative.star"))
+        );
+        assert_eq!(
+            context
+                .resolve_load("subpath:relative.star", &current_file, None)
+                .unwrap(),
+            LspUrl::File(PathBuf::from("/absolute/path/subpath/relative.star"))
         );
         assert_eq!(
             context
