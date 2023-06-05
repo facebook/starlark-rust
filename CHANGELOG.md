@@ -1,6 +1,6 @@
 # Starlark
 
-## 0.9.0 (June 4, 2023)
+## 0.9.0 (June 5, 2023)
 
 There were over one thousand commits since the last release, with the main areas of change including:
 
