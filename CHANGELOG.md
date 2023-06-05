@@ -1,5 +1,42 @@
 # Starlark
 
+## 0.9.0 (June 4, 2023)
+
+There were over one thousand commits since the last release, with the main areas of change including:
+
+* Add `Module.names` to get the symbols in a module.
+* Change iterators on `Value` to support reduced stack space and enable future garbage collection, removing `iterate_collect` and `with_iterator`.
+* Improve DAP (debugger) support.
+* Improve the performance and fix a few bugs in `%` string formatting.
+* Introduce `StarlarkTypeRepr` as a trait for things that have a type representation.
+* Optimise and increase standards conformance of the Starlark standard library.
+* Rework how `List`/`Dict` are specified, making their internals private and introducing `ListRef`/`DictRef` for pointers to them.
+* Add `AllocStruct`, `AllocList` and `AllocDict` as helpers to allocate the various types more efficiently.
+* Remove the `dedupe` Starlark function.
+* Integrate with the `allocative` crate to support the `Allocative` trait.
+* Add more `Trace` implementations.
+* Support type annotations on assignments.
+* Make `Module.loads` also return the `FileSpan`.
+* Add `FrozenModule.get_option`.
+* Add support for integers greater than 32 bits.
+* Move to a separate `starlark_map` crate for `SmallMap` and optimise it.
+* Require the `starlark_type!` macro.
+* Change `Module.extra_v` to be `Value<'v>`.
+* Expose `FrozenHeap` from `Freezer` and `GlobalsBuilder`.
+* Remove `Value::new_int`.
+* In `starlark_module` functions must be more explicit - return `anyhow::Result`, have an explicit `'v` parameter, explicit `heap`/`eval` arguments.
+* Add `StringValueLike` to cover string types that are values.
+* Change the `json` extension method to be `json.encode` and `json.decode`.
+* Support stable Rust.
+* Inline all the relevant pieces of the `gazebo` library.
+* Change all `starlark_module` annotations to be `#[starlark(...)]`, `#[starlark(require = named)]` for name-only parameters.
+* Many performance optimisations.
+* Change the API for profiling and add new profiling features.
+* Make the `starlark` binary spawn the REPL by default.
+* Many improvements and API changes to the documentation generation code.
+* Many improvements to the LSP code.
+* Add a `Dialect` option to enable types.
+
 ## 0.8.0 (May 9, 2022)
 
 * Redo `StringValue` and `FrozenStringValue` as aliases for `ValueTyped<StarlarkStr>` and `FrozenValueTyped<StarlarkStr>` respectively.
