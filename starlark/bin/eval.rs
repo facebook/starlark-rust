@@ -498,7 +498,7 @@ mod tests {
     use super::*;
 
     fn make_context() -> Context {
-        Context::new(ContextMode::Run, false, &[], false).unwrap()
+        Context::new(ContextMode::Run, false, &[], false, None).unwrap()
     }
 
     #[test]

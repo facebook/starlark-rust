@@ -876,8 +876,6 @@ impl<T: LspContext> Backend<T> {
                     .and_then(|docs| docs.get_doc_summary().map(|str| str.to_string())),
                 documentation: symbol.documentation.map(|docs| {
                     Documentation::MarkupContent(MarkupContent {
-                        // The doc item is rendered as code, so embed it in markdown, indicating
-                        // the syntax, in order to render correctly.
                         kind: MarkupKind::Markdown,
                         value: render_doc_item(symbol.name, &docs),
                     })
