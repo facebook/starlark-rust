@@ -35,6 +35,7 @@ use dupe::Dupe;
 use eval::Context;
 use itertools::Either;
 use itertools::Itertools;
+use starlark::build_system::BuildSystemHint;
 use starlark::docs::get_registered_starlark_docs;
 use starlark::docs::render_docs_as_code;
 use starlark::docs::Doc;
@@ -102,6 +103,9 @@ struct Args {
         conflicts_with_all = &["lsp", "dap"],
     )]
     json: bool,
+
+    #[arg(long = "build-system", help = "Build system to use.")]
+    build_system: Option<BuildSystemHint>,
 
     #[arg(
         long = "docs",
@@ -264,6 +268,7 @@ fn main() -> anyhow::Result<()> {
             !args.evaluate.is_empty() || is_interactive,
             &expand_dirs(ext, args.prelude).collect::<Vec<_>>(),
             is_interactive,
+            args.build_system,
         )?;
 
         if args.lsp {

@@ -389,6 +389,7 @@ pub use stdlib::PrintHandler;
 pub(crate) mod analysis;
 pub mod any;
 pub mod assert;
+pub mod build_system;
 pub mod codemap;
 pub mod collections;
 pub mod debug;

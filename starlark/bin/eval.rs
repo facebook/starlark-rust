@@ -26,6 +26,9 @@ use std::path::PathBuf;
 use itertools::Either;
 use lsp_types::Diagnostic;
 use lsp_types::Url;
+use starlark::build_system::try_resolve_build_system;
+use starlark::build_system::BuildSystem;
+use starlark::build_system::BuildSystemHint;
 use starlark::docs::get_registered_starlark_docs;
 use starlark::docs::render_docs_as_code;
 use starlark::docs::Doc;
@@ -68,6 +71,7 @@ pub(crate) struct Context {
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
     pub(crate) builtin_symbols: HashMap<String, LspUrl>,
     pub(crate) globals: Globals,
+    pub(crate) build_system: Option<Box<dyn BuildSystem>>,
 }
 
 /// The outcome of evaluating (checking, parsing or running) given starlark code.
@@ -115,6 +119,7 @@ impl Context {
         print_non_none: bool,
         prelude: &[PathBuf],
         module: bool,
+        build_system_hint: Option<BuildSystemHint>,
     ) -> anyhow::Result<Self> {
         let globals = globals();
         let prelude: Vec<_> = prelude
@@ -147,6 +152,9 @@ impl Context {
             .map(|(u, ds)| (u, render_docs_as_code(&ds)))
             .collect();
 
+        let build_system =
+            try_resolve_build_system(std::env::current_dir().ok().as_ref(), build_system_hint);
+
         Ok(Self {
             mode,
             print_non_none,
@@ -155,6 +163,7 @@ impl Context {
             builtin_docs,
             builtin_symbols,
             globals,
+            build_system,
         })
     }
 
