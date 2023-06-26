@@ -702,12 +702,18 @@ impl<T: LspContext> Backend<T> {
                             (
                                 key,
                                 CompletionItem {
-                                    label: value.name,
                                     kind: Some(match value.kind {
                                         SymbolKind::Method => CompletionItemKind::METHOD,
                                         SymbolKind::Variable => CompletionItemKind::VARIABLE,
                                     }),
                                     detail: value.detail,
+                                    documentation: value.doc.map(|doc| {
+                                        Documentation::MarkupContent(MarkupContent {
+                                            kind: MarkupKind::Markdown,
+                                            value: render_doc_item(&value.name, &doc),
+                                        })
+                                    }),
+                                    label: value.name,
                                     ..Default::default()
                                 },
                             )
