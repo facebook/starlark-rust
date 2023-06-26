@@ -944,8 +944,9 @@ impl<T: LspContext> Backend<T> {
                         None => Range::new(Position::new(0, 0), Position::new(0, 0)),
                     },
                     format!(
-                        "{}load(\"{module}\", \"{symbol}\")",
+                        "{}load(\"{module}\", \"{symbol}\"){}",
                         if last_load.is_some() { "\n" } else { "" },
+                        if last_load.is_some() { "" } else { "\n\n" },
                     ),
                 )
             }
