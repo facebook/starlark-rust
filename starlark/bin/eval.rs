@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -100,6 +101,9 @@ enum ResolveLoadError {
     /// Unable to parse the given path.
     #[error("Unable to parse the load path `{}`", .0)]
     CannotParsePath(String),
+    /// Cannot resolve path containing workspace without information from the build system.
+    #[error("Cannot resolve path `{}` without build system info", .0)]
+    MissingBuildSystem(String),
 }
 
 /// Errors when [`LspContext::render_as_load()`] cannot render a given path.
@@ -328,19 +332,43 @@ impl LspContext for Context {
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<LspUrl> {
-        if let Some(path) = path.strip_prefix("//") {
-            // Resolve from the root of the workspace.
-            match (path.split_once(':'), workspace_root) {
-                (Some((subfolder, filename)), Some(workspace_root)) => {
-                    let mut result = workspace_root.to_owned();
+        let original_path = path;
+        if let Some((repository, path)) = path.split_once("//") {
+            // The repository may be prefixed with an '@', but it's optional in Buck2.
+            let repository = if let Some(without_at) = repository.strip_prefix('@') {
+                without_at
+            } else {
+                repository
+            };
+
+            // Check if the repository refers to the workspace root, or if not, if it is a known
+            // repository, and what its path is.
+            let repository_root = if repository.is_empty() {
+                workspace_root.map(Cow::Borrowed)
+            } else if let Some(build_system) = &self.build_system {
+                if matches!(build_system.root_repository_name(), Some(name) if name == repository) {
+                    workspace_root.map(Cow::Borrowed)
+                } else {
+                    build_system.repository_path(repository)
+                }
+            } else {
+                return Err(ResolveLoadError::MissingBuildSystem(path.to_owned()).into());
+            };
+
+            // Resolve from the root of the repository.
+            match (path.split_once(':'), repository_root) {
+                (Some((subfolder, filename)), Some(repository_root)) => {
+                    let mut result = repository_root.into_owned();
                     result.push(subfolder);
                     result.push(filename);
                     Ok(Url::from_file_path(result).unwrap().try_into()?)
                 }
                 (Some(_), None) => {
-                    Err(ResolveLoadError::MissingWorkspaceRoot(path.to_owned()).into())
+                    Err(ResolveLoadError::MissingWorkspaceRoot(original_path.to_owned()).into())
                 }
-                (None, _) => Err(ResolveLoadError::CannotParsePath(format!("//{path}")).into()),
+                (None, _) => {
+                    Err(ResolveLoadError::CannotParsePath(original_path.to_string()).into())
+                }
             }
         } else if let Some((folder, filename)) = path.split_once(':') {
             // Resolve relative paths from the current file.
