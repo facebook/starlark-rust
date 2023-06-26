@@ -67,6 +67,7 @@ impl OracleDocs {
                 self.functions
                     .insert(doc.id.name.clone(), Ty::from_docs_function(x));
             }
+            DocItem::Param(_) => {}
         }
     }
 

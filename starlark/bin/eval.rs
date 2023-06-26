@@ -177,7 +177,7 @@ impl Context {
             DocItem::Object(_) => {
                 Url::parse(&format!("starlark:/native/builtins/{}.bzl", doc.id.name)).unwrap()
             }
-            DocItem::Function(_) | DocItem::Property(_) => {
+            DocItem::Function(_) | DocItem::Property(_) | DocItem::Param(_) => {
                 Url::parse("starlark:/native/builtins.bzl").unwrap()
             }
         };

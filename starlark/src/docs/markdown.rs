@@ -240,6 +240,9 @@ pub(crate) fn render_doc_item(name: &str, item: &DocItem) -> String {
         DocItem::Object(o) => render_object(name, o),
         DocItem::Function(f) => render_function(name, f),
         DocItem::Property(p) => render_property(name, p),
+        DocItem::Param(p) => {
+            render_function_parameters(std::slice::from_ref(p)).unwrap_or_default()
+        }
     }
 }
 

@@ -480,6 +480,19 @@ impl DocFunction {
         format!("def {}{}{}:\n{}    pass", name, params, ret, docstring)
     }
 
+    pub(crate) fn find_param_with_name(&self, param_name: &str) -> Option<&DocParam> {
+        self.params.iter().find(|p| match p {
+            DocParam::Arg { name, .. }
+            | DocParam::Args { name, .. }
+            | DocParam::Kwargs { name, .. }
+                if name == param_name =>
+            {
+                true
+            }
+            _ => false,
+        })
+    }
+
     /// Parses function documentation out of a docstring
     ///
     /// # Arguments
@@ -798,6 +811,7 @@ pub enum DocItem {
     Object(DocObject),
     Function(DocFunction),
     Property(DocProperty),
+    Param(DocParam),
 }
 
 impl DocItem {
@@ -808,6 +822,12 @@ impl DocItem {
             DocItem::Object(o) => o.docs.as_ref(),
             DocItem::Function(f) => f.docs.as_ref(),
             DocItem::Property(p) => p.docs.as_ref(),
+            DocItem::Param(p) => match p {
+                DocParam::Arg { docs, .. }
+                | DocParam::Args { docs, .. }
+                | DocParam::Kwargs { docs, .. } => docs.as_ref(),
+                _ => None,
+            },
         }
     }
 
@@ -838,6 +858,7 @@ impl Doc {
             DocItem::Object(o) => o.render_as_code(&self.id.name),
             DocItem::Function(f) => f.render_as_code(&self.id.name),
             DocItem::Property(p) => p.render_as_code(&self.id.name),
+            DocItem::Param(p) => p.render_as_code(),
         }
     }
 }
