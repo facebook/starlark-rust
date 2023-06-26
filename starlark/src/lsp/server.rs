@@ -89,7 +89,7 @@ use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
 use crate::codemap::Spanned;
-use crate::docs::DocItem;
+use crate::docs::render_doc_item;
 use crate::environment::GlobalSymbol;
 use crate::environment::GlobalSymbolKind;
 use crate::lsp::server::LoadContentsError::WrongScheme;
@@ -870,20 +870,16 @@ impl<T: LspContext> Backend<T> {
                     GlobalSymbolKind::Function => CompletionItemKind::FUNCTION,
                     GlobalSymbolKind::Constant => CompletionItemKind::CONSTANT,
                 }),
+                detail: symbol
+                    .documentation
+                    .as_ref()
+                    .and_then(|docs| docs.get_doc_summary().map(|str| str.to_string())),
                 documentation: symbol.documentation.map(|docs| {
                     Documentation::MarkupContent(MarkupContent {
                         // The doc item is rendered as code, so embed it in markdown, indicating
                         // the syntax, in order to render correctly.
                         kind: MarkupKind::Markdown,
-                        value: format!(
-                            "```starlark\n{}\n```",
-                            match docs {
-                                DocItem::Module(m) => m.render_as_code(),
-                                DocItem::Object(o) => o.render_as_code(symbol.name),
-                                DocItem::Function(f) => f.render_as_code(symbol.name),
-                                DocItem::Property(p) => p.render_as_code(symbol.name),
-                            }
-                        ),
+                        value: render_doc_item(symbol.name, &docs),
                     })
                 }),
                 ..Default::default()

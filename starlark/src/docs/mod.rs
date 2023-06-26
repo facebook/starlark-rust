@@ -27,6 +27,7 @@ use std::collections::HashMap;
 use allocative::Allocative;
 use dupe::Dupe;
 use itertools::Itertools;
+pub(crate) use markdown::render_doc_item;
 pub use markdown::MarkdownFlavor;
 pub use markdown::RenderMarkdown;
 use once_cell::sync::Lazy;
@@ -797,6 +798,23 @@ pub enum DocItem {
     Object(DocObject),
     Function(DocFunction),
     Property(DocProperty),
+}
+
+impl DocItem {
+    /// Get the underlying [`DocString`] for this item, if it exists.
+    pub fn get_doc_string(&self) -> Option<&DocString> {
+        match self {
+            DocItem::Module(m) => m.docs.as_ref(),
+            DocItem::Object(o) => o.docs.as_ref(),
+            DocItem::Function(f) => f.docs.as_ref(),
+            DocItem::Property(p) => p.docs.as_ref(),
+        }
+    }
+
+    /// Get the summary of the underlying [`DocString`] for this item, if it exists.
+    pub fn get_doc_summary(&self) -> Option<&str> {
+        self.get_doc_string().map(|ds| ds.summary.as_str())
+    }
 }
 
 /// The main structure that represents the documentation for a given symbol / module.

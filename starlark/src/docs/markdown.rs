@@ -234,7 +234,7 @@ fn render_object(name: &str, object: &DocObject) -> String {
     render_members(name, true, &object.docs, &object.members)
 }
 
-fn render_doc_item(name: &str, item: &DocItem) -> String {
+pub(crate) fn render_doc_item(name: &str, item: &DocItem) -> String {
     match &item {
         DocItem::Module(m) => render_module(name, m),
         DocItem::Object(o) => render_object(name, o),
