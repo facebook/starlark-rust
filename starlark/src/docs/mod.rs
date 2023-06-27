@@ -33,7 +33,6 @@ pub use markdown::RenderMarkdown;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use regex::RegexBuilder;
-use serde::Deserialize;
 use serde::Serialize;
 pub use starlark_derive::StarlarkDocs;
 use starlark_map::small_map::SmallMap;
@@ -45,6 +44,7 @@ use crate::syntax::ast::AstPayload;
 use crate::syntax::ast::AstStmtP;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::StmtP;
+use crate::typing::Ty;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
 use crate::values::Value;
@@ -61,16 +61,7 @@ fn indent_trimmed(s: &str, prefix: &str) -> String {
 }
 
 /// The documentation provided by a user for a specific module, object, function, etc.
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Trace,
-    Default,
-    Allocative
-)]
+#[derive(Debug, Clone, PartialEq, Serialize, Trace, Default, Allocative)]
 pub struct DocString {
     /// The first line of a doc string. This has whitespace trimmed from it.
     pub summary: String,
@@ -322,7 +313,7 @@ impl DocString {
 }
 
 /// Line / column for where in a file a symbol is.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct Pos {
     /// Line number, zero based.
     pub line: usize,
@@ -331,7 +322,7 @@ pub struct Pos {
 }
 
 /// The file a symbol resides in, and if available its location within that file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct Location {
     /// `path` is a string that can be passed into `load()` statements.
     pub path: String,
@@ -340,7 +331,7 @@ pub struct Location {
 }
 
 /// The main identifier for a symbol.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default)]
 pub struct Identifier {
     /// The name of the symbol (e.g. the function name, a name or path for a module, etc).
     pub name: String,
@@ -349,14 +340,14 @@ pub struct Identifier {
 }
 
 /// The type of a given parameter, field, etc.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Allocative)]
 pub struct DocType {
     /// The type string that one would find in a starlark expression.
-    pub raw_type: String,
+    pub raw_type: Ty,
 }
 
 /// Documents a full module.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default, Allocative)]
 pub struct DocModule {
     /// In general, this should be the first statement of a loaded file, if that statement is
     /// a string literal.
@@ -374,17 +365,7 @@ impl DocModule {
             .unwrap_or_default();
         for (k, v) in &self.members {
             res.push('\n');
-            res.push_str(
-                &(Doc {
-                    id: Identifier {
-                        name: k.clone(),
-                        location: None,
-                    },
-                    item: v.clone().to_doc_item(),
-                    custom_attrs: HashMap::new(),
-                }
-                .render_as_code()),
-            );
+            res.push_str(&(Doc::named_item(k.clone(), v.clone().to_doc_item())).render_as_code());
             res.push('\n');
         }
         res
@@ -392,7 +373,7 @@ impl DocModule {
 }
 
 /// Documents a single function.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default, Allocative)]
 pub struct DocFunction {
     /// Documentation for the function. If parsed, this should generally be the first statement
     /// of a function's body if that statement is a string literal. Any sections like "Args:",
@@ -404,6 +385,8 @@ pub struct DocFunction {
     pub params: Vec<DocParam>,
     /// Details about what this function returns.
     pub ret: DocReturn,
+    /// Does this function provide a `.type` value.
+    pub dot_type: Option<String>,
 }
 
 impl DocFunction {
@@ -417,7 +400,7 @@ impl DocFunction {
             .params
             .iter()
             .map(|p| match p {
-                DocParam::NoArgs => 0,
+                DocParam::NoArgs | DocParam::OnlyPosBefore => 0,
                 DocParam::Arg { name, .. }
                 | DocParam::Args { name, .. }
                 | DocParam::Kwargs { name, .. } => name.len() + 2,
@@ -508,6 +491,7 @@ impl DocFunction {
         mut params: Vec<DocParam>,
         return_type: Option<DocType>,
         raw_docstring: Option<&str>,
+        dot_type: Option<String>,
     ) -> Self {
         match raw_docstring.and_then(|raw| DocString::from_docstring(kind, raw)) {
             Some(ds) => {
@@ -544,6 +528,7 @@ impl DocFunction {
                         docs: return_docs,
                         typ: return_type,
                     },
+                    dot_type,
                 }
             }
             None => DocFunction {
@@ -553,6 +538,7 @@ impl DocFunction {
                     docs: None,
                     typ: return_type,
                 },
+                dot_type,
             },
         }
     }
@@ -608,7 +594,7 @@ impl DocFunction {
 }
 
 /// A single parameter of a function.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DocParam {
     /// A regular parameter that may or may not have a default value.
@@ -622,6 +608,8 @@ pub enum DocParam {
     },
     /// Represents the "*" argument.
     NoArgs,
+    /// Represents the "/" argument from [PEP 570](https://peps.python.org/pep-0570/).
+    OnlyPosBefore,
     /// Represents the "*args" style of argument.
     Args {
         name: String,
@@ -642,7 +630,7 @@ impl DocParam {
     fn starlark_docstring(&self, max_indentation: &str) -> Option<String> {
         let (name, docs) = match self {
             DocParam::Arg { name, docs, .. } => Some((name, docs)),
-            DocParam::NoArgs => None,
+            DocParam::NoArgs | DocParam::OnlyPosBefore => None,
             DocParam::Args { name, docs, .. } => Some((name, docs)),
             DocParam::Kwargs { name, docs, .. } => Some((name, docs)),
         }?;
@@ -666,6 +654,7 @@ impl DocParam {
                 (None, None) => name.clone(),
             },
             DocParam::NoArgs => "*".to_owned(),
+            DocParam::OnlyPosBefore => "/".to_owned(),
             DocParam::Args { name, typ, .. } | DocParam::Kwargs { name, typ, .. } => {
                 match typ.as_ref() {
                     Some(typ) => format!("{}: {}", name, typ.raw_type),
@@ -677,7 +666,7 @@ impl DocParam {
 }
 
 /// Details about the return value of a function.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default, Allocative)]
 pub struct DocReturn {
     /// Extra semantic details around the returned value's meaning.
     pub docs: Option<DocString>,
@@ -692,7 +681,7 @@ impl DocReturn {
 }
 
 /// A single property of an object. These are explicitly not functions (see [`DocMember`]).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default, Allocative)]
 pub struct DocProperty {
     pub docs: Option<DocString>,
     #[serde(rename = "type")]
@@ -724,7 +713,7 @@ impl DocProperty {
 }
 
 /// A named member of an object.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DocMember {
     Property(DocProperty),
@@ -756,7 +745,7 @@ impl DocMember {
 }
 
 /// An object with named functions/properties.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Default, Allocative)]
 pub struct DocObject {
     pub docs: Option<DocString>,
     /// Name and details of each member of this object.
@@ -804,7 +793,7 @@ impl DocObject {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Allocative)]
+#[derive(Debug, Clone, PartialEq, Serialize, Allocative)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DocItem {
     Module(DocModule),
@@ -838,7 +827,7 @@ impl DocItem {
 }
 
 /// The main structure that represents the documentation for a given symbol / module.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Doc {
     pub id: Identifier,
     pub item: DocItem,
@@ -848,6 +837,17 @@ pub struct Doc {
 }
 
 impl Doc {
+    pub fn named_item(name: String, item: DocItem) -> Self {
+        Doc {
+            id: Identifier {
+                name,
+                location: None,
+            },
+            item,
+            custom_attrs: HashMap::new(),
+        }
+    }
+
     /// Render a starlark code representation of this documentation object.
     ///
     /// Function bodies for these consist of a single "pass" statement, and objects
@@ -910,7 +910,7 @@ impl RegisteredDoc {
             name,
             location: None,
         };
-        let item = T::get_methods()?.documentation();
+        let item = DocItem::Object(T::get_methods()?.documentation());
         let custom_attrs = custom_attrs
             .iter()
             .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
@@ -1207,7 +1207,7 @@ mod tests {
 
         let kind = DocStringKind::Starlark;
         let return_type = Some(DocType {
-            raw_type: "int".to_owned(),
+            raw_type: Ty::int(),
         });
         let expected = DocFunction {
             docs: DocString::from_docstring(kind, "This is an example docstring\n\nDetails here"),
@@ -1248,6 +1248,7 @@ mod tests {
                 docs: DocString::from_docstring(kind, "A value"),
                 typ: return_type.clone(),
             },
+            dot_type: None,
         };
 
         let function_docs = DocFunction::from_docstring(
@@ -1260,6 +1261,7 @@ mod tests {
             ],
             return_type,
             Some(docstring),
+            None,
         );
 
         assert_eq!(expected, function_docs);
@@ -1283,7 +1285,7 @@ mod tests {
 
         let kind = DocStringKind::Rust;
         let return_type = Some(DocType {
-            raw_type: "int".to_owned(),
+            raw_type: Ty::int(),
         });
         let expected = DocFunction {
             docs: DocString::from_docstring(kind, "This is an example docstring\n\nDetails here"),
@@ -1312,6 +1314,7 @@ mod tests {
                 docs: DocString::from_docstring(kind, "A value"),
                 typ: return_type.clone(),
             },
+            dot_type: None,
         };
 
         let function_docs = DocFunction::from_docstring(
@@ -1319,6 +1322,7 @@ mod tests {
             vec![arg("arg_bar"), arg("arg_foo")],
             return_type,
             Some(docstring),
+            None,
         );
 
         assert_eq!(expected, function_docs);

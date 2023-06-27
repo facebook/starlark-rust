@@ -36,11 +36,12 @@ pub use crate::analysis::Lint;
 use crate::codemap::CodeMap;
 use crate::codemap::FileSpan;
 use crate::codemap::Span;
+pub use crate::errors::frame::Frame;
 use crate::eval::CallStack;
 use crate::values::string::fast_string;
-use crate::values::string::CharIndex;
 
 pub(crate) mod did_you_mean;
+pub(crate) mod frame;
 
 /// An error plus its origination location and call stack.
 ///
@@ -57,67 +58,6 @@ pub struct Diagnostic {
 
     /// Call stack where the error originated.
     pub call_stack: CallStack,
-}
-
-/// A frame of the call-stack.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub struct Frame {
-    /// The name of the entry on the call-stack.
-    pub name: String,
-    /// The location of the definition, or [`None`] for native Rust functions.
-    pub location: Option<FileSpan>,
-}
-
-impl Display for Frame {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.name)?;
-        if let Some(loc) = &self.location {
-            write!(f, " (called from {})", loc)?;
-        }
-        Ok(())
-    }
-}
-
-fn truncate_snippet(snippet: &str, max_len: usize) -> (&str, &str) {
-    let ddd = "...";
-    assert!(max_len >= ddd.len());
-    match fast_string::split_at(snippet, CharIndex(max_len - ddd.len())) {
-        None => (snippet, ""),
-        Some((_, b)) if b.chars().nth(3).is_none() => (snippet, ""),
-        Some((a, _)) => (a, "..."),
-    }
-}
-
-impl Frame {
-    pub(crate) fn write_two_lines(
-        &self,
-        indent: &str,
-        caller: &str,
-        write: &mut dyn fmt::Write,
-    ) -> fmt::Result {
-        if let Some(location) = &self.location {
-            let line = location
-                .file
-                .source_line_at_pos(location.span.begin())
-                .trim();
-            let (line, ddd) = truncate_snippet(line, 80);
-            writeln!(
-                write,
-                "{}* {}:{}, in {}",
-                indent,
-                location.file.filename(),
-                location.file.find_line(location.span.begin()) + 1,
-                // Note we print caller function here as in Python, not callee,
-                // so in the stack trace, top frame is printed without executed function name.
-                caller,
-            )?;
-            writeln!(write, "{}    {}{}", indent, line, ddd)?;
-        } else {
-            // Python just omits builtin functions in the traceback.
-            writeln!(write, "{}File <builtin>, in {}", indent, caller)?;
-        }
-        Ok(())
-    }
 }
 
 impl Error for Diagnostic {
@@ -199,14 +139,6 @@ impl Diagnostic {
 
     /// Gets annotated snippets for a [`Diagnostic`].
     fn get_display_list<'a>(&'a self, annotation_label: &'a str, color: bool) -> DisplayList<'a> {
-        fn convert_span_to_range_relative_to_first_line(
-            diagnostic_span: Span,
-            start_column: usize,
-        ) -> (usize, usize) {
-            let span_length = diagnostic_span.len() as usize;
-            (start_column, start_column + span_length)
-        }
-
         fn convert_span_to_slice<'a>(span: &'a FileSpan) -> Slice<'a> {
             let region = span.resolve_span();
 
@@ -216,19 +148,23 @@ impl Diagnostic {
             let first_line_span = span.file.line_span(region.begin_line);
             let last_line_span = span.file.line_span(region.end_line);
             let source_span = span.span.merge(first_line_span).merge(last_line_span);
+            let source = span.file.source_span(source_span);
+
+            // We want to highlight the span, which needs to be relative to source, and in
+            // characters.
+            // Our spans are in terms of bytes, but our resolved spans in terms of characters.
+            let range_start_chars = region.begin_column;
+            let range_len_chars = fast_string::len(span.source_span()).0;
 
             Slice {
-                source: span.file.source_span(source_span),
+                source,
                 line_start: 1 + region.begin_line,
                 origin: Some(span.file.filename()),
                 fold: false,
                 annotations: vec![SourceAnnotation {
                     label: "",
                     annotation_type: AnnotationType::Error,
-                    range: convert_span_to_range_relative_to_first_line(
-                        span.span,
-                        region.begin_column,
-                    ),
+                    range: (range_start_chars, range_start_chars + range_len_chars),
                 }],
             }
         }
@@ -255,7 +191,7 @@ impl Diagnostic {
 
 impl Display for Diagnostic {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        diagnostic_display(self, f)
+        diagnostic_display(self, false, f)
     }
 }
 
@@ -265,12 +201,12 @@ impl Display for Diagnostic {
 // variants by doing a conversion using annotate-snippets
 // (https://github.com/rust-lang/annotate-snippets-rs)
 
-fn diagnostic_display(diagnostic: &Diagnostic, f: &mut Formatter<'_>) -> fmt::Result {
+fn diagnostic_display(diagnostic: &Diagnostic, color: bool, f: &mut dyn fmt::Write) -> fmt::Result {
     write!(f, "{}", diagnostic.call_stack)?;
     let annotation_label = format!("{}", diagnostic.message);
     // I set color to false here to make the comparison easier with tests (coloring
     // adds in pretty strange unicode chars).
-    let display_list = diagnostic.get_display_list(&annotation_label, false);
+    let display_list = diagnostic.get_display_list(&annotation_label, color);
     writeln!(f, "{}", display_list)?;
     // Print out the `Caused by:` trace (if exists) and rust backtrace (if enabled).
     // The trace printed comes from an [`anyhow::Error`] that is not a [`Diagnostic`].
@@ -282,34 +218,7 @@ fn diagnostic_display(diagnostic: &Diagnostic, f: &mut Formatter<'_>) -> fmt::Re
 }
 
 fn diagnostic_stderr(diagnostic: &Diagnostic) {
-    eprint!("{}", diagnostic.call_stack);
-    let annotation_label = format!("{}", diagnostic.message);
-    let display_list = diagnostic.get_display_list(&annotation_label, true);
-    eprintln!("{}", display_list);
-    // Print out the `Caused by:` trace (if exists) and rust backtrace (if enabled).
-    // The trace printed comes from an [`anyhow::Error`] that is not a [`Diagnostic`].
-    if diagnostic.message.source().is_some() {
-        eprintln!("\n\n{:?}", diagnostic.message);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::errors::truncate_snippet;
-
-    #[test]
-    fn test_truncate_snippet() {
-        assert_eq!(("", ""), truncate_snippet("", 5));
-        assert_eq!(("a", ""), truncate_snippet("a", 5));
-        assert_eq!(("ab", ""), truncate_snippet("ab", 5));
-        assert_eq!(("abc", ""), truncate_snippet("abc", 5));
-        assert_eq!(("abcd", ""), truncate_snippet("abcd", 5));
-        assert_eq!(("abcde", ""), truncate_snippet("abcde", 5));
-        assert_eq!(("ab", "..."), truncate_snippet("abcdef", 5));
-        assert_eq!(("ab", "..."), truncate_snippet("abcdefg", 5));
-        assert_eq!(("ab", "..."), truncate_snippet("abcdefgh", 5));
-        assert_eq!(("ab", "..."), truncate_snippet("abcdefghi", 5));
-        assert_eq!(("Київ", ""), truncate_snippet("Київ", 5));
-        assert_eq!(("па", "..."), truncate_snippet("паляниця", 5));
-    }
+    let mut stderr = String::new();
+    diagnostic_display(diagnostic, true, &mut stderr).unwrap();
+    eprint!("{}", stderr);
 }

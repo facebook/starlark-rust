@@ -63,10 +63,9 @@ impl<'a> Eq for BorrowedExportedName<'a> {}
 /// ```
 /// use allocative::Allocative;
 /// use starlark::eval::Evaluator;
-/// use starlark::starlark_type;
 /// use starlark::values::exported_name::ExportedName;
 /// use starlark::values::StarlarkValue;
-/// use starlark_derive::{NoSerialize, ProvidesStaticType};
+/// use starlark_derive::{NoSerialize, ProvidesStaticType, starlark_value};
 ///
 /// #[derive(Debug, NoSerialize, ProvidesStaticType, Allocative, derive_more::Display)]
 /// #[display(fmt = "{:?}", "self")]
@@ -74,9 +73,8 @@ impl<'a> Eq for BorrowedExportedName<'a> {}
 ///    name: T,
 /// }
 ///
+/// #[starlark_value(type = "MyStruct")]
 /// impl<'v, T: ExportedName> StarlarkValue<'v> for MyStruct<T> {
-///   starlark_type!("MyStruct");
-///
 ///   fn export_as(&self, variable_name: &str, _eval: &mut Evaluator<'v, '_>) {
 ///        self.name.try_export_as(variable_name);
 ///    }
@@ -87,7 +85,7 @@ impl<'a> Eq for BorrowedExportedName<'a> {}
 /// but it is completely optional when implementing
 /// [`StarlarkValue::export_as`](crate::values::StarlarkValue::export_as).
 pub trait ExportedName:
-    Debug + Display + Freeze<Frozen = FrozenExportedName> + Allocative + ProvidesStaticType + 'static
+    Debug + Display + Freeze<Frozen = FrozenExportedName> + Allocative + 'static
 {
     /// Borrow the name.
     fn borrow(&self) -> Option<BorrowedExportedName>;

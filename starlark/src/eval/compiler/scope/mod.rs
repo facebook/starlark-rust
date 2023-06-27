@@ -15,8 +15,15 @@
  * limitations under the License.
  */
 
+pub(crate) mod payload;
+mod tests;
+
+use std::cmp;
+use std::collections::HashMap;
 use std::iter;
+use std::marker::PhantomData;
 use std::mem;
+use std::slice;
 
 use dupe::Dupe;
 use starlark_derive::VisitSpanMut;
@@ -24,27 +31,27 @@ use starlark_map::small_map;
 use starlark_map::small_map::SmallMap;
 
 use crate::codemap::CodeMap;
+use crate::codemap::Span;
 use crate::environment::names::MutableNames;
 use crate::environment::slots::ModuleSlotId;
-use crate::environment::EnvironmentError;
 use crate::environment::Globals;
 use crate::environment::Module;
 use crate::errors::did_you_mean::did_you_mean;
-use crate::errors::Diagnostic;
 use crate::eval::compiler::def::CopySlotFromParent;
+use crate::eval::compiler::scope::payload::CstAssign;
+use crate::eval::compiler::scope::payload::CstAssignIdent;
+use crate::eval::compiler::scope::payload::CstExpr;
+use crate::eval::compiler::scope::payload::CstIdent;
+use crate::eval::compiler::scope::payload::CstParameter;
+use crate::eval::compiler::scope::payload::CstPayload;
+use crate::eval::compiler::scope::payload::CstStmt;
+use crate::eval::compiler::scope::payload::CstTypeExpr;
+use crate::eval::compiler::EvalException;
 use crate::eval::runtime::slots::LocalSlotIdCapturedOrNot;
 use crate::syntax::ast::Assign;
 use crate::syntax::ast::AssignIdent;
-use crate::syntax::ast::AstArgumentP;
 use crate::syntax::ast::AstAssignIdentP;
-use crate::syntax::ast::AstAssignP;
-use crate::syntax::ast::AstExprP;
-use crate::syntax::ast::AstLoadP;
-use crate::syntax::ast::AstNoPayload;
-use crate::syntax::ast::AstParameterP;
-use crate::syntax::ast::AstPayload;
-use crate::syntax::ast::AstStmtP;
-use crate::syntax::ast::AstString;
+use crate::syntax::ast::AstStmt;
 use crate::syntax::ast::ClauseP;
 use crate::syntax::ast::DefP;
 use crate::syntax::ast::ExprP;
@@ -53,26 +60,51 @@ use crate::syntax::ast::LambdaP;
 use crate::syntax::ast::Stmt;
 use crate::syntax::ast::StmtP;
 use crate::syntax::ast::Visibility;
-use crate::syntax::payload_map::AstPayloadFunction;
 use crate::syntax::uniplate::VisitMut;
 use crate::syntax::Dialect;
+use crate::typing::Interface;
 use crate::values::FrozenHeap;
 use crate::values::FrozenRef;
 use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 
-pub(crate) struct Scope<'a> {
-    pub(crate) scope_data: ScopeData,
+#[derive(Debug, thiserror::Error)]
+enum ScopeError {
+    #[error("Variable `{0}` not found")]
+    VariableNotFound(String),
+    #[error("Variable `{0}` not found, did you mean `{1}`?")]
+    VariableNotFoundDidYouMean(String, String),
+    #[error("Identifiers in type expressions can only refer globals or builtins: `{0}`")]
+    TypeExpressionGlobalOrBuiltin(String),
+}
+
+/// All scopes and bindings in a module.
+struct ModuleScopeBuilder<'a> {
+    scope_data: ModuleScopeData<'a>,
     module: &'a MutableNames,
     frozen_heap: &'a FrozenHeap,
-    pub(crate) module_bindings: SmallMap<FrozenStringValue, BindingId>,
+    module_bindings: SmallMap<FrozenStringValue, BindingId>,
     // The first scope is a module-level scope (including comprehensions in module scope).
     // The rest are scopes for functions (which include their comprehensions).
     locals: Vec<ScopeId>,
     unscopes: Vec<Unscope>,
     codemap: FrozenRef<'static, CodeMap>,
     globals: FrozenRef<'static, Globals>,
-    pub(crate) errors: Vec<anyhow::Error>,
+    errors: Vec<EvalException>,
+    top_level_stmt_count: usize,
+    /// Index of last statement that defines a type.
+    last_stmt_defining_type: Option<TopLevelStmtIndex>,
+}
+
+pub(crate) struct ModuleScopes<'f> {
+    pub(crate) scope_data: ModuleScopeData<'f>,
+    pub(crate) module_slot_count: u32,
+    pub(crate) cst: CstStmt,
+    pub(crate) module_bindings: SmallMap<FrozenStringValue, BindingId>,
+    /// Number of top-level statements in the module.
+    pub(crate) top_level_stmt_count: usize,
+    /// Index of last statement that defines a type.
+    pub(crate) last_stmt_defining_type: Option<TopLevelStmtIndex>,
 }
 
 struct UnscopeBinding {
@@ -90,7 +122,7 @@ struct UnscopeBinding {
 struct Unscope(SmallMap<FrozenStringValue, UnscopeBinding>);
 
 #[derive(Default, Debug)]
-pub(crate) struct ScopeNames {
+pub(crate) struct ScopeNames<'f> {
     /// `Some` when scope is initialized.
     /// For module scope, the value is zero.
     pub param_count: Option<u32>,
@@ -102,9 +134,11 @@ pub(crate) struct ScopeNames {
     /// Slots to copy from the parent.
     /// Module-level identifiers are not copied over, to avoid excess copying.
     pub parent: Vec<CopySlotFromParent>,
+    /// We store frozen strings.
+    _heap: PhantomData<&'f ()>,
 }
 
-impl ScopeNames {
+impl<'f> ScopeNames<'f> {
     fn set_param_count(&mut self, param_count: u32) {
         assert!(self.param_count.is_none());
         self.param_count = Some(param_count);
@@ -198,31 +232,57 @@ pub(crate) enum Slot {
     Local(LocalSlotIdCapturedOrNot),
 }
 
-impl<'a> Scope<'a> {
+#[derive(Clone, Copy, Dupe)]
+enum ResolveIdentScope {
+    /// Resolving normal identifier.
+    Any,
+    /// Resolving identifier in type expression.
+    GlobalForTypeExpression,
+}
+
+impl<'f> ModuleScopeBuilder<'f> {
     fn top_scope_id(&self) -> ScopeId {
         *self.locals.last().unwrap()
     }
 
-    fn scope_at_level(&self, level: usize) -> &ScopeNames {
+    fn scope_at_level(&self, level: usize) -> &ScopeNames<'f> {
         let scope_id = self.locals[level];
         self.scope_data.get_scope(scope_id)
     }
 
-    fn scope_at_level_mut(&mut self, level: usize) -> &mut ScopeNames {
+    fn scope_at_level_mut(&mut self, level: usize) -> &mut ScopeNames<'f> {
         let scope_id = self.locals[level];
         self.scope_data.mut_scope(scope_id)
     }
 
-    pub fn enter_module(
-        module: &'a MutableNames,
-        frozen_heap: &'a FrozenHeap,
-        scope_id: ScopeId,
-        mut scope_data: ScopeData,
-        code: &mut CstStmt,
+    /// Resolve symbols in a module.
+    ///
+    /// Checks all the symbols are resolved to locals/globals/captured/etc.
+    /// Do not check types yet. But validate type expressions.
+    ///
+    /// This function does not fail, errors are stored in the `errors` field.
+    fn enter_module(
+        module: &'f MutableNames,
+        frozen_heap: &'f FrozenHeap,
+        loads: &HashMap<String, Interface>,
+        stmt: AstStmt,
         globals: FrozenRef<'static, Globals>,
         codemap: FrozenRef<'static, CodeMap>,
         dialect: &Dialect,
-    ) -> Self {
+    ) -> (CstStmt, ModuleScopeBuilder<'f>) {
+        let mut scope_data = ModuleScopeData::new();
+        let scope_id = scope_data.new_scope().0;
+        let mut cst = CstStmt::from_ast(stmt, &mut scope_data, loads);
+
+        let top_level_stmts: &mut [CstStmt] = match &mut cst.node {
+            StmtP::Statements(stmts) => {
+                // TODO(nga): single-line top-level statements like `a(); b()`
+                //   will be treated as multiple top-level statements.
+                stmts
+            }
+            _ => slice::from_mut(&mut cst),
+        };
+
         // Not really important, sanity check
         assert_eq!(scope_id, ScopeId::module());
 
@@ -232,18 +292,26 @@ impl<'a> Scope<'a> {
 
         let existing_module_names_and_visibilites = module.all_names_and_visibilities();
         for (name, vis) in existing_module_names_and_visibilites.iter() {
-            let (binding_id, _binding) = scope_data.new_binding(*vis, AssignCount::AtMostOnce);
+            let (binding_id, _binding) = scope_data.new_binding(
+                *name,
+                BindingSource::FromModule,
+                *vis,
+                AssignCount::AtMostOnce,
+            );
             locals.insert_hashed(name.get_hashed(), binding_id);
         }
 
-        Stmt::collect_defines(
-            code,
-            InLoop::No,
-            &mut scope_data,
-            frozen_heap,
-            &mut locals,
-            dialect,
-        );
+        for (i, stmt) in top_level_stmts.iter_mut().enumerate() {
+            Stmt::collect_defines(
+                stmt,
+                TopLevelStmtIndex(i),
+                InLoop::No,
+                &mut scope_data,
+                frozen_heap,
+                &mut locals,
+                dialect,
+            );
+        }
 
         let mut module_bindings = SmallMap::new();
         for (x, binding_id) in locals {
@@ -256,8 +324,16 @@ impl<'a> Scope<'a> {
         }
 
         // Here we traverse the AST second time to collect scopes of defs
-        Self::collect_defines_recursively(&mut scope_data, code, frozen_heap, dialect);
-        let mut scope = Self {
+        for (i, stmt) in top_level_stmts.iter_mut().enumerate() {
+            ModuleScopeBuilder::collect_defines_recursively(
+                &mut scope_data,
+                stmt,
+                TopLevelStmtIndex(i),
+                frozen_heap,
+                dialect,
+            );
+        }
+        let mut scope = ModuleScopeBuilder {
             scope_data,
             frozen_heap,
             module,
@@ -267,31 +343,104 @@ impl<'a> Scope<'a> {
             codemap,
             globals,
             errors: Vec::new(),
+            top_level_stmt_count: top_level_stmts.len(),
+            last_stmt_defining_type: None,
         };
-        scope.resolve_idents(code);
-        scope
+        for (i, stmt) in top_level_stmts.iter_mut().enumerate() {
+            scope.resolve_idents(stmt, TopLevelStmtIndex(i));
+        }
+        (cst, scope)
     }
+}
 
-    // Number of module slots I need, and a struct holding all scopes.
-    pub fn exit_module(mut self) -> (u32, ScopeData) {
+impl<'f> ModuleScopeBuilder<'f> {
+    // Number of module slots I need, a struct holding all scopes, and module bindings.
+    fn exit_module(
+        mut self,
+    ) -> (
+        u32,
+        ModuleScopeData<'f>,
+        SmallMap<FrozenStringValue, BindingId>,
+    ) {
         assert!(self.locals.len() == 1);
         assert!(self.unscopes.is_empty());
         let scope_id = self.locals.pop().unwrap();
         assert!(scope_id == ScopeId::module());
         let scope = self.scope_data.get_scope(scope_id);
         assert!(scope.parent.is_empty());
-        (self.module.slot_count(), self.scope_data)
+        (
+            self.module.slot_count(),
+            self.scope_data,
+            self.module_bindings,
+        )
+    }
+}
+
+impl<'f> ModuleScopes<'f> {
+    pub(crate) fn check_module_err(
+        module: &'f MutableNames,
+        frozen_heap: &'f FrozenHeap,
+        loads: &HashMap<String, Interface>,
+        stmt: AstStmt,
+        globals: FrozenRef<'static, Globals>,
+        codemap: FrozenRef<'static, CodeMap>,
+        dialect: &Dialect,
+    ) -> anyhow::Result<ModuleScopes<'f>> {
+        let (errors, scopes) =
+            ModuleScopes::check_module(module, frozen_heap, loads, stmt, globals, codemap, dialect);
+        if let Some(error) = errors.into_iter().next() {
+            return Err(error.into_anyhow());
+        }
+        Ok(scopes)
     }
 
+    pub(crate) fn check_module(
+        module: &'f MutableNames,
+        frozen_heap: &'f FrozenHeap,
+        loads: &HashMap<String, Interface>,
+        stmt: AstStmt,
+        globals: FrozenRef<'static, Globals>,
+        codemap: FrozenRef<'static, CodeMap>,
+        dialect: &Dialect,
+    ) -> (Vec<EvalException>, ModuleScopes<'f>) {
+        let (stmt, mut scope) = ModuleScopeBuilder::enter_module(
+            module,
+            frozen_heap,
+            loads,
+            stmt,
+            globals,
+            codemap,
+            dialect,
+        );
+        let top_level_stmt_count = scope.top_level_stmt_count;
+        let last_stmt_defining_type = scope.last_stmt_defining_type;
+        let errors = mem::take(&mut scope.errors);
+        let (module_slot_count, scope_data, module_bindings) = scope.exit_module();
+        (
+            errors,
+            ModuleScopes {
+                cst: stmt,
+                scope_data,
+                module_bindings,
+                module_slot_count,
+                top_level_stmt_count,
+                last_stmt_defining_type,
+            },
+        )
+    }
+}
+
+impl<'f> ModuleScopeBuilder<'f> {
     fn collect_defines_in_def(
-        scope_data: &mut ScopeData,
+        scope_data: &mut ModuleScopeData,
         scope_id: ScopeId,
         params: &mut [CstParameter],
         body: Option<&mut CstStmt>,
+        top_level_stmt_index: TopLevelStmtIndex,
         frozen_heap: &FrozenHeap,
         dialect: &Dialect,
     ) {
-        let params = params
+        let params: Vec<&mut AstAssignIdentP<_>> = params
             .iter_mut()
             .filter_map(|p| p.node.split_mut().0)
             .collect::<Vec<_>>();
@@ -300,19 +449,25 @@ impl<'a> Scope<'a> {
             .set_param_count(params.len().try_into().unwrap());
         let mut locals: SmallMap<FrozenStringValue, _> = SmallMap::new();
         for p in params {
+            let name = frozen_heap.alloc_str_intern(&p.0);
             // Subtle invariant: the slots for the params must be ordered and at the
             // beginning
             let binding_id = scope_data
-                .new_binding(Visibility::Public, AssignCount::AtMostOnce)
+                .new_binding(
+                    name,
+                    BindingSource::Source(p.span, top_level_stmt_index),
+                    Visibility::Public,
+                    AssignCount::AtMostOnce,
+                )
                 .0;
             p.1 = Some(binding_id);
-            let old_local =
-                locals.insert_hashed(frozen_heap.alloc_str_intern(&p.0).get_hashed(), binding_id);
+            let old_local = locals.insert_hashed(name.get_hashed(), binding_id);
             assert!(old_local.is_none());
         }
         if let Some(code) = body {
             Stmt::collect_defines(
                 code,
+                top_level_stmt_index,
                 InLoop::No,
                 scope_data,
                 frozen_heap,
@@ -329,8 +484,9 @@ impl<'a> Scope<'a> {
     }
 
     fn collect_defines_recursively(
-        scope_data: &mut ScopeData,
+        scope_data: &mut ModuleScopeData,
         code: &mut CstStmt,
+        top_level_stmt_index: TopLevelStmtIndex,
         frozen_heap: &FrozenHeap,
         dialect: &Dialect,
     ) {
@@ -349,24 +505,34 @@ impl<'a> Scope<'a> {
                 *scope_id,
                 params,
                 Some(body),
+                top_level_stmt_index,
                 frozen_heap,
                 dialect,
             );
         }
 
         code.visit_children_mut(&mut |visit| match visit {
-            VisitMut::Expr(e) => {
-                Self::collect_defines_recursively_in_expr(scope_data, e, frozen_heap, dialect)
-            }
-            VisitMut::Stmt(s) => {
-                Self::collect_defines_recursively(scope_data, s, frozen_heap, dialect)
-            }
+            VisitMut::Expr(e) => Self::collect_defines_recursively_in_expr(
+                scope_data,
+                e,
+                top_level_stmt_index,
+                frozen_heap,
+                dialect,
+            ),
+            VisitMut::Stmt(s) => Self::collect_defines_recursively(
+                scope_data,
+                s,
+                top_level_stmt_index,
+                frozen_heap,
+                dialect,
+            ),
         });
     }
 
     fn collect_defines_recursively_in_expr(
-        scope_data: &mut ScopeData,
+        scope_data: &mut ModuleScopeData,
         code: &mut CstExpr,
+        top_level_stmt_index: TopLevelStmtIndex,
         frozen_heap: &FrozenHeap,
         dialect: &Dialect,
     ) {
@@ -376,15 +542,29 @@ impl<'a> Scope<'a> {
             payload: scope_id,
         }) = &mut code.node
         {
-            Self::collect_defines_in_def(scope_data, *scope_id, params, None, frozen_heap, dialect);
+            Self::collect_defines_in_def(
+                scope_data,
+                *scope_id,
+                params,
+                None,
+                top_level_stmt_index,
+                frozen_heap,
+                dialect,
+            );
         }
 
         code.visit_expr_mut(|e| {
-            Self::collect_defines_recursively_in_expr(scope_data, e, frozen_heap, dialect)
+            Self::collect_defines_recursively_in_expr(
+                scope_data,
+                e,
+                top_level_stmt_index,
+                frozen_heap,
+                dialect,
+            )
         });
     }
 
-    fn resolve_idents(&mut self, code: &mut CstStmt) {
+    fn resolve_idents(&mut self, code: &mut CstStmt, top_level_stmt_index: TopLevelStmtIndex) {
         match &mut code.node {
             StmtP::Def(DefP {
                 name: _,
@@ -398,60 +578,114 @@ impl<'a> Scope<'a> {
                 return_type.as_mut().map(|r| &mut **r),
                 Some(body),
                 None,
+                top_level_stmt_index,
             ),
+            StmtP::Assign(lhs, ty_rhs) => {
+                let (ty, rhs) = &mut **ty_rhs;
+                self.resolve_idents_in_assign(lhs, top_level_stmt_index);
+                if let Some(ty) = ty {
+                    self.resolve_idents_in_type_expr(ty, top_level_stmt_index);
+                }
+                self.resolve_idents_in_expr(rhs, top_level_stmt_index);
+            }
             _ => code.visit_children_mut(|visit| match visit {
-                VisitMut::Stmt(stmt) => self.resolve_idents(stmt),
-                VisitMut::Expr(expr) => self.resolve_idents_in_expr(expr),
+                VisitMut::Stmt(stmt) => self.resolve_idents(stmt, top_level_stmt_index),
+                VisitMut::Expr(expr) => self.resolve_idents_in_expr(expr, top_level_stmt_index),
             }),
         }
     }
 
-    fn resolve_idents_in_assign(&mut self, assign: &mut CstAssign) {
-        assign.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr));
+    fn resolve_idents_in_assign(
+        &mut self,
+        assign: &mut CstAssign,
+        top_level_stmt_index: TopLevelStmtIndex,
+    ) {
+        assign.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr, top_level_stmt_index));
     }
 
     fn resolve_idents_in_def(
         &mut self,
         scope_id: ScopeId,
         params: &mut [CstParameter],
-        ret: Option<&mut CstExpr>,
+        ret: Option<&mut CstTypeExpr>,
         body_stmt: Option<&mut CstStmt>,
         body_expr: Option<&mut CstExpr>,
+        top_level_stmt_index: TopLevelStmtIndex,
     ) {
         for param in params {
-            param.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr));
+            let (_, ty, def) = param.split_mut();
+            if let Some(ty) = ty {
+                self.resolve_idents_in_type_expr(ty, top_level_stmt_index);
+            }
+            if let Some(def) = def {
+                self.resolve_idents_in_expr(def, top_level_stmt_index);
+            }
         }
         if let Some(ret) = ret {
-            self.resolve_idents_in_expr(ret);
+            self.resolve_idents_in_type_expr(ret, top_level_stmt_index);
         }
 
         self.enter_def(scope_id);
         if let Some(body_stmt) = body_stmt {
-            self.resolve_idents(body_stmt);
+            self.resolve_idents(body_stmt, top_level_stmt_index);
         }
         if let Some(body_expr) = body_expr {
-            self.resolve_idents_in_expr(body_expr);
+            self.resolve_idents_in_expr(body_expr, top_level_stmt_index);
         }
         self.exit_def();
     }
 
-    fn resolve_idents_in_expr(&mut self, expr: &mut CstExpr) {
+    fn resolve_idents_in_expr_impl(
+        &mut self,
+        scope: ResolveIdentScope,
+        expr: &mut CstExpr,
+        top_level_stmt_index: TopLevelStmtIndex,
+    ) {
         match &mut expr.node {
-            ExprP::Identifier(ident, slot) => self.resolve_ident(ident, slot),
+            ExprP::Identifier(ident) => self.resolve_ident(scope, ident),
             ExprP::Lambda(LambdaP {
                 params,
                 body,
                 payload: scope_id,
-            }) => self.resolve_idents_in_def(*scope_id, params, None, None, Some(body)),
+            }) => self.resolve_idents_in_def(
+                *scope_id,
+                params,
+                None,
+                None,
+                Some(body),
+                top_level_stmt_index,
+            ),
             ExprP::ListComprehension(expr, first_for, clauses) => {
-                self.resolve_idents_in_compr(&mut [expr], first_for, clauses)
+                self.resolve_idents_in_compr(&mut [expr], first_for, clauses, top_level_stmt_index)
             }
             ExprP::DictComprehension(k_v, first_for, clauses) => {
                 let (k, v) = &mut **k_v;
-                self.resolve_idents_in_compr(&mut [k, v], first_for, clauses)
+                self.resolve_idents_in_compr(&mut [k, v], first_for, clauses, top_level_stmt_index)
             }
-            _ => expr.visit_expr_mut(|expr| self.resolve_idents_in_expr(expr)),
+            _ => expr.visit_expr_mut(|expr| {
+                self.resolve_idents_in_expr_impl(scope, expr, top_level_stmt_index)
+            }),
         }
+    }
+
+    fn resolve_idents_in_expr(
+        &mut self,
+        expr: &mut CstExpr,
+        top_level_stmt_index: TopLevelStmtIndex,
+    ) {
+        self.resolve_idents_in_expr_impl(ResolveIdentScope::Any, expr, top_level_stmt_index);
+    }
+
+    fn resolve_idents_in_type_expr(
+        &mut self,
+        expr: &mut CstTypeExpr,
+        top_level_stmt_index: TopLevelStmtIndex,
+    ) {
+        self.resolve_idents_in_expr_impl(
+            ResolveIdentScope::GlobalForTypeExpression,
+            &mut expr.node.expr,
+            top_level_stmt_index,
+        );
     }
 
     fn current_scope_all_visible_names_for_did_you_mean(&self) -> Vec<FrozenStringValue> {
@@ -466,39 +700,67 @@ impl<'a> Scope<'a> {
         r
     }
 
-    fn variable_not_found_err(&self, ident: &AstString) -> anyhow::Error {
+    fn variable_not_found_err(&self, ident: &CstIdent) -> EvalException {
         let variants = self.current_scope_all_visible_names_for_did_you_mean();
-        let better = did_you_mean(ident, variants.iter().map(|s| s.as_str()));
-        Diagnostic::new(
+        let better = did_you_mean(ident.node.0.as_str(), variants.iter().map(|s| s.as_str()));
+        EvalException::new(
             match better {
-                Some(better) => EnvironmentError::VariableNotFoundDidYouMean(
-                    ident.node.clone(),
-                    better.to_owned(),
-                ),
-                None => EnvironmentError::VariableNotFound(ident.node.clone()),
-            },
+                Some(better) => {
+                    ScopeError::VariableNotFoundDidYouMean(ident.node.0.clone(), better.to_owned())
+                }
+                None => ScopeError::VariableNotFound(ident.node.0.clone()),
+            }
+            .into(),
             ident.span,
             &self.codemap,
         )
     }
 
-    fn resolve_ident(&mut self, ident: &AstString, resolved_ident: &mut Option<ResolvedIdent>) {
-        assert!(resolved_ident.is_none());
-        *resolved_ident = Some(
-            match self.get_name(self.frozen_heap.alloc_str_intern(ident)) {
-                None => {
-                    // Must be a global, since we know all variables
-                    match self.globals.get_frozen(ident) {
-                        None => {
-                            self.errors.push(self.variable_not_found_err(ident));
-                            return;
-                        }
-                        Some(v) => ResolvedIdent::Global(v),
+    fn update_latest_binding_used_in_type_expr(&mut self, binding_id: BindingId) {
+        let binding = self.scope_data.get_binding(binding_id);
+        let top_level_stmt_index = match binding.source {
+            BindingSource::Source(_, top_level_stmt_index) => top_level_stmt_index,
+            BindingSource::FromModule => return,
+        };
+        match &mut self.last_stmt_defining_type {
+            None => self.last_stmt_defining_type = Some(top_level_stmt_index),
+            Some(last_stmt) => *last_stmt = cmp::max(*last_stmt, top_level_stmt_index),
+        }
+    }
+
+    fn resolve_ident(&mut self, scope: ResolveIdentScope, ident: &mut CstIdent) {
+        assert!(ident.node.1.is_none());
+        let resolved = match self.get_name(self.frozen_heap.alloc_str_intern(&ident.node.0)) {
+            None => {
+                // Must be a global, since we know all variables
+                match self.globals.get_frozen(&ident.node.0) {
+                    None => {
+                        self.errors.push(self.variable_not_found_err(ident));
+                        return;
                     }
+                    Some(v) => ResolvedIdent::Global(v),
                 }
-                Some(slot) => ResolvedIdent::Slot(slot),
+            }
+            Some((slot, binding_id)) => ResolvedIdent::Slot(slot, binding_id),
+        };
+        match scope {
+            ResolveIdentScope::Any => {}
+            ResolveIdentScope::GlobalForTypeExpression => match resolved {
+                ResolvedIdent::Slot(Slot::Local(_), _) => {
+                    self.errors.push(EvalException::new(
+                        ScopeError::TypeExpressionGlobalOrBuiltin(ident.node.0.clone()).into(),
+                        ident.span,
+                        &self.codemap,
+                    ));
+                    return;
+                }
+                ResolvedIdent::Slot(Slot::Module(_), binding_id) => {
+                    self.update_latest_binding_used_in_type_expr(binding_id);
+                }
+                ResolvedIdent::Global(_) => {}
             },
-        );
+        }
+        ident.node.1 = Some(resolved);
     }
 
     fn resolve_idents_in_compr(
@@ -506,9 +768,10 @@ impl<'a> Scope<'a> {
         exprs: &mut [&mut CstExpr],
         first_for: &mut ForClauseP<CstPayload>,
         clauses: &mut [ClauseP<CstPayload>],
+        top_level_stmt_index: TopLevelStmtIndex,
     ) {
         // First for is resolved in outer scope
-        self.resolve_idents_in_for_clause(first_for);
+        self.resolve_idents_in_for_clause(first_for, top_level_stmt_index);
 
         self.enter_compr();
 
@@ -521,29 +784,36 @@ impl<'a> Scope<'a> {
                     ClauseP::If(..) => None,
                 },
             )),
+            top_level_stmt_index,
         );
 
         // Now resolve idents in compr scope
 
         for clause in clauses.iter_mut() {
             match clause {
-                ClauseP::For(for_clause) => self.resolve_idents_in_for_clause(for_clause),
-                ClauseP::If(cond) => self.resolve_idents_in_expr(cond),
+                ClauseP::For(for_clause) => {
+                    self.resolve_idents_in_for_clause(for_clause, top_level_stmt_index)
+                }
+                ClauseP::If(cond) => self.resolve_idents_in_expr(cond, top_level_stmt_index),
             }
         }
 
         // Finally, resolve the item expression
 
         for expr in exprs {
-            self.resolve_idents_in_expr(expr);
+            self.resolve_idents_in_expr(expr, top_level_stmt_index);
         }
 
         self.exit_compr();
     }
 
-    fn resolve_idents_in_for_clause(&mut self, for_clause: &mut ForClauseP<CstPayload>) {
-        self.resolve_idents_in_expr(&mut for_clause.over);
-        self.resolve_idents_in_assign(&mut for_clause.var);
+    fn resolve_idents_in_for_clause(
+        &mut self,
+        for_clause: &mut ForClauseP<CstPayload>,
+        top_level_stmt_index: TopLevelStmtIndex,
+    ) {
+        self.resolve_idents_in_expr(&mut for_clause.over, top_level_stmt_index);
+        self.resolve_idents_in_assign(&mut for_clause.var, top_level_stmt_index);
     }
 
     pub fn enter_def(&mut self, scope_id: ScopeId) {
@@ -554,7 +824,7 @@ impl<'a> Scope<'a> {
     // Which slots to grab from the current scope to the parent scope, size of your
     // self scope Future state: Should return the slots to use from the parent
     // scope
-    pub fn exit_def(&mut self) -> &mut ScopeNames {
+    pub fn exit_def(&mut self) -> &mut ScopeNames<'f> {
         let scope_id = self.locals.pop().unwrap();
         self.scope_data.mut_scope(scope_id)
     }
@@ -563,12 +833,17 @@ impl<'a> Scope<'a> {
         self.unscopes.push(Unscope::default());
     }
 
-    fn add_compr<'x>(&mut self, var: impl IntoIterator<Item = &'x mut CstAssign>) {
+    fn add_compr<'x>(
+        &mut self,
+        var: impl IntoIterator<Item = &'x mut CstAssign>,
+        top_level_stmt_index: TopLevelStmtIndex,
+    ) {
         let scope_id = self.top_scope_id();
         let mut locals = SmallMap::new();
         for var in var {
             Assign::collect_defines_lvalue(
                 var,
+                top_level_stmt_index,
                 InLoop::Yes,
                 &mut self.scope_data,
                 self.frozen_heap,
@@ -636,23 +911,47 @@ impl Stmt {
     // Collect all the variables that are defined in this scope
     fn collect_defines<'a>(
         stmt: &'a mut CstStmt,
+        top_level_stmt_index: TopLevelStmtIndex,
         in_loop: InLoop,
-        scope_data: &mut ScopeData,
+        scope_data: &mut ModuleScopeData,
         frozen_heap: &FrozenHeap,
         result: &mut SmallMap<FrozenStringValue, BindingId>,
         dialect: &Dialect,
     ) {
         match &mut stmt.node {
             StmtP::Assign(dest, _) | StmtP::AssignModify(dest, _, _) => {
-                Assign::collect_defines_lvalue(dest, in_loop, scope_data, frozen_heap, result);
+                Assign::collect_defines_lvalue(
+                    dest,
+                    top_level_stmt_index,
+                    in_loop,
+                    scope_data,
+                    frozen_heap,
+                    result,
+                );
             }
             StmtP::For(dest, over_body) => {
                 let (_over, body) = &mut **over_body;
-                Assign::collect_defines_lvalue(dest, InLoop::Yes, scope_data, frozen_heap, result);
-                StmtP::collect_defines(body, InLoop::Yes, scope_data, frozen_heap, result, dialect);
+                Assign::collect_defines_lvalue(
+                    dest,
+                    top_level_stmt_index,
+                    InLoop::Yes,
+                    scope_data,
+                    frozen_heap,
+                    result,
+                );
+                StmtP::collect_defines(
+                    body,
+                    top_level_stmt_index,
+                    InLoop::Yes,
+                    scope_data,
+                    frozen_heap,
+                    result,
+                    dialect,
+                );
             }
             StmtP::Def(DefP { name, .. }) => AssignIdent::collect_assign_ident(
                 name,
+                top_level_stmt_index,
                 in_loop,
                 Visibility::Public,
                 scope_data,
@@ -668,6 +967,7 @@ impl Stmt {
                     }
                     AssignIdent::collect_assign_ident(
                         name,
+                        top_level_stmt_index,
                         in_loop,
                         vis,
                         scope_data,
@@ -677,7 +977,15 @@ impl Stmt {
                 }
             }
             stmt => stmt.visit_stmt_mut(|x| {
-                Stmt::collect_defines(x, in_loop, scope_data, frozen_heap, result, dialect)
+                Stmt::collect_defines(
+                    x,
+                    top_level_stmt_index,
+                    in_loop,
+                    scope_data,
+                    frozen_heap,
+                    result,
+                    dialect,
+                )
             }),
         }
     }
@@ -686,19 +994,22 @@ impl Stmt {
 impl AssignIdent {
     fn collect_assign_ident<'a>(
         assign: &'a mut CstAssignIdent,
+        top_level_stmt_index: TopLevelStmtIndex,
         in_loop: InLoop,
         vis: Visibility,
-        scope_data: &mut ScopeData,
+        scope_data: &mut ModuleScopeData,
         frozen_heap: &FrozenHeap,
         result: &mut SmallMap<FrozenStringValue, BindingId>,
     ) {
         // Helper function to untangle lifetimes: we read and modify `assign` fields.
         fn assign_ident_impl<'b>(
             name: FrozenStringValue,
+            span: Span,
+            top_level_stmt_index: TopLevelStmtIndex,
             binding: &'b mut Option<BindingId>,
             in_loop: InLoop,
             mut vis: Visibility,
-            scope_data: &mut ScopeData,
+            scope_data: &mut ModuleScopeData,
             result: &mut SmallMap<FrozenStringValue, BindingId>,
         ) {
             assert!(
@@ -727,7 +1038,12 @@ impl AssignIdent {
                         InLoop::Yes => AssignCount::Any,
                         InLoop::No => AssignCount::AtMostOnce,
                     };
-                    let (new_binding_id, _) = scope_data.new_binding(vis, assign_count);
+                    let (new_binding_id, _) = scope_data.new_binding(
+                        name,
+                        BindingSource::Source(span, top_level_stmt_index),
+                        vis,
+                        assign_count,
+                    );
                     e.insert(new_binding_id);
                     *binding = Some(new_binding_id);
                 }
@@ -735,6 +1051,8 @@ impl AssignIdent {
         }
         assign_ident_impl(
             frozen_heap.alloc_str_intern(&assign.node.0),
+            assign.span,
+            top_level_stmt_index,
             &mut assign.node.1,
             in_loop,
             vis,
@@ -749,14 +1067,16 @@ impl Assign {
     // for variable etc)
     fn collect_defines_lvalue<'a>(
         expr: &'a mut CstAssign,
+        top_level_stmt_index: TopLevelStmtIndex,
         in_loop: InLoop,
-        scope_data: &mut ScopeData,
+        scope_data: &mut ModuleScopeData,
         frozen_heap: &FrozenHeap,
         result: &mut SmallMap<FrozenStringValue, BindingId>,
     ) {
         expr.node.visit_lvalue_mut(|x| {
             AssignIdent::collect_assign_ident(
                 x,
+                top_level_stmt_index,
                 in_loop,
                 Visibility::Public,
                 scope_data,
@@ -769,9 +1089,11 @@ impl Assign {
 
 /// Storage of objects referenced by AST.
 #[derive(Default)]
-pub(crate) struct ScopeData {
-    bindings: Vec<Binding>,
-    scopes: Vec<ScopeNames>,
+pub(crate) struct ModuleScopeData<'f> {
+    /// Bindings by id.
+    bindings: Vec<Binding<'f>>,
+    /// Scopes by id.
+    scopes: Vec<ScopeNames<'f>>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -789,13 +1111,23 @@ pub(crate) enum Captured {
     No,
 }
 
+#[derive(Debug)]
+pub(crate) enum BindingSource {
+    /// Variable is defined in the source of the module.
+    Source(Span, TopLevelStmtIndex),
+    /// Variable came from `Module`, not defined in the source file.
+    FromModule,
+}
+
 /// Binding defines a place for a variable.
 ///
 /// For example, in code `x = 1; x = 2`, there's one binding for name `x`.
 ///
 /// In code `x = 1; def f(): x = 2`, there are two bindings for name `x`.
 #[derive(Debug)]
-pub(crate) struct Binding {
+pub(crate) struct Binding<'f> {
+    pub(crate) name: FrozenStringValue,
+    pub(crate) source: BindingSource,
     pub(crate) vis: Visibility,
     /// `slot` is `None` when it is not initialized yet.
     /// When analysis is completed, `slot` is always `Some`.
@@ -805,15 +1137,24 @@ pub(crate) struct Binding {
     // (Comprehension scopes do not count, because they are considered
     // local by the runtime and do not allocate a frame).
     pub(crate) captured: Captured,
+    _marker: PhantomData<&'f ()>,
 }
 
-impl Binding {
-    fn new(vis: Visibility, assign_count: AssignCount) -> Binding {
+impl<'f> Binding<'f> {
+    fn new(
+        name: FrozenStringValue,
+        source: BindingSource,
+        vis: Visibility,
+        assign_count: AssignCount,
+    ) -> Binding<'f> {
         Binding {
+            name,
+            source,
             vis,
             slot: None,
             assign_count,
             captured: Captured::No,
+            _marker: PhantomData,
         }
     }
 }
@@ -832,38 +1173,45 @@ impl ScopeId {
     }
 }
 
-impl ScopeData {
-    pub(crate) fn new() -> ScopeData {
-        ScopeData::default()
+/// Index of top-level statement.
+#[derive(Copy, Clone, Dupe, Debug, PartialEq, Eq, Ord, PartialOrd)]
+pub(crate) struct TopLevelStmtIndex(pub(crate) usize);
+
+impl<'f> ModuleScopeData<'f> {
+    pub(crate) fn new() -> ModuleScopeData<'f> {
+        ModuleScopeData::default()
     }
 
-    pub(crate) fn get_binding(&self, BindingId(id): BindingId) -> &Binding {
+    pub(crate) fn get_binding(&self, BindingId(id): BindingId) -> &Binding<'f> {
         &self.bindings[id]
     }
 
-    fn mut_binding(&mut self, BindingId(id): BindingId) -> &mut Binding {
+    fn mut_binding(&mut self, BindingId(id): BindingId) -> &mut Binding<'f> {
         &mut self.bindings[id]
     }
 
     fn new_binding(
         &mut self,
+        name: FrozenStringValue,
+        source: BindingSource,
         vis: Visibility,
         assigned_count: AssignCount,
-    ) -> (BindingId, &mut Binding) {
+    ) -> (BindingId, &mut Binding<'f>) {
         let binding_id = BindingId(self.bindings.len());
-        self.bindings.push(Binding::new(vis, assigned_count));
+        self.bindings
+            .push(Binding::new(name, source, vis, assigned_count));
         (binding_id, self.bindings.last_mut().unwrap())
     }
 
-    pub(crate) fn get_scope(&self, ScopeId(id): ScopeId) -> &ScopeNames {
+    pub(crate) fn get_scope(&self, ScopeId(id): ScopeId) -> &ScopeNames<'f> {
         &self.scopes[id]
     }
 
-    pub(crate) fn mut_scope(&mut self, ScopeId(id): ScopeId) -> &mut ScopeNames {
+    pub(crate) fn mut_scope(&mut self, ScopeId(id): ScopeId) -> &mut ScopeNames<'f> {
         &mut self.scopes[id]
     }
 
-    pub(crate) fn new_scope(&mut self) -> (ScopeId, &mut ScopeNames) {
+    pub(crate) fn new_scope(&mut self) -> (ScopeId, &mut ScopeNames<'f>) {
         let scope_id = ScopeId(self.scopes.len());
         self.scopes.push(ScopeNames::default());
         (scope_id, self.scopes.last_mut().unwrap())
@@ -881,252 +1229,8 @@ impl ScopeData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Dupe)]
 pub(crate) enum ResolvedIdent {
-    Slot((Slot, BindingId)),
+    Slot(Slot, BindingId),
     Global(FrozenValue),
-}
-
-// We use CST as acronym for compiler-specific AST.
-
-/// Compiler-specific AST payload.
-#[derive(Debug)]
-pub(crate) struct CstPayload;
-impl AstPayload for CstPayload {
-    /// Information about how identifier binding is resolved.
-    ///
-    /// This is `None` when CST is created.
-    /// All payload objects are filled with binding ids for all assign idents
-    /// during analysis.
-    ///
-    /// When compilation starts, all payloads are `Some`.
-    type IdentPayload = Option<ResolvedIdent>;
-    /// Binding for an identifier in assignment position.
-    ///
-    /// This is `None` when CST is created.
-    /// All payload objects are filled with binding ids for all assign idents
-    /// during analysis.
-    ///
-    /// When compilation starts, all payloads are `Some`.
-    type IdentAssignPayload = Option<BindingId>;
-    type DefPayload = ScopeId;
-}
-
-pub(crate) struct CompilerAstMap<'a>(pub(crate) &'a mut ScopeData);
-impl AstPayloadFunction<AstNoPayload, CstPayload> for CompilerAstMap<'_> {
-    fn map_ident(&mut self, (): ()) -> Option<ResolvedIdent> {
-        None
-    }
-
-    fn map_ident_assign(&mut self, (): ()) -> Option<BindingId> {
-        None
-    }
-
-    fn map_def(&mut self, (): ()) -> ScopeId {
-        self.0.new_scope().0
-    }
-}
-
-pub(crate) type CstExpr = AstExprP<CstPayload>;
-pub(crate) type CstAssign = AstAssignP<CstPayload>;
-pub(crate) type CstAssignIdent = AstAssignIdentP<CstPayload>;
-pub(crate) type CstArgument = AstArgumentP<CstPayload>;
-pub(crate) type CstParameter = AstParameterP<CstPayload>;
-pub(crate) type CstStmt = AstStmtP<CstPayload>;
-pub(crate) type CstLoad = AstLoadP<CstPayload>;
-
-#[cfg(test)]
-mod tests {
-    use std::fmt::Write;
-
-    use dupe::Dupe;
-
-    use crate::environment::names::MutableNames;
-    use crate::environment::Globals;
-    use crate::eval::compiler::scope::AssignCount;
-    use crate::eval::compiler::scope::Captured;
-    use crate::eval::compiler::scope::CompilerAstMap;
-    use crate::eval::compiler::scope::CstAssign;
-    use crate::eval::compiler::scope::CstAssignIdent;
-    use crate::eval::compiler::scope::CstExpr;
-    use crate::eval::compiler::scope::CstStmt;
-    use crate::eval::compiler::scope::ResolvedIdent;
-    use crate::eval::compiler::scope::Scope;
-    use crate::eval::compiler::scope::ScopeData;
-    use crate::eval::compiler::scope::Slot;
-    use crate::syntax::ast::DefP;
-    use crate::syntax::ast::ExprP;
-    use crate::syntax::ast::StmtP;
-    use crate::syntax::uniplate::Visit;
-    use crate::syntax::AstModule;
-    use crate::syntax::Dialect;
-    use crate::values::FrozenHeap;
-    use crate::values::FrozenRef;
-
-    fn test_with_module(program: &str, expected: &str, module: &MutableNames) {
-        let ast = AstModule::parse("t.star", program.to_owned(), &Dialect::Extended).unwrap();
-        let mut scope_data = ScopeData::new();
-        let root_scope_id = scope_data.new_scope().0;
-        let mut cst = ast
-            .statement
-            .into_map_payload(&mut CompilerAstMap(&mut scope_data));
-        let frozen_heap = FrozenHeap::new();
-        let codemap = frozen_heap.alloc_any_display_from_debug(ast.codemap.dupe());
-        let scope = Scope::enter_module(
-            module,
-            &frozen_heap,
-            root_scope_id,
-            scope_data,
-            &mut cst,
-            FrozenRef::new(Globals::empty()),
-            codemap,
-            &Dialect::Extended,
-        );
-        assert!(scope.errors.is_empty());
-        let (.., scope_data) = scope.exit_module();
-        let mut r = String::new();
-        for (i, binding) in scope_data.bindings.iter().enumerate() {
-            if i != 0 {
-                r.push(' ');
-            }
-            let slot = match binding.slot.unwrap() {
-                Slot::Module(slot) => format!("m={}", slot.0),
-                Slot::Local(slot) => format!("l={}", slot.0),
-            };
-            let assign_count = match binding.assign_count {
-                AssignCount::AtMostOnce => "",
-                AssignCount::Any => "+",
-            };
-            let captured = match binding.captured {
-                Captured::Yes => "&",
-                Captured::No => "",
-            };
-            write!(r, "{}:{}{}{}", i, slot, assign_count, captured).unwrap();
-        }
-
-        write!(r, " |").unwrap();
-
-        struct Visitor<'a> {
-            r: &'a mut String,
-        }
-
-        impl Visitor<'_> {
-            fn visit_expr(&mut self, expr: &CstExpr) {
-                if let ExprP::Identifier(ident, resolved) = &expr.node {
-                    let resolved = match resolved.as_ref().unwrap() {
-                        ResolvedIdent::Slot((_slot, binding_id)) => binding_id.0.to_string(),
-                        ResolvedIdent::Global(_) => "G".to_owned(),
-                    };
-                    write!(&mut self.r, " {}:{}", ident.node, resolved).unwrap();
-                }
-
-                expr.visit_expr(|expr| self.visit_expr(expr));
-            }
-
-            fn visit_exprs<'a>(&mut self, exprs: impl IntoIterator<Item = &'a CstExpr>) {
-                for expr in exprs {
-                    self.visit_expr(expr);
-                }
-            }
-
-            fn visit_lvalue(&mut self, ident: &CstAssignIdent) {
-                write!(&mut self.r, " {}:{}", ident.0, ident.1.unwrap().0).unwrap();
-            }
-
-            fn visit_stmt_children(&mut self, stmt: &CstStmt) {
-                stmt.visit_children(|visit| match visit {
-                    Visit::Stmt(stmt) => self.visit_stmt(stmt),
-                    Visit::Expr(expr) => self.visit_expr(expr),
-                });
-            }
-
-            fn visit_assign(&mut self, assign: &CstAssign) {
-                assign.visit_lvalue(|ident| self.visit_lvalue(ident));
-            }
-
-            fn visit_stmt(&mut self, stmt: &CstStmt) {
-                match &stmt.node {
-                    StmtP::Assign(lhs, _rhs) => self.visit_assign(lhs),
-                    StmtP::Def(DefP { name, params, .. }) => {
-                        self.visit_lvalue(name);
-                        for param in params {
-                            let (name, def, typ) = param.split();
-                            if let Some(name) = name {
-                                self.visit_lvalue(name);
-                            }
-                            self.visit_exprs(def);
-                            self.visit_exprs(typ);
-                        }
-                    }
-                    StmtP::For(assign, ..) => self.visit_assign(assign),
-                    _ => {}
-                }
-
-                self.visit_stmt_children(stmt);
-            }
-        }
-
-        Visitor { r: &mut r }.visit_stmt(&cst);
-
-        assert_eq!(expected, &r);
-    }
-
-    fn t(program: &str, expected: &str) {
-        let module = MutableNames::new();
-        test_with_module(program, expected, &module);
-    }
-
-    // Expected test output (second parameter to `t` function) is:
-    // * list of bindings in format like `1:l=2` means binding id = 1, local slot 2
-    // * list of variables with references to binding ids
-
-    #[test]
-    fn basic() {
-        t("x = 1; y = 2", "0:m=0 1:m=1 | x:0 y:1");
-    }
-
-    #[test]
-    fn module_reassignment() {
-        t("x = 1; x = 2", "0:m=0+ | x:0 x:0");
-    }
-
-    #[test]
-    fn reassignment_in_loop() {
-        t("for x in []: y = x", "0:m=0+ 1:m=1+ | x:0 y:1 x:0");
-    }
-
-    #[test]
-    fn def_capture() {
-        t("x = 1\ndef f(): x", "0:m=0& 1:m=1 | x:0 f:1 x:0");
-    }
-
-    #[test]
-    fn def_shadow() {
-        t("x = 1\ndef f(): x = 2", "0:m=0 1:m=1 2:l=0 | x:0 f:1 x:2");
-    }
-
-    #[test]
-    fn def_param_bindings() {
-        t("def f(x): return x", "0:m=0 1:l=0 | f:0 x:1 x:1");
-    }
-
-    #[test]
-    fn nested_def_capture() {
-        t(
-            "\
-def f():
-    x = 1
-    def g(): return x",
-            "0:m=0 1:l=0& 2:l=1 | f:0 x:1 g:2 x:1",
-        )
-    }
-
-    #[test]
-    fn existing_module_with_names() {
-        let frozen_heap = FrozenHeap::new();
-        let module = MutableNames::new();
-        module.add_name(frozen_heap.alloc_str_intern("x"));
-        module.add_name(frozen_heap.alloc_str_intern("y"));
-        test_with_module("x = y", "0:m=0+ 1:m=1 | x:0 y:1", &module);
-    }
 }

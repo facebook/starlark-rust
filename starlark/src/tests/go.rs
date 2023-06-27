@@ -43,7 +43,9 @@ fn test_go() {
     // The data for these tests was taken from
     // https://github.com/google/starlark-go/blob/e81fc95f7bd5bb1495fe69f27c1a99fcc77caa48/starlark/testdata/
 
-    let assert = Assert::new();
+    let mut assert = Assert::new();
+    // TODO(nga): fix and enable.
+    assert.disable_static_typechecking();
     assert.conformance_except(
         test_case!("assign.star"),
         &[
@@ -73,6 +75,8 @@ fn test_go() {
             // We added copy, which throws off the assert
             "dir({})[:3]",
             "dir([])[:3]",
+            // We do not support range to `i32::MAX` on 32 bit.
+            "range(0x7fffffff)",
         ],
     ));
     assert.conformance(test_case!("control.star"));
@@ -83,8 +87,8 @@ fn test_go() {
                 "unknown binary op: dict \\\\+ dict",   // We support {} + {}
                 "cannot insert into frozen hash table", // We don't actually have freeze
                 "cannot clear frozen hash table",
-                "assert.eq(a, 1)", // End of the test above
-                "assert.eq(x, {1: 2, 2: 4, 0: 2})",
+                "asserts.eq(a, 1)", // End of the test above
+                "asserts.eq(x, {1: 2, 2: 4, 0: 2})",
             ],
         ),
         &[

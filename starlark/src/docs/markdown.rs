@@ -123,7 +123,7 @@ fn render_function_parameters(params: &[DocParam]) -> Option<String> {
         .iter()
         .filter(|p| match p {
             DocParam::Arg { docs, .. } => docs.is_some(),
-            DocParam::NoArgs => false,
+            DocParam::NoArgs | DocParam::OnlyPosBefore => false,
             DocParam::Args { docs, .. } => docs.is_some(),
             DocParam::Kwargs { docs, .. } => docs.is_some(),
         })
@@ -137,7 +137,7 @@ fn render_function_parameters(params: &[DocParam]) -> Option<String> {
         .iter()
         .filter_map(|p| match p {
             DocParam::Arg { name, docs, .. } => Some((name, docs)),
-            DocParam::NoArgs => None,
+            DocParam::NoArgs | DocParam::OnlyPosBefore => None,
             DocParam::Args { name, docs, .. } => Some((name, docs)),
             DocParam::Kwargs { name, docs, .. } => Some((name, docs)),
         })
@@ -177,8 +177,12 @@ fn render_function(name: &str, function: &DocFunction) -> String {
         body.push_str("\n\n#### Returns\n\n");
         body.push_str(returns);
     }
+    if let Some(dot_type) = &function.dot_type {
+        body.push_str("\n\n#### `.type` attribute\n\n");
+        body.push_str(&format!("Produces `{dot_type:?}`"));
+    }
     if let Some(details) = &details {
-        if parameter_docs.is_some() || return_docs.is_some() {
+        if parameter_docs.is_some() || return_docs.is_some() || function.dot_type.is_some() {
             body.push_str("\n\n#### Details\n\n");
         } else {
             // No need to aggressively separate the defaults from the summary if there
@@ -287,7 +291,7 @@ impl<'a> RenderMarkdown for TypeRenderer<'a> {
     fn render_markdown_opt(&self, flavor: MarkdownFlavor) -> Option<String> {
         fn raw_type(t: &Option<DocType>) -> String {
             match t {
-                Some(t) if !t.raw_type.is_empty() => t.raw_type.clone(),
+                Some(t) => t.raw_type.to_string(),
                 _ => "\"\"".to_owned(),
             }
         }
@@ -318,6 +322,7 @@ impl<'a> RenderMarkdown for TypeRenderer<'a> {
                             }
                         }
                         DocParam::NoArgs => "*".to_owned(),
+                        DocParam::OnlyPosBefore => "/".to_owned(),
                         DocParam::Args { typ, name, .. } => {
                             format!("{}{}", name, raw_type_prefix(": ", typ))
                         }

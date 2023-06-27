@@ -37,6 +37,7 @@ use crate::cast;
 use crate::cast::transmute;
 use crate::coerce::Coerce;
 use crate::coerce::CoerceKey;
+use crate::typing::Ty;
 use crate::values::alloc_value::AllocFrozenStringValue;
 use crate::values::alloc_value::AllocStringValue;
 use crate::values::int::PointerI32;
@@ -174,12 +175,11 @@ impl<'v, T: StarlarkValue<'v>> ValueTyped<'v, T> {
             }
         } else {
             unsafe {
-                &*(self
-                    .0
+                self.0
                     .0
                     .unpack_ptr_no_int_unchecked()
                     .unpack_header_unchecked()
-                    .payload_ptr() as *const T)
+                    .payload::<T>()
             }
         }
     }
@@ -236,24 +236,22 @@ impl<'v, T: StarlarkValue<'v>> FrozenValueTyped<'v, T> {
             }
         } else if T::static_type_id() == StarlarkStr::static_type_id() {
             unsafe {
-                &*(self
-                    .0
+                self.0
                     .0
                     .unpack_ptr_no_int_unchecked()
                     .unpack_header_unchecked()
-                    .payload_ptr() as *const T)
+                    .payload::<T>()
             }
         } else {
             // When a frozen pointer is not str and not int,
             // unpack is does not need untagging.
             // This generates slightly more efficient machine code.
             unsafe {
-                &*(self
-                    .0
+                self.0
                     .0
                     .unpack_ptr_no_int_no_str_unchecked()
                     .unpack_header_unchecked()
-                    .payload_ptr() as *const T)
+                    .payload::<T>()
             }
         }
     }
@@ -302,7 +300,7 @@ impl<'v, T: StarlarkValue<'v>> Deref for ValueTyped<'v, T> {
 }
 
 impl<'v, T: StarlarkValue<'v>> StarlarkTypeRepr for ValueTyped<'v, T> {
-    fn starlark_type_repr() -> String {
+    fn starlark_type_repr() -> Ty {
         T::starlark_type_repr()
     }
 }
@@ -330,7 +328,7 @@ impl<'v> AllocStringValue<'v> for StringValue<'v> {
 }
 
 impl<'v, T: StarlarkValue<'v>> StarlarkTypeRepr for FrozenValueTyped<'v, T> {
-    fn starlark_type_repr() -> String {
+    fn starlark_type_repr() -> Ty {
         T::starlark_type_repr()
     }
 }
@@ -364,11 +362,10 @@ mod tests {
     use crate::values::int::PointerI32;
     use crate::values::FrozenValue;
     use crate::values::FrozenValueTyped;
-    use crate::values::StarlarkValue;
 
     #[test]
     fn int() {
-        let v = FrozenValueTyped::<PointerI32>::new(FrozenValue::new_int(17)).unwrap();
-        assert_eq!(17, v.as_ref().to_int().unwrap());
+        let v = FrozenValueTyped::<PointerI32>::new(FrozenValue::testing_new_int(17)).unwrap();
+        assert_eq!(17, v.as_ref().get().to_i32());
     }
 }

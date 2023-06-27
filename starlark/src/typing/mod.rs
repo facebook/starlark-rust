@@ -25,6 +25,8 @@
 
 pub(crate) mod bindings;
 pub(crate) mod ctx;
+pub(crate) mod error;
+pub(crate) mod mode;
 pub(crate) mod oracle;
 pub(crate) mod ty;
 pub(crate) mod typecheck;
@@ -33,11 +35,14 @@ pub(crate) mod typecheck;
 mod tests;
 
 pub use bindings::Interface;
+pub use oracle::ctx::TypingOracleCtx;
 pub use oracle::docs::OracleDocs;
 pub use oracle::standard::OracleStandard;
-pub use oracle::traits::OracleNoBuiltins;
-pub use oracle::traits::OracleNone;
+pub use oracle::traits::OracleSeq;
+pub use oracle::traits::TypingAttr;
+pub use oracle::traits::TypingBinOp;
 pub use oracle::traits::TypingOracle;
+pub use oracle::traits::TypingUnOp;
 pub use ty::Approximation;
 pub use ty::Arg;
 pub use ty::Param;
@@ -45,5 +50,6 @@ pub use ty::ParamMode;
 pub use ty::Ty;
 pub use ty::TyFunction;
 pub use ty::TyName;
+pub use ty::TyStruct;
 pub use ty::TyUnion;
 pub use typecheck::TypeMap;

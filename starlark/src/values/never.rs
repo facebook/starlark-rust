@@ -15,10 +15,21 @@
  * limitations under the License.
  */
 
-use crate::collections::StarlarkHashValue;
-use crate::values::StarlarkValue;
+use crate::typing::Ty;
+use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::AllocValue;
 
-/// Implemented by "basic" (non-heap allocated) types like `int` or `NoneType`.
-pub(crate) trait StarlarkValueBasic<'v>: StarlarkValue<'v> {
-    fn get_hash(&self) -> StarlarkHashValue;
+/// Never type, can be used as native function return type.
+pub(crate) enum StarlarkNever {}
+
+impl StarlarkTypeRepr for StarlarkNever {
+    fn starlark_type_repr() -> Ty {
+        Ty::Never
+    }
+}
+
+impl<'v> AllocValue<'v> for StarlarkNever {
+    fn alloc_value(self, _heap: &'v crate::values::Heap) -> crate::values::Value<'v> {
+        match self {}
+    }
 }

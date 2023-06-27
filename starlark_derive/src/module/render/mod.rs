@@ -22,7 +22,6 @@ use std::collections::HashSet;
 use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote_spanned;
-use syn::Expr;
 
 use crate::module::render::fun::render_fun;
 use crate::module::typ::SpecialParam;
@@ -94,7 +93,6 @@ fn render_attr(x: StarAttr) -> TokenStream {
         attrs,
         return_type,
         return_type_arg,
-        starlark_return_type,
         speculative_exec_safe,
         body,
         docstring,
@@ -111,7 +109,7 @@ fn render_attr(x: StarAttr) -> TokenStream {
         None
     };
 
-    let return_type_str = render_starlark_type(span, &return_type_arg, &starlark_return_type);
+    let return_type_str = render_starlark_type(span, &return_type_arg);
 
     quote_spanned! {
         span=>
@@ -209,45 +207,22 @@ fn get_lifetimes(span: proc_macro2::Span, typ: &syn::Type) -> TokenStream {
     }
 }
 
-pub(crate) fn render_starlark_type(
-    span: proc_macro2::Span,
-    typ: &syn::Type,
-    // If the user supplied a Starlark version of the string, pass it along
-    starlark_type: &Option<Expr>,
-) -> TokenStream {
-    match starlark_type {
-        None => {
-            let lifetimes = get_lifetimes(span, typ);
-            quote_spanned! {span=>
-                {
-                    #[allow(clippy::extra_unused_lifetimes)]
-                    fn get_type_string #lifetimes() -> String {
-                        <#typ as starlark::values::type_repr::StarlarkTypeRepr>::starlark_type_repr()
-                    }
-                    get_type_string()
-                }
+pub(crate) fn render_starlark_type(span: proc_macro2::Span, typ: &syn::Type) -> TokenStream {
+    let lifetimes = get_lifetimes(span, typ);
+    quote_spanned! {span=>
+        {
+            #[allow(clippy::extra_unused_lifetimes)]
+            fn get_type_string #lifetimes() -> starlark::typing::Ty {
+                <#typ as starlark::values::type_repr::StarlarkTypeRepr>::starlark_type_repr()
             }
-        }
-        Some(t) => {
-            quote_spanned! {span=> (#t).to_owned()}
+            get_type_string()
         }
     }
 }
 
-pub(crate) fn render_starlark_return_type(
-    fun: &StarFun,
-    // If the user supplied a Starlark version of the string, pass it along
-    starlark_type: &Option<Expr>,
-) -> TokenStream {
-    match starlark_type {
-        None => {
-            let struct_name = fun.struct_name();
-            quote_spanned! {fun.span()=>
-                #struct_name::return_type_starlark_type_repr()
-            }
-        }
-        Some(t) => {
-            quote_spanned! {fun.span()=> (#t).to_owned()}
-        }
+pub(crate) fn render_starlark_return_type(fun: &StarFun) -> TokenStream {
+    let struct_name = fun.struct_name();
+    quote_spanned! {fun.span()=>
+        #struct_name::return_type_starlark_type_repr()
     }
 }

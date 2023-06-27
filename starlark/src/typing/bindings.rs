@@ -20,13 +20,14 @@ use std::sync::Arc;
 
 use dupe::Dupe;
 
+use crate::codemap::CodeMap;
 use crate::codemap::Span;
+use crate::codemap::Spanned;
+use crate::eval::compiler::scope::payload::CstAssign;
+use crate::eval::compiler::scope::payload::CstExpr;
+use crate::eval::compiler::scope::payload::CstPayload;
+use crate::eval::compiler::scope::payload::CstStmt;
 use crate::eval::compiler::scope::BindingId;
-use crate::eval::compiler::scope::CstAssign;
-use crate::eval::compiler::scope::CstAssignIdent;
-use crate::eval::compiler::scope::CstExpr;
-use crate::eval::compiler::scope::CstPayload;
-use crate::eval::compiler::scope::CstStmt;
 use crate::eval::compiler::scope::ResolvedIdent;
 use crate::syntax::ast::AssignOp;
 use crate::syntax::ast::AssignP;
@@ -34,9 +35,12 @@ use crate::syntax::ast::ClauseP;
 use crate::syntax::ast::DefP;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::ForClauseP;
+use crate::syntax::ast::IdentP;
 use crate::syntax::ast::ParameterP;
 use crate::syntax::ast::StmtP;
 use crate::syntax::uniplate::Visit;
+use crate::typing::error::InternalError;
+use crate::typing::mode::TypecheckMode;
 use crate::typing::ty::Approximation;
 use crate::typing::ty::Param;
 use crate::typing::ty::Ty;
@@ -71,11 +75,9 @@ impl<'a> BindExpr<'a> {
 #[derive(Default)]
 pub(crate) struct Bindings<'a> {
     pub(crate) expressions: HashMap<BindingId, Vec<BindExpr<'a>>>,
-    pub(crate) descriptions: HashMap<BindingId, &'a CstAssignIdent>,
     pub(crate) types: HashMap<BindingId, Ty>,
     pub(crate) check: Vec<&'a CstExpr>,
     pub(crate) check_type: Vec<(Span, Option<&'a CstExpr>, Ty)>,
-    pub(crate) approximations: Vec<Approximation>,
 }
 
 /// Interface representing the types of all bindings in a module.
@@ -99,29 +101,53 @@ impl Interface {
     }
 }
 
-pub type Loads = HashMap<String, Interface>;
+#[derive(Default)]
+pub(crate) struct BindingsCollect<'a> {
+    pub(crate) bindings: Bindings<'a>,
+    pub(crate) approximations: Vec<Approximation>,
+}
 
-impl<'a> Bindings<'a> {
-    /// Collect all the assignments to variables
-    pub(crate) fn collect(x: &'a CstStmt, loads: &'_ Loads) -> Self {
-        fn assign<'a>(lhs: &'a CstAssign, rhs: BindExpr<'a>, bindings: &mut Bindings<'a>) {
+impl<'a> BindingsCollect<'a> {
+    /// Collect all the assignments to variables.
+    ///
+    /// This function only fails on internal errors.
+    pub(crate) fn collect(
+        xs: &'a [CstStmt],
+        typecheck_mode: TypecheckMode,
+        codemap: &CodeMap,
+    ) -> Result<Self, InternalError> {
+        fn assign<'a>(
+            lhs: &'a CstAssign,
+            rhs: BindExpr<'a>,
+            bindings: &mut BindingsCollect<'a>,
+            codemap: &CodeMap,
+        ) -> Result<(), InternalError> {
             match &**lhs {
                 AssignP::Identifier(x) => {
-                    bindings.descriptions.insert(x.1.unwrap(), x);
                     bindings
+                        .bindings
                         .expressions
-                        .entry(x.1.unwrap())
+                        .entry(x.resolved_binding_id(codemap)?)
                         .or_default()
                         .push(rhs);
                 }
                 AssignP::Tuple(xs) => {
                     for (i, x) in xs.iter().enumerate() {
-                        assign(x, BindExpr::GetIndex(i, Box::new(rhs.clone())), bindings)
+                        assign(
+                            x,
+                            BindExpr::GetIndex(i, Box::new(rhs.clone())),
+                            bindings,
+                            codemap,
+                        )?;
                     }
                 }
                 AssignP::ArrayIndirection(array_index) => match &*array_index.0 {
-                    ExprP::Identifier(_name, Some(ResolvedIdent::Slot((_, ident)))) => {
+                    ExprP::Identifier(Spanned {
+                        span: _,
+                        node: IdentP(_name, Some(ResolvedIdent::Slot(_, ident))),
+                    }) => {
                         bindings
+                            .bindings
                             .expressions
                             .entry(*ident)
                             .or_default()
@@ -141,52 +167,69 @@ impl<'a> Bindings<'a> {
                     ));
                 }
             }
+            Ok(())
         }
 
         fn visit<'a>(
             x: Visit<'a, CstPayload>,
             return_type: &Ty,
-            loads: &Loads,
-            bindings: &mut Bindings<'a>,
-        ) {
+            bindings: &mut BindingsCollect<'a>,
+            typecheck_mode: TypecheckMode,
+            codemap: &CodeMap,
+        ) -> Result<(), InternalError> {
             match x {
                 Visit::Stmt(x) => match &**x {
                     StmtP::Assign(lhs, ty_rhs) => {
                         if let Some(ty) = &ty_rhs.0 {
-                            let ty2 = Ty::from_expr(ty, &mut bindings.approximations);
-                            bindings
-                                .check_type
-                                .push((ty.span, Some(&ty_rhs.1), ty2.clone()));
+                            let ty2 = Ty::from_type_expr(
+                                ty,
+                                typecheck_mode,
+                                &mut bindings.approximations,
+                                codemap,
+                            )?;
+                            bindings.bindings.check_type.push((
+                                ty.span,
+                                Some(&ty_rhs.1),
+                                ty2.clone(),
+                            ));
                             if let AssignP::Identifier(id) = &**lhs {
                                 // FIXME: This could be duplicated if you declare the type of a variable twice,
                                 // we would only see the second one.
-                                bindings.types.insert(id.1.unwrap(), ty2);
+                                bindings
+                                    .bindings
+                                    .types
+                                    .insert(id.resolved_binding_id(codemap)?, ty2);
                             }
                         }
-                        assign(lhs, BindExpr::Expr(&ty_rhs.1), bindings)
+                        assign(lhs, BindExpr::Expr(&ty_rhs.1), bindings, codemap)?
                     }
                     StmtP::AssignModify(lhs, op, rhs) => {
-                        assign(lhs, BindExpr::AssignOp(lhs, *op, rhs), bindings)
+                        assign(lhs, BindExpr::AssignOp(lhs, *op, rhs), bindings, codemap)?
                     }
                     StmtP::For(lhs, iter_body) => assign(
                         lhs,
                         BindExpr::Iter(Box::new(BindExpr::Expr(&iter_body.0))),
                         bindings,
-                    ),
+                        codemap,
+                    )?,
                     StmtP::Def(DefP {
                         name,
                         params,
                         return_type,
                         ..
                     }) => {
-                        bindings.descriptions.insert(name.1.unwrap(), name);
                         let mut params2 = Vec::with_capacity(params.len());
                         let mut seen_no_args = false;
                         for p in params {
                             let name_ty = match &**p {
                                 ParameterP::Normal(name, ty)
                                 | ParameterP::WithDefaultValue(name, ty, _) => {
-                                    let ty = Ty::from_expr_opt(ty, &mut bindings.approximations);
+                                    let ty = Ty::from_type_expr_opt(
+                                        ty,
+                                        typecheck_mode,
+                                        &mut bindings.approximations,
+                                        codemap,
+                                    )?;
                                     let mut param = if seen_no_args {
                                         Param::name_only(&name.0, ty.clone())
                                     } else {
@@ -205,16 +248,23 @@ impl<'a> Bindings<'a> {
                                 ParameterP::Args(name, ty) => {
                                     // There is the type we require people calling us use (usually any)
                                     // and then separately the type we are when we are running (always tuple)
-                                    params2.push(Param::args(Ty::from_expr_opt(
+                                    params2.push(Param::args(Ty::from_type_expr_opt(
                                         ty,
+                                        typecheck_mode,
                                         &mut bindings.approximations,
-                                    )));
+                                        codemap,
+                                    )?));
                                     Some((name, Ty::name("tuple")))
                                 }
                                 ParameterP::KwArgs(name, ty) => {
-                                    let ty = Ty::from_expr_opt(ty, &mut bindings.approximations);
+                                    let ty = Ty::from_type_expr_opt(
+                                        ty,
+                                        typecheck_mode,
+                                        &mut bindings.approximations,
+                                        codemap,
+                                    )?;
                                     let ty = if ty.is_any() {
-                                        Ty::dict(Ty::Any, Ty::Any)
+                                        Ty::dict(Ty::string(), Ty::Any)
                                     } else {
                                         ty
                                     };
@@ -223,39 +273,50 @@ impl<'a> Bindings<'a> {
                                 }
                             };
                             if let Some((name, ty)) = name_ty {
-                                bindings.types.insert(name.1.unwrap(), ty);
-                                bindings.descriptions.insert(name.1.unwrap(), name);
+                                bindings
+                                    .bindings
+                                    .types
+                                    .insert(name.resolved_binding_id(codemap)?, ty);
                             }
                         }
-                        let ret_ty = Ty::from_expr_opt(return_type, &mut bindings.approximations);
-                        bindings
-                            .types
-                            .insert(name.1.unwrap(), Ty::function(params2, ret_ty.clone()));
-                        x.visit_children(|x| visit(x, &ret_ty, loads, bindings));
+                        let ret_ty = Ty::from_type_expr_opt(
+                            return_type,
+                            typecheck_mode,
+                            &mut bindings.approximations,
+                            codemap,
+                        )?;
+                        bindings.bindings.types.insert(
+                            name.resolved_binding_id(codemap)?,
+                            Ty::function(params2, ret_ty.clone()),
+                        );
+                        x.visit_children_err(|x| {
+                            visit(x, &ret_ty, bindings, typecheck_mode, codemap)
+                        })?;
                         // We do our own visit_children, with a different return type
-                        return;
+                        return Ok(());
                     }
                     StmtP::Load(x) => {
-                        let none = Interface::empty();
-                        let mp = loads.get(x.module.as_str()).unwrap_or(&none);
+                        let mp = &x.payload;
                         for (ident, _load) in &x.args {
                             let ty = mp.get(ident.0.as_str()).cloned().unwrap_or(Ty::Any);
-                            bindings.descriptions.insert(ident.1.unwrap(), ident);
-                            bindings.types.insert(ident.1.unwrap(), ty);
+                            bindings
+                                .bindings
+                                .types
+                                .insert(ident.resolved_binding_id(codemap)?, ty);
                         }
                     }
-                    StmtP::Return(ret) => {
-                        bindings
-                            .check_type
-                            .push((x.span, ret.as_ref(), return_type.clone()))
-                    }
+                    StmtP::Return(ret) => bindings.bindings.check_type.push((
+                        x.span,
+                        ret.as_ref(),
+                        return_type.clone(),
+                    )),
                     StmtP::Expression(x) => {
                         // We want to find ident.append(), ident.extend(), ident.extend()
                         // to fake up a BindExpr::ListAppend/ListExtend
                         // so that mutating list operations aren't invisible to us
                         if let ExprP::Call(fun, args) = &**x {
                             if let ExprP::Dot(id, attr) = &***fun {
-                                if let ExprP::Identifier(_, id) = &***id {
+                                if let ExprP::Identifier(id) = &id.node {
                                     let res = match attr.as_str() {
                                         "append" if args.len() == 1 => Some((false, 0)),
                                         "insert" if args.len() == 2 => Some((false, 1)),
@@ -263,23 +324,30 @@ impl<'a> Bindings<'a> {
                                         _ => None,
                                     };
                                     if let Some((extend, arg)) = res {
-                                        if let ResolvedIdent::Slot((_, id)) = id.as_ref().unwrap() {
+                                        if let ResolvedIdent::Slot(_, id) =
+                                            id.node.1.as_ref().unwrap()
+                                        {
                                             let bind = if extend {
                                                 BindExpr::ListExtend(*id, args[arg].expr())
                                             } else {
                                                 BindExpr::ListAppend(*id, args[arg].expr())
                                             };
-                                            bindings.expressions.entry(*id).or_default().push(bind)
+                                            bindings
+                                                .bindings
+                                                .expressions
+                                                .entry(*id)
+                                                .or_default()
+                                                .push(bind)
                                         }
                                     }
                                 }
                             }
                         }
 
-                        bindings.check.push(x)
+                        bindings.bindings.check.push(x)
                     }
-                    StmtP::If(x, _) => bindings.check.push(x),
-                    StmtP::IfElse(x, _) => bindings.check.push(x),
+                    StmtP::If(x, _) => bindings.bindings.check.push(x),
+                    StmtP::IfElse(x, _) => bindings.bindings.check.push(x),
                     _ => {}
                 },
                 Visit::Expr(x) => match &**x {
@@ -300,17 +368,21 @@ impl<'a> Bindings<'a> {
                                 &x.var,
                                 BindExpr::Iter(Box::new(BindExpr::Expr(&x.over))),
                                 bindings,
-                            )
+                                codemap,
+                            )?
                         }
                     }
                     _ => {}
                 },
             }
-            x.visit_children(|x| visit(x, return_type, loads, bindings))
+            x.visit_children_err(|x| visit(x, return_type, bindings, typecheck_mode, codemap))?;
+            Ok(())
         }
 
-        let mut res = Bindings::default();
-        visit(Visit::Stmt(x), &Ty::Any, loads, &mut res);
-        res
+        let mut res = BindingsCollect::default();
+        for x in xs {
+            visit(Visit::Stmt(x), &Ty::Any, &mut res, typecheck_mode, codemap)?;
+        }
+        Ok(res)
     }
 }

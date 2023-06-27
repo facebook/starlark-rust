@@ -52,8 +52,8 @@ use crate::module::typ::StarStmt;
 #[derive(Default)]
 struct FnAttrs {
     is_attribute: bool,
-    type_attribute: Option<Expr>,
-    starlark_return_type: Option<Expr>,
+    as_type: Option<syn::Path>,
+    starlark_ty_custom_function: Option<Expr>,
     speculative_exec_safe: bool,
     docstring: Option<String>,
     /// Rest attributes
@@ -68,7 +68,6 @@ struct FnParamAttrs {
     named_only: bool,
     args: bool,
     kwargs: bool,
-    starlark_type: Option<Expr>,
     unused_attrs: Vec<Attribute>,
 }
 
@@ -90,46 +89,40 @@ fn parse_starlark_fn_param_attr(
             }
             first = false;
 
-            if parser.parse::<Token![type]>().is_ok() {
+            let ident = parser.parse::<Ident>()?;
+            if ident == "default" {
                 parser.parse::<Token![=]>()?;
-                param_attrs.starlark_type = Some(parser.parse::<Expr>()?);
+                param_attrs.default = Some(parser.parse::<Expr>()?);
                 continue;
-            } else {
-                let ident = parser.parse::<Ident>()?;
-                if ident == "default" {
-                    parser.parse::<Token![=]>()?;
-                    param_attrs.default = Some(parser.parse::<Expr>()?);
+            } else if ident == "this" {
+                param_attrs.this = true;
+                continue;
+            } else if ident == "args" {
+                param_attrs.args = true;
+                continue;
+            } else if ident == "kwargs" {
+                param_attrs.kwargs = true;
+                continue;
+            } else if ident == "require" {
+                parser.parse::<Token!(=)>()?;
+                let require = parser.parse::<Ident>()?;
+                if require == "pos" {
+                    param_attrs.pos_only = true;
                     continue;
-                } else if ident == "this" {
-                    param_attrs.this = true;
+                } else if require == "named" {
+                    param_attrs.named_only = true;
                     continue;
-                } else if ident == "args" {
-                    param_attrs.args = true;
-                    continue;
-                } else if ident == "kwargs" {
-                    param_attrs.kwargs = true;
-                    continue;
-                } else if ident == "require" {
-                    parser.parse::<Token!(=)>()?;
-                    let require = parser.parse::<Ident>()?;
-                    if require == "pos" {
-                        param_attrs.pos_only = true;
-                        continue;
-                    } else if require == "named" {
-                        param_attrs.named_only = true;
-                        continue;
-                    }
                 }
-
-                return Err(syn::Error::new(
-                    ident.span(),
-                    "Expecting \
-                    `#[starlark(default = expr)]`, \
-                    `#[starlark(require = pos)]`, \
-                    `#[starlark(require = named)]`, \
-                    `#[starlark(this)]` attribute",
-                ));
             }
+
+            return Err(syn::Error::new(
+                ident.span(),
+                "Expecting \
+                `#[starlark(default = expr)]`, \
+                `#[starlark(require = pos)]`, \
+                `#[starlark(require = named)]`, \
+                `#[starlark(this)]` attribute",
+            ));
         }
         Ok(())
     };
@@ -164,32 +157,30 @@ fn parse_starlark_fn_attr(tokens: &Attribute, attrs: &mut FnAttrs) -> syn::Resul
             }
             first = false;
 
-            if parser.parse::<Token![type]>().is_ok() {
+            let ident = parser.parse::<Ident>()?;
+            if ident == "as_type" {
                 parser.parse::<Token![=]>()?;
-                attrs.type_attribute = Some(parser.parse::<Expr>()?);
+                attrs.as_type = Some(parser.parse::<syn::Path>()?);
                 continue;
-            } else {
-                let ident = parser.parse::<Ident>()?;
-                if ident == "attribute" {
-                    attrs.is_attribute = true;
-                    continue;
-                } else if ident == "speculative_exec_safe" {
-                    attrs.speculative_exec_safe = true;
-                    continue;
-                } else if ident == "return_type" {
-                    parser.parse::<Token![=]>()?;
-                    attrs.starlark_return_type = Some(parser.parse::<Expr>()?);
-                    continue;
-                }
-                return Err(syn::Error::new(
-                    ident.span(),
-                    "Expecting \
-                    `#[starlark(type = \"ty\")]`, \
-                    `#[starlark(attribute)]`, \
-                    `#[starlark(return_type = \"type\")]`, \
-                    `#[starlark(speculative_exec_safe)]` attribute",
-                ));
+            } else if ident == "attribute" {
+                attrs.is_attribute = true;
+                continue;
+            } else if ident == "speculative_exec_safe" {
+                attrs.speculative_exec_safe = true;
+                continue;
+            } else if ident == "ty_custom_function" {
+                parser.parse::<Token![=]>()?;
+                attrs.starlark_ty_custom_function = Some(parser.parse::<Expr>()?);
+                continue;
             }
+            return Err(syn::Error::new(
+                ident.span(),
+                "Expecting \
+                    `#[starlark(as_type = ImplStarlarkValue)]`, \
+                    `#[starlark(ty_custom_function = MyTy)]`, \
+                    `#[starlark(attribute)]`, \
+                    `#[starlark(speculative_exec_safe)]` attribute",
+            ));
         }
 
         Ok(())
@@ -218,7 +209,7 @@ fn parse_fn_attrs(span: Span, xs: Vec<Attribute>) -> syn::Result<FnAttrs> {
             res.attrs.push(x);
         }
     }
-    if res.is_attribute && res.type_attribute.is_some() {
+    if res.is_attribute && res.as_type.is_some() {
         return Err(syn::Error::new(span, "Can't be an attribute with a .type"));
     }
     Ok(res)
@@ -270,10 +261,10 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
 
     let FnAttrs {
         is_attribute,
-        type_attribute,
+        as_type,
         speculative_exec_safe,
         docstring,
-        starlark_return_type,
+        starlark_ty_custom_function,
         attrs,
     } = parse_fn_attrs(func.span(), func.attrs)?;
 
@@ -345,12 +336,17 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
                 "Attribute function `this` parameter have no default value",
             ));
         }
+        if starlark_ty_custom_function.is_some() {
+            return Err(syn::Error::new(
+                sig_span,
+                "Attribute function cannot types are not implemented",
+            ));
+        }
         Ok(StarStmt::Attr(StarAttr {
             name: func.sig.ident,
             arg: arg.ty,
             heap,
             attrs,
-            starlark_return_type,
             return_type,
             return_type_arg,
             speculative_exec_safe,
@@ -366,17 +362,24 @@ pub(crate) fn parse_fun(func: ItemFn, module_kind: ModuleKind) -> syn::Result<St
             ));
         }
 
+        if is_method && starlark_ty_custom_function.is_some() {
+            return Err(syn::Error::new(
+                sig_span,
+                "Custom types are not implemented for methods",
+            ));
+        }
+
         let source = resolve_args(&mut args)?;
 
         let fun = StarFun {
             name: func.sig.ident,
-            type_attribute,
+            as_type,
             attrs,
             args,
             heap,
             eval,
             return_type,
-            starlark_return_type,
+            starlark_ty_custom_function,
             speculative_exec_safe,
             body: *func.block,
             source,
@@ -683,7 +686,6 @@ fn parse_arg(
                 name: ident.ident,
                 pass_style,
                 ty: *ty,
-                starlark_type: param_attrs.starlark_type,
                 default: param_attrs.default,
                 source: StarArgSource::Unknown,
             }))

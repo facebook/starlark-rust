@@ -22,9 +22,12 @@ use std::ops::Deref;
 use dupe::Dupe;
 use either::Either;
 
+use crate::typing::Ty;
 use crate::values::list::ListRef;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::types::tuple::value::Tuple;
+use crate::values::AllocValue;
+use crate::values::Heap;
 use crate::values::Value;
 use crate::values::ValueError;
 
@@ -33,11 +36,20 @@ use crate::values::ValueError;
 pub trait UnpackValue<'v>: Sized + StarlarkTypeRepr {
     /// Description of values acceptable by `unpack_value`, e. g. `list or str`.
     fn expected() -> String {
-        Self::starlark_type_repr()
+        Self::starlark_type_repr().to_string()
     }
 
     /// Given a [`Value`], try and unpack it into the given type, which may involve some element of conversion.
     fn unpack_value(value: Value<'v>) -> Option<Self>;
+
+    /// Unpack a value, but return error instead of `None` if unpacking fails.
+    fn unpack_value_err(value: Value<'v>) -> anyhow::Result<Self> {
+        #[derive(thiserror::Error, Debug)]
+        #[error("Expected `{0}`, but got `{1}`")]
+        struct Error(String, &'static str);
+
+        Self::unpack_value(value).ok_or_else(|| Error(Self::expected(), value.get_type()).into())
+    }
 
     /// Unpack value, but instead of `None` return error about incorrect argument type.
     #[inline]
@@ -108,7 +120,7 @@ impl<'v, T: UnpackValue<'v>> Deref for ValueOf<'v, T> {
 }
 
 impl<'v, T: UnpackValue<'v>> StarlarkTypeRepr for ValueOf<'v, T> {
-    fn starlark_type_repr() -> String {
+    fn starlark_type_repr() -> Ty {
         T::starlark_type_repr()
     }
 }
@@ -121,6 +133,12 @@ impl<'v, T: UnpackValue<'v>> UnpackValue<'v> for ValueOf<'v, T> {
     fn unpack_value(value: Value<'v>) -> Option<Self> {
         let typed = T::unpack_value(value)?;
         Some(Self { value, typed })
+    }
+}
+
+impl<'v, T: UnpackValue<'v>> AllocValue<'v> for ValueOf<'v, T> {
+    fn alloc_value(self, _heap: &'v Heap) -> Value<'v> {
+        self.value
     }
 }
 

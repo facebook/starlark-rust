@@ -21,6 +21,7 @@ use maplit::hashmap;
 use serde::Serialize;
 use serde::Serializer;
 use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 use starlark_derive::Freeze;
 use starlark_derive::NoSerialize;
 use starlark_derive::StarlarkDocs;
@@ -39,9 +40,9 @@ use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
 use crate::starlark_complex_value;
 use crate::starlark_simple_value;
-use crate::starlark_type;
 use crate::values::StarlarkValue;
 use crate::values::ValueLike;
+use crate::wasm::is_wasm;
 
 /// Main module docs
 #[starlark_module]
@@ -65,9 +66,8 @@ struct TestExample {}
 
 starlark_simple_value!(TestExample);
 
+#[starlark_value(type = "TestExample")]
 impl<'v> StarlarkValue<'v> for TestExample {
-    starlark_type!("TestExample");
-
     fn get_methods() -> Option<&'static Methods>
     where
         Self: Sized,
@@ -105,12 +105,12 @@ where
 
 starlark_complex_value!(ComplexTestExample);
 
-impl<'v, T: ValueLike<'v> + 'v + ProvidesStaticType> StarlarkValue<'v> for ComplexTestExampleGen<T>
+#[starlark_value(type = "ComplexTestExample")]
+impl<'v, T: ValueLike<'v> + 'v + ProvidesStaticType<'v>> StarlarkValue<'v>
+    for ComplexTestExampleGen<T>
 where
-    Self: ProvidesStaticType,
+    Self: ProvidesStaticType<'v>,
 {
-    starlark_type!("ComplexTestExample");
-
     fn get_methods() -> Option<&'static Methods>
     where
         Self: Sized,
@@ -122,6 +122,11 @@ where
 
 #[test]
 fn test_derive_docs() {
+    if is_wasm() {
+        // `inventory` doesn't work on wasm.
+        return;
+    }
+
     let docs = get_registered_starlark_docs()
         .into_iter()
         .find(|d| d.id.name == "TestExample")
@@ -150,6 +155,11 @@ fn test_derive_docs() {
 
 #[test]
 fn test_derive_docs_on_complex_values() {
+    if is_wasm() {
+        // `inventory` doesn't work on wasm.
+        return;
+    }
+
     let complex_docs = get_registered_starlark_docs()
         .into_iter()
         .find(|d| d.id.name == "ComplexTestExample")
@@ -194,9 +204,8 @@ struct TestAttrExample {}
 
 starlark_simple_value!(TestAttrExample);
 
+#[starlark_value(type = "TestAttrExample")]
 impl<'v> StarlarkValue<'v> for TestAttrExample {
-    starlark_type!("TestAttrExample");
-
     fn get_methods() -> Option<&'static Methods>
     where
         Self: Sized,
@@ -208,6 +217,11 @@ impl<'v> StarlarkValue<'v> for TestAttrExample {
 
 #[test]
 fn test_derive_docs_custom_attrs() {
+    if is_wasm() {
+        // `inventory` doesn't work on wasm.
+        return;
+    }
+
     let docs = get_registered_starlark_docs()
         .into_iter()
         .find(|d| d.id.name == "TestAttrExample")

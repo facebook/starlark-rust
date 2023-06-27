@@ -30,6 +30,7 @@ use std::ops::Deref;
 use allocative::Allocative;
 use display_container::fmt_keyed_container;
 use serde::Serialize;
+use starlark_derive::starlark_value;
 use starlark_derive::StarlarkDocs;
 use starlark_map::Equivalent;
 
@@ -43,7 +44,7 @@ use crate::collections::SmallMap;
 use crate::environment::Methods;
 use crate::environment::MethodsStatic;
 use crate::hint::unlikely;
-use crate::starlark_type;
+use crate::typing::Ty;
 use crate::values::comparison::equals_small_map;
 use crate::values::dict::refcell::unleak_borrow;
 use crate::values::dict::DictOf;
@@ -63,7 +64,6 @@ use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::StringValue;
 use crate::values::Trace;
-use crate::values::UnpackValue;
 use crate::values::Value;
 use crate::values::ValueLike;
 
@@ -100,7 +100,7 @@ pub struct Dict<'v> {
 }
 
 impl<'v> StarlarkTypeRepr for Dict<'v> {
-    fn starlark_type_repr() -> String {
+    fn starlark_type_repr() -> Ty {
         DictOf::<Value<'v>, Value<'v>>::starlark_type_repr()
     }
 }
@@ -113,7 +113,7 @@ pub(crate) struct FrozenDictData {
 }
 
 /// Alias is used in `StarlarkDocs` derive.
-type FrozenDict = DictGen<FrozenDictData>;
+pub(crate) type FrozenDict = DictGen<FrozenDictData>;
 
 unsafe impl<'v> Coerce<Dict<'v>> for FrozenDictData {}
 
@@ -375,12 +375,11 @@ pub(crate) fn dict_methods() -> Option<&'static Methods> {
     RES.methods(crate::stdlib::dict::dict_methods)
 }
 
+#[starlark_value(type = Dict::TYPE)]
 impl<'v, T: DictLike<'v> + 'v> StarlarkValue<'v> for DictGen<T>
 where
-    Self: ProvidesStaticType,
+    Self: ProvidesStaticType<'v>,
 {
-    starlark_type!(Dict::TYPE);
-
     fn get_methods() -> Option<&'static Methods> {
         dict_methods()
     }
@@ -484,27 +483,6 @@ impl<'v, T: DictLike<'v>> Serialize for DictGen<T> {
     }
 }
 
-impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> StarlarkTypeRepr for SmallMap<K, V> {
-    fn starlark_type_repr() -> String {
-        DictOf::<K, V>::starlark_type_repr()
-    }
-}
-
-impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> UnpackValue<'v> for SmallMap<K, V> {
-    fn expected() -> String {
-        format!("dict mapping {} to {}", K::expected(), V::expected())
-    }
-
-    fn unpack_value(value: Value<'v>) -> Option<Self> {
-        let dict = DictRef::from_value(value)?;
-        let mut r = SmallMap::new();
-        for (k, v) in dict.content.iter() {
-            r.insert(K::unpack_value(*k)?, V::unpack_value(*v)?);
-        }
-        Some(r)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -533,13 +511,13 @@ b1 and b2 and b3
         let k1 = heap.alloc_str("hello").get_hashed();
         let k2 = heap.alloc_str("world").get_hashed();
         let mut sm = SmallMap::new();
-        sm.insert_hashed(k1, Value::new_int(12));
-        sm.insert_hashed(k2, Value::new_int(56));
+        sm.insert_hashed(k1, heap.alloc(12));
+        sm.insert_hashed(k2, heap.alloc(56));
         let d = Dict::new(coerce(sm));
 
-        assert_eq!(d.get(heap.alloc("hello"))?.unwrap().unpack_int(), Some(12));
+        assert_eq!(d.get(heap.alloc("hello"))?.unwrap().unpack_i32(), Some(12));
         assert_eq!(d.get(heap.alloc("foo"))?, None);
-        assert_eq!(d.get_str("hello").unwrap().unpack_int(), Some(12));
+        assert_eq!(d.get_str("hello").unwrap().unpack_i32(), Some(12));
         assert_eq!(d.get_str("foo"), None);
         Ok(())
     }

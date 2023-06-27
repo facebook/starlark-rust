@@ -659,12 +659,19 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         mut parameter_types: HashMap<usize, DocType>,
         mut parameter_docs: HashMap<String, Option<DocString>>,
     ) -> Vec<DocParam> {
+        let mut pos_only = 0;
         let mut params: Vec<DocParam> = self
             .iter_params()
             .enumerate()
             .map(|(i, (name, kind))| {
                 let typ = parameter_types.remove(&i);
                 let docs = parameter_docs.remove(name).flatten();
+                if pos_only == i
+                    && !matches!(kind, ParameterKind::Args | ParameterKind::KWargs)
+                    && self.names.get_str(name).is_none()
+                {
+                    pos_only += 1;
+                }
                 let name = name.to_owned();
                 match kind {
                     ParameterKind::Required => DocParam::Arg {
@@ -694,6 +701,10 @@ impl<'v, V: ValueLike<'v>> ParametersSpec<V> {
         // Go back and add the "*" arg if it's present
         if let Some(i) = self.no_args_param_index() {
             params.insert(i, DocParam::NoArgs);
+        }
+
+        if pos_only > 0 {
+            params.insert(pos_only, DocParam::OnlyPosBefore);
         }
 
         params
@@ -777,6 +788,7 @@ mod tests {
     use crate::eval::compiler::def::FrozenDef;
     use crate::eval::runtime::params::ParameterKind;
     use crate::eval::ParametersSpec;
+    use crate::typing::Ty;
     use crate::values::FrozenValue;
 
     #[test]
@@ -854,7 +866,7 @@ mod tests {
                 name: "a".to_owned(),
                 docs: None,
                 typ: Some(DocType {
-                    raw_type: "int".to_owned(),
+                    raw_type: Ty::int(),
                 }),
                 default_value: Some("_".to_owned()),
             },
@@ -869,7 +881,7 @@ mod tests {
         types.insert(
             1,
             DocType {
-                raw_type: "int".to_owned(),
+                raw_type: Ty::int(),
             },
         );
         let mut docs = HashMap::new();

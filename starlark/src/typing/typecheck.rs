@@ -19,6 +19,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
+use std::slice;
 
 use dupe::Dupe;
 
@@ -27,69 +28,51 @@ use crate::codemap::FileSpanRef;
 use crate::codemap::Span;
 use crate::environment::names::MutableNames;
 use crate::environment::Globals;
+use crate::eval::compiler::scope::payload::CstStmt;
 use crate::eval::compiler::scope::BindingId;
-use crate::eval::compiler::scope::CompilerAstMap;
-use crate::eval::compiler::scope::CstStmt;
-use crate::eval::compiler::scope::Scope;
-use crate::eval::compiler::scope::ScopeData;
-use crate::slice_vec_ext::VecExt;
+use crate::eval::compiler::scope::BindingSource;
+use crate::eval::compiler::scope::ModuleScopes;
+use crate::eval::compiler::EvalException;
+use crate::syntax::ast::StmtP;
 use crate::syntax::ast::Visibility;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::typing::bindings::Bindings;
+use crate::typing::bindings::BindingsCollect;
 use crate::typing::bindings::Interface;
 use crate::typing::ctx::TypingContext;
-use crate::typing::ctx::TypingError;
+use crate::typing::error::InternalError;
+use crate::typing::error::TypingError;
+use crate::typing::mode::TypecheckMode;
+use crate::typing::oracle::ctx::TypingOracleCtx;
 use crate::typing::oracle::traits::TypingOracle;
 use crate::typing::ty::Approximation;
 use crate::typing::ty::Ty;
+use crate::typing::OracleDocs;
 use crate::values::FrozenHeap;
-use crate::values::FrozenRef;
-
-/// Give every identifier a unique name, using dotted names to note values in nested scopes
-fn unique_identifiers<'f>(
-    frozen_heap: &'f FrozenHeap,
-    ast: AstModule,
-    names: &'f MutableNames,
-) -> (CstStmt, Scope<'f>) {
-    let mut scope_data = ScopeData::new();
-    let root_scope_id = scope_data.new_scope().0;
-    let mut cst = ast
-        .statement
-        .into_map_payload(&mut CompilerAstMap(&mut scope_data));
-    let codemap = frozen_heap.alloc_any_display_from_debug(ast.codemap.dupe());
-    let scope = Scope::enter_module(
-        names,
-        frozen_heap,
-        root_scope_id,
-        scope_data,
-        &mut cst,
-        FrozenRef::new(Globals::empty()),
-        codemap,
-        &Dialect::Extended,
-    );
-    (cst, scope)
-}
 
 // Things which are None in the map have type void - they are never constructed
-fn solve_bindings(
+pub(crate) fn solve_bindings(
     oracle: &dyn TypingOracle,
+    globals: &Globals,
     bindings: Bindings,
     codemap: &CodeMap,
 ) -> (Vec<TypingError>, HashMap<BindingId, Ty>, Vec<Approximation>) {
     let mut types = bindings
         .expressions
         .keys()
-        .map(|x| (*x, Ty::Void))
+        .map(|x| (*x, Ty::Never))
         .collect::<HashMap<_, _>>();
     for (k, ty) in bindings.types {
         types.insert(k, ty);
     }
     // FIXME: Should be a fixed point, just do 10 iterations since that probably converges
     let mut changed = false;
+    let mut global_docs = OracleDocs::new();
+    global_docs.add_module(&globals.documentation());
     let mut ctx = TypingContext {
-        codemap: codemap.dupe(),
-        oracle,
+        oracle: TypingOracleCtx { oracle, codemap },
+        global_docs,
         errors: RefCell::new(Vec::new()),
         approximoations: RefCell::new(Vec::new()),
         types,
@@ -125,7 +108,7 @@ fn solve_bindings(
     }
     for (span, e, require) in &bindings.check_type {
         let ty = match e {
-            None => Ty::None,
+            None => Ty::none(),
             Some(x) => ctx.expression_type(x),
         };
         ctx.validate_type(&ty, require, *span);
@@ -168,24 +151,62 @@ impl AstModule {
     pub fn typecheck(
         self,
         oracle: &dyn TypingOracle,
+        globals: &Globals,
         loads: &HashMap<String, Interface>,
     ) -> (Vec<anyhow::Error>, TypeMap, Interface, Vec<Approximation>) {
         let codemap = self.codemap.dupe();
         let names = MutableNames::new();
         let frozen_heap = FrozenHeap::new();
-        let (cst, scope) = unique_identifiers(&frozen_heap, self, &names);
-        let bindings = Bindings::collect(&cst, loads);
-        let descriptions = bindings.descriptions.clone();
-        let mut approximations = bindings.approximations.clone();
-        let (errors, types, solve_approximations) = solve_bindings(oracle, bindings, &codemap);
+        let (
+            scope_errors,
+            ModuleScopes {
+                cst,
+                scope_data,
+                module_bindings,
+                ..
+            },
+        ) = ModuleScopes::check_module(
+            &names,
+            &frozen_heap,
+            loads,
+            self.statement,
+            frozen_heap.alloc_any_display_from_debug(globals.dupe()),
+            frozen_heap.alloc_any_display_from_debug(self.codemap.dupe()),
+            &Dialect::Extended,
+        );
+        // We don't really need to properly unpack top-level statements,
+        // but make it safe against future changes.
+        let cst: &[CstStmt] = match &cst.node {
+            StmtP::Statements(x) => x,
+            _ => slice::from_ref(&cst),
+        };
+        let bindings = match BindingsCollect::collect(cst, TypecheckMode::Lint, &codemap) {
+            Ok(bindings) => bindings,
+            Err(e) => {
+                return (
+                    vec![InternalError::into_anyhow(e)],
+                    TypeMap {
+                        codemap,
+                        bindings: HashMap::new(),
+                    },
+                    Interface::default(),
+                    Vec::new(),
+                );
+            }
+        };
+        let mut approximations = bindings.approximations;
+        let (solve_errors, types, solve_approximations) =
+            solve_bindings(oracle, globals, bindings.bindings, &codemap);
 
         approximations.extend(solve_approximations);
 
         let mut typemap = HashMap::with_capacity(types.len());
         for (id, ty) in &types {
-            let (name, span) = match descriptions.get(id) {
-                None => ("{unknown}".to_owned(), Span::default()),
-                Some(i) => (i.0.clone(), i.span),
+            let binding = scope_data.get_binding(*id);
+            let name = binding.name.as_str().to_owned();
+            let span = match binding.source {
+                BindingSource::Source(span, _) => span,
+                BindingSource::FromModule => Span::default(),
             };
             typemap.insert(*id, (name, span, ty.clone()));
         }
@@ -194,12 +215,16 @@ impl AstModule {
             codemap: codemap.dupe(),
         };
 
-        let errors = errors.into_map(|x| anyhow::anyhow!(x));
+        let errors = scope_errors
+            .into_iter()
+            .map(EvalException::into_anyhow)
+            .chain(solve_errors.into_iter().map(TypingError::into_anyhow))
+            .collect();
 
         let mut res = HashMap::new();
         for (name, vis) in names.all_names_and_visibilities() {
             if vis == Visibility::Public {
-                let ty = types[scope.module_bindings.get(name.as_str()).unwrap()].clone();
+                let ty = types[module_bindings.get(name.as_str()).unwrap()].clone();
                 res.insert(name.as_str().to_owned(), ty);
             }
         }

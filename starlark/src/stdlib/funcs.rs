@@ -20,9 +20,10 @@
 
 use std::char;
 use std::cmp::Ordering;
-use std::fmt::Display;
 use std::num::NonZeroI32;
 
+use allocative::Allocative;
+use either::Either;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
@@ -30,27 +31,41 @@ use crate::collections::SmallMap;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
-use crate::values::bool::BOOL_TYPE;
+use crate::typing::oracle::ctx::TypingOracleCtx;
+use crate::typing::ty::TyCustomFunctionImpl;
+use crate::typing::Arg;
+use crate::typing::Ty;
+use crate::typing::TypingAttr;
+use crate::typing::TypingOracle;
+use crate::values::bool::StarlarkBool;
+use crate::values::dict::value::FrozenDict;
 use crate::values::dict::Dict;
 use crate::values::dict::DictRef;
 use crate::values::float::StarlarkFloat;
-use crate::values::int::INT_TYPE;
+use crate::values::int::PointerI32;
+use crate::values::list::value::FrozenList;
 use crate::values::list::AllocList;
 use crate::values::list::ListRef;
+use crate::values::never::StarlarkNever;
 use crate::values::none::NoneType;
-use crate::values::num::Num;
+use crate::values::num::NumRef;
 use crate::values::range::Range;
-use crate::values::string::STRING_TYPE;
+use crate::values::string::repr::string_repr;
+use crate::values::string::StarlarkStr;
+use crate::values::tuple::value::FrozenTuple;
 use crate::values::tuple::AllocTuple;
 use crate::values::tuple::TupleRef;
-use crate::values::types::tuple::value::Tuple;
+use crate::values::types::int_or_big::StarlarkInt;
+use crate::values::value_of_unchecked::ValueOfUnchecked;
 use crate::values::AllocValue;
 use crate::values::FrozenStringValue;
 use crate::values::Heap;
+use crate::values::StarlarkIter;
 use crate::values::StringValue;
 use crate::values::Value;
 use crate::values::ValueError;
 use crate::values::ValueLike;
+use crate::values::ValueOf;
 
 fn unpack_pair<'v>(pair: Value<'v>, heap: &'v Heap) -> anyhow::Result<(Value<'v>, Value<'v>)> {
     let mut it = pair.iterate(heap)?;
@@ -125,6 +140,42 @@ fn min_max<'v>(
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Allocative)]
+struct ZipType;
+
+impl TyCustomFunctionImpl for ZipType {
+    fn validate_call(&self, args: &[Arg], oracle: TypingOracleCtx) -> Result<Ty, String> {
+        let mut iter_item_types: Vec<Ty> = Vec::new();
+        let mut seen_star_args = false;
+        for arg in args {
+            match arg {
+                Arg::Pos(pos) => match oracle.attribute(pos, TypingAttr::Iter) {
+                    Some(Err(_)) => {
+                        return Err("Argument does not allow iteration".to_owned());
+                    }
+                    Some(Ok(t)) => iter_item_types.push(t),
+                    None => iter_item_types.push(Ty::Any),
+                },
+                Arg::Name(_, _) => {
+                    return Err("`zip()` does not accept keyword arguments".to_owned());
+                }
+                Arg::Args(_) => {
+                    seen_star_args = true;
+                }
+                Arg::Kwargs(_) => {
+                    // `zip()` does not accept keyword args,
+                    // but if `**kwargs` is empty, the call is valid.
+                }
+            }
+        }
+        if seen_star_args {
+            Ok(Ty::list(Ty::Any))
+        } else {
+            Ok(Ty::list(Ty::Tuple(iter_item_types)))
+        }
+    }
+}
+
 #[starlark_module]
 pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// The `None` value, used to represent nothing.
@@ -147,7 +198,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// fail("oops", 1, False)  # fail: oops 1 False
     /// # "#, "oops 1 False");
     /// ```
-    fn fail(#[starlark(args)] args: Vec<Value>) -> anyhow::Result<NoneType> {
+    fn fail(#[starlark(args)] args: Vec<Value>) -> anyhow::Result<StarlarkNever> {
         let mut s = String::new();
         for x in args {
             s.push(' ');
@@ -175,10 +226,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(speculative_exec_safe)]
     fn any<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] x: Value<'v>,
+        #[starlark(require = pos)] x: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         heap: &'v Heap,
     ) -> anyhow::Result<bool> {
-        for i in x.iterate(heap)? {
+        for i in x.get().iterate(heap)? {
             if i.to_bool() {
                 return Ok(true);
             }
@@ -205,10 +256,10 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(speculative_exec_safe)]
     fn all<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] x: Value<'v>,
+        #[starlark(require = pos)] x: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         heap: &'v Heap,
     ) -> anyhow::Result<bool> {
-        for i in x.iterate(heap)? {
+        for i in x.get().iterate(heap)? {
             if !i.to_bool() {
                 return Ok(false);
             }
@@ -239,7 +290,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// bool("1") == True
     /// # "#);
     /// ```
-    #[starlark(type = BOOL_TYPE, speculative_exec_safe)]
+    #[starlark(as_type = StarlarkBool, speculative_exec_safe)]
     fn bool(#[starlark(require = pos)] x: Option<Value>) -> anyhow::Result<bool> {
         match x {
             None => Ok(false),
@@ -263,19 +314,9 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
-    fn chr(
-        #[starlark(require = pos, type = "[int.type, bool.type]")] i: Value,
-    ) -> anyhow::Result<char> {
-        let i = i.to_int()?;
-        let cp = match u32::try_from(i) {
-            Ok(cp) => cp,
-            Err(_) => {
-                return Err(anyhow::anyhow!(
-                    "chr() parameter value negative integer {}",
-                    i
-                ));
-            }
-        };
+    fn chr(#[starlark(require = pos)] i: i32) -> anyhow::Result<char> {
+        let cp = u32::try_from(i)
+            .map_err(|_| anyhow::anyhow!("chr() parameter value negative integer {i}"))?;
         match char::from_u32(cp) {
             Some(x) => Ok(x),
             None => Err(anyhow::anyhow!(
@@ -315,7 +356,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// x == {'a': 1} and y == {'x': 2, 'a': 1}
     /// # "#);
     /// ```
-    #[starlark(type = Dict::TYPE, speculative_exec_safe)]
+    #[starlark(as_type = FrozenDict, speculative_exec_safe)]
     fn dict<'v>(args: &Arguments<'v, '_>, heap: &'v Heap) -> anyhow::Result<Dict<'v>> {
         // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
         // In particular, we don't generate the kwargs if there are no positional arguments.
@@ -391,11 +432,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     #[starlark(speculative_exec_safe)]
     fn enumerate<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] it: Value<'v>,
+        #[starlark(require = pos)] it: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         #[starlark(default = 0)] start: i32,
         heap: &'v Heap,
     ) -> anyhow::Result<impl AllocValue<'v>> {
         let v = it
+            .get()
             .iterate(heap)?
             .enumerate()
             .map(move |(k, v)| (k as i32 + start, v));
@@ -426,47 +468,40 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// float("hello")   # error: not a valid number
     /// # "#, "not a valid number");
     /// # starlark::assert::fail(r#"
-    /// float([])   # error: argument must be a string, a number, or a boolean
-    /// # "#, "argument must be a string, a number, or a boolean");
+    /// float([])   # error
+    /// # "#, "Expected type");
     /// ```
-    #[starlark(type = StarlarkFloat::TYPE, speculative_exec_safe)]
+    #[starlark(as_type = StarlarkFloat, speculative_exec_safe)]
     fn float(
-        #[starlark(require = pos, type = "[str.type, int.type, float.type, bool.type]")] a: Option<
-            Value,
-        >,
+        #[starlark(require = pos)] a: Option<Either<Either<NumRef, bool>, &str>>,
     ) -> anyhow::Result<f64> {
         if a.is_none() {
             return Ok(0.0);
         }
         let a = a.unwrap();
-        if let Some(f) = a.unpack_num().map(|n| n.as_float()) {
-            Ok(f)
-        } else if let Some(s) = a.unpack_str() {
-            match s.parse::<f64>() {
-                Ok(f) => {
-                    if f.is_infinite() && !s.to_lowercase().contains("inf") {
-                        // if a resulting float is infinite but the parsed string is not explicitly infinity then we should fail with an error
-                        Err(anyhow::anyhow!(
-                            "float() floating-point number too large: {}",
-                            s
-                        ))
-                    } else {
-                        Ok(f)
+        match a {
+            Either::Left(Either::Left(f)) => Ok(f.as_float()),
+            Either::Left(Either::Right(b)) => Ok(if b { 1.0 } else { 0.0 }),
+            Either::Right(s) => {
+                match s.parse::<f64>() {
+                    Ok(f) => {
+                        if f.is_infinite() && !s.to_lowercase().contains("inf") {
+                            // if a resulting float is infinite but the parsed string is not explicitly infinity then we should fail with an error
+                            Err(anyhow::anyhow!(
+                                "float() floating-point number too large: {}",
+                                s
+                            ))
+                        } else {
+                            Ok(f)
+                        }
+                    }
+                    Err(x) => {
+                        let mut repr = String::new();
+                        string_repr(s, &mut repr);
+                        Err(anyhow::anyhow!("{} is not a valid number: {}", repr, x,))
                     }
                 }
-                Err(x) => Err(anyhow::anyhow!(
-                    "{} is not a valid number: {}",
-                    a.to_repr(),
-                    x
-                )),
             }
-        } else if let Some(b) = a.unpack_bool() {
-            Ok(if b { 1.0 } else { 0.0 })
-        } else {
-            Err(anyhow::anyhow!(
-                "float() argument must be a string, a number, or a boolean, not `{}`",
-                a.get_type()
-            ))
         }
     }
 
@@ -597,118 +632,101 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// int(2e9) == 2000000000
     /// # "#);
     /// # starlark::assert::fail(r#"
-    /// int("hello")   # error: not a valid number
-    /// # "#, "not a valid number");
+    /// int("hello")   # error: Cannot parse
+    /// # "#, "Cannot parse");
     /// # starlark::assert::fail(r#"
-    /// int(1e100)   # error: overflow
-    /// # "#, "cannot convert float to integer");
+    /// int(float("nan"))   # error: cannot be represented as exact integer
+    /// # "#, "cannot be represented as exact integer");
     /// # starlark::assert::fail(r#"
-    /// int(float("nan"))   # error: cannot convert NaN to int
-    /// # "#, "cannot convert float to integer");
-    /// # starlark::assert::fail(r#"
-    /// int(float("inf"))   # error: cannot convert infinity to int
-    /// # "#, "cannot convert float to integer");
+    /// int(float("inf"))   # error: cannot be represented as exact integer
+    /// # "#, "cannot be represented as exact integer");
     /// ```
-    #[starlark(type = INT_TYPE, speculative_exec_safe, return_type = "int.type")]
+    #[starlark(as_type = PointerI32, speculative_exec_safe)]
     fn int<'v>(
-        #[starlark(require = pos)] a: Option<Value<'v>>,
-        #[starlark(type = "[int.type, bool.type]")] base: Option<Value<'v>>,
-    ) -> anyhow::Result<Value<'v>> {
-        if a.is_none() {
-            return Ok(Value::new_int(0));
-        }
-        let a = a.unwrap();
-        if let Some(s) = a.unpack_str() {
-            let base = match base {
-                Some(base) => base.to_int()?,
-                None => 0,
-            };
-            if base == 1 || base < 0 || base > 36 {
-                return Err(anyhow::anyhow!(
-                    "{} is not a valid base, int() base must be >= 2 and <= 36",
-                    base
-                ));
+        #[starlark(require = pos)] a: Option<
+            ValueOf<'v, Either<Either<NumRef<'v>, bool>, &'v str>>,
+        >,
+        base: Option<i32>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<ValueOfUnchecked<'v, StarlarkInt>> {
+        let Some(a) = a else {
+            return Ok(ValueOfUnchecked::new(heap.alloc(0)));
+        };
+        let num_or_bool = match a.typed {
+            Either::Left(num_or_bool) => num_or_bool,
+            Either::Right(s) => {
+                let base = base.unwrap_or(0);
+                if base == 1 || base < 0 || base > 36 {
+                    return Err(anyhow::anyhow!(
+                        "{} is not a valid base, int() base must be >= 2 and <= 36",
+                        base
+                    ));
+                }
+                let (negate, s) = {
+                    match s.chars().next() {
+                        Some('+') => (false, s.get(1..).unwrap()),
+                        Some('-') => (true, s.get(1..).unwrap()),
+                        _ => (false, s),
+                    }
+                };
+                let base = if base == 0 {
+                    match s.get(0..2) {
+                        Some("0b") | Some("0B") => 2,
+                        Some("0o") | Some("0O") => 8,
+                        Some("0x") | Some("0X") => 16,
+                        _ => 10,
+                    }
+                } else {
+                    base as u32
+                };
+                let s = match base {
+                    16 => {
+                        if s.starts_with("0x") || s.starts_with("0X") {
+                            s.get(2..).unwrap()
+                        } else {
+                            s
+                        }
+                    }
+                    8 => {
+                        if s.starts_with("0o") || s.starts_with("0O") {
+                            s.get(2..).unwrap()
+                        } else {
+                            s
+                        }
+                    }
+                    2 => {
+                        if s.starts_with("0b") || s.starts_with("0B") {
+                            s.get(2..).unwrap()
+                        } else {
+                            s
+                        }
+                    }
+                    _ => s,
+                };
+                // We already handled the sign above, so we are not trying to parse another sign.
+                if s.starts_with('-') || s.starts_with('+') {
+                    return Err(anyhow::anyhow!("Cannot parse `{}` as an integer", s,));
+                }
+
+                let x = StarlarkInt::from_str_radix(s, base)?;
+                let x = if negate { -x } else { x };
+                return Ok(ValueOfUnchecked::new(heap.alloc(x)));
             }
-            let (negate, s) = {
-                match s.chars().next() {
-                    Some('+') => (false, s.get(1..).unwrap()),
-                    Some('-') => (true, s.get(1..).unwrap()),
-                    _ => (false, s),
-                }
-            };
-            let base = if base == 0 {
-                match s.get(0..2) {
-                    Some("0b") | Some("0B") => 2,
-                    Some("0o") | Some("0O") => 8,
-                    Some("0x") | Some("0X") => 16,
-                    _ => 10,
-                }
-            } else {
-                base as u32
-            };
-            let s = match base {
-                16 => {
-                    if s.starts_with("0x") || s.starts_with("0X") {
-                        s.get(2..).unwrap()
-                    } else {
-                        s
-                    }
-                }
-                8 => {
-                    if s.starts_with("0o") || s.starts_with("0O") {
-                        s.get(2..).unwrap()
-                    } else {
-                        s
-                    }
-                }
-                2 => {
-                    if s.starts_with("0b") || s.starts_with("0B") {
-                        s.get(2..).unwrap()
-                    } else {
-                        s
-                    }
-                }
-                _ => s,
-            };
-            fn err(a: Value, base: u32, error: impl Display) -> anyhow::Error {
-                anyhow::anyhow!(
-                    "{} is not a valid number in base {}: {}",
-                    a.to_repr(),
-                    base,
-                    error,
-                )
-            }
-            match (u32::from_str_radix(s, base), negate) {
-                (Ok(i), false) => i32::try_from(i)
-                    .map(Value::new_int)
-                    .map_err(|_| err(a, base, "overflow")),
-                (Ok(i), true) => {
-                    if i > 0x80000000 {
-                        Err(err(a, base, "overflow"))
-                    } else {
-                        Ok(Value::new_int(0u32.wrapping_sub(i) as i32))
-                    }
-                }
-                (Err(x), _) => Err(err(a, base, x)),
-            }
-        } else if let Some(base) = base {
-            Err(anyhow::anyhow!(
+        };
+
+        if let Some(base) = base {
+            return Err(anyhow::anyhow!(
                 "int() cannot convert non-string with explicit base '{}'",
-                base.to_repr()
-            ))
-        } else if let Some(num) = a.unpack_num() {
-            match num {
-                Num::Float(f) => match Num::from(f.trunc()).as_int() {
-                    Some(i) => Ok(Value::new_int(i)),
-                    None => Err(anyhow::anyhow!(
-                        "int() cannot convert float to integer: {}",
-                        a.to_repr()
-                    )),
-                },
-                Num::Int(..) | Num::BigInt(..) => Ok(a),
-            }
-        } else {
-            Ok(Value::new_int(a.to_int()?))
+                base
+            ));
+        }
+
+        match num_or_bool {
+            Either::Left(NumRef::Int(_)) => Ok(ValueOfUnchecked::new(a.value)),
+            Either::Left(NumRef::Float(f)) => Ok(ValueOfUnchecked::new(
+                heap.alloc(StarlarkInt::from_f64_exact(f.trunc())?),
+            )),
+            Either::Right(b) => Ok(ValueOfUnchecked::new(heap.alloc(b as i32))),
         }
     }
 
@@ -754,23 +772,23 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// # "#);
     /// # starlark::assert::fail(r#"
     /// list("strings are not iterable") # error: not supported
-    /// # "#, "not supported");
+    /// # "#, r#"Expected type `iter("")` but got `str.type`"#);
     /// ```
-    #[starlark(type = ListRef::TYPE, speculative_exec_safe, return_type = "[\"\"]")]
+    #[starlark(as_type = FrozenList, speculative_exec_safe)]
     fn list<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] a: Option<Value<'v>>,
+        #[starlark(require = pos)] a: Option<ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>>,
         heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
-        Ok(if let Some(a) = a {
-            if let Some(xs) = ListRef::from_value(a) {
+    ) -> anyhow::Result<ValueOfUnchecked<'v, &'v ListRef<'v>>> {
+        Ok(ValueOfUnchecked::new(if let Some(a) = a {
+            if let Some(xs) = ListRef::from_value(a.get()) {
                 heap.alloc_list(xs.content())
             } else {
-                let it = a.iterate(heap)?;
+                let it = a.get().iterate(heap)?;
                 heap.alloc(AllocList(it))
             }
         } else {
             heap.alloc(AllocList::EMPTY)
-        })
+        }))
     }
 
     /// [max](
@@ -892,11 +910,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// list(range(10, 3, -2))                  == [10, 8, 6, 4]
     /// # "#);
     /// ```
-    #[starlark(type = Range::TYPE, speculative_exec_safe)]
+    #[starlark(as_type = Range, speculative_exec_safe)]
     fn range(
         #[starlark(require = pos)] a1: i32,
         #[starlark(require = pos)] a2: Option<i32>,
-        #[starlark(default = 1)] step: i32,
+        #[starlark(require = pos, default = 1)] step: i32,
     ) -> anyhow::Result<Range> {
         let start = match a2 {
             None => 0,
@@ -956,12 +974,12 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// reversed({"one": 1, "two": 2}.keys())  == ["two", "one"]
     /// # "#);
     /// ```
-    #[starlark(speculative_exec_safe, return_type = "[\"\"]")]
+    #[starlark(speculative_exec_safe)]
     fn reversed<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] a: Value<'v>,
+        #[starlark(require = pos)] a: ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>,
         heap: &'v Heap,
     ) -> anyhow::Result<Vec<Value<'v>>> {
-        let mut v: Vec<Value> = a.iterate(heap)?.collect();
+        let mut v: Vec<Value> = a.get().iterate(heap)?.collect();
         v.reverse();
         Ok(v)
     }
@@ -990,14 +1008,13 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// ```
     // This function is not spec-safe, because it may call `key` function
     // which might be not spec-safe.
-    #[starlark(return_type = "[\"\"]")]
     fn sorted<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] x: Value<'v>,
+        #[starlark(require = pos)] x: ValueOfUnchecked<'v, ValueOfUnchecked<Value<'v>>>,
         #[starlark(require = named)] key: Option<Value<'v>>,
         #[starlark(require = named, default = false)] reverse: bool,
         eval: &mut Evaluator<'v, '_>,
     ) -> anyhow::Result<AllocList<impl IntoIterator<Item = Value<'v>>>> {
-        let it = x.iterate(eval.heap())?;
+        let it = x.get().iterate(eval.heap())?;
         let mut it = match key {
             None => it.map(|x| (x, x)).collect(),
             Some(key) => {
@@ -1046,7 +1063,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// str([1, "x"])                   == "[1, \"x\"]"
     /// # "#);
     /// ```
-    #[starlark(type = STRING_TYPE, speculative_exec_safe)]
+    #[starlark(as_type = StarlarkStr, speculative_exec_safe)]
     fn str<'v>(
         #[starlark(require = pos)] a: Value<'v>,
         eval: &mut Evaluator<'v, '_>,
@@ -1075,20 +1092,20 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// tuple([1,2,3]) == (1, 2, 3)
     /// # "#);
     /// ```
-    #[starlark(type = Tuple::TYPE, speculative_exec_safe)]
+    #[starlark(as_type = FrozenTuple, speculative_exec_safe)]
     fn tuple<'v>(
-        #[starlark(require = pos, type = "iter(\"\")")] a: Option<Value<'v>>,
+        #[starlark(require = pos)] a: Option<ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>>,
         heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
+    ) -> anyhow::Result<ValueOfUnchecked<'v, &'v TupleRef<'v>>> {
         if let Some(a) = a {
-            if TupleRef::from_value(a).is_some() {
-                return Ok(a);
+            if TupleRef::from_value(a.get()).is_some() {
+                return Ok(ValueOfUnchecked::new(a.get()));
             }
 
-            let it = a.iterate(heap)?;
-            Ok(heap.alloc_tuple_iter(it))
+            let it = a.get().iterate(heap)?;
+            Ok(ValueOfUnchecked::new(heap.alloc_tuple_iter(it)))
         } else {
-            Ok(heap.alloc(AllocTuple::EMPTY))
+            Ok(ValueOfUnchecked::new(heap.alloc(AllocTuple::EMPTY)))
         }
     }
 
@@ -1128,7 +1145,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// zip(range(5), "abc".elems())    == [(0, "a"), (1, "b"), (2, "c")]
     /// # "#);
     /// ```
-    #[starlark(speculative_exec_safe, return_type = "[\"\"]")]
+    #[starlark(speculative_exec_safe, ty_custom_function = ZipType)]
     fn zip<'v>(
         #[starlark(args)] args: Vec<Value<'v>>,
         heap: &'v Heap,
@@ -1156,6 +1173,7 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
 #[cfg(test)]
 mod tests {
     use crate::assert;
+    use crate::assert::Assert;
 
     #[test]
     fn test_constants() {
@@ -1186,18 +1204,18 @@ hash("te") != hash("st")
 x = "test"; y = "te" + "st"; hash(y) == hash(y)
 "#,
         );
-        assert::fail("hash(None)", "doesn't match");
-        assert::fail("hash(True)", "doesn't match");
-        assert::fail("hash(1)", "doesn't match");
-        assert::fail("hash([])", "doesn't match");
-        assert::fail("hash({})", "doesn't match");
-        assert::fail("hash(range(1))", "doesn't match");
-        assert::fail("hash((1, 2))", "doesn't match");
+        assert::fail("noop(hash)(None)", "doesn't match");
+        assert::fail("noop(hash)(True)", "doesn't match");
+        assert::fail("noop(hash)(1)", "doesn't match");
+        assert::fail("noop(hash)([])", "doesn't match");
+        assert::fail("noop(hash)({})", "doesn't match");
+        assert::fail("noop(hash)(range(1))", "doesn't match");
+        assert::fail("noop(hash)((1, 2))", "doesn't match");
         assert::fail(
             r#"
 def foo():
     pass
-hash(foo)
+noop(hash)(foo)
 "#,
             "doesn't match",
         );
@@ -1209,13 +1227,20 @@ hash(foo)
         assert::eq("-2147483647 - 1", "int('-2147483648')");
         assert::eq("0", "int('0')");
         assert::eq("0", "int('-0')");
-        assert::fail("int('2147483648')", "overflow");
-        assert::fail("int('-2147483649')", "overflow");
+        assert::eq(
+            "999999999999999945322333868247445125709646570021247924665841614848",
+            "int(1e66)",
+        );
+        assert::eq("2147483648", "int('2147483648')");
+        assert::eq("-2147483649", "int('-2147483649')");
     }
 
     #[test]
     fn test_tuple() {
-        assert::eq("(1, 2)", "tuple((1, 2))");
-        assert::eq("(1, 2)", "tuple([1, 2])");
+        let mut a = Assert::new();
+        // TODO(nga): fix and enable.
+        a.disable_static_typechecking();
+        a.eq("(1, 2)", "tuple((1, 2))");
+        a.eq("(1, 2)", "tuple([1, 2])");
     }
 }

@@ -29,11 +29,11 @@ use std::slice;
 
 use allocative::Allocative;
 use serde::Serialize;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::private::Private;
-use crate::starlark_type;
 use crate::values::types::list::value::display_list;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
@@ -254,9 +254,8 @@ impl<'v> Display for Array<'v> {
     }
 }
 
+#[starlark_value(type = "array")]
 impl<'v> StarlarkValue<'v> for Array<'v> {
-    starlark_type!("array");
-
     fn is_special(_: Private) -> bool
     where
         Self: Sized,
@@ -302,7 +301,7 @@ mod tests {
     fn debug() {
         let heap = Heap::new();
         let array = heap.alloc_array(10);
-        array.push(Value::new_int(23));
+        array.push(heap.alloc(23));
         // Just check it does not crash.
         drop(array.to_string());
     }
@@ -311,7 +310,7 @@ mod tests {
     fn display() {
         let heap = Heap::new();
         let array = heap.alloc_array(10);
-        array.push(Value::new_int(29));
+        array.push(heap.alloc(29));
         array.push(Value::new_none());
         assert_eq!("array([29, None], cap=10)", array.to_string());
     }
@@ -320,8 +319,8 @@ mod tests {
     fn push() {
         let heap = Heap::new();
         let array = heap.alloc_array(10);
-        array.push(Value::new_int(17));
-        array.push(Value::new_int(19));
-        assert_eq!(Value::new_int(19), array.content()[1]);
+        array.push(heap.alloc(17));
+        array.push(heap.alloc(19));
+        assert_eq!(heap.alloc(19), array.content()[1]);
     }
 }

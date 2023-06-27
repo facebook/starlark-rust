@@ -28,6 +28,7 @@ use std::slice;
 use allocative::Allocative;
 use display_container::fmt_container;
 use serde::Serialize;
+use starlark_derive::starlark_value;
 use starlark_derive::StarlarkDocs;
 use starlark_derive::Trace;
 
@@ -41,7 +42,7 @@ use crate::hint::unlikely;
 use crate::private::Private;
 use crate::slice_vec_ext::SliceExt;
 use crate::slice_vec_ext::VecExt;
-use crate::starlark_type;
+use crate::typing::Ty;
 use crate::values::array::Array;
 use crate::values::comparison::compare_slice;
 use crate::values::comparison::equals_slice;
@@ -101,7 +102,7 @@ impl Debug for FrozenListData {
 }
 
 /// Alias is used in `StarlarkDocs` derive.
-type FrozenList = ListGen<FrozenListData>;
+pub(crate) type FrozenList = ListGen<FrozenListData>;
 
 impl ListGen<FrozenListData> {
     pub(crate) fn offset_of_content() -> usize {
@@ -242,7 +243,7 @@ impl<'a, 'v, V: 'a> StarlarkTypeRepr for &'a [V]
 where
     &'a V: AllocValue<'v> + StarlarkTypeRepr,
 {
-    fn starlark_type_repr() -> String {
+    fn starlark_type_repr() -> Ty {
         Vec::<&'a V>::starlark_type_repr()
     }
 }
@@ -410,12 +411,11 @@ pub(crate) fn list_methods() -> Option<&'static Methods> {
     RES.methods(crate::stdlib::list::list_methods)
 }
 
+#[starlark_value(type = ListData::TYPE)]
 impl<'v, T: ListLike<'v> + 'v> StarlarkValue<'v> for ListGen<T>
 where
-    Self: ProvidesStaticType + Display,
+    Self: ProvidesStaticType<'v> + Display,
 {
-    starlark_type!(ListData::TYPE);
-
     fn is_special(_: Private) -> bool
     where
         Self: Sized,

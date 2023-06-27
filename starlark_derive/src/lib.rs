@@ -35,6 +35,7 @@ mod for_each_field;
 mod freeze;
 mod module;
 mod serde;
+mod starlark_value;
 mod trace;
 mod visit_span;
 mod vtable;
@@ -57,7 +58,7 @@ mod vtable;
 /// * It is type `Option`, in which case it will be considered optional.
 /// * It is a single argument of type `Arguments`, in which case all arguments will be passed together with minimal interpretation.
 ///
-/// There are a number of attributes that can be made to each parameter by writing attributes before the
+/// There are a number of attributes that can be add to each parameter by writing attributes before the
 /// parameter name:
 ///
 /// * `#[starlark(default = "a default")]` - provide a deafult for the parameter if it is omitted.
@@ -65,12 +66,11 @@ mod vtable;
 /// * `#[starlark(require = named)]` - require the parameter to be passed by name, not by position.
 /// * `#[starlark(args)]` - treat the argument as `*args` in Starlark, receiving all additional positional arguments as a tuple.
 /// * `#[starlark(kwargs)]` - treat the argument as `**kwargs` in Starlark, receiving all additional named arguments as a dictionary.
-/// * `#[starlark(type = "foo")]` - give a custom type for the documentation.
 ///
 /// There are a number of attributes that can be applied to the entire function by writing attributes
 /// before the `fn` of the function:
 ///
-/// * `#[starlark(type = "foo")]` - if the function has `.type` applied, return this string. Usually used on
+/// * `#[starlark(attribute_type = "foo")]` - if the function has `.type` applied, return this string. Usually used on
 ///   constructor functions so that `ctor.type` can be used in Starlark code.
 /// * `#[starlark(return_type = "foo")]` - the return type of the function used for documention.
 /// * `#[starlark(speculative_exec_safe)]` - the function
@@ -173,7 +173,7 @@ pub fn derive_starlark_attrs(input: proc_macro::TokenStream) -> proc_macro::Toke
 /// `starlark::StarlarkValue`.
 ///
 /// Types that derive `StarlarkDocs` are also registered automatically with the `inventory` crate.
-/// To get all types annotated with `StarlarkDocs`, see `starlark::docs::get_all_docs()`
+/// To get all types annotated with `StarlarkDocs`, see `starlark::docs::get_registered_starlark_docs()`
 ///
 /// Note that for statically linked binaries, documentation from all compiled crates in the binary
 /// will be included.
@@ -197,6 +197,16 @@ pub fn derive_starlark_docs(input: proc_macro::TokenStream) -> proc_macro::Token
 #[proc_macro]
 pub fn starlark_attrs(_: proc_macro::TokenStream) -> proc_macro::TokenStream {
     attrs::starlark_attrs()
+}
+
+/// Generate missing elements of `StarlarkValue` trait when this attribute
+/// is applied to an impl block of `StarlarkValue`.
+#[proc_macro_attribute]
+pub fn starlark_value(
+    attr: proc_macro::TokenStream,
+    input: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    starlark_value::derive_starlark_value(attr, input)
 }
 
 /// Derive the `ProvidesStaticType` trait. Requires the type has no type arguments, no constant arguments,

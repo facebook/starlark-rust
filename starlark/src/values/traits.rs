@@ -28,6 +28,7 @@
 //! https://github.com/google/skylark/blob/a0e5de7e63b47e716cca7226662a4c95d47bf873/doc/spec.md#sequence-types).
 //! We also use the term _container_ for denoting any of those type that can
 //! hold several values.
+
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -36,6 +37,7 @@ use std::fmt::Write;
 use allocative::Allocative;
 use erased_serde::Serialize;
 use starlark_derive::starlark_internal_vtable;
+use starlark_map::StarlarkHashValue;
 
 use crate::any::ProvidesStaticType;
 use crate::collections::Hashed;
@@ -45,6 +47,7 @@ use crate::environment::Methods;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
 use crate::private::Private;
+use crate::typing::Ty;
 use crate::values::demand::Demand;
 use crate::values::error::ControlError;
 use crate::values::function::FUNCTION_TYPE;
@@ -72,21 +75,21 @@ use crate::values::ValueError;
 ///
 /// ```
 /// use starlark::values::{ProvidesStaticType, ComplexValue, Coerce, Freezer, FrozenValue, StarlarkValue, Value, ValueLike, Trace, Tracer, Freeze, NoSerialize};
-/// use starlark::{starlark_complex_value, starlark_type};
+/// use starlark::{starlark_complex_value};
 /// use derive_more::Display;
 /// use allocative::Allocative;
+/// use starlark_derive::starlark_value;
 ///
 /// #[derive(Debug, Trace, Coerce, Display, ProvidesStaticType, NoSerialize, Allocative)]
 /// #[repr(C)]
 /// struct OneGen<V>(V);
 /// starlark_complex_value!(One);
 ///
+/// #[starlark_value(type = "one")]
 /// impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for OneGen<V>
-///     where Self: ProvidesStaticType
+///     where Self: ProvidesStaticType<'v>,
 /// {
-///     starlark_type!("one");
-///
-///     // To implement methods which are work for both `One` and `FrozenOne`,
+///     // To implement methods which work for both `One` and `FrozenOne`,
 ///     // use the `ValueLike` trait.
 /// }
 ///
@@ -140,7 +143,7 @@ use crate::values::ValueError;
 /// If the types are different between the frozen and non-frozen values you can define your own
 /// type specialisations as `type One<'v> = OneGen<Value<'v>>` and `type FrozenOne = OneGen<String>`
 /// and use [`starlark_complex_values!`](crate::starlark_complex_values!) which will provide similar facilities to
-/// [`starlark_complex_value!`](crate::starlark_type!).
+/// [`starlark_complex_value!`](crate::starlark_simple_value!).
 ///
 /// ## Other types
 ///
@@ -178,23 +181,24 @@ where
 /// There are only two required members of [`StarlarkValue`], namely
 /// [`TYPE`](StarlarkValue::TYPE)
 /// and [`get_type_value_static`](StarlarkValue::get_type_value_static).
-/// Both these should be implemented with the [`starlark_type!`](crate::starlark_type!) macro:
+/// Both these should be implemented with the [`starlark_value`](crate::values::starlark_value)
+/// proc macro:
 ///
 /// ```
 /// use starlark::values::StarlarkValue;
 /// use starlark::values::ProvidesStaticType;
 /// use starlark::values::NoSerialize;
 /// # use starlark::starlark_simple_value;
-/// use starlark::starlark_type;
 /// use derive_more::Display;
 /// use allocative::Allocative;
+/// use starlark_derive::starlark_value;
 ///
 /// #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative)]
 /// #[display(fmt = "Foo")]
 /// struct Foo;
 /// # starlark_simple_value!(Foo);
+/// #[starlark_value(type = "foo")]
 /// impl<'v> StarlarkValue<'v> for Foo {
-///     starlark_type!("foo");
 /// }
 /// ```
 ///
@@ -207,31 +211,35 @@ where
 /// any implementations other than the default implementation will not be run.
 #[starlark_internal_vtable]
 pub trait StarlarkValue<'v>:
-    'v + ProvidesStaticType + Allocative + Debug + Display + Serialize + Sized
+    'v + ProvidesStaticType<'v> + Allocative + Debug + Display + Serialize + Sized
 {
     /// Return a string describing the type of self, as returned by the type()
     /// function.
     ///
-    /// This can be only implemented by the [`starlark_type!`](crate::starlark_type!) macro.
+    /// This can be only implemented by the [`#[starlark_value]`](crate::values::starlark_value)
+    /// proc macro.
     const TYPE: &'static str;
 
     /// Like [`TYPE`](Self::TYPE), but returns a reusable [`FrozenStringValue`]
     /// pointer to it. This function deliberately doesn't take a heap,
     /// as it would not be performant to allocate a new value each time.
     ///
-    /// This can be only implemented by the [`starlark_type!`](crate::starlark_type!) macro.
+    /// This can be only implemented by the [`#[starlark_value]`](crate::values::starlark_value)
+    /// proc macro.
     fn get_type_value_static() -> FrozenStringValue;
 
     /// Return a string that is the representation of a type that a user would use in
     /// type annotations. This often will be the same as [`Self::TYPE`], but in
     /// some instances it might be slightly different than what is returned by `TYPE`.
     ///
-    /// This can be only implemented by the [`starlark_type!`](crate::starlark_type!) macro.
-    fn get_type_starlark_repr() -> String {
-        format!("\"{}\"", Self::get_type_value_static().as_str())
+    /// This can be only implemented by the [`#[starlark_value]`](crate::values::starlark_value)
+    /// proc macro.
+    fn get_type_starlark_repr() -> Ty {
+        Ty::name(Self::TYPE)
     }
 
-    /// Please do not implement this method or `get_type`, but use `starlark_type!` macro.
+    /// Please do not implement this method or `get_type`,
+    /// but use [`#[starlark_value]`](crate::values::starlark_value) proc macro.
     #[doc(hidden)]
     fn please_use_starlark_type_macro();
 
@@ -248,6 +256,12 @@ pub trait StarlarkValue<'v>:
     /// values matching `get_type`, but might also work for subtypes it implements.
     fn matches_type(&self, ty: &str) -> bool {
         Self::TYPE == ty
+    }
+
+    /// Function is implemented for types values.
+    #[doc(hidden)]
+    fn type_matches_value(&self, _value: Value<'v>, _private: Private) -> bool {
+        unreachable!("`type_matches_value` should only be called on special types")
     }
 
     /// Get the members associated with this type, accessible via `this_type.x`.
@@ -267,7 +281,14 @@ pub trait StarlarkValue<'v>:
     where
         Self: Sized,
     {
-        Self::get_methods().map(|methods| methods.documentation())
+        Self::get_methods().map(|methods| DocItem::Object(methods.documentation()))
+    }
+
+    /// Type of this instance for typechecker.
+    /// Note this can be more precise than generic type.
+    #[doc(hidden)]
+    fn typechecker_ty(&self, _private: Private) -> Option<Ty> {
+        None
     }
 
     /// Return a string representation of self, as returned by the `repr()` function.
@@ -307,13 +328,6 @@ pub trait StarlarkValue<'v>:
         true
     }
 
-    /// Convert self to a integer value, as returned by the int() function if
-    /// the type is numeric (not for string).
-    /// Works for int and bool (0 = false, 1 = true).
-    fn to_int(&self) -> anyhow::Result<i32> {
-        ValueError::unsupported(self, "int()")
-    }
-
     /// Return a hash data for self to be used when self is placed as a key in a `Dict`.
     /// Return an [`Err`] if there is no hash for this value (e.g. list).
     /// Must be stable between frozen and non-frozen values.
@@ -330,6 +344,14 @@ pub trait StarlarkValue<'v>:
         } else {
             Err(ControlError::NotHashableValue(Self::TYPE.to_owned()).into())
         }
+    }
+
+    /// Get the hash value. Calls [`write_hash`](Self::write_hash) by default.
+    #[doc(hidden)]
+    fn get_hash(&self, _private: Private) -> anyhow::Result<StarlarkHashValue> {
+        let mut hasher = StarlarkHasher::new();
+        self.write_hash(&mut hasher)?;
+        Ok(hasher.finish_small())
     }
 
     /// Compare `self` with `other` for equality.
@@ -775,10 +797,4 @@ pub trait StarlarkValue<'v>:
     fn provide(&'v self, demand: &mut Demand<'_, 'v>) {
         let _ = demand;
     }
-}
-
-/// Trait implemented by a value stored in arena which delegates
-/// it's operations to contained [`StarlarkValue`].
-pub(crate) trait StarlarkValueDyn<'v>: 'v + Serialize {
-    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()>;
 }

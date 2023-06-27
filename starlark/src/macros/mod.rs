@@ -15,21 +15,6 @@
  * limitations under the License.
  */
 
-/// Define the [`TYPE`](crate::values::StarlarkValue::TYPE) and
-/// [`get_type_value_static`](crate::values::StarlarkValue::get_type_value_static) fields of
-/// [`StarlarkValue`](crate::values::StarlarkValue).
-#[macro_export]
-macro_rules! starlark_type {
-    ($typ:expr) => {
-        const TYPE: &'static str = $typ;
-        #[inline]
-        fn get_type_value_static() -> $crate::values::FrozenStringValue {
-            $crate::const_frozen_string!($typ)
-        }
-        fn please_use_starlark_type_macro() {}
-    };
-}
-
 /// Reduce boilerplate when making types instances of [`ComplexValue`](crate::values::ComplexValue)
 /// - see the [`ComplexValue`](crate::values::ComplexValue) docs for an example.
 #[macro_export]
@@ -65,7 +50,7 @@ macro_rules! starlark_complex_value {
 
             impl<'v> $crate::values::type_repr::StarlarkTypeRepr for &'v $x<'v> {
                 #[inline]
-                fn starlark_type_repr() -> String {
+                fn starlark_type_repr() -> $crate::typing::Ty {
                     <$x as $crate::values::StarlarkValue>::get_type_starlark_repr()
                 }
             }
@@ -144,16 +129,17 @@ macro_rules! starlark_complex_values {
 ///
 /// ```
 /// use starlark::values::{Heap, StarlarkValue, Value, ProvidesStaticType, NoSerialize};
-/// use starlark::{starlark_simple_value, starlark_type};
+/// use starlark::{starlark_simple_value};
 /// use derive_more::Display;
 /// use allocative::Allocative;
+/// use starlark_derive::starlark_value;
 ///
 /// #[derive(Debug, Display, ProvidesStaticType, NoSerialize, Allocative)]
 /// struct MyObject(String);
 /// starlark_simple_value!(MyObject);
-/// impl<'v> StarlarkValue<'v> for MyObject {
-///     starlark_type!("my_object");
 ///
+/// #[starlark_value(type = "my_object")]
+/// impl<'v> StarlarkValue<'v> for MyObject {
 ///     // We can choose to implement whichever methods we want.
 ///     // All other operations will result in runtime errors.
 ///     fn plus(&self, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
@@ -207,7 +193,7 @@ macro_rules! starlark_simple_value {
             }
 
             impl<'v> $crate::values::type_repr::StarlarkTypeRepr for &'v $x {
-                fn starlark_type_repr() -> String {
+                fn starlark_type_repr() -> $crate::typing::Ty {
                     <$x as $crate::values::StarlarkValue>::get_type_starlark_repr()
                 }
             }

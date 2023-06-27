@@ -40,10 +40,25 @@ use crate::module::util::mut_token;
 
 impl StarFun {
     fn type_expr(&self) -> TokenStream {
-        match &self.type_attribute {
+        match &self.as_type {
             Some(x) => quote_spanned! {
-            self.span()=>
-                std::option::Option::Some(starlark::const_frozen_string!(#x).to_frozen_value())
+                self.span()=>
+                    std::option::Option::Some(
+                        <#x as starlark::values::StarlarkValue>::get_type_value_static(),
+                    )
+            },
+            None => quote_spanned! {
+                self.span()=>
+                std::option::Option::None
+            },
+        }
+    }
+
+    fn ty_custom_expr(&self) -> TokenStream {
+        match &self.starlark_ty_custom_function {
+            Some(x) => quote_spanned! {
+                self.span()=>
+                std::option::Option::Some(starlark::typing::Ty::custom_function(#x))
             },
             None => {
                 quote_spanned! {
@@ -51,6 +66,21 @@ impl StarFun {
                     std::option::Option::None
                 }
             }
+        }
+    }
+
+    fn type_str(&self) -> TokenStream {
+        match &self.as_type {
+            Some(x) => quote_spanned! {
+                self.span()=>
+                    std::option::Option::Some(
+                        <#x as starlark::values::StarlarkValue>::get_type_value_static().as_str(),
+                    )
+            },
+            None => quote_spanned! {
+                self.span()=>
+                std::option::Option::None
+            },
         }
     }
 
@@ -184,14 +214,15 @@ impl StarFun {
         &self,
         documentation_var: &Ident,
         struct_fields_init: TokenStream,
-    ) -> TokenStream {
+    ) -> syn::Result<TokenStream> {
         let name_str = self.name_str();
         let speculative_exec_safe = self.speculative_exec_safe;
         let typ = self.type_expr();
+        let ty_custom = self.ty_custom_expr();
         let struct_name = self.struct_name();
 
         if self.is_method() {
-            quote_spanned! {self.span()=>
+            Ok(quote_spanned! {self.span()=>
                 #[allow(clippy::redundant_closure)]
                 globals_builder.set_method(
                     #name_str,
@@ -202,20 +233,21 @@ impl StarFun {
                         #struct_fields_init
                     },
                 );
-            }
+            })
         } else {
-            quote_spanned! {self.span()=>
+            Ok(quote_spanned! {self.span()=>
                 #[allow(clippy::redundant_closure)]
                 globals_builder.set_function(
                     #name_str,
                     #speculative_exec_safe,
                     #documentation_var,
                     #typ,
+                    #ty_custom,
                     #struct_name {
                         #struct_fields_init
                     },
                 );
-            }
+            })
         }
     }
 }
@@ -235,7 +267,7 @@ pub(crate) fn render_fun(x: StarFun) -> syn::Result<TokenStream> {
 
     let struct_name = x.struct_name();
 
-    let builder_set = x.builder_set(&documentation_var, struct_fields_init);
+    let builder_set = x.builder_set(&documentation_var, struct_fields_init)?;
 
     let StarFun {
         attrs,
@@ -270,7 +302,7 @@ pub(crate) fn render_fun(x: StarFun) -> syn::Result<TokenStream> {
             // https://github.com/rust-lang/rfcs/pull/2515
             // Until then we use this hack as a workaround.
             #[allow(dead_code)] // Function is not used when return type is specified explicitly.
-            fn return_type_starlark_type_repr() -> std::string::String {
+            fn return_type_starlark_type_repr() -> starlark::typing::Ty {
                 fn get_impl<'v, T: starlark::values::AllocValue<'v>>(
                     _f: fn(
                         #this_param_type
@@ -278,7 +310,7 @@ pub(crate) fn render_fun(x: StarFun) -> syn::Result<TokenStream> {
                         #eval_param_type
                         #heap_param_type
                     ) -> anyhow::Result<T>,
-                ) -> std::string::String {
+                ) -> starlark::typing::Ty {
                     <T as starlark::values::type_repr::StarlarkTypeRepr>::starlark_type_repr()
                 }
                 get_impl(Self::invoke_impl)
@@ -546,16 +578,16 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
         .enumerate()
         .filter(|(_, a)| a.pass_style != StarArgPassStyle::Args) // these aren't coerced according to their type (Vec vs tuple)
         .map(|(i, arg)| {
-            let typ_str = render_starlark_type(span, arg.without_option(), &arg.starlark_type);
+            let typ_str = render_starlark_type(span, arg.without_option());
             quote_spanned!(span=> (#i, starlark::docs::DocType { raw_type: #typ_str }) )
         })
         .collect();
 
-    let return_type_str = render_starlark_return_type(x, &x.starlark_return_type);
+    let return_type_str = render_starlark_return_type(x);
     let var_name = format_ident!("__documentation");
+    let dot_type: TokenStream = x.type_str();
     let documentation = quote_spanned!(span=>
         let #var_name = {
-            let signature = #documentation_signature;
             let parameter_types = std::collections::HashMap::from([#(#parameter_types),*]);
             let return_type = Some(
                 starlark::docs::DocType {
@@ -564,9 +596,10 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
             );
             starlark::values::function::NativeCallableRawDocs {
                 rust_docstring: #docs,
-                signature,
+                signature: #documentation_signature,
                 parameter_types,
                 return_type,
+                dot_type: #dot_type,
             }
         };
     );
@@ -700,7 +733,7 @@ fn render_signature_arg(
 fn render_default_as_frozen_value(default: &Expr) -> Option<TokenStream> {
     let x = quote!(#default).to_string();
     if let Ok(x) = x.trim_end_matches("i32").parse::<i32>() {
-        Some(quote! { starlark::values::FrozenValue::new_int(#x) })
+        Some(quote! { globals_builder.alloc(#x) })
     } else if let Ok(x) = x.parse::<bool>() {
         Some(quote! { starlark::values::FrozenValue::new_bool(#x) })
     } else if x == "NoneOr :: None" {

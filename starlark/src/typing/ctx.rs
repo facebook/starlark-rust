@@ -21,17 +21,16 @@ use std::fmt::Debug;
 
 use thiserror::Error;
 
-use crate::codemap::CodeMap;
-use crate::codemap::ResolvedFileSpan;
 use crate::codemap::Span;
+use crate::eval::compiler::scope::payload::CstAssign;
+use crate::eval::compiler::scope::payload::CstExpr;
+use crate::eval::compiler::scope::payload::CstPayload;
 use crate::eval::compiler::scope::BindingId;
-use crate::eval::compiler::scope::CstAssign;
-use crate::eval::compiler::scope::CstExpr;
-use crate::eval::compiler::scope::CstPayload;
 use crate::eval::compiler::scope::ResolvedIdent;
 use crate::slice_vec_ext::SliceExt;
 use crate::slice_vec_ext::VecExt;
 use crate::syntax::ast::ArgumentP;
+use crate::syntax::ast::AssignOp;
 use crate::syntax::ast::AssignP;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::BinOp;
@@ -39,49 +38,27 @@ use crate::syntax::ast::ClauseP;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::ForClauseP;
 use crate::typing::bindings::BindExpr;
-use crate::typing::oracle::traits::TypingOracle;
+use crate::typing::error::TypingError;
+use crate::typing::oracle::ctx::TypingOracleCtx;
+use crate::typing::oracle::traits::TypingAttr;
+use crate::typing::oracle::traits::TypingBinOp;
+use crate::typing::oracle::traits::TypingUnOp;
 use crate::typing::ty::Approximation;
 use crate::typing::ty::Arg;
-use crate::typing::ty::Param;
-use crate::typing::ty::ParamMode;
 use crate::typing::ty::Ty;
-use crate::typing::ty::TyFunction;
+use crate::typing::OracleDocs;
 
 #[derive(Error, Debug)]
-pub(crate) enum TypingError {
-    #[error("The attribute `{attr}` is not available on the type `{typ}`, at {loc}")]
-    AttributeNotAvailable {
-        loc: ResolvedFileSpan,
-        typ: String,
-        attr: String,
-    },
-    #[error("The builtin `{name}` is not known, at {loc}")]
-    UnknownBuiltin { loc: ResolvedFileSpan, name: String },
-    #[error("The call to `{name}` is invalid because {reason}, at {loc}")]
-    InvalidBuiltinCall {
-        loc: ResolvedFileSpan,
-        name: String,
-        reason: String,
-    },
-    #[error("Expected type `{require}` but got `{got}`, at {loc}")]
-    IncompatibleType {
-        loc: ResolvedFileSpan,
-        got: String,
-        require: String,
-    },
-    #[error("Call to a non-callable type `{ty}`, at {loc}")]
-    CallToNonCallable { loc: ResolvedFileSpan, ty: String },
-    #[error("Missing required parameter `{name}`, at {loc}")]
-    MissingRequiredParameter { loc: ResolvedFileSpan, name: String },
-    #[error("Unexpected parameter named `{name}`, at {loc}")]
-    UnexpectedNamedArgument { loc: ResolvedFileSpan, name: String },
-    #[error("Too many positional arguments, at {loc}")]
-    TooManyPositionalArguments { loc: ResolvedFileSpan },
+enum TypingContextError {
+    #[error("The attribute `{attr}` is not available on the type `{typ}`")]
+    AttributeNotAvailable { typ: String, attr: String },
+    #[error("The builtin `{name}` is not known")]
+    UnknownBuiltin { name: String },
 }
 
 pub(crate) struct TypingContext<'a> {
-    pub(crate) codemap: CodeMap,
-    pub(crate) oracle: &'a dyn TypingOracle,
+    pub(crate) oracle: TypingOracleCtx<'a>,
+    pub(crate) global_docs: OracleDocs,
     // We'd prefer this to be a &mut self,
     // but that makes writing the code more fiddly, so just RefCell the errors
     pub(crate) errors: RefCell<Vec<TypingError>>,
@@ -90,9 +67,10 @@ pub(crate) struct TypingContext<'a> {
 }
 
 impl TypingContext<'_> {
-    fn add_error(&self, err: TypingError) -> Ty {
+    fn add_error(&self, span: Span, err: TypingContextError) -> Ty {
+        let err = self.oracle.mk_error(span, err);
         self.errors.borrow_mut().push(err);
-        Ty::Void
+        Ty::Never
     }
 
     pub(crate) fn approximation(&self, category: &'static str, message: impl Debug) -> Ty {
@@ -102,214 +80,57 @@ impl TypingContext<'_> {
         Ty::Any
     }
 
-    fn resolve(&self, span: Span) -> ResolvedFileSpan {
-        self.codemap.file_span(span).resolve()
-    }
-
-    fn validate_args(&self, params: &[Param], args: &[Arg], span: Span) {
-        // Want to figure out which arguments go in which positions
-        let mut param_args: Vec<Vec<&Ty>> = vec![vec![]; params.len()];
-        // The next index a positional parameter might fill
-        let mut param_pos = 0;
-        let mut seen_vargs = false;
-
-        for arg in args {
-            match arg {
-                Arg::Pos(ty) => loop {
-                    match params.get(param_pos) {
-                        None => {
-                            self.add_error(TypingError::TooManyPositionalArguments {
-                                loc: self.resolve(span),
-                            });
-                            return;
-                        }
-                        Some(param) => {
-                            let found_index = param_pos;
-                            if param.mode != ParamMode::Args {
-                                param_pos += 1;
-                            }
-                            if param.allows_pos() {
-                                param_args[found_index].push(ty);
-                                break;
-                            }
-                        }
-                    }
-                },
-                Arg::Name(name, ty) => {
-                    let mut success = false;
-                    for (i, param) in params.iter().enumerate() {
-                        if param.name() == name || param.mode == ParamMode::Kwargs {
-                            param_args[i].push(ty);
-                            success = true;
-                            break;
-                        }
-                    }
-                    if !success {
-                        self.add_error(TypingError::UnexpectedNamedArgument {
-                            loc: self.resolve(span),
-                            name: name.clone(),
-                        });
-                    }
-                }
-                Arg::Args(_) => {
-                    param_pos = params.len();
-                    seen_vargs = true;
-                }
-                Arg::Kwargs(_) => {
-                    seen_vargs = true;
-                }
-            }
-        }
-
-        for (param, args) in std::iter::zip(params, param_args) {
-            if !param.allows_many() && args.len() > 1 {
-                panic!("bad")
-            }
-            if args.is_empty() {
-                // We assume that *args/**kwargs might have splatted things everywhere.
-                if !param.optional && !seen_vargs {
-                    self.add_error(TypingError::MissingRequiredParameter {
-                        loc: self.resolve(span),
-                        name: param.name().to_owned(),
-                    });
-                }
-                continue;
-            }
-            match param.mode {
-                ParamMode::PosOnly | ParamMode::PosOrName(_) | ParamMode::NameOnly(_) => {
-                    self.validate_type(args[0], &param.ty, span)
-                }
-                ParamMode::Args => {
-                    for ty in args {
-                        // For an arg, we require the type annotation to be inner value,
-                        // rather than the outer (which is always a tuple)
-                        self.validate_type(ty, &param.ty, span);
-                    }
-                }
-                ParamMode::Kwargs => {
-                    let val_types: Vec<_> = param
-                        .ty
-                        .iter_union()
-                        .filter_map(|x| match x {
-                            Ty::Dict(k_v) => Some(k_v.1.clone()),
-                            _ => None,
-                        })
-                        .collect();
-                    if !val_types.is_empty() {
-                        let require = Ty::unions(val_types);
-                        for ty in args {
-                            self.validate_type(ty, &require, span);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     fn validate_call(&self, fun: &Ty, args: &[Arg], span: Span) -> Ty {
-        fn unpack_function(x: &Ty) -> Option<&TyFunction> {
-            match x {
-                Ty::Function(x) => Some(x),
-                _ => None,
+        match self.oracle.validate_call(span, fun, args) {
+            Ok(ty) => ty,
+            Err(e) => {
+                self.errors.borrow_mut().push(e);
+                Ty::Never
             }
         }
-
-        if fun.is_any() || fun.is_void() {
-            return fun.clone(); // Everything is valid
-        }
-        let funs: Vec<_> = fun.iter_union().filter_map(unpack_function).collect();
-        if funs.is_empty() {
-            return self.add_error(TypingError::CallToNonCallable {
-                loc: self.resolve(span),
-                ty: fun.to_string(),
-            });
-        }
-
-        // We call validate_args on each function, which will either
-        // add to the errors state, or won't.
-        // We capture the length of errors before we start, and after one iteration,
-        // and if _any_ operation doesn't add to the errors, we are fine.
-        let errors_before_all = self.errors.borrow().len();
-        let mut errors_after_one = None;
-
-        let mut successful_return_types = Vec::new();
-        for fun in funs {
-            let errors_before_this = self.errors.borrow().len();
-            let return_type = if let Some(res) = self.oracle.builtin_call(&fun.name, args) {
-                match res {
-                    Ok(t) => t,
-                    Err(reason) => self.add_error(TypingError::InvalidBuiltinCall {
-                        loc: self.resolve(span),
-                        name: fun.name.to_owned(),
-                        reason,
-                    }),
-                }
-            } else {
-                self.validate_args(&fun.params, args, span);
-                (*fun.result).clone()
-            };
-            let errors_after_this = self.errors.borrow().len();
-            if errors_before_this == errors_after_this {
-                successful_return_types.push(return_type);
-            }
-            if errors_after_one.is_none() {
-                errors_after_one = Some(errors_after_this);
-            }
-        }
-        if successful_return_types.is_empty() {
-            // We definitely failed, but we might have failed many times, so just keep the errors
-            // from the first function call, since we don't want to duplicate lots of errors
-            assert!(errors_after_one.unwrap() > errors_before_all);
-            self.errors.borrow_mut().truncate(errors_after_one.unwrap());
-        } else {
-            // Since one succeeded, we don't need any errors
-            self.errors.borrow_mut().truncate(errors_before_all);
-        }
-        Ty::unions(successful_return_types)
     }
 
     fn from_iterated(&self, ty: &Ty, span: Span) -> Ty {
-        self.expression_attribute(ty, "__iter__", span)
+        self.expression_attribute(ty, TypingAttr::Iter, span)
     }
 
     pub(crate) fn validate_type(&self, got: &Ty, require: &Ty, span: Span) {
-        if !got.intersects(require, Some(self)) {
-            self.add_error(TypingError::IncompatibleType {
-                loc: self.resolve(span),
-                got: got.to_string(),
-                require: require.to_string(),
-            });
+        if let Err(e) = self.oracle.validate_type(got, require, span) {
+            self.errors.borrow_mut().push(e);
         }
     }
 
     fn builtin(&self, name: &str, span: Span) -> Ty {
-        match self.oracle.builtin(name) {
-            Some(Ok(x)) => x,
-            Some(Err(())) => self.add_error(TypingError::UnknownBuiltin {
-                loc: self.resolve(span),
-                name: name.to_owned(),
-            }),
-            None => self.approximation("oracle.builtin", name),
+        match self.global_docs.builtin(name) {
+            Ok(x) => x,
+            Err(()) => self.add_error(
+                span,
+                TypingContextError::UnknownBuiltin {
+                    name: name.to_owned(),
+                },
+            ),
         }
     }
 
-    fn expression_attribute(&self, ty: &Ty, attr: &str, span: Span) -> Ty {
+    fn expression_attribute(&self, ty: &Ty, attr: TypingAttr, span: Span) -> Ty {
         match ty.attribute(attr, self) {
             Ok(x) => x,
-            Err(()) => self.add_error(TypingError::AttributeNotAvailable {
-                loc: self.resolve(span),
-                typ: ty.to_string(),
-                attr: attr.to_owned(),
-            }),
+            Err(()) => self.add_error(
+                span,
+                TypingContextError::AttributeNotAvailable {
+                    typ: ty.to_string(),
+                    attr: attr.to_string(),
+                },
+            ),
         }
     }
 
-    fn expression_primitive_ty(&self, name: &str, arg0: Ty, args: Vec<Ty>, span: Span) -> Ty {
-        let fun = self.expression_attribute(&arg0, &format!("__{}__", name.to_lowercase()), span);
+    fn expression_primitive_ty(&self, name: TypingAttr, arg0: Ty, args: Vec<Ty>, span: Span) -> Ty {
+        let fun = self.expression_attribute(&arg0, name, span);
         self.validate_call(&fun, &args.into_map(Arg::Pos), span)
     }
 
-    fn expression_primitive(&self, name: &str, args: &[&CstExpr], span: Span) -> Ty {
+    fn expression_primitive(&self, name: TypingAttr, args: &[&CstExpr], span: Span) -> Ty {
         let t0 = self.expression_type(args[0]);
         let ts = args[1..].map(|x| self.expression_type(x));
         self.expression_primitive_ty(name, t0, ts, span)
@@ -324,7 +145,20 @@ impl TypingContext<'_> {
                 let span = lhs.span;
                 let rhs = self.expression_type(rhs);
                 let lhs = self.expression_assign(lhs);
-                self.expression_primitive_ty(&format!("{:?}", op), lhs, vec![rhs], span)
+                let attr = match op {
+                    AssignOp::Add => TypingAttr::BinOp(TypingBinOp::Add),
+                    AssignOp::Subtract => TypingAttr::BinOp(TypingBinOp::Sub),
+                    AssignOp::Multiply => TypingAttr::BinOp(TypingBinOp::Mul),
+                    AssignOp::Divide => TypingAttr::BinOp(TypingBinOp::Div),
+                    AssignOp::FloorDivide => TypingAttr::BinOp(TypingBinOp::FloorDiv),
+                    AssignOp::Percent => TypingAttr::BinOp(TypingBinOp::Percent),
+                    AssignOp::BitAnd => TypingAttr::BinOp(TypingBinOp::BitAnd),
+                    AssignOp::BitOr => TypingAttr::BinOp(TypingBinOp::BitOr),
+                    AssignOp::BitXor => TypingAttr::BinOp(TypingBinOp::BitXor),
+                    AssignOp::LeftShift => TypingAttr::BinOp(TypingBinOp::LeftShift),
+                    AssignOp::RightShift => TypingAttr::BinOp(TypingBinOp::RightShift),
+                };
+                self.expression_primitive_ty(attr, lhs, vec![rhs], span)
             }
             BindExpr::SetIndex(id, index, e) => {
                 let span = index.span;
@@ -357,7 +191,7 @@ impl TypingContext<'_> {
                     Ty::list(self.expression_type(e))
                 } else {
                     // It doesn't seem to be a list, so let's assume the append is non-mutating
-                    Ty::Void
+                    Ty::Never
                 }
             }
             BindExpr::ListExtend(id, e) => {
@@ -365,7 +199,7 @@ impl TypingContext<'_> {
                     Ty::list(self.from_iterated(&self.expression_type(e), e.span))
                 } else {
                     // It doesn't seem to be a list, so let's assume the extend is non-mutating
-                    Ty::Void
+                    Ty::Never
                 }
             }
         }
@@ -376,7 +210,7 @@ impl TypingContext<'_> {
         match &**x {
             AssignP::Tuple(_) => self.approximation("expression_assignment", x),
             AssignP::ArrayIndirection(a_b) => {
-                self.expression_primitive("index", &[&a_b.0, &a_b.1], x.span)
+                self.expression_primitive(TypingAttr::Index, &[&a_b.0, &a_b.1], x.span)
             }
             AssignP::Dot(_, _) => self.approximation("expression_assignment", x),
             AssignP::Identifier(x) => {
@@ -406,7 +240,9 @@ impl TypingContext<'_> {
         let span = x.span;
         match &**x {
             ExprP::Tuple(xs) => Ty::Tuple(xs.map(|x| self.expression_type(x))),
-            ExprP::Dot(a, b) => self.expression_attribute(&self.expression_type(a), b, b.span),
+            ExprP::Dot(a, b) => {
+                self.expression_attribute(&self.expression_type(a), TypingAttr::Regular(b), b.span)
+            }
             ExprP::Call(f, args) => {
                 let args_ty = args.map(|x| match &**x {
                     ArgumentP::Positional(x) => Arg::Pos(self.expression_type(x)),
@@ -420,7 +256,7 @@ impl TypingContext<'_> {
                     }
                     ArgumentP::KwArgs(x) => {
                         let ty = self.expression_type(x);
-                        self.validate_type(&ty, &Ty::dict(Ty::Any, Ty::Any), x.span);
+                        self.validate_type(&ty, &Ty::dict(Ty::string(), Ty::Any), x.span);
                         Arg::Kwargs(ty)
                     }
                 });
@@ -430,21 +266,39 @@ impl TypingContext<'_> {
                 self.validate_call(&f_ty, &args_ty, span)
             }
             ExprP::ArrayIndirection(a_b) => {
-                self.expression_primitive("index", &[&a_b.0, &a_b.1], span)
+                self.expression_primitive(TypingAttr::Index, &[&a_b.0, &a_b.1], span)
             }
             ExprP::Slice(x, start, stop, stride) => {
                 for e in [start, stop, stride].iter().copied().flatten() {
                     self.validate_type(&self.expression_type(e), &Ty::int(), e.span);
                 }
-                self.expression_attribute(&self.expression_type(x), "__slice__", span)
+                self.expression_attribute(&self.expression_type(x), TypingAttr::Slice, span)
             }
-            ExprP::Identifier(x, i) => {
-                if let Some(ResolvedIdent::Slot((_, i))) = i {
-                    if let Some(ty) = self.types.get(i) {
-                        return ty.clone();
+            ExprP::Identifier(x) => {
+                match &x.node.1 {
+                    Some(ResolvedIdent::Slot(_, i)) => {
+                        if let Some(ty) = self.types.get(i) {
+                            ty.clone()
+                        } else {
+                            // All types must be resolved to this point,
+                            // this code is unreachable.
+                            Ty::Any
+                        }
+                    }
+                    Some(ResolvedIdent::Global(g)) => {
+                        if let Some(t) = g.to_value().get_ref().typechecker_ty() {
+                            t
+                        } else {
+                            self.builtin(&x.node.0, x.span)
+                        }
+                    }
+                    None => {
+                        // All identifiers must be resolved at this point,
+                        // but we don't stop after scope resolution error,
+                        // so this code is reachable.
+                        Ty::Any
                     }
                 }
-                self.builtin(x, x.span)
             }
             ExprP::Lambda(_) => {
                 self.approximation("We don't type check lambdas", ());
@@ -456,27 +310,33 @@ impl TypingContext<'_> {
                 AstLiteral::String(_) => Ty::string(),
             },
             ExprP::Not(x) => {
-                if self.expression_type(x).is_void() {
-                    Ty::Void
+                if self.expression_type(x).is_never() {
+                    Ty::Never
                 } else {
                     Ty::bool()
                 }
             }
-            ExprP::Minus(x) => self.expression_primitive("minus", &[&**x], span),
-            ExprP::Plus(x) => self.expression_primitive("plus", &[&**x], span),
-            ExprP::BitNot(x) => self.expression_primitive("bit_not", &[&**x], span),
+            ExprP::Minus(x) => {
+                self.expression_primitive(TypingAttr::UnOp(TypingUnOp::Minus), &[&**x], span)
+            }
+            ExprP::Plus(x) => {
+                self.expression_primitive(TypingAttr::UnOp(TypingUnOp::Plus), &[&**x], span)
+            }
+            ExprP::BitNot(x) => {
+                self.expression_primitive(TypingAttr::UnOp(TypingUnOp::BitNot), &[&**x], span)
+            }
             ExprP::Op(lhs, op, rhs) => {
                 let lhs = self.expression_type(lhs);
                 let rhs = self.expression_type(rhs);
-                let bool_ret = if lhs.is_void() || rhs.is_void() {
-                    Ty::Void
+                let bool_ret = if lhs.is_never() || rhs.is_never() {
+                    Ty::Never
                 } else {
                     Ty::bool()
                 };
                 match op {
                     BinOp::And | BinOp::Or => {
-                        if lhs.is_void() {
-                            Ty::Void
+                        if lhs.is_never() {
+                            Ty::Never
                         } else {
                             Ty::union2(lhs, rhs)
                         }
@@ -488,23 +348,98 @@ impl TypingContext<'_> {
                     }
                     BinOp::In | BinOp::NotIn => {
                         // We dispatch `x in y` as y.__in__(x) as that's how we validate
-                        self.expression_primitive_ty("in", rhs, vec![lhs], span);
+                        self.expression_primitive_ty(
+                            TypingAttr::BinOp(TypingBinOp::In),
+                            rhs,
+                            vec![lhs],
+                            span,
+                        );
                         // Ignore the return type, we know it's always a bool
                         bool_ret
                     }
                     BinOp::Less | BinOp::LessOrEqual | BinOp::Greater | BinOp::GreaterOrEqual => {
-                        self.expression_primitive_ty("less", lhs, vec![rhs], span);
+                        self.expression_primitive_ty(
+                            TypingAttr::BinOp(TypingBinOp::Less),
+                            lhs,
+                            vec![rhs],
+                            span,
+                        );
                         bool_ret
                     }
-                    _ => self.expression_primitive_ty(&format!("{:?}", op), lhs, vec![rhs], span),
+                    BinOp::Subtract => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::Sub),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::Add => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::Add),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::Multiply => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::Mul),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::Percent => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::Percent),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::Divide => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::Div),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::FloorDivide => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::FloorDiv),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::BitAnd => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::BitAnd),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::BitOr => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::BitOr),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::BitXor => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::BitXor),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::LeftShift => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::LeftShift),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
+                    BinOp::RightShift => self.expression_primitive_ty(
+                        TypingAttr::BinOp(TypingBinOp::RightShift),
+                        lhs,
+                        vec![rhs],
+                        span,
+                    ),
                 }
             }
             ExprP::If(c_t_f) => {
                 let c = self.expression_type(&c_t_f.0);
                 let t = self.expression_type(&c_t_f.1);
                 let f = self.expression_type(&c_t_f.2);
-                if c.is_void() {
-                    Ty::Void
+                if c.is_never() {
+                    Ty::Never
                 } else {
                     Ty::union2(t, f)
                 }

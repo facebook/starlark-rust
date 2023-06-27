@@ -97,7 +97,7 @@ pub(crate) struct SpecialParam {
 #[derive(Debug)]
 pub(crate) struct StarFun {
     pub name: Ident,
-    pub type_attribute: Option<Expr>,
+    pub as_type: Option<syn::Path>,
     pub attrs: Vec<Attribute>,
     pub args: Vec<StarArg>,
     /// Has `&Heap` parameter.
@@ -106,7 +106,7 @@ pub(crate) struct StarFun {
     pub eval: Option<SpecialParam>,
     /// `anyhow::Result<T>`.
     pub return_type: Type,
-    pub starlark_return_type: Option<Expr>,
+    pub starlark_ty_custom_function: Option<Expr>,
     pub speculative_exec_safe: bool,
     pub body: Block,
     pub source: StarFunSource,
@@ -152,7 +152,6 @@ pub(crate) struct StarAttr {
     pub return_type: Type,
     /// `T`.
     pub return_type_arg: Type,
-    pub starlark_return_type: Option<Expr>,
     pub speculative_exec_safe: bool,
     pub body: Block,
     pub docstring: Option<String>,
@@ -193,7 +192,6 @@ pub(crate) struct StarArg {
     pub pass_style: StarArgPassStyle,
     pub name: Ident,
     pub ty: Type,
-    pub starlark_type: Option<Expr>,
     pub default: Option<Expr>,
     pub source: StarArgSource,
 }

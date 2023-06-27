@@ -27,10 +27,27 @@ use crate::docs::DocMember;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
+use crate::typing::Ty;
 use crate::values::none::NoneType;
+use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::Heap;
 use crate::values::StringValue;
 use crate::values::Value;
+use crate::values::ValueOfUnchecked;
+
+struct InputTypeRepr;
+struct OutputTypeRepr;
+
+impl StarlarkTypeRepr for InputTypeRepr {
+    fn starlark_type_repr() -> Ty {
+        Ty::name("input")
+    }
+}
+impl StarlarkTypeRepr for OutputTypeRepr {
+    fn starlark_type_repr() -> Ty {
+        Ty::name("output")
+    }
+}
 
 #[starlark_module]
 #[allow(unused_variables)] // Since this is for a test
@@ -59,19 +76,15 @@ fn globals(builder: &mut GlobalsBuilder) {
         unimplemented!()
     }
 
-    #[starlark(return_type = "\"output\"")]
     fn custom_types<'v>(
         arg1: StringValue<'v>,
-        #[starlark(type = "\"input\"")] arg2: Value<'v>,
+        arg2: ValueOfUnchecked<'v, InputTypeRepr>,
         heap: &'v Heap,
-    ) -> anyhow::Result<Value<'v>> {
+    ) -> anyhow::Result<ValueOfUnchecked<'v, OutputTypeRepr>> {
         unimplemented!()
     }
 
-    fn pos_named(
-        #[starlark(require = pos)] arg1: i32,
-        #[starlark(require = named)] arg2: i32,
-    ) -> anyhow::Result<i32> {
+    fn pos_named(arg1: i32, #[starlark(require = named)] arg2: i32) -> anyhow::Result<i32> {
         unimplemented!()
     }
 
@@ -113,12 +126,12 @@ def with_arguments(*args, **kwargs) -> int.type: pass
         x.replace("\\\"int\\\"", "int.type")
             .replace("\\\"bool\\\"", "bool.type")
             .replace("\\\"string\\\"", "str.type")
-            .replace("Some(DocType { raw_type: \"\\\"\\\"\" })", "None")
+            .replace("Some(DocType { raw_type: Any })", "None")
             .replace("\\\"_\\\"", "_")
     }
 
     let expected = expected.documentation().members;
-    let got = unpack(got.documentation());
+    let got = unpack(DocItem::Module(got.documentation()));
     assert_eq!(expected.len(), got.len());
     for (name, expected1) in expected.iter() {
         let got1 = got.get(name).unwrap();

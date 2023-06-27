@@ -23,7 +23,9 @@ use starlark_derive::Trace;
 use starlark_map::small_map::SmallMap;
 
 use crate as starlark;
+use crate::typing::Ty;
 use crate::values::dict::DictRef;
+use crate::values::type_repr::DictType;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::UnpackValue;
 use crate::values::Value;
@@ -51,6 +53,14 @@ impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> DictOf<'v, K, V> {
             })
             .collect()
     }
+
+    /// Number of entries.
+    #[inline]
+    pub fn len(&self) -> usize {
+        DictRef::from_value(self.value)
+            .expect("already validated as a dict")
+            .len()
+    }
 }
 
 impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
@@ -70,12 +80,8 @@ impl<'v, K: UnpackValue<'v> + Hash + Eq, V: UnpackValue<'v>> DictOf<'v, K, V> {
 }
 
 impl<'v, K: UnpackValue<'v>, V: UnpackValue<'v>> StarlarkTypeRepr for DictOf<'v, K, V> {
-    fn starlark_type_repr() -> String {
-        format!(
-            "{{{}: {}}}",
-            K::starlark_type_repr(),
-            V::starlark_type_repr()
-        )
+    fn starlark_type_repr() -> Ty {
+        DictType::<K, V>::starlark_type_repr()
     }
 }
 

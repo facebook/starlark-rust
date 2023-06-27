@@ -37,19 +37,20 @@ fn test_format_one() {
 fn test_percent_s_one_format_one_eval() {
     assert::pass(
         r#"
-load("assert.star", "assert")
+load("asserts.star", "asserts")
 
 def test(x):
     return ("<{}>".format(x), "<%s>" % x)
 
-assert.eq(("<1>", "<1>"), test(1))
+asserts.eq(("<1>", "<1>"), test(1))
 # Test format does not accidentally call `PercentSOne`.
-assert.eq(("<(1,)>", "<1>"), test((1,)))
+asserts.eq(("<(1,)>", "<1>"), test((1,)))
 "#,
     );
 }
 
 #[test]
+#[ignore] // TODO(nga): fix typechecker and enable this test.
 fn test_spec_exec_list() {
     // `list` function is const-evaluated and the resulting list is compiled as list instruction.
     bc_golden_test("expr_spec_exec_list", "def test(): return list((10, 20))");

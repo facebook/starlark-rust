@@ -99,7 +99,7 @@ impl OwnedFrozenValue {
 
     /// Unpack the int contained in the underlying value, or [`None`] if it is not an int.
     pub fn unpack_int(&self) -> Option<i32> {
-        self.value.unpack_int()
+        self.value.unpack_i32()
     }
 
     /// Unpack the string contained in the underlying value, or [`None`] if it is not an string.
@@ -178,7 +178,7 @@ impl OwnedFrozenValue {
 }
 
 /// Same as [`OwnedFrozenValue`] but it is known to contain `T`.
-#[derive(Debug, Clone_, Dupe_)]
+#[derive(Debug, Clone_, Dupe_, Allocative)]
 pub struct OwnedFrozenValueTyped<T: StarlarkValue<'static>> {
     owner: FrozenHeapRef,
     value: FrozenValueTyped<'static, T>,

@@ -17,6 +17,7 @@
 
 //! Evaluation of an expression.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 
 use dupe::Dupe;
@@ -36,9 +37,10 @@ use crate::eval::compiler::def::FrozenDef;
 use crate::eval::compiler::expr_bool::ExprCompiledBool;
 use crate::eval::compiler::known::list_to_tuple;
 use crate::eval::compiler::opt_ctx::OptCtx;
+use crate::eval::compiler::scope::payload::CstExpr;
+use crate::eval::compiler::scope::payload::CstIdent;
 use crate::eval::compiler::scope::AssignCount;
 use crate::eval::compiler::scope::Captured;
-use crate::eval::compiler::scope::CstExpr;
 use crate::eval::compiler::scope::ResolvedIdent;
 use crate::eval::compiler::scope::Slot;
 use crate::eval::compiler::span::IrSpanned;
@@ -48,25 +50,22 @@ use crate::eval::runtime::frozen_file_span::FrozenFileSpan;
 use crate::eval::runtime::slots::LocalCapturedSlotId;
 use crate::eval::runtime::slots::LocalSlotId;
 use crate::slice_vec_ext::SliceExt;
-use crate::slice_vec_ext::VecExt;
 use crate::syntax::ast::AstExprP;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::AstPayload;
-use crate::syntax::ast::AstString;
 use crate::syntax::ast::BinOp;
 use crate::syntax::ast::ExprP;
 use crate::syntax::ast::LambdaP;
 use crate::syntax::ast::StmtP;
-use crate::syntax::lexer::TokenInt;
 use crate::values::function::BoundMethodGen;
 use crate::values::function::FrozenBoundMethod;
 use crate::values::layout::value_not_special::FrozenValueNotSpecial;
 use crate::values::list::ListRef;
 use crate::values::string::interpolation::parse_percent_s_one;
-use crate::values::types::bigint::StarlarkBigInt;
 use crate::values::types::bool::StarlarkBool;
 use crate::values::types::dict::Dict;
 use crate::values::types::float::StarlarkFloat;
+use crate::values::types::inline_int::InlineInt;
 use crate::values::types::list::value::FrozenListData;
 use crate::values::types::list::value::ListData;
 use crate::values::types::range::Range;
@@ -145,7 +144,7 @@ impl Builtin1 {
         match self {
             Builtin1::Minus => v.to_value().minus(ctx.heap()).ok(),
             Builtin1::Plus => v.to_value().plus(ctx.heap()).ok(),
-            Builtin1::BitNot => Some(Value::new_int(!v.to_value().to_int().ok()?)),
+            Builtin1::BitNot => v.to_value().bit_not(ctx.heap()).ok(),
             Builtin1::Not => Some(Value::new_bool(!v.to_value().to_bool())),
             Builtin1::TypeIs(t) => Some(Value::new_bool(v.to_value().get_type_value() == *t)),
             Builtin1::FormatOne(before, after) => {
@@ -779,7 +778,7 @@ impl ExprCompiled {
                 None
             }
         } else if let Some(v) = v.downcast_ref::<StarlarkFloat>() {
-            Some(ExprCompiled::Value(heap.alloc_float(*v)))
+            Some(ExprCompiled::Value(heap.alloc(*v)))
         } else if let Some(v) = v.downcast_ref::<Range>() {
             Some(ExprCompiled::Value(heap.alloc(*v)))
         } else if let Some(v) = ListRef::from_value(v) {
@@ -947,7 +946,9 @@ impl ExprCompiled {
     pub(crate) fn len(span: FrameSpan, arg: IrSpanned<ExprCompiled>) -> ExprCompiled {
         if let Some(arg) = arg.as_value() {
             if let Ok(len) = arg.to_value().length() {
-                return ExprCompiled::Value(FrozenValue::new_int(len));
+                if let Ok(len) = InlineInt::try_from(len) {
+                    return ExprCompiled::Value(FrozenValue::new_int(len));
+                }
             }
         }
         ExprCompiled::Call(Box::new(IrSpanned {
@@ -992,10 +993,7 @@ fn try_eval_type_is(
 impl AstLiteral {
     fn compile(&self, heap: &FrozenHeap) -> FrozenValue {
         match self {
-            AstLiteral::Int(i) => match &i.node {
-                TokenInt::I32(i) => FrozenValue::new_int(*i),
-                TokenInt::BigInt(i) => StarlarkBigInt::alloc_bigint_frozen(i.clone(), heap),
-            },
+            AstLiteral::Int(i) => heap.alloc(i.node.0.clone()),
             AstLiteral::Float(f) => heap.alloc(f.node),
             AstLiteral::String(x) => heap.alloc(x.node.as_str()),
         }
@@ -1119,20 +1117,15 @@ pub(crate) fn get_attr_hashed_bind<'v>(
 }
 
 impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
-    pub fn expr_opt(&mut self, expr: Option<Box<CstExpr>>) -> Option<IrSpanned<ExprCompiled>> {
-        expr.map(|v| self.expr(*v))
-    }
-
-    fn expr_ident(
-        &mut self,
-        ident: AstString,
-        resolved_ident: Option<ResolvedIdent>,
-    ) -> ExprCompiled {
-        let resolved_ident =
-            resolved_ident.unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node));
+    fn expr_ident(&mut self, ident: &CstIdent) -> ExprCompiled {
+        let resolved_ident = ident
+            .node
+            .1
+            .as_ref()
+            .unwrap_or_else(|| panic!("variable not resolved: `{}`", ident.node.0));
         match resolved_ident {
-            ResolvedIdent::Slot((Slot::Local(slot), binding_id)) => {
-                let binding = self.scope_data.get_binding(binding_id);
+            ResolvedIdent::Slot(Slot::Local(slot), binding_id) => {
+                let binding = self.scope_data.get_binding(*binding_id);
 
                 // We can't look up the local variabless in advance, because they are different each time
                 // we go through a new function call.
@@ -1141,13 +1134,13 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                     Captured::No => ExprCompiled::Local(LocalSlotId(slot.0)),
                 }
             }
-            ResolvedIdent::Slot((Slot::Module(slot), binding_id)) => {
-                let binding = self.scope_data.get_binding(binding_id);
+            ResolvedIdent::Slot(Slot::Module(slot), binding_id) => {
+                let binding = self.scope_data.get_binding(*binding_id);
 
                 // We can only inline variables if they were assigned once
                 // otherwise we might inline the wrong value.
                 if binding.assign_count == AssignCount::AtMostOnce {
-                    if let Some(v) = self.eval.module_env.slots().get_slot(slot) {
+                    if let Some(v) = self.eval.module_env.slots().get_slot(*slot) {
                         // We could inline non-frozen values, but these values
                         // can be garbage-collected, so it is somewhat harder to implement.
                         if let Some(v) = v.unpack_frozen() {
@@ -1156,9 +1149,9 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                     }
                 }
 
-                ExprCompiled::Module(slot)
+                ExprCompiled::Module(*slot)
             }
-            ResolvedIdent::Global(v) => ExprCompiled::Value(v),
+            ResolvedIdent::Global(v) => ExprCompiled::Value(*v),
         }
     }
 
@@ -1167,11 +1160,11 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
         OptCtx::new(self.eval, param_count)
     }
 
-    pub(crate) fn expr(&mut self, expr: CstExpr) -> IrSpanned<ExprCompiled> {
+    pub(crate) fn expr(&mut self, expr: &CstExpr) -> IrSpanned<ExprCompiled> {
         // println!("compile {}", expr.node);
         let span = FrameSpan::new(FrozenFileSpan::new(self.codemap, expr.span));
-        let expr = match expr.node {
-            ExprP::Identifier(ident, resolved_ident) => self.expr_ident(ident, resolved_ident),
+        let expr = match &expr.node {
+            ExprP::Identifier(ident) => self.expr_ident(ident),
             ExprP::Lambda(l) => {
                 let signature_span = l.signature_span();
                 let signature_span = FrozenFileSpan::new(self.codemap, signature_span);
@@ -1182,85 +1175,86 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                 } = l;
                 let suite = Spanned {
                     span: expr.span,
-                    node: StmtP::Return(Some(*body)),
+                    // TODO(nga): unnecessary clone.
+                    node: StmtP::Return(Some(*body.clone())),
                 };
-                self.function("lambda", signature_span, scope_id, params, None, suite)
+                self.function("lambda", signature_span, *scope_id, params, None, &suite)
             }
             ExprP::Tuple(exprs) => {
-                let xs = exprs.into_map(|x| self.expr(x));
+                let xs = exprs.map(|x| self.expr(x));
                 ExprCompiled::tuple(xs, self.eval.module_env.frozen_heap())
             }
             ExprP::List(exprs) => {
-                let xs = exprs.into_map(|x| self.expr(x));
+                let xs = exprs.map(|x| self.expr(x));
                 ExprCompiled::List(xs)
             }
             ExprP::Dict(exprs) => {
-                let xs = exprs.into_map(|(k, v)| (self.expr(k), self.expr(v)));
+                let xs = exprs.map(|(k, v)| (self.expr(k), self.expr(v)));
                 ExprCompiled::Dict(xs)
             }
             ExprP::If(cond_then_expr_else_expr) => {
-                let (cond, then_expr, else_expr) = *cond_then_expr_else_expr;
+                let (cond, then_expr, else_expr) = &**cond_then_expr_else_expr;
                 let cond = self.expr(cond);
                 let then_expr = self.expr(then_expr);
                 let else_expr = self.expr(else_expr);
                 return ExprCompiled::if_expr(cond, then_expr, else_expr);
             }
             ExprP::Dot(left, right) => {
-                let left = self.expr(*left);
+                let left = self.expr(left);
                 let s = Symbol::new(&right.node);
 
                 ExprCompiled::dot(left, &s, &mut self.opt_ctx())
             }
             ExprP::Call(left, args) => {
-                let left = self.expr(*left);
+                let left = self.expr(left);
                 let args = self.args(args);
                 CallCompiled::call(span, left, args, &mut self.opt_ctx())
             }
             ExprP::ArrayIndirection(array_index) => {
-                let (array, index) = *array_index;
+                let (array, index) = &**array_index;
                 let array = self.expr(array);
                 let index = self.expr(index);
                 ExprCompiled::array_indirection(array, index, &mut self.opt_ctx())
             }
             ExprP::Slice(collection, start, stop, stride) => {
-                let collection = self.expr(*collection);
-                let start = start.map(|x| self.expr(*x));
-                let stop = stop.map(|x| self.expr(*x));
-                let stride = stride.map(|x| self.expr(*x));
+                let collection = self.expr(collection);
+                let start = start.as_ref().map(|x| self.expr(x));
+                let stop = stop.as_ref().map(|x| self.expr(x));
+                let stride = stride.as_ref().map(|x| self.expr(x));
                 ExprCompiled::slice(span, collection, start, stop, stride, &mut self.opt_ctx())
             }
             ExprP::Not(expr) => {
-                let expr = self.expr(*expr);
+                let expr = self.expr(expr);
                 return ExprCompiled::not(span, expr);
             }
             ExprP::Minus(expr) => {
-                let expr = self.expr(*expr);
+                let expr = self.expr(expr);
                 ExprCompiled::un_op(span, &Builtin1::Minus, expr, &mut self.opt_ctx())
             }
             ExprP::Plus(expr) => {
-                let expr = self.expr(*expr);
+                let expr = self.expr(expr);
                 ExprCompiled::un_op(span, &Builtin1::Plus, expr, &mut self.opt_ctx())
             }
             ExprP::BitNot(expr) => {
-                let expr = self.expr(*expr);
+                let expr = self.expr(expr);
                 ExprCompiled::un_op(span, &Builtin1::BitNot, expr, &mut self.opt_ctx())
             }
             ExprP::Op(left, op, right) => {
-                if let Some(x) = ExprP::reduces_to_string(op, &left, &right) {
+                if let Some(x) = ExprP::reduces_to_string(*op, left, right) {
                     // Note there's const propagation for `+` on compiled expressions,
                     // but special handling of `+` on AST might be slightly more efficient
                     // (no unnecessary allocations on the heap). So keep it.
                     let val = self.eval.module_env.frozen_heap().alloc(x);
                     ExprCompiled::Value(val)
                 } else {
-                    let right = if op == BinOp::In || op == BinOp::NotIn {
-                        list_to_tuple(*right)
+                    let right = if *op == BinOp::In || *op == BinOp::NotIn {
+                        list_to_tuple(right)
                     } else {
-                        *right
+                        Cow::Borrowed(&**right)
                     };
 
-                    let l = self.expr(*left);
-                    let r = self.expr(right);
+                    let l = self.expr(left);
+                    let r = self.expr(&right);
                     match op {
                         BinOp::Or => return ExprCompiled::or(l, r),
                         BinOp::And => return ExprCompiled::and(l, r),
@@ -1344,12 +1338,10 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                     }
                 }
             }
-            ExprP::ListComprehension(x, for_, clauses) => {
-                self.list_comprehension(*x, *for_, clauses)
-            }
+            ExprP::ListComprehension(x, for_, clauses) => self.list_comprehension(x, for_, clauses),
             ExprP::DictComprehension(k_v, for_, clauses) => {
-                let (k, v) = *k_v;
-                self.dict_comprehension(k, v, *for_, clauses)
+                let (k, v) = &**k_v;
+                self.dict_comprehension(k, v, for_, clauses)
             }
             ExprP::Literal(x) => {
                 let val = x.compile(self.eval.module_env.frozen_heap());
@@ -1361,7 +1353,7 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
 
     /// Like `expr` but returns an expression optimized assuming
     /// only the truth of the result is needed.
-    pub(crate) fn expr_truth(&mut self, expr: CstExpr) -> IrSpanned<ExprCompiledBool> {
+    pub(crate) fn expr_truth(&mut self, expr: &CstExpr) -> IrSpanned<ExprCompiledBool> {
         let expr = self.expr(expr);
         ExprCompiledBool::new(expr)
     }

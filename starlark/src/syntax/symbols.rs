@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use super::ast::AstExprP;
 use super::ast::DefP;
 use crate::codemap::CodeMap;
 use crate::codemap::LineCol;
@@ -8,7 +7,6 @@ use crate::docs::DocFunction;
 use crate::docs::DocItem;
 use crate::docs::DocParam;
 use crate::docs::DocStringKind;
-use crate::docs::DocType;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::AstPayload;
 use crate::syntax::ast::AstStmtP;
@@ -155,21 +153,14 @@ fn get_doc_item_for_def<P: AstPayload>(def: &DefP<P>) -> Option<DocFunction> {
                 _ => None,
             })
             .collect();
-        let return_type =
-            def.return_type
-                .as_ref()
-                .and_then(|return_type| match &return_type.node {
-                    ExprP::Identifier(i, _) => Some(DocType {
-                        raw_type: i.node.to_owned(),
-                    }),
-                    _ => None,
-                });
 
         let doc_function = DocFunction::from_docstring(
             DocStringKind::Starlark,
             args,
-            return_type,
+            // TODO: Figure out how to get a `Ty` from the `def.return_type`.
+            None,
             Some(doc_string),
+            None,
         );
         Some(doc_function)
     } else {

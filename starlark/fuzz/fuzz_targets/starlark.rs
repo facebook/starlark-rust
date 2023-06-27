@@ -17,8 +17,6 @@
 
 #![no_main]
 
-use std::hint::black_box;
-
 use libfuzzer_sys::fuzz_target;
 use starlark::environment::Globals;
 use starlark::environment::Module;
@@ -26,19 +24,32 @@ use starlark::eval::Evaluator;
 use starlark::syntax::AstModule;
 use starlark::syntax::Dialect;
 
-fn run_arbitrary_starlark(content: &str) -> anyhow::Result<()> {
+fn run_arbitrary_starlark_err(content: &str) -> anyhow::Result<String> {
     let ast: AstModule =
         AstModule::parse("hello_world.star", content.to_owned(), &Dialect::Standard)?;
     let globals: Globals = Globals::standard();
     let module: Module = Module::new();
     let mut eval: Evaluator = Evaluator::new(&module);
-    let value = black_box(eval.eval_module(ast, &globals)?);
-    _ = black_box(format!("{value:?}"));
-    Ok(())
+    let value = eval.eval_module(ast, &globals)?;
+    Ok(format!("{value:?}"))
+}
+
+fn run_arbitrary_starlark(content: &str) -> String {
+    match run_arbitrary_starlark_err(content) {
+        Ok(v) => v,
+        Err(e) => {
+            const INTERNAL_ERROR: &str = "(internal error)";
+            let s = format!("{e:?}");
+            // We want to spot internal errors, but not encourage the fuzzer to write internal error in the input.
+            // A sufficiently smart fuzzer might outwit us, but hopefully not too quickly.
+            if s.contains(INTERNAL_ERROR) && !content.contains(INTERNAL_ERROR) {
+                panic!("Internal error as anyhow::Error: {s}")
+            }
+            s
+        }
+    }
 }
 
 fuzz_target!(|content: &str| {
-    if let Err(e) = black_box(run_arbitrary_starlark(content)) {
-        _ = black_box(format!("{e:?}"));
-    }
+    let _ = run_arbitrary_starlark(content);
 });

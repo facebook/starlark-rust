@@ -26,6 +26,7 @@ use allocative::Allocative;
 use display_container::fmt_container;
 use serde::ser::SerializeTuple;
 use serde::Serialize;
+use starlark_derive::starlark_value;
 use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
@@ -34,7 +35,6 @@ use crate::coerce::coerce;
 use crate::coerce::Coerce;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
-use crate::starlark_type;
 use crate::values::comparison::compare_slice;
 use crate::values::comparison::equals_slice;
 use crate::values::index::apply_slice;
@@ -135,12 +135,11 @@ impl<'v, V: ValueLike<'v>> TupleGen<V> {
     }
 }
 
+#[starlark_value(type = Tuple::TYPE)]
 impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for TupleGen<V>
 where
-    Self: ProvidesStaticType,
+    Self: ProvidesStaticType<'v>,
 {
-    starlark_type!(Tuple::TYPE);
-
     fn is_special(_: Private) -> bool
     where
         Self: Sized,
@@ -264,6 +263,7 @@ impl<'v, V: ValueLike<'v>> Serialize for TupleGen<V> {
 #[cfg(test)]
 mod tests {
     use crate::assert;
+    use crate::assert::Assert;
 
     #[test]
     fn test_to_str() {
@@ -278,7 +278,10 @@ str((1,)) == "(1,)"
 
     #[test]
     fn test_repr_cycle() {
-        assert::eq("l = []; t = (l,); l.append(t); repr(t)", "'([(...)],)'");
-        assert::eq("l = []; t = (l,); l.append(t); str(t)", "'([(...)],)'");
+        let mut a = Assert::new();
+        // TODO(nga): fix and enable.
+        a.disable_static_typechecking();
+        a.eq("l = []; t = (l,); l.append(t); repr(t)", "'([(...)],)'");
+        a.eq("l = []; t = (l,); l.append(t); str(t)", "'([(...)],)'");
     }
 }

@@ -23,13 +23,13 @@ use std::num::NonZeroI32;
 
 use allocative::Allocative;
 use dupe::Dupe;
+use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::starlark_simple_value;
-use crate::starlark_type;
 use crate::values::index::convert_index;
 use crate::values::index::convert_slice_indices;
 use crate::values::Heap;
@@ -114,9 +114,8 @@ impl Range {
     }
 }
 
+#[starlark_value(type = Range::TYPE)]
 impl<'v> StarlarkValue<'v> for Range {
-    starlark_type!(Range::TYPE);
-
     fn to_bool(&self) -> bool {
         (self.start < self.stop && self.step.get() > 0)
             || (self.start > self.stop && self.step.get() < 0)
@@ -152,10 +151,10 @@ impl<'v> StarlarkValue<'v> for Range {
         }
     }
 
-    fn at(&self, index: Value, _heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+    fn at(&self, index: Value, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         let index = convert_index(index, self.length()?)?;
         // Must not overflow if `length` is computed correctly
-        Ok(Value::new_int(self.start + self.step.get() * index))
+        Ok(heap.alloc(self.start + self.step.get() * index))
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
@@ -202,14 +201,14 @@ impl<'v> StarlarkValue<'v> for Range {
         Ok(me)
     }
 
-    unsafe fn iter_next(&self, index: usize, _heap: &'v Heap) -> Option<Value<'v>> {
+    unsafe fn iter_next(&self, index: usize, heap: &'v Heap) -> Option<Value<'v>> {
         let rem_range = self.rem_range_at_iter(index)?;
 
         if !rem_range.to_bool() {
             return None;
         }
 
-        Some(Value::new_int(rem_range.start))
+        Some(heap.alloc(rem_range.start))
     }
 
     unsafe fn iter_size_hint(&self, index: usize) -> (usize, Option<usize>) {
@@ -270,7 +269,9 @@ impl PartialEq for Range {
 mod tests {
     use std::num::NonZeroI32;
 
+    use crate::assert;
     use crate::values::range::Range;
+    use crate::values::types::inline_int::InlineInt;
     use crate::values::Heap;
     use crate::values::StarlarkValue;
     use crate::values::Value;
@@ -346,7 +347,7 @@ mod tests {
             let full: Vec<Value> = x.iterate(&heap).unwrap().collect();
             assert_eq!(x.length().unwrap(), full.len() as i32);
             for (i, v) in full.iter().enumerate() {
-                assert_eq!(x.at(Value::new_int(i as i32), &heap).unwrap(), *v);
+                assert_eq!(x.at(heap.alloc(i), &heap).unwrap(), *v);
             }
         }
 
@@ -361,5 +362,17 @@ mod tests {
                 )
             }
         }
+    }
+
+    #[test]
+    fn test_max_len() {
+        assert::eq(
+            &InlineInt::MAX.to_string(),
+            &format!("len(range({}))", InlineInt::MAX),
+        );
+        assert::eq(
+            &InlineInt::MAX.to_string(),
+            &format!("len(range({}, -1))", InlineInt::MIN),
+        );
     }
 }

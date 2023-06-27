@@ -22,6 +22,7 @@ use allocative::Allocative;
 use anyhow::Context;
 use derive_more::Display;
 use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
@@ -34,7 +35,6 @@ use crate::environment::Module;
 use crate::errors::Diagnostic;
 use crate::eval::Evaluator;
 use crate::starlark_simple_value;
-use crate::starlark_type;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::values::none::NoneType;
@@ -303,8 +303,8 @@ fn test_radd() {
         }
     }
 
+    #[starlark_value(type = "select")]
     impl<'v> StarlarkValue<'v> for Select {
-        starlark_type!("select");
         fn radd(&self, lhs: Value<'v>, heap: &'v Heap) -> Option<anyhow::Result<Value<'v>>> {
             let lhs: Select = UnpackValue::unpack_value(lhs).unwrap();
             Some(Ok(heap.alloc(lhs.add(self))))
@@ -606,10 +606,10 @@ fn test_module_visibility_preserved_by_evaluator() -> anyhow::Result<()> {
     let globals = Globals::standard();
 
     let import = Module::new();
-    import.set("a", Value::new_int(1));
+    import.set("a", Value::testing_new_int(1));
     import.set_private(
         import.frozen_heap().alloc_str_intern("b"),
-        Value::new_int(2),
+        Value::testing_new_int(2),
     );
 
     {
@@ -782,9 +782,8 @@ fn test_label_assign() {
     #[display(fmt = "{:?}", self)]
     struct Wrapper<'v>(RefCell<SmallMap<String, Value<'v>>>);
 
+    #[starlark_value(type = "wrapper")]
     impl<'v> StarlarkValue<'v> for Wrapper<'v> {
-        starlark_type!("wrapper");
-
         fn get_attr(&self, attribute: &str, _heap: &'v Heap) -> Option<Value<'v>> {
             Some(*self.0.borrow().get(attribute).unwrap())
         }
@@ -799,9 +798,8 @@ fn test_label_assign() {
     #[display(fmt = "FrozenWrapper")]
     struct FrozenWrapper;
 
-    impl<'v> StarlarkValue<'v> for FrozenWrapper {
-        starlark_type!("wrapper");
-    }
+    #[starlark_value(type = "wrapper")]
+    impl<'v> StarlarkValue<'v> for FrozenWrapper {}
 
     impl<'v> Freeze for Wrapper<'v> {
         type Frozen = FrozenWrapper;
@@ -847,35 +845,38 @@ assert_eq(len(count), 1)
 #[test]
 fn test_self_mutate_list() {
     // Check functions that mutate and access self on lists
-    assert::is_true(
+    let mut a = Assert::new();
+    // TODO(nga): fix and enable.
+    a.disable_static_typechecking();
+    a.is_true(
         r#"
 xs = [1, 2, 3]
 xs.extend(xs)
 xs == [1, 2, 3, 1, 2, 3]
 "#,
     );
-    assert::is_true(
+    a.is_true(
         r#"
 xs = [1, 2, 3]
 xs += xs
 xs == [1, 2, 3, 1, 2, 3]
 "#,
     );
-    assert::fail(
+    a.fail(
         r#"
 xs = [1, 2, 3]
 xs.pop(xs)
 "#,
-        "not supported",
+        "Type of parameter `index` doesn't match",
     );
-    assert::fail(
+    a.fail(
         r#"
 xs = [1, 2, 3]
 xs.remove(xs)
 "#,
         "not found in list",
     );
-    assert::is_true(
+    a.is_true(
         r#"
 xs = [1, 2, 3]
 xs.append(xs)
@@ -883,21 +884,21 @@ xs.remove(xs)
 xs == [1, 2, 3]
 "#,
     );
-    assert::is_true(
+    a.is_true(
         r#"
 xs = [1, 2, 3]
 xs += xs
 xs == [1, 2, 3, 1, 2, 3]
 "#,
     );
-    assert::fail(
+    a.fail(
         r#"
 xs = []
 xs[xs]
 "#,
         "Type of parameter",
     );
-    assert::fail(
+    a.fail(
         r#"
 xs = []
 xs[xs] = xs
@@ -1007,4 +1008,35 @@ animal("Joe")
     let res: Value = eval.eval_module(ast, &globals).unwrap();
     let animal = SmallMap::<String, Value>::unpack_value(res).unwrap();
     println!("animal = {:?}", animal);
+}
+
+#[test]
+fn test_fuzzer_59102() {
+    // From https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=59102
+    let src = "\"\u{e0070}";
+    let res: Result<AstModule, anyhow::Error> =
+        AstModule::parse("hello_world.star", src.to_owned(), &Dialect::Standard);
+    // The panic actually only happens when we format the result
+    format!("{:?}", res);
+}
+
+#[test]
+fn test_fuzzer_59371() {
+    // From https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=59371
+    let src = "\"\u{2009}\\x";
+    let res: Result<AstModule, anyhow::Error> =
+        AstModule::parse("hello_world.star", src.to_owned(), &Dialect::Standard);
+    // The panic actually only happens when we format the result
+    format!("{:?}", res);
+}
+
+#[test]
+fn test_fuzzer_59839() {
+    // From https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=59839
+    let src = "\"{20000000000000000396}\".format()";
+    let ast = AstModule::parse("hello_world.star", src.to_owned(), &Dialect::Standard).unwrap();
+    let globals: Globals = Globals::standard();
+    let module: Module = Module::new();
+    let mut eval: Evaluator = Evaluator::new(&module);
+    assert!(eval.eval_module(ast, &globals).is_err());
 }

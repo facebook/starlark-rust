@@ -27,6 +27,7 @@ use std::hash::Hasher;
 
 use allocative::Allocative;
 use serde::Serialize;
+use starlark_derive::starlark_value;
 use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
@@ -34,8 +35,7 @@ use crate::any::ProvidesStaticType;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
-use crate::starlark_type;
-use crate::values::basic::StarlarkValueBasic;
+use crate::typing::Ty;
 use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
@@ -79,7 +79,7 @@ impl AllocFrozenValue for bool {
 }
 
 impl StarlarkTypeRepr for bool {
-    fn starlark_type_repr() -> String {
+    fn starlark_type_repr() -> Ty {
         StarlarkBool::get_type_starlark_repr()
     }
 }
@@ -91,13 +91,8 @@ impl UnpackValue<'_> for bool {
 }
 
 /// Define the bool type
-impl StarlarkValue<'_> for StarlarkBool {
-    starlark_type!(BOOL_TYPE);
-
-    fn get_type_starlark_repr() -> String {
-        "bool.type".to_owned()
-    }
-
+#[starlark_value(type = BOOL_TYPE)]
+impl<'v> StarlarkValue<'v> for StarlarkBool {
     fn is_special(_: Private) -> bool
     where
         Self: Sized,
@@ -114,9 +109,6 @@ impl StarlarkValue<'_> for StarlarkBool {
         }
     }
 
-    fn to_int(&self) -> anyhow::Result<i32> {
-        Ok(if self.0 { 1 } else { 0 })
-    }
     fn to_bool(&self) -> bool {
         self.0
     }
@@ -124,6 +116,15 @@ impl StarlarkValue<'_> for StarlarkBool {
     fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
         hasher.write_u8(if self.0 { 1 } else { 0 });
         Ok(())
+    }
+
+    fn get_hash(&self, _private: Private) -> anyhow::Result<StarlarkHashValue> {
+        // These constants are just two random numbers.
+        Ok(StarlarkHashValue::new_unchecked(if self.0 {
+            0xa4acba08
+        } else {
+            0x71e8ba71
+        }))
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
@@ -141,11 +142,8 @@ impl StarlarkValue<'_> for StarlarkBool {
             ValueError::unsupported_with(self, "<>", other)
         }
     }
-}
 
-impl<'v> StarlarkValueBasic<'v> for StarlarkBool {
-    fn get_hash(&self) -> StarlarkHashValue {
-        // These constants are just two random numbers.
-        StarlarkHashValue::new_unchecked(if self.0 { 0xa4acba08 } else { 0x71e8ba71 })
+    fn typechecker_ty(&self, _private: Private) -> Option<Ty> {
+        Some(Ty::bool())
     }
 }

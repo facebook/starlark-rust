@@ -19,18 +19,23 @@ use allocative::Allocative;
 use derive_more::Display;
 use serde::Serialize;
 use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
+use starlark_derive::NoSerialize;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::assert;
+use crate::docs::Doc;
 use crate::docs::DocItem;
+use crate::docs::MarkdownFlavor;
+use crate::docs::RenderMarkdown;
 use crate::environment::GlobalsBuilder;
 use crate::environment::Methods;
 use crate::environment::MethodsBuilder;
 use crate::environment::MethodsStatic;
-use crate::starlark_type;
 use crate::tests::docs::golden::docs_golden_test;
 use crate::values::none::NoneType;
+use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Value;
 
@@ -82,6 +87,19 @@ def _do_not_export():
     pass
 "#;
 
+#[derive(
+    Debug,
+    derive_more::Display,
+    ProvidesStaticType,
+    Allocative,
+    NoSerialize
+)]
+#[display(fmt = "magic")]
+struct Magic;
+
+#[starlark_value(type = "magic")]
+impl<'v> StarlarkValue<'v> for Magic {}
+
 /// These are where the module docs go
 #[starlark_module]
 fn module(builder: &mut GlobalsBuilder) {
@@ -118,6 +136,7 @@ fn module(builder: &mut GlobalsBuilder) {
     /// 1 == 1
     /// # "#);
     /// ```
+    #[starlark(as_type = Magic)]
     fn func3(
         #[starlark(require = pos)] a1: i32,
         #[starlark(require = pos)] a2: Option<i32>,
@@ -135,15 +154,27 @@ fn module(builder: &mut GlobalsBuilder) {
         let _unused = (explicit_default, hidden_default, string_default);
         Ok(NoneType)
     }
+
+    fn pos_either_named(
+        #[starlark(require = pos)] a: i32,
+        b: i32,
+        #[starlark(require = named)] c: i32,
+    ) -> anyhow::Result<NoneType> {
+        let _unused = (a, b, c);
+        Ok(NoneType)
+    }
+
+    fn notypes<'v>(a: Value<'v>) -> anyhow::Result<Value<'v>> {
+        Ok(a)
+    }
 }
 
 #[derive(ProvidesStaticType, Debug, Display, Allocative, Serialize)]
 #[display(format = "obj")]
 struct Obj;
 
+#[starlark_value(type = "obj")]
 impl<'v> StarlarkValue<'v> for Obj {
-    starlark_type!("obj");
-
     fn get_methods() -> Option<&'static Methods> {
         static RES: MethodsStatic = MethodsStatic::new();
         RES.methods(object)
@@ -201,7 +232,7 @@ fn golden_docs_starlark() {
 fn golden_docs_module() {
     let res = docs_golden_test(
         "module",
-        GlobalsBuilder::new().with(module).build().documentation(),
+        DocItem::Module(GlobalsBuilder::new().with(module).build().documentation()),
     );
     assert!(!res.contains("starlark::assert::all_true"));
     assert!(res.contains(r#"string_default: str.type = "my_default"#));
@@ -211,4 +242,31 @@ fn golden_docs_module() {
 fn golden_docs_object() {
     let res = docs_golden_test("object", Obj.documentation().unwrap());
     assert!(res.contains(r#"name.\_\_exported\_\_"#));
+}
+
+#[test]
+fn inner_object_functions_have_docs() {
+    let heap = Heap::new();
+    let obj = heap.alloc_simple(Obj);
+    let item = obj
+        .get_attr("func1", &heap)
+        .unwrap()
+        .unwrap()
+        .documentation()
+        .unwrap();
+    let res = Doc::named_item("func1".to_owned(), item).render_markdown(MarkdownFlavor::DocFile);
+    assert!(res.contains("Docs for func1"));
+}
+
+#[test]
+fn inner_module_functions_have_docs() {
+    let item = GlobalsBuilder::new()
+        .with(module)
+        .build()
+        .get("func1")
+        .unwrap()
+        .documentation()
+        .unwrap();
+    let res = Doc::named_item("func1".to_owned(), item).render_markdown(MarkdownFlavor::DocFile);
+    assert!(res.contains("Docs for func1"))
 }

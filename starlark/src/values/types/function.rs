@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
+use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 
 use crate as starlark;
@@ -40,11 +41,13 @@ use crate::eval::ParametersSpec;
 use crate::private::Private;
 use crate::starlark_complex_value;
 use crate::starlark_simple_value;
-use crate::starlark_type;
+use crate::typing::Ty;
+use crate::values::type_repr::StarlarkTypeRepr;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::Freeze;
 use crate::values::FrozenHeap;
+use crate::values::FrozenStringValue;
 use crate::values::FrozenValue;
 use crate::values::FrozenValueTyped;
 use crate::values::Heap;
@@ -55,6 +58,15 @@ use crate::values::ValueLike;
 
 /// Return value of `type(any function)`.
 pub const FUNCTION_TYPE: &str = "function";
+
+/// Marker trait for function types.
+pub(crate) enum StarlarkFunction {}
+
+impl StarlarkTypeRepr for StarlarkFunction {
+    fn starlark_type_repr() -> Ty {
+        Ty::name(FUNCTION_TYPE)
+    }
+}
 
 /// A native function that can be evaluated.
 ///
@@ -137,6 +149,7 @@ pub struct NativeCallableRawDocs {
     pub signature: ParametersSpec<FrozenValue>,
     pub parameter_types: HashMap<usize, DocType>,
     pub return_type: Option<DocType>,
+    pub dot_type: Option<&'static str>,
 }
 
 #[doc(hidden)]
@@ -148,6 +161,7 @@ impl NativeCallableRawDocs {
                 .documentation(self.parameter_types.clone(), HashMap::new()),
             self.return_type.clone(),
             self.rust_docstring,
+            self.dot_type.map(ToOwned::to_owned),
         )
     }
 }
@@ -163,7 +177,9 @@ pub struct NativeFunction {
     #[allocative(skip)]
     pub(crate) function: Box<dyn NativeFunc>,
     pub(crate) name: String,
-    pub(crate) typ: Option<FrozenValue>,
+    /// `.type` attribute.
+    pub(crate) typ: Option<FrozenStringValue>,
+    pub(crate) ty: Option<Ty>,
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
     #[derivative(Debug = "ignore")]
@@ -191,6 +207,7 @@ impl NativeFunction {
             function: Box::new(function),
             name,
             typ: None,
+            ty: None,
             speculative_exec_safe: false,
             raw_docs: None,
         }
@@ -214,11 +231,6 @@ impl NativeFunction {
             name,
         )
     }
-
-    /// A `.type` value, if one exists. Specified using `#[starlark(type = "the_type")]`.
-    pub fn set_type(&mut self, typ: FrozenValue) {
-        self.typ = Some(typ)
-    }
 }
 
 impl<'v> AllocValue<'v> for NativeFunction {
@@ -228,9 +240,8 @@ impl<'v> AllocValue<'v> for NativeFunction {
 }
 
 /// Define the function type
+#[starlark_value(type = FUNCTION_TYPE)]
 impl<'v> StarlarkValue<'v> for NativeFunction {
-    starlark_type!(FUNCTION_TYPE);
-
     fn invoke(
         &self,
         _me: Value<'v>,
@@ -267,6 +278,10 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
             .as_ref()
             .map(|raw_docs| DocItem::Function(raw_docs.documentation()))
     }
+
+    fn typechecker_ty(&self, _private: Private) -> Option<Ty> {
+        self.ty.clone()
+    }
 }
 
 #[derive(Derivative, Display, NoSerialize, ProvidesStaticType, Allocative)]
@@ -285,9 +300,9 @@ pub(crate) struct NativeMethod {
 }
 
 starlark_simple_value!(NativeMethod);
-impl<'v> StarlarkValue<'v> for NativeMethod {
-    starlark_type!("native_method");
 
+#[starlark_value(type = "native_method")]
+impl<'v> StarlarkValue<'v> for NativeMethod {
     fn invoke_method(
         &self,
         _me: Value<'v>,
@@ -316,7 +331,7 @@ pub(crate) struct NativeAttribute {
     /// Safe to evaluate speculatively.
     pub(crate) speculative_exec_safe: bool,
     pub(crate) docstring: Option<String>,
-    pub(crate) typ: String,
+    pub(crate) typ: Ty,
 }
 
 starlark_simple_value!(NativeAttribute);
@@ -327,9 +342,8 @@ impl NativeAttribute {
     }
 }
 
+#[starlark_value(type = "attribute")]
 impl<'v> StarlarkValue<'v> for NativeAttribute {
-    starlark_type!("attribute");
-
     fn invoke_method(
         &self,
         _me: Value<'v>,
@@ -348,7 +362,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
             .as_ref()
             .and_then(|ds| DocString::from_docstring(DocStringKind::Rust, ds));
         let typ = Some(DocType {
-            raw_type: self.typ.to_owned(),
+            raw_type: self.typ.clone(),
         });
         Some(DocItem::Property(DocProperty { docs: ds, typ }))
     }
@@ -383,12 +397,11 @@ impl<'v, V: ValueLike<'v>> BoundMethodGen<V> {
     }
 }
 
+#[starlark_value(type = FUNCTION_TYPE)]
 impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for BoundMethodGen<V>
 where
-    Self: ProvidesStaticType,
+    Self: ProvidesStaticType<'v>,
 {
-    starlark_type!(FUNCTION_TYPE);
-
     fn invoke(
         &self,
         _me: Value<'v>,
@@ -402,5 +415,9 @@ where
             eval,
             Private,
         )
+    }
+
+    fn documentation(&self) -> Option<DocItem> {
+        self.method.documentation()
     }
 }

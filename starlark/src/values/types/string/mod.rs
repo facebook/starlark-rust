@@ -35,6 +35,7 @@ use std::sync::atomic;
 use allocative::Allocative;
 use dupe::Dupe;
 use serde::Serialize;
+use starlark_derive::starlark_value;
 use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
@@ -46,7 +47,6 @@ use crate::collections::StarlarkHasher;
 use crate::environment::Methods;
 use crate::environment::MethodsStatic;
 use crate::private::Private;
-use crate::starlark_type;
 use crate::values::index::apply_slice;
 use crate::values::string::repr::string_repr;
 use crate::values::types::none::NoneOr;
@@ -63,7 +63,7 @@ pub(crate) mod fast_string;
 pub(crate) mod intern;
 pub(crate) mod interpolation;
 pub(crate) mod iter;
-mod repr;
+pub(crate) mod repr;
 pub(crate) mod simd;
 
 /// Index of a char in a string.
@@ -241,13 +241,8 @@ pub(crate) fn str_methods() -> Option<&'static Methods> {
     RES.methods(crate::stdlib::string::string_methods)
 }
 
+#[starlark_value(type = STRING_TYPE)]
 impl<'v> StarlarkValue<'v> for StarlarkStr {
-    starlark_type!(STRING_TYPE);
-
-    fn get_type_starlark_repr() -> String {
-        "str.type".to_owned()
-    }
-
     fn is_special(_: Private) -> bool
     where
         Self: Sized,
@@ -272,6 +267,10 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         // Don't defer to str because we cache the Hash in StarlarkStr
         hasher.write_u32(self.get_hash().get());
         Ok(())
+    }
+
+    fn get_hash(&self, _private: Private) -> anyhow::Result<StarlarkHashValue> {
+        Ok(self.get_hash())
     }
 
     fn equals(&self, other: Value) -> anyhow::Result<bool> {
@@ -330,7 +329,7 @@ impl<'v> StarlarkValue<'v> for StarlarkStr {
         heap: &'v Heap,
     ) -> anyhow::Result<Value<'v>> {
         let s = self;
-        if matches!(stride, Some(stride) if stride.unpack_int() != Some(1)) {
+        if matches!(stride, Some(stride) if stride.unpack_i32() != Some(1)) {
             // The stride case is super rare and super complex, so let's do something inefficient but safe
             let xs = s.chars().collect::<Vec<_>>();
             let xs = apply_slice(&xs, start, stop, stride)?;
@@ -480,12 +479,12 @@ len("😿") == 1
                     let start = if i == 6 {
                         None
                     } else {
-                        Some(Value::new_int(i))
+                        Some(Value::testing_new_int(i))
                     };
                     let stop = if j == 6 {
                         None
                     } else {
-                        Some(Value::new_int(j))
+                        Some(Value::testing_new_int(j))
                     };
                     // Compare list slicing (comparatively simple) to string slicing (complex unicode)
                     let res1 = apply_slice(&example.chars().collect::<Vec<_>>(), start, stop, None)
@@ -551,17 +550,16 @@ len("😿") == 1
             for (i, char) in chars.iter().enumerate() {
                 let char_str = char.to_string();
                 assert_eq!(
-                    val.at(Value::new_int(i as i32), &heap)?.unpack_str(),
+                    val.at(heap.alloc(i), &heap)?.unpack_str(),
                     Some(char_str.as_str())
                 );
                 assert_eq!(
-                    val.at(Value::new_int(-len + (i as i32)), &heap)?
-                        .unpack_str(),
+                    val.at(heap.alloc(-len + (i as i32)), &heap)?.unpack_str(),
                     Some(char_str.as_str())
                 );
             }
-            assert!(val.at(Value::new_int(len), &heap).is_err());
-            assert!(val.at(Value::new_int(-(len + 1)), &heap).is_err());
+            assert!(val.at(heap.alloc(len), &heap).is_err());
+            assert!(val.at(heap.alloc(-(len + 1)), &heap).is_err());
             Ok(())
         }
 

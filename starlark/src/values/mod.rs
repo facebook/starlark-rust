@@ -31,6 +31,7 @@
 //!   so may serve as interesting inspiration for writing your own values, in addition to occurring in Starlark programs.
 
 pub use starlark_derive::starlark_attrs;
+pub use starlark_derive::starlark_value;
 pub use starlark_derive::Freeze;
 pub use starlark_derive::NoSerialize;
 pub use starlark_derive::StarlarkAttrs;
@@ -46,6 +47,8 @@ pub use crate::values::error::ValueError;
 pub use crate::values::freeze::Freeze;
 pub use crate::values::frozen_ref::FrozenRef;
 pub use crate::values::iter::StarlarkIterator;
+pub use crate::values::iter_type::StarlarkIter;
+pub use crate::values::layout::complex::ValueOfComplex;
 pub use crate::values::layout::heap::heap_type::Freezer;
 pub use crate::values::layout::heap::heap_type::FrozenHeap;
 pub use crate::values::layout::heap::heap_type::FrozenHeapRef;
@@ -87,9 +90,9 @@ pub use crate::values::types::structs;
 pub use crate::values::types::tuple;
 pub use crate::values::unpack::UnpackValue;
 pub use crate::values::unpack::ValueOf;
+pub use crate::values::value_of_unchecked::ValueOfUnchecked;
 
 mod alloc_value;
-pub(crate) mod basic;
 mod comparison;
 pub(crate) mod demand;
 pub(crate) mod error;
@@ -97,7 +100,9 @@ mod freeze;
 pub(crate) mod frozen_ref;
 mod index;
 pub(crate) mod iter;
+pub(crate) mod iter_type;
 pub(crate) mod layout;
+pub(crate) mod never;
 pub(crate) mod num;
 mod owned;
 pub(crate) mod recursive_repr_or_json_guard;
@@ -108,3 +113,4 @@ pub mod type_repr;
 pub(crate) mod types;
 pub(crate) mod typing;
 mod unpack;
+pub(crate) mod value_of_unchecked;

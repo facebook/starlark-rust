@@ -20,6 +20,7 @@ use std::fmt::Display;
 
 use allocative::Allocative;
 use starlark_derive::starlark_module;
+use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 
 use crate as starlark;
@@ -36,7 +37,6 @@ use crate::eval::Evaluator;
 use crate::slice_vec_ext::SliceExt;
 use crate::slice_vec_ext::VecExt;
 use crate::starlark_complex_values;
-use crate::starlark_type;
 use crate::values::dict::DictRef;
 use crate::values::function::FUNCTION_TYPE;
 use crate::values::layout::typed::string::StringValueLike;
@@ -136,12 +136,11 @@ impl<'v> Freeze for Partial<'v> {
     }
 }
 
+#[starlark_value(type = FUNCTION_TYPE)]
 impl<'v, V: ValueLike<'v> + 'v, S: StringValueLike<'v> + 'v> StarlarkValue<'v> for PartialGen<V, S>
 where
-    Self: ProvidesStaticType,
+    Self: ProvidesStaticType<'v>,
 {
-    starlark_type!(FUNCTION_TYPE);
-
     fn name_for_call_stack(&self, _me: Value<'v>) -> String {
         "partial".to_owned()
     }
@@ -181,35 +180,46 @@ where
 mod tests {
     use crate::assert;
 
-    #[test]
-    fn test_partial() {
-        assert::pass(
-            r#"
+    fn eq(expected: &str, expr: &str) {
+        let sum = r#"
 def sum(a, b, *args, **kwargs):
     # print("a=%s b=%s args=%s kwargs=%s" % (a, b, args, kwargs))
     args = (a, b) + args
     return [args, kwargs]
+"#;
 
-# simple test
-assert_eq(
-    [(1, 2, 3), {"other": True, "third": None}],
-    (partial(sum, 1, other=True))(2, 3, third=None))
+        assert::eq(expected, &format!("{}{}", sum, expr));
+    }
 
-# passing *args **kwargs to partial
-assert_eq(
-    [(1, 2, 3), {"other": True, "third": None}],
-    (partial(sum, *[1], **{"other": True}))(2, 3, third=None))
+    #[test]
+    fn test_simple() {
+        eq(
+            "[(1, 2, 3), {'other': True, 'third': None}]",
+            "(partial(sum, 1, other=True))(2, 3, third=None)",
+        );
+    }
 
-# passing *args **kwargs to returned func
-assert_eq(
-    [(1, 2, 3), {"other": True, "third": None}],
-    (partial(sum, other=True))(*[1, 2, 3], **{"third": None}))
+    #[test]
+    fn test_star_to_partial() {
+        eq(
+            "[(1, 2, 3), {'other': True, 'third': None}]",
+            "(partial(sum, *[1], **{'other': True}))(2, 3, third=None)",
+        );
+    }
 
-# no args to partial
-assert_eq(
-    [(1, 2, 3), {"other": True, "third": None}],
-    (partial(sum))(1, 2, 3, third=None, **{"other": True}))
-"#,
+    #[test]
+    fn test_start_to_returned_func() {
+        eq(
+            "[(1, 2, 3), {'other': True, 'third': None}]",
+            "(partial(sum, other=True))(*[1, 2, 3], **{'third': None})",
+        );
+    }
+
+    #[test]
+    fn test_no_args_to_partial() {
+        eq(
+            "[(1, 2, 3), {'other': True, 'third': None}]",
+            "(partial(sum))(1, 2, 3, third=None, **{'other': True})",
         );
     }
 }

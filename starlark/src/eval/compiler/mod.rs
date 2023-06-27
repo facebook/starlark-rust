@@ -30,22 +30,52 @@ pub(crate) mod scope;
 pub(crate) mod small_vec_1;
 pub(crate) mod span;
 pub(crate) mod stmt;
+pub(crate) mod types;
 
 use std::fmt::Debug;
 
 use crate::codemap::CodeMap;
+use crate::codemap::Span;
 use crate::environment::Globals;
 use crate::errors::Diagnostic;
-use crate::eval::compiler::scope::ScopeData;
+use crate::eval::compiler::scope::ModuleScopeData;
 use crate::eval::compiler::scope::ScopeId;
 use crate::eval::compiler::scope::ScopeNames;
+use crate::eval::compiler::scope::TopLevelStmtIndex;
 use crate::eval::runtime::frame_span::FrameSpan;
 use crate::eval::Evaluator;
 use crate::values::FrozenRef;
 
-/// Error of evaluation of an expression.
-#[derive(Debug)]
-pub(crate) struct EvalException(pub(crate) anyhow::Error);
+/// Error with location.
+#[derive(Debug, derive_more::Display)]
+// TODO(nga): lalrpop generates public members which require error type to be public too.
+#[doc(hidden)]
+pub struct EvalException(
+    /// Error is `Diagnostic`, but stored as `anyhow::Error` for smaller size.
+    anyhow::Error,
+);
+
+impl EvalException {
+    #[cold]
+    pub(crate) fn into_anyhow(self) -> anyhow::Error {
+        self.0
+    }
+
+    #[cold]
+    pub(crate) fn new(error: anyhow::Error, span: Span, codemap: &CodeMap) -> EvalException {
+        EvalException(Diagnostic::new(error, span, codemap))
+    }
+
+    pub(crate) fn _testing_loc(mut err: &anyhow::Error) -> crate::codemap::ResolvedFileSpan {
+        if let Some(eval_exc) = err.downcast_ref::<EvalException>() {
+            err = &eval_exc.0;
+        }
+        match err.downcast_ref::<Diagnostic>() {
+            Some(d) => d.span.as_ref().unwrap().resolve(),
+            None => panic!("Expected Diagnostic, got {:#?}", err),
+        }
+    }
+}
 
 #[cold]
 #[inline(never)]
@@ -81,11 +111,15 @@ pub(crate) fn expr_throw<'v, T>(
 
 pub(crate) struct Compiler<'v, 'a, 'e> {
     pub(crate) eval: &'e mut Evaluator<'v, 'a>,
-    pub(crate) scope_data: ScopeData,
+    pub(crate) scope_data: ModuleScopeData<'v>,
     pub(crate) locals: Vec<ScopeId>,
     pub(crate) globals: FrozenRef<'static, Globals>,
     pub(crate) codemap: FrozenRef<'static, CodeMap>,
     pub(crate) check_types: bool,
+    pub(crate) top_level_stmt_count: usize,
+    pub(crate) last_stmt_defining_type: Option<TopLevelStmtIndex>,
+    /// Last statement with types populated into payload.
+    pub(crate) last_stmt_with_populated_types: TopLevelStmtIndex,
 }
 
 impl Compiler<'_, '_, '_> {

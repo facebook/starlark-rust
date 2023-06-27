@@ -22,6 +22,7 @@ use derive_more::Display;
 use dupe::Dupe;
 use serde::Serialize;
 use serde::Serializer;
+use starlark_derive::starlark_value;
 use starlark_derive::StarlarkDocs;
 
 use crate as starlark;
@@ -29,8 +30,7 @@ use crate::any::ProvidesStaticType;
 use crate::collections::StarlarkHashValue;
 use crate::collections::StarlarkHasher;
 use crate::private::Private;
-use crate::starlark_type;
-use crate::values::basic::StarlarkValueBasic;
+use crate::typing::Ty;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::FrozenHeap;
@@ -60,13 +60,8 @@ impl NoneType {
 }
 
 /// Define the NoneType type
+#[starlark_value(type = NoneType::TYPE)]
 impl<'v> StarlarkValue<'v> for NoneType {
-    starlark_type!(NoneType::TYPE);
-
-    fn get_type_starlark_repr() -> String {
-        "None".to_owned()
-    }
-
     fn is_special(_: Private) -> bool
     where
         Self: Sized,
@@ -89,12 +84,14 @@ impl<'v> StarlarkValue<'v> for NoneType {
         hasher.write_u64(9_223_380_832_852_120_682);
         Ok(())
     }
-}
 
-impl<'v> StarlarkValueBasic<'v> for NoneType {
-    fn get_hash(&self) -> StarlarkHashValue {
+    fn get_hash(&self, _private: Private) -> anyhow::Result<StarlarkHashValue> {
         // Just a random number.
-        StarlarkHashValue::new_unchecked(0xf9c2263d)
+        Ok(StarlarkHashValue::new_unchecked(0xf9c2263d))
+    }
+
+    fn typechecker_ty(&self, _private: Private) -> Option<Ty> {
+        Some(Ty::none())
     }
 }
 

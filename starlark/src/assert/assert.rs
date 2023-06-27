@@ -49,6 +49,7 @@ use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::values::none::NoneType;
 use crate::values::structs::AllocStruct;
+use crate::values::typing::TypeCompiled;
 use crate::values::AllocValue;
 use crate::values::Heap;
 use crate::values::OwnedFrozenValue;
@@ -60,17 +61,17 @@ fn mk_environment() -> GlobalsBuilder {
 
 static GLOBALS: Lazy<Globals> = Lazy::new(|| mk_environment().build());
 
-static ASSERT_STAR: Lazy<FrozenModule> = Lazy::new(|| {
+static ASSERTS_STAR: Lazy<FrozenModule> = Lazy::new(|| {
     let g = GlobalsBuilder::new()
-        .with_struct("assert", assert_star)
+        .with_struct("asserts", asserts_star)
         .build();
     let m = Module::new();
     m.frozen_heap().add_reference(g.heap());
-    let assert = g.get("assert").unwrap();
-    m.set("assert", assert);
+    let asserts = g.get("asserts").unwrap();
+    m.set("asserts", asserts);
     m.set(
         "freeze",
-        assert.get_attr("freeze", m.heap()).unwrap().unwrap(),
+        asserts.get_attr("freeze", m.heap()).unwrap().unwrap(),
     );
     m.freeze().unwrap()
 });
@@ -111,7 +112,7 @@ enum GcStrategy {
 /// Definitions to support assert.star as used by the Go test suite
 #[starlark_module]
 // Deliberately qualify the GlobalsBuild type to test that we can
-fn assert_star(builder: &mut crate::environment::GlobalsBuilder) {
+fn asserts_star(builder: &mut crate::environment::GlobalsBuilder) {
     fn eq<'v>(a: Value<'v>, b: Value<'v>) -> anyhow::Result<NoneType> {
         assert_equals(a, b)
     }
@@ -208,23 +209,23 @@ pub(crate) fn test_functions(builder: &mut GlobalsBuilder) {
     }
 
     fn assert_type<'v>(v: Value<'v>, ty: Value<'v>, heap: &'v Heap) -> anyhow::Result<NoneType> {
-        v.check_type(ty, Some("v"), heap)?;
+        TypeCompiled::new(ty, heap)?.check_type(v, Some("v"))?;
         Ok(NoneType)
     }
 
     fn is_type<'v>(v: Value<'v>, ty: Value<'v>, heap: &'v Heap) -> anyhow::Result<bool> {
-        v.is_type(ty, heap)
+        Ok(TypeCompiled::new(ty, heap)?.matches(v))
     }
 
     /// Function which consumes arguments and that's it.
     ///
     /// This function is unknown to optimizer, so it can be used in optimizer tests.
-    fn noop(
-        #[starlark(args)] args: Value,
-        #[starlark(kwargs)] kwargs: Value,
-    ) -> anyhow::Result<NoneType> {
-        let _ = (args, kwargs);
-        Ok(NoneType)
+    fn noop<'v>(
+        #[starlark(args)] args: Vec<Value<'v>>,
+        #[starlark(kwargs)] kwargs: Value<'v>,
+    ) -> anyhow::Result<Value<'v>> {
+        let _ = kwargs;
+        Ok(args.into_iter().next().unwrap_or(Value::new_none()))
     }
 }
 
@@ -238,6 +239,7 @@ pub struct Assert<'a> {
     // Ideally `print_handler` should be set up in `setup_eval`
     // but if you know how to do it, show me how.
     print_handler: Option<&'a (dyn PrintHandler + 'a)>,
+    static_typechecking: bool,
 }
 
 /// Construction and state management.
@@ -250,11 +252,12 @@ impl<'a> Assert<'a> {
     pub fn new() -> Self {
         Self {
             dialect: Dialect::Extended,
-            modules: hashmap!["assert.star".to_owned() => Lazy::force(&ASSERT_STAR).dupe()],
+            modules: hashmap!["asserts.star".to_owned() => Lazy::force(&ASSERTS_STAR).dupe()],
             globals: Lazy::force(&GLOBALS).dupe(),
             gc_strategy: None,
             setup_eval: Box::new(|_| ()),
             print_handler: None,
+            static_typechecking: true,
         }
     }
 
@@ -271,6 +274,10 @@ impl<'a> Assert<'a> {
     /// Configure the handler for `print` function.
     pub fn set_print_handler(&mut self, handler: &'a (dyn PrintHandler + 'a)) {
         self.print_handler = Some(handler);
+    }
+
+    pub(crate) fn disable_static_typechecking(&mut self) {
+        self.static_typechecking = false;
     }
 
     fn with_gc<A>(&self, f: impl Fn(GcStrategy) -> A) -> A {
@@ -303,6 +310,7 @@ impl<'a> Assert<'a> {
             eval.trigger_gc();
         };
         let mut eval = Evaluator::new(module);
+        eval.enable_static_typechecking(self.static_typechecking);
         (self.setup_eval)(&mut eval);
         if let Some(print_handler) = self.print_handler {
             eval.set_print_handler(print_handler);
@@ -698,7 +706,10 @@ pub fn is_true(program: &str) {
 
 /// See [`Assert::all_true`].
 pub fn all_true(expressions: &str) {
-    Assert::new().all_true(expressions)
+    let mut a = Assert::new();
+    // TODO(nga): fix and enable.
+    a.disable_static_typechecking();
+    a.all_true(expressions)
 }
 
 /// See [`Assert::pass`].
