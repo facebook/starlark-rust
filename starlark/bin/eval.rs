@@ -618,36 +618,33 @@ mod tests {
     #[test]
     fn resolve_load() {
         let context = make_context();
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testcases/resolve");
 
         // Successful cases
-        let current_file = LspUrl::File(PathBuf::from("/absolute/path/from.star"));
+        let current_file = LspUrl::File(root.join("from.star"));
         assert_eq!(
             context
                 .resolve_load(":relative.star", &current_file, None,)
                 .unwrap(),
-            LspUrl::File(PathBuf::from("/absolute/path/relative.star"))
+            LspUrl::File(root.join("relative.star"))
         );
         assert_eq!(
             context
                 .resolve_load("subpath:relative.star", &current_file, None)
                 .unwrap(),
-            LspUrl::File(PathBuf::from("/absolute/path/subpath/relative.star"))
+            LspUrl::File(root.join("subpath/relative.star"))
         );
         assert_eq!(
             context
-                .resolve_load("//:root.star", &current_file, Some(Path::new("/foo/bar")),)
+                .resolve_load("//:root.star", &current_file, Some(root.as_path()),)
                 .unwrap(),
-            LspUrl::File(PathBuf::from("/foo/bar/root.star"))
+            LspUrl::File(root.join("root.star"))
         );
         assert_eq!(
             context
-                .resolve_load(
-                    "//baz:root.star",
-                    &current_file,
-                    Some(Path::new("/foo/bar")),
-                )
+                .resolve_load("//baz:root.star", &current_file, Some(root.as_path()),)
                 .unwrap(),
-            LspUrl::File(PathBuf::from("/foo/bar/baz/root.star"))
+            LspUrl::File(root.join("baz/root.star"))
         );
 
         // Error cases
