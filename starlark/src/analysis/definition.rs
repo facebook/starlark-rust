@@ -266,7 +266,7 @@ impl LspModule {
     /// accessed at Pos is defined.
     fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> TempDefinition<'a> {
         /// Look for a name in the given scope, with a given source, and return the right
-        /// type of `TempIdentifierDefinition` based on whether / how the variable is bound.
+        /// type of [`TempIdentifierDefinition`] based on whether / how the variable is bound.
         fn resolve_get_in_scope<'a>(
             scope: &'a Scope,
             name: &'a str,
@@ -429,15 +429,18 @@ impl LspModule {
         self.ast.loaded_symbols()
     }
 
+    /// Attempt to find an exported symbol with the given name.
+    pub(crate) fn find_exported_symbol(&self, name: &str) -> Option<Symbol> {
+        self.ast
+            .exported_symbols()
+            .into_iter()
+            .find(|symbol| symbol.name == name)
+    }
+
     /// Attempt to find the location in this module where an exported symbol is defined.
-    pub(crate) fn find_exported_symbol(&self, name: &str) -> Option<ResolvedSpan> {
-        self.ast.exported_symbols().iter().find_map(|symbol| {
-            if symbol.name == name {
-                Some(symbol.span.resolve_span())
-            } else {
-                None
-            }
-        })
+    pub(crate) fn find_exported_symbol_span(&self, name: &str) -> Option<ResolvedSpan> {
+        self.find_exported_symbol(name)
+            .map(|symbol| symbol.span.resolve_span())
     }
 
     /// Attempt to find the location in this module where a member of a struct (named `name`)

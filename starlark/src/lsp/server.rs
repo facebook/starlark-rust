@@ -44,6 +44,7 @@ use lsp_types::notification::LogMessage;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::Completion;
 use lsp_types::request::GotoDefinition;
+use lsp_types::request::HoverRequest;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::CompletionOptions;
@@ -57,9 +58,14 @@ use lsp_types::DidOpenTextDocumentParams;
 use lsp_types::Documentation;
 use lsp_types::GotoDefinitionParams;
 use lsp_types::GotoDefinitionResponse;
+use lsp_types::Hover;
+use lsp_types::HoverContents;
+use lsp_types::HoverParams;
+use lsp_types::HoverProviderCapability;
 use lsp_types::InitializeParams;
 use lsp_types::LocationLink;
 use lsp_types::LogMessageParams;
+use lsp_types::MarkedString;
 use lsp_types::MarkupContent;
 use lsp_types::MarkupKind;
 use lsp_types::MessageType;
@@ -309,7 +315,7 @@ pub trait LspContext {
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<String>;
 
-    /// Resolve a string literal into a Url and a function that specifies a locaction within that
+    /// Resolve a string literal into a Url and a function that specifies a location within that
     /// target file.
     ///
     /// This can be used for things like file paths in string literals, build targets, etc.
@@ -393,6 +399,7 @@ impl<T: LspContext> Backend<T> {
                 ]),
                 ..Default::default()
             }),
+            hover_provider: Some(HoverProviderCapability::Simple(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -483,6 +490,11 @@ impl<T: LspContext> Backend<T> {
         ));
     }
 
+    /// Offers hover information for the symbol at the current cursor.
+    fn hover(&self, id: RequestId, params: HoverParams, initialize_params: &InitializeParams) {
+        self.send_response(new_response(id, self.hover_info(params, initialize_params)));
+    }
+
     /// Get the file contents of a starlark: URI.
     fn get_starlark_file_contents(&self, id: RequestId, params: StarlarkFileContentsParams) {
         let response: anyhow::Result<_> = match params.uri {
@@ -553,7 +565,7 @@ impl<T: LspContext> Backend<T> {
                     self.get_ast_or_load_from_disk(&load_uri)?
                         .and_then(|ast| match member {
                             Some(member) => ast.find_exported_symbol_and_member(&name, member),
-                            None => ast.find_exported_symbol(&name),
+                            None => ast.find_exported_symbol_span(&name),
                         });
                 match loaded_location {
                     None => Self::location_link(source, uri, location)?,
@@ -615,7 +627,7 @@ impl<T: LspContext> Backend<T> {
                                     Some(member) => {
                                         ast.find_exported_symbol_and_member(&name, member)
                                     }
-                                    None => ast.find_exported_symbol(&name),
+                                    None => ast.find_exported_symbol_span(&name),
                                 });
 
                         Self::location_link(source, &uri, loaded_location.unwrap_or_default())?
@@ -955,10 +967,7 @@ impl<T: LspContext> Backend<T> {
                 // inserts a new load statement after the last one we found.
                 TextEdit::new(
                     match last_load {
-                        Some(span) => Range::new(
-                            Position::new(span.end_line as u32, span.end_column as u32),
-                            Position::new(span.end_line as u32, span.end_column as u32),
-                        ),
+                        Some(span) => span.into(),
                         None => Range::new(Position::new(0, 0), Position::new(0, 0)),
                     },
                     format!(
@@ -986,6 +995,103 @@ impl<T: LspContext> Backend<T> {
             label: keyword.to_string(),
             kind: Some(CompletionItemKind::KEYWORD),
             ..Default::default()
+        })
+    }
+
+    fn hover_info(
+        &self,
+        params: HoverParams,
+        initialize_params: &InitializeParams,
+    ) -> anyhow::Result<Hover> {
+        let uri = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .try_into()?;
+        let line = params.text_document_position_params.position.line;
+        let character = params.text_document_position_params.position.character;
+        let workspace_root =
+            Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), &uri);
+
+        // Return an empty result as a "not found"
+        let not_found = Hover {
+            contents: HoverContents::Array(vec![]),
+            range: None,
+        };
+
+        Ok(match self.get_ast(&uri) {
+            Some(ast) => {
+                let location = ast.find_definition(line, character);
+                match location {
+                    Definition::Identifier(identifier_definition) => self
+                        .get_hover_for_identifier_definition(
+                            identifier_definition,
+                            &uri,
+                            workspace_root.as_deref(),
+                        )?,
+                    Definition::Dotted(DottedDefinition {
+                        root_definition_location,
+                        ..
+                    }) => {
+                        // Not something we really support yet, so just provide hover information for
+                        // the root definition.
+                        self.get_hover_for_identifier_definition(
+                            root_definition_location,
+                            &uri,
+                            workspace_root.as_deref(),
+                        )?
+                    }
+                }
+                .unwrap_or(not_found)
+            }
+            None => not_found,
+        })
+    }
+
+    fn get_hover_for_identifier_definition(
+        &self,
+        identifier_definition: IdentifierDefinition,
+        current_uri: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<Option<Hover>> {
+        Ok(match identifier_definition {
+            IdentifierDefinition::LoadedLocation {
+                path, name, source, ..
+            } => {
+                // Symbol loaded from another file. Find the file and get the definition
+                // from there, hopefully including the docs.
+                let load_uri = self.resolve_load_path(&path, current_uri, workspace_root)?;
+                self.get_ast_or_load_from_disk(&load_uri)?.and_then(|ast| {
+                    ast.find_exported_symbol(&name).and_then(|symbol| {
+                        symbol.docs.map(|docs| Hover {
+                            contents: HoverContents::Array(vec![MarkedString::String(
+                                render_doc_item(symbol.name, &docs),
+                            )]),
+                            range: Some(source.into()),
+                        })
+                    })
+                })
+            }
+            IdentifierDefinition::Unresolved { source, name } => {
+                // Try to resolve as a global symbol.
+                self.context
+                    .get_global_symbols()
+                    .into_iter()
+                    .find(|symbol| symbol.name == name)
+                    .and_then(|symbol| {
+                        symbol.documentation.map(|docs| Hover {
+                            contents: HoverContents::Array(vec![MarkedString::String(
+                                render_doc_item(symbol.name.clone(), &docs),
+                            )]),
+                            range: Some(source.into()),
+                        })
+                    })
+            }
+            IdentifierDefinition::NotFound => None,
+            _ => {
+                // Don't support other cases just yet.
+                None
+            }
         })
     }
 
@@ -1044,6 +1150,8 @@ impl<T: LspContext> Backend<T> {
                         self.get_starlark_file_contents(req.id, params);
                     } else if let Some(params) = as_request::<Completion>(&req) {
                         self.completion(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<HoverRequest>(&req) {
+                        self.hover(req.id, params, &initialize_params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }

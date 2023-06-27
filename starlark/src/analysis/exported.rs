@@ -21,7 +21,6 @@ use crate::codemap::FileSpan;
 use crate::collections::SmallMap;
 use crate::docs::DocItem;
 use crate::syntax::ast::AstAssignIdent;
-use crate::syntax::ast::DefP;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::Stmt;
 use crate::syntax::docs::get_doc_item_for_assign;
