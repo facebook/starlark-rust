@@ -25,6 +25,7 @@ pub use parser::AstLoad;
 pub(crate) mod ast;
 pub(crate) mod cursors;
 mod dialect;
+pub(crate) mod docs;
 #[cfg(test)]
 mod grammar_tests;
 pub(crate) mod lexer;
@@ -33,9 +34,9 @@ mod lexer_tests;
 pub(crate) mod module;
 pub(crate) mod parser;
 pub(crate) mod payload_map;
+pub(crate) mod symbols;
 #[cfg(test)]
 mod testcases;
-pub(crate) mod symbols;
 pub(crate) mod type_expr;
 pub(crate) mod uniplate;
 pub(crate) mod validate;
