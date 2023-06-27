@@ -56,4 +56,18 @@ impl BuildSystem for Buck2BuildSystem {
             .get(repository_name)
             .map(|path| Cow::Borrowed(path.as_path()))
     }
+
+    fn repository_for_path<'a>(&'a self, path: &'a Path) -> Option<(Cow<'a, str>, &'a Path)> {
+        self.repositories
+            .iter()
+            .find_map(|(name, repository_path)| {
+                path.strip_prefix(repository_path)
+                    .ok()
+                    .map(|stripped_path| (Cow::Borrowed(name.as_str()), stripped_path))
+            })
+    }
+
+    fn should_use_at_sign_before_repository_name(&self) -> bool {
+        false
+    }
 }

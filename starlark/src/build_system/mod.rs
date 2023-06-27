@@ -26,6 +26,17 @@ pub trait BuildSystem: std::fmt::Debug + Send + Sync {
 
     /// Returns the path of the repository with the given name.
     fn repository_path(&self, repository_name: &str) -> Option<Cow<Path>>;
+
+    /// Given a path, tries to resolve the repository name and the path
+    /// relative to the root of repository. Returns `None` if the path is not
+    /// part of a known repository.
+    fn repository_for_path<'a>(&'a self, path: &'a Path) -> Option<(Cow<'a, str>, &'a Path)>;
+
+    /// Whether to prefix absolute paths with `@` when that path contains a
+    /// repository name.
+    fn should_use_at_sign_before_repository_name(&self) -> bool {
+        true
+    }
 }
 
 /// Tries to resolve the build system from the current working directory.

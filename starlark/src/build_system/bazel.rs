@@ -8,7 +8,7 @@ use crate::build_system::BuildSystem;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BazelBuildSystem {
     workspace_name: Option<String>,
-    output_base: PathBuf,
+    external_output_base: PathBuf,
 }
 
 impl BazelBuildSystem {
@@ -49,7 +49,7 @@ impl BazelBuildSystem {
                     name if name == Self::DEFAULT_WORKSPACE_NAME => None,
                     name => Some(name),
                 },
-                output_base: PathBuf::from(output_base),
+                external_output_base: PathBuf::from(output_base).join("external"),
             })
         } else {
             None
@@ -63,8 +63,22 @@ impl BuildSystem for BazelBuildSystem {
     }
 
     fn repository_path(&self, repository_name: &str) -> Option<Cow<Path>> {
-        let mut path = self.output_base.join("external");
-        path.push(repository_name);
+        let path = self.external_output_base.join(repository_name);
         Some(Cow::Owned(path))
+    }
+
+    fn repository_for_path<'a>(&'a self, path: &'a Path) -> Option<(Cow<'a, str>, &'a Path)> {
+        if let Ok(path) = path.strip_prefix(&self.external_output_base) {
+            let mut path_components = path.components();
+
+            let repository_name = path_components.next()?.as_os_str().to_string_lossy();
+            dbg!(&repository_name);
+            let repository_path = path_components.as_path();
+            dbg!(&repository_path);
+
+            Some((repository_name, repository_path))
+        } else {
+            None
+        }
     }
 }

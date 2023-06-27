@@ -104,6 +104,9 @@ enum ResolveLoadError {
     /// Cannot resolve path containing workspace without information from the build system.
     #[error("Cannot resolve path `{}` without build system info", .0)]
     MissingBuildSystem(String),
+    /// The path contained a repository name that is not known to the build system.
+    #[error("Cannot resolve path `{}` because the repository `{}` is unknown", .0, .1)]
+    UnknownRepository(String, String),
 }
 
 /// Errors when [`LspContext::render_as_load()`] cannot render a given path.
@@ -341,24 +344,63 @@ impl LspContext for Context {
                 repository
             };
 
-            // Check if the repository refers to the workspace root, or if not, if it is a known
-            // repository, and what its path is.
-            let repository_root = if repository.is_empty() {
-                workspace_root.map(Cow::Borrowed)
-            } else if let Some(build_system) = &self.build_system {
-                if matches!(build_system.root_repository_name(), Some(name) if name == repository) {
-                    workspace_root.map(Cow::Borrowed)
-                } else {
-                    build_system.repository_path(repository)
+            // Find the root we're resolving from. There's quite a few cases to consider here:
+            // - `repository` is empty, and we're resolving from the workspace root.
+            // - `repository` is empty, and we're resolving from a known remote repository.
+            // - `repository` is not empty, and refers to the current repository (the workspace).
+            // - `repository` is not empty, and refers to a known remote repository.
+            //
+            // Also with all of these cases, we need to consider if we have build system
+            // information or not. If not, we can't resolve any remote repositories, and we can't
+            // know whether a repository name refers to the workspace or not.
+            let resolve_root = match (repository, current_file, self.build_system.as_ref()) {
+                // Repository is empty, and we know what file we're resolving from. Use the build
+                // system information to check if we're in a known remote repository, and what the
+                // root is. Fall back to the `workspace_root` otherwise.
+                ("", LspUrl::File(current_file), Some(build_system)) => {
+                    if let Some((_, remote_repository_root)) =
+                        build_system.repository_for_path(current_file)
+                    {
+                        Some(Cow::Borrowed(remote_repository_root))
+                    } else {
+                        workspace_root.map(Cow::Borrowed)
+                    }
                 }
-            } else {
-                return Err(ResolveLoadError::MissingBuildSystem(path.to_owned()).into());
+                // No repository in the load path, and we don't have build system information, or
+                // an `LspUrl` we can't use to check the root. Use the workspace root.
+                ("", _, _) => workspace_root.map(Cow::Borrowed),
+                // We have a repository name and build system information. Check if the repository
+                // name refers to the workspace, and if so, use the workspace root. If not, check
+                // if it refers to a known remote repository, and if so, use that root.
+                // Otherwise, fail with an error.
+                (repository, _, Some(build_system)) => {
+                    if matches!(build_system.root_repository_name(), Some(name) if name == repository)
+                    {
+                        workspace_root.map(Cow::Borrowed)
+                    } else if let Some(remote_repository_root) =
+                        build_system.repository_path(repository)
+                    {
+                        Some(remote_repository_root)
+                    } else {
+                        return Err(ResolveLoadError::UnknownRepository(
+                            original_path.to_owned(),
+                            repository.to_owned(),
+                        )
+                        .into());
+                    }
+                }
+                // Finally, fall back to the workspace root.
+                _ => {
+                    return Err(
+                        ResolveLoadError::MissingBuildSystem(original_path.to_owned()).into(),
+                    );
+                }
             };
 
             // Resolve from the root of the repository.
-            match (path.split_once(':'), repository_root) {
-                (Some((subfolder, filename)), Some(repository_root)) => {
-                    let mut result = repository_root.into_owned();
+            match (path.split_once(':'), resolve_root) {
+                (Some((subfolder, filename)), Some(resolve_root)) => {
+                    let mut result = resolve_root.into_owned();
                     result.push(subfolder);
                     result.push(filename);
                     Ok(Url::from_file_path(result).unwrap().try_into()?)
@@ -403,35 +445,64 @@ impl LspContext for Context {
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<String> {
         match (target, current_file) {
-            (LspUrl::File(target_path), LspUrl::File(current_file_path)) => {
-                let target_package = target_path.parent();
-                let current_file_package = current_file_path.parent();
+            // Check whether the target and the current file are in the same package.
+            (LspUrl::File(target_path), LspUrl::File(current_file_path)) if matches!((target_path.parent(), current_file_path.parent()), (Some(a), Some(b)) if a == b) =>
+            {
+                // Then just return a relative path.
                 let target_filename = target_path.file_name();
-
-                // If both are in the same package, return a relative path.
-                if matches!((target_package, current_file_package), (Some(a), Some(b)) if a == b) {
-                    return match target_filename {
-                        Some(filename) => Ok(format!(":{}", filename.to_string_lossy())),
-                        None => {
-                            Err(RenderLoadError::MissingTargetFilename(target_path.clone()).into())
-                        }
-                    };
+                match target_filename {
+                    Some(filename) => Ok(format!(":{}", filename.to_string_lossy())),
+                    None => Err(RenderLoadError::MissingTargetFilename(target_path.clone()).into()),
                 }
+            }
+            (LspUrl::File(target_path), _) => {
+                // Try to find a repository that contains the target, as well as the path to the
+                // target relative to the repository root. If we can't find a repository, we'll
+                // try to resolve the target relative to the workspace root. If we don't have a
+                // workspace root, we'll just use the target path as-is.
+                let (repository, target_path) = &self
+                    .build_system
+                    .as_ref()
+                    .and_then(|build_system| {
+                        build_system
+                            .repository_for_path(target_path)
+                            .map(|(repository, target_path)| (Some(repository), target_path))
+                    })
+                    .or_else(|| {
+                        workspace_root
+                            .and_then(|root| target_path.strip_prefix(root).ok())
+                            .map(|path| (None, path))
+                    })
+                    .unwrap_or((None, target_path));
 
-                let target_path = workspace_root
-                    .and_then(|root| target_path.strip_prefix(root).ok())
-                    .unwrap_or(target_path);
-
-                Ok(format!(
-                    "//{}:{}",
-                    target_path
-                        .parent()
-                        .map(|path| path.to_string_lossy())
-                        .unwrap_or_default(),
-                    target_filename
-                        .unwrap_or(target_path.as_os_str())
-                        .to_string_lossy()
-                ))
+                let target_filename = target_path.file_name();
+                match target_filename {
+                    Some(filename) => Ok(format!(
+                        "{}{}//{}:{}",
+                        if repository.is_some()
+                            && self
+                                .build_system
+                                .as_ref()
+                                .map(|build_system| {
+                                    build_system.should_use_at_sign_before_repository_name()
+                                })
+                                .unwrap_or(true)
+                        {
+                            "@"
+                        } else {
+                            ""
+                        },
+                        repository.as_ref().unwrap_or(&Cow::Borrowed("")),
+                        target_path
+                            .parent()
+                            .map(|path| path.to_string_lossy())
+                            .unwrap_or_default(),
+                        filename.to_string_lossy()
+                    )),
+                    None => Err(
+                        RenderLoadError::MissingTargetFilename(target_path.to_path_buf()).into(),
+                    ),
+                }
             }
             _ => Err(RenderLoadError::WrongScheme(
                 "file://".to_owned(),
