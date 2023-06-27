@@ -1,6 +1,9 @@
 use crate::docs::DocFunction;
 use crate::docs::DocParam;
+use crate::docs::DocProperty;
+use crate::docs::DocString;
 use crate::docs::DocStringKind;
+use crate::syntax::ast::AstAssignP;
 use crate::syntax::ast::AstLiteral;
 use crate::syntax::ast::AstPayload;
 use crate::syntax::ast::AstStmtP;
@@ -42,6 +45,19 @@ pub(crate) fn get_doc_item_for_def<P: AstPayload>(def: &DefP<P>) -> Option<DocFu
     } else {
         None
     }
+}
+
+pub(crate) fn get_doc_item_for_assign<P: AstPayload>(
+    previous_node: &AstStmtP<P>,
+    _assign: &AstAssignP<P>,
+) -> Option<DocProperty> {
+    peek_docstring(previous_node).map(|doc_string| {
+        DocProperty {
+            docs: DocString::from_docstring(DocStringKind::Starlark, doc_string),
+            // TODO: Can constants have a type?
+            typ: None,
+        }
+    })
 }
 
 fn peek_docstring<P: AstPayload>(stmt: &AstStmtP<P>) -> Option<&str> {

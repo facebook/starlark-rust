@@ -19,10 +19,13 @@ use dupe::Dupe;
 
 use crate::codemap::FileSpan;
 use crate::collections::SmallMap;
+use crate::docs::DocItem;
 use crate::syntax::ast::AstAssignIdent;
 use crate::syntax::ast::DefP;
 use crate::syntax::ast::Expr;
 use crate::syntax::ast::Stmt;
+use crate::syntax::docs::get_doc_item_for_assign;
+use crate::syntax::docs::get_doc_item_for_def;
 use crate::syntax::AstModule;
 
 /// The type of an exported symbol.
@@ -46,7 +49,7 @@ impl SymbolKind {
 }
 
 /// A symbol. Returned from [`AstModule::exported_symbols`].
-#[derive(Debug, PartialEq, Eq, Clone, Dupe, Hash)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Symbol<'a> {
     /// The name of the symbol.
     pub name: &'a str,
@@ -54,6 +57,8 @@ pub struct Symbol<'a> {
     pub span: FileSpan,
     /// The type of symbol it represents.
     pub kind: SymbolKind,
+    /// The documentation for this symbol.
+    pub docs: Option<DocItem>,
 }
 
 impl AstModule {
@@ -69,34 +74,48 @@ impl AstModule {
             result: &mut SmallMap<&'a str, Symbol<'a>>,
             name: &'a AstAssignIdent,
             kind: SymbolKind,
+            resolve_docs: impl FnOnce() -> Option<DocItem>,
         ) {
             if !name.0.starts_with('_') {
                 result.entry(&name.0).or_insert(Symbol {
                     name: &name.0,
                     span: me.file_span(name.span),
                     kind,
+                    docs: resolve_docs(),
                 });
             }
         }
 
+        let mut last_node = None;
         for x in self.top_level_statements() {
             match &**x {
                 Stmt::Assign(dest, rhs) => {
                     dest.visit_lvalue(|name| {
                         let kind = SymbolKind::from_expr(&rhs.1);
-                        add(self, &mut result, name, kind);
+                        add(self, &mut result, name, kind, || {
+                            last_node
+                                .and_then(|last| get_doc_item_for_assign(last, dest))
+                                .map(DocItem::Property)
+                        });
                     });
                 }
                 Stmt::AssignModify(dest, _, _) => {
                     dest.visit_lvalue(|name| {
-                        add(self, &mut result, name, SymbolKind::Any);
+                        add(self, &mut result, name, SymbolKind::Any, || {
+                            last_node
+                                .and_then(|last| get_doc_item_for_assign(last, dest))
+                                .map(DocItem::Property)
+                        });
                     });
                 }
-                Stmt::Def(DefP { name, .. }) => {
-                    add(self, &mut result, name, SymbolKind::Function);
+                Stmt::Def(def) => {
+                    add(self, &mut result, &def.name, SymbolKind::Function, || {
+                        get_doc_item_for_def(def).map(DocItem::Function)
+                    });
                 }
                 _ => {}
             }
+            last_node = Some(x);
         }
         result.into_values().collect()
     }

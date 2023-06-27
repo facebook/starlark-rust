@@ -830,6 +830,12 @@ impl<T: LspContext> Backend<T> {
                         ExportedSymbolKind::Any => CompletionItemKind::CONSTANT,
                         ExportedSymbolKind::Function => CompletionItemKind::METHOD,
                     }),
+                    documentation: symbol.docs.map(|docs| {
+                        Documentation::MarkupContent(MarkupContent {
+                            kind: MarkupKind::Markdown,
+                            value: render_doc_item(symbol.name, &docs),
+                        })
+                    }),
                     additional_text_edits: Some(vec![format_text_edit(&load_path, symbol.name)]),
                     ..Default::default()
                 })
