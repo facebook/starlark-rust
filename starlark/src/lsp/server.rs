@@ -246,7 +246,7 @@ pub struct StringLiteralResult {
     /// If `None`, then just jump to the URL. Do not attempt to load the file.
     #[derivative(Debug = "ignore")]
     pub location_finder:
-        Option<Box<dyn FnOnce(&AstModule, &LspUrl) -> anyhow::Result<Option<Range>> + Send>>,
+        Option<Box<dyn FnOnce(&AstModule, &str, &LspUrl) -> anyhow::Result<Option<Range>> + Send>>,
 }
 
 fn _assert_string_literal_result_is_send() {
@@ -570,10 +570,10 @@ impl<T: LspContext> Backend<T> {
                 }
             }
             IdentifierDefinition::StringLiteral { literal, .. } => {
-                let literal = self
-                    .context
-                    .resolve_string_literal(&literal, uri, workspace_root)?;
-                match literal {
+                let resolved_literal =
+                    self.context
+                        .resolve_string_literal(&literal, uri, workspace_root)?;
+                match resolved_literal {
                     Some(StringLiteralResult {
                         url,
                         location_finder: Some(location_finder),
@@ -583,7 +583,14 @@ impl<T: LspContext> Backend<T> {
                         let result =
                             self.get_ast_or_load_from_disk(&url)
                                 .and_then(|ast| match ast {
-                                    Some(module) => location_finder(&module.ast, &url),
+                                    Some(module) => location_finder(
+                                        &module.ast,
+                                        literal
+                                            .split_once(':')
+                                            .map(|(_, rest)| rest)
+                                            .unwrap_or_default(),
+                                        &url,
+                                    ),
                                     None => Ok(None),
                                 });
                         if let Err(e) = &result {

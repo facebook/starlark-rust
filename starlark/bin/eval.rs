@@ -107,6 +107,9 @@ enum ResolveLoadError {
     /// The path contained a repository name that is not known to the build system.
     #[error("Cannot resolve path `{}` because the repository `{}` is unknown", .0, .1)]
     UnknownRepository(String, String),
+    /// The path contained a target name that does not resolve to an existing file.
+    #[error("Cannot resolve path `{}` because the file does not exist", .0)]
+    TargetNotFound(String),
 }
 
 /// Errors when [`LspContext::render_as_load()`] cannot render a given path.
@@ -335,6 +338,32 @@ impl LspContext for Context {
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<LspUrl> {
+        let try_file = |folder: PathBuf,
+                        presumed_filename: &str,
+                        build_system: Option<&dyn BuildSystem>|
+         -> anyhow::Result<LspUrl> {
+            // Try the presumed filename first, and check if it exists.
+            {
+                let path = folder.join(presumed_filename);
+                if path.exists() {
+                    return Ok(Url::from_file_path(path).unwrap().try_into()?);
+                }
+            }
+
+            // If the presumed filename doesn't exist, try to find a build file from the build system
+            // and use that instead.
+            if let Some(build_system) = build_system {
+                for build_file_name in build_system.get_build_file_names() {
+                    let path = folder.join(build_file_name);
+                    if path.exists() {
+                        return Ok(Url::from_file_path(path).unwrap().try_into()?);
+                    }
+                }
+            }
+
+            Err(ResolveLoadError::TargetNotFound(path.to_owned()).into())
+        };
+
         let original_path = path;
         if let Some((repository, path)) = path.split_once("//") {
             // The repository may be prefixed with an '@', but it's optional in Buck2.
@@ -399,12 +428,11 @@ impl LspContext for Context {
 
             // Resolve from the root of the repository.
             match (path.split_once(':'), resolve_root) {
-                (Some((subfolder, filename)), Some(resolve_root)) => {
-                    let mut result = resolve_root.into_owned();
-                    result.push(subfolder);
-                    result.push(filename);
-                    Ok(Url::from_file_path(result).unwrap().try_into()?)
-                }
+                (Some((subfolder, filename)), Some(resolve_root)) => try_file(
+                    resolve_root.join(subfolder),
+                    filename,
+                    self.build_system.as_deref(),
+                ),
                 (Some(_), None) => {
                     Err(ResolveLoadError::MissingWorkspaceRoot(original_path.to_owned()).into())
                 }
@@ -417,16 +445,16 @@ impl LspContext for Context {
             match current_file {
                 LspUrl::File(current_file_path) => {
                     let current_file_dir = current_file_path.parent();
-                    let absolute_path = match current_file_dir {
-                        Some(current_file_dir) => {
-                            let mut result = current_file_dir.to_owned();
-                            result.push(folder);
-                            result.push(filename);
-                            Ok(result)
+                    match current_file_dir {
+                        Some(current_file_dir) => Ok(try_file(
+                            current_file_dir.join(folder),
+                            filename,
+                            self.build_system.as_deref(),
+                        )?),
+                        None => {
+                            Err(ResolveLoadError::MissingCurrentFilePath(path.to_owned()).into())
                         }
-                        None => Err(ResolveLoadError::MissingCurrentFilePath(path.to_owned())),
-                    }?;
-                    Ok(Url::from_file_path(absolute_path).unwrap().try_into()?)
+                    }
                 }
                 _ => Err(
                     ResolveLoadError::WrongScheme("file://".to_owned(), current_file.clone())
@@ -521,9 +549,24 @@ impl LspContext for Context {
     ) -> anyhow::Result<Option<StringLiteralResult>> {
         self.resolve_load(literal, current_file, workspace_root)
             .map(|url| {
+                let original_target_name = Path::new(literal).file_name();
+                let path_file_name = url.path().file_name();
+                let same_filename = original_target_name == path_file_name;
+
                 Some(StringLiteralResult {
-                    url,
-                    location_finder: None,
+                    url: url.clone(),
+                    // If the target name is the same as the original target name, we don't need to
+                    // do anything. Otherwise, we need to find the function call in the target file
+                    // that has a `name` parameter with the same value as the original target name.
+                    location_finder: if same_filename {
+                        None
+                    } else {
+                        Some(Box::new(|ast, name, _| {
+                            Ok(ast
+                                .find_function_call_with_name(name)
+                                .map(|resolved_span| resolved_span.into()))
+                        }))
+                    },
                 })
             })
     }

@@ -70,4 +70,8 @@ impl BuildSystem for Buck2BuildSystem {
     fn should_use_at_sign_before_repository_name(&self) -> bool {
         false
     }
+
+    fn get_build_file_names(&self) -> Vec<&str> {
+        vec!["BUCK"]
+    }
 }

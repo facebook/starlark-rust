@@ -81,4 +81,8 @@ impl BuildSystem for BazelBuildSystem {
             None
         }
     }
+
+    fn get_build_file_names(&self) -> Vec<&str> {
+        vec!["BUILD", "BUILD.bazel"]
+    }
 }

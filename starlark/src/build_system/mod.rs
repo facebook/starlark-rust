@@ -32,6 +32,9 @@ pub trait BuildSystem: std::fmt::Debug + Send + Sync {
     /// part of a known repository.
     fn repository_for_path<'a>(&'a self, path: &'a Path) -> Option<(Cow<'a, str>, &'a Path)>;
 
+    /// Get valid build file names for this build system.
+    fn get_build_file_names(&self) -> Vec<&str>;
+
     /// Whether to prefix absolute paths with `@` when that path contains a
     /// repository name.
     fn should_use_at_sign_before_repository_name(&self) -> bool {
