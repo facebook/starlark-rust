@@ -85,7 +85,19 @@ pub(crate) fn find_symbols_at_position<'a>(
                 walk(codemap, position, body, top_level, symbols);
             }
             StmtP::Def(def) => {
-                add(symbols, top_level, &def.name, SymbolKind::Function, None);
+                add(
+                    symbols,
+                    top_level,
+                    &def.name,
+                    SymbolKind::Function {
+                        argument_names: def
+                            .params
+                            .iter()
+                            .filter_map(|param| param.split().0.map(|name| name.to_string()))
+                            .collect(),
+                    },
+                    None,
+                );
 
                 // Only recurse into method if the cursor is in it.
                 if codemap.resolve_span(def.body.span).contains(position) {
@@ -161,7 +173,13 @@ my_var = True
             vec![
                 sym("exported_a", SymbolKind::Any, Some("foo.star")),
                 sym("renamed", SymbolKind::Any, Some("foo.star")),
-                sym("_method", SymbolKind::Function, None),
+                sym(
+                    "_method",
+                    SymbolKind::Function {
+                        argument_names: vec!["param".to_owned()],
+                    },
+                    None
+                ),
                 sym("my_var", SymbolKind::Any, None),
             ]
         );
@@ -170,7 +188,13 @@ my_var = True
             inside_method,
             vec![
                 sym("param", SymbolKind::Any, None),
-                sym("x", SymbolKind::Function, None),
+                sym(
+                    "x",
+                    SymbolKind::Function {
+                        argument_names: vec!["_".to_owned()]
+                    },
+                    None
+                ),
             ]
         );
     }
