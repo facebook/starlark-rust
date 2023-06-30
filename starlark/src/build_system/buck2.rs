@@ -13,6 +13,9 @@ pub(crate) struct Buck2BuildSystem {
 }
 
 impl Buck2BuildSystem {
+    const BUILD_FILE_NAMES: [&'static str; 1] = ["BUCK"];
+    const LOADABLE_EXTENSIONS: [&'static str; 1] = ["bzl"];
+
     pub(crate) fn new(workspace_dir: Option<&PathBuf>) -> Option<Self> {
         // We always need the workspace dir to resolve the workspace name.
         let workspace_dir = workspace_dir?;
@@ -21,6 +24,7 @@ impl Buck2BuildSystem {
         let command = raw_command
             .arg("audit")
             .arg("cell")
+            .arg("--aliases")
             .arg("--json")
             .current_dir(workspace_dir);
 
@@ -29,18 +33,22 @@ impl Buck2BuildSystem {
             return None;
         }
 
-        let repositories =
-            serde_json::from_slice::<HashMap<String, PathBuf>>(&output.stdout).ok()?;
-        let workspace_name = repositories.iter().find_map(|(name, path)| {
-            if path == workspace_dir {
-                Some(name.clone())
-            } else {
-                None
-            }
-        })?;
+        let mut workspace_name = None;
+        let repositories = serde_json::from_slice::<HashMap<String, PathBuf>>(&output.stdout)
+            .ok()?
+            .into_iter()
+            .filter_map(|(name, path)| {
+                if &path == workspace_dir {
+                    workspace_name = Some(name);
+                    None
+                } else {
+                    Some((name, path))
+                }
+            })
+            .collect();
 
         Some(Self {
-            workspace_name,
+            workspace_name: workspace_name?,
             repositories,
         })
     }
@@ -61,17 +69,55 @@ impl BuildSystem for Buck2BuildSystem {
         self.repositories
             .iter()
             .find_map(|(name, repository_path)| {
-                path.strip_prefix(repository_path)
-                    .ok()
-                    .map(|stripped_path| (Cow::Borrowed(name.as_str()), stripped_path))
+                if path.starts_with(repository_path) {
+                    Some((Cow::Borrowed(name.as_str()), repository_path.as_path()))
+                } else {
+                    None
+                }
             })
+    }
+
+    fn repository_names(&self) -> Vec<Cow<str>> {
+        self.repositories
+            .keys()
+            .map(|name| name.as_str())
+            .map(Cow::Borrowed)
+            .collect()
+    }
+
+    fn get_build_file_names(&self) -> &[&str] {
+        &Self::BUILD_FILE_NAMES
+    }
+
+    fn get_loadable_extensions(&self) -> &[&str] {
+        &Self::LOADABLE_EXTENSIONS
+    }
+
+    fn query_buildable_targets(
+        &self,
+        module: &str,
+        workspace_dir: Option<&Path>,
+    ) -> Option<Vec<String>> {
+        let mut raw_command = Command::new("buck2");
+        let mut command = raw_command
+            .arg("uquery")
+            // buck2 query doesn't like `@` prefixes.
+            .arg(module.trim_start_matches('@'))
+            .arg("--json");
+        if let Some(workspace_dir) = workspace_dir {
+            command = command.current_dir(workspace_dir);
+        }
+
+        let output = command.output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let output = String::from_utf8(output.stdout).ok()?;
+        serde_json::from_str(&output).ok()
     }
 
     fn should_use_at_sign_before_repository_name(&self) -> bool {
         false
-    }
-
-    fn get_build_file_names(&self) -> Vec<&str> {
-        vec!["BUCK"]
     }
 }

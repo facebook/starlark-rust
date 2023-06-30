@@ -32,8 +32,22 @@ pub trait BuildSystem: std::fmt::Debug + Send + Sync {
     /// part of a known repository.
     fn repository_for_path<'a>(&'a self, path: &'a Path) -> Option<(Cow<'a, str>, &'a Path)>;
 
+    /// Returns the names of all known repositories.
+    fn repository_names(&self) -> Vec<Cow<str>>;
+
     /// Get valid build file names for this build system.
-    fn get_build_file_names(&self) -> Vec<&str>;
+    fn get_build_file_names(&self) -> &[&str];
+
+    /// Get valid file extensions for this build system.
+    fn get_loadable_extensions(&self) -> &[&str];
+
+    /// Ask the build system for the build targets that are buildable from the
+    /// given module. The `module` parameter should always end with a `:`.
+    fn query_buildable_targets(
+        &self,
+        module: &str,
+        workspace_dir: Option<&Path>,
+    ) -> Option<Vec<String>>;
 
     /// Whether to prefix absolute paths with `@` when that path contains a
     /// repository name.
