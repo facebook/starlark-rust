@@ -56,9 +56,15 @@ impl Add<u32> for Pos {
     }
 }
 
+impl Display for Pos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A range of text within a CodeMap.
 #[derive(Copy, Dupe, Clone, Hash, Eq, PartialEq, Debug, Default, Allocative)]
-pub(crate) struct Span {
+pub struct Span {
     /// The position in the codemap representing the first byte of the span.
     begin: Pos,
 

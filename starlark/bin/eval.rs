@@ -315,55 +315,14 @@ impl Context {
             .into_iter()
             .map(EvalMessage::from)
     }
-}
 
-impl LspContext for Context {
-    fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
-        match uri {
-            LspUrl::File(uri) => {
-                let EvalResult { messages, ast } =
-                    self.file_with_contents(&uri.to_string_lossy(), content);
-                LspEvalResult {
-                    diagnostics: messages.map(Diagnostic::from).collect(),
-                    ast,
-                }
-            }
-            _ => LspEvalResult::default(),
-        }
-    }
-
-    fn resolve_load(
+    fn resolve_folder<'a>(
         &self,
-        path: &str,
+        path: &'a str,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<LspUrl> {
-        let try_file = |folder: PathBuf,
-                        presumed_filename: &str,
-                        build_system: Option<&dyn BuildSystem>|
-         -> anyhow::Result<LspUrl> {
-            // Try the presumed filename first, and check if it exists.
-            {
-                let path = folder.join(presumed_filename);
-                if path.exists() {
-                    return Ok(Url::from_file_path(path).unwrap().try_into()?);
-                }
-            }
-
-            // If the presumed filename doesn't exist, try to find a build file from the build system
-            // and use that instead.
-            if let Some(build_system) = build_system {
-                for build_file_name in build_system.get_build_file_names() {
-                    let path = folder.join(build_file_name);
-                    if path.exists() {
-                        return Ok(Url::from_file_path(path).unwrap().try_into()?);
-                    }
-                }
-            }
-
-            Err(ResolveLoadError::TargetNotFound(path.to_owned()).into())
-        };
-
+        resolved_filename: &mut Option<&'a str>,
+    ) -> anyhow::Result<PathBuf> {
         let original_path = path;
         if let Some((repository, path)) = path.split_once("//") {
             // The repository may be prefixed with an '@', but it's optional in Buck2.
@@ -428,11 +387,11 @@ impl LspContext for Context {
 
             // Resolve from the root of the repository.
             match (path.split_once(':'), resolve_root) {
-                (Some((subfolder, filename)), Some(resolve_root)) => try_file(
-                    resolve_root.join(subfolder),
-                    filename,
-                    self.build_system.as_deref(),
-                ),
+                (Some((subfolder, filename)), Some(resolve_root)) => {
+                    resolved_filename.replace(filename);
+                    Ok(resolve_root.join(subfolder))
+                }
+                (None, Some(resolve_root)) => Ok(resolve_root.join(path)),
                 (Some(_), None) => {
                     Err(ResolveLoadError::MissingWorkspaceRoot(original_path.to_owned()).into())
                 }
@@ -441,16 +400,14 @@ impl LspContext for Context {
                 }
             }
         } else if let Some((folder, filename)) = path.split_once(':') {
+            resolved_filename.replace(filename);
+
             // Resolve relative paths from the current file.
             match current_file {
                 LspUrl::File(current_file_path) => {
                     let current_file_dir = current_file_path.parent();
                     match current_file_dir {
-                        Some(current_file_dir) => Ok(try_file(
-                            current_file_dir.join(folder),
-                            filename,
-                            self.build_system.as_deref(),
-                        )?),
+                        Some(current_file_dir) => Ok(current_file_dir.join(folder)),
                         None => {
                             Err(ResolveLoadError::MissingCurrentFilePath(path.to_owned()).into())
                         }
@@ -464,6 +421,56 @@ impl LspContext for Context {
         } else {
             Err(ResolveLoadError::CannotParsePath(path.to_owned()).into())
         }
+    }
+}
+
+impl LspContext for Context {
+    fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
+        match uri {
+            LspUrl::File(uri) => {
+                let EvalResult { messages, ast } =
+                    self.file_with_contents(&uri.to_string_lossy(), content);
+                LspEvalResult {
+                    diagnostics: messages.map(Diagnostic::from).collect(),
+                    ast,
+                }
+            }
+            _ => LspEvalResult::default(),
+        }
+    }
+
+    fn resolve_load(
+        &self,
+        path: &str,
+        current_file: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<LspUrl> {
+        let mut presumed_filename = None;
+        let folder =
+            self.resolve_folder(path, current_file, workspace_root, &mut presumed_filename)?;
+
+        // Try the presumed filename first, and check if it exists.
+        if let Some(presumed_filename) = presumed_filename {
+            let path = folder.join(presumed_filename);
+            if path.exists() {
+                return Ok(Url::from_file_path(path).unwrap().try_into()?);
+            }
+        } else {
+            return Err(ResolveLoadError::CannotParsePath(path.to_owned()).into());
+        }
+
+        // If the presumed filename doesn't exist, try to find a build file from the build system
+        // and use that instead.
+        if let Some(build_system) = self.build_system.as_ref() {
+            for build_file_name in build_system.get_build_file_names() {
+                let path = folder.join(build_file_name);
+                if path.exists() {
+                    return Ok(Url::from_file_path(path).unwrap().try_into()?);
+                }
+            }
+        }
+
+        Err(ResolveLoadError::TargetNotFound(path.to_owned()).into())
     }
 
     fn render_as_load(
@@ -562,9 +569,7 @@ impl LspContext for Context {
                         None
                     } else {
                         Some(Box::new(|ast, name, _| {
-                            Ok(ast
-                                .find_function_call_with_name(name)
-                                .map(|resolved_span| resolved_span.into()))
+                            Ok(ast.find_function_call_with_name(name))
                         }))
                     },
                 })

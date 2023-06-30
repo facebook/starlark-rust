@@ -63,6 +63,7 @@ use lsp_types::HoverContents;
 use lsp_types::HoverParams;
 use lsp_types::HoverProviderCapability;
 use lsp_types::InitializeParams;
+use lsp_types::LanguageString;
 use lsp_types::LocationLink;
 use lsp_types::LogMessageParams;
 use lsp_types::MarkedString;
@@ -252,7 +253,7 @@ pub struct StringLiteralResult {
     /// If `None`, then just jump to the URL. Do not attempt to load the file.
     #[derivative(Debug = "ignore")]
     pub location_finder:
-        Option<Box<dyn FnOnce(&AstModule, &str, &LspUrl) -> anyhow::Result<Option<Range>> + Send>>,
+        Option<Box<dyn FnOnce(&AstModule, &str, &LspUrl) -> anyhow::Result<Option<Span>> + Send>>,
 }
 
 fn _assert_string_literal_result_is_send() {
@@ -582,9 +583,11 @@ impl<T: LspContext> Backend<T> {
                 }
             }
             IdentifierDefinition::StringLiteral { literal, .. } => {
-                let resolved_literal =
-                    self.context
-                        .resolve_string_literal(&literal, uri, workspace_root)?;
+                let Ok(resolved_literal) = self.context
+                    .resolve_string_literal(&literal, uri, workspace_root)
+                else {
+                    return Ok(None);
+                };
                 match resolved_literal {
                     Some(StringLiteralResult {
                         url,
@@ -600,15 +603,25 @@ impl<T: LspContext> Backend<T> {
                                         literal
                                             .split_once(':')
                                             .map(|(_, rest)| rest)
+                                            .or_else(|| {
+                                                literal.rsplit_once('/').map(|(_, rest)| rest)
+                                            })
                                             .unwrap_or_default(),
                                         &url,
-                                    ),
+                                    )
+                                    .map(|span| {
+                                        span.map(|span| module.ast.codemap.resolve_span(span))
+                                    }),
                                     None => Ok(None),
                                 });
-                        if let Err(e) = &result {
-                            eprintln!("Error jumping to definition: {:#}", e);
-                        }
-                        let target_range = result.unwrap_or_default().unwrap_or_default();
+                        let result = match result {
+                            Ok(result) => result,
+                            Err(e) => {
+                                eprintln!("Error jumping to definition: {:#}", e);
+                                None
+                            }
+                        };
+                        let target_range = result.unwrap_or_default();
                         Self::location_link(source, &url, target_range)?
                     }
                     Some(StringLiteralResult {
@@ -656,7 +669,7 @@ impl<T: LspContext> Backend<T> {
 
         let location = match self.get_ast(&uri) {
             Some(ast) => {
-                let location = ast.find_definition(line, character);
+                let location = ast.find_definition_at_location(line, character);
                 let source = location.source().unwrap_or_default();
                 match location {
                     Definition::Identifier(definition) => self.resolve_definition_location(
@@ -998,6 +1011,7 @@ impl<T: LspContext> Backend<T> {
         })
     }
 
+    /// Get hover information for a given position in a document.
     fn hover_info(
         &self,
         params: HoverParams,
@@ -1020,12 +1034,13 @@ impl<T: LspContext> Backend<T> {
         };
 
         Ok(match self.get_ast(&uri) {
-            Some(ast) => {
-                let location = ast.find_definition(line, character);
+            Some(document) => {
+                let location = document.find_definition_at_location(line, character);
                 match location {
                     Definition::Identifier(identifier_definition) => self
                         .get_hover_for_identifier_definition(
                             identifier_definition,
+                            &document,
                             &uri,
                             workspace_root.as_deref(),
                         )?,
@@ -1037,6 +1052,7 @@ impl<T: LspContext> Backend<T> {
                         // the root definition.
                         self.get_hover_for_identifier_definition(
                             root_definition_location,
+                            &document,
                             &uri,
                             workspace_root.as_deref(),
                         )?
@@ -1051,26 +1067,98 @@ impl<T: LspContext> Backend<T> {
     fn get_hover_for_identifier_definition(
         &self,
         identifier_definition: IdentifierDefinition,
-        current_uri: &LspUrl,
+        document: &LspModule,
+        document_uri: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<Option<Hover>> {
         Ok(match identifier_definition {
+            IdentifierDefinition::Location {
+                destination,
+                name,
+                source,
+            } => {
+                // TODO: This seems very inefficient. Once the document starts
+                // holding the `Scope` including AST nodes, this indirection
+                // should be removed.
+                find_symbols_at_location(
+                    &document.ast.codemap,
+                    &document.ast.statement,
+                    LineCol {
+                        line: destination.begin_line,
+                        column: destination.begin_column,
+                    },
+                )
+                .remove(&name)
+                .and_then(|symbol| {
+                    symbol.doc.map(|docs| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_item(&symbol.name, &docs),
+                        )]),
+                        range: Some(source.into()),
+                    })
+                })
+            }
             IdentifierDefinition::LoadedLocation {
                 path, name, source, ..
             } => {
                 // Symbol loaded from another file. Find the file and get the definition
                 // from there, hopefully including the docs.
-                let load_uri = self.resolve_load_path(&path, current_uri, workspace_root)?;
+                let load_uri = self.resolve_load_path(&path, document_uri, workspace_root)?;
                 self.get_ast_or_load_from_disk(&load_uri)?.and_then(|ast| {
                     ast.find_exported_symbol(&name).and_then(|symbol| {
                         symbol.docs.map(|docs| Hover {
                             contents: HoverContents::Array(vec![MarkedString::String(
-                                render_doc_item(symbol.name, &docs),
+                                render_doc_item(&symbol.name, &docs),
                             )]),
                             range: Some(source.into()),
                         })
                     })
                 })
+            }
+            IdentifierDefinition::StringLiteral { source, literal } => {
+                let Ok(resolved_literal) = self.context.resolve_string_literal(
+                    &literal,
+                    document_uri,
+                    workspace_root,
+                ) else {
+                    // We might just be hovering a string that's not a file/target/etc,
+                    // so just return nothing.
+                    return Ok(None);
+                };
+                match resolved_literal {
+                    Some(StringLiteralResult {
+                        url,
+                        location_finder: Some(location_finder),
+                    }) => {
+                        // If there's an error loading the file to parse it, at least
+                        // try to get to the file.
+                        let module = if let Ok(Some(ast)) = self.get_ast_or_load_from_disk(&url) {
+                            ast
+                        } else {
+                            return Ok(None);
+                        };
+                        let result = location_finder(
+                            &module.ast,
+                            literal
+                                .split_once(':')
+                                .map(|(_, rest)| rest)
+                                .or_else(|| literal.rsplit_once('/').map(|(_, rest)| rest))
+                                .unwrap_or_default(),
+                            &url,
+                        )?;
+
+                        result.map(|location| Hover {
+                            contents: HoverContents::Array(vec![MarkedString::LanguageString(
+                                LanguageString {
+                                    language: "python".to_string(),
+                                    value: module.ast.codemap.source_span(location).to_string(),
+                                },
+                            )]),
+                            range: Some(source.into()),
+                        })
+                    }
+                    _ => None,
+                }
             }
             IdentifierDefinition::Unresolved { source, name } => {
                 // Try to resolve as a global symbol.
@@ -1087,11 +1175,7 @@ impl<T: LspContext> Backend<T> {
                         })
                     })
             }
-            IdentifierDefinition::NotFound => None,
-            _ => {
-                // Don't support other cases just yet.
-                None
-            }
+            IdentifierDefinition::LoadPath { .. } | IdentifierDefinition::NotFound => None,
         })
     }
 
@@ -1512,8 +1596,8 @@ mod test {
 
         let expected_location = expected_location_link_from_spans(
             bar_uri.clone(),
-            foo.span("baz_click"),
-            bar.span("baz"),
+            foo.resolve_span("baz_click"),
+            bar.resolve_span("baz"),
         );
 
         let mut server = TestServer::new()?;
@@ -1561,8 +1645,8 @@ mod test {
 
         let expected_location = expected_location_link_from_spans(
             bar_uri.clone(),
-            foo.span("baz_click"),
-            bar.span("baz"),
+            foo.resolve_span("baz_click"),
+            bar.resolve_span("baz"),
         );
 
         let mut server = TestServer::new()?;
@@ -1606,8 +1690,8 @@ mod test {
 
         let expected_location = expected_location_link_from_spans(
             bar_uri.clone(),
-            foo.span("baz_click"),
-            bar.span("baz"),
+            foo.resolve_span("baz_click"),
+            bar.resolve_span("baz"),
         );
 
         let mut server = TestServer::new()?;
@@ -1648,8 +1732,8 @@ mod test {
         let foo = FixtureWithRanges::from_fixture(foo_uri.path(), &foo_contents)?;
         let expected_location = expected_location_link_from_spans(
             foo_uri.clone(),
-            foo.span("baz_click"),
-            foo.span("baz_loc"),
+            foo.resolve_span("baz_click"),
+            foo.resolve_span("baz_loc"),
         );
 
         let mut server = TestServer::new()?;
@@ -1692,8 +1776,8 @@ mod test {
 
         let expected_location = expected_location_link_from_spans(
             foo_uri.clone(),
-            foo.span("not_baz"),
-            foo.span("not_baz_loc"),
+            foo.resolve_span("not_baz"),
+            foo.resolve_span("not_baz_loc"),
         );
 
         let mut server = TestServer::new()?;
@@ -1738,8 +1822,8 @@ mod test {
 
         let expected_location = expected_location_link_from_spans(
             bar_uri.clone(),
-            foo.span("baz_click"),
-            bar.span("baz"),
+            foo.resolve_span("baz_click"),
+            bar.resolve_span("baz"),
         );
 
         let mut server = TestServer::new()?;
@@ -1783,8 +1867,8 @@ mod test {
 
         let expected_location = expected_location_link_from_spans(
             foo_uri.clone(),
-            foo.span("not_baz_loc"),
-            foo.span("not_baz_loc"),
+            foo.resolve_span("not_baz_loc"),
+            foo.resolve_span("not_baz_loc"),
         );
 
         let mut server = TestServer::new()?;
@@ -1832,7 +1916,7 @@ mod test {
         let foo = FixtureWithRanges::from_fixture(foo_uri.path(), &foo_contents)?;
 
         let expected_location = LocationLink {
-            origin_selection_range: Some(foo.span("bar_click").into()),
+            origin_selection_range: Some(foo.resolve_span("bar_click").into()),
             target_uri: bar_uri,
             target_range: Default::default(),
             target_selection_range: Default::default(),
@@ -1879,11 +1963,9 @@ mod test {
 
         let bar_contents = r#""Just <bar>a string</bar>""#;
         let bar = FixtureWithRanges::from_fixture(bar_uri.path(), bar_contents)?;
-        let bar_range = bar.span("bar");
-        let bar_range_str = format!(
-            "{}:{}:{}:{}",
-            bar_range.begin_line, bar_range.begin_column, bar_range.end_line, bar_range.end_column
-        );
+        let bar_span = bar.span("bar");
+        let bar_resolved_span = bar.resolve_span("bar");
+        let bar_span_str = format!("{}:{}", bar_span.begin(), bar_span.end());
 
         let foo_contents = dedent(
             r#"
@@ -1963,7 +2045,7 @@ mod test {
             "#,
         )
         .trim()
-        .replace("{bar_range}", &bar_range_str);
+        .replace("{bar_range}", &bar_span_str);
         let foo = FixtureWithRanges::from_fixture(foo_uri.path(), &foo_contents)?;
 
         let mut server = TestServer::new()?;
@@ -1972,13 +2054,13 @@ mod test {
 
         let mut test = |name: &str, expect_range: bool| -> anyhow::Result<()> {
             let range = if expect_range {
-                bar_range
+                bar_resolved_span
             } else {
                 Default::default()
             };
             let expected_location = expected_location_link_from_spans(
                 bar_uri.clone(),
-                foo.span(&format!("{}_click", name)),
+                foo.resolve_span(&format!("{}_click", name)),
                 range,
             );
 
@@ -2085,7 +2167,7 @@ mod test {
         let response = goto_definition_response_location(&mut server, req_id)?;
 
         let expected = LocationLink {
-            origin_selection_range: Some(foo.span("bar").into()),
+            origin_selection_range: Some(foo.resolve_span("bar").into()),
             target_uri: bar_uri,
             target_range: Default::default(),
             target_selection_range: Default::default(),
@@ -2103,7 +2185,7 @@ mod test {
         let response = goto_definition_response_location(&mut server, req_id)?;
 
         let expected = LocationLink {
-            origin_selection_range: Some(foo.span("baz").into()),
+            origin_selection_range: Some(foo.resolve_span("baz").into()),
             target_uri: baz_uri,
             target_range: Default::default(),
             target_selection_range: Default::default(),
@@ -2121,7 +2203,7 @@ mod test {
         let response = goto_definition_response_location(&mut server, req_id)?;
 
         let expected = LocationLink {
-            origin_selection_range: Some(foo.span("dir1").into()),
+            origin_selection_range: Some(foo.resolve_span("dir1").into()),
             target_uri: dir1_uri,
             target_range: Default::default(),
             target_selection_range: Default::default(),
@@ -2140,7 +2222,7 @@ mod test {
         let response = goto_definition_response_location(&mut server, req_id)?;
 
         let expected = LocationLink {
-            origin_selection_range: Some(foo.span("dir2").into()),
+            origin_selection_range: Some(foo.resolve_span("dir2").into()),
             target_uri: dir2_uri,
             target_range: Default::default(),
             target_selection_range: Default::default(),
@@ -2252,8 +2334,8 @@ mod test {
 
         let expected_n1_location = expected_location_link_from_spans(
             native_uri,
-            foo.span("click_n1"),
-            native.span("n1_loc"),
+            foo.resolve_span("click_n1"),
+            native.resolve_span("n1_loc"),
         );
 
         let goto_definition = goto_definition_request(
@@ -2269,8 +2351,8 @@ mod test {
 
         let expected_n2_location = expected_location_link_from_spans(
             foo_uri.clone(),
-            foo.span("click_n2"),
-            foo.span("n2_loc"),
+            foo.resolve_span("click_n2"),
+            foo.resolve_span("n2_loc"),
         );
 
         let goto_definition = goto_definition_request(
@@ -2377,8 +2459,8 @@ mod test {
             .map(|(fixture, uri, id)| {
                 expected_location_link_from_spans(
                     (*uri).clone(),
-                    foo.span(id),
-                    fixture.span(&format!("dest_{}", id)),
+                    foo.resolve_span(id),
+                    fixture.resolve_span(&format!("dest_{}", id)),
                 )
             })
             .collect::<Vec<_>>();

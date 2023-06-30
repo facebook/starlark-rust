@@ -49,6 +49,7 @@ pub(crate) enum IdentifierDefinition {
     Location {
         source: ResolvedSpan,
         destination: ResolvedSpan,
+        name: String,
     },
     /// The symbol was loaded from another file. "destination" is the position within the
     /// "load()" statement, but additionally, the path in that load statement, and the
@@ -113,7 +114,11 @@ pub(crate) struct DottedDefinition {
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum TempIdentifierDefinition<'a> {
     /// The location of the definition of the symbol at the current line/column
-    Location { source: Span, destination: Span },
+    Location {
+        source: Span,
+        destination: Span,
+        name: &'a str,
+    },
     LoadedLocation {
         source: Span,
         destination: Span,
@@ -226,7 +231,7 @@ impl LspModule {
     ///
     /// This method also handles scoping properly (i.e. an access of "foo" in a function
     /// will return location of the parameter "foo", even if there is a global called "foo").
-    pub(crate) fn find_definition(&self, line: u32, col: u32) -> Definition {
+    pub(crate) fn find_definition_at_location(&self, line: u32, col: u32) -> Definition {
         // TODO(nmj): This should probably just store references to all of the AST nodes
         //            when the LSPModule object is created, and then we can do a much faster
         //            lookup, especially in cases where a file has not been changed, so the
@@ -284,6 +289,7 @@ impl LspModule {
                 Some((_, span)) => TempIdentifierDefinition::Location {
                     source,
                     destination: *span,
+                    name,
                 },
                 // We know the symbol name, but it might only be available in
                 // an outer scope.
@@ -380,9 +386,11 @@ impl LspModule {
             TempIdentifierDefinition::Location {
                 source,
                 destination,
+                name,
             } => IdentifierDefinition::Location {
                 source: self.ast.codemap.resolve_span(source),
                 destination: self.ast.codemap.resolve_span(destination),
+                name: name.to_owned(),
             },
             TempIdentifierDefinition::Name { source, name } => match scope.bound.get(name) {
                 None => IdentifierDefinition::Unresolved {
@@ -400,6 +408,7 @@ impl LspModule {
                 Some((_, span)) => IdentifierDefinition::Location {
                     source: self.ast.codemap.resolve_span(source),
                     destination: self.ast.codemap.resolve_span(*span),
+                    name: name.to_owned(),
                 },
             },
             // If we could not find the symbol, see if the current position is within
@@ -420,7 +429,7 @@ impl LspModule {
     }
 
     /// Get the list of symbols exported by this module.
-    pub(crate) fn get_exported_symbols(&self) -> Vec<Symbol<'_>> {
+    pub(crate) fn get_exported_symbols(&self) -> Vec<Symbol> {
         self.ast.exported_symbols()
     }
 
@@ -516,8 +525,11 @@ impl LspModule {
         symbol_to_lookup
             .and_then(|span| {
                 let resolved = self.ast.codemap.resolve_span(span);
-                self.find_definition(resolved.begin_line as u32, resolved.begin_column as u32)
-                    .local_destination()
+                self.find_definition_at_location(
+                    resolved.begin_line as u32,
+                    resolved.begin_column as u32,
+                )
+                .local_destination()
             })
             .or_else(|| match (arg_span, identifier_span) {
                 (Some(span), _) => Some(self.ast.codemap.resolve_span(span)),
@@ -590,6 +602,7 @@ pub(crate) mod helpers {
     use std::collections::hash_map::Entry;
     use std::collections::HashMap;
 
+    use derivative::Derivative;
     use textwrap::dedent;
 
     use super::*;
@@ -601,13 +614,19 @@ pub(crate) mod helpers {
     use crate::syntax::Dialect;
 
     /// Result of parsing a starlark fixture that has range markers in it. See `FixtureWithRanges::from_fixture`
-    #[derive(Debug, Clone, PartialEq, Eq)]
+    #[derive(Clone, Eq)]
+    #[derive(Derivative)]
+    #[derivative(Debug, PartialEq)]
     pub(crate) struct FixtureWithRanges {
         filename: String,
         /// The starlark program with markers removed.
         program: String,
         /// The location of all of the symbols that were indicated by the test fixture.
-        ranges: HashMap<String, ResolvedSpan>,
+        ranges: HashMap<String, Span>,
+        /// The codemap to resolve spans.
+        #[derivative(Debug = "ignore")]
+        #[derivative(PartialEq = "ignore")]
+        codemap: Option<CodeMap>,
     }
 
     impl FixtureWithRanges {
@@ -672,20 +691,23 @@ pub(crate) mod helpers {
             program.push_str(&fixture[fixture_idx..fixture.len()]);
 
             let code_map = CodeMap::new(filename.to_owned(), program.clone());
-            let spans: HashMap<String, ResolvedSpan> = ranges
+            let spans: HashMap<String, Span> = ranges
                 .into_iter()
                 .map(|(id, (start, end))| {
-                    let span = Span::new(
-                        Pos::new(start.unwrap() as u32),
-                        Pos::new(end.unwrap() as u32),
-                    );
-                    (id, code_map.resolve_span(span))
+                    (
+                        id,
+                        Span::new(
+                            Pos::new(start.unwrap() as u32),
+                            Pos::new(end.unwrap() as u32),
+                        ),
+                    )
                 })
                 .collect();
 
             Ok(Self {
                 filename: filename.to_owned(),
                 program,
+                codemap: Some(code_map),
                 ranges: spans,
             })
         }
@@ -693,6 +715,12 @@ pub(crate) mod helpers {
         pub(crate) fn begin_line(&self, identifier: &str) -> u32 {
             self.ranges
                 .get(identifier)
+                .map(|span| {
+                    self.codemap
+                        .as_ref()
+                        .expect("codemap to be set")
+                        .resolve_span(*span)
+                })
                 .expect("identifier to be present")
                 .begin_line as u32
         }
@@ -700,14 +728,32 @@ pub(crate) mod helpers {
         pub(crate) fn begin_column(&self, identifier: &str) -> u32 {
             self.ranges
                 .get(identifier)
+                .map(|span| {
+                    self.codemap
+                        .as_ref()
+                        .expect("codemap to be set")
+                        .resolve_span(*span)
+                })
                 .expect("identifier to be present")
                 .begin_column as u32
         }
 
-        pub(crate) fn span(&self, identifier: &str) -> ResolvedSpan {
+        pub(crate) fn span(&self, identifier: &str) -> Span {
             *self
                 .ranges
                 .get(identifier)
+                .expect("identifier to be present")
+        }
+
+        pub(crate) fn resolve_span(&self, identifier: &str) -> ResolvedSpan {
+            self.ranges
+                .get(identifier)
+                .map(|span| {
+                    self.codemap
+                        .as_ref()
+                        .expect("codemap to be set")
+                        .resolve_span(*span)
+                })
                 .expect("identifier to be present")
         }
 
@@ -750,25 +796,21 @@ pub(crate) mod helpers {
         .to_owned();
 
         let expected_locations = [
-            ("a", 0, 17, 0, 22),
-            ("bar_highlight", 3, 0, 3, 3),
-            ("bar_click", 3, 0, 3, 1),
-            ("x", 3, 4, 3, 5),
+            ("a", 17, 22),
+            ("bar_highlight", 32, 35),
+            ("bar_click", 32, 33),
+            ("x", 36, 37),
         ]
         .into_iter()
-        .map(|(id, begin_line, begin_column, end_line, end_column)| {
-            let span = ResolvedSpan {
-                begin_line,
-                begin_column,
-                end_line,
-                end_column,
-            };
+        .map(|(id, begin_pos, end_pos)| {
+            let span = Span::new(Pos::new(begin_pos), Pos::new(end_pos));
             (id.to_owned(), span)
         })
         .collect();
 
         let expected = FixtureWithRanges {
             filename: "test.star".to_owned(),
+            codemap: None,
             program: expected_program,
             ranges: expected_locations,
         };
@@ -814,23 +856,23 @@ mod test {
         let module = parsed.module()?;
 
         let expected: Definition = IdentifierDefinition::LoadedLocation {
-            source: parsed.span("print_click"),
-            destination: parsed.span("print"),
+            source: parsed.resolve_span("print_click"),
+            destination: parsed.resolve_span("print"),
             path: "bar.star".to_owned(),
             name: "other_print".to_owned(),
         }
         .into();
         assert_eq!(
             expected,
-            module.find_definition(parsed.begin_line("p1"), parsed.begin_column("p1"))
+            module.find_definition_at_location(parsed.begin_line("p1"), parsed.begin_column("p1"))
         );
         assert_eq!(
             expected,
-            module.find_definition(parsed.begin_line("p2"), parsed.begin_column("p2"))
+            module.find_definition_at_location(parsed.begin_line("p2"), parsed.begin_column("p2"))
         );
         assert_eq!(
             expected,
-            module.find_definition(parsed.begin_line("p3"), parsed.begin_column("p3"))
+            module.find_definition_at_location(parsed.begin_line("p3"), parsed.begin_column("p3"))
         );
         Ok(())
     }
@@ -861,38 +903,40 @@ mod test {
         let module = parsed.module()?;
 
         let expected_add = Definition::from(IdentifierDefinition::Location {
-            source: parsed.span("add_click"),
-            destination: parsed.span("add"),
+            source: parsed.resolve_span("add_click"),
+            destination: parsed.resolve_span("add"),
+            name: "add".to_owned(),
         });
         let expected_invalid = Definition::from(IdentifierDefinition::Location {
-            source: parsed.span("invalid_symbol_click"),
-            destination: parsed.span("invalid_symbol"),
+            source: parsed.resolve_span("invalid_symbol_click"),
+            destination: parsed.resolve_span("invalid_symbol"),
+            name: "invalid_symbol".to_owned(),
         });
 
         assert_eq!(
             expected_add,
-            module.find_definition(parsed.begin_line("a1"), parsed.begin_column("a1"))
+            module.find_definition_at_location(parsed.begin_line("a1"), parsed.begin_column("a1"))
         );
         assert_eq!(
             expected_add,
-            module.find_definition(parsed.begin_line("a2"), parsed.begin_column("a2"))
+            module.find_definition_at_location(parsed.begin_line("a2"), parsed.begin_column("a2"))
         );
         assert_eq!(
             expected_add,
-            module.find_definition(parsed.begin_line("a3"), parsed.begin_column("a3"))
+            module.find_definition_at_location(parsed.begin_line("a3"), parsed.begin_column("a3"))
         );
 
         assert_eq!(
             expected_invalid,
-            module.find_definition(parsed.begin_line("i1"), parsed.begin_column("i1"))
+            module.find_definition_at_location(parsed.begin_line("i1"), parsed.begin_column("i1"))
         );
         assert_eq!(
             expected_invalid,
-            module.find_definition(parsed.begin_line("i2"), parsed.begin_column("i2"))
+            module.find_definition_at_location(parsed.begin_line("i2"), parsed.begin_column("i2"))
         );
         assert_eq!(
             expected_invalid,
-            module.find_definition(parsed.begin_line("i3"), parsed.begin_column("i3"))
+            module.find_definition_at_location(parsed.begin_line("i3"), parsed.begin_column("i3"))
         );
         Ok(())
     }
@@ -924,10 +968,14 @@ mod test {
 
         assert_eq!(
             Definition::from(IdentifierDefinition::Location {
-                source: parsed.span("x_param"),
-                destination: parsed.span("x")
+                source: parsed.resolve_span("x_param"),
+                destination: parsed.resolve_span("x"),
+                name: "x".to_owned(),
             }),
-            module.find_definition(parsed.begin_line("x_param"), parsed.begin_column("x_param"))
+            module.find_definition_at_location(
+                parsed.begin_line("x_param"),
+                parsed.begin_column("x_param")
+            )
         );
         Ok(())
     }
@@ -959,32 +1007,47 @@ mod test {
 
         assert_eq!(
             Definition::from(IdentifierDefinition::Location {
-                source: parsed.span("x_var"),
-                destination: parsed.span("x")
+                source: parsed.resolve_span("x_var"),
+                destination: parsed.resolve_span("x"),
+                name: "x".to_owned(),
             }),
-            module.find_definition(parsed.begin_line("x_var"), parsed.begin_column("x_var"))
+            module.find_definition_at_location(
+                parsed.begin_line("x_var"),
+                parsed.begin_column("x_var")
+            )
         );
         assert_eq!(
             Definition::from(IdentifierDefinition::Location {
-                source: parsed.span("y_var1"),
-                destination: parsed.span("y2")
+                source: parsed.resolve_span("y_var1"),
+                destination: parsed.resolve_span("y2"),
+                name: "y".to_owned(),
             }),
-            module.find_definition(parsed.begin_line("y_var1"), parsed.begin_column("y_var1"))
+            module.find_definition_at_location(
+                parsed.begin_line("y_var1"),
+                parsed.begin_column("y_var1")
+            )
         );
 
         assert_eq!(
             Definition::from(IdentifierDefinition::Location {
-                source: parsed.span("y_var2"),
-                destination: parsed.span("y1")
+                source: parsed.resolve_span("y_var2"),
+                destination: parsed.resolve_span("y1"),
+                name: "y".to_owned(),
             }),
-            module.find_definition(parsed.begin_line("y_var2"), parsed.begin_column("y_var2"))
+            module.find_definition_at_location(
+                parsed.begin_line("y_var2"),
+                parsed.begin_column("y_var2")
+            )
         );
         assert_eq!(
             Definition::from(IdentifierDefinition::Unresolved {
-                source: parsed.span("z_var"),
+                source: parsed.resolve_span("z_var"),
                 name: "z".to_owned()
             }),
-            module.find_definition(parsed.begin_line("z_var"), parsed.begin_column("z_var"))
+            module.find_definition_at_location(
+                parsed.begin_line("z_var"),
+                parsed.begin_column("z_var")
+            )
         );
         Ok(())
     }
@@ -1016,7 +1079,10 @@ mod test {
 
         assert_eq!(
             Definition::from(IdentifierDefinition::NotFound),
-            module.find_definition(parsed.begin_line("no_def"), parsed.begin_column("no_def"))
+            module.find_definition_at_location(
+                parsed.begin_line("no_def"),
+                parsed.begin_column("no_def")
+            )
         );
 
         Ok(())
@@ -1072,10 +1138,11 @@ mod test {
 
         fn test(parsed: &FixtureWithRanges, module: &LspModule, name: &str) {
             let expected = Definition::from(IdentifierDefinition::StringLiteral {
-                source: parsed.span(&format!("{}_click", name)),
+                source: parsed.resolve_span(&format!("{}_click", name)),
                 literal: name.to_owned(),
             });
-            let actual = module.find_definition(parsed.begin_line(name), parsed.begin_column(name));
+            let actual = module
+                .find_definition_at_location(parsed.begin_line(name), parsed.begin_column(name));
 
             assert_eq!(
                 expected, actual,
@@ -1122,12 +1189,12 @@ mod test {
 
         let expected = |span_id: &str, segments: &[&str]| -> Definition {
             let root_definition_location = IdentifierDefinition::Unresolved {
-                source: parsed.span(&format!("{}_root", span_id)),
+                source: parsed.resolve_span(&format!("{}_root", span_id)),
                 name: "foo".to_owned(),
             };
             if segments.len() > 1 {
                 DottedDefinition {
-                    source: parsed.span(span_id),
+                    source: parsed.resolve_span(span_id),
                     root_definition_location,
                     segments: segments.iter().map(|s| (*s).to_owned()).collect(),
                 }
@@ -1138,7 +1205,10 @@ mod test {
         };
 
         let find_definition = |span_id: &str| {
-            module.find_definition(parsed.begin_line(span_id), parsed.begin_column(span_id))
+            module.find_definition_at_location(
+                parsed.begin_line(span_id),
+                parsed.begin_column(span_id),
+            )
         };
 
         let expected_foo = expected("foo", &["foo"]);
@@ -1174,14 +1244,14 @@ mod test {
 
         let expected = |span_id: &str, segments: &[&str]| -> Definition {
             let root_definition_location = IdentifierDefinition::LoadedLocation {
-                source: parsed.span(&format!("{}_root", span_id)),
-                destination: parsed.span("root"),
+                source: parsed.resolve_span(&format!("{}_root", span_id)),
+                destination: parsed.resolve_span("root"),
                 path: "defs.bzl".to_owned(),
                 name: "foo".to_owned(),
             };
             if segments.len() > 1 {
                 DottedDefinition {
-                    source: parsed.span(span_id),
+                    source: parsed.resolve_span(span_id),
                     root_definition_location,
                     segments: segments.iter().map(|s| (*s).to_owned()).collect(),
                 }
@@ -1192,7 +1262,10 @@ mod test {
         };
 
         let find_definition = |span_id: &str| {
-            module.find_definition(parsed.begin_line(span_id), parsed.begin_column(span_id))
+            module.find_definition_at_location(
+                parsed.begin_line(span_id),
+                parsed.begin_column(span_id),
+            )
         };
 
         let expected_foo = expected("foo", &["foo"]);
@@ -1227,12 +1300,13 @@ mod test {
 
         let expected = |span_id: &str, segments: &[&str]| -> Definition {
             let root_definition_location = IdentifierDefinition::Location {
-                source: parsed.span(&format!("{}_root", span_id)),
-                destination: parsed.span("root"),
+                source: parsed.resolve_span(&format!("{}_root", span_id)),
+                destination: parsed.resolve_span("root"),
+                name: "foo".to_owned(),
             };
             if segments.len() > 1 {
                 DottedDefinition {
-                    source: parsed.span(span_id),
+                    source: parsed.resolve_span(span_id),
                     root_definition_location,
                     segments: segments.iter().map(|s| (*s).to_owned()).collect(),
                 }
@@ -1243,7 +1317,10 @@ mod test {
         };
 
         let find_definition = |span_id: &str| {
-            module.find_definition(parsed.begin_line(span_id), parsed.begin_column(span_id))
+            module.find_definition_at_location(
+                parsed.begin_line(span_id),
+                parsed.begin_column(span_id),
+            )
         };
 
         let expected_foo = expected("foo", &["foo"]);

@@ -110,6 +110,7 @@ pub struct GlobalSymbol<'a> {
 }
 
 /// A kind of globally available symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlobalSymbolKind {
     /// A global function, e.g. `dict`.
     Function,
