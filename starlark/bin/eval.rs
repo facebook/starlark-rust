@@ -25,6 +25,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use itertools::Either;
+use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::Url;
 use starlark::build_system::try_resolve_build_system;
@@ -40,6 +41,9 @@ use starlark::environment::Globals;
 use starlark::environment::Module;
 use starlark::errors::EvalMessage;
 use starlark::eval::Evaluator;
+use starlark::lsp::completion::FilesystemCompletion;
+use starlark::lsp::completion::FilesystemCompletionOptions;
+use starlark::lsp::completion::FilesystemCompletionRoot;
 use starlark::lsp::server::LspContext;
 use starlark::lsp::server::LspEvalResult;
 use starlark::lsp::server::LspUrl;
@@ -576,6 +580,113 @@ impl LspContext for Context {
             })
     }
 
+    fn get_filesystem_entries(
+        &self,
+        from: FilesystemCompletionRoot,
+        current_file: &LspUrl,
+        workspace_root: Option<&Path>,
+        options: &FilesystemCompletionOptions,
+    ) -> anyhow::Result<Vec<FilesystemCompletion>> {
+        // Find the actual folder on disk we're looking at.
+        let (from_path, render_base) = match from {
+            FilesystemCompletionRoot::Path(path) => (path.to_owned(), path.to_string_lossy()),
+            FilesystemCompletionRoot::String(str) => (
+                self.resolve_folder(str, current_file, workspace_root, &mut None)?,
+                Cow::Borrowed(str),
+            ),
+        };
+
+        let build_file_names = self
+            .build_system
+            .as_ref()
+            .map(|build_system| build_system.get_build_file_names())
+            .unwrap_or_default();
+        let loadable_extensions = self
+            .build_system
+            .as_ref()
+            .map(|build_system| build_system.get_loadable_extensions());
+        let mut result = Vec::new();
+        for entry in fs::read_dir(from_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            // NOTE: Safe to `unwrap()` here, because we know that `path` is a file system path. And
+            // since it's an entry in a directory, it must have a file name.
+            let file_name = path.file_name().unwrap().to_string_lossy();
+            if path.is_dir() && options.directories {
+                result.push(FilesystemCompletion::Entry {
+                    label: file_name.to_string(),
+                    insert_text: format!(
+                        "{}{}",
+                        if render_base.ends_with('/') || render_base.is_empty() {
+                            ""
+                        } else {
+                            "/"
+                        },
+                        file_name
+                    ),
+                    insert_text_offset: render_base.len(),
+                    kind: CompletionItemKind::FOLDER,
+                });
+            } else if path.is_file() {
+                if build_file_names.contains(&file_name.as_ref()) {
+                    if options.targets {
+                        if let Some(targets) =
+                            self.build_system.as_ref().unwrap().query_buildable_targets(
+                                &format!(
+                                    "{render_base}{}",
+                                    if render_base.ends_with(':') { "" } else { ":" }
+                                ),
+                                workspace_root,
+                            )
+                        {
+                            result.push(FilesystemCompletion::BuildFile {
+                                targets,
+                                prefix_with_colon: !render_base.ends_with(':'),
+                                insert_text_offset: render_base.len(),
+                            });
+                        }
+                    }
+                    continue;
+                } else if options.files {
+                    // Check if it's in the list of allowed extensions. If we have a list, and it
+                    // doesn't contain the extension, or the file has no extension, skip this file.
+                    if !options.all_files {
+                        let extension = path.extension().map(|ext| ext.to_string_lossy());
+                        if let Some(loadable_extensions) = loadable_extensions {
+                            match extension {
+                                Some(extension) => {
+                                    if !loadable_extensions.contains(&extension.as_ref()) {
+                                        continue;
+                                    }
+                                }
+                                None => {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    result.push(FilesystemCompletion::Entry {
+                        label: file_name.to_string(),
+                        insert_text: format!(
+                            "{}{}",
+                            if render_base.ends_with(':') || render_base.is_empty() {
+                                ""
+                            } else {
+                                ":"
+                            },
+                            file_name
+                        ),
+                        insert_text_offset: render_base.len(),
+                        kind: CompletionItemKind::FILE,
+                    });
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
     fn get_load_contents(&self, uri: &LspUrl) -> anyhow::Result<Option<String>> {
         match uri {
             LspUrl::File(path) => match path.is_absolute() {
@@ -601,6 +712,20 @@ impl LspContext for Context {
 
     fn get_global_symbols(&self) -> Vec<GlobalSymbol> {
         self.globals.symbols().collect()
+    }
+
+    fn get_repository_names(&self) -> Vec<Cow<str>> {
+        self.build_system
+            .as_ref()
+            .map(|build_system| build_system.repository_names())
+            .unwrap_or_default()
+    }
+
+    fn use_at_repository_prefix(&self) -> bool {
+        self.build_system
+            .as_ref()
+            .map(|build_system| build_system.should_use_at_sign_before_repository_name())
+            .unwrap_or(true)
     }
 }
 

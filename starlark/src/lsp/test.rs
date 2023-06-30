@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,6 +67,9 @@ use crate::docs::Location;
 use crate::environment::GlobalSymbol;
 use crate::environment::GlobalSymbolKind;
 use crate::errors::EvalMessage;
+use crate::lsp::completion::FilesystemCompletion;
+use crate::lsp::completion::FilesystemCompletionOptions;
+use crate::lsp::completion::FilesystemCompletionRoot;
 use crate::lsp::server::new_notification;
 use crate::lsp::server::server_with_connection;
 use crate::lsp::server::LspContext;
@@ -161,7 +165,7 @@ impl LspContext for TestServerContext {
         &self,
         path: &str,
         current_file: &LspUrl,
-        workspace_root: Option<&Path>,
+        _workspace_root: Option<&Path>,
     ) -> anyhow::Result<LspUrl> {
         let path = PathBuf::from(path);
         match current_file {
@@ -293,6 +297,24 @@ impl LspContext for TestServerContext {
                 documentation: None,
             })
             .collect()
+    }
+
+    fn get_filesystem_entries(
+        &self,
+        _from: FilesystemCompletionRoot,
+        _current_file: &LspUrl,
+        _workspace_root: Option<&Path>,
+        _options: &FilesystemCompletionOptions,
+    ) -> anyhow::Result<Vec<FilesystemCompletion>> {
+        todo!()
+    }
+
+    fn get_repository_names(&self) -> Vec<Cow<str>> {
+        todo!()
+    }
+
+    fn use_at_repository_prefix(&self) -> bool {
+        true
     }
 }
 

@@ -17,6 +17,7 @@
 
 //! Based on the reference lsp-server example at <https://github.com/rust-analyzer/lsp-server/blob/master/examples/goto_def.rs>.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -91,7 +92,7 @@ use crate::analysis::definition::Definition;
 use crate::analysis::definition::DottedDefinition;
 use crate::analysis::definition::IdentifierDefinition;
 use crate::analysis::definition::LspModule;
-use crate::analysis::exported::SymbolKind as ExportedSymbolKind;
+use crate::analysis::inspect::AutocompleteType;
 use crate::codemap::LineCol;
 use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
@@ -99,12 +100,14 @@ use crate::codemap::Spanned;
 use crate::docs::render_doc_item;
 use crate::environment::GlobalSymbol;
 use crate::environment::GlobalSymbolKind;
+use crate::lsp::completion::FilesystemCompletion;
+use crate::lsp::completion::FilesystemCompletionOptions;
+use crate::lsp::completion::FilesystemCompletionRoot;
+use crate::lsp::completion::StringCompletionMode;
 use crate::lsp::server::LoadContentsError::WrongScheme;
 use crate::syntax::ast::AssignIdentP;
 use crate::syntax::ast::AstPayload;
-use crate::syntax::ast::StmtP;
 use crate::syntax::symbols::find_symbols_at_location;
-use crate::syntax::symbols::SymbolKind;
 use crate::syntax::AstModule;
 
 /// The request to get the file contents for a starlark: URI
@@ -329,6 +332,16 @@ pub trait LspContext {
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<Option<StringLiteralResult>>;
 
+    /// Given a filesystem completion root, i.e. either a path based on an open file, or an
+    /// unparsed string, return a list of filesystem entries that match the given criteria.
+    fn get_filesystem_entries(
+        &self,
+        from: FilesystemCompletionRoot,
+        current_file: &LspUrl,
+        workspace_root: Option<&Path>,
+        options: &FilesystemCompletionOptions,
+    ) -> anyhow::Result<Vec<FilesystemCompletion>>;
+
     /// Get the contents of a starlark program at a given path, if it exists.
     fn get_load_contents(&self, uri: &LspUrl) -> anyhow::Result<Option<String>>;
 
@@ -352,6 +365,12 @@ pub trait LspContext {
         current_file: &LspUrl,
         symbol: &str,
     ) -> anyhow::Result<Option<LspUrl>>;
+
+    /// Get the list of known repository names.
+    fn get_repository_names(&self) -> Vec<Cow<str>>;
+
+    /// Whether to use the `@` prefix when rendering repository names.
+    fn use_at_repository_prefix(&self) -> bool;
 }
 
 /// Errors when [`LspContext::resolve_load()`] cannot resolve a given path.
@@ -370,12 +389,12 @@ pub(crate) enum LoadContentsError {
     WrongScheme(String, LspUrl),
 }
 
-struct Backend<T: LspContext> {
+pub(crate) struct Backend<T: LspContext> {
     connection: Connection,
-    context: T,
+    pub(crate) context: T,
     /// The `AstModule` from the last time that a file was opened / changed and parsed successfully.
     /// Entries are evicted when the file is closed.
-    last_valid_parse: RwLock<HashMap<LspUrl, Arc<LspModule>>>,
+    pub(crate) last_valid_parse: RwLock<HashMap<LspUrl, Arc<LspModule>>>,
 }
 
 /// The logic implementations of stuff
@@ -393,10 +412,20 @@ impl<T: LspContext> Backend<T> {
             definition_provider,
             completion_provider: Some(CompletionOptions {
                 trigger_characters: Some(vec![
+                    // e.g. function call
                     "(".to_string(),
+                    // e.g. list creation, function call
                     ",".to_string(),
+                    // e.g. when typing a load path
+                    "/".to_string(),
+                    // e.g. dict creation
+                    ":".to_string(),
+                    // e.g. variable assignment
                     "=".to_string(),
+                    // e.g. list creation
                     "[".to_string(),
+                    // e.g. string literal (load path, target name)
+                    "\"".to_string(),
                 ]),
                 ..Default::default()
             }),
@@ -410,7 +439,10 @@ impl<T: LspContext> Backend<T> {
         last_valid_parse.get(uri).duped()
     }
 
-    fn get_ast_or_load_from_disk(&self, uri: &LspUrl) -> anyhow::Result<Option<Arc<LspModule>>> {
+    pub(crate) fn get_ast_or_load_from_disk(
+        &self,
+        uri: &LspUrl,
+    ) -> anyhow::Result<Option<Arc<LspModule>>> {
         let module = match self.get_ast(uri) {
             Some(result) => Some(result),
             None => self
@@ -508,7 +540,7 @@ impl<T: LspContext> Backend<T> {
         self.send_response(new_response(id, response));
     }
 
-    fn resolve_load_path(
+    pub(crate) fn resolve_load_path(
         &self,
         path: &str,
         current_uri: &LspUrl,
@@ -724,81 +756,82 @@ impl<T: LspContext> Backend<T> {
         initialize_params: &InitializeParams,
     ) -> anyhow::Result<CompletionResponse> {
         let uri = params.text_document_position.text_document.uri.try_into()?;
+        let line = params.text_document_position.position.line;
+        let character = params.text_document_position.position.character;
 
         let symbols: Option<Vec<_>> = match self.get_ast(&uri) {
-            Some(ast) => {
-                // Scan through current document
-                let cursor_position = LineCol {
-                    line: params.text_document_position.position.line as usize,
-                    column: params.text_document_position.position.character as usize,
-                };
-                let mut symbols: HashMap<_, _> =
-                    find_symbols_at_location(&ast.ast.codemap, &ast.ast.statement, cursor_position)
-                        .into_iter()
-                        .map(|(key, value)| {
-                            (
-                                key,
-                                CompletionItem {
-                                    kind: Some(match value.kind {
-                                        SymbolKind::Method => CompletionItemKind::METHOD,
-                                        SymbolKind::Variable => CompletionItemKind::VARIABLE,
-                                    }),
-                                    detail: value.detail,
-                                    documentation: value.doc.map(|doc| {
-                                        Documentation::MarkupContent(MarkupContent {
-                                            kind: MarkupKind::Markdown,
-                                            value: render_doc_item(&value.name, &doc),
-                                        })
-                                    }),
-                                    label: value.name,
-                                    ..Default::default()
-                                },
-                            )
-                        })
-                        .collect();
+            Some(document) => {
+                // Figure out what kind of position we are in, to determine the best type of
+                // autocomplete.
+                let autocomplete_type = document.ast.get_auto_complete_type(line, character);
+                let workspace_root =
+                    Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), &uri);
 
-                // Discover exported symbols from other documents
-                let docs = self.last_valid_parse.read().unwrap();
-                if docs.len() > 1 {
-                    // Find the position of the last load in the current file.
-                    let mut last_load = None;
-                    let mut loads = HashMap::new();
-                    ast.ast.statement.visit_stmt(|node| {
-                        if let StmtP::Load(load) = &node.node {
-                            last_load = Some(node.span);
-                            loads.insert(load.module.node.clone(), (load.args.clone(), node.span));
-                        }
-                    });
-                    let last_load = last_load.map(|span| ast.ast.codemap.resolve_span(span));
-
-                    symbols.extend(
-                        self.get_all_exported_symbols(
-                            Some(&uri),
-                            &symbols,
-                            initialize_params,
+                match &autocomplete_type {
+                    None | Some(AutocompleteType::None) => None,
+                    Some(AutocompleteType::Default) => Some(
+                        self.default_completion_options(
                             &uri,
-                            |module, symbol| {
-                                Self::get_load_text_edit(
-                                    module,
-                                    symbol,
-                                    &ast,
-                                    last_load,
-                                    loads.get(module),
-                                )
-                            },
+                            &document,
+                            line,
+                            character,
+                            workspace_root.as_deref(),
                         )
-                        .into_iter()
-                        .map(|item| (item.label.clone(), item)),
-                    );
-                }
-
-                Some(
-                    symbols
-                        .into_values()
-                        .chain(self.get_global_symbol_completion_items())
-                        .chain(Self::get_keyword_completion_items())
                         .collect(),
-                )
+                    ),
+                    Some(AutocompleteType::LoadPath {
+                        current_value,
+                        current_span,
+                    })
+                    | Some(AutocompleteType::String {
+                        current_value,
+                        current_span,
+                    }) => Some(
+                        self.string_completion_options(
+                            if matches!(autocomplete_type, Some(AutocompleteType::LoadPath { .. }))
+                            {
+                                StringCompletionMode::FilesOnly
+                            } else {
+                                StringCompletionMode::IncludeNamedTargets
+                            },
+                            &uri,
+                            current_value,
+                            *current_span,
+                            workspace_root.as_deref(),
+                        )
+                        .collect(),
+                    ),
+                    Some(AutocompleteType::LoadSymbol {
+                        path,
+                        current_span,
+                        previously_loaded,
+                    }) => Some(self.exported_symbol_options(
+                        path,
+                        *current_span,
+                        previously_loaded,
+                        &uri,
+                        workspace_root.as_deref(),
+                    )),
+                    Some(AutocompleteType::Parameter {
+                        function_name_span, ..
+                    }) => Some(
+                        self.parameter_name_options(
+                            function_name_span,
+                            &document,
+                            &uri,
+                            workspace_root.as_deref(),
+                        )
+                        .chain(self.default_completion_options(
+                            &uri,
+                            &document,
+                            line,
+                            character,
+                            workspace_root.as_deref(),
+                        ))
+                        .collect(),
+                    ),
+                    Some(AutocompleteType::Type) => Some(Self::type_completion_options().collect()),
+                }
             }
             None => None,
         };
@@ -810,11 +843,11 @@ impl<T: LspContext> Backend<T> {
     /// symbols. This list contains both the symbols exported from the loaded
     /// files, as well as symbols loaded in the open files. Symbols that are
     /// loaded from modules that are open are deduplicated.
-    fn get_all_exported_symbols<F, S>(
+    pub(crate) fn get_all_exported_symbols<F, S>(
         &self,
         except_from: Option<&LspUrl>,
         symbols: &HashMap<String, S>,
-        initialize_params: &InitializeParams,
+        workspace_root: Option<&Path>,
         current_document: &LspUrl,
         format_text_edit: F,
     ) -> Vec<CompletionItem>
@@ -836,7 +869,7 @@ impl<T: LspContext> Backend<T> {
             let Ok(load_path) = self.context.render_as_load(
                 doc_uri,
                 current_document,
-                Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri).as_deref(),
+                workspace_root,
             ) else {
                 continue;
             };
@@ -844,26 +877,16 @@ impl<T: LspContext> Backend<T> {
             for symbol in doc
                 .get_exported_symbols()
                 .into_iter()
-                .filter(|symbol| !symbols.contains_key(symbol.name))
+                .filter(|symbol| !symbols.contains_key(&symbol.name))
             {
                 seen.insert(format!("{load_path}:{}", &symbol.name));
 
-                result.push(CompletionItem {
-                    label: symbol.name.to_string(),
-                    detail: Some(format!("Load from {load_path}")),
-                    kind: Some(match symbol.kind {
-                        ExportedSymbolKind::Any => CompletionItemKind::CONSTANT,
-                        ExportedSymbolKind::Function => CompletionItemKind::METHOD,
-                    }),
-                    documentation: symbol.docs.map(|docs| {
-                        Documentation::MarkupContent(MarkupContent {
-                            kind: MarkupKind::Markdown,
-                            value: render_doc_item(symbol.name, &docs),
-                        })
-                    }),
-                    additional_text_edits: Some(vec![format_text_edit(&load_path, symbol.name)]),
-                    ..Default::default()
-                })
+                let text_edits = Some(vec![format_text_edit(&load_path, &symbol.name)]);
+                let mut completion_item: CompletionItem = symbol.into();
+                completion_item.detail = Some(format!("Load from {load_path}"));
+                completion_item.additional_text_edits = text_edits;
+
+                result.push(completion_item)
             }
         }
 
@@ -880,17 +903,15 @@ impl<T: LspContext> Backend<T> {
             })
             .filter(|(_, symbol)| !symbols.contains_key(symbol.name))
         {
-            let workspace_root =
-                Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), doc_uri);
             let Ok(url) = self.context
-                    .resolve_load(symbol.loaded_from, doc_uri, workspace_root.as_deref())
+                    .resolve_load(symbol.loaded_from, doc_uri, workspace_root)
             else {
                 continue;
             };
             let Ok(load_path) = self.context.render_as_load(
                 &url,
                 current_document,
-                workspace_root.as_deref()
+                workspace_root
             ) else {
                 continue;
             };
@@ -909,7 +930,9 @@ impl<T: LspContext> Backend<T> {
         result
     }
 
-    fn get_global_symbol_completion_items(&self) -> impl Iterator<Item = CompletionItem> + '_ {
+    pub(crate) fn get_global_symbol_completion_items(
+        &self,
+    ) -> impl Iterator<Item = CompletionItem> + '_ {
         self.context
             .get_global_symbols()
             .into_iter()
@@ -933,7 +956,7 @@ impl<T: LspContext> Backend<T> {
             })
     }
 
-    fn get_load_text_edit<P>(
+    pub(crate) fn get_load_text_edit<P>(
         module: &str,
         symbol: &str,
         ast: &LspModule,
@@ -994,7 +1017,7 @@ impl<T: LspContext> Backend<T> {
     }
 
     /// Get completion items for each language keyword.
-    fn get_keyword_completion_items() -> impl Iterator<Item = CompletionItem> {
+    pub(crate) fn get_keyword_completion_items() -> impl Iterator<Item = CompletionItem> {
         [
             // Actual keywords
             "and", "else", "load", "break", "for", "not", "continue", "if", "or", "def", "in",
