@@ -241,6 +241,7 @@ pub trait StarlarkValue<'v>:
     /// Please do not implement this method or `get_type`,
     /// but use [`#[starlark_value]`](crate::values::starlark_value) proc macro.
     #[doc(hidden)]
+    #[starlark_internal_vtable(skip)]
     fn please_use_starlark_type_macro();
 
     /// Type is special in Starlark, it is implemented differently than user defined types.
@@ -248,7 +249,8 @@ pub trait StarlarkValue<'v>:
     ///
     /// This function must not be implemented outside of starlark crate.
     #[doc(hidden)]
-    fn is_special(_: Private) -> bool {
+    #[starlark_internal_vtable(skip)]
+    fn is_special(_private: Private) -> bool {
         false
     }
 
@@ -288,6 +290,12 @@ pub trait StarlarkValue<'v>:
     /// Note this can be more precise than generic type.
     #[doc(hidden)]
     fn typechecker_ty(&self, _private: Private) -> Option<Ty> {
+        None
+    }
+
+    /// Evaluate this value as a type expression. Basically, `eval_type(this)`.
+    #[doc(hidden)]
+    fn eval_type(&self, _private: Private) -> Option<Ty> {
         None
     }
 
@@ -409,6 +417,17 @@ pub trait StarlarkValue<'v>:
         ValueError::unsupported_with(self, "[]", index)
     }
 
+    /// Return the result of `a[index0, index1]` if `a` is indexable by two parameters.
+    fn at2(
+        &self,
+        _index0: Value<'v>,
+        _index1: Value<'v>,
+        _heap: &'v Heap,
+        _private: Private,
+    ) -> anyhow::Result<Value<'v>> {
+        ValueError::unsupported(self, "[,]")
+    }
+
     /// Extract a slice of the underlying object if the object is indexable. The
     /// result will be object between `start` and `stop` (both of them are
     /// added length() if negative and then clamped between 0 and length()).
@@ -445,6 +464,7 @@ pub trait StarlarkValue<'v>:
 
     /// Implement iteration over the value of this container by providing
     /// the values in a `Vec`.
+    #[starlark_internal_vtable(skip)]
     fn iterate_collect(&self, _heap: &'v Heap) -> anyhow::Result<Vec<Value<'v>>> {
         ValueError::unsupported(self, "(iter)")
     }

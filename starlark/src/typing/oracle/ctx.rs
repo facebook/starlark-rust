@@ -15,18 +15,22 @@
  * limitations under the License.
  */
 
+use std::fmt::Display;
+
 use dupe::Dupe;
 
 use crate::codemap::CodeMap;
 use crate::codemap::Span;
+use crate::codemap::Spanned;
 use crate::typing::error::TypingError;
-use crate::typing::Arg;
-use crate::typing::Param;
-use crate::typing::ParamMode;
+use crate::typing::function::Arg;
+use crate::typing::function::Param;
+use crate::typing::function::ParamMode;
+use crate::typing::function::TyFunction;
 use crate::typing::Ty;
-use crate::typing::TyFunction;
 use crate::typing::TyName;
 use crate::typing::TypingAttr;
+use crate::typing::TypingBinOp;
 use crate::typing::TypingOracle;
 
 #[derive(Debug, thiserror::Error)]
@@ -56,7 +60,29 @@ pub struct TypingOracleCtx<'a> {
 
 impl<'a> TypingOracle for TypingOracleCtx<'a> {
     fn attribute(&self, ty: &Ty, attr: TypingAttr) -> Option<Result<Ty, ()>> {
-        self.oracle.attribute(ty, attr)
+        Some(Ok(match ty {
+            ty if ty == &Ty::none() => return Some(Err(())),
+            Ty::Tuple(tys) => match attr {
+                TypingAttr::BinOp(TypingBinOp::In) => {
+                    Ty::function(vec![Param::pos_only(Ty::unions(tys.clone()))], Ty::bool())
+                }
+                TypingAttr::Iter => Ty::unions(tys.clone()),
+                TypingAttr::Index => {
+                    Ty::function(vec![Param::pos_only(Ty::int())], Ty::unions(tys.clone()))
+                }
+                _ => return Some(Err(())),
+            },
+            Ty::Name(x) if x == "tuple" => match attr {
+                TypingAttr::Iter => Ty::Any,
+                TypingAttr::BinOp(TypingBinOp::In) => {
+                    Ty::function(vec![Param::pos_only(Ty::Any)], Ty::bool())
+                }
+                TypingAttr::Index => Ty::function(vec![Param::pos_only(Ty::int())], Ty::Any),
+                _ => return Some(Err(())),
+            },
+            Ty::Custom(c) => return c.0.attribute_dyn(attr),
+            ty => return self.oracle.attribute(ty, attr),
+        }))
     }
 
     fn as_function(&self, ty: &TyName) -> Option<Result<TyFunction, ()>> {
@@ -73,13 +99,17 @@ impl<'a> TypingOracleCtx<'a> {
         TypingError::new(err.into(), span, self.codemap)
     }
 
+    pub(crate) fn msg_error(&self, span: Span, msg: impl Display) -> TypingError {
+        TypingError::msg(msg, span, self.codemap)
+    }
+
     pub(crate) fn validate_type(
         &self,
         got: &Ty,
         require: &Ty,
         span: Span,
     ) -> Result<(), TypingError> {
-        if !got.intersects(require, Some(*self)) {
+        if !got.intersects(require, *self) {
             Err(self.mk_error(
                 span,
                 TypingOracleCtxError::IncompatibleType {
@@ -92,20 +122,27 @@ impl<'a> TypingOracleCtx<'a> {
         }
     }
 
-    fn validate_args(&self, params: &[Param], args: &[Arg], span: Span) -> Result<(), TypingError> {
+    fn validate_args(
+        &self,
+        params: &[Param],
+        args: &[Spanned<Arg>],
+        span: Span,
+    ) -> Result<(), TypingError> {
         // Want to figure out which arguments go in which positions
-        let mut param_args: Vec<Vec<&Ty>> = vec![vec![]; params.len()];
+        let mut param_args: Vec<Vec<Spanned<&Ty>>> = vec![vec![]; params.len()];
         // The next index a positional parameter might fill
         let mut param_pos = 0;
         let mut seen_vargs = false;
 
         for arg in args {
-            match arg {
+            match &arg.node {
                 Arg::Pos(ty) => loop {
                     match params.get(param_pos) {
                         None => {
-                            return Err(self
-                                .mk_error(span, TypingOracleCtxError::TooManyPositionalArguments));
+                            return Err(self.mk_error(
+                                arg.span,
+                                TypingOracleCtxError::TooManyPositionalArguments,
+                            ));
                         }
                         Some(param) => {
                             let found_index = param_pos;
@@ -113,7 +150,10 @@ impl<'a> TypingOracleCtx<'a> {
                                 param_pos += 1;
                             }
                             if param.allows_pos() {
-                                param_args[found_index].push(ty);
+                                param_args[found_index].push(Spanned {
+                                    span: arg.span,
+                                    node: ty,
+                                });
                                 break;
                             }
                         }
@@ -123,14 +163,17 @@ impl<'a> TypingOracleCtx<'a> {
                     let mut success = false;
                     for (i, param) in params.iter().enumerate() {
                         if param.name() == name || param.mode == ParamMode::Kwargs {
-                            param_args[i].push(ty);
+                            param_args[i].push(Spanned {
+                                span: arg.span,
+                                node: ty,
+                            });
                             success = true;
                             break;
                         }
                     }
                     if !success {
                         return Err(self.mk_error(
-                            span,
+                            arg.span,
                             TypingOracleCtxError::UnexpectedNamedArgument { name: name.clone() },
                         ));
                     }
@@ -163,13 +206,13 @@ impl<'a> TypingOracleCtx<'a> {
             }
             match param.mode {
                 ParamMode::PosOnly | ParamMode::PosOrName(_) | ParamMode::NameOnly(_) => {
-                    self.validate_type(args[0], &param.ty, span)?;
+                    self.validate_type(args[0].node, &param.ty, args[0].span)?;
                 }
                 ParamMode::Args => {
                     for ty in args {
                         // For an arg, we require the type annotation to be inner value,
                         // rather than the outer (which is always a tuple)
-                        self.validate_type(ty, &param.ty, span)?;
+                        self.validate_type(ty.node, &param.ty, ty.span)?;
                     }
                 }
                 ParamMode::Kwargs => {
@@ -185,7 +228,7 @@ impl<'a> TypingOracleCtx<'a> {
                     if !val_types.is_empty() {
                         let require = Ty::unions(val_types);
                         for ty in args {
-                            self.validate_type(ty, &require, span)?;
+                            self.validate_type(ty.node, &require, ty.span)?;
                         }
                     }
                 }
@@ -194,11 +237,11 @@ impl<'a> TypingOracleCtx<'a> {
         Ok(())
     }
 
-    fn validate_fn_call(
+    pub(crate) fn validate_fn_call(
         &self,
         span: Span,
         fun: &TyFunction,
-        args: &[Arg],
+        args: &[Spanned<Arg>],
     ) -> Result<Ty, TypingError> {
         self.validate_args(&fun.params, args, span)?;
         Ok((*fun.result).clone())
@@ -209,7 +252,7 @@ impl<'a> TypingOracleCtx<'a> {
         &self,
         span: Span,
         fun: &Ty,
-        args: &[Arg],
+        args: &[Spanned<Arg>],
     ) -> Result<Ty, TypingError> {
         match fun {
             Ty::Never => Ok(Ty::Never),
@@ -227,7 +270,7 @@ impl<'a> TypingOracleCtx<'a> {
                     },
                 )),
             },
-            Ty::List(_) | Ty::Dict(_) | Ty::Tuple(_) | Ty::Struct { .. } => Err(self.mk_error(
+            Ty::List(_) | Ty::Dict(_) | Ty::Tuple(_) => Err(self.mk_error(
                 span,
                 TypingOracleCtxError::CallToNonCallable {
                     ty: fun.to_string(),
@@ -237,11 +280,7 @@ impl<'a> TypingOracleCtx<'a> {
                 // Unknown type, may be callable.
                 Ok(Ty::Any)
             }
-            Ty::Function(f) => self.validate_fn_call(span, f, args),
-            Ty::Custom(t) => {
-                t.0.validate_call(args, *self)
-                    .map_err(|e| TypingError::msg(e, span, self.codemap))
-            }
+            Ty::Custom(t) => t.0.validate_call_dyn(span, args, *self),
             Ty::Union(variants) => {
                 let mut successful = Vec::new();
                 let mut errors = Vec::new();

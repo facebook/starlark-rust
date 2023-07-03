@@ -15,105 +15,42 @@
  * limitations under the License.
  */
 
-//! A `record` type, comprising of a fixed set of fields.
-//!
-//! Calling `record()` produces a [`RecordType`]. Calling [`RecordType`] produces a [`Record`].
-//! The field names of the record are only stored once, potentially reducing memory usage.
-//! Created in Starlark using the `record()` function, which accepts keyword arguments.
-//! The keys become field names, and values are the types. Calling the resulting
-//! function produces an actual record.
-//!
-//! ```
-//! # starlark::assert::is_true(r#"
-//! IpAddress = record(host=str.type, port=int.type)
-//! rec = IpAddress(host="localhost", port=80)
-//! rec.port == 80
-//! # "#);
-//! ```
-//!
-//! It is also possible to use `field(type, default)` type to give defaults:
-//!
-//! ```
-//! # starlark::assert::is_true(r#"
-//! IpAddress = record(host=str.type, port=field(int.type, 80))
-//! rec = IpAddress(host="localhost")
-//! rec.port == 80
-//! # "#);
-//! ```
-
 use std::fmt;
-use std::fmt::Debug;
 use std::fmt::Display;
 use std::hash::Hash;
 
 use allocative::Allocative;
 use display_container::fmt_keyed_container;
-use dupe::Dupe;
 use either::Either;
-use serde::Serialize;
 use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 use starlark_derive::StarlarkDocs;
+use starlark_derive::Trace;
+use starlark_map::small_map::SmallMap;
+use starlark_map::StarlarkHasher;
 
 use crate as starlark;
 use crate::any::ProvidesStaticType;
 use crate::coerce::coerce;
-use crate::coerce::Coerce;
-use crate::collections::Hashed;
-use crate::collections::SmallMap;
-use crate::collections::StarlarkHasher;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
 use crate::eval::ParametersSpec;
-use crate::starlark_complex_value;
+use crate::private::Private;
 use crate::starlark_complex_values;
-use crate::values::comparison::equals_slice;
+use crate::typing::Ty;
+use crate::values::exported_name::ExportedName;
+use crate::values::exported_name::FrozenExportedName;
+use crate::values::exported_name::MutableExportedName;
 use crate::values::function::FUNCTION_TYPE;
-use crate::values::types::exported_name::ExportedName;
-use crate::values::types::exported_name::FrozenExportedName;
-use crate::values::types::exported_name::MutableExportedName;
-use crate::values::typing::TypeCompiled;
+use crate::values::record::field::FieldGen;
+use crate::values::record::Record;
 use crate::values::Freeze;
 use crate::values::Freezer;
 use crate::values::FrozenValue;
 use crate::values::Heap;
 use crate::values::StarlarkValue;
-use crate::values::Trace;
 use crate::values::Value;
 use crate::values::ValueLike;
-
-/// The result of `field()`.
-#[derive(
-    Clone,
-    Debug,
-    Dupe,
-    Trace,
-    Freeze,
-    NoSerialize,
-    ProvidesStaticType,
-    StarlarkDocs,
-    Allocative
-)]
-#[starlark_docs(builtin = "extension")]
-pub struct FieldGen<V> {
-    pub(crate) typ: TypeCompiled<V>,
-    default: Option<V>,
-}
-
-impl<'v, V: ValueLike<'v>> Display for FieldGen<V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "field(")?;
-        Display::fmt(&self.typ, f)?;
-        if let Some(d) = &self.default {
-            write!(f, ", ")?;
-            Display::fmt(d, f)?;
-        }
-        write!(f, ")")
-    }
-}
-
-// Manual because no instance for Option<V>
-unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 
 /// The result of `record()`, being the type of records.
 #[derive(
@@ -126,7 +63,7 @@ unsafe impl<From: Coerce<To>, To> Coerce<FieldGen<To>> for FieldGen<From> {}
 )]
 #[starlark_docs(builtin = "extension")]
 pub struct RecordTypeGen<V, Typ: ExportedName> {
-    typ: Typ,
+    pub(crate) typ: Typ,
     /// The V is the type the field must satisfy (e.g. `"string"`)
     fields: SmallMap<String, FieldGen<V>>,
     /// Creating these on every invoke is pretty expensive (profiling shows)
@@ -145,31 +82,9 @@ pub type RecordType<'v> = RecordTypeGen<Value<'v>, MutableExportedName>;
 /// Type of a record in a frozen heap.
 pub type FrozenRecordType = RecordTypeGen<FrozenValue, FrozenExportedName>;
 
-/// An actual record.
-#[derive(Clone, Debug, Trace, Coerce, Freeze, ProvidesStaticType, Allocative)]
-#[repr(C)]
-pub struct RecordGen<V> {
-    typ: V, // Must be RecordType
-    values: Box<[V]>,
-}
-
-impl<'v, V: ValueLike<'v>> Display for RecordGen<V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt_keyed_container(f, "record(", ")", "=", self.iter())
-    }
-}
-
-starlark_complex_value!(pub(crate) Field);
 starlark_complex_values!(RecordType);
-starlark_complex_value!(pub Record);
 
-impl<V> FieldGen<V> {
-    pub(crate) fn new(typ: TypeCompiled<V>, default: Option<V>) -> Self {
-        Self { typ, default }
-    }
-}
-
-fn record_fields<'v>(
+pub(crate) fn record_fields<'v>(
     x: Either<&'v RecordType<'v>, &'v FrozenRecordType>,
 ) -> &'v SmallMap<String, FieldGen<Value<'v>>> {
     x.either(|x| &x.fields, |x| coerce(&x.fields))
@@ -198,46 +113,6 @@ impl<'v> RecordType<'v> {
             }
         }
         parameters.finish()
-    }
-}
-
-impl<'v, V: ValueLike<'v>> RecordGen<V> {
-    /// `type(x)` for records.
-    pub const TYPE: &'static str = "record";
-
-    fn get_record_type(&self) -> Either<&'v RecordType<'v>, &'v FrozenRecordType> {
-        // Safe to unwrap because we always ensure typ is RecordType
-        RecordType::from_value(self.typ.to_value()).unwrap()
-    }
-
-    fn get_record_fields(&self) -> &'v SmallMap<String, FieldGen<Value<'v>>> {
-        record_fields(self.get_record_type())
-    }
-
-    /// Iterate over the elements in the record.
-    pub fn iter<'a>(&'a self) -> impl ExactSizeIterator<Item = (&'v str, V)> + 'a
-    where
-        'v: 'a,
-    {
-        self.get_record_fields()
-            .keys()
-            .map(String::as_str)
-            .zip(self.values.iter().copied())
-    }
-}
-
-#[starlark_value(type = "field")]
-impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for FieldGen<V>
-where
-    Self: ProvidesStaticType<'v>,
-{
-    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        self.typ.write_hash(hasher)?;
-        self.default.is_some().hash(hasher);
-        if let Some(d) = self.default {
-            d.write_hash(hasher)?;
-        }
-        Ok(())
     }
 }
 
@@ -330,6 +205,15 @@ where
         }
     }
 
+    fn eval_type(&self, _private: Private) -> Option<Ty> {
+        // Very basic type, only checks the name.
+        // Should also behave like a function.
+        //
+        // If record is not assigned to a variable (`typ` is unset), this code is unreachable.
+
+        self.typ.borrow().as_ref().map(|t| Ty::name(t.as_str()))
+    }
+
     fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
         fn eq<'v>(
             a: &RecordTypeGen<impl ValueLike<'v>, impl ExportedName>,
@@ -365,57 +249,54 @@ where
     }
 }
 
-#[starlark_value(type = Record::TYPE)]
-impl<'v, V: ValueLike<'v> + 'v> StarlarkValue<'v> for RecordGen<V>
-where
-    Self: ProvidesStaticType<'v>,
-{
-    fn matches_type(&self, ty: &str) -> bool {
-        if ty == Record::TYPE {
-            return true;
-        }
-        match self.get_record_type() {
-            Either::Left(x) => x.typ.equal_to(ty),
-            Either::Right(x) => x.typ.equal_to(ty),
-        }
+#[cfg(test)]
+mod tests {
+    use crate::assert;
+
+    #[test]
+    fn test_record_type_as_type_pass() {
+        assert::pass(
+            r"
+RecPass = record(a = field(int), b = field(int))
+
+def f_pass(x: RecPass):
+    return x.a
+
+f_pass(RecPass(a = 1, b = 2))
+",
+        );
     }
 
-    fn equals(&self, other: Value<'v>) -> anyhow::Result<bool> {
-        match Record::from_value(other) {
-            Some(other) if self.typ.equals(other.typ)? => {
-                equals_slice(&self.values, &other.values, |x, y| x.equals(*y))
-            }
-            _ => Ok(false),
-        }
+    #[test]
+    fn test_record_type_as_type_compile_time() {
+        assert::fail(
+            r"
+RecFailCt1 = record(a = field(int), b = field(int))
+RecFailCt2 = record(a = field(int), b = field(int))
+
+def f_fail_ct(x: RecFailCt1):
+    return x.a
+
+f_fail_ct(RecFailCt2(a = 1, b = 2))
+",
+            // TODO(nga): this is runtime error, not compile time.
+            "Value `record(a=1, b=2)` of type `record` does not match",
+        );
     }
 
-    fn get_attr(&self, attribute: &str, heap: &'v Heap) -> Option<Value<'v>> {
-        self.get_attr_hashed(Hashed::new(attribute), heap)
-    }
+    #[test]
+    fn test_record_type_as_type_runtime() {
+        assert::fail(
+            r"
+RecFailRt1 = record(a = field(int), b = field(int))
+RecFailRt2 = record(a = field(int), b = field(int))
 
-    fn get_attr_hashed(&self, attribute: Hashed<&str>, _heap: &'v Heap) -> Option<Value<'v>> {
-        let i = self.get_record_fields().get_index_of_hashed(attribute)?;
-        Some(self.values[i].to_value())
-    }
+def f_fail_rt(x: RecFailRt1):
+    return x.a
 
-    fn write_hash(&self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
-        self.typ.write_hash(hasher)?;
-        for v in &*self.values {
-            v.write_hash(hasher)?;
-        }
-        Ok(())
-    }
-
-    fn dir_attr(&self) -> Vec<String> {
-        self.get_record_fields().keys().cloned().collect()
-    }
-}
-
-impl<'v, V: ValueLike<'v>> Serialize for RecordGen<V> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_map(self.iter())
+noop(f_fail_rt)(RecFailRt2(a = 1, b = 2))
+",
+            "Value `record(a=1, b=2)` of type `record` does not match the type annotation",
+        );
     }
 }

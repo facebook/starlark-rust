@@ -120,6 +120,18 @@ pub(crate) enum ParameterP<P: AstPayload> {
     KwArgs(AstAssignIdentP<P>, Option<Box<AstTypeExprP<P>>>),
 }
 
+impl<P: AstPayload> ParameterP<P> {
+    pub(crate) fn ident(&self) -> Option<&AstAssignIdentP<P>> {
+        match self {
+            ParameterP::Normal(x, _)
+            | ParameterP::WithDefaultValue(x, _, _)
+            | ParameterP::Args(x, _)
+            | ParameterP::KwArgs(x, _) => Some(x),
+            ParameterP::NoArgs => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum AstLiteral {
     Int(AstInt),
@@ -152,7 +164,8 @@ pub(crate) enum ExprP<P: AstPayload> {
     Tuple(Vec<AstExprP<P>>),
     Dot(Box<AstExprP<P>>, AstString),
     Call(Box<AstExprP<P>>, Vec<AstArgumentP<P>>),
-    ArrayIndirection(Box<(AstExprP<P>, AstExprP<P>)>),
+    Index(Box<(AstExprP<P>, AstExprP<P>)>),
+    Index2(Box<(AstExprP<P>, AstExprP<P>, AstExprP<P>)>),
     Slice(
         Box<AstExprP<P>>,
         Option<Box<AstExprP<P>>>,
@@ -194,7 +207,7 @@ pub(crate) enum AssignP<P: AstPayload> {
     // We use Tuple for both Tuple and List,
     // as these have the same semantics in Starlark.
     Tuple(Vec<AstAssignP<P>>),
-    ArrayIndirection(Box<(AstExprP<P>, AstExprP<P>)>),
+    Index(Box<(AstExprP<P>, AstExprP<P>)>),
     Dot(Box<AstExprP<P>>, AstString),
     Identifier(AstAssignIdentP<P>),
 }
@@ -466,9 +479,13 @@ impl Display for Expr {
                 }
                 f.write_str(")")
             }
-            Expr::ArrayIndirection(e_i) => {
+            Expr::Index(e_i) => {
                 let (e, i) = &**e_i;
                 write!(f, "{}[{}]", e.node, i.node)
+            }
+            Expr::Index2(a_i0_i1) => {
+                let (a, i0, i1) = &**a_i0_i1;
+                write!(f, "{}[{}, {}]", a.node, i0.node, i1.node)
             }
             Expr::Slice(e, i1, i2, i3) => {
                 write!(f, "{}[]", e.node)?;
@@ -542,7 +559,7 @@ impl Display for Assign {
                 f.write_str(")")
             }
             Assign::Dot(e, s) => write!(f, "{}.{}", e.node, s.node),
-            Assign::ArrayIndirection(e_i) => {
+            Assign::Index(e_i) => {
                 let (e, i) = &**e_i;
                 write!(f, "{}[{}]", e.node, i.node)
             }

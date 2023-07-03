@@ -23,12 +23,15 @@ use dupe::Dupe;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
+use crate::codemap::Span;
+use crate::codemap::Spanned;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Arguments;
+use crate::typing::error::TypingError;
+use crate::typing::function::Arg;
+use crate::typing::function::TyCustomFunctionImpl;
 use crate::typing::oracle::ctx::TypingOracleCtx;
-use crate::typing::ty::TyCustomFunctionImpl;
-use crate::typing::ty::TyStruct;
-use crate::typing::Arg;
+use crate::typing::structs::TyStruct;
 use crate::typing::Ty;
 use crate::values::structs::value::FrozenStruct;
 use crate::values::structs::value::Struct;
@@ -38,13 +41,18 @@ use crate::values::Heap;
 struct StructType;
 
 impl TyCustomFunctionImpl for StructType {
-    fn validate_call(&self, args: &[Arg], _oracle: TypingOracleCtx) -> Result<Ty, String> {
+    fn validate_call(
+        &self,
+        _span: Span,
+        args: &[Spanned<Arg>],
+        oracle: TypingOracleCtx,
+    ) -> Result<Ty, TypingError> {
         let mut fields = BTreeMap::new();
         let mut extra = false;
         for x in args {
-            match x {
+            match &x.node {
                 Arg::Pos(_) => {
-                    return Err("Positional arguments not allowed".to_owned());
+                    return Err(oracle.msg_error(x.span, "Positional arguments not allowed"));
                 }
                 Arg::Args(_) => {
                     // Args can be empty, and this is valid call:
@@ -58,7 +66,7 @@ impl TyCustomFunctionImpl for StructType {
                 Arg::Kwargs(_) => extra = true,
             }
         }
-        Ok(Ty::Struct(TyStruct { fields, extra }))
+        Ok(Ty::custom(TyStruct { fields, extra }))
     }
 }
 

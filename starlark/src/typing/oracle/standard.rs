@@ -19,15 +19,14 @@ use crate::docs::Doc;
 use crate::docs::DocItem;
 use crate::environment::Globals;
 use crate::stdlib::LibraryExtension;
+use crate::typing::function::Param;
 use crate::typing::oracle::docs::OracleDocs;
 use crate::typing::oracle::traits::TypingAttr;
 use crate::typing::oracle::traits::TypingBinOp;
 use crate::typing::oracle::traits::TypingOracle;
 use crate::typing::oracle::traits::TypingUnOp;
-use crate::typing::ty::Param;
 use crate::typing::ty::Ty;
 use crate::typing::ty::TyName;
-use crate::typing::ty::TyStruct;
 use crate::values::StarlarkValue;
 
 /// A [`TypingOracle`] based on information from documentation.
@@ -57,8 +56,8 @@ impl OracleStandard {
         add::<crate::values::int::PointerI32>(&mut fallback);
         add::<crate::values::none::NoneType>(&mut fallback);
         add::<crate::values::range::Range>(&mut fallback);
-        add::<crate::values::record::FrozenField>(&mut fallback);
-        add::<crate::values::record::FrozenRecordType>(&mut fallback);
+        add::<crate::values::record::field::FrozenField>(&mut fallback);
+        add::<crate::values::record::record_type::FrozenRecordType>(&mut fallback);
         add::<crate::values::regex::StarlarkRegex>(&mut fallback);
         add::<crate::values::dict::value::DictGen<crate::values::dict::value::FrozenDictData>>(
             &mut fallback,
@@ -84,7 +83,6 @@ impl TypingOracle for OracleStandard {
         // We have to explicitly implement operators (e.g. `__in__` since we don't generate documentation for them).
         // We explicitly implement polymorphic functions (e.g. `dict.get`) so they can get much more precise types.
         Some(Ok(match ty {
-            ty if ty == &Ty::none() => return Some(Err(())),
             Ty::List(elem) => match attr {
                 TypingAttr::Slice => ty.clone(),
                 TypingAttr::BinOp(TypingBinOp::Less) => {
@@ -156,32 +154,6 @@ impl TypingOracle for OracleStandard {
                     _ => return fallback(),
                 }
             }
-            Ty::Struct(TyStruct { fields, extra }) => match attr {
-                TypingAttr::Regular(attr) => match fields.get(attr) {
-                    Some(ty) => ty.clone(),
-                    None if *extra => Ty::Any,
-                    _ => return Some(Err(())),
-                },
-                _ => return Some(Err(())),
-            },
-            Ty::Tuple(tys) => match attr {
-                TypingAttr::BinOp(TypingBinOp::In) => {
-                    Ty::function(vec![Param::pos_only(Ty::unions(tys.clone()))], Ty::bool())
-                }
-                TypingAttr::Iter => Ty::unions(tys.clone()),
-                TypingAttr::Index => {
-                    Ty::function(vec![Param::pos_only(Ty::int())], Ty::unions(tys.clone()))
-                }
-                _ => return Some(Err(())),
-            },
-            Ty::Name(x) if x == "tuple" => match attr {
-                TypingAttr::Iter => Ty::Any,
-                TypingAttr::BinOp(TypingBinOp::In) => {
-                    Ty::function(vec![Param::pos_only(Ty::Any)], Ty::bool())
-                }
-                TypingAttr::Index => Ty::function(vec![Param::pos_only(Ty::int())], Ty::Any),
-                _ => return Some(Err(())),
-            },
             Ty::Name(x) if x == "int" => match attr {
                 TypingAttr::BinOp(TypingBinOp::Less) => {
                     Ty::function(vec![Param::pos_only(Ty::int())], Ty::bool())

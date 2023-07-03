@@ -23,14 +23,14 @@ use starlark_derive::starlark_module;
 use crate as starlark;
 use crate::collections::SmallMap;
 use crate::environment::GlobalsBuilder;
-use crate::values::record::Field;
-use crate::values::record::RecordType;
+use crate::values::record::field::Field;
+use crate::values::record::record_type::RecordType;
 use crate::values::typing::TypeCompiled;
 use crate::values::Heap;
 use crate::values::Value;
 
 #[starlark_module]
-pub fn global(builder: &mut GlobalsBuilder) {
+pub(crate) fn register_record(builder: &mut GlobalsBuilder) {
     /// A `record` type represents a set of named values, each with their own type.
     ///
     /// For example:

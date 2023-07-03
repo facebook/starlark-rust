@@ -27,13 +27,16 @@ use either::Either;
 use starlark_derive::starlark_module;
 
 use crate as starlark;
+use crate::codemap::Span;
+use crate::codemap::Spanned;
 use crate::collections::SmallMap;
 use crate::environment::GlobalsBuilder;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
+use crate::typing::error::TypingError;
+use crate::typing::function::Arg;
+use crate::typing::function::TyCustomFunctionImpl;
 use crate::typing::oracle::ctx::TypingOracleCtx;
-use crate::typing::ty::TyCustomFunctionImpl;
-use crate::typing::Arg;
 use crate::typing::Ty;
 use crate::typing::TypingAttr;
 use crate::typing::TypingOracle;
@@ -42,6 +45,7 @@ use crate::values::dict::value::FrozenDict;
 use crate::values::dict::Dict;
 use crate::values::dict::DictRef;
 use crate::values::float::StarlarkFloat;
+use crate::values::function::SpecialBuiltinFunction;
 use crate::values::int::PointerI32;
 use crate::values::list::value::FrozenList;
 use crate::values::list::AllocList;
@@ -144,20 +148,27 @@ fn min_max<'v>(
 struct ZipType;
 
 impl TyCustomFunctionImpl for ZipType {
-    fn validate_call(&self, args: &[Arg], oracle: TypingOracleCtx) -> Result<Ty, String> {
+    fn validate_call(
+        &self,
+        _span: Span,
+        args: &[Spanned<Arg>],
+        oracle: TypingOracleCtx,
+    ) -> Result<Ty, TypingError> {
         let mut iter_item_types: Vec<Ty> = Vec::new();
         let mut seen_star_args = false;
         for arg in args {
-            match arg {
+            match &arg.node {
                 Arg::Pos(pos) => match oracle.attribute(pos, TypingAttr::Iter) {
                     Some(Err(_)) => {
-                        return Err("Argument does not allow iteration".to_owned());
+                        return Err(oracle.msg_error(arg.span, "Argument does not allow iteration"));
                     }
                     Some(Ok(t)) => iter_item_types.push(t),
                     None => iter_item_types.push(Ty::Any),
                 },
                 Arg::Name(_, _) => {
-                    return Err("`zip()` does not accept keyword arguments".to_owned());
+                    return Err(
+                        oracle.msg_error(arg.span, "zip() does not accept keyword arguments")
+                    );
                 }
                 Arg::Args(_) => {
                     seen_star_args = true;
@@ -356,7 +367,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// x == {'a': 1} and y == {'x': 2, 'a': 1}
     /// # "#);
     /// ```
-    #[starlark(as_type = FrozenDict, speculative_exec_safe)]
+    #[starlark(
+        as_type = FrozenDict,
+        speculative_exec_safe,
+        special_builtin_function = SpecialBuiltinFunction::Dict,
+    )]
     fn dict<'v>(args: &Arguments<'v, '_>, heap: &'v Heap) -> anyhow::Result<Dict<'v>> {
         // Dict is super hot, and has a slightly odd signature, so we can do a bunch of special cases on it.
         // In particular, we don't generate the kwargs if there are no positional arguments.
@@ -774,7 +789,11 @@ pub(crate) fn global_functions(builder: &mut GlobalsBuilder) {
     /// list("strings are not iterable") # error: not supported
     /// # "#, r#"Expected type `iter("")` but got `str.type`"#);
     /// ```
-    #[starlark(as_type = FrozenList, speculative_exec_safe)]
+    #[starlark(
+        as_type = FrozenList,
+        speculative_exec_safe,
+        special_builtin_function = SpecialBuiltinFunction::List,
+    )]
     fn list<'v>(
         #[starlark(require = pos)] a: Option<ValueOfUnchecked<'v, StarlarkIter<Value<'v>>>>,
         heap: &'v Heap,

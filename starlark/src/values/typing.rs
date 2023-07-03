@@ -190,8 +190,7 @@ pub(crate) fn register_eval_type(globals: &mut GlobalsBuilder) {
 )]
 #[repr(transparent)]
 pub(crate) struct TypeCompiled<V>(
-    /// `V` is a starlark value which implements `type_matches_value`.
-    /// Such values are not visible to the user.
+    /// `V` is `TypeCompiledImplAsStarlarkValue`.
     V,
 );
 
@@ -264,6 +263,10 @@ impl<'v, V: ValueLike<'v>> TypeCompiled<V> {
 
     pub(crate) fn to_value(self) -> TypeCompiled<Value<'v>> {
         TypeCompiled(self.0.to_value())
+    }
+
+    pub(crate) fn to_inner(self) -> V {
+        self.0
     }
 
     pub(crate) fn write_hash(self, hasher: &mut StarlarkHasher) -> anyhow::Result<()> {
@@ -517,6 +520,50 @@ impl<'v> TypeCompiled<Value<'v>> {
         }
 
         TypeCompiled(heap.alloc_simple(TypeCompiledImplAsStarlarkValue(IsConcrete(t.to_owned()))))
+    }
+
+    /// Hold `Ty`, but only check name if it is provided.
+    fn ty_other(ty: Ty, heap: &'v Heap) -> TypeCompiled<Value<'v>> {
+        #[derive(Eq, PartialEq, Allocative, Debug, ProvidesStaticType)]
+        struct Erased {
+            ty: Ty,
+            name: Option<String>,
+        }
+
+        impl Hash for Erased {
+            fn hash<H: Hasher>(&self, state: &mut H) {
+                // TODO(nga): implement `Hash` for `Ty`.
+                self.ty.as_name().hash(state)
+            }
+        }
+
+        impl<'v> TypeCompiledImpl<'v> for Erased {
+            fn as_ty(&self) -> Ty {
+                self.ty.clone()
+            }
+
+            fn matches(&self, value: Value<'v>) -> bool {
+                if let Some(name) = &self.name {
+                    value.get_ref().matches_type(name)
+                } else {
+                    true
+                }
+            }
+
+            fn is_wildcard(&self) -> bool {
+                self.name.is_none()
+            }
+
+            fn to_frozen(&self, heap: &FrozenHeap) -> TypeCompiled<FrozenValue> {
+                TypeCompiled(heap.alloc_simple(TypeCompiledImplAsStarlarkValue(Erased {
+                    ty: self.ty.clone(),
+                    name: self.name.clone(),
+                })))
+            }
+        }
+
+        let name = ty.as_name().map(|s| s.to_owned());
+        TypeCompiled(heap.alloc_simple(TypeCompiledImplAsStarlarkValue(Erased { ty, name })))
     }
 
     pub(crate) fn type_list_of(
@@ -866,6 +913,35 @@ impl<'v> TypeCompiled<Value<'v>> {
         }
     }
 
+    pub(crate) fn from_ty(ty: &Ty, heap: &'v Heap) -> Self {
+        match ty {
+            Ty::Any => TypeCompiled::type_anything(),
+            Ty::Union(xs) => {
+                let xs = xs.alternatives().map(|x| TypeCompiled::from_ty(x, heap));
+                TypeCompiled::type_any_of(xs, heap)
+            }
+            Ty::Name(name) => TypeCompiled::from_str(name.as_str(), heap),
+            Ty::List(item) => {
+                let item = TypeCompiled::from_ty(item, heap);
+                TypeCompiled::type_list_of(item, heap)
+            }
+            Ty::Tuple(xs) => {
+                let xs = xs.map(|x| TypeCompiled::from_ty(x, heap));
+                TypeCompiled::type_tuple_of(xs, heap)
+            }
+            Ty::Dict(k_v) => {
+                let (k, v) = &**k_v;
+                let k = TypeCompiled::from_ty(k, heap);
+                let v = TypeCompiled::from_ty(v, heap);
+                TypeCompiled::type_dict_of(k, v, heap)
+            }
+            Ty::Never | Ty::Iter(_) | Ty::Custom(_) => {
+                // There are no runtime matchers for these types.
+                TypeCompiled::ty_other(ty.clone(), heap)
+            }
+        }
+    }
+
     pub(crate) fn new(ty: Value<'v>, heap: &'v Heap) -> anyhow::Result<Self> {
         if let Some(s) = ty.unpack_str() {
             Ok(TypeCompiled::from_str(s, heap))
@@ -879,6 +955,8 @@ impl<'v> TypeCompiled<Value<'v>> {
             TypeCompiled::from_dict(t, heap)
         } else if ty.request_value::<&dyn TypeCompiledImpl>().is_some() {
             Ok(TypeCompiled(ty))
+        } else if let Some(ty) = ty.get_ref().eval_type() {
+            Ok(TypeCompiled::from_ty(&ty, heap))
         } else {
             Err(invalid_type_annotation(ty, heap).into())
         }
@@ -930,13 +1008,10 @@ f(8) == False"#,
             "def f_compile_time(i: bool.type):\n pass\nf_compile_time(1)",
             "Expected type `bool.type` but got `int.type`",
         );
-        // Type errors should be caught when the user forgets quotes around a valid type
-        a.fail("def f(v: bool):\n pass\n", r#"Perhaps you meant `"bool"`"#);
-        a.fails(
+        a.pass(
             r#"Foo = record(value=int.type)
 def f(v: bool.type) -> Foo:
     return Foo(value=1)"#,
-            &[r#"record(value=field(int.type))"#],
         );
         a.fails(
             r#"Bar = enum("bar")
@@ -1015,6 +1090,35 @@ def foo(f: int.type = None):
         );
     }
 
+    #[ignore] // TODO(nga): depends on D46848632.
+    #[test]
+    fn test_new_syntax_without_dot_type_compile_time() {
+        assert::pass(r"def f() -> int: return 17");
+        assert::fail(
+            r#"
+def f() -> int: return 'tea'
+"#,
+            "Expected type `int.type` but got `str.type`",
+        );
+    }
+
+    #[test]
+    fn test_new_syntax_without_dot_type_runtime() {
+        assert::pass(
+            r#"
+def f() -> str: return noop('coke')
+f()
+"#,
+        );
+        assert::fail(
+            r#"
+def f() -> str: return noop(19)
+f()
+"#,
+            "Value `19` of type `int`",
+        );
+    }
+
     #[test]
     fn test_type_compiled_display() {
         fn t(expected: &str, ty0: &str) {
@@ -1076,6 +1180,44 @@ def f(x: ty):
 f("x")
 "#,
             "Expected type `int.type` but got `str.type`",
+        );
+    }
+
+    #[test]
+    fn test_new_list_dict_syntax_pass() {
+        assert::pass(
+            r#"
+def uuu(x: list[int]):
+    pass
+
+uuu([1, 2, 3])
+"#,
+        );
+    }
+
+    #[test]
+    fn test_new_list_dict_syntax_fail_compile_time() {
+        assert::fail(
+            r#"
+def uuu(x: list[int]):
+    pass
+
+uuu(["mm"])
+"#,
+            "Expected type `[int.type]` but got `[str.type]`",
+        );
+    }
+
+    #[test]
+    fn test_new_list_dict_syntax_fail_runtime() {
+        assert::fail(
+            r#"
+def uuu(x: list[int]):
+    pass
+
+noop(uuu)(["mm"])
+"#,
+            r#"Value `["mm"]` of type `list` does not match"#,
         );
     }
 }

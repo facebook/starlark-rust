@@ -325,6 +325,10 @@ impl<'v> AValueDyn<'v> {
         (self.vtable.starlark_value.typechecker_ty)(self.value, Private)
     }
 
+    pub(crate) fn eval_type(self) -> Option<Ty> {
+        (self.vtable.starlark_value.eval_type)(self.value, Private)
+    }
+
     #[inline]
     pub(crate) fn get_methods(self) -> Option<&'static Methods> {
         (self.vtable.starlark_value.get_methods)()
@@ -333,6 +337,15 @@ impl<'v> AValueDyn<'v> {
     #[inline]
     pub(crate) fn at(self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
         (self.vtable.starlark_value.at)(self.value, index, heap)
+    }
+
+    pub(crate) fn at2(
+        self,
+        index0: Value<'v>,
+        index1: Value<'v>,
+        heap: &'v Heap,
+    ) -> anyhow::Result<Value<'v>> {
+        (self.vtable.starlark_value.at2)(self.value, index0, index1, heap, Private)
     }
 
     #[inline]

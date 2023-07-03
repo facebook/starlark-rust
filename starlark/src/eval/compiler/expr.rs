@@ -269,6 +269,13 @@ pub(crate) enum ExprCompiled {
         Builtin2,
         Box<(IrSpanned<ExprCompiled>, IrSpanned<ExprCompiled>)>,
     ),
+    Index2(
+        Box<(
+            IrSpanned<ExprCompiled>,
+            IrSpanned<ExprCompiled>,
+            IrSpanned<ExprCompiled>,
+        )>,
+    ),
     Call(Box<IrSpanned<CallCompiled>>),
     Def(DefCompiled),
 }
@@ -507,6 +514,13 @@ impl IrSpanned<ExprCompiled> {
                 let r = r.optimize(ctx);
                 ExprCompiled::bin_op(*op, l, r, ctx)
             }
+            ExprCompiled::Index2(a_i0_i1) => {
+                let (a, i0, i1) = &**a_i0_i1;
+                let a = a.optimize(ctx);
+                let i0 = i0.optimize(ctx);
+                let i1 = i1.optimize(ctx);
+                ExprCompiled::index2(a, i0, i1)
+            }
             d @ ExprCompiled::Def(..) => (*d).clone(),
             ExprCompiled::Call(ref call) => call.optimize(ctx),
         };
@@ -686,7 +700,7 @@ impl ExprCompiled {
             Builtin2::Percent => ExprCompiled::percent(l, r, ctx),
             Builtin2::Add => ExprCompiled::add(l, r),
             Builtin2::Equals => ExprCompiled::equals(l, r).node,
-            Builtin2::ArrayIndex => ExprCompiled::array_indirection(l, r, ctx),
+            Builtin2::ArrayIndex => ExprCompiled::index(l, r, ctx),
             bin_op => ExprCompiled::Builtin2(bin_op, Box::new((l, r))),
         }
     }
@@ -883,7 +897,7 @@ impl ExprCompiled {
         ExprCompiled::Slice(Box::new((array, start, stop, step)))
     }
 
-    pub(crate) fn array_indirection(
+    pub(crate) fn index(
         array: IrSpanned<ExprCompiled>,
         index: IrSpanned<ExprCompiled>,
         ctx: &mut OptCtx,
@@ -897,6 +911,14 @@ impl ExprCompiled {
             }
         }
         ExprCompiled::Builtin2(Builtin2::ArrayIndex, Box::new((array, index)))
+    }
+
+    pub(crate) fn index2(
+        array: IrSpanned<ExprCompiled>,
+        index0: IrSpanned<ExprCompiled>,
+        index1: IrSpanned<ExprCompiled>,
+    ) -> ExprCompiled {
+        ExprCompiled::Index2(Box::new((array, index0, index1)))
     }
 
     pub(crate) fn typ(span: FrameSpan, v: IrSpanned<ExprCompiled>) -> ExprCompiled {
@@ -1210,11 +1232,18 @@ impl<'v, 'a, 'e> Compiler<'v, 'a, 'e> {
                 let args = self.args(args);
                 CallCompiled::call(span, left, args, &mut self.opt_ctx())
             }
-            ExprP::ArrayIndirection(array_index) => {
+            ExprP::Index(array_index) => {
                 let (array, index) = &**array_index;
                 let array = self.expr(array);
                 let index = self.expr(index);
-                ExprCompiled::array_indirection(array, index, &mut self.opt_ctx())
+                ExprCompiled::index(array, index, &mut self.opt_ctx())
+            }
+            ExprP::Index2(array_index0_index1) => {
+                let (array, index0, index1) = &**array_index0_index1;
+                let array = self.expr(array);
+                let index0 = self.expr(index0);
+                let index1 = self.expr(index1);
+                ExprCompiled::index2(array, index0, index1)
             }
             ExprP::Slice(collection, start, stop, stride) => {
                 let collection = self.expr(collection);

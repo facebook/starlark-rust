@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use allocative::Allocative;
 use derivative::Derivative;
 use derive_more::Display;
+use dupe::Dupe;
 use starlark_derive::starlark_value;
 use starlark_derive::NoSerialize;
 
@@ -33,7 +34,6 @@ use crate::docs::DocItem;
 use crate::docs::DocProperty;
 use crate::docs::DocString;
 use crate::docs::DocStringKind;
-use crate::docs::DocType;
 use crate::eval::Arguments;
 use crate::eval::Evaluator;
 use crate::eval::ParametersParser;
@@ -43,6 +43,7 @@ use crate::starlark_complex_value;
 use crate::starlark_simple_value;
 use crate::typing::Ty;
 use crate::values::type_repr::StarlarkTypeRepr;
+use crate::values::typing::TypeCompiled;
 use crate::values::AllocFrozenValue;
 use crate::values::AllocValue;
 use crate::values::Freeze;
@@ -54,6 +55,7 @@ use crate::values::Heap;
 use crate::values::StarlarkValue;
 use crate::values::Trace;
 use crate::values::Value;
+use crate::values::ValueError;
 use crate::values::ValueLike;
 
 /// Return value of `type(any function)`.
@@ -66,6 +68,13 @@ impl StarlarkTypeRepr for StarlarkFunction {
     fn starlark_type_repr() -> Ty {
         Ty::name(FUNCTION_TYPE)
     }
+}
+
+#[derive(Debug, Allocative, Clone, Copy, Dupe)]
+#[doc(hidden)]
+pub enum SpecialBuiltinFunction {
+    List,
+    Dict,
 }
 
 /// A native function that can be evaluated.
@@ -147,8 +156,8 @@ impl<T> NativeAttr for T where
 pub struct NativeCallableRawDocs {
     pub rust_docstring: Option<&'static str>,
     pub signature: ParametersSpec<FrozenValue>,
-    pub parameter_types: HashMap<usize, DocType>,
-    pub return_type: Option<DocType>,
+    pub parameter_types: HashMap<usize, Ty>,
+    pub return_type: Ty,
     pub dot_type: Option<&'static str>,
 }
 
@@ -184,6 +193,7 @@ pub struct NativeFunction {
     pub(crate) speculative_exec_safe: bool,
     #[derivative(Debug = "ignore")]
     pub(crate) raw_docs: Option<NativeCallableRawDocs>,
+    pub(crate) special_builtin_function: Option<SpecialBuiltinFunction>,
 }
 
 impl AllocFrozenValue for NativeFunction {
@@ -210,6 +220,7 @@ impl NativeFunction {
             ty: None,
             speculative_exec_safe: false,
             raw_docs: None,
+            special_builtin_function: None,
         }
     }
 
@@ -260,6 +271,15 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
         None
     }
 
+    #[allow(clippy::manual_map)]
+    fn eval_type(&self, _private: Private) -> Option<Ty> {
+        if let Some(s) = &self.typ {
+            Some(Ty::name(s.as_str()))
+        } else {
+            None
+        }
+    }
+
     fn has_attr(&self, _attribute: &str, _heap: &'v Heap) -> bool {
         // TODO(nga): implement properly.
         false
@@ -281,6 +301,33 @@ impl<'v> StarlarkValue<'v> for NativeFunction {
 
     fn typechecker_ty(&self, _private: Private) -> Option<Ty> {
         self.ty.clone()
+    }
+
+    fn at(&self, index: Value<'v>, heap: &'v Heap) -> anyhow::Result<Value<'v>> {
+        match &self.special_builtin_function {
+            Some(SpecialBuiltinFunction::List) => {
+                let index = TypeCompiled::new(index, heap)?;
+                Ok(TypeCompiled::type_list_of(index, heap).to_inner())
+            }
+            _ => ValueError::unsupported(self, "[]"),
+        }
+    }
+
+    fn at2(
+        &self,
+        index0: Value<'v>,
+        index1: Value<'v>,
+        heap: &'v Heap,
+        _private: Private,
+    ) -> anyhow::Result<Value<'v>> {
+        match &self.special_builtin_function {
+            Some(SpecialBuiltinFunction::Dict) => {
+                let index0 = TypeCompiled::new(index0, heap)?;
+                let index1 = TypeCompiled::new(index1, heap)?;
+                Ok(TypeCompiled::type_dict_of(index0, index1, heap).to_inner())
+            }
+            _ => ValueError::unsupported(self, "[,]"),
+        }
     }
 }
 
@@ -361,9 +408,7 @@ impl<'v> StarlarkValue<'v> for NativeAttribute {
             .docstring
             .as_ref()
             .and_then(|ds| DocString::from_docstring(DocStringKind::Rust, ds));
-        let typ = Some(DocType {
-            raw_type: self.typ.clone(),
-        });
+        let typ = self.typ.clone();
         Some(DocItem::Property(DocProperty { docs: ds, typ }))
     }
 }

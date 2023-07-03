@@ -230,8 +230,10 @@ PrimaryExpr: AstExpr = {
           Expr::Slice(Box::new(e), i1.map(|x| Box::new(x)), i2.map(|x| Box::new(x)), i3.unwrap_or(None).map(|x| Box::new(x)))
               .ast(l, r)
         },
-    <l:@L> <e:PrimaryExpr> "[" <i:TestList> "]" <r:@R>
-        => Expr::ArrayIndirection(Box::new((e, i))).ast(l, r),
+    <l:@L> <e:PrimaryExpr> "[" <i:Test> "]" <r:@R>
+        => Expr::Index(Box::new((e, i))).ast(l, r),
+    <l:@L> <e:PrimaryExpr> "[" <i0:Test> "," <i1:Test> "]" <r:@R>
+        => Expr::Index2(Box::new((e, i0, i1))).ast(l, r),
     Operand
 };
 

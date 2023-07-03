@@ -25,15 +25,14 @@ use crate::stdlib::LibraryExtension;
 use crate::syntax::AstModule;
 use crate::syntax::Dialect;
 use crate::tests::golden_test_template::golden_test_template;
+use crate::typing::function::Param;
 use crate::typing::oracle::traits::OracleNoAttributes;
 use crate::typing::oracle::traits::OracleSeq;
 use crate::typing::oracle::traits::TypingAttr;
 use crate::typing::Interface;
 use crate::typing::OracleDocs;
 use crate::typing::OracleStandard;
-use crate::typing::Param;
 use crate::typing::Ty;
-use crate::typing::TyFunction;
 use crate::typing::TypingOracle;
 
 fn mk_oracle() -> impl TypingOracle {
@@ -76,17 +75,19 @@ fn test_oracle() {
     );
     assert_eq!(b.builtin("not_a_symbol"), Err(()));
 
-    fn get_type(x: &Result<Ty, ()>) -> &str {
+    fn has_type(x: &Result<Ty, ()>) -> bool {
         match x {
-            Ok(Ty::Function(TyFunction { type_attr, .. })) => type_attr.as_str(),
-            _ => "",
+            Ok(Ty::Custom(c)) => {
+                matches!(c.0.attribute_dyn(TypingAttr::Regular("type")), Some(Ok(_)))
+            }
+            _ => false,
         }
     }
 
-    assert_eq!(get_type(&b.builtin("int")), "int");
-    assert_eq!(get_type(&b.builtin("str")), "string");
-    assert_eq!(get_type(&b.builtin("list")), "list");
-    assert_eq!(get_type(&b.builtin("hash")), "");
+    assert!(has_type(&b.builtin("int")));
+    assert!(has_type(&b.builtin("str")));
+    assert!(has_type(&b.builtin("list")));
+    assert!(!has_type(&b.builtin("hash")));
 }
 
 #[derive(Default)]
@@ -328,6 +329,88 @@ fn test_tuple() {
         r#"
 def empty_tuple_fixed_name() -> (): return tuple()
 def empty_tuple_name_fixed() -> tuple.type: return ()
+"#,
+    );
+}
+
+#[test]
+fn test_test_new_syntax_without_dot_type() {
+    TypeCheck::new().check(
+        "new_syntax_without_dot_type",
+        r#"
+def foo(x: str): pass
+
+# good
+foo("test")
+
+# bad
+foo(1)
+"#,
+    );
+}
+
+#[test]
+fn test_calls() {
+    TypeCheck::new().check(
+        "calls",
+        r#"
+def f(y): pass
+
+# Extra parameter.
+f(1, 2)
+
+# Not enough parameters.
+f()
+"#,
+    );
+}
+
+#[test]
+fn test_list_append() {
+    TypeCheck::new().ty("x").check(
+        "list_append",
+        r#"
+# Type of `x` should be inferred as list of either `int` or `str`.
+x = []
+x.append(1)
+x.append("")
+"#,
+    );
+}
+
+#[test]
+fn test_list_append_bug() {
+    // TODO(nga): fix.
+    TypeCheck::new().ty("x").check(
+        "list_append_bug",
+        r#"
+x = []
+x.append(x)
+"#,
+    );
+}
+
+#[test]
+fn test_new_list_dict_syntax() {
+    TypeCheck::new().ty("x").check(
+        "new_list_dict_syntax",
+        r#"
+def new_list_dict_syntax(x: dict[str, int]) -> list[str]:
+    return list(x.keys())
+
+# Check type is properly parsed from the function return type.
+x = new_list_dict_syntax({"a": 1, "b": 2})
+"#,
+    );
+}
+
+#[test]
+fn test_int_plus_float() {
+    TypeCheck::new().ty("x").check(
+        "int_plus_float",
+        r#"
+# TODO(nga): fix.
+x = 1 + 1.0
 "#,
     );
 }

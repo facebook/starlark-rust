@@ -153,6 +153,7 @@ pub(crate) struct InstrObjectFieldImpl;
 pub(crate) struct InstrObjectFieldRawImpl;
 pub(crate) struct InstrSetObjectFieldImpl;
 pub(crate) struct InstrSliceImpl;
+pub(crate) struct InstrArrayIndex2Impl;
 
 pub(crate) type InstrLoadLocal = InstrNoFlow<InstrLoadLocalImpl>;
 pub(crate) type InstrLoadLocalCaptured = InstrNoFlow<InstrLoadLocalCapturedImpl>;
@@ -169,6 +170,7 @@ pub(crate) type InstrObjectField = InstrNoFlow<InstrObjectFieldImpl>;
 pub(crate) type InstrObjectFieldRaw = InstrNoFlow<InstrObjectFieldRawImpl>;
 pub(crate) type InstrSetObjectField = InstrNoFlow<InstrSetObjectFieldImpl>;
 pub(crate) type InstrSlice = InstrNoFlow<InstrSliceImpl>;
+pub(crate) type InstrArrayIndex2 = InstrNoFlow<InstrArrayIndex2Impl>;
 
 impl InstrNoFlowImpl for InstrLoadLocalImpl {
     type Arg = (LocalSlotId, BcSlotOut);
@@ -442,6 +444,25 @@ impl InstrNoFlowImpl for InstrSliceImpl {
         let stop = stop.map(|s| frame.get_bc_slot(s));
         let step = step.map(|s| frame.get_bc_slot(s));
         let value = list.slice(start, stop, step, eval.heap())?;
+        frame.set_bc_slot(*target, value);
+        Ok(())
+    }
+}
+
+impl InstrNoFlowImpl for InstrArrayIndex2Impl {
+    type Arg = (BcSlotIn, BcSlotIn, BcSlotIn, BcSlotOut);
+
+    #[cold]
+    fn run_with_args<'v>(
+        eval: &mut Evaluator<'v, '_>,
+        frame: BcFramePtr<'v>,
+        _ip: BcPtrAddr,
+        (array, index0, index1, target): &(BcSlotIn, BcSlotIn, BcSlotIn, BcSlotOut),
+    ) -> anyhow::Result<()> {
+        let array = frame.get_bc_slot(*array);
+        let index0 = frame.get_bc_slot(*index0);
+        let index1 = frame.get_bc_slot(*index1);
+        let value = array.get_ref().at2(index0, index1, eval.heap())?;
         frame.set_bc_slot(*target, value);
         Ok(())
     }

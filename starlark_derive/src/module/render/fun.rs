@@ -69,6 +69,21 @@ impl StarFun {
         }
     }
 
+    fn special_builtin_function_expr(&self) -> TokenStream {
+        match &self.special_builtin_function {
+            Some(x) => quote_spanned! {
+                self.span()=>
+                std::option::Option::Some(#x)
+            },
+            None => {
+                quote_spanned! {
+                    self.span()=>
+                    std::option::Option::None
+                }
+            }
+        }
+    }
+
     fn type_str(&self) -> TokenStream {
         match &self.as_type {
             Some(x) => quote_spanned! {
@@ -220,6 +235,7 @@ impl StarFun {
         let typ = self.type_expr();
         let ty_custom = self.ty_custom_expr();
         let struct_name = self.struct_name();
+        let special_builtin_function = self.special_builtin_function_expr();
 
         if self.is_method() {
             Ok(quote_spanned! {self.span()=>
@@ -243,6 +259,7 @@ impl StarFun {
                     #documentation_var,
                     #typ,
                     #ty_custom,
+                    #special_builtin_function,
                     #struct_name {
                         #struct_fields_init
                     },
@@ -579,7 +596,7 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
         .filter(|(_, a)| a.pass_style != StarArgPassStyle::Args) // these aren't coerced according to their type (Vec vs tuple)
         .map(|(i, arg)| {
             let typ_str = render_starlark_type(span, arg.without_option());
-            quote_spanned!(span=> (#i, starlark::docs::DocType { raw_type: #typ_str }) )
+            quote_spanned!(span=> (#i, #typ_str) )
         })
         .collect();
 
@@ -589,16 +606,11 @@ fn render_documentation(x: &StarFun) -> syn::Result<(Ident, TokenStream)> {
     let documentation = quote_spanned!(span=>
         let #var_name = {
             let parameter_types = std::collections::HashMap::from([#(#parameter_types),*]);
-            let return_type = Some(
-                starlark::docs::DocType {
-                    raw_type: #return_type_str
-                }
-            );
             starlark::values::function::NativeCallableRawDocs {
                 rust_docstring: #docs,
                 signature: #documentation_signature,
                 parameter_types,
-                return_type,
+                return_type: #return_type_str,
                 dot_type: #dot_type,
             }
         };

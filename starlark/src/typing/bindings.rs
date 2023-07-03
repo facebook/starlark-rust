@@ -40,9 +40,9 @@ use crate::syntax::ast::ParameterP;
 use crate::syntax::ast::StmtP;
 use crate::syntax::uniplate::Visit;
 use crate::typing::error::InternalError;
+use crate::typing::function::Param;
 use crate::typing::mode::TypecheckMode;
 use crate::typing::ty::Approximation;
-use crate::typing::ty::Param;
 use crate::typing::ty::Ty;
 
 #[derive(Clone)]
@@ -141,7 +141,7 @@ impl<'a> BindingsCollect<'a> {
                         )?;
                     }
                 }
-                AssignP::ArrayIndirection(array_index) => match &*array_index.0 {
+                AssignP::Index(array_index) => match &*array_index.0 {
                     ExprP::Identifier(Spanned {
                         span: _,
                         node: IdentP(_name, Some(ResolvedIdent::Slot(_, ident))),

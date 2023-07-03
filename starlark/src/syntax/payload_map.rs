@@ -139,11 +139,19 @@ impl<A: AstPayload> ExprP<A> {
                 Box::new(ca.into_map_payload(f)),
                 args.into_map(|a| a.into_map_payload(f)),
             ),
-            ExprP::ArrayIndirection(array_index) => {
+            ExprP::Index(array_index) => {
                 let (array, index) = *array_index;
-                ExprP::ArrayIndirection(Box::new((
+                ExprP::Index(Box::new((
                     array.into_map_payload(f),
                     index.into_map_payload(f),
+                )))
+            }
+            ExprP::Index2(a_i0_i1) => {
+                let (array, i0, i1) = *a_i0_i1;
+                ExprP::Index2(Box::new((
+                    array.into_map_payload(f),
+                    i0.into_map_payload(f),
+                    i1.into_map_payload(f),
                 )))
             }
             ExprP::Slice(x, a, b, c) => ExprP::Slice(
@@ -221,9 +229,9 @@ impl<A: AstPayload> AssignP<A> {
     ) -> AssignP<B> {
         match self {
             AssignP::Tuple(args) => AssignP::Tuple(args.into_map(|a| a.into_map_payload(f))),
-            AssignP::ArrayIndirection(array_index) => {
+            AssignP::Index(array_index) => {
                 let (array, index) = *array_index;
-                AssignP::ArrayIndirection(Box::new((
+                AssignP::Index(Box::new((
                     array.into_map_payload(f),
                     index.into_map_payload(f),
                 )))
