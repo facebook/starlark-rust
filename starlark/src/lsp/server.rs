@@ -1003,7 +1003,10 @@ impl<T: LspContext> Backend<T> {
                 // inserts a new load statement after the last one we found.
                 TextEdit::new(
                     match last_load {
-                        Some(span) => span.into(),
+                        Some(span) => Range::new(
+                            Position::new(span.end_line as u32, span.end_column as u32),
+                            Position::new(span.end_line as u32, span.end_column as u32),
+                        ),
                         None => Range::new(Position::new(0, 0), Position::new(0, 0)),
                     },
                     format!(
