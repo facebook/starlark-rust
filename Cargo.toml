@@ -17,6 +17,7 @@ cmp_any = { version = "0.8.1", path = "gazebo/cmp_any" }
 dupe = { version = "0.9.0", path = "gazebo/dupe" }
 display_container = { version = "0.9.0", path = "gazebo/display_container" }
 either = "1.8"
+equivalent = "1.0.0"
 indenter = "0.3.3"
 
 ctor = "0.1.26"
