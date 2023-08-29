@@ -375,9 +375,7 @@ impl LspContext for Context {
         _current_value: &str,
         _workspace_root: Option<&Path>,
     ) -> anyhow::Result<Vec<starlark::lsp::completion::StringCompletionResult>> {
-        Err(anyhow::anyhow!(
-            "Not yet implemented, get_string_completion_options"
-        ))
+        Ok(Vec::new())
     }
 }
 
