@@ -406,6 +406,8 @@ impl<T: LspContext> Backend<T> {
                     "[".to_owned(),
                     // e.g. string literal (load path, target name)
                     "\"".to_owned(),
+                    // don't lose autocomplete when typing a space, e.g. after a comma
+                    " ".to_owned(),
                 ]),
                 ..Default::default()
             }),
