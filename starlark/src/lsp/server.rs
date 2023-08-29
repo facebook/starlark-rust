@@ -87,8 +87,6 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
-use super::completion::StringCompletionResult;
-use super::completion::StringCompletionType;
 use crate::codemap::ResolvedPos;
 use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
@@ -98,6 +96,8 @@ use crate::docs::markdown::render_doc_member;
 use crate::docs::markdown::render_doc_param;
 use crate::docs::DocMember;
 use crate::docs::DocModule;
+use crate::lsp::completion::StringCompletionResult;
+use crate::lsp::completion::StringCompletionType;
 use crate::lsp::definition::Definition;
 use crate::lsp::definition::DottedDefinition;
 use crate::lsp::definition::IdentifierDefinition;

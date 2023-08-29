@@ -67,6 +67,8 @@ use crate::docs::DocModule;
 use crate::docs::Identifier;
 use crate::docs::Location;
 use crate::errors::EvalMessage;
+use crate::lsp::completion::StringCompletionResult;
+use crate::lsp::completion::StringCompletionType;
 use crate::lsp::server::new_notification;
 use crate::lsp::server::server_with_connection;
 use crate::lsp::server::LspContext;
@@ -297,10 +299,12 @@ impl LspContext for TestServerContext {
 
     fn get_string_completion_options(
         &self,
-        _kind: super::completion::StringCompletionType,
+        _document_uri: &LspUrl,
+        _kind: StringCompletionType,
         _current_value: &str,
-    ) -> anyhow::Result<Vec<super::completion::StringCompletionResult>> {
-        Ok(vec![])
+        _workspace_root: Option<&Path>,
+    ) -> anyhow::Result<Vec<StringCompletionResult>> {
+        Ok(Vec::new())
     }
 }
 
