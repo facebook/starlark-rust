@@ -839,6 +839,8 @@ impl LspContext for BazelContext {
             } else {
                 // Complete from the last `:` or `/` in the current value.
                 current_value
+                    // NOTE: Can't use `rsplit_once` as we need the value _including_ the value
+                    // we're splitting on.
                     .rfind(if complete_directories { '/' } else { ':' })
                     .map(|pos| &current_value[..pos + 1])
                     .map(FilesystemCompletionRoot::String)
