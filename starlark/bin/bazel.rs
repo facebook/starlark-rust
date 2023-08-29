@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use either::Either;
+use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::Url;
 use starlark::docs::get_registered_starlark_docs;
@@ -22,7 +23,6 @@ use starlark::errors::EvalMessage;
 use starlark::eval::Evaluator;
 use starlark::lsp;
 use starlark::lsp::completion::StringCompletionResult;
-use starlark::lsp::completion::StringCompletionResultKind;
 use starlark::lsp::completion::StringCompletionType;
 use starlark::lsp::server::LspContext;
 use starlark::lsp::server::LspEvalResult;
@@ -523,7 +523,7 @@ impl BazelContext {
                         file_name
                     )),
                     insert_text_offset: render_base.len(),
-                    kind: StringCompletionResultKind::Folder,
+                    kind: CompletionItemKind::FOLDER,
                 });
             } else if path.is_file() {
                 if Self::BUILD_FILE_NAMES.contains(&file_name.as_ref()) {
@@ -544,7 +544,7 @@ impl BazelContext {
                                         target
                                     )),
                                     insert_text_offset: render_base.len(),
-                                    kind: StringCompletionResultKind::Label,
+                                    kind: CompletionItemKind::PROPERTY,
                                 }
                             }));
                         }
@@ -579,7 +579,7 @@ impl BazelContext {
                             file_name
                         )),
                         insert_text_offset: render_base.len(),
-                        kind: StringCompletionResultKind::File,
+                        kind: CompletionItemKind::FILE,
                     });
                 }
             }
@@ -796,7 +796,7 @@ impl LspContext for BazelContext {
                         value: name_with_at,
                         insert_text: Some(insert_text),
                         insert_text_offset: 0,
-                        kind: StringCompletionResultKind::Module,
+                        kind: CompletionItemKind::MODULE,
                     }
                 })
                 .collect()

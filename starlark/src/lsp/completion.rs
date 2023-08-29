@@ -67,31 +67,7 @@ pub struct StringCompletionResult {
     /// From where to start the insertion, compared to the start of the string.
     pub insert_text_offset: usize,
     /// The kind of result, e.g. a file vs a folder.
-    pub kind: StringCompletionResultKind,
-}
-
-/// The kind of string being offered as an autocomplete option.
-#[derive(Debug, PartialEq)]
-pub enum StringCompletionResultKind {
-    /// A module/package, containing options external to the current workspace.
-    Module,
-    /// A regular file.
-    File,
-    /// A regular folder.
-    Folder,
-    /// A buildable target.
-    Label,
-}
-
-impl From<StringCompletionResultKind> for CompletionItemKind {
-    fn from(value: StringCompletionResultKind) -> Self {
-        match value {
-            StringCompletionResultKind::Module => CompletionItemKind::MODULE,
-            StringCompletionResultKind::File => CompletionItemKind::FILE,
-            StringCompletionResultKind::Folder => CompletionItemKind::FOLDER,
-            StringCompletionResultKind::Label => CompletionItemKind::PROPERTY,
-        }
-    }
+    pub kind: CompletionItemKind,
 }
 
 impl<T: LspContext> Backend<T> {
@@ -370,7 +346,7 @@ impl<T: LspContext> Backend<T> {
 
                 CompletionItem {
                     label: result.value.clone(),
-                    kind: Some(result.kind.into()),
+                    kind: Some(result.kind),
                     insert_text: result.insert_text.clone(),
                     text_edit: Some(CompletionTextEdit::Edit(TextEdit {
                         range,
