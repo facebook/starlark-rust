@@ -36,6 +36,7 @@ use starlark::environment::Globals;
 use starlark::environment::Module;
 use starlark::errors::EvalMessage;
 use starlark::eval::Evaluator;
+use starlark::lsp::completion::StringCompletionType;
 use starlark::lsp::server::LspContext;
 use starlark::lsp::server::LspEvalResult;
 use starlark::lsp::server::LspUrl;
@@ -365,6 +366,18 @@ impl LspContext for Context {
 
     fn get_environment(&self, _uri: &LspUrl) -> DocModule {
         DocModule::default()
+    }
+
+    fn get_string_completion_options(
+        &self,
+        _document_uri: &LspUrl,
+        _kind: StringCompletionType,
+        _current_value: &str,
+        _workspace_root: Option<&Path>,
+    ) -> anyhow::Result<Vec<starlark::lsp::completion::StringCompletionResult>> {
+        Err(anyhow::anyhow!(
+            "Not yet implemented, get_string_completion_options"
+        ))
     }
 }
 

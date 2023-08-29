@@ -249,7 +249,7 @@ impl LspContext for TestServerContext {
                 LspUrl::File(u) => match u.extension() {
                     Some(e) if e == "star" => Some(StringLiteralResult {
                         url,
-                        location_finder: Some(Box::new(move |_ast| Ok(span))),
+                        location_finder: Some(Box::new(move |_ast, _name| Ok(span))),
                     }),
                     _ => Some(StringLiteralResult {
                         url,
@@ -293,6 +293,14 @@ impl LspContext for TestServerContext {
                 .map(|name| (name.clone(), DocMember::Function(DocFunction::default())))
                 .collect(),
         }
+    }
+
+    fn get_string_completion_options(
+        &self,
+        _kind: super::completion::StringCompletionType,
+        _current_value: &str,
+    ) -> anyhow::Result<Vec<super::completion::StringCompletionResult>> {
+        Ok(vec![])
     }
 }
 

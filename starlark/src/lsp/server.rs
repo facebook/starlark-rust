@@ -87,6 +87,8 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde::Serializer;
 
+use super::completion::StringCompletionResult;
+use super::completion::StringCompletionType;
 use crate::codemap::ResolvedPos;
 use crate::codemap::ResolvedSpan;
 use crate::codemap::Span;
@@ -252,7 +254,8 @@ pub struct StringLiteralResult {
     ///
     /// If `None`, then just jump to the URL. Do not attempt to load the file.
     #[derivative(Debug = "ignore")]
-    pub location_finder: Option<Box<dyn FnOnce(&AstModule) -> anyhow::Result<Option<Span>> + Send>>,
+    pub location_finder:
+        Option<Box<dyn FnOnce(&AstModule, &str) -> anyhow::Result<Option<Span>> + Send>>,
 }
 
 fn _assert_string_literal_result_is_send() {
@@ -351,6 +354,17 @@ pub trait LspContext {
         current_file: &LspUrl,
         symbol: &str,
     ) -> anyhow::Result<Option<LspUrl>>;
+
+    /// Get valid completion options if possible, based on the kind of string
+    /// completion expected (e.g. any string literal, versus the path argument in
+    /// a load statement).
+    fn get_string_completion_options(
+        &self,
+        document_uri: &LspUrl,
+        kind: StringCompletionType,
+        current_value: &str,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<Vec<StringCompletionResult>>;
 }
 
 /// Errors when [`LspContext::resolve_load()`] cannot resolve a given path.
@@ -611,9 +625,11 @@ impl<T: LspContext> Backend<T> {
                         let result =
                             self.get_ast_or_load_from_disk(&url)
                                 .and_then(|ast| match ast {
-                                    Some(module) => location_finder(&module.ast).map(|span| {
-                                        span.map(|span| module.ast.codemap.resolve_span(span))
-                                    }),
+                                    Some(module) => {
+                                        location_finder(&module.ast, &literal).map(|span| {
+                                            span.map(|span| module.ast.codemap.resolve_span(span))
+                                        })
+                                    }
                                     None => Ok(None),
                                 });
                         let result = match result {
@@ -749,8 +765,24 @@ impl<T: LspContext> Backend<T> {
                         )
                         .collect(),
                     ),
-                    Some(AutocompleteType::LoadPath { .. })
-                    | Some(AutocompleteType::String { .. }) => None,
+                    Some(AutocompleteType::LoadPath {
+                        current_value,
+                        current_span,
+                    })
+                    | Some(AutocompleteType::String {
+                        current_value,
+                        current_span,
+                    }) => Some(self.string_completion_options(
+                        &uri,
+                        if matches!(&autocomplete_type, Some(AutocompleteType::LoadPath { .. })) {
+                            StringCompletionType::LoadPath
+                        } else {
+                            StringCompletionType::String
+                        },
+                        current_value,
+                        *current_span,
+                        workspace_root.as_deref(),
+                    )?),
                     Some(AutocompleteType::LoadSymbol {
                         path,
                         current_span,
@@ -925,10 +957,7 @@ impl<T: LspContext> Backend<T> {
                 load_args.sort_by(|(_, a), (_, b)| a.cmp(b));
 
                 TextEdit::new(
-                    Range::new(
-                        Position::new(load_span.begin.line as u32, load_span.begin.column as u32),
-                        Position::new(load_span.end.line as u32, load_span.end.column as u32),
-                    ),
+                    load_span.into(),
                     format!(
                         "load(\"{module}\", {})",
                         load_args
@@ -1118,7 +1147,7 @@ impl<T: LspContext> Backend<T> {
                         } else {
                             return Ok(None);
                         };
-                        let result = location_finder(&module.ast)?;
+                        let result = location_finder(&module.ast, &literal)?;
 
                         result.map(|location| Hover {
                             contents: HoverContents::Array(vec![MarkedString::LanguageString(
@@ -1326,8 +1355,9 @@ where
 
 fn new_response<T>(id: RequestId, params: anyhow::Result<T>) -> Response
 where
-    T: serde::Serialize,
+    T: serde::Serialize + Debug,
 {
+    // dbg!(&params);
     match params {
         Ok(params) => Response {
             id,
