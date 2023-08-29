@@ -1355,9 +1355,8 @@ where
 
 fn new_response<T>(id: RequestId, params: anyhow::Result<T>) -> Response
 where
-    T: serde::Serialize + Debug,
+    T: serde::Serialize,
 {
-    // dbg!(&params);
     match params {
         Ok(params) => Response {
             id,
