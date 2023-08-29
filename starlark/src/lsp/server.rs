@@ -763,12 +763,15 @@ impl<T: LspContext> Backend<T> {
                         workspace_root.as_deref(),
                     )),
                     Some(AutocompleteType::Parameter {
-                        function_name_span, ..
+                        function_name_span,
+                        previously_used_named_parameters,
+                        ..
                     }) => Some(
                         self.parameter_name_options(
                             function_name_span,
                             &document,
                             &uri,
+                            &previously_used_named_parameters,
                             workspace_root.as_deref(),
                         )
                         .chain(self.default_completion_options(
