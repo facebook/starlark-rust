@@ -268,13 +268,11 @@ impl AstModule {
                     // No matches? We might be in between empty braces (new function call),
                     // e.g. `foo(|)`. However, we don't want to offer completions for
                     // when the cursor is at the very end of the function call, e.g. `foo()|`.
-                    return Some(if args.is_empty() && span.end() != position {
+                    return Some(if span.end() != position {
                         AutocompleteType::Parameter {
                             function_name: name.to_string(),
                             function_name_span: codemap.resolve_span(name.span),
                         }
-                    } else if !args.is_empty() {
-                        AutocompleteType::Default
                     } else {
                         // Don't offer completions right after the function call.
                         AutocompleteType::None
