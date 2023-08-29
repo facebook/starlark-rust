@@ -32,6 +32,7 @@ pub(crate) mod grammar_util;
 pub(crate) mod lexer;
 #[cfg(test)]
 mod lexer_tests;
+pub(crate) mod load;
 pub(crate) mod module;
 pub(crate) mod parser;
 pub(crate) mod payload_map;

@@ -17,6 +17,8 @@
 
 //! Code called by the parser to handle complex cases not handled by the grammar.
 
+use super::ast::AstAssignIdent;
+use super::load::check_load_statement;
 use crate::codemap::CodeMap;
 use crate::codemap::Pos;
 use crate::codemap::Span;
@@ -41,6 +43,7 @@ use crate::syntax::ast::ExprP;
 use crate::syntax::ast::FStringP;
 use crate::syntax::ast::IdentP;
 use crate::syntax::ast::LambdaP;
+use crate::syntax::ast::LoadP;
 use crate::syntax::ast::Stmt;
 use crate::syntax::ast::StmtP;
 use crate::syntax::ast::ToAst;
@@ -172,6 +175,22 @@ pub(crate) fn check_def(
         params,
         return_type,
         body: Box::new(stmts),
+        payload: (),
+    })
+}
+
+pub(crate) fn check_load(
+    module: AstString,
+    args: Vec<(AstAssignIdent, AstString)>,
+    parser_state: &mut ParserState,
+) -> Stmt {
+    if let Err(e) = check_load_statement(&module, &args, &parser_state.codemap) {
+        parser_state.errors.push(e);
+    }
+
+    Stmt::Load(LoadP {
+        module,
+        args,
         payload: (),
     })
 }
