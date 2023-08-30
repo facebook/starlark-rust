@@ -317,12 +317,12 @@ impl LspContext for Context {
         }
     }
 
-    fn resolve_string_literal(
+    fn resolve_string_literal<'a>(
         &self,
-        literal: &str,
+        literal: &'a str,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Option<StringLiteralResult>> {
+    ) -> anyhow::Result<Option<StringLiteralResult<'a>>> {
         self.resolve_load(literal, current_file, workspace_root)
             .map(|url| {
                 Some(StringLiteralResult {

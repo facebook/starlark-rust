@@ -227,12 +227,12 @@ impl LspContext for TestServerContext {
         }
     }
 
-    fn resolve_string_literal(
+    fn resolve_string_literal<'a>(
         &self,
-        literal: &str,
+        literal: &'a str,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Option<StringLiteralResult>> {
+    ) -> anyhow::Result<Option<StringLiteralResult<'a>>> {
         let re = regex::Regex::new(r#"--(\d+):(\d+)$"#)?;
         let (literal, span) = match re.captures(literal) {
             Some(cap) => {
@@ -251,7 +251,7 @@ impl LspContext for TestServerContext {
                 LspUrl::File(u) => match u.extension() {
                     Some(e) if e == "star" => Some(StringLiteralResult {
                         url,
-                        location_finder: Some(Box::new(move |_ast, _name| Ok(span))),
+                        location_finder: Some(Box::new(move |_ast| Ok(span))),
                     }),
                     _ => Some(StringLiteralResult {
                         url,

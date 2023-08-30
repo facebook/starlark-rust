@@ -246,7 +246,7 @@ impl TryFrom<&LspUrl> for Url {
 /// The result of resolving a StringLiteral when looking up a definition.
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct StringLiteralResult {
+pub struct StringLiteralResult<'a> {
     /// The path that a string literal resolves to.
     pub url: LspUrl,
     /// A function that takes the AstModule at path specified by `url`, and
@@ -255,7 +255,7 @@ pub struct StringLiteralResult {
     /// If `None`, then just jump to the URL. Do not attempt to load the file.
     #[derivative(Debug = "ignore")]
     pub location_finder:
-        Option<Box<dyn FnOnce(&AstModule, &str) -> anyhow::Result<Option<Span>> + Send>>,
+        Option<Box<dyn FnOnce(&AstModule) -> anyhow::Result<Option<Span>> + Send + 'a>>,
 }
 
 fn _assert_string_literal_result_is_send() {
@@ -324,12 +324,12 @@ pub trait LspContext {
     /// This can be used for things like file paths in string literals, build targets, etc.
     ///
     /// `current_file` is the file that is currently being evaluated
-    fn resolve_string_literal(
+    fn resolve_string_literal<'a>(
         &self,
-        literal: &str,
+        literal: &'a str,
         current_file: &LspUrl,
         workspace_root: Option<&Path>,
-    ) -> anyhow::Result<Option<StringLiteralResult>>;
+    ) -> anyhow::Result<Option<StringLiteralResult<'a>>>;
 
     /// Get the contents of a starlark program at a given path, if it exists.
     fn get_load_contents(&self, uri: &LspUrl) -> anyhow::Result<Option<String>>;
@@ -625,11 +625,9 @@ impl<T: LspContext> Backend<T> {
                         let result =
                             self.get_ast_or_load_from_disk(&url)
                                 .and_then(|ast| match ast {
-                                    Some(module) => {
-                                        location_finder(&module.ast, &literal).map(|span| {
-                                            span.map(|span| module.ast.codemap.resolve_span(span))
-                                        })
-                                    }
+                                    Some(module) => location_finder(&module.ast).map(|span| {
+                                        span.map(|span| module.ast.codemap.resolve_span(span))
+                                    }),
                                     None => Ok(None),
                                 });
                         let result = match result {
@@ -1147,7 +1145,7 @@ impl<T: LspContext> Backend<T> {
                         } else {
                             return Ok(None);
                         };
-                        let result = location_finder(&module.ast, &literal)?;
+                        let result = location_finder(&module.ast)?;
 
                         result.map(|location| Hover {
                             contents: HoverContents::Array(vec![MarkedString::LanguageString(
