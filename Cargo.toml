@@ -6,6 +6,7 @@ members = [
     "gazebo/display_container",
     "gazebo/dupe",
     "starlark",
+    "starlark_bin",
     "starlark_derive",
     "starlark_map",
     "starlark_syntax",
