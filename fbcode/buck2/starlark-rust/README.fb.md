@@ -25,7 +25,9 @@ these projects may break.
 * flite (authoring ML features; where are the source files?)
 * [JetBrains CLI](https://fburl.com/code/hetua4cx)
   (what it does with starlark?)
-
+* [Grid 2 Jobclass definitions for ASIC](https://www.internalfb.com/intern/wiki/ESE/SPEAR/ASIC/User_Documentation/EDA/GridCLI_-_a_compute_job_scheduling_tool/User_Documentation/Grid_2_Jobclasses/)
+  * files deployed and managed by chef [ARVR](https://www.internalfb.com/code/opsfiles/chef/itchef/cookbooks/other/fbit_arvredamgmt/files/default/)[FB](https://www.internalfb.com/code/opsfiles/chef/itchef/cookbooks/other/fbit_fbedamgmt/files/default/)
+  * [all files matching pattern (*.star) : example link](https://www.internalfb.com/code/opsfiles/chef/itchef/cookbooks/other/fbit_arvredamgmt/files/default/snc/prod/jobconfigs/)
 ## Tools working with starlark-rust sources
 
 When something changes in starlark-rust,
