@@ -1,5 +1,17 @@
 # Starlark
 
+## 0.10.0 (Oct 16, 2023)
+
+There were over eight hundred commits since the last release, with the main areas of change including:
+
+* Make it work on 32 bit architectures, including WASM.
+* Introduce `starlark_syntax`, `starlark_lsp`, `starlark_bin` crates.
+* Expose the AST through `starlark_syntax`.
+* No longer require nightly Rust compiler.
+* Change how types are represented, e.g. `{str.type, ""}` becomes `dict[str, typing.Any]`.
+* Add static type checking options.
+* Support f-strings extension.
+
 ## 0.9.0 (June 5, 2023)
 
 There were over one thousand commits since the last release, with the main areas of change including:
