@@ -4,6 +4,7 @@
 
 * `UnpackValue` is no longer implemented for `Vec`. Instead,
   `UnpackList`, `UnpackTuple` or `UnpackListOrTuple` can be used.
+* Added `call_stack()` function.
 
 ## 0.10.0 (Oct 16, 2023)
 
