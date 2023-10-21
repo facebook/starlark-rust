@@ -1,5 +1,10 @@
 # Starlark
 
+## 0.11 (Unreleased)
+
+* `UnpackValue` is no longer implemented for `Vec`. Instead,
+  `UnpackList`, `UnpackTuple` or `UnpackListOrTuple` can be used.
+
 ## 0.10.0 (Oct 16, 2023)
 
 There were over eight hundred commits since the last release, with the main areas of change including:
