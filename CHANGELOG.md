@@ -6,6 +6,7 @@
   `UnpackList`, `UnpackTuple` or `UnpackListOrTuple` can be used.
 * Added `call_stack()` function.
 * Removed `experimental_regex()`
+* Switched from `anyhow::Error` and `Diagnostic` to `starlark::Error` in many APIs
 
 ## 0.10.0 (Oct 16, 2023)
 
