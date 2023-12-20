@@ -768,10 +768,15 @@ impl LspContext for BazelContext {
                     location_finder: if same_filename {
                         None
                     } else {
-                        let literal = literal.to_owned();
-                        Some(Box::new(move |ast| {
-                            Ok(ast.find_function_call_with_name(&literal))
-                        }))
+                        match literal.split(":").last() {
+                            None => None,
+                            Some(name) => {
+                                let name = name.to_owned();
+                                Some(Box::new(move |ast| {
+                                    Ok(ast.find_function_call_with_name(&name))
+                                }))
+                            }
+                        }
                     },
                 })
             })
