@@ -71,6 +71,7 @@ use starlark::syntax::Dialect;
 use starlark_syntax::slice_vec_ext::VecExt;
 
 use crate::error::eval_message_to_lsp_diagnostic;
+use crate::server::Command;
 use crate::server::new_notification;
 use crate::server::server_with_connection;
 use crate::server::LspContext;
@@ -134,7 +135,17 @@ struct TestServerContext {
     builtin_symbols: Arc<HashMap<String, LspUrl>>,
 }
 
+enum TestCommand {}
+
+impl Command for TestCommand {
+    fn to_lsp(&self) -> lsp_types::Command {
+        match *self {}
+    }
+}
+
 impl LspContext for TestServerContext {
+    type Command = TestCommand;
+
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
             LspUrl::File(path) | LspUrl::Starlark(path) => {
@@ -299,6 +310,10 @@ impl LspContext for TestServerContext {
                 .map(|name| (name.clone(), DocMember::Function(DocFunction::default())))
                 .collect(),
         }
+    }
+
+    fn codelens(&self, document_uri: &LspUrl, workspace_root: Option<&Path>, ast: &AstModule) -> Vec<crate::server::Codelens<TestCommand>> {
+        todo!()
     }
 }
 

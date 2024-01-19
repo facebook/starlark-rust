@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+use anyhow::anyhow;
 use derivative::Derivative;
 use derive_more::Display;
 use dupe::Dupe;
@@ -42,9 +43,13 @@ use lsp_types::notification::DidCloseTextDocument;
 use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::notification::LogMessage;
 use lsp_types::notification::PublishDiagnostics;
+use lsp_types::request::CodeLensRequest;
 use lsp_types::request::Completion;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
+use lsp_types::CodeLens;
+use lsp_types::CodeLensOptions;
+use lsp_types::CodeLensParams;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::CompletionOptions;
@@ -287,8 +292,23 @@ impl Default for LspServerSettings {
     }
 }
 
+pub struct Codelens<Command> {
+    pub span: Span,
+    pub command: Command,
+}
+
+pub trait Command {
+    fn to_lsp(&self) -> lsp_types::Command;
+}
+
 /// Various pieces of context to allow the LSP to interact with starlark parsers, etc.
 pub trait LspContext {
+    /// The type of commands. This is designed to make commands more strongly-typed,
+    /// allowing us to handle the conversion to and from the weakly-typed lsp types
+    /// separately. Commands appear in various parts of the protocol, for example codelens and
+    /// code actions.
+    type Command: Command;
+
     /// Parse a file with the given contents. The filename is used in the diagnostics.
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult;
 
@@ -367,6 +387,14 @@ pub trait LspContext {
         let _unused = (document_uri, kind, current_value, workspace_root);
         Ok(Vec::new())
     }
+
+    /// Get the codelens items for a document. Usually this will be for running tests or building targets.
+    fn codelens(
+        &self,
+        document_uri: &LspUrl,
+        workspace_root: Option<&Path>,
+        ast: &AstModule,
+    ) -> Vec<Codelens<Self::Command>>;
 }
 
 /// Errors when [`LspContext::resolve_load()`] cannot resolve a given path.
@@ -428,6 +456,9 @@ impl<T: LspContext> Backend<T> {
                 ..Default::default()
             }),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            code_lens_provider: Some(CodeLensOptions {
+                resolve_provider: None,
+            }),
             ..ServerCapabilities::default()
         }
     }
@@ -524,6 +555,19 @@ impl<T: LspContext> Backend<T> {
     /// Offers hover information for the symbol at the current cursor.
     fn hover(&self, id: RequestId, params: HoverParams, initialize_params: &InitializeParams) {
         self.send_response(new_response(id, self.hover_info(params, initialize_params)));
+    }
+
+    /// Gets the codelenses for a file
+    fn codelens(
+        &self,
+        id: RequestId,
+        params: CodeLensParams,
+        initialize_params: &InitializeParams,
+    ) {
+        self.send_response(new_response(
+            id,
+            self.do_codelens(params, initialize_params),
+        ));
     }
 
     /// Get the file contents of a starlark: URI.
@@ -1203,6 +1247,36 @@ impl<T: LspContext> Backend<T> {
             _ => None,
         }
     }
+
+    fn do_codelens(
+        &self,
+        params: CodeLensParams,
+        initialize_params: &InitializeParams,
+    ) -> anyhow::Result<Option<Vec<CodeLens>>> {
+        let uri: LspUrl = params.text_document.uri.try_into()?;
+
+        let lsp_module = self
+            .get_ast_or_load_from_disk(&uri)?
+            .ok_or_else(|| anyhow!("Cannot get AST"))?;
+
+        let workspace_root =
+            Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), &uri);
+
+        let items = self
+            .context
+            .codelens(&uri, workspace_root.as_deref(), &lsp_module.ast);
+
+        let result = items
+            .into_iter()
+            .map(|item| CodeLens {
+                range: lsp_module.ast.codemap().resolve_span(item.span).into(),
+                command: Some(item.command.to_lsp()),
+                data: None,
+            })
+            .collect();
+
+        Ok(Some(result))
+    }
 }
 
 /// The library style pieces
@@ -1246,6 +1320,8 @@ impl<T: LspContext> Backend<T> {
                         self.completion(req.id, params, &initialize_params);
                     } else if let Some(params) = as_request::<HoverRequest>(&req) {
                         self.hover(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<CodeLensRequest>(&req) {
+                        self.codelens(req.id, params, &initialize_params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }
