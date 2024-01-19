@@ -28,14 +28,9 @@ use hashbrown::raw::Bucket;
 use hashbrown::raw::RawTable;
 
 use crate::Equivalent;
+use crate::Hashed;
+use crate::StarlarkHashValue;
 use crate::StarlarkHasher;
-
-#[inline]
-fn compute_hash<Q: Hash + ?Sized>(k: &Q) -> u64 {
-    let mut hasher = StarlarkHasher::new();
-    k.hash(&mut hasher);
-    hasher.finish()
-}
 
 /// Hash map which does not expose any insertion order-specific behavior
 /// (except `Debug`).
@@ -80,9 +75,19 @@ impl<K, V> UnorderedMap<K, V> {
     where
         Q: Hash + Equivalent<K> + ?Sized,
     {
-        let hash = compute_hash(k);
+        let k = Hashed::new(k);
+        self.get_hashed(k)
+    }
+
+    /// Get a reference to the value associated with the given key.
+    #[inline]
+    pub fn get_hashed<Q>(&self, key: Hashed<&Q>) -> Option<&V>
+    where
+        Q: Equivalent<K> + ?Sized,
+    {
+        let hash = key.hash().promote();
         self.0
-            .get(hash, |(next_k, _v)| k.equivalent(next_k))
+            .get(hash, |(next_k, _v)| key.key().equivalent(next_k))
             .map(|(_, v)| v)
     }
 
@@ -92,7 +97,7 @@ impl<K, V> UnorderedMap<K, V> {
     where
         Q: Hash + Equivalent<K> + ?Sized,
     {
-        let hash = compute_hash(k);
+        let hash = StarlarkHashValue::new(k).promote();
         self.0
             .get_mut(hash, |(next_k, _v)| k.equivalent(next_k))
             .map(|(_, v)| v)
@@ -107,20 +112,31 @@ impl<K, V> UnorderedMap<K, V> {
         self.get(k).is_some()
     }
 
+    /// Does the map contain the specified key?
+    #[inline]
+    pub fn contains_key_hashed<Q>(&self, key: Hashed<&Q>) -> bool
+    where
+        Q: Equivalent<K> + ?Sized,
+    {
+        self.get_hashed(key).is_some()
+    }
+
     /// Insert an entry into the map.
     #[inline]
     pub fn insert(&mut self, k: K, v: V) -> Option<V>
     where
         K: Hash + Eq,
     {
-        let hash = compute_hash(&k);
-        if let Some((_k, existing_value)) =
-            self.0.get_mut(hash, |(next_k, _v)| k.equivalent(next_k))
-        {
-            Some(mem::replace(existing_value, v))
-        } else {
-            self.0.insert(hash, (k, v), |(k, _v)| compute_hash(k));
-            None
+        let k = Hashed::new(k);
+        match self.raw_entry_mut().from_key_hashed(k.as_ref()) {
+            RawEntryMut::Occupied(mut e) => {
+                let old = e.insert(v);
+                Some(old)
+            }
+            RawEntryMut::Vacant(e) => {
+                e.insert_hashed(k, v);
+                None
+            }
         }
     }
 
@@ -130,10 +146,30 @@ impl<K, V> UnorderedMap<K, V> {
     where
         Q: Hash + Equivalent<K> + ?Sized,
     {
-        let hash = compute_hash(k);
-        self.0
-            .remove_entry(hash, |(next_k, _v)| k.equivalent(next_k))
-            .map(|(_, v)| v)
+        match self.raw_entry_mut().from_key(k) {
+            RawEntryMut::Occupied(e) => Some(e.remove()),
+            RawEntryMut::Vacant(_) => None,
+        }
+    }
+
+    /// Preserve only the elements specified by the predicate.
+    pub fn retain<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&K, &mut V) -> bool,
+    {
+        // TODO(nga): update hashbrown and use safe `HashTable` instead of this heavily unsafe code:
+        //   https://docs.rs/hashbrown/latest/hashbrown/struct.HashTable.html
+
+        // Unsafe code is copy-paste from `hashbrown` crate:
+        // https://github.com/rust-lang/hashbrown/blob/f2e62124cd947b5e2309dd6a24c7e422932aae97/src/map.rs#L923
+        unsafe {
+            for item in self.0.iter() {
+                let (k, v) = item.as_mut();
+                if !f(k, v) {
+                    self.0.erase(item);
+                }
+            }
+        }
     }
 
     /// Get an entry in the map for in-place manipulation.
@@ -142,7 +178,7 @@ impl<K, V> UnorderedMap<K, V> {
     where
         K: Hash + Eq,
     {
-        let hash = compute_hash(&k);
+        let hash = StarlarkHashValue::new(&k).promote();
         if let Some(bucket) = self.0.find(hash, |(next_k, _v)| k.equivalent(next_k)) {
             Entry::Occupied(OccupiedEntry { _map: self, bucket })
         } else {
@@ -154,20 +190,51 @@ impl<K, V> UnorderedMap<K, V> {
         }
     }
 
+    /// Lower-level access to the entry API.
+    #[inline]
+    pub fn raw_entry_mut(&mut self) -> RawEntryBuilderMut<K, V> {
+        RawEntryBuilderMut { map: self }
+    }
+
     /// Clear the map, removing all entries.
     #[inline]
     pub fn clear(&mut self) {
         self.0.clear();
     }
 
-    /// This function is private.
+    /// Entries in the map, in arbitrary order.
     #[inline]
-    pub(crate) fn iter(&self) -> impl ExactSizeIterator<Item = (&K, &V)> {
+    pub fn entries_unordered(&self) -> impl ExactSizeIterator<Item = (&K, &V)> {
         unsafe { self.0.iter().map(|e| (&e.as_ref().0, &e.as_ref().1)) }
     }
 
-    /// This function is private.
-    pub(crate) fn into_iter(self) -> impl ExactSizeIterator<Item = (K, V)> {
+    /// Entries in the map, in arbitrary order.
+    #[inline]
+    pub fn entries_unordered_mut(&mut self) -> impl ExactSizeIterator<Item = (&K, &mut V)> {
+        unsafe { self.0.iter().map(|e| (&e.as_ref().0, &mut e.as_mut().1)) }
+    }
+
+    /// Keys in the map, in arbitrary order.
+    #[inline]
+    pub fn keys_unordered(&self) -> impl ExactSizeIterator<Item = &K> {
+        self.entries_unordered().map(|(k, _v)| k)
+    }
+
+    /// Values in the map, in arbitrary order.
+    #[inline]
+    pub fn values_unordered(&self) -> impl ExactSizeIterator<Item = &V> {
+        self.entries_unordered().map(|(_k, v)| v)
+    }
+
+    /// Values in the map, in arbitrary order.
+    #[inline]
+    pub fn values_unordered_mut(&mut self) -> impl ExactSizeIterator<Item = &mut V> {
+        self.entries_unordered_mut().map(|(_k, v)| v)
+    }
+
+    /// Into entries, in arbitrary order.
+    #[inline]
+    pub(crate) fn into_entries_unordered(self) -> impl ExactSizeIterator<Item = (K, V)> {
         self.0.into_iter()
     }
 
@@ -176,7 +243,7 @@ impl<K, V> UnorderedMap<K, V> {
     where
         K: Ord,
     {
-        let mut entries = Vec::from_iter(self.iter());
+        let mut entries = Vec::from_iter(self.entries_unordered());
         entries.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
         entries
     }
@@ -186,7 +253,7 @@ impl<K, V> UnorderedMap<K, V> {
     where
         K: Hash + Eq,
     {
-        self.into_iter().collect()
+        self.into_entries_unordered().collect()
     }
 
     /// Apply the function to value.
@@ -195,7 +262,7 @@ impl<K, V> UnorderedMap<K, V> {
         K: Hash + Eq,
     {
         let mut map = UnorderedMap::with_capacity(self.len());
-        for (k, v) in self.into_iter() {
+        for (k, v) in self.into_entries_unordered() {
             map.insert(k, f(v));
         }
         map
@@ -213,14 +280,17 @@ impl<K, V, Q: Equivalent<K> + Hash> Index<&Q> for UnorderedMap<K, V> {
 
 impl<K: Debug, V: Debug> Debug for UnorderedMap<K, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_map().entries(self.iter()).finish()
+        f.debug_map().entries(self.entries_unordered()).finish()
     }
 }
 
 impl<K: Eq + Hash, V: Eq> PartialEq for UnorderedMap<K, V> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.len() == other.len() && self.iter().all(|(k, v)| other.get(k) == Some(v))
+        self.len() == other.len()
+            && self
+                .entries_unordered()
+                .all(|(k, v)| other.get(k) == Some(v))
     }
 }
 
@@ -230,7 +300,7 @@ impl<K: Hash, V: Hash> Hash for UnorderedMap<K, V> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.len().hash(state);
         let mut sum: u64 = 0;
-        for (k, v) in self.iter() {
+        for (k, v) in self.entries_unordered() {
             let mut hasher = StarlarkHasher::new();
             (k, v).hash(&mut hasher);
             sum = sum.wrapping_add(hasher.finish());
@@ -273,27 +343,161 @@ pub enum Entry<'a, K, V> {
 
 impl<'a, K: Eq + Hash, V> VacantEntry<'a, K, V> {
     /// Insert a value into the map.
+    #[inline]
     pub fn insert(self, value: V) {
-        self.map
-            .0
-            .insert(self.hash, (self.key, value), |(k, _v)| compute_hash(k));
+        self.map.0.insert(self.hash, (self.key, value), |(k, _v)| {
+            StarlarkHashValue::new(k).promote()
+        });
     }
 }
 
 impl<'a, K, V> OccupiedEntry<'a, K, V> {
     /// Remove the entry from the map.
+    #[inline]
     pub fn get(&self) -> &V {
         unsafe { &self.bucket.as_ref().1 }
     }
 
     /// Get a reference to the value associated with the entry.
+    #[inline]
     pub fn get_mut(&mut self) -> &mut V {
         unsafe { &mut self.bucket.as_mut().1 }
     }
 
     /// Replace the value associated with the entry.
+    #[inline]
     pub fn insert(&mut self, value: V) -> V {
         mem::replace(self.get_mut(), value)
+    }
+}
+
+/// Builder for [`RawEntryMut`].
+pub struct RawEntryBuilderMut<'a, K, V> {
+    map: &'a mut UnorderedMap<K, V>,
+}
+
+impl<'a, K, V> RawEntryBuilderMut<'a, K, V> {
+    /// Find an entry by key.
+    #[inline]
+    pub fn from_key<Q>(self, k: &Q) -> RawEntryMut<'a, K, V>
+    where
+        Q: Hash + Equivalent<K> + ?Sized,
+    {
+        let k = Hashed::new(k);
+        self.from_key_hashed(k)
+    }
+
+    /// Find an entry by hashed key.
+    #[inline]
+    pub fn from_key_hashed<Q>(self, k: Hashed<&Q>) -> RawEntryMut<'a, K, V>
+    where
+        Q: Equivalent<K> + ?Sized,
+    {
+        let hash = k.hash().promote();
+        if let Some(bucket) = self
+            .map
+            .0
+            .find(hash, |(next_k, _v)| k.key().equivalent(next_k))
+        {
+            RawEntryMut::Occupied(RawOccupiedEntryMut {
+                map: self.map,
+                bucket,
+            })
+        } else {
+            RawEntryMut::Vacant(RawVacantEntryMut { map: self.map })
+        }
+    }
+}
+
+/// Occupied entry.
+pub struct RawOccupiedEntryMut<'a, K, V> {
+    map: &'a mut UnorderedMap<K, V>,
+    bucket: Bucket<(K, V)>,
+}
+
+/// Vacant entry.
+pub struct RawVacantEntryMut<'a, K, V> {
+    map: &'a mut UnorderedMap<K, V>,
+}
+
+/// Raw entry.
+pub enum RawEntryMut<'a, K, V> {
+    /// Occupied entry.
+    Occupied(RawOccupiedEntryMut<'a, K, V>),
+    /// Vacant entry.
+    Vacant(RawVacantEntryMut<'a, K, V>),
+}
+
+impl<'a, K, V> RawOccupiedEntryMut<'a, K, V> {
+    /// Replace the value associated with the entry.
+    #[inline]
+    pub fn insert(&mut self, value: V) -> V {
+        mem::replace(self.get_mut(), value)
+    }
+
+    /// Replace the key associated with the entry.
+    #[inline]
+    pub fn insert_key(&mut self, key: K) -> K {
+        mem::replace(self.key_mut(), key)
+    }
+
+    /// Get a reference to the value associated with the entry.
+    #[inline]
+    pub fn get(&self) -> &V {
+        unsafe { &self.bucket.as_ref().1 }
+    }
+
+    /// Get a reference to the value associated with the entry.
+    #[inline]
+    pub fn get_mut(&mut self) -> &mut V {
+        unsafe { &mut self.bucket.as_mut().1 }
+    }
+
+    /// Get a reference to the key associated with the entry.
+    #[inline]
+    pub fn key_mut(&mut self) -> &mut K {
+        unsafe { &mut self.bucket.as_mut().0 }
+    }
+
+    /// Remove the entry, return the value.
+    #[inline]
+    pub fn remove(self) -> V {
+        self.remove_entry().1
+    }
+
+    /// Remove the entry, return the key and value.
+    #[inline]
+    pub fn remove_entry(self) -> (K, V) {
+        unsafe { self.map.0.remove(self.bucket) }
+    }
+}
+
+impl<'a, K, V> RawVacantEntryMut<'a, K, V> {
+    /// Insert entry.
+    ///
+    /// Not this function computes the hash of the key.
+    #[inline]
+    pub fn insert(self, key: K, value: V) -> (&'a mut K, &'a mut V)
+    where
+        K: Hash,
+    {
+        let key = Hashed::new(key);
+        self.insert_hashed(key, value)
+    }
+
+    /// Insert entry.
+    #[inline]
+    pub fn insert_hashed(self, key: Hashed<K>, value: V) -> (&'a mut K, &'a mut V)
+    where
+        K: Hash,
+    {
+        let (k, v) =
+            self.map
+                .0
+                .insert_entry(key.hash().promote(), (key.into_key(), value), |(k, _v)| {
+                    StarlarkHashValue::new(k).promote()
+                });
+        (k, v)
     }
 }
 
@@ -348,5 +552,27 @@ mod tests {
         map.insert(5, 6);
         map.insert(3, 4);
         assert_eq!(map.entries_sorted(), vec![(&1, &2), (&3, &4), (&5, &6)]);
+    }
+
+    #[test]
+    fn test_retain() {
+        let mut map = UnorderedMap::new();
+        for i in 0..1000 {
+            map.insert(format!("key{}", i), format!("value{}", i));
+        }
+
+        map.retain(|k, v| {
+            v.push('x');
+            k.ends_with('0')
+        });
+
+        assert_eq!(100, map.len());
+        for i in 0..1000 {
+            if i % 10 == 0 {
+                assert_eq!(format!("value{}x", i), map[&format!("key{}", i)]);
+            } else {
+                assert!(!map.contains_key(&format!("key{}", i)));
+            }
+        }
     }
 }

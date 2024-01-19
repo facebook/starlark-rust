@@ -820,6 +820,7 @@ where
     where
         V: Default,
     {
+        #[allow(clippy::unwrap_or_default)] // defining or_default
         self.or_insert_with(V::default)
     }
 
@@ -919,7 +920,7 @@ where
 /// ```
 /// use starlark_map::smallmap;
 ///
-/// let map = smallmap!{
+/// let map = smallmap! {
 ///     "a" => 1,
 ///     "b" => 2,
 /// };
