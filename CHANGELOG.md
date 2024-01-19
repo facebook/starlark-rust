@@ -1,6 +1,6 @@
 # Starlark
 
-## 0.11 (Unreleased)
+## 0.11 (Jan 19, 2024)
 
 * `UnpackValue` is no longer implemented for `Vec`. Instead, `UnpackList`, `UnpackTuple` or `UnpackListOrTuple` can be used.
 * Added `call_stack()` function.
