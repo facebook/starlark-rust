@@ -147,7 +147,7 @@ impl<T> SmallSet<T> {
     #[inline]
     pub fn insert_unique_unchecked(&mut self, key: T)
     where
-        T: Hash + Eq,
+        T: Hash,
     {
         self.0.insert_unique_unchecked(key, ());
     }
@@ -400,6 +400,11 @@ impl<T> SmallSet<T> {
     {
         self.0.hash_ordered(state)
     }
+
+    /// Reverse the iteration order of the set.
+    pub fn reverse(&mut self) {
+        self.0.reverse();
+    }
 }
 
 impl<'a, T> IntoIterator for &'a SmallSet<T> {
@@ -492,7 +497,7 @@ where
 /// ```
 /// use starlark_map::smallset;
 ///
-/// let set = smallset!{"a", "b"};
+/// let set = smallset! {"a", "b"};
 /// assert_eq!(set.contains("a"), true);
 /// assert_eq!(set.len(), 2);
 /// assert_eq!(set.contains("c"), false);

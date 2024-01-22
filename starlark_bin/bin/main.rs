@@ -17,6 +17,7 @@
 
 // Disagree these are good hints
 #![allow(clippy::type_complexity)]
+#![allow(clippy::manual_map)]
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -51,7 +52,7 @@ mod dap;
 mod eval;
 
 #[derive(Debug, Parser)]
-#[command(name = "starlark", about = "Evaluate Starlark code")]
+#[command(name = "starlark", about = "Evaluate Starlark code", version)]
 struct Args {
     #[arg(
         long = "lsp",

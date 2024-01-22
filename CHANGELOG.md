@@ -1,12 +1,15 @@
 # Starlark
 
-## 0.11 (Unreleased)
+## 0.11 (Jan 19, 2024)
 
-* `UnpackValue` is no longer implemented for `Vec`. Instead,
-  `UnpackList`, `UnpackTuple` or `UnpackListOrTuple` can be used.
+* `UnpackValue` is no longer implemented for `Vec`. Instead, `UnpackList`, `UnpackTuple` or `UnpackListOrTuple` can be used.
 * Added `call_stack()` function.
-* Removed `experimental_regex()`
-* Switched from `anyhow::Error` and `Diagnostic` to `starlark::Error` in many APIs
+* Removed `experimental_regex()` function.
+* Switched from `anyhow::Error` and `Diagnostic` to `starlark::Error` in many APIs.
+* Fix `repr()` for enums.
+* Various improvements to [DAP](https://microsoft.github.io/debug-adapter-protocol/) support.
+* Add a few more traits and functions to `SortedMap`.
+* Disable the legacy type representation, types as strings such as `"bool"` are no longer supported. See the revised [typing documentation](https://github.com/facebookexperimental/starlark-rust/blob/main/docs/types.md).
 
 ## 0.10.0 (Oct 16, 2023)
 

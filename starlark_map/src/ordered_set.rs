@@ -113,7 +113,7 @@ impl<T> OrderedSet<T> {
 
     /// Iterate over the elements.
     #[inline]
-    pub fn iter(&self) -> small_set::Iter<T> {
+    pub fn iter(&self) -> Iter<T> {
         self.0.iter()
     }
 
@@ -136,6 +136,15 @@ impl<T> OrderedSet<T> {
         T: Hash + Eq,
     {
         self.0.insert(value)
+    }
+
+    /// Insert an element into the set assuming it is not already present.
+    #[inline]
+    pub fn insert_unique_unchecked(&mut self, value: T)
+    where
+        T: Hash,
+    {
+        self.0.insert_unique_unchecked(value)
     }
 
     /// Insert an element if element is not present in the set,
@@ -191,6 +200,11 @@ impl<T> OrderedSet<T> {
     {
         self.0.union(&other.0)
     }
+
+    /// Reverse the iteration order of the set.
+    pub fn reverse(&mut self) {
+        self.0.reverse();
+    }
 }
 
 impl<T> Default for OrderedSet<T> {
@@ -230,9 +244,14 @@ impl<T: Hash> Hash for OrderedSet<T> {
     }
 }
 
+/// Iterator returned by `iter`.
+pub type Iter<'a, T> = small_set::Iter<'a, T>;
+/// Iterator returned by `into_iter`.
+pub type IntoIter<T> = small_set::IntoIter<T>;
+
 impl<T> IntoIterator for OrderedSet<T> {
     type Item = T;
-    type IntoIter = small_set::IntoIter<T>;
+    type IntoIter = IntoIter<T>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -242,7 +261,7 @@ impl<T> IntoIterator for OrderedSet<T> {
 
 impl<'a, T> IntoIterator for &'a OrderedSet<T> {
     type Item = &'a T;
-    type IntoIter = small_set::Iter<'a, T>;
+    type IntoIter = Iter<'a, T>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -264,6 +283,16 @@ where
     #[inline]
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         OrderedSet(SmallSet::from_iter(iter))
+    }
+}
+
+impl<T> Extend<T> for OrderedSet<T>
+where
+    T: Eq + Hash,
+{
+    #[inline]
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        self.0.extend(iter)
     }
 }
 

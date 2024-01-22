@@ -710,6 +710,20 @@ impl<K, V> SmallMap<K, V> {
     {
         self.entries.hash_ordered(state)
     }
+
+    /// Reverse the iteration order of the map.
+    pub fn reverse(&mut self) {
+        self.entries.reverse();
+        if let Some(index) = &mut self.index {
+            let len = self.entries.len();
+            // Safety: iterator does not escape.
+            unsafe {
+                for entry in index.iter() {
+                    *entry.as_mut() = len - 1 - *entry.as_ref();
+                }
+            }
+        }
+    }
 }
 
 /// Reference to the actual entry in the map.
@@ -820,6 +834,7 @@ where
     where
         V: Default,
     {
+        #[allow(clippy::unwrap_or_default)] // defining or_default
         self.or_insert_with(V::default)
     }
 
@@ -919,7 +934,7 @@ where
 /// ```
 /// use starlark_map::smallmap;
 ///
-/// let map = smallmap!{
+/// let map = smallmap! {
 ///     "a" => 1,
 ///     "b" => 2,
 /// };
@@ -1016,6 +1031,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::map_identity)]
     fn few_entries() {
         let entries1 = [(0, 'a'), (1, 'b')];
         let m1 = entries1.iter().copied().collect::<SmallMap<_, _>>();
@@ -1323,6 +1339,51 @@ mod tests {
         assert_eq!(
             serde_json::from_value::<SmallMap<String, i32>>(expected).unwrap(),
             mp
+        );
+    }
+
+    #[test]
+    fn test_reverse_small() {
+        let mut map = SmallMap::new();
+        map.insert("a".to_owned(), "b".to_owned());
+        map.insert("c".to_owned(), "d".to_owned());
+        map.reverse();
+
+        assert_eq!(Some("b"), map.get("a").map(|s| s.as_str()));
+        assert_eq!(Some("d"), map.get("c").map(|s| s.as_str()));
+        assert_eq!(
+            vec![
+                ("c".to_owned(), "d".to_owned()),
+                ("a".to_owned(), "b".to_owned())
+            ],
+            map.into_iter().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_reverse_large() {
+        let mut map = SmallMap::new();
+        for i in 0..100 {
+            map.insert(i.to_string(), (i * 10).to_string());
+        }
+
+        let expected = map
+            .iter()
+            .rev()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>();
+
+        map.reverse();
+
+        for i in 0..100 {
+            assert_eq!(Some(&(i * 10).to_string()), map.get(&i.to_string()));
+        }
+
+        assert_eq!(
+            expected,
+            map.iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect::<Vec<_>>()
         );
     }
 }
