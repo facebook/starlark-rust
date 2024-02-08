@@ -1,12 +1,13 @@
 # Contributing to Starlark
 
-We want to make contributing to this project as easy and transparent as possible.
+We want to make contributing to this project as easy and transparent as
+possible.
 
 ## Our Development Process
 
-Starlark is currently developed in Facebook's internal repositories and then exported
-out to GitHub by a Facebook team member; however, we invite you to submit pull
-requests as described below.
+Starlark is currently developed in Facebook's internal repositories and then
+exported out to GitHub by a Facebook team member; however, we invite you to
+submit pull requests as described below.
 
 ## Pull Requests
 
@@ -41,5 +42,5 @@ Follow the automatic `rust fmt` configuration.
 
 ## License
 
-By contributing to Starlark, you agree that your contributions will be
-licensed under the [LICENSE](LICENSE) file in the root directory of this source tree.
+By contributing to Starlark, you agree that your contributions will be licensed
+under the [LICENSE](LICENSE) file in the root directory of this source tree.
