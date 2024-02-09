@@ -1,5 +1,21 @@
 # Starlark
 
+## 0.12 (Feb 9, 2024)
+
+- Implemented `reverse()` for `SmallMap`.
+- Added a few more traits and functions to `OrderedSet`.
+- Fixed "go to label" in bzl LSP.
+- Added `OwnedFrozenRef`.
+- Added `call_stack_frame()` function.
+- Categorized lexer errors.
+- Used correct error printing in `assert`.
+- Cleaned up some code around imports, code consistency, and formatting.
+- Fixed multi-line doc generation.
+- Updated `dashmap` from 5.4.0 to 5.5.3.
+- Removed autocompletion on reserved words and some trigger chars for Starlark
+  LSP.
+- Updated `hashbrown` from 0.13.2 to 0.14.3.
+
 ## 0.11 (Jan 19, 2024)
 
 - `UnpackValue` is no longer implemented for `Vec`. Instead, `UnpackList`,
