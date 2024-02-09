@@ -15,6 +15,7 @@
 - Removed autocompletion on reserved words and some trigger chars for Starlark
   LSP.
 - Updated `hashbrown` from 0.13.2 to 0.14.3.
+- Updated `allocative` from 0.3.1 to 0.3.2.
 
 ## 0.11 (Jan 19, 2024)
 
