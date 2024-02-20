@@ -18,8 +18,8 @@ license = "Apache-2.0"
 repository = "https://github.com/facebookexperimental/starlark-rust"
 
 [workspace.dependencies]
-allocative = { version = "0.3.2", path = "allocative/allocative" }
-allocative_derive = { version = "0.3.2", path = "allocative/allocative_derive" }
+allocative = { version = "0.3.3", path = "allocative/allocative" }
+allocative_derive = { version = "0.3.3", path = "allocative/allocative_derive" }
 cmp_any = { version = "0.8.1", path = "gazebo/cmp_any" }
 display_container = { version = "0.9.0", path = "gazebo/display_container" }
 dupe = { version = "0.9.0", path = "gazebo/dupe" }
