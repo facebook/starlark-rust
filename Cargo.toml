@@ -15,7 +15,7 @@ resolver = "2"
 
 [workspace.package]
 license = "Apache-2.0"
-repository = "https://github.com/facebookexperimental/starlark-rust"
+repository = "https://github.com/facebook/starlark-rust"
 
 [workspace.dependencies]
 allocative = { version = "0.3.3", path = "allocative/allocative" }
