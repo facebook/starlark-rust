@@ -43,6 +43,7 @@ use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::notification::LogMessage;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::Completion;
+use lsp_types::request::DocumentSymbolRequest;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
 use lsp_types::CompletionItem;
@@ -55,6 +56,8 @@ use lsp_types::Diagnostic;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
+use lsp_types::DocumentSymbolParams;
+use lsp_types::DocumentSymbolResponse;
 use lsp_types::Documentation;
 use lsp_types::GotoDefinitionParams;
 use lsp_types::GotoDefinitionResponse;
@@ -107,6 +110,7 @@ use crate::definition::IdentifierDefinition;
 use crate::definition::LspModule;
 use crate::inspect::AstModuleInspect;
 use crate::inspect::AutocompleteType;
+use crate::symbols;
 use crate::symbols::find_symbols_at_location;
 
 /// The request to get the file contents for a starlark: URI
@@ -408,6 +412,7 @@ impl<T: LspContext> Backend<T> {
             definition_provider,
             completion_provider: Some(CompletionOptions::default()),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            document_symbol_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         }
     }
@@ -504,6 +509,11 @@ impl<T: LspContext> Backend<T> {
     /// Offers hover information for the symbol at the current cursor.
     fn hover(&self, id: RequestId, params: HoverParams, initialize_params: &InitializeParams) {
         self.send_response(new_response(id, self.hover_info(params, initialize_params)));
+    }
+
+    /// Offer an overview of symbols in the current document.
+    fn document_symbols(&self, id: RequestId, params: DocumentSymbolParams) {
+        self.send_response(new_response(id, self.get_document_symbols(params)));
     }
 
     /// Get the file contents of a starlark: URI.
@@ -1166,6 +1176,23 @@ impl<T: LspContext> Backend<T> {
         })
     }
 
+    fn get_document_symbols(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> anyhow::Result<DocumentSymbolResponse> {
+        let uri = params.text_document.uri.try_into()?;
+
+        let document = match self.get_ast(&uri) {
+            Some(document) => document,
+            None => return Ok(DocumentSymbolResponse::Nested(vec![])),
+        };
+
+        let result =
+            symbols::get_document_symbols(document.ast.codemap(), document.ast.statement());
+
+        Ok(result.into())
+    }
+
     fn get_workspace_root(
         workspace_roots: Option<&Vec<WorkspaceFolder>>,
         target: &LspUrl,
@@ -1223,6 +1250,8 @@ impl<T: LspContext> Backend<T> {
                         self.completion(req.id, params, &initialize_params);
                     } else if let Some(params) = as_request::<HoverRequest>(&req) {
                         self.hover(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<DocumentSymbolRequest>(&req) {
+                        self.document_symbols(req.id, params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }
