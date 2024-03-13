@@ -49,6 +49,7 @@ use lsp_types::request::Completion;
 use lsp_types::request::DocumentSymbolRequest;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
+use lsp_types::request::SignatureHelpRequest;
 use lsp_types::request::WorkspaceSymbolRequest;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -80,11 +81,16 @@ use lsp_types::MarkupContent;
 use lsp_types::MarkupKind;
 use lsp_types::MessageType;
 use lsp_types::OneOf;
+use lsp_types::ParameterInformation;
+use lsp_types::ParameterLabel;
 use lsp_types::Position;
 use lsp_types::PublishDiagnosticsParams;
 use lsp_types::Range;
 use lsp_types::RenameFilesParams;
 use lsp_types::ServerCapabilities;
+use lsp_types::SignatureHelp;
+use lsp_types::SignatureHelpOptions;
+use lsp_types::SignatureHelpParams;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
 use lsp_types::TextEdit;
@@ -106,6 +112,7 @@ use starlark::docs::markdown::render_doc_member;
 use starlark::docs::markdown::render_doc_param;
 use starlark::docs::DocMember;
 use starlark::docs::DocModule;
+use starlark::docs::DocParam;
 use starlark::syntax::AstModule;
 use starlark_syntax::codemap::ResolvedPos;
 use starlark_syntax::syntax::ast::AstPayload;
@@ -120,8 +127,11 @@ use crate::definition::IdentifierDefinition;
 use crate::definition::LspModule;
 use crate::inspect::AstModuleInspect;
 use crate::inspect::AutocompleteType;
+use crate::signature;
 use crate::symbols;
 use crate::symbols::find_symbols_at_location;
+use crate::symbols::Symbol;
+use crate::symbols::SymbolKind;
 
 /// The request to get the file contents for a starlark: URI
 struct StarlarkFileContentsRequest {}
@@ -428,6 +438,13 @@ impl<T: LspContext> Backend<T> {
             completion_provider: Some(CompletionOptions::default()),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
             document_symbol_provider: Some(OneOf::Left(true)),
+            signature_help_provider: Some(SignatureHelpOptions {
+                trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+                retrigger_characters: Some(vec![",".to_string()]),
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
+            }),
             workspace_symbol_provider: if context.is_eager() {
                 Some(OneOf::Left(true))
             } else {
@@ -557,6 +574,18 @@ impl<T: LspContext> Backend<T> {
     /// Offers hover information for the symbol at the current cursor.
     fn hover(&self, id: RequestId, params: HoverParams, initialize_params: &InitializeParams) {
         self.send_response(new_response(id, self.hover_info(params, initialize_params)));
+    }
+
+    fn signature_help(
+        &self,
+        id: RequestId,
+        params: SignatureHelpParams,
+        initialize_params: &InitializeParams,
+    ) {
+        self.send_response(new_response(
+            id,
+            self.signature_help_info(params, initialize_params),
+        ));
     }
 
     /// Offer an overview of symbols in the current document.
@@ -1122,57 +1151,52 @@ impl<T: LspContext> Backend<T> {
         document_uri: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<Option<Hover>> {
+        let symbol = self.get_symbol_for_identifier_definition(
+            &identifier_definition,
+            document,
+            document_uri,
+            workspace_root,
+        )?;
+
         Ok(match identifier_definition {
-            IdentifierDefinition::Location {
-                destination,
-                name,
-                source,
-            } => {
-                // TODO: This seems very inefficient. Once the document starts
-                // holding the `Scope` including AST nodes, this indirection
-                // should be removed.
-                find_symbols_at_location(
-                    document.ast.codemap(),
-                    document.ast.statement(),
-                    ResolvedPos {
-                        line: destination.begin.line,
-                        column: destination.begin.column,
-                    },
-                )
-                .remove(&name)
-                .and_then(|symbol| {
-                    symbol
-                        .doc
-                        .map(|docs| Hover {
+            IdentifierDefinition::Location { source, .. } => symbol.and_then(|symbol| {
+                symbol
+                    .doc
+                    .map(|docs| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_item(&symbol.name, &docs.to_doc_item()),
+                        )]),
+                        range: Some(source.into()),
+                    })
+                    .or_else(|| {
+                        symbol.param.map(|docs| Hover {
                             contents: HoverContents::Array(vec![MarkedString::String(
-                                render_doc_item(&symbol.name, &docs),
+                                render_doc_param(&docs),
                             )]),
                             range: Some(source.into()),
                         })
-                        .or_else(|| {
-                            symbol.param.map(|docs| Hover {
-                                contents: HoverContents::Array(vec![MarkedString::String(
-                                    render_doc_param(&docs),
-                                )]),
-                                range: Some(source.into()),
-                            })
-                        })
-                })
-            }
-            IdentifierDefinition::LoadedLocation {
-                path, name, source, ..
-            } => {
+                    })
+            }),
+            IdentifierDefinition::LoadedLocation { source, .. } => {
                 // Symbol loaded from another file. Find the file and get the definition
                 // from there, hopefully including the docs.
-                let load_uri = self.resolve_load_path(&path, document_uri, workspace_root)?;
-                self.get_ast_or_load_from_disk(&load_uri)?.and_then(|ast| {
-                    ast.find_exported_symbol(&name).and_then(|symbol| {
-                        symbol.doc.map(|docs| Hover {
-                            contents: HoverContents::Array(vec![MarkedString::String(
-                                render_doc_item(&symbol.name, &docs),
-                            )]),
-                            range: Some(source.into()),
-                        })
+                symbol.and_then(|symbol| {
+                    symbol.doc.map(|docs| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_item(&symbol.name, &docs.to_doc_item()),
+                        )]),
+                        range: Some(source.into()),
+                    })
+                })
+            }
+            IdentifierDefinition::Unresolved { source, .. } => {
+                // Try to resolve as a global symbol.
+                symbol.and_then(|symbol| {
+                    symbol.doc.map(|doc| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_member(&symbol.name, &doc),
+                        )]),
+                        range: Some(source.into()),
                     })
                 })
             }
@@ -1212,21 +1236,217 @@ impl<T: LspContext> Backend<T> {
                     _ => None,
                 }
             }
-            IdentifierDefinition::Unresolved { source, name } => {
+            IdentifierDefinition::LoadPath { .. } | IdentifierDefinition::NotFound => None,
+        })
+    }
+
+    fn get_symbol_for_identifier_definition(
+        &self,
+        identifier_definition: &IdentifierDefinition,
+        document: &LspModule,
+        document_uri: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<Option<Symbol>> {
+        match identifier_definition {
+            IdentifierDefinition::Location {
+                destination, name, ..
+            } => {
+                // TODO: This seems very inefficient. Once the document starts
+                // holding the `Scope` including AST nodes, this indirection
+                // should be removed.
+                Ok(find_symbols_at_location(
+                    document.ast.codemap(),
+                    document.ast.statement(),
+                    ResolvedPos {
+                        line: destination.begin.line,
+                        column: destination.begin.column,
+                    },
+                )
+                .remove(name))
+            }
+            IdentifierDefinition::LoadedLocation { path, name, .. } => {
+                // Symbol loaded from another file. Find the file and get the definition
+                // from there, hopefully including the docs.
+                let load_uri = self.resolve_load_path(path, document_uri, workspace_root)?;
+                Ok(self
+                    .get_ast_or_load_from_disk(&load_uri)?
+                    .and_then(|ast| ast.find_exported_symbol(name)))
+            }
+            IdentifierDefinition::Unresolved { name, .. } => {
                 // Try to resolve as a global symbol.
-                self.context
+                Ok(self
+                    .context
                     .get_environment(document_uri)
                     .members
                     .into_iter()
-                    .find(|symbol| symbol.0 == name)
-                    .map(|symbol| Hover {
-                        contents: HoverContents::Array(vec![MarkedString::String(
-                            render_doc_member(&symbol.0, &symbol.1),
-                        )]),
-                        range: Some(source.into()),
-                    })
+                    .find_map(|(symbol_name, doc)| {
+                        if &symbol_name == name {
+                            Some(Symbol {
+                                name: symbol_name,
+                                kind: match &doc {
+                                    DocMember::Property(_) => SymbolKind::Constant,
+                                    DocMember::Function(doc) => SymbolKind::Method {
+                                        argument_names: doc
+                                            .params
+                                            .iter()
+                                            .filter_map(|param| match param {
+                                                DocParam::Arg { name, .. }
+                                                | DocParam::Args { name, .. }
+                                                | DocParam::Kwargs { name, .. } => {
+                                                    Some(name.clone())
+                                                }
+                                                DocParam::NoArgs | DocParam::OnlyPosBefore => None,
+                                            })
+                                            .collect(),
+                                    },
+                                },
+                                doc: Some(doc),
+                                param: None,
+                                span: None,
+                                detail: None,
+                            })
+                        } else {
+                            None
+                        }
+                    }))
             }
-            IdentifierDefinition::LoadPath { .. } | IdentifierDefinition::NotFound => None,
+            IdentifierDefinition::StringLiteral { .. }
+            | IdentifierDefinition::LoadPath { .. }
+            | IdentifierDefinition::NotFound => Ok(None),
+        }
+    }
+
+    fn signature_help_info(
+        &self,
+        params: SignatureHelpParams,
+        initialize_params: &InitializeParams,
+    ) -> anyhow::Result<SignatureHelp> {
+        let uri = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .try_into()?;
+        let line = params.text_document_position_params.position.line;
+        let character = params.text_document_position_params.position.character;
+        let workspace_root =
+            Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), &uri);
+
+        Ok(match self.get_ast(&uri) {
+            Some(ast) => {
+                let calls = signature::function_signatures(&ast, line, character)?;
+                let mut signatures = Vec::new();
+                let mut active_signature = None;
+                let mut active_parameter = None;
+
+                for call in calls {
+                    // Look up the function definition
+                    let definition = ast.find_definition_at_location(
+                        call.function_span.begin.line as u32,
+                        call.function_span.begin.column as u32,
+                    );
+                    let identifier_definition = match definition {
+                        Definition::Identifier(i) => i,
+                        Definition::Dotted(DottedDefinition {
+                            root_definition_location,
+                            ..
+                        }) => root_definition_location,
+                    };
+                    if let Some(symbol) = self.get_symbol_for_identifier_definition(
+                        &identifier_definition,
+                        &ast,
+                        &uri,
+                        workspace_root.as_deref(),
+                    )? {
+                        match symbol.kind {
+                            SymbolKind::Method { argument_names } => {
+                                let value = lsp_types::SignatureInformation {
+                                    documentation: symbol.doc.as_ref().map(|doc| {
+                                        Documentation::MarkupContent(MarkupContent {
+                                            kind: MarkupKind::Markdown,
+                                            value: render_doc_member(&symbol.name, doc),
+                                        })
+                                    }),
+                                    label: format!(
+                                        "{}({})",
+                                        symbol.name,
+                                        symbol.doc
+                                            .as_ref()
+                                            .and_then(|doc| match doc {
+                                                DocMember::Property(_) => None,
+                                                DocMember::Function(func_doc) => Some(func_doc),
+                                            }).map(|doc| {
+                                                doc.params.iter().map(|param| param.render_as_code()).collect::<Vec<_>>().join(", ")
+                                            })
+                                            .unwrap_or_else(|| argument_names.join(", ")),
+                                    ),
+                                    active_parameter: match call.current_argument {
+                                        signature::CallArgument::Positional(i) => Some(i as u32),
+                                        signature::CallArgument::Named(name) => argument_names
+                                            .iter()
+                                            .enumerate()
+                                            .find_map(|(i, arg_name)| {
+                                                if arg_name == &name {
+                                                    Some(i as u32)
+                                                } else {
+                                                    None
+                                                }
+                                            }),
+                                        signature::CallArgument::None => None,
+                                    },
+                                    parameters: Some(
+                                        argument_names
+                                            .into_iter()
+                                            .map(|arg_name| ParameterInformation {
+                                                documentation: symbol.doc.as_ref().and_then(|doc| {
+                                                    match doc {
+                                                        DocMember::Property(_) => todo!(),
+                                                        DocMember::Function(func) => func.params.iter().find_map(|param| {
+                                                            let param_name = match param {
+                                                                DocParam::Arg { name , .. } => name,
+                                                                DocParam::Args { name, .. } => name,
+                                                                DocParam::Kwargs { name, .. } => name,
+                                                                DocParam::NoArgs | DocParam::OnlyPosBefore => return None,
+                                                            };
+
+                                                            if param_name == &arg_name {
+                                                                Some(Documentation::MarkupContent(MarkupContent {
+                                                                    kind: MarkupKind::Markdown,
+                                                                    value: render_doc_param(param),
+                                                                }))
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }),
+                                                    }
+                                                }),
+                                                label: ParameterLabel::Simple(arg_name),
+                                            })
+                                            .collect(),
+                                    ),
+                                };
+                                active_parameter = value.active_parameter;
+                                signatures.push(value);
+
+                                active_signature = Some(signatures.len() as u32 - 1);
+                            }
+                            SymbolKind::Constant | SymbolKind::Variable => {
+                                // That's weird, innit?
+                            }
+                        }
+                    }
+                }
+
+                SignatureHelp {
+                    signatures,
+                    active_signature,
+                    active_parameter,
+                }
+            }
+            None => SignatureHelp {
+                signatures: vec![],
+                active_signature: None,
+                active_parameter: None,
+            },
         })
     }
 
@@ -1354,6 +1574,8 @@ impl<T: LspContext> Backend<T> {
                         self.completion(req.id, params, &initialize_params);
                     } else if let Some(params) = as_request::<HoverRequest>(&req) {
                         self.hover(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<SignatureHelpRequest>(&req) {
+                        self.signature_help(req.id, params, &initialize_params);
                     } else if let Some(params) = as_request::<DocumentSymbolRequest>(&req) {
                         self.document_symbols(req.id, params);
                     } else if let Some(params) = as_request::<WorkspaceSymbolRequest>(&req) {

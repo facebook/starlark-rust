@@ -21,7 +21,7 @@ use lsp_types::MarkupContent;
 use lsp_types::MarkupKind;
 use starlark::collections::SmallMap;
 use starlark::docs::markdown::render_doc_item;
-use starlark::docs::DocItem;
+use starlark::docs::DocMember;
 use starlark::syntax::AstModule;
 use starlark_syntax::syntax::ast::AstAssignIdent;
 use starlark_syntax::syntax::ast::Stmt;
@@ -38,7 +38,7 @@ impl From<Symbol> for CompletionItem {
         let documentation = value.doc.map(|doc| {
             Documentation::MarkupContent(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: render_doc_item(&value.name, &doc),
+                value: render_doc_item(&value.name, &doc.to_doc_item()),
             })
         });
         Self {
@@ -63,17 +63,16 @@ impl AstModuleExportedSymbols for AstModule {
         let mut result: SmallMap<&str, _> = SmallMap::new();
 
         fn add<'a>(
-            me: &AstModule,
             result: &mut SmallMap<&'a str, Symbol>,
             name: &'a AstAssignIdent,
             kind: SymbolKind,
-            resolve_docs: impl FnOnce() -> Option<DocItem>,
+            resolve_docs: impl FnOnce() -> Option<DocMember>,
         ) {
             if !name.ident.starts_with('_') {
                 result.entry(&name.ident).or_insert(Symbol {
                     name: name.ident.clone(),
                     detail: None,
-                    span: name.span,
+                    span: Some(name.span),
                     kind,
                     doc: resolve_docs(),
                     param: None,
@@ -87,25 +86,24 @@ impl AstModuleExportedSymbols for AstModule {
                 Stmt::Assign(assign) => {
                     assign.lhs.visit_lvalue(|name| {
                         let kind = SymbolKind::from_expr(&assign.rhs);
-                        add(self, &mut result, name, kind, || {
+                        add(&mut result, name, kind, || {
                             last_node
                                 .and_then(|last| get_doc_item_for_assign(last, &assign.lhs))
-                                .map(DocItem::Property)
+                                .map(DocMember::Property)
                         });
                     });
                 }
                 Stmt::AssignModify(dest, _, _) => {
                     dest.visit_lvalue(|name| {
-                        add(self, &mut result, name, SymbolKind::Variable, || {
+                        add(&mut result, name, SymbolKind::Variable, || {
                             last_node
                                 .and_then(|last| get_doc_item_for_assign(last, dest))
-                                .map(DocItem::Property)
+                                .map(DocMember::Property)
                         });
                     });
                 }
                 Stmt::Def(def) => {
                     add(
-                        self,
                         &mut result,
                         &def.name,
                         SymbolKind::Method {
@@ -115,7 +113,7 @@ impl AstModuleExportedSymbols for AstModule {
                                 .filter_map(|param| param.split().0.map(|name| name.to_string()))
                                 .collect(),
                         },
-                        || get_doc_item_for_def(def).map(DocItem::Function),
+                        || get_doc_item_for_def(def).map(DocMember::Function),
                     );
                 }
                 _ => {}
@@ -150,7 +148,11 @@ d = 2
         );
         let res = modu.exported_symbols();
         assert_eq!(
-            res.map(|symbol| format!("{} {}", modu.file_span(symbol.span), symbol.name)),
+            res.map(|symbol| format!(
+                "{} {}",
+                modu.file_span(symbol.span.expect("span should be set")),
+                symbol.name
+            )),
             &["X:3:5-6 b", "X:4:1-2 d"]
         );
     }

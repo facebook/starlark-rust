@@ -647,7 +647,7 @@ impl DocParam {
         Some(indented)
     }
 
-    fn render_as_code(&self) -> String {
+    pub fn render_as_code(&self) -> String {
         match self {
             DocParam::Arg {
                 name,
