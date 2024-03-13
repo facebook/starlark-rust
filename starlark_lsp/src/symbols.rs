@@ -170,9 +170,16 @@ pub(crate) fn find_symbols_at_location<P: AstPayload>(
     symbols
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum DocumentSymbolMode {
+    IncludeLoads,
+    OmitLoads,
+}
+
 pub fn get_document_symbols<P: AstPayload>(
     codemap: &CodeMap,
     ast: &AstStmtP<P>,
+    mode: DocumentSymbolMode,
 ) -> Vec<DocumentSymbol> {
     let mut symbols = Vec::new();
     match &ast.node {
@@ -198,19 +205,19 @@ pub fn get_document_symbols<P: AstPayload>(
         }
         StmtP::Statements(statements) => {
             for stmt in statements {
-                symbols.extend(get_document_symbols(codemap, stmt));
+                symbols.extend(get_document_symbols(codemap, stmt, mode));
             }
         }
         StmtP::If(_, body) => {
-            symbols.extend(get_document_symbols(codemap, body));
+            symbols.extend(get_document_symbols(codemap, body, mode));
         }
         StmtP::IfElse(_, bodies) => {
             let (if_body, else_body) = bodies.deref();
-            symbols.extend(get_document_symbols(codemap, if_body));
-            symbols.extend(get_document_symbols(codemap, else_body));
+            symbols.extend(get_document_symbols(codemap, if_body, mode));
+            symbols.extend(get_document_symbols(codemap, else_body, mode));
         }
         StmtP::For(for_) => {
-            symbols.extend(get_document_symbols(codemap, &for_.body));
+            symbols.extend(get_document_symbols(codemap, &for_.body, mode));
         }
         StmtP::Def(def) => {
             symbols.push(make_document_symbol(
@@ -223,34 +230,36 @@ pub fn get_document_symbols<P: AstPayload>(
                     def.params
                         .iter()
                         .filter_map(|param| get_document_symbol_for_parameter(codemap, param))
-                        .chain(get_document_symbols(codemap, &def.body))
+                        .chain(get_document_symbols(codemap, &def.body, mode))
                         .collect(),
                 ),
             ));
         }
         StmtP::Load(load) => {
-            symbols.push(make_document_symbol(
-                load.module.node.clone(),
-                LspSymbolKind::MODULE,
-                ast.span,
-                load.module.span,
-                codemap,
-                Some(
-                    load.args
-                        .iter()
-                        .map(|loaded_symbol| {
-                            make_document_symbol(
-                                loaded_symbol.local.ident.clone(),
-                                LspSymbolKind::METHOD,
-                                loaded_symbol.span(),
-                                loaded_symbol.local.span,
-                                codemap,
-                                None,
-                            )
-                        })
-                        .collect(),
-                ),
-            ));
+            if mode == DocumentSymbolMode::IncludeLoads {
+                symbols.push(make_document_symbol(
+                    load.module.node.clone(),
+                    LspSymbolKind::MODULE,
+                    ast.span,
+                    load.module.span,
+                    codemap,
+                    Some(
+                        load.args
+                            .iter()
+                            .map(|loaded_symbol| {
+                                make_document_symbol(
+                                    loaded_symbol.local.ident.clone(),
+                                    LspSymbolKind::METHOD,
+                                    loaded_symbol.span(),
+                                    loaded_symbol.local.span,
+                                    codemap,
+                                    None,
+                                )
+                            })
+                            .collect(),
+                    ),
+                ));
+            }
         }
 
         // These don't produce any symbols.
@@ -413,6 +422,7 @@ mod tests {
 
     use super::find_symbols_at_location;
     use super::get_document_symbols;
+    use super::DocumentSymbolMode;
     use super::Symbol;
     use super::SymbolKind;
 
@@ -581,7 +591,11 @@ some_rule(name = "qux")
         .unwrap();
 
         assert_eq!(
-            get_document_symbols(ast_module.codemap(), ast_module.statement()),
+            get_document_symbols(
+                ast_module.codemap(),
+                ast_module.statement(),
+                DocumentSymbolMode::IncludeLoads
+            ),
             vec![
                 #[allow(deprecated)]
                 DocumentSymbol {
@@ -923,6 +937,269 @@ some_rule(name = "qux")
                     children: None
                 }
             ]
-        )
+        );
+
+        assert_eq!(
+            get_document_symbols(
+                ast_module.codemap(),
+                ast_module.statement(),
+                DocumentSymbolMode::OmitLoads
+            ),
+            vec![
+                #[allow(deprecated)]
+                DocumentSymbol {
+                    name: "method".to_owned(),
+                    detail: None,
+                    kind: LspSymbolKind::FUNCTION,
+                    tags: None,
+                    deprecated: None,
+                    range: Range {
+                        start: Position {
+                            line: 2,
+                            character: 0
+                        },
+                        end: Position {
+                            line: 7,
+                            character: 0
+                        }
+                    },
+                    selection_range: Range {
+                        start: Position {
+                            line: 2,
+                            character: 4
+                        },
+                        end: Position {
+                            line: 2,
+                            character: 10
+                        }
+                    },
+                    children: Some(vec![
+                        DocumentSymbol {
+                            name: "param".to_owned(),
+                            detail: None,
+                            kind: LspSymbolKind::VARIABLE,
+                            tags: None,
+                            deprecated: None,
+                            range: Range {
+                                start: Position {
+                                    line: 2,
+                                    character: 11
+                                },
+                                end: Position {
+                                    line: 2,
+                                    character: 16
+                                }
+                            },
+                            selection_range: Range {
+                                start: Position {
+                                    line: 2,
+                                    character: 11
+                                },
+                                end: Position {
+                                    line: 2,
+                                    character: 16
+                                }
+                            },
+                            children: None
+                        },
+                        DocumentSymbol {
+                            name: "foo".to_owned(),
+                            detail: None,
+                            kind: LspSymbolKind::STRUCT,
+                            tags: None,
+                            deprecated: None,
+                            range: Range {
+                                start: Position {
+                                    line: 3,
+                                    character: 4
+                                },
+                                end: Position {
+                                    line: 3,
+                                    character: 33
+                                }
+                            },
+                            selection_range: Range {
+                                start: Position {
+                                    line: 3,
+                                    character: 4
+                                },
+                                end: Position {
+                                    line: 3,
+                                    character: 7
+                                }
+                            },
+                            children: Some(vec![DocumentSymbol {
+                                name: "field".to_owned(),
+                                detail: None,
+                                kind: LspSymbolKind::FIELD,
+                                tags: None,
+                                deprecated: None,
+                                range: Range {
+                                    start: Position {
+                                        line: 3,
+                                        character: 17
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        character: 32
+                                    }
+                                },
+                                selection_range: Range {
+                                    start: Position {
+                                        line: 3,
+                                        character: 17
+                                    },
+                                    end: Position {
+                                        line: 3,
+                                        character: 22
+                                    }
+                                },
+                                children: None
+                            }])
+                        },
+                        DocumentSymbol {
+                            name: "bar".to_owned(),
+                            detail: None,
+                            kind: LspSymbolKind::FUNCTION,
+                            tags: None,
+                            deprecated: None,
+                            range: Range {
+                                start: Position {
+                                    line: 4,
+                                    character: 10
+                                },
+                                end: Position {
+                                    line: 4,
+                                    character: 25
+                                }
+                            },
+                            selection_range: Range {
+                                start: Position {
+                                    line: 4,
+                                    character: 10
+                                },
+                                end: Position {
+                                    line: 4,
+                                    character: 25
+                                }
+                            },
+                            children: Some(vec![DocumentSymbol {
+                                name: "x".to_owned(),
+                                detail: None,
+                                kind: LspSymbolKind::VARIABLE,
+                                tags: None,
+                                deprecated: None,
+                                range: Range {
+                                    start: Position {
+                                        line: 4,
+                                        character: 17
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        character: 18
+                                    }
+                                },
+                                selection_range: Range {
+                                    start: Position {
+                                        line: 4,
+                                        character: 17
+                                    },
+                                    end: Position {
+                                        line: 4,
+                                        character: 18
+                                    }
+                                },
+                                children: None
+                            }])
+                        }
+                    ])
+                },
+                #[allow(deprecated)]
+                DocumentSymbol {
+                    name: "baz".to_owned(),
+                    detail: None,
+                    kind: LspSymbolKind::STRUCT,
+                    tags: None,
+                    deprecated: None,
+                    range: Range {
+                        start: Position {
+                            line: 7,
+                            character: 0
+                        },
+                        end: Position {
+                            line: 7,
+                            character: 29
+                        }
+                    },
+                    selection_range: Range {
+                        start: Position {
+                            line: 7,
+                            character: 0
+                        },
+                        end: Position {
+                            line: 7,
+                            character: 3
+                        }
+                    },
+                    children: Some(vec![DocumentSymbol {
+                        name: "field".to_owned(),
+                        detail: None,
+                        kind: LspSymbolKind::FIELD,
+                        tags: None,
+                        deprecated: None,
+                        range: Range {
+                            start: Position {
+                                line: 7,
+                                character: 13
+                            },
+                            end: Position {
+                                line: 7,
+                                character: 28
+                            }
+                        },
+                        selection_range: Range {
+                            start: Position {
+                                line: 7,
+                                character: 13
+                            },
+                            end: Position {
+                                line: 7,
+                                character: 18
+                            }
+                        },
+                        children: None
+                    }])
+                },
+                #[allow(deprecated)]
+                DocumentSymbol {
+                    name: "qux".to_owned(),
+                    detail: None,
+                    kind: LspSymbolKind::CONSTANT,
+                    tags: None,
+                    deprecated: None,
+                    range: Range {
+                        start: Position {
+                            line: 9,
+                            character: 0
+                        },
+                        end: Position {
+                            line: 9,
+                            character: 23
+                        }
+                    },
+                    selection_range: Range {
+                        start: Position {
+                            line: 9,
+                            character: 17
+                        },
+                        end: Position {
+                            line: 9,
+                            character: 22
+                        }
+                    },
+                    children: None
+                }
+            ]
+        );
     }
 }
