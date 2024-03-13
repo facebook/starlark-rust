@@ -42,7 +42,6 @@ use crate::definition::Definition;
 use crate::definition::DottedDefinition;
 use crate::definition::IdentifierDefinition;
 use crate::definition::LspModule;
-use crate::exported::SymbolKind as ExportedSymbolKind;
 use crate::server::Backend;
 use crate::server::LspContext;
 use crate::server::LspUrl;
@@ -97,7 +96,7 @@ impl<T: LspContext> Backend<T> {
                 key,
                 CompletionItem {
                     kind: Some(match value.kind {
-                        SymbolKind::Method => CompletionItemKind::METHOD,
+                        SymbolKind::Method { .. } => CompletionItemKind::METHOD,
                         SymbolKind::Variable => CompletionItemKind::VARIABLE,
                     }),
                     detail: value.detail,
@@ -258,7 +257,7 @@ impl<T: LspContext> Backend<T> {
                 )
                 .remove(name)
                 .and_then(|symbol| match symbol.kind {
-                    SymbolKind::Method => symbol.doc,
+                    SymbolKind::Method { .. } => symbol.doc,
                     SymbolKind::Variable => None,
                 })
                 .and_then(|docs| match docs {
@@ -286,8 +285,8 @@ impl<T: LspContext> Backend<T> {
                 self.get_ast_or_load_from_disk(&load_uri)?
                     .and_then(|ast| ast.find_exported_symbol(name))
                     .and_then(|symbol| match symbol.kind {
-                        ExportedSymbolKind::Any => None,
-                        ExportedSymbolKind::Function { argument_names } => Some(
+                        SymbolKind::Variable => None,
+                        SymbolKind::Method { argument_names } => Some(
                             argument_names
                                 .into_iter()
                                 .map(|name| CompletionItem {

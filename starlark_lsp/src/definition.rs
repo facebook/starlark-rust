@@ -44,9 +44,9 @@ use crate::bind::Assigner;
 use crate::bind::Bind;
 use crate::bind::Scope;
 use crate::exported::AstModuleExportedSymbols;
-use crate::exported::Symbol;
 use crate::loaded::AstModuleLoadedSymbols;
 use crate::loaded::LoadedSymbol;
+use crate::symbols::Symbol;
 
 /// The location of a definition for a given identifier. See [`AstModule::find_definition_at_location`].
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -275,7 +275,7 @@ impl LspModule {
 
     /// Look at the given scope and child scopes to try to find where the identifier
     /// accessed at Pos is defined.
-    fn find_definition_in_scope<'a>(scope: &'a Scope, pos: Pos) -> TempDefinition<'a> {
+    fn find_definition_in_scope(scope: &Scope, pos: Pos) -> TempDefinition {
         /// Look for a name in the given scope, with a given source, and return the right
         /// type of [`TempIdentifierDefinition`] based on whether / how the variable is bound.
         fn resolve_get_in_scope<'a>(
@@ -455,7 +455,7 @@ impl LspModule {
     /// Attempt to find the location in this module where an exported symbol is defined.
     pub(crate) fn find_exported_symbol_span(&self, name: &str) -> Option<ResolvedSpan> {
         self.find_exported_symbol(name)
-            .map(|symbol| symbol.span.resolve_span())
+            .map(|symbol| self.ast.codemap().resolve_span(symbol.span))
     }
 
     /// Attempt to find the location in this module where a member of a struct (named `name`)

@@ -16,78 +16,29 @@
  */
 
 use lsp_types::CompletionItem;
-use lsp_types::CompletionItemKind;
 use lsp_types::Documentation;
 use lsp_types::MarkupContent;
 use lsp_types::MarkupKind;
-use starlark::codemap::FileSpan;
 use starlark::collections::SmallMap;
 use starlark::docs::markdown::render_doc_item;
 use starlark::docs::DocItem;
 use starlark::syntax::AstModule;
 use starlark_syntax::syntax::ast::AstAssignIdent;
-use starlark_syntax::syntax::ast::Expr;
 use starlark_syntax::syntax::ast::Stmt;
 use starlark_syntax::syntax::module::AstModuleFields;
 use starlark_syntax::syntax::top_level_stmts::top_level_stmts;
 
 use crate::docs::get_doc_item_for_assign;
 use crate::docs::get_doc_item_for_def;
-
-/// The type of an exported symbol.
-/// If unknown, will use `Any`.
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-pub(crate) enum SymbolKind {
-    /// Any kind of symbol.
-    Any,
-    /// The symbol represents something that can be called, for example
-    /// a `def` or a variable assigned to a `lambda`.
-    Function { argument_names: Vec<String> },
-}
-
-impl SymbolKind {
-    pub(crate) fn from_expr(x: &Expr) -> Self {
-        match x {
-            Expr::Lambda(lambda) => Self::Function {
-                argument_names: lambda
-                    .params
-                    .iter()
-                    .filter_map(|param| param.split().0.map(|name| name.to_string()))
-                    .collect(),
-            },
-            _ => Self::Any,
-        }
-    }
-}
-
-impl From<SymbolKind> for CompletionItemKind {
-    fn from(value: SymbolKind) -> Self {
-        match value {
-            SymbolKind::Any => CompletionItemKind::CONSTANT,
-            SymbolKind::Function { .. } => CompletionItemKind::FUNCTION,
-        }
-    }
-}
-
-/// A symbol. Returned from [`AstModule::exported_symbols`].
-#[derive(Debug, PartialEq, Clone)]
-pub(crate) struct Symbol {
-    /// The name of the symbol.
-    pub(crate) name: String,
-    /// The location of its definition.
-    pub(crate) span: FileSpan,
-    /// The type of symbol it represents.
-    pub(crate) kind: SymbolKind,
-    /// The documentation for this symbol.
-    pub(crate) docs: Option<DocItem>,
-}
+use crate::symbols::Symbol;
+use crate::symbols::SymbolKind;
 
 impl From<Symbol> for CompletionItem {
     fn from(value: Symbol) -> Self {
-        let documentation = value.docs.map(|docs| {
+        let documentation = value.doc.map(|doc| {
             Documentation::MarkupContent(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: render_doc_item(&value.name, &docs),
+                value: render_doc_item(&value.name, &doc),
             })
         });
         Self {
@@ -121,9 +72,11 @@ impl AstModuleExportedSymbols for AstModule {
             if !name.ident.starts_with('_') {
                 result.entry(&name.ident).or_insert(Symbol {
                     name: name.ident.clone(),
-                    span: me.file_span(name.span),
+                    detail: None,
+                    span: name.span,
                     kind,
-                    docs: resolve_docs(),
+                    doc: resolve_docs(),
+                    param: None,
                 });
             }
         }
@@ -143,7 +96,7 @@ impl AstModuleExportedSymbols for AstModule {
                 }
                 Stmt::AssignModify(dest, _, _) => {
                     dest.visit_lvalue(|name| {
-                        add(self, &mut result, name, SymbolKind::Any, || {
+                        add(self, &mut result, name, SymbolKind::Variable, || {
                             last_node
                                 .and_then(|last| get_doc_item_for_assign(last, dest))
                                 .map(DocItem::Property)
@@ -155,7 +108,7 @@ impl AstModuleExportedSymbols for AstModule {
                         self,
                         &mut result,
                         &def.name,
-                        SymbolKind::Function {
+                        SymbolKind::Method {
                             argument_names: def
                                 .params
                                 .iter()
@@ -197,7 +150,7 @@ d = 2
         );
         let res = modu.exported_symbols();
         assert_eq!(
-            res.map(|symbol| format!("{} {}", symbol.span, symbol.name)),
+            res.map(|symbol| format!("{} {}", modu.file_span(symbol.span), symbol.name)),
             &["X:3:5-6 b", "X:4:1-2 d"]
         );
     }

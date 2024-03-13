@@ -1167,7 +1167,7 @@ impl<T: LspContext> Backend<T> {
                 let load_uri = self.resolve_load_path(&path, document_uri, workspace_root)?;
                 self.get_ast_or_load_from_disk(&load_uri)?.and_then(|ast| {
                     ast.find_exported_symbol(&name).and_then(|symbol| {
-                        symbol.docs.map(|docs| Hover {
+                        symbol.doc.map(|docs| Hover {
                             contents: HoverContents::Array(vec![MarkedString::String(
                                 render_doc_item(&symbol.name, &docs),
                             )]),
