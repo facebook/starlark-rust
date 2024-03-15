@@ -669,9 +669,13 @@ impl DocParam {
             },
             DocParam::NoArgs => "*".to_owned(),
             DocParam::OnlyPosBefore => "/".to_owned(),
-            DocParam::Args { name, typ, .. } | DocParam::Kwargs { name, typ, .. } => match typ {
-                t if t.is_any() => name.clone(),
-                typ => format!("{}: {}", name, typ),
+            DocParam::Args { name, typ, .. } => match typ {
+                t if t.is_any() => format!("*{}", name),
+                typ => format!("*{}: {}", name, typ),
+            },
+            DocParam::Kwargs { name, typ, .. } => match typ {
+                t if t.is_any() => format!("**{}", name),
+                typ => format!("**{}: {}", name, typ),
             },
         }
     }
