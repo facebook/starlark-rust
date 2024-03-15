@@ -282,11 +282,11 @@ impl<T: LspContext> Backend<T> {
                     .and_then(|ast| ast.find_exported_symbol(name))
                     .and_then(|symbol| match symbol.kind {
                         SymbolKind::Constant | SymbolKind::Variable => None,
-                        SymbolKind::Method { argument_names } => Some(
-                            argument_names
+                        SymbolKind::Method { arguments } => Some(
+                            arguments
                                 .into_iter()
-                                .map(|name| CompletionItem {
-                                    label: name,
+                                .map(|arg| CompletionItem {
+                                    label: arg.name,
                                     kind: Some(CompletionItemKind::PROPERTY),
                                     ..Default::default()
                                 })
@@ -325,6 +325,8 @@ impl<T: LspContext> Backend<T> {
             }
             // None of these can be functions, so can't have any parameters.
             IdentifierDefinition::LoadPath { .. }
+            | IdentifierDefinition::LocationWithParameterReference { .. }
+            | IdentifierDefinition::LoadedLocationWithParameterReference { .. }
             | IdentifierDefinition::StringLiteral { .. }
             | IdentifierDefinition::NotFound => None,
         })

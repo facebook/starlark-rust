@@ -25,6 +25,7 @@ use lsp_types::DocumentSymbol;
 use lsp_types::SymbolKind as LspSymbolKind;
 use starlark::codemap::CodeMap;
 use starlark::codemap::Span;
+use starlark::docs::DocFunction;
 use starlark::docs::DocMember;
 use starlark::docs::DocParam;
 use starlark_syntax::codemap::ResolvedPos;
@@ -47,8 +48,47 @@ use crate::docs::get_doc_item_for_def;
 #[derive(Debug, PartialEq)]
 pub(crate) enum SymbolKind {
     Constant,
-    Method { argument_names: Vec<String> },
+    Method {
+        arguments: Vec<MethodSymbolArgument>,
+    },
     Variable,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct MethodSymbolArgument {
+    pub(crate) name: String,
+    pub(crate) span: Option<Span>,
+    pub(crate) doc: Option<DocParam>,
+    pub(crate) is_kwargs: bool,
+}
+
+impl MethodSymbolArgument {
+    pub(crate) fn from_ast_parameter<P: AstPayload>(
+        param: &ParameterP<P>,
+        doc: Option<&DocParam>,
+    ) -> Option<Self> {
+        match param {
+            ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => Some(Self {
+                name: p.ident.clone(),
+                span: Some(p.span),
+                doc: doc.cloned(),
+                is_kwargs: false,
+            }),
+            ParameterP::Args(p, _) => Some(Self {
+                name: p.ident.clone(),
+                span: Some(p.span),
+                doc: doc.cloned(),
+                is_kwargs: false,
+            }),
+            ParameterP::KwArgs(p, _) => Some(Self {
+                name: p.ident.clone(),
+                span: Some(p.span),
+                doc: doc.cloned(),
+                is_kwargs: true,
+            }),
+            ParameterP::NoArgs => None,
+        }
+    }
 }
 
 impl From<SymbolKind> for CompletionItemKind {
@@ -65,10 +105,10 @@ impl SymbolKind {
     pub(crate) fn from_expr<P: AstPayload>(x: &AstExprP<P>) -> Self {
         match &x.node {
             ExprP::Lambda(lambda) => Self::Method {
-                argument_names: lambda
+                arguments: lambda
                     .params
                     .iter()
-                    .filter_map(|param| param.split().0.map(|name| name.node.ident.to_string()))
+                    .filter_map(|param| MethodSymbolArgument::from_ast_parameter(&param.node, None))
                     .collect(),
             },
             _ => Self::Variable,
@@ -106,7 +146,7 @@ pub(crate) fn find_symbols_at_location<P: AstPayload>(
                     span: Some(x.span),
                     kind: (match &rhs.node {
                         ExprP::Lambda(lambda) => SymbolKind::Method {
-                            argument_names: argument_names(&lambda.params),
+                            arguments: argument_names(&lambda.params, None),
                         },
                         _ => SymbolKind::Variable,
                     }),
@@ -121,7 +161,7 @@ pub(crate) fn find_symbols_at_location<P: AstPayload>(
                     span: Some(x.span),
                     kind: (match &source.node {
                         ExprP::Lambda(lambda) => SymbolKind::Method {
-                            argument_names: argument_names(&lambda.params),
+                            arguments: argument_names(&lambda.params, None),
                         },
                         _ => SymbolKind::Variable,
                     }),
@@ -152,7 +192,7 @@ pub(crate) fn find_symbols_at_location<P: AstPayload>(
                         name: def.name.ident.clone(),
                         span: Some(def.name.span),
                         kind: SymbolKind::Method {
-                            argument_names: argument_names(&def.params),
+                            arguments: argument_names(&def.params, doc.as_ref()),
                         },
                         detail: None,
                         doc: doc.clone().map(DocMember::Function),
@@ -194,9 +234,7 @@ pub(crate) fn find_symbols_at_location<P: AstPayload>(
                             span: Some(local.span),
                             detail: Some(format!("Loaded from {}", load.module.node)),
                             // TODO: This should be dynamic based on the actual loaded value.
-                            kind: SymbolKind::Method {
-                                argument_names: vec![],
-                            },
+                            kind: SymbolKind::Method { arguments: vec![] },
                             // TODO: Pull from the original file.
                             doc: None,
                             param: None,
@@ -214,14 +252,19 @@ pub(crate) fn find_symbols_at_location<P: AstPayload>(
 
 fn argument_names<P: AstPayload>(
     params: &[starlark::codemap::Spanned<ParameterP<P>>],
-) -> Vec<String> {
+    doc: Option<&DocFunction>,
+) -> Vec<MethodSymbolArgument> {
     params
         .iter()
-        .filter_map(|param| match &param.node {
-            ParameterP::Normal(p, _) | ParameterP::WithDefaultValue(p, _, _) => {
-                Some(p.ident.clone())
-            }
-            _ => None,
+        .filter_map(|param| {
+            MethodSymbolArgument::from_ast_parameter(
+                &param.node,
+                doc.and_then(|doc| {
+                    param
+                        .ident()
+                        .and_then(|name| doc.find_param_with_name(&name.node.ident))
+                }),
+            )
         })
         .collect()
 }
@@ -481,6 +524,7 @@ mod tests {
     use super::find_symbols_at_location;
     use super::get_document_symbols;
     use super::DocumentSymbolMode;
+    use super::MethodSymbolArgument;
     use super::Symbol;
     use super::SymbolKind;
 
@@ -513,9 +557,7 @@ my_var = True
                         name: "exported_a".to_owned(),
                         span: Some(Span::new(Pos::new(17), Pos::new(29))),
                         detail: Some("Loaded from foo.star".to_owned()),
-                        kind: SymbolKind::Method {
-                            argument_names: vec![]
-                        },
+                        kind: SymbolKind::Method { arguments: vec![] },
                         doc: None,
                         param: None,
                     },
@@ -526,9 +568,7 @@ my_var = True
                         name: "renamed".to_owned(),
                         span: Some(Span::new(Pos::new(31), Pos::new(38))),
                         detail: Some("Loaded from foo.star".to_owned()),
-                        kind: SymbolKind::Method {
-                            argument_names: vec![]
-                        },
+                        kind: SymbolKind::Method { arguments: vec![] },
                         doc: None,
                         param: None,
                     },
@@ -540,7 +580,12 @@ my_var = True
                         span: Some(Span::new(Pos::new(60), Pos::new(66))),
                         detail: None,
                         kind: SymbolKind::Method {
-                            argument_names: vec!["param".to_owned()]
+                            arguments: vec![MethodSymbolArgument {
+                                name: "param".to_owned(),
+                                span: Some(Span::new(Pos::new(67), Pos::new(72))),
+                                doc: None,
+                                is_kwargs: false,
+                            }]
                         },
                         doc: None,
                         param: None,
@@ -590,9 +635,7 @@ my_var = True
                         name: "exported_a".to_owned(),
                         span: Some(Span::new(Pos::new(17), Pos::new(29))),
                         detail: Some("Loaded from foo.star".to_owned()),
-                        kind: SymbolKind::Method {
-                            argument_names: vec![],
-                        },
+                        kind: SymbolKind::Method { arguments: vec![] },
                         doc: None,
                         param: None,
                     },
@@ -603,9 +646,7 @@ my_var = True
                         name: "renamed".to_owned(),
                         span: Some(Span::new(Pos::new(31), Pos::new(38))),
                         detail: Some("Loaded from foo.star".to_owned()),
-                        kind: SymbolKind::Method {
-                            argument_names: vec![],
-                        },
+                        kind: SymbolKind::Method { arguments: vec![] },
                         doc: None,
                         param: None,
                     },
@@ -617,7 +658,12 @@ my_var = True
                         span: Some(Span::new(Pos::new(60), Pos::new(66))),
                         detail: None,
                         kind: SymbolKind::Method {
-                            argument_names: vec!["param".to_owned()],
+                            arguments: vec![MethodSymbolArgument {
+                                name: "param".to_owned(),
+                                span: Some(Span::new(Pos::new(67), Pos::new(72))),
+                                doc: None,
+                                is_kwargs: false
+                            }],
                         },
                         doc: None,
                         param: None,

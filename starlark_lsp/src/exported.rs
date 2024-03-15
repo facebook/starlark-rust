@@ -30,6 +30,7 @@ use starlark_syntax::syntax::top_level_stmts::top_level_stmts;
 
 use crate::docs::get_doc_item_for_assign;
 use crate::docs::get_doc_item_for_def;
+use crate::symbols::MethodSymbolArgument;
 use crate::symbols::Symbol;
 use crate::symbols::SymbolKind;
 
@@ -103,17 +104,27 @@ impl AstModuleExportedSymbols for AstModule {
                     });
                 }
                 Stmt::Def(def) => {
+                    let doc_item = get_doc_item_for_def(def);
                     add(
                         &mut result,
                         &def.name,
                         SymbolKind::Method {
-                            argument_names: def
+                            arguments: def
                                 .params
                                 .iter()
-                                .filter_map(|param| param.split().0.map(|name| name.to_string()))
+                                .filter_map(|param| {
+                                    MethodSymbolArgument::from_ast_parameter(
+                                        param,
+                                        doc_item.as_ref().and_then(|doc| {
+                                            param.node.ident().and_then(|ident| {
+                                                doc.find_param_with_name(&ident.ident)
+                                            })
+                                        }),
+                                    )
+                                })
                                 .collect(),
                         },
-                        || get_doc_item_for_def(def).map(DocMember::Function),
+                        || doc_item.map(DocMember::Function),
                     );
                 }
                 _ => {}

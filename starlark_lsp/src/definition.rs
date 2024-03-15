@@ -42,13 +42,14 @@ use starlark_syntax::syntax::uniplate::Visit;
 use crate::bind::scope;
 use crate::bind::Assigner;
 use crate::bind::Bind;
+use crate::bind::IndirectReference;
 use crate::bind::Scope;
 use crate::exported::AstModuleExportedSymbols;
 use crate::loaded::AstModuleLoadedSymbols;
 use crate::loaded::LoadedSymbol;
 use crate::symbols::Symbol;
 
-/// The location of a definition for a given identifier. See [`AstModule::find_definition_at_location`].
+/// The location of a definition for a given identifier. See [`LspModule::find_definition_at_location`].
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum IdentifierDefinition {
     /// The definition was found at this location in the current file.
@@ -56,6 +57,12 @@ pub(crate) enum IdentifierDefinition {
         source: ResolvedSpan,
         destination: ResolvedSpan,
         name: String,
+    },
+    LocationWithParameterReference {
+        source: ResolvedSpan,
+        destination: ResolvedSpan,
+        name: String,
+        parameter: String,
     },
     /// The symbol was loaded from another file. "destination" is the position within the
     /// "load()" statement, but additionally, the path in that load statement, and the
@@ -66,6 +73,13 @@ pub(crate) enum IdentifierDefinition {
         destination: ResolvedSpan,
         path: String,
         name: String,
+    },
+    LoadedLocationWithParameterReference {
+        source: ResolvedSpan,
+        destination: ResolvedSpan,
+        path: String,
+        name: String,
+        parameter: String,
     },
     /// The symbol is the path component of a `load` statement. This is the raw string
     /// that is in the AST, and needs to be properly resolved to a path to be useful.
@@ -88,7 +102,9 @@ impl IdentifierDefinition {
     fn source(&self) -> Option<ResolvedSpan> {
         match self {
             IdentifierDefinition::Location { source, .. }
+            | IdentifierDefinition::LocationWithParameterReference { source, .. }
             | IdentifierDefinition::LoadedLocation { source, .. }
+            | IdentifierDefinition::LoadedLocationWithParameterReference { source, .. }
             | IdentifierDefinition::LoadPath { source, .. }
             | IdentifierDefinition::StringLiteral { source, .. }
             | IdentifierDefinition::Unresolved { source, .. } => Some(*source),
@@ -124,17 +140,27 @@ enum TempIdentifierDefinition<'a> {
         source: Span,
         destination: Span,
         name: &'a str,
+        /// In the case that the symbol is a parameter to a function, this is the name of the
+        /// parameter that the symbol is being used as.
+        parameter_name: Option<&'a str>,
     },
     LoadedLocation {
         source: Span,
         destination: Span,
         path: &'a str,
         name: &'a str,
+        /// In the case that the symbol is a parameter to a function, this is the name of the
+        /// parameter that the symbol is being used as.
+        parameter_name: Option<&'a str>,
     },
     /// The definition was not found in the current scope but the name of an identifier
     /// was found at the given position. This should be checked in outer scopes
     /// to attempt to find the definition.
-    Name { source: Span, name: &'a str },
+    Name {
+        source: Span,
+        name: &'a str,
+        parameter_name: Option<&'a str>,
+    },
     /// None of the accesses matched the position that was provided.
     NotFound,
 }
@@ -282,6 +308,7 @@ impl LspModule {
             scope: &'a Scope,
             name: &'a str,
             source: Span,
+            parameter_name: Option<&'a str>,
         ) -> TempIdentifierDefinition<'a> {
             match scope.bound.get(name) {
                 Some((Assigner::Load { path, name }, span)) => {
@@ -290,31 +317,51 @@ impl LspModule {
                         destination: *span,
                         path,
                         name: name.as_str(),
+                        parameter_name,
                     }
                 }
                 Some((_, span)) => TempIdentifierDefinition::Location {
                     source,
                     destination: *span,
                     name,
+                    parameter_name,
                 },
                 // We know the symbol name, but it might only be available in
                 // an outer scope.
-                None => TempIdentifierDefinition::Name { source, name },
+                None => TempIdentifierDefinition::Name {
+                    source,
+                    name,
+                    parameter_name,
+                },
             }
         }
 
         for bind in &scope.inner {
             match bind {
                 Bind::Get(g) if g.span.contains(pos) => {
-                    return resolve_get_in_scope(scope, g.node.ident.as_str(), g.span).into();
+                    return resolve_get_in_scope(scope, g.node.ident.as_str(), g.span, None).into();
+                }
+                Bind::IndirectReference(IndirectReference {
+                    argument_name,
+                    function,
+                }) if argument_name.span.contains(pos) => {
+                    return resolve_get_in_scope(
+                        scope,
+                        function.node.ident.as_str(),
+                        argument_name.span,
+                        Some(argument_name.node.as_str()),
+                    )
+                    .into();
                 }
                 Bind::Scope(inner_scope) => {
                     match Self::find_definition_in_scope(inner_scope, pos) {
                         TempDefinition::Identifier(TempIdentifierDefinition::Name {
                             source,
                             name,
+                            parameter_name,
                         }) => {
-                            return resolve_get_in_scope(scope, name, source).into();
+                            return resolve_get_in_scope(scope, name, source, parameter_name)
+                                .into();
                         }
                         TempDefinition::Identifier(TempIdentifierDefinition::NotFound) => {}
                         TempDefinition::Dotted(TempDottedDefinition {
@@ -323,6 +370,7 @@ impl LspModule {
                                 TempIdentifierDefinition::Name {
                                     source: root_source,
                                     name: root_name,
+                                    parameter_name: None,
                                 },
                             variable,
                             attributes,
@@ -333,6 +381,7 @@ impl LspModule {
                                     scope,
                                     root_name,
                                     root_source,
+                                    None,
                                 ),
                                 variable,
                                 attributes,
@@ -356,6 +405,7 @@ impl LspModule {
                             scope,
                             root_identifier.node.ident.as_str(),
                             root_identifier.span,
+                            None,
                         );
                         // If someone clicks on the "root" identifier, just treat it as a "get"
                         match idx {
@@ -372,15 +422,15 @@ impl LspModule {
                         }
                     }
                 }
-                // For everything else, just ignore it. Note that the `Get` is ignored
-                // because we already checked the pos above.
-                Bind::Set(_, _) | Bind::Flow | Bind::Get(_) => {}
+                // For everything else, just ignore it. Note that the `Get` and `IndirectReference`
+                // are ignored because we already checked the pos above.
+                Bind::Set(_, _) | Bind::Flow | Bind::Get(_) | Bind::IndirectReference(_) => {}
             }
         }
         TempIdentifierDefinition::NotFound.into()
     }
 
-    /// Converts a `TempIdentifierDefinition` to an `IdentifierDefinition`, resolving spans
+    /// Converts a [`TempIdentifierDefinition`] to an [`IdentifierDefinition`], resolving spans
     /// against the current AST, owning strings, etc.
     fn get_definition_location(
         &self,
@@ -393,28 +443,58 @@ impl LspModule {
                 source,
                 destination,
                 name,
-            } => IdentifierDefinition::Location {
-                source: self.ast.codemap().resolve_span(source),
-                destination: self.ast.codemap().resolve_span(destination),
-                name: name.to_owned(),
+                parameter_name,
+            } => match parameter_name {
+                Some(argument_name) => IdentifierDefinition::LocationWithParameterReference {
+                    source: self.ast.codemap().resolve_span(source),
+                    destination: self.ast.codemap().resolve_span(destination),
+                    name: name.to_owned(),
+                    parameter: argument_name.to_owned(),
+                },
+                None => IdentifierDefinition::Location {
+                    source: self.ast.codemap().resolve_span(source),
+                    destination: self.ast.codemap().resolve_span(destination),
+                    name: name.to_owned(),
+                },
             },
-            TempIdentifierDefinition::Name { source, name } => match scope.bound.get(name) {
+            TempIdentifierDefinition::Name {
+                source,
+                name,
+                parameter_name,
+            } => match scope.bound.get(name) {
                 None => IdentifierDefinition::Unresolved {
                     source: self.ast.codemap().resolve_span(source),
                     name: name.to_owned(),
                 },
-                Some((Assigner::Load { path, name }, span)) => {
-                    IdentifierDefinition::LoadedLocation {
+                Some((Assigner::Load { path, name }, span)) => match parameter_name {
+                    Some(parameter_name) => {
+                        IdentifierDefinition::LoadedLocationWithParameterReference {
+                            source: self.ast.codemap().resolve_span(source),
+                            destination: self.ast.codemap().resolve_span(*span),
+                            path: path.node.clone(),
+                            name: name.node.clone(),
+                            parameter: parameter_name.to_owned(),
+                        }
+                    }
+                    None => IdentifierDefinition::LoadedLocation {
                         source: self.ast.codemap().resolve_span(source),
                         destination: self.ast.codemap().resolve_span(*span),
                         path: path.node.clone(),
                         name: name.node.clone(),
-                    }
-                }
-                Some((_, span)) => IdentifierDefinition::Location {
-                    source: self.ast.codemap().resolve_span(source),
-                    destination: self.ast.codemap().resolve_span(*span),
-                    name: name.to_owned(),
+                    },
+                },
+                Some((_, span)) => match parameter_name {
+                    Some(parameter_name) => IdentifierDefinition::LocationWithParameterReference {
+                        source: self.ast.codemap().resolve_span(source),
+                        destination: self.ast.codemap().resolve_span(*span),
+                        name: name.to_owned(),
+                        parameter: parameter_name.to_owned(),
+                    },
+                    None => IdentifierDefinition::Location {
+                        source: self.ast.codemap().resolve_span(source),
+                        destination: self.ast.codemap().resolve_span(*span),
+                        name: name.to_owned(),
+                    },
                 },
             },
             // If we could not find the symbol, see if the current position is within
@@ -425,11 +505,23 @@ impl LspModule {
                 destination,
                 path,
                 name,
-            } => IdentifierDefinition::LoadedLocation {
-                source: self.ast.codemap().resolve_span(source),
-                destination: self.ast.codemap().resolve_span(destination),
-                path: path.to_owned(),
-                name: name.to_owned(),
+                parameter_name,
+            } => match parameter_name {
+                Some(parameter_name) => {
+                    IdentifierDefinition::LoadedLocationWithParameterReference {
+                        source: self.ast.codemap().resolve_span(source),
+                        destination: self.ast.codemap().resolve_span(destination),
+                        path: path.to_owned(),
+                        name: name.to_owned(),
+                        parameter: parameter_name.to_owned(),
+                    }
+                }
+                None => IdentifierDefinition::LoadedLocation {
+                    source: self.ast.codemap().resolve_span(source),
+                    destination: self.ast.codemap().resolve_span(destination),
+                    path: path.to_owned(),
+                    name: name.to_owned(),
+                },
             },
         }
     }
@@ -620,7 +712,7 @@ pub(crate) mod helpers {
 
     use super::*;
 
-    /// Result of parsing a starlark fixture that has range markers in it. See `FixtureWithRanges::from_fixture`
+    /// Result of parsing a starlark fixture that has range markers in it. See [`FixtureWithRanges::from_fixture`]
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub(crate) struct FixtureWithRanges {
         filename: String,

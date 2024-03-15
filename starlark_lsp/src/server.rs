@@ -130,6 +130,7 @@ use crate::inspect::AutocompleteType;
 use crate::signature;
 use crate::symbols;
 use crate::symbols::find_symbols_at_location;
+use crate::symbols::MethodSymbolArgument;
 use crate::symbols::Symbol;
 use crate::symbols::SymbolKind;
 
@@ -650,6 +651,7 @@ impl<T: LspContext> Backend<T> {
         definition: IdentifierDefinition,
         source: ResolvedSpan,
         member: Option<&str>,
+        document: &LspModule,
         uri: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<Option<LocationLink>> {
@@ -658,6 +660,41 @@ impl<T: LspContext> Backend<T> {
                 destination: target,
                 ..
             } => Self::location_link(source, uri, target)?,
+            IdentifierDefinition::LocationWithParameterReference {
+                destination: target,
+                name,
+                parameter,
+                ..
+            } => {
+                // TODO: This seems very inefficient. Once the document starts
+                // holding the `Scope` including AST nodes, this indirection
+                // should be removed.
+                let location = find_symbols_at_location(
+                    document.ast.codemap(),
+                    document.ast.statement(),
+                    ResolvedPos {
+                        line: target.begin.line,
+                        column: target.begin.column,
+                    },
+                )
+                .remove(&name)
+                .and_then(|symbol| match symbol.kind {
+                    SymbolKind::Method { arguments } => arguments
+                        .iter()
+                        .find(|arg| arg.name == parameter)
+                        .or_else(|| arguments.iter().find(|arg| arg.is_kwargs))
+                        .and_then(|arg| arg.span),
+                    SymbolKind::Constant | SymbolKind::Variable => symbol.span,
+                });
+
+                Self::location_link(
+                    source,
+                    uri,
+                    location
+                        .map(|span| document.ast.codemap().resolve_span(span))
+                        .unwrap_or(target),
+                )?
+            }
             IdentifierDefinition::LoadedLocation {
                 destination: location,
                 path,
@@ -675,6 +712,37 @@ impl<T: LspContext> Backend<T> {
                     None => Self::location_link(source, uri, location)?,
                     Some(loaded_location) => {
                         Self::location_link(source, &load_uri, loaded_location)?
+                    }
+                }
+            }
+            IdentifierDefinition::LoadedLocationWithParameterReference {
+                destination: location,
+                path,
+                name,
+                parameter,
+                ..
+            } => {
+                assert!(member.is_none());
+
+                let load_uri = self.resolve_load_path(&path, uri, workspace_root)?;
+                let Some(ast) = self.get_ast_or_load_from_disk(&load_uri)? else {
+                    return Self::location_link(source, uri, location);
+                };
+
+                let resolved_symbol = ast.find_exported_symbol(&name);
+                let resolved_location: Option<ResolvedSpan> = resolved_symbol
+                    .and_then(|symbol| match symbol.kind {
+                        SymbolKind::Method { arguments } => Some(arguments),
+                        _ => None,
+                    })
+                    .and_then(|arguments| arguments.into_iter().find(|arg| arg.name == parameter))
+                    .and_then(|arg| arg.span)
+                    .map(|span| ast.ast.codemap().resolve_span(span));
+
+                match resolved_location {
+                    None => Self::location_link(source, uri, location)?,
+                    Some(resolved_location) => {
+                        Self::location_link(source, &load_uri, resolved_location)?
                     }
                 }
             }
@@ -769,6 +837,7 @@ impl<T: LspContext> Backend<T> {
                         definition,
                         source,
                         None,
+                        &ast,
                         &uri,
                         workspace_root.as_deref(),
                     )?,
@@ -798,6 +867,7 @@ impl<T: LspContext> Backend<T> {
                                 .expect("to have at least one component")
                                 .as_str(),
                         ),
+                        &ast,
                         &uri,
                         workspace_root.as_deref(),
                     )?,
@@ -1177,6 +1247,28 @@ impl<T: LspContext> Backend<T> {
                         })
                     })
             }),
+            IdentifierDefinition::LocationWithParameterReference {
+                source, parameter, ..
+            }
+            | IdentifierDefinition::LoadedLocationWithParameterReference {
+                source,
+                parameter,
+                ..
+            } => symbol.and_then(|symbol| match symbol.kind {
+                SymbolKind::Method { arguments } => arguments
+                    .iter()
+                    .find(|arg| arg.name == parameter)
+                    .or_else(|| arguments.iter().find(|arg| arg.is_kwargs))
+                    .and_then(|arg| {
+                        Some(Hover {
+                            contents: HoverContents::Array(vec![MarkedString::String(
+                                render_doc_param(arg.doc.as_ref()?),
+                            )]),
+                            range: Some(source.into()),
+                        })
+                    }),
+                _ => None,
+            }),
             IdentifierDefinition::LoadedLocation { source, .. } => {
                 // Symbol loaded from another file. Find the file and get the definition
                 // from there, hopefully including the docs.
@@ -1250,6 +1342,9 @@ impl<T: LspContext> Backend<T> {
         match identifier_definition {
             IdentifierDefinition::Location {
                 destination, name, ..
+            }
+            | IdentifierDefinition::LocationWithParameterReference {
+                destination, name, ..
             } => {
                 // TODO: This seems very inefficient. Once the document starts
                 // holding the `Scope` including AST nodes, this indirection
@@ -1264,7 +1359,8 @@ impl<T: LspContext> Backend<T> {
                 )
                 .remove(name))
             }
-            IdentifierDefinition::LoadedLocation { path, name, .. } => {
+            IdentifierDefinition::LoadedLocation { path, name, .. }
+            | IdentifierDefinition::LoadedLocationWithParameterReference { path, name, .. } => {
                 // Symbol loaded from another file. Find the file and get the definition
                 // from there, hopefully including the docs.
                 let load_uri = self.resolve_load_path(path, document_uri, workspace_root)?;
@@ -1286,14 +1382,33 @@ impl<T: LspContext> Backend<T> {
                                 kind: match &doc {
                                     DocMember::Property(_) => SymbolKind::Constant,
                                     DocMember::Function(doc) => SymbolKind::Method {
-                                        argument_names: doc
+                                        arguments: doc
                                             .params
                                             .iter()
                                             .filter_map(|param| match param {
-                                                DocParam::Arg { name, .. }
-                                                | DocParam::Args { name, .. }
-                                                | DocParam::Kwargs { name, .. } => {
-                                                    Some(name.clone())
+                                                DocParam::Arg { name, .. } => {
+                                                    Some(MethodSymbolArgument {
+                                                        name: name.clone(),
+                                                        doc: Some(param.clone()),
+                                                        span: None,
+                                                        is_kwargs: false,
+                                                    })
+                                                }
+                                                DocParam::Args { name, .. } => {
+                                                    Some(MethodSymbolArgument {
+                                                        name: name.clone(),
+                                                        doc: Some(param.clone()),
+                                                        span: None,
+                                                        is_kwargs: false,
+                                                    })
+                                                }
+                                                DocParam::Kwargs { name, .. } => {
+                                                    Some(MethodSymbolArgument {
+                                                        name: name.clone(),
+                                                        doc: Some(param.clone()),
+                                                        span: None,
+                                                        is_kwargs: true,
+                                                    })
                                                 }
                                                 DocParam::NoArgs | DocParam::OnlyPosBefore => None,
                                             })
@@ -1358,7 +1473,7 @@ impl<T: LspContext> Backend<T> {
                         workspace_root.as_deref(),
                     )? {
                         match symbol.kind {
-                            SymbolKind::Method { argument_names } => {
+                            SymbolKind::Method { arguments } => {
                                 let value = lsp_types::SignatureInformation {
                                     documentation: symbol.doc.as_ref().map(|doc| {
                                         Documentation::MarkupContent(MarkupContent {
@@ -1377,15 +1492,15 @@ impl<T: LspContext> Backend<T> {
                                             }).map(|doc| {
                                                 doc.params.iter().map(|param| param.render_as_code()).collect::<Vec<_>>().join(", ")
                                             })
-                                            .unwrap_or_else(|| argument_names.join(", ")),
+                                            .unwrap_or_else(|| arguments.iter().map(|arg| &arg.name).join(", ")),
                                     ),
                                     active_parameter: match call.current_argument {
                                         signature::CallArgument::Positional(i) => Some(i as u32),
-                                        signature::CallArgument::Named(name) => argument_names
+                                        signature::CallArgument::Named(name) => arguments
                                             .iter()
                                             .enumerate()
-                                            .find_map(|(i, arg_name)| {
-                                                if arg_name == &name {
+                                            .find_map(|(i, arg)| {
+                                                if arg.name == name {
                                                     Some(i as u32)
                                                 } else {
                                                     None
@@ -1394,9 +1509,9 @@ impl<T: LspContext> Backend<T> {
                                         signature::CallArgument::None => None,
                                     },
                                     parameters: Some(
-                                        argument_names
+                                        arguments
                                             .into_iter()
-                                            .map(|arg_name| ParameterInformation {
+                                            .map(|arg| ParameterInformation {
                                                 documentation: symbol.doc.as_ref().and_then(|doc| {
                                                     match doc {
                                                         DocMember::Property(_) => todo!(),
@@ -1408,7 +1523,7 @@ impl<T: LspContext> Backend<T> {
                                                                 DocParam::NoArgs | DocParam::OnlyPosBefore => return None,
                                                             };
 
-                                                            if param_name == &arg_name {
+                                                            if param_name == &arg.name {
                                                                 Some(Documentation::MarkupContent(MarkupContent {
                                                                     kind: MarkupKind::Markdown,
                                                                     value: render_doc_param(param),
@@ -1419,7 +1534,7 @@ impl<T: LspContext> Backend<T> {
                                                         }),
                                                     }
                                                 }),
-                                                label: ParameterLabel::Simple(arg_name),
+                                                label: ParameterLabel::Simple(arg.name),
                                             })
                                             .collect(),
                                     ),
