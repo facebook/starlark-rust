@@ -402,6 +402,7 @@ fn make_document_symbol(
 mod tests {
     use std::collections::HashMap;
 
+    use itertools::Itertools;
     use lsp_types::DocumentSymbol;
     use lsp_types::Position;
     use lsp_types::Range;
@@ -580,349 +581,51 @@ some_rule(name = "qux")
         )
         .unwrap();
 
+        fn format_document_symbol(symbol: DocumentSymbol, indent_level: usize) -> String {
+            use std::borrow::Cow;
+
+            let inner_indent = "  ".repeat(indent_level);
+            let outer_indent = "  ".repeat(indent_level - 1);
+            let children = match symbol.children {
+                Some(children) => Cow::Owned(format!(
+                    " [\n{}{}\n{}]",
+                    &inner_indent,
+                    children
+                        .into_iter()
+                        .map(|symbol| format_document_symbol(symbol, indent_level + 1))
+                        .join(&format!("\n{}", &inner_indent)),
+                    &outer_indent
+                )),
+                None => Cow::Borrowed(""),
+            };
+
+            format!("{:?} {}{children}", symbol.kind, symbol.name,)
+        }
+
+        let symbols = get_document_symbols(ast_module.codemap(), ast_module.statement())
+            .into_iter()
+            .map(|symbol| format_document_symbol(symbol, 1))
+            .join("\n");
+
         assert_eq!(
-            get_document_symbols(ast_module.codemap(), ast_module.statement()),
-            vec![
-                #[allow(deprecated)]
-                DocumentSymbol {
-                    name: "foo.star".to_owned(),
-                    detail: None,
-                    kind: LspSymbolKind::MODULE,
-                    tags: None,
-                    deprecated: None,
-                    range: Range {
-                        start: Position {
-                            line: 0,
-                            character: 0
-                        },
-                        end: Position {
-                            line: 0,
-                            character: 54
-                        }
-                    },
-                    selection_range: Range {
-                        start: Position {
-                            line: 0,
-                            character: 5
-                        },
-                        end: Position {
-                            line: 0,
-                            character: 15
-                        }
-                    },
-                    children: Some(vec![
-                        DocumentSymbol {
-                            name: "exported_a".to_owned(),
-                            detail: None,
-                            kind: LspSymbolKind::METHOD,
-                            tags: None,
-                            deprecated: None,
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 17
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 29
-                                }
-                            },
-                            selection_range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 17
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 29
-                                }
-                            },
-                            children: None
-                        },
-                        DocumentSymbol {
-                            name: "renamed".to_owned(),
-                            detail: None,
-                            kind: LspSymbolKind::METHOD,
-                            tags: None,
-                            deprecated: None,
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 31
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 53
-                                }
-                            },
-                            selection_range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 31
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 38
-                                }
-                            },
-                            children: None
-                        }
-                    ])
-                },
-                #[allow(deprecated)]
-                DocumentSymbol {
-                    name: "method".to_owned(),
-                    detail: None,
-                    kind: LspSymbolKind::FUNCTION,
-                    tags: None,
-                    deprecated: None,
-                    range: Range {
-                        start: Position {
-                            line: 2,
-                            character: 0
-                        },
-                        end: Position {
-                            line: 7,
-                            character: 0
-                        }
-                    },
-                    selection_range: Range {
-                        start: Position {
-                            line: 2,
-                            character: 4
-                        },
-                        end: Position {
-                            line: 2,
-                            character: 10
-                        }
-                    },
-                    children: Some(vec![
-                        DocumentSymbol {
-                            name: "param".to_owned(),
-                            detail: None,
-                            kind: LspSymbolKind::VARIABLE,
-                            tags: None,
-                            deprecated: None,
-                            range: Range {
-                                start: Position {
-                                    line: 2,
-                                    character: 11
-                                },
-                                end: Position {
-                                    line: 2,
-                                    character: 16
-                                }
-                            },
-                            selection_range: Range {
-                                start: Position {
-                                    line: 2,
-                                    character: 11
-                                },
-                                end: Position {
-                                    line: 2,
-                                    character: 16
-                                }
-                            },
-                            children: None
-                        },
-                        DocumentSymbol {
-                            name: "foo".to_owned(),
-                            detail: None,
-                            kind: LspSymbolKind::STRUCT,
-                            tags: None,
-                            deprecated: None,
-                            range: Range {
-                                start: Position {
-                                    line: 3,
-                                    character: 4
-                                },
-                                end: Position {
-                                    line: 3,
-                                    character: 33
-                                }
-                            },
-                            selection_range: Range {
-                                start: Position {
-                                    line: 3,
-                                    character: 4
-                                },
-                                end: Position {
-                                    line: 3,
-                                    character: 7
-                                }
-                            },
-                            children: Some(vec![DocumentSymbol {
-                                name: "field".to_owned(),
-                                detail: None,
-                                kind: LspSymbolKind::FIELD,
-                                tags: None,
-                                deprecated: None,
-                                range: Range {
-                                    start: Position {
-                                        line: 3,
-                                        character: 17
-                                    },
-                                    end: Position {
-                                        line: 3,
-                                        character: 32
-                                    }
-                                },
-                                selection_range: Range {
-                                    start: Position {
-                                        line: 3,
-                                        character: 17
-                                    },
-                                    end: Position {
-                                        line: 3,
-                                        character: 22
-                                    }
-                                },
-                                children: None
-                            }])
-                        },
-                        DocumentSymbol {
-                            name: "bar".to_owned(),
-                            detail: None,
-                            kind: LspSymbolKind::FUNCTION,
-                            tags: None,
-                            deprecated: None,
-                            range: Range {
-                                start: Position {
-                                    line: 4,
-                                    character: 10
-                                },
-                                end: Position {
-                                    line: 4,
-                                    character: 25
-                                }
-                            },
-                            selection_range: Range {
-                                start: Position {
-                                    line: 4,
-                                    character: 10
-                                },
-                                end: Position {
-                                    line: 4,
-                                    character: 25
-                                }
-                            },
-                            children: Some(vec![DocumentSymbol {
-                                name: "x".to_owned(),
-                                detail: None,
-                                kind: LspSymbolKind::VARIABLE,
-                                tags: None,
-                                deprecated: None,
-                                range: Range {
-                                    start: Position {
-                                        line: 4,
-                                        character: 17
-                                    },
-                                    end: Position {
-                                        line: 4,
-                                        character: 18
-                                    }
-                                },
-                                selection_range: Range {
-                                    start: Position {
-                                        line: 4,
-                                        character: 17
-                                    },
-                                    end: Position {
-                                        line: 4,
-                                        character: 18
-                                    }
-                                },
-                                children: None
-                            }])
-                        }
-                    ])
-                },
-                #[allow(deprecated)]
-                DocumentSymbol {
-                    name: "baz".to_owned(),
-                    detail: None,
-                    kind: LspSymbolKind::STRUCT,
-                    tags: None,
-                    deprecated: None,
-                    range: Range {
-                        start: Position {
-                            line: 7,
-                            character: 0
-                        },
-                        end: Position {
-                            line: 7,
-                            character: 29
-                        }
-                    },
-                    selection_range: Range {
-                        start: Position {
-                            line: 7,
-                            character: 0
-                        },
-                        end: Position {
-                            line: 7,
-                            character: 3
-                        }
-                    },
-                    children: Some(vec![DocumentSymbol {
-                        name: "field".to_owned(),
-                        detail: None,
-                        kind: LspSymbolKind::FIELD,
-                        tags: None,
-                        deprecated: None,
-                        range: Range {
-                            start: Position {
-                                line: 7,
-                                character: 13
-                            },
-                            end: Position {
-                                line: 7,
-                                character: 28
-                            }
-                        },
-                        selection_range: Range {
-                            start: Position {
-                                line: 7,
-                                character: 13
-                            },
-                            end: Position {
-                                line: 7,
-                                character: 18
-                            }
-                        },
-                        children: None
-                    }])
-                },
-                #[allow(deprecated)]
-                DocumentSymbol {
-                    name: "qux".to_owned(),
-                    detail: None,
-                    kind: LspSymbolKind::CONSTANT,
-                    tags: None,
-                    deprecated: None,
-                    range: Range {
-                        start: Position {
-                            line: 9,
-                            character: 0
-                        },
-                        end: Position {
-                            line: 9,
-                            character: 23
-                        }
-                    },
-                    selection_range: Range {
-                        start: Position {
-                            line: 9,
-                            character: 17
-                        },
-                        end: Position {
-                            line: 9,
-                            character: 22
-                        }
-                    },
-                    children: None
-                }
-            ]
-        )
+            symbols,
+            r##"Module foo.star [
+  Method exported_a
+  Method renamed
+]
+Function method [
+  Variable param
+  Struct foo [
+    Field field
+  ]
+  Function bar [
+    Variable x
+  ]
+]
+Struct baz [
+  Field field
+]
+Constant qux"##
+        );
     }
 }
