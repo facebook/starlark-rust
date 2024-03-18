@@ -343,10 +343,10 @@ impl<'a> RenderMarkdown for TypeRenderer<'a> {
                         DocParam::NoArgs => "*".to_owned(),
                         DocParam::OnlyPosBefore => "/".to_owned(),
                         DocParam::Args { typ, name, .. } => {
-                            format!("{}{}", name, raw_type_prefix(": ", typ))
+                            format!("*{}{}", name, raw_type_prefix(": ", typ))
                         }
                         DocParam::Kwargs { typ, name, .. } => {
-                            format!("{}{}", name, raw_type_prefix(": ", typ))
+                            format!("**{}{}", name, raw_type_prefix(": ", typ))
                         }
                     });
 

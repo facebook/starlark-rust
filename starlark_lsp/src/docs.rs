@@ -38,14 +38,27 @@ pub(crate) fn get_doc_item_for_def<P: AstPayload>(def: &DefP<P>) -> Option<DocFu
             .params
             .iter()
             .filter_map(|param| match &param.node {
-                ParameterP::Normal(p, _)
-                | ParameterP::WithDefaultValue(p, _, _)
-                | ParameterP::Args(p, _)
-                | ParameterP::KwArgs(p, _) => Some(DocParam::Arg {
+                ParameterP::Normal(p, _) => Some(DocParam::Arg {
                     name: p.ident.to_owned(),
                     docs: None,
                     typ: Ty::any(),
                     default_value: None,
+                }),
+                ParameterP::Args(p, _) => Some(DocParam::Args {
+                    name: p.ident.to_owned(),
+                    docs: None,
+                    typ: Ty::any(),
+                }),
+                ParameterP::KwArgs(p, _) => Some(DocParam::Kwargs {
+                    name: p.ident.to_owned(),
+                    docs: None,
+                    typ: Ty::any(),
+                }),
+                ParameterP::WithDefaultValue(p, _, _) => Some(DocParam::Arg {
+                    name: p.ident.to_owned(),
+                    docs: None,
+                    typ: Ty::any(),
+                    default_value: Some("_".to_owned()),
                 }),
                 _ => None,
             })

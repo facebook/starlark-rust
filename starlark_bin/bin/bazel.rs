@@ -141,6 +141,7 @@ pub(crate) fn main(
     prelude: &[PathBuf],
     dialect: Dialect,
     globals: Globals,
+    eager: bool,
 ) -> anyhow::Result<()> {
     if !lsp {
         return Err(anyhow::anyhow!("Bazel mode only supports `--lsp`"));
@@ -154,6 +155,7 @@ pub(crate) fn main(
         is_interactive,
         dialect,
         globals,
+        eager,
     )?;
 
     ctx.mode = ContextMode::Check;
@@ -173,6 +175,7 @@ pub(crate) struct BazelContext {
     pub(crate) globals: Globals,
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
     pub(crate) builtin_symbols: HashMap<String, LspUrl>,
+    pub(crate) eager: bool,
 }
 
 impl BazelContext {
@@ -187,6 +190,7 @@ impl BazelContext {
         module: bool,
         dialect: Dialect,
         globals: Globals,
+        eager: bool,
     ) -> anyhow::Result<Self> {
         let prelude: Vec<_> = prelude
             .iter()
@@ -263,6 +267,7 @@ impl BazelContext {
             }),
             external_output_base: output_base
                 .map(|output_base| PathBuf::from(output_base).join("external")),
+            eager,
         })
     }
 
@@ -885,5 +890,9 @@ impl LspContext for BazelContext {
         }
 
         Ok(names)
+    }
+
+    fn is_eager(&self) -> bool {
+        self.eager
     }
 }

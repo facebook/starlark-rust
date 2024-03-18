@@ -30,6 +30,7 @@ mod exported;
 pub(crate) mod inspect;
 pub(crate) mod loaded;
 pub mod server;
+pub(crate) mod signature;
 mod symbols;
 #[cfg(all(test, not(windows)))]
 mod test;

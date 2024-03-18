@@ -509,14 +509,21 @@ impl DocFunction {
                     Some(args) => {
                         let entries = Self::parse_params(kind, args);
                         for x in &mut params {
-                            match x {
-                                DocParam::Arg { name, docs, .. }
-                                | DocParam::Args { name, docs, .. }
-                                | DocParam::Kwargs { name, docs, .. } => match entries.get(name) {
-                                    Some(raw) => *docs = DocString::from_docstring(kind, raw),
-                                    _ => (),
-                                },
-                                _ => (),
+                            if let Some((docs, raw)) = match x {
+                                DocParam::Arg { name, docs, .. } => {
+                                    entries.get(name).map(|raw| (docs, raw))
+                                }
+                                DocParam::Args { name, docs, .. } => entries
+                                    .get(name)
+                                    .or_else(|| entries.get(&format!("*{}", name)))
+                                    .map(|raw| (docs, raw)),
+                                DocParam::Kwargs { name, docs, .. } => entries
+                                    .get(name)
+                                    .or_else(|| entries.get(&format!("**{}", name)))
+                                    .map(|raw| (docs, raw)),
+                                _ => None,
+                            } {
+                                *docs = DocString::from_docstring(kind, raw);
                             }
                         }
                     }
@@ -647,7 +654,7 @@ impl DocParam {
         Some(indented)
     }
 
-    fn render_as_code(&self) -> String {
+    pub fn render_as_code(&self) -> String {
         match self {
             DocParam::Arg {
                 name,
@@ -662,9 +669,13 @@ impl DocParam {
             },
             DocParam::NoArgs => "*".to_owned(),
             DocParam::OnlyPosBefore => "/".to_owned(),
-            DocParam::Args { name, typ, .. } | DocParam::Kwargs { name, typ, .. } => match typ {
-                t if t.is_any() => name.clone(),
-                typ => format!("{}: {}", name, typ),
+            DocParam::Args { name, typ, .. } => match typ {
+                t if t.is_any() => format!("*{}", name),
+                typ => format!("*{}: {}", name, typ),
+            },
+            DocParam::Kwargs { name, typ, .. } => match typ {
+                t if t.is_any() => format!("**{}", name),
+                typ => format!("**{}: {}", name, typ),
             },
         }
     }

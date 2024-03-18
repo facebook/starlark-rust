@@ -20,6 +20,8 @@ use std::collections::HashMap;
 use starlark::codemap::Pos;
 use starlark::codemap::Span;
 use starlark::syntax::AstModule;
+use starlark_syntax::syntax::ast::Argument;
+use starlark_syntax::syntax::ast::ArgumentP;
 use starlark_syntax::syntax::ast::AssignIdentP;
 use starlark_syntax::syntax::ast::AssignP;
 use starlark_syntax::syntax::ast::AstAssignIdent;
@@ -33,6 +35,7 @@ use starlark_syntax::syntax::ast::AstTypeExpr;
 use starlark_syntax::syntax::ast::Clause;
 use starlark_syntax::syntax::ast::DefP;
 use starlark_syntax::syntax::ast::Expr;
+use starlark_syntax::syntax::ast::ExprP;
 use starlark_syntax::syntax::ast::ForClause;
 use starlark_syntax::syntax::ast::ForP;
 use starlark_syntax::syntax::ast::IdentP;
@@ -43,21 +46,35 @@ use starlark_syntax::syntax::module::AstModuleFields;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum Assigner {
     /// Obtained from `load`. `name` is the symbol in that file, not necessarily the local name
-    Load {
-        path: AstString,
-        name: AstString,
-    },
-    Argument, // From a function argument
-    Assign,   // From an assignment
+    Load { path: AstString, name: AstString },
+    /// From a function call argument
+    Argument,
+    /// From an assignment
+    Assign,
 }
 
 #[derive(Debug)]
 pub(crate) enum Bind {
-    Set(Assigner, AstAssignIdent), // Variable assigned to directly
-    Get(AstIdent),                 // Variable that is referenced
-    GetDotted(GetDotted),          // Variable is referenced, but is part of a dotted access
-    Flow,         // Flow control occurs here (if, for etc) - can arrive or leave at this point
-    Scope(Scope), // Entering a new scope (lambda/def/comprehension)
+    /// Variable assigned to directly
+    Set(Assigner, AstAssignIdent),
+    /// Variable that is referenced
+    Get(AstIdent),
+    /// Variable is referenced, but is part of a dotted access
+    GetDotted(GetDotted),
+    /// An indirect reference, i.e. a named argument in a function call
+    IndirectReference(IndirectReference),
+    /// Flow control occurs here (if, for etc) - can arrive or leave at this point
+    Flow,
+    /// Entering a new scope (lambda/def/comprehension)
+    Scope(Scope),
+}
+
+#[derive(Debug)]
+pub(crate) struct IndirectReference {
+    pub(crate) argument_name: AstString,
+    // TODO: This could also be a dotted access, another function call, etc. These kinds of
+    // references are not captured at the moment.
+    pub(crate) function: AstIdent,
 }
 
 /// A 'get' bind that was part of a dotted member access pattern.
@@ -123,7 +140,7 @@ impl Scope {
                 Bind::Scope(scope) => scope.free.iter().for_each(|(k, v)| {
                     free.entry(k.clone()).or_insert(*v);
                 }),
-                Bind::Flow => {}
+                Bind::IndirectReference(_) | Bind::Flow => {}
             }
         }
         for x in bound.keys() {
@@ -183,10 +200,19 @@ fn dot_access<'a>(lhs: &'a AstExpr, attribute: &'a AstString, res: &mut Vec<Bind
                 attributes.push(attribute);
                 f(lhs, attributes, res);
             }
-            Expr::Call(name, parameters) => {
-                f(name, attributes, res);
-                // make sure that if someone does a(b).c, 'b' is bound and considered used.
+            Expr::Call(func_name, parameters) => {
+                f(func_name, attributes, res);
                 for parameter in parameters {
+                    if let ExprP::Identifier(func_name) = &func_name.node {
+                        if let ArgumentP::Named(arg_name, _) = &parameter.node {
+                            res.push(Bind::IndirectReference(IndirectReference {
+                                argument_name: arg_name.clone(),
+                                function: func_name.clone(),
+                            }))
+                        }
+                    }
+
+                    // make sure that if someone does a(b).c, 'b' is bound and considered used.
                     expr(parameter.expr(), res);
                 }
             }
@@ -221,6 +247,24 @@ fn expr(x: &AstExpr, res: &mut Vec<Bind>) {
             expr(&x.0, res);
             expr(&x.1, res)
         }),
+        Expr::Call(func, args) => {
+            expr(func, res);
+            for x in args {
+                if let ExprP::Identifier(function_ident) = &func.node {
+                    match &**x {
+                        Argument::Named(name, value) => {
+                            res.push(Bind::IndirectReference(IndirectReference {
+                                argument_name: name.clone(),
+                                function: function_ident.clone(),
+                            }));
+                            expr(value, res);
+                        }
+                        _ => expr(x.expr(), res),
+                    }
+                }
+                expr(x.expr(), res)
+            }
+        }
 
         // Uninteresting - just recurse
         _ => x.visit_expr(|x| expr(x, res)),
