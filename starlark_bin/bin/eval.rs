@@ -70,6 +70,7 @@ pub(crate) struct Context {
     pub(crate) globals: Globals,
     pub(crate) builtin_docs: HashMap<LspUrl, String>,
     pub(crate) builtin_symbols: HashMap<String, LspUrl>,
+    pub(crate) eager: bool,
 }
 
 /// The outcome of evaluating (checking, parsing or running) given starlark code.
@@ -101,6 +102,7 @@ impl Context {
         module: bool,
         dialect: Dialect,
         globals: Globals,
+        eager: bool,
     ) -> anyhow::Result<Self> {
         let prelude: Vec<_> = prelude
             .iter()
@@ -143,6 +145,7 @@ impl Context {
             globals,
             builtin_docs,
             builtin_symbols,
+            eager,
         })
     }
 
@@ -378,5 +381,9 @@ impl LspContext for Context {
 
     fn get_environment(&self, _uri: &LspUrl) -> DocModule {
         DocModule::default()
+    }
+
+    fn is_eager(&self) -> bool {
+        self.eager
     }
 }
