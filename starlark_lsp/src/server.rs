@@ -39,22 +39,31 @@ use lsp_server::Response;
 use lsp_server::ResponseError;
 use lsp_types::notification::DidChangeTextDocument;
 use lsp_types::notification::DidCloseTextDocument;
+use lsp_types::notification::DidCreateFiles;
+use lsp_types::notification::DidDeleteFiles;
 use lsp_types::notification::DidOpenTextDocument;
+use lsp_types::notification::DidRenameFiles;
 use lsp_types::notification::LogMessage;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::Completion;
+use lsp_types::request::DocumentSymbolRequest;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
+use lsp_types::request::SignatureHelpRequest;
+use lsp_types::request::WorkspaceSymbolRequest;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::CompletionOptions;
 use lsp_types::CompletionParams;
 use lsp_types::CompletionResponse;
 use lsp_types::DefinitionOptions;
+use lsp_types::DeleteFilesParams;
 use lsp_types::Diagnostic;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
+use lsp_types::DocumentSymbolParams;
+use lsp_types::DocumentSymbolResponse;
 use lsp_types::Documentation;
 use lsp_types::GotoDefinitionParams;
 use lsp_types::GotoDefinitionResponse;
@@ -64,6 +73,7 @@ use lsp_types::HoverParams;
 use lsp_types::HoverProviderCapability;
 use lsp_types::InitializeParams;
 use lsp_types::LanguageString;
+use lsp_types::Location;
 use lsp_types::LocationLink;
 use lsp_types::LogMessageParams;
 use lsp_types::MarkedString;
@@ -71,16 +81,25 @@ use lsp_types::MarkupContent;
 use lsp_types::MarkupKind;
 use lsp_types::MessageType;
 use lsp_types::OneOf;
+use lsp_types::ParameterInformation;
+use lsp_types::ParameterLabel;
 use lsp_types::Position;
 use lsp_types::PublishDiagnosticsParams;
 use lsp_types::Range;
+use lsp_types::RenameFilesParams;
 use lsp_types::ServerCapabilities;
+use lsp_types::SignatureHelp;
+use lsp_types::SignatureHelpOptions;
+use lsp_types::SignatureHelpParams;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
 use lsp_types::TextEdit;
 use lsp_types::Url;
 use lsp_types::WorkDoneProgressOptions;
 use lsp_types::WorkspaceFolder;
+use lsp_types::WorkspaceSymbol;
+use lsp_types::WorkspaceSymbolParams;
+use lsp_types::WorkspaceSymbolResponse;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -93,6 +112,7 @@ use starlark::docs::markdown::render_doc_member;
 use starlark::docs::markdown::render_doc_param;
 use starlark::docs::DocMember;
 use starlark::docs::DocModule;
+use starlark::docs::DocParam;
 use starlark::syntax::AstModule;
 use starlark_syntax::codemap::ResolvedPos;
 use starlark_syntax::syntax::ast::AstPayload;
@@ -107,7 +127,11 @@ use crate::definition::IdentifierDefinition;
 use crate::definition::LspModule;
 use crate::inspect::AstModuleInspect;
 use crate::inspect::AutocompleteType;
+use crate::signature;
+use crate::symbols;
 use crate::symbols::find_symbols_at_location;
+use crate::symbols::Symbol;
+use crate::symbols::SymbolKind;
 
 /// The request to get the file contents for a starlark: URI
 struct StarlarkFileContentsRequest {}
@@ -367,6 +391,11 @@ pub trait LspContext {
         let _unused = (document_uri, kind, current_value, workspace_root);
         Ok(Vec::new())
     }
+
+    /// Should the LSP eagerly load all files in the workspace? Otherwise, only files that are
+    /// opened will be parsed. This can be useful for large workspaces, but eager loading
+    /// adds support for workspace symbols, etc.
+    fn is_eager(&self) -> bool;
 }
 
 /// Errors when [`LspContext::resolve_load()`] cannot resolve a given path.
@@ -395,7 +424,7 @@ pub(crate) struct Backend<T: LspContext> {
 
 /// The logic implementations of stuff
 impl<T: LspContext> Backend<T> {
-    fn server_capabilities(settings: LspServerSettings) -> ServerCapabilities {
+    fn server_capabilities(context: &T, settings: LspServerSettings) -> ServerCapabilities {
         let definition_provider = settings.enable_goto_definition.then_some({
             OneOf::Right(DefinitionOptions {
                 work_done_progress_options: WorkDoneProgressOptions {
@@ -408,6 +437,19 @@ impl<T: LspContext> Backend<T> {
             definition_provider,
             completion_provider: Some(CompletionOptions::default()),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            document_symbol_provider: Some(OneOf::Left(true)),
+            signature_help_provider: Some(SignatureHelpOptions {
+                trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+                retrigger_characters: Some(vec![",".to_string()]),
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
+            }),
+            workspace_symbol_provider: if context.is_eager() {
+                Some(OneOf::Left(true))
+            } else {
+                None
+            },
             ..ServerCapabilities::default()
         }
     }
@@ -431,9 +473,8 @@ impl<T: LspContext> Backend<T> {
         Ok(module)
     }
 
-    fn validate(&self, uri: Url, version: Option<i64>, text: String) -> anyhow::Result<()> {
-        let uri = uri.try_into()?;
-        let eval_result = self.context.parse_file_with_contents(&uri, text);
+    fn validate(&self, uri: &LspUrl, version: Option<i64>, text: String) -> anyhow::Result<()> {
+        let eval_result = self.context.parse_file_with_contents(uri, text);
         if let Some(ast) = eval_result.ast {
             let module = Arc::new(LspModule::new(ast));
             let mut last_valid_parse = self.last_valid_parse.write().unwrap();
@@ -444,8 +485,9 @@ impl<T: LspContext> Backend<T> {
     }
 
     fn did_open(&self, params: DidOpenTextDocumentParams) -> anyhow::Result<()> {
+        let uri = params.text_document.uri.try_into()?;
         self.validate(
-            params.text_document.uri,
+            &uri,
             Some(params.text_document.version as i64),
             params.text_document.text,
         )
@@ -454,19 +496,47 @@ impl<T: LspContext> Backend<T> {
     fn did_change(&self, params: DidChangeTextDocumentParams) -> anyhow::Result<()> {
         // We asked for Sync full, so can just grab all the text from params
         let change = params.content_changes.into_iter().next().unwrap();
-        self.validate(
-            params.text_document.uri,
-            Some(params.text_document.version as i64),
-            change.text,
-        )
+        let uri = params.text_document.uri.try_into()?;
+        self.validate(&uri, Some(params.text_document.version as i64), change.text)
     }
 
     fn did_close(&self, params: DidCloseTextDocumentParams) -> anyhow::Result<()> {
+        // If in eager mode, don't remove the file from the `last_valid_parse`.
+        if self.context.is_eager() {
+            return Ok(());
+        }
+
         {
             let mut last_valid_parse = self.last_valid_parse.write().unwrap();
             last_valid_parse.remove(&params.text_document.uri.clone().try_into()?);
         }
         self.publish_diagnostics(params.text_document.uri, Vec::new(), None);
+        Ok(())
+    }
+
+    fn did_rename(&self, params: RenameFilesParams) -> anyhow::Result<()> {
+        let mut last_valid_parse = self.last_valid_parse.write().unwrap();
+        for file in params.files {
+            let old_uri = Url::parse(&file.old_uri).unwrap();
+            let old_uri = old_uri.try_into()?;
+            let new_uri = Url::parse(&file.new_uri).unwrap();
+            let new_uri = new_uri.try_into()?;
+
+            if let Some(ast) = last_valid_parse.remove(&old_uri) {
+                last_valid_parse.insert(new_uri, ast);
+            }
+        }
+        Ok(())
+    }
+
+    fn did_delete(&self, params: DeleteFilesParams) -> anyhow::Result<()> {
+        let mut last_valid_parse = self.last_valid_parse.write().unwrap();
+        for file in params.files {
+            let uri = Url::parse(&file.uri).unwrap();
+            let uri = uri.try_into()?;
+            last_valid_parse.remove(&uri);
+            self.publish_diagnostics(uri.try_into()?, Vec::new(), None);
+        }
         Ok(())
     }
 
@@ -504,6 +574,29 @@ impl<T: LspContext> Backend<T> {
     /// Offers hover information for the symbol at the current cursor.
     fn hover(&self, id: RequestId, params: HoverParams, initialize_params: &InitializeParams) {
         self.send_response(new_response(id, self.hover_info(params, initialize_params)));
+    }
+
+    fn signature_help(
+        &self,
+        id: RequestId,
+        params: SignatureHelpParams,
+        initialize_params: &InitializeParams,
+    ) {
+        self.send_response(new_response(
+            id,
+            self.signature_help_info(params, initialize_params),
+        ));
+    }
+
+    /// Offer an overview of symbols in the current document.
+    fn document_symbols(&self, id: RequestId, params: DocumentSymbolParams) {
+        self.send_response(new_response(id, self.get_document_symbols(params)));
+    }
+
+    /// Offer an overview of all symbols in the current workspace.
+    /// Only supported in eager mode.
+    fn workspace_symbols(&self, id: RequestId, params: WorkspaceSymbolParams) {
+        self.send_response(new_response(id, self.get_workspace_symbols(params)));
     }
 
     /// Get the file contents of a starlark: URI.
@@ -1058,57 +1151,52 @@ impl<T: LspContext> Backend<T> {
         document_uri: &LspUrl,
         workspace_root: Option<&Path>,
     ) -> anyhow::Result<Option<Hover>> {
+        let symbol = self.get_symbol_for_identifier_definition(
+            &identifier_definition,
+            document,
+            document_uri,
+            workspace_root,
+        )?;
+
         Ok(match identifier_definition {
-            IdentifierDefinition::Location {
-                destination,
-                name,
-                source,
-            } => {
-                // TODO: This seems very inefficient. Once the document starts
-                // holding the `Scope` including AST nodes, this indirection
-                // should be removed.
-                find_symbols_at_location(
-                    document.ast.codemap(),
-                    document.ast.statement(),
-                    ResolvedPos {
-                        line: destination.begin.line,
-                        column: destination.begin.column,
-                    },
-                )
-                .remove(&name)
-                .and_then(|symbol| {
-                    symbol
-                        .doc
-                        .map(|docs| Hover {
+            IdentifierDefinition::Location { source, .. } => symbol.and_then(|symbol| {
+                symbol
+                    .doc
+                    .map(|docs| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_item(&symbol.name, &docs.to_doc_item()),
+                        )]),
+                        range: Some(source.into()),
+                    })
+                    .or_else(|| {
+                        symbol.param.map(|docs| Hover {
                             contents: HoverContents::Array(vec![MarkedString::String(
-                                render_doc_item(&symbol.name, &docs),
+                                render_doc_param(&docs),
                             )]),
                             range: Some(source.into()),
                         })
-                        .or_else(|| {
-                            symbol.param.map(|docs| Hover {
-                                contents: HoverContents::Array(vec![MarkedString::String(
-                                    render_doc_param(&docs),
-                                )]),
-                                range: Some(source.into()),
-                            })
-                        })
-                })
-            }
-            IdentifierDefinition::LoadedLocation {
-                path, name, source, ..
-            } => {
+                    })
+            }),
+            IdentifierDefinition::LoadedLocation { source, .. } => {
                 // Symbol loaded from another file. Find the file and get the definition
                 // from there, hopefully including the docs.
-                let load_uri = self.resolve_load_path(&path, document_uri, workspace_root)?;
-                self.get_ast_or_load_from_disk(&load_uri)?.and_then(|ast| {
-                    ast.find_exported_symbol(&name).and_then(|symbol| {
-                        symbol.docs.map(|docs| Hover {
-                            contents: HoverContents::Array(vec![MarkedString::String(
-                                render_doc_item(&symbol.name, &docs),
-                            )]),
-                            range: Some(source.into()),
-                        })
+                symbol.and_then(|symbol| {
+                    symbol.doc.map(|docs| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_item(&symbol.name, &docs.to_doc_item()),
+                        )]),
+                        range: Some(source.into()),
+                    })
+                })
+            }
+            IdentifierDefinition::Unresolved { source, .. } => {
+                // Try to resolve as a global symbol.
+                symbol.and_then(|symbol| {
+                    symbol.doc.map(|doc| Hover {
+                        contents: HoverContents::Array(vec![MarkedString::String(
+                            render_doc_member(&symbol.name, &doc),
+                        )]),
+                        range: Some(source.into()),
                     })
                 })
             }
@@ -1148,22 +1236,284 @@ impl<T: LspContext> Backend<T> {
                     _ => None,
                 }
             }
-            IdentifierDefinition::Unresolved { source, name } => {
+            IdentifierDefinition::LoadPath { .. } | IdentifierDefinition::NotFound => None,
+        })
+    }
+
+    fn get_symbol_for_identifier_definition(
+        &self,
+        identifier_definition: &IdentifierDefinition,
+        document: &LspModule,
+        document_uri: &LspUrl,
+        workspace_root: Option<&Path>,
+    ) -> anyhow::Result<Option<Symbol>> {
+        match identifier_definition {
+            IdentifierDefinition::Location {
+                destination, name, ..
+            } => {
+                // TODO: This seems very inefficient. Once the document starts
+                // holding the `Scope` including AST nodes, this indirection
+                // should be removed.
+                Ok(find_symbols_at_location(
+                    document.ast.codemap(),
+                    document.ast.statement(),
+                    ResolvedPos {
+                        line: destination.begin.line,
+                        column: destination.begin.column,
+                    },
+                )
+                .remove(name))
+            }
+            IdentifierDefinition::LoadedLocation { path, name, .. } => {
+                // Symbol loaded from another file. Find the file and get the definition
+                // from there, hopefully including the docs.
+                let load_uri = self.resolve_load_path(path, document_uri, workspace_root)?;
+                Ok(self
+                    .get_ast_or_load_from_disk(&load_uri)?
+                    .and_then(|ast| ast.find_exported_symbol(name)))
+            }
+            IdentifierDefinition::Unresolved { name, .. } => {
                 // Try to resolve as a global symbol.
-                self.context
+                Ok(self
+                    .context
                     .get_environment(document_uri)
                     .members
                     .into_iter()
-                    .find(|symbol| symbol.0 == name)
-                    .map(|symbol| Hover {
-                        contents: HoverContents::Array(vec![MarkedString::String(
-                            render_doc_member(&symbol.0, &symbol.1),
-                        )]),
-                        range: Some(source.into()),
-                    })
+                    .find_map(|(symbol_name, doc)| {
+                        if &symbol_name == name {
+                            Some(Symbol {
+                                name: symbol_name,
+                                kind: match &doc {
+                                    DocMember::Property(_) => SymbolKind::Constant,
+                                    DocMember::Function(doc) => SymbolKind::Method {
+                                        argument_names: doc
+                                            .params
+                                            .iter()
+                                            .filter_map(|param| match param {
+                                                DocParam::Arg { name, .. }
+                                                | DocParam::Args { name, .. }
+                                                | DocParam::Kwargs { name, .. } => {
+                                                    Some(name.clone())
+                                                }
+                                                DocParam::NoArgs | DocParam::OnlyPosBefore => None,
+                                            })
+                                            .collect(),
+                                    },
+                                },
+                                doc: Some(doc),
+                                param: None,
+                                span: None,
+                                detail: None,
+                            })
+                        } else {
+                            None
+                        }
+                    }))
             }
-            IdentifierDefinition::LoadPath { .. } | IdentifierDefinition::NotFound => None,
+            IdentifierDefinition::StringLiteral { .. }
+            | IdentifierDefinition::LoadPath { .. }
+            | IdentifierDefinition::NotFound => Ok(None),
+        }
+    }
+
+    fn signature_help_info(
+        &self,
+        params: SignatureHelpParams,
+        initialize_params: &InitializeParams,
+    ) -> anyhow::Result<SignatureHelp> {
+        let uri = params
+            .text_document_position_params
+            .text_document
+            .uri
+            .try_into()?;
+        let line = params.text_document_position_params.position.line;
+        let character = params.text_document_position_params.position.character;
+        let workspace_root =
+            Self::get_workspace_root(initialize_params.workspace_folders.as_ref(), &uri);
+
+        Ok(match self.get_ast(&uri) {
+            Some(ast) => {
+                let calls = signature::function_signatures(&ast, line, character)?;
+                let mut signatures = Vec::new();
+                let mut active_signature = None;
+                let mut active_parameter = None;
+
+                for call in calls {
+                    // Look up the function definition
+                    let definition = ast.find_definition_at_location(
+                        call.function_span.begin.line as u32,
+                        call.function_span.begin.column as u32,
+                    );
+                    let identifier_definition = match definition {
+                        Definition::Identifier(i) => i,
+                        Definition::Dotted(DottedDefinition {
+                            root_definition_location,
+                            ..
+                        }) => root_definition_location,
+                    };
+                    if let Some(symbol) = self.get_symbol_for_identifier_definition(
+                        &identifier_definition,
+                        &ast,
+                        &uri,
+                        workspace_root.as_deref(),
+                    )? {
+                        match symbol.kind {
+                            SymbolKind::Method { argument_names } => {
+                                let value = lsp_types::SignatureInformation {
+                                    documentation: symbol.doc.as_ref().map(|doc| {
+                                        Documentation::MarkupContent(MarkupContent {
+                                            kind: MarkupKind::Markdown,
+                                            value: render_doc_member(&symbol.name, doc),
+                                        })
+                                    }),
+                                    label: format!(
+                                        "{}({})",
+                                        symbol.name,
+                                        symbol.doc
+                                            .as_ref()
+                                            .and_then(|doc| match doc {
+                                                DocMember::Property(_) => None,
+                                                DocMember::Function(func_doc) => Some(func_doc),
+                                            }).map(|doc| {
+                                                doc.params.iter().map(|param| param.render_as_code()).collect::<Vec<_>>().join(", ")
+                                            })
+                                            .unwrap_or_else(|| argument_names.join(", ")),
+                                    ),
+                                    active_parameter: match call.current_argument {
+                                        signature::CallArgument::Positional(i) => Some(i as u32),
+                                        signature::CallArgument::Named(name) => argument_names
+                                            .iter()
+                                            .enumerate()
+                                            .find_map(|(i, arg_name)| {
+                                                if arg_name == &name {
+                                                    Some(i as u32)
+                                                } else {
+                                                    None
+                                                }
+                                            }),
+                                        signature::CallArgument::None => None,
+                                    },
+                                    parameters: Some(
+                                        argument_names
+                                            .into_iter()
+                                            .map(|arg_name| ParameterInformation {
+                                                documentation: symbol.doc.as_ref().and_then(|doc| {
+                                                    match doc {
+                                                        DocMember::Property(_) => todo!(),
+                                                        DocMember::Function(func) => func.params.iter().find_map(|param| {
+                                                            let param_name = match param {
+                                                                DocParam::Arg { name , .. } => name,
+                                                                DocParam::Args { name, .. } => name,
+                                                                DocParam::Kwargs { name, .. } => name,
+                                                                DocParam::NoArgs | DocParam::OnlyPosBefore => return None,
+                                                            };
+
+                                                            if param_name == &arg_name {
+                                                                Some(Documentation::MarkupContent(MarkupContent {
+                                                                    kind: MarkupKind::Markdown,
+                                                                    value: render_doc_param(param),
+                                                                }))
+                                                            } else {
+                                                                None
+                                                            }
+                                                        }),
+                                                    }
+                                                }),
+                                                label: ParameterLabel::Simple(arg_name),
+                                            })
+                                            .collect(),
+                                    ),
+                                };
+                                active_parameter = value.active_parameter;
+                                signatures.push(value);
+
+                                active_signature = Some(signatures.len() as u32 - 1);
+                            }
+                            SymbolKind::Constant | SymbolKind::Variable => {
+                                // That's weird, innit?
+                            }
+                        }
+                    }
+                }
+
+                SignatureHelp {
+                    signatures,
+                    active_signature,
+                    active_parameter,
+                }
+            }
+            None => SignatureHelp {
+                signatures: vec![],
+                active_signature: None,
+                active_parameter: None,
+            },
         })
+    }
+
+    fn get_document_symbols(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> anyhow::Result<DocumentSymbolResponse> {
+        let uri = params.text_document.uri.try_into()?;
+
+        let document = match self.get_ast(&uri) {
+            Some(document) => document,
+            None => return Ok(DocumentSymbolResponse::Nested(vec![])),
+        };
+
+        let result = symbols::get_document_symbols(
+            document.ast.codemap(),
+            document.ast.statement(),
+            symbols::DocumentSymbolMode::IncludeLoads,
+        );
+
+        Ok(result.into())
+    }
+
+    fn get_workspace_symbols(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> anyhow::Result<WorkspaceSymbolResponse> {
+        let query = &params.query.to_lowercase();
+
+        let symbols = self
+            .last_valid_parse
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|(uri, document)| {
+                let uri: Url = uri.try_into().unwrap();
+
+                symbols::get_document_symbols(
+                    document.ast.codemap(),
+                    document.ast.statement(),
+                    symbols::DocumentSymbolMode::OmitLoads,
+                )
+                .into_iter()
+                .filter_map(move |symbol| {
+                    if !query.is_empty() && !symbol.name.to_lowercase().contains(query) {
+                        return None;
+                    }
+
+                    let location = Location {
+                        uri: uri.clone(),
+                        range: symbol.range,
+                    };
+
+                    Some(WorkspaceSymbol {
+                        name: symbol.name,
+                        kind: symbol.kind,
+                        location: OneOf::Left(location),
+                        container_name: None,
+                        tags: None,
+                        // TODO?
+                        data: None,
+                    })
+                })
+            })
+            .collect();
+
+        Ok(WorkspaceSymbolResponse::Nested(symbols))
     }
 
     fn get_workspace_root(
@@ -1210,6 +1560,7 @@ impl<T: LspContext> Backend<T> {
 
     fn main_loop(&self, initialize_params: InitializeParams) -> anyhow::Result<()> {
         self.log_message(MessageType::INFO, "Starlark server initialised");
+        self.preload_workspace(&initialize_params);
         for msg in &self.connection.receiver {
             match msg {
                 Message::Request(req) => {
@@ -1223,6 +1574,12 @@ impl<T: LspContext> Backend<T> {
                         self.completion(req.id, params, &initialize_params);
                     } else if let Some(params) = as_request::<HoverRequest>(&req) {
                         self.hover(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<SignatureHelpRequest>(&req) {
+                        self.signature_help(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<DocumentSymbolRequest>(&req) {
+                        self.document_symbols(req.id, params);
+                    } else if let Some(params) = as_request::<WorkspaceSymbolRequest>(&req) {
+                        self.workspace_symbols(req.id, params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }
@@ -1235,6 +1592,20 @@ impl<T: LspContext> Backend<T> {
                         self.did_change(params)?;
                     } else if let Some(params) = as_notification::<DidCloseTextDocument>(&x) {
                         self.did_close(params)?;
+                    } else if let Some(params) = as_notification::<DidCreateFiles>(&x) {
+                        if self.context.is_eager() {
+                            for file in params.files {
+                                let url = Url::parse(&file.uri).unwrap();
+                                let path = url.to_file_path().ok();
+                                if let Some(path) = path {
+                                    self.preload_file_if_relevant(&LspUrl::File(path))?;
+                                }
+                            }
+                        }
+                    } else if let Some(params) = as_notification::<DidDeleteFiles>(&x) {
+                        self.did_delete(params)?;
+                    } else if let Some(params) = as_notification::<DidRenameFiles>(&x) {
+                        self.did_rename(params)?;
                     }
                 }
                 Message::Response(_) => {
@@ -1242,6 +1613,90 @@ impl<T: LspContext> Backend<T> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn preload_workspace(&self, initialize_params: &InitializeParams) {
+        if !self.context.is_eager() {
+            return;
+        }
+
+        // Figure out the roots to crawl from
+        let workspace_roots: Vec<_> =
+            if let Some(workspace_folders) = initialize_params.workspace_folders.as_ref() {
+                workspace_folders
+                    .iter()
+                    .filter_map(|folder| folder.uri.to_file_path().ok())
+                    .collect()
+            } else if let Some(root_uri) = initialize_params.root_uri.as_ref() {
+                root_uri.to_file_path().ok().into_iter().collect()
+            } else {
+                #[allow(deprecated)]
+                initialize_params
+                    .root_path
+                    .as_ref()
+                    .map(PathBuf::from)
+                    .into_iter()
+                    .collect()
+            };
+
+        for root in workspace_roots {
+            if let Err(e) = self.preload_directory(&root) {
+                self.log_message(
+                    MessageType::WARNING,
+                    &format!("Error preloading workspace: {:#}", e),
+                );
+            }
+        }
+    }
+
+    fn preload_directory(&self, dir: &Path) -> anyhow::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_file() {
+                self.preload_file_if_relevant(&LspUrl::File(entry.path()))?;
+            } else if file_type.is_dir() {
+                self.preload_directory(&entry.path())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn preload_file_if_relevant(&self, file: &LspUrl) -> anyhow::Result<()> {
+        if !self.context.is_eager() {
+            return Ok(());
+        }
+
+        // Check if it's a Starlark-ish file.
+        match file {
+            LspUrl::File(path) => {
+                let ext = path.extension().and_then(|ext| ext.to_str());
+                let file_name = path.file_name().and_then(|name| name.to_str());
+                let is_starlark = matches!(
+                    (ext, file_name),
+                    (Some("star"), _)
+                        | (Some("bzl"), _)
+                        | (Some("bzlmod"), _)
+                        | (Some("bazel"), _)
+                        | (_, Some("BUILD"))
+                        | (_, Some("WORKSPACE"))
+                );
+
+                if !is_starlark {
+                    return Ok(());
+                }
+            }
+            LspUrl::Starlark(_) | LspUrl::Other(_) => return Ok(()),
+        }
+
+        let contents = self.context.get_load_contents(file)?;
+        if let Some(contents) = contents {
+            // NOTE: This also inserts the AST into the cache.
+            self.validate(file, None, contents)?;
+        }
+
         Ok(())
     }
 }
@@ -1274,11 +1729,11 @@ pub fn server_with_connection<T: LspContext>(
         .as_ref()
         .and_then(|opts| serde_json::from_value(opts.clone()).ok())
         .unwrap_or_default();
-    let capabilities_payload = Backend::<T>::server_capabilities(server_settings);
+    let capabilities_payload = Backend::server_capabilities(&context, server_settings);
     let server_capabilities = serde_json::to_value(capabilities_payload).unwrap();
 
     let initialize_data = serde_json::json!({
-            "capabilities": server_capabilities,
+        "capabilities": server_capabilities,
     });
     connection.initialize_finish(init_request_id, initialize_data)?;
 

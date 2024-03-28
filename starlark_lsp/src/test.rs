@@ -300,6 +300,10 @@ impl LspContext for TestServerContext {
                 .collect(),
         }
     }
+
+    fn is_eager(&self) -> bool {
+        false
+    }
 }
 
 /// A server for use in testing that provides helpers for sending requests, correlating

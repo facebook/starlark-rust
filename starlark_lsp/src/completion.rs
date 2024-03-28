@@ -31,7 +31,6 @@ use lsp_types::TextEdit;
 use starlark::codemap::ResolvedSpan;
 use starlark::docs::markdown::render_doc_item;
 use starlark::docs::markdown::render_doc_param;
-use starlark::docs::DocItem;
 use starlark::docs::DocMember;
 use starlark::docs::DocParam;
 use starlark_syntax::codemap::ResolvedPos;
@@ -42,7 +41,6 @@ use crate::definition::Definition;
 use crate::definition::DottedDefinition;
 use crate::definition::IdentifierDefinition;
 use crate::definition::LspModule;
-use crate::exported::SymbolKind as ExportedSymbolKind;
 use crate::server::Backend;
 use crate::server::LspContext;
 use crate::server::LspUrl;
@@ -96,17 +94,14 @@ impl<T: LspContext> Backend<T> {
             (
                 key,
                 CompletionItem {
-                    kind: Some(match value.kind {
-                        SymbolKind::Method => CompletionItemKind::METHOD,
-                        SymbolKind::Variable => CompletionItemKind::VARIABLE,
-                    }),
+                    kind: Some(value.kind.into()),
                     detail: value.detail,
                     documentation: value
                         .doc
                         .map(|doc| {
                             Documentation::MarkupContent(MarkupContent {
                                 kind: MarkupKind::Markdown,
-                                value: render_doc_item(&value.name, &doc),
+                                value: render_doc_item(&value.name, &doc.to_doc_item()),
                             })
                         })
                         .or_else(|| {
@@ -258,11 +253,11 @@ impl<T: LspContext> Backend<T> {
                 )
                 .remove(name)
                 .and_then(|symbol| match symbol.kind {
-                    SymbolKind::Method => symbol.doc,
-                    SymbolKind::Variable => None,
+                    SymbolKind::Method { .. } => symbol.doc,
+                    SymbolKind::Constant | SymbolKind::Variable => None,
                 })
                 .and_then(|docs| match docs {
-                    DocItem::Function(doc_function) => Some(
+                    DocMember::Function(doc_function) => Some(
                         doc_function
                             .params
                             .into_iter()
@@ -286,8 +281,8 @@ impl<T: LspContext> Backend<T> {
                 self.get_ast_or_load_from_disk(&load_uri)?
                     .and_then(|ast| ast.find_exported_symbol(name))
                     .and_then(|symbol| match symbol.kind {
-                        ExportedSymbolKind::Any => None,
-                        ExportedSymbolKind::Function { argument_names } => Some(
+                        SymbolKind::Constant | SymbolKind::Variable => None,
+                        SymbolKind::Method { argument_names } => Some(
                             argument_names
                                 .into_iter()
                                 .map(|name| CompletionItem {

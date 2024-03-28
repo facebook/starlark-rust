@@ -142,6 +142,9 @@ struct Args {
     )]
     files: Vec<PathBuf>,
 
+    #[arg(long = "eager", help = "In LSP mode, eagerly load all files.")]
+    eager: bool,
+
     #[arg(
         long = "bazel",
         help = "Run in Bazel mode (temporary, will be removed)"
@@ -298,6 +301,7 @@ fn main() -> anyhow::Result<()> {
                 &prelude,
                 dialect,
                 globals,
+                args.eager,
             )?;
             return Ok(());
         }
@@ -313,6 +317,7 @@ fn main() -> anyhow::Result<()> {
             is_interactive,
             dialect,
             globals,
+            args.eager,
         )?;
 
         if args.lsp {
