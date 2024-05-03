@@ -39,22 +39,30 @@ use lsp_server::Response;
 use lsp_server::ResponseError;
 use lsp_types::notification::DidChangeTextDocument;
 use lsp_types::notification::DidCloseTextDocument;
+use lsp_types::notification::DidCreateFiles;
+use lsp_types::notification::DidDeleteFiles;
 use lsp_types::notification::DidOpenTextDocument;
+use lsp_types::notification::DidRenameFiles;
 use lsp_types::notification::LogMessage;
 use lsp_types::notification::PublishDiagnostics;
 use lsp_types::request::Completion;
+use lsp_types::request::DocumentSymbolRequest;
 use lsp_types::request::GotoDefinition;
 use lsp_types::request::HoverRequest;
+use lsp_types::request::WorkspaceSymbolRequest;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::CompletionOptions;
 use lsp_types::CompletionParams;
 use lsp_types::CompletionResponse;
 use lsp_types::DefinitionOptions;
+use lsp_types::DeleteFilesParams;
 use lsp_types::Diagnostic;
 use lsp_types::DidChangeTextDocumentParams;
 use lsp_types::DidCloseTextDocumentParams;
 use lsp_types::DidOpenTextDocumentParams;
+use lsp_types::DocumentSymbolParams;
+use lsp_types::DocumentSymbolResponse;
 use lsp_types::Documentation;
 use lsp_types::GotoDefinitionParams;
 use lsp_types::GotoDefinitionResponse;
@@ -64,6 +72,7 @@ use lsp_types::HoverParams;
 use lsp_types::HoverProviderCapability;
 use lsp_types::InitializeParams;
 use lsp_types::LanguageString;
+use lsp_types::Location;
 use lsp_types::LocationLink;
 use lsp_types::LogMessageParams;
 use lsp_types::MarkedString;
@@ -74,6 +83,7 @@ use lsp_types::OneOf;
 use lsp_types::Position;
 use lsp_types::PublishDiagnosticsParams;
 use lsp_types::Range;
+use lsp_types::RenameFilesParams;
 use lsp_types::ServerCapabilities;
 use lsp_types::TextDocumentSyncCapability;
 use lsp_types::TextDocumentSyncKind;
@@ -81,6 +91,9 @@ use lsp_types::TextEdit;
 use lsp_types::Url;
 use lsp_types::WorkDoneProgressOptions;
 use lsp_types::WorkspaceFolder;
+use lsp_types::WorkspaceSymbol;
+use lsp_types::WorkspaceSymbolParams;
+use lsp_types::WorkspaceSymbolResponse;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Deserializer;
@@ -107,6 +120,7 @@ use crate::definition::IdentifierDefinition;
 use crate::definition::LspModule;
 use crate::inspect::AstModuleInspect;
 use crate::inspect::AutocompleteType;
+use crate::symbols;
 use crate::symbols::find_symbols_at_location;
 
 /// The request to get the file contents for a starlark: URI
@@ -367,6 +381,11 @@ pub trait LspContext {
         let _unused = (document_uri, kind, current_value, workspace_root);
         Ok(Vec::new())
     }
+
+    /// Should the LSP eagerly load all files in the workspace? Otherwise, only files that are
+    /// opened will be parsed. This can be useful for large workspaces, but eager loading
+    /// adds support for workspace symbols, etc.
+    fn is_eager(&self) -> bool;
 }
 
 /// Errors when [`LspContext::resolve_load()`] cannot resolve a given path.
@@ -395,7 +414,7 @@ pub(crate) struct Backend<T: LspContext> {
 
 /// The logic implementations of stuff
 impl<T: LspContext> Backend<T> {
-    fn server_capabilities(settings: LspServerSettings) -> ServerCapabilities {
+    fn server_capabilities(context: &T, settings: LspServerSettings) -> ServerCapabilities {
         let definition_provider = settings.enable_goto_definition.then_some({
             OneOf::Right(DefinitionOptions {
                 work_done_progress_options: WorkDoneProgressOptions {
@@ -408,6 +427,12 @@ impl<T: LspContext> Backend<T> {
             definition_provider,
             completion_provider: Some(CompletionOptions::default()),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            document_symbol_provider: Some(OneOf::Left(true)),
+            workspace_symbol_provider: if context.is_eager() {
+                Some(OneOf::Left(true))
+            } else {
+                None
+            },
             ..ServerCapabilities::default()
         }
     }
@@ -431,9 +456,8 @@ impl<T: LspContext> Backend<T> {
         Ok(module)
     }
 
-    fn validate(&self, uri: Url, version: Option<i64>, text: String) -> anyhow::Result<()> {
-        let uri = uri.try_into()?;
-        let eval_result = self.context.parse_file_with_contents(&uri, text);
+    fn validate(&self, uri: &LspUrl, version: Option<i64>, text: String) -> anyhow::Result<()> {
+        let eval_result = self.context.parse_file_with_contents(uri, text);
         if let Some(ast) = eval_result.ast {
             let module = Arc::new(LspModule::new(ast));
             let mut last_valid_parse = self.last_valid_parse.write().unwrap();
@@ -444,8 +468,9 @@ impl<T: LspContext> Backend<T> {
     }
 
     fn did_open(&self, params: DidOpenTextDocumentParams) -> anyhow::Result<()> {
+        let uri = params.text_document.uri.try_into()?;
         self.validate(
-            params.text_document.uri,
+            &uri,
             Some(params.text_document.version as i64),
             params.text_document.text,
         )
@@ -454,19 +479,47 @@ impl<T: LspContext> Backend<T> {
     fn did_change(&self, params: DidChangeTextDocumentParams) -> anyhow::Result<()> {
         // We asked for Sync full, so can just grab all the text from params
         let change = params.content_changes.into_iter().next().unwrap();
-        self.validate(
-            params.text_document.uri,
-            Some(params.text_document.version as i64),
-            change.text,
-        )
+        let uri = params.text_document.uri.try_into()?;
+        self.validate(&uri, Some(params.text_document.version as i64), change.text)
     }
 
     fn did_close(&self, params: DidCloseTextDocumentParams) -> anyhow::Result<()> {
+        // If in eager mode, don't remove the file from the `last_valid_parse`.
+        if self.context.is_eager() {
+            return Ok(());
+        }
+
         {
             let mut last_valid_parse = self.last_valid_parse.write().unwrap();
             last_valid_parse.remove(&params.text_document.uri.clone().try_into()?);
         }
         self.publish_diagnostics(params.text_document.uri, Vec::new(), None);
+        Ok(())
+    }
+
+    fn did_rename(&self, params: RenameFilesParams) -> anyhow::Result<()> {
+        let mut last_valid_parse = self.last_valid_parse.write().unwrap();
+        for file in params.files {
+            let old_uri = Url::parse(&file.old_uri).unwrap();
+            let old_uri = old_uri.try_into()?;
+            let new_uri = Url::parse(&file.new_uri).unwrap();
+            let new_uri = new_uri.try_into()?;
+
+            if let Some(ast) = last_valid_parse.remove(&old_uri) {
+                last_valid_parse.insert(new_uri, ast);
+            }
+        }
+        Ok(())
+    }
+
+    fn did_delete(&self, params: DeleteFilesParams) -> anyhow::Result<()> {
+        let mut last_valid_parse = self.last_valid_parse.write().unwrap();
+        for file in params.files {
+            let uri = Url::parse(&file.uri).unwrap();
+            let uri = uri.try_into()?;
+            last_valid_parse.remove(&uri);
+            self.publish_diagnostics(uri.try_into()?, Vec::new(), None);
+        }
         Ok(())
     }
 
@@ -504,6 +557,17 @@ impl<T: LspContext> Backend<T> {
     /// Offers hover information for the symbol at the current cursor.
     fn hover(&self, id: RequestId, params: HoverParams, initialize_params: &InitializeParams) {
         self.send_response(new_response(id, self.hover_info(params, initialize_params)));
+    }
+
+    /// Offer an overview of symbols in the current document.
+    fn document_symbols(&self, id: RequestId, params: DocumentSymbolParams) {
+        self.send_response(new_response(id, self.get_document_symbols(params)));
+    }
+
+    /// Offer an overview of all symbols in the current workspace.
+    /// Only supported in eager mode.
+    fn workspace_symbols(&self, id: RequestId, params: WorkspaceSymbolParams) {
+        self.send_response(new_response(id, self.get_workspace_symbols(params)));
     }
 
     /// Get the file contents of a starlark: URI.
@@ -1166,6 +1230,72 @@ impl<T: LspContext> Backend<T> {
         })
     }
 
+    fn get_document_symbols(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> anyhow::Result<DocumentSymbolResponse> {
+        let uri = params.text_document.uri.try_into()?;
+
+        let document = match self.get_ast(&uri) {
+            Some(document) => document,
+            None => return Ok(DocumentSymbolResponse::Nested(vec![])),
+        };
+
+        let result = symbols::get_document_symbols(
+            document.ast.codemap(),
+            document.ast.statement(),
+            symbols::DocumentSymbolMode::IncludeLoads,
+        );
+
+        Ok(result.into())
+    }
+
+    fn get_workspace_symbols(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> anyhow::Result<WorkspaceSymbolResponse> {
+        let query = &params.query.to_lowercase();
+
+        let symbols = self
+            .last_valid_parse
+            .read()
+            .unwrap()
+            .iter()
+            .flat_map(|(uri, document)| {
+                let uri: Url = uri.try_into().unwrap();
+
+                symbols::get_document_symbols(
+                    document.ast.codemap(),
+                    document.ast.statement(),
+                    symbols::DocumentSymbolMode::OmitLoads,
+                )
+                .into_iter()
+                .filter_map(move |symbol| {
+                    if !query.is_empty() && !symbol.name.to_lowercase().contains(query) {
+                        return None;
+                    }
+
+                    let location = Location {
+                        uri: uri.clone(),
+                        range: symbol.range,
+                    };
+
+                    Some(WorkspaceSymbol {
+                        name: symbol.name,
+                        kind: symbol.kind,
+                        location: OneOf::Left(location),
+                        container_name: None,
+                        tags: None,
+                        // TODO?
+                        data: None,
+                    })
+                })
+            })
+            .collect();
+
+        Ok(WorkspaceSymbolResponse::Nested(symbols))
+    }
+
     fn get_workspace_root(
         workspace_roots: Option<&Vec<WorkspaceFolder>>,
         target: &LspUrl,
@@ -1210,6 +1340,7 @@ impl<T: LspContext> Backend<T> {
 
     fn main_loop(&self, initialize_params: InitializeParams) -> anyhow::Result<()> {
         self.log_message(MessageType::INFO, "Starlark server initialised");
+        self.preload_workspace(&initialize_params);
         for msg in &self.connection.receiver {
             match msg {
                 Message::Request(req) => {
@@ -1223,6 +1354,10 @@ impl<T: LspContext> Backend<T> {
                         self.completion(req.id, params, &initialize_params);
                     } else if let Some(params) = as_request::<HoverRequest>(&req) {
                         self.hover(req.id, params, &initialize_params);
+                    } else if let Some(params) = as_request::<DocumentSymbolRequest>(&req) {
+                        self.document_symbols(req.id, params);
+                    } else if let Some(params) = as_request::<WorkspaceSymbolRequest>(&req) {
+                        self.workspace_symbols(req.id, params);
                     } else if self.connection.handle_shutdown(&req)? {
                         return Ok(());
                     }
@@ -1235,6 +1370,20 @@ impl<T: LspContext> Backend<T> {
                         self.did_change(params)?;
                     } else if let Some(params) = as_notification::<DidCloseTextDocument>(&x) {
                         self.did_close(params)?;
+                    } else if let Some(params) = as_notification::<DidCreateFiles>(&x) {
+                        if self.context.is_eager() {
+                            for file in params.files {
+                                let url = Url::parse(&file.uri).unwrap();
+                                let path = url.to_file_path().ok();
+                                if let Some(path) = path {
+                                    self.preload_file_if_relevant(&LspUrl::File(path))?;
+                                }
+                            }
+                        }
+                    } else if let Some(params) = as_notification::<DidDeleteFiles>(&x) {
+                        self.did_delete(params)?;
+                    } else if let Some(params) = as_notification::<DidRenameFiles>(&x) {
+                        self.did_rename(params)?;
                     }
                 }
                 Message::Response(_) => {
@@ -1242,6 +1391,90 @@ impl<T: LspContext> Backend<T> {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn preload_workspace(&self, initialize_params: &InitializeParams) {
+        if !self.context.is_eager() {
+            return;
+        }
+
+        // Figure out the roots to crawl from
+        let workspace_roots: Vec<_> =
+            if let Some(workspace_folders) = initialize_params.workspace_folders.as_ref() {
+                workspace_folders
+                    .iter()
+                    .filter_map(|folder| folder.uri.to_file_path().ok())
+                    .collect()
+            } else if let Some(root_uri) = initialize_params.root_uri.as_ref() {
+                root_uri.to_file_path().ok().into_iter().collect()
+            } else {
+                #[allow(deprecated)]
+                initialize_params
+                    .root_path
+                    .as_ref()
+                    .map(PathBuf::from)
+                    .into_iter()
+                    .collect()
+            };
+
+        for root in workspace_roots {
+            if let Err(e) = self.preload_directory(&root) {
+                self.log_message(
+                    MessageType::WARNING,
+                    &format!("Error preloading workspace: {:#}", e),
+                );
+            }
+        }
+    }
+
+    fn preload_directory(&self, dir: &Path) -> anyhow::Result<()> {
+        for entry in std::fs::read_dir(dir)? {
+            let entry = entry?;
+            let file_type = entry.file_type()?;
+            if file_type.is_file() {
+                self.preload_file_if_relevant(&LspUrl::File(entry.path()))?;
+            } else if file_type.is_dir() {
+                self.preload_directory(&entry.path())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn preload_file_if_relevant(&self, file: &LspUrl) -> anyhow::Result<()> {
+        if !self.context.is_eager() {
+            return Ok(());
+        }
+
+        // Check if it's a Starlark-ish file.
+        match file {
+            LspUrl::File(path) => {
+                let ext = path.extension().and_then(|ext| ext.to_str());
+                let file_name = path.file_name().and_then(|name| name.to_str());
+                let is_starlark = matches!(
+                    (ext, file_name),
+                    (Some("star"), _)
+                        | (Some("bzl"), _)
+                        | (Some("bzlmod"), _)
+                        | (Some("bazel"), _)
+                        | (_, Some("BUILD"))
+                        | (_, Some("WORKSPACE"))
+                );
+
+                if !is_starlark {
+                    return Ok(());
+                }
+            }
+            LspUrl::Starlark(_) | LspUrl::Other(_) => return Ok(()),
+        }
+
+        let contents = self.context.get_load_contents(file)?;
+        if let Some(contents) = contents {
+            // NOTE: This also inserts the AST into the cache.
+            self.validate(file, None, contents)?;
+        }
+
         Ok(())
     }
 }
@@ -1274,11 +1507,11 @@ pub fn server_with_connection<T: LspContext>(
         .as_ref()
         .and_then(|opts| serde_json::from_value(opts.clone()).ok())
         .unwrap_or_default();
-    let capabilities_payload = Backend::<T>::server_capabilities(server_settings);
+    let capabilities_payload = Backend::server_capabilities(&context, server_settings);
     let server_capabilities = serde_json::to_value(capabilities_payload).unwrap();
 
     let initialize_data = serde_json::json!({
-            "capabilities": server_capabilities,
+        "capabilities": server_capabilities,
     });
     connection.initialize_finish(init_request_id, initialize_data)?;
 
