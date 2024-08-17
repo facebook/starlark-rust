@@ -112,7 +112,7 @@ impl AllocFrozenValue for TypingCallable {
     NoSerialize,
     derive_more::Display
 )]
-#[display("{}", "callable")]
+#[display("{}", callable)]
 pub(crate) struct TypingCallableAt2 {
     callable: TyCallable,
 }
