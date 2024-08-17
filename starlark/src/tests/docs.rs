@@ -95,7 +95,7 @@ def _do_not_export():
     Allocative,
     NoSerialize
 )]
-#[display(fmt = "magic")]
+#[display("magic")]
 struct Magic;
 
 #[starlark_value(type = "magic")]

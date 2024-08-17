@@ -31,7 +31,7 @@ starlark_syntax = { version = "0.9", path = "starlark_syntax" }
 anyhow = "1.0.65"
 ctor = "0.1.26"
 derivative = "2.2"
-derive_more = "0.99.3"
+derive_more = { version = "1.0", features = ["display"] }
 either = "1.8"
 equivalent = "1.0.0"
 indenter = "0.3.3"

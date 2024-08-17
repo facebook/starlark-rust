@@ -76,9 +76,9 @@ fn bool_fns(globals: &mut GlobalsBuilder) {
 
 #[derive(Display, Debug, Copy, Clone, Dupe)]
 enum TestBinOp {
-    #[display(fmt = "and")]
+    #[display("and")]
     And,
-    #[display(fmt = "or")]
+    #[display("or")]
     Or,
 }
 
