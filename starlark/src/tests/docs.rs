@@ -183,7 +183,7 @@ fn module(builder: &mut GlobalsBuilder) {
 }
 
 #[derive(ProvidesStaticType, Debug, Display, Allocative, Serialize)]
-#[display(format = "obj")]
+#[display("obj")]
 struct Obj;
 
 #[starlark_value(type = "obj")]

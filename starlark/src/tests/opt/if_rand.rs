@@ -19,7 +19,6 @@
 
 use std::cell::Cell;
 use std::fmt;
-use std::fmt::Display;
 
 use derive_more::Display;
 use dupe::Dupe;
@@ -122,7 +121,7 @@ impl TestExpr {
     }
 }
 
-impl Display for TestExpr {
+impl fmt::Display for TestExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TestExpr::Const(x) => match x {
