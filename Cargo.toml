@@ -8,6 +8,7 @@ members = [
     "starlark_bin",
     "starlark_derive",
     "starlark_lsp",
+    "starlark_js",
     "starlark_map",
     "starlark_syntax",
 ]
