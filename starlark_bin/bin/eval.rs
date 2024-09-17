@@ -40,6 +40,7 @@ use starlark::syntax::AstModule;
 use starlark::syntax::Dialect;
 use starlark::StarlarkResultExt;
 use starlark_lsp::error::eval_message_to_lsp_diagnostic;
+use starlark_lsp::server::Command;
 use starlark_lsp::server::LspContext;
 use starlark_lsp::server::LspEvalResult;
 use starlark_lsp::server::LspUrl;
@@ -298,7 +299,17 @@ impl Context {
     }
 }
 
+pub enum EvalCommand {}
+
+impl Command for EvalCommand {
+    fn to_lsp(&self) -> lsp_types::Command {
+        match *self {}
+    }
+}
+
 impl LspContext for Context {
+    type Command = EvalCommand;
+
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
             LspUrl::File(uri) => {
@@ -385,5 +396,9 @@ impl LspContext for Context {
 
     fn get_environment(&self, _uri: &LspUrl) -> DocModule {
         DocModule::default()
+    }
+
+    fn codelens(&self, document_uri: &LspUrl, workspace_root: Option<&Path>, ast: &AstModule) -> Vec<starlark_lsp::server::Codelens<EvalCommand>> {
+        todo!()
     }
 }

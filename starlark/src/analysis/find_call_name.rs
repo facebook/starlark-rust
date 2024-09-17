@@ -27,6 +27,15 @@ use crate::codemap::Span;
 use crate::codemap::Spanned;
 use crate::syntax::AstModule;
 
+#[derive(Debug, PartialEq, Eq)]
+/// Function calls that have a name attribute
+pub struct NamedFunctionCall {
+    /// The value of the name attribute passed to the function call
+    pub name: String,
+    /// The span of the function call
+    pub span: Span,
+}
+
 /// Find the location of a top level function call that has a kwarg "name", and a string value
 /// matching `name`.
 pub trait AstModuleFindCallName {
@@ -36,17 +45,23 @@ pub trait AstModuleFindCallName {
     /// NOTE: If the AST is exposed in the future, this function may be removed and implemented
     ///       by specific programs instead.
     fn find_function_call_with_name(&self, name: &str) -> Option<Span>;
+
+    /// Find all top level function calls that have a kwarg "name"
+    fn find_named_function_calls(&self) -> Vec<NamedFunctionCall>;
 }
 
 impl AstModuleFindCallName for AstModule {
     fn find_function_call_with_name(&self, name: &str) -> Option<Span> {
-        let mut ret = None;
+        self.find_named_function_calls()
+            .iter()
+            .find(|call| call.name == name)
+            .map(|call| call.span)
+    }
 
-        fn visit_expr(ret: &mut Option<Span>, name: &str, node: &AstExpr) {
-            if ret.is_some() {
-                return;
-            }
+    fn find_named_function_calls<'a>(&'a self) -> Vec<NamedFunctionCall> {
+        let mut ret = Vec::new();
 
+        fn visit_expr(ret: &mut Vec<NamedFunctionCall>, node: &AstExpr) {
             match node {
                 Spanned {
                     node: Expr::Call(identifier, arguments),
@@ -60,20 +75,22 @@ impl AstModuleFindCallName for AstModule {
                                     node: Expr::Literal(AstLiteral::String(s)),
                                     ..
                                 },
-                            ) if arg_name.node == "name" && s.node == name => Some(identifier.span),
+                            ) if arg_name.node == "name" => Some(NamedFunctionCall {
+                                name: s.node.clone(),
+                                span: identifier.span,
+                            }),
                             _ => None,
                         });
-                        if found.is_some() {
-                            *ret = found;
+                        if let Some(found) = found {
+                            ret.push(found);
                         }
                     }
                 }
-                _ => node.visit_expr(|x| visit_expr(ret, name, x)),
+                _ => node.visit_expr(|x| visit_expr(ret, x)),
             }
         }
 
-        self.statement()
-            .visit_expr(|x| visit_expr(&mut ret, name, x));
+        self.statement().visit_expr(|x| visit_expr(&mut ret, x));
         ret
     }
 }
@@ -111,6 +128,46 @@ def x(name = "foo_name"):
                 .map(|span| module.codemap().resolve_span(span))
         );
         assert_eq!(None, module.find_function_call_with_name("bar_name"));
+        Ok(())
+    }
+
+    #[test]
+    fn finds_all_named_function_calls() -> anyhow::Result<()> {
+        let contents = r#"
+foo(name = "foo_name")
+bar("bar_name")
+baz(name = "baz_name")
+
+def x(name = "foo_name"):
+    pass
+"#;
+
+        let module = AstModule::parse("foo.star", contents.to_owned(), &Dialect::Extended).unwrap();
+
+        let calls = module.find_named_function_calls();
+
+        assert_eq!(
+            calls.iter().map(|call| &call.name).collect::<Vec<_>>(),
+            &["foo_name", "baz_name"]
+        );
+
+        assert_eq!(
+            calls
+                .iter()
+                .map(|call| module.codemap().resolve_span(call.span))
+                .collect::<Vec<_>>(),
+            &[
+                ResolvedSpan {
+                    begin: ResolvedPos { line: 1, column: 0 },
+                    end: ResolvedPos { line: 1, column: 3 }
+                },
+                ResolvedSpan {
+                    begin: ResolvedPos { line: 3, column: 0 },
+                    end: ResolvedPos { line: 3, column: 3 }
+                }
+            ]
+        );
+
         Ok(())
     }
 }

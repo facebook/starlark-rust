@@ -38,6 +38,8 @@ use std::process::Command;
 use either::Either;
 use lsp_types::CompletionItemKind;
 use lsp_types::Url;
+use serde::Deserialize;
+use serde::Serialize;
 use starlark::analysis::find_call_name::AstModuleFindCallName;
 use starlark::analysis::AstModuleLint;
 use starlark::docs::get_registered_starlark_docs;
@@ -56,6 +58,7 @@ use starlark::StarlarkResultExt;
 use starlark_lsp::completion::StringCompletionResult;
 use starlark_lsp::completion::StringCompletionType;
 use starlark_lsp::error::eval_message_to_lsp_diagnostic;
+use starlark_lsp::server::Codelens;
 use starlark_lsp::server::LspContext;
 use starlark_lsp::server::LspEvalResult;
 use starlark_lsp::server::LspUrl;
@@ -552,7 +555,7 @@ impl BazelContext {
                         if let Some(targets) = self.query_buildable_targets(
                             &format!(
                                 "{render_base}{}",
-                                if render_base.ends_with(':') { "" } else { ":" }
+                                render_base.strip_suffix(":").unwrap_or(&render_base)
                             ),
                             workspace_root,
                         ) {
@@ -615,7 +618,7 @@ impl BazelContext {
         workspace_dir: Option<&Path>,
     ) -> Option<Vec<String>> {
         let mut raw_command = Command::new("bazel");
-        let mut command = raw_command.arg("query").arg(format!("{module}*"));
+        let mut command = raw_command.arg("query").arg(format!("{module}:*"));
         if let Some(workspace_dir) = workspace_dir {
             command = command.current_dir(workspace_dir);
         }
@@ -629,13 +632,102 @@ impl BazelContext {
         Some(
             output
                 .lines()
-                .filter_map(|line| line.strip_prefix(module).map(|str| str.to_owned()))
+                .filter_map(|line| {
+                    line.strip_prefix(module)
+                        .and_then(|line| line.strip_prefix(":"))
+                        .map(|str| str.to_owned())
+                })
                 .collect(),
         )
+    }
+
+    fn query_executable_targets(
+        &self,
+        module: &str,
+        workspace_dir: Option<&Path>,
+    ) -> Option<Vec<String>> {
+        let mut raw_command = Command::new("bazel");
+        let mut command = raw_command
+            .arg("cquery")
+            .arg(format!("{module}:*"))
+            .arg("--output=starlark")
+            .arg("--starlark:expr")
+            .arg("target.label.name if providers(target)['FilesToRunProvider'].executable != None else ''");
+
+        if let Some(workspace_dir) = workspace_dir {
+            command = command.current_dir(workspace_dir);
+        }
+
+        let output = command.output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let output = String::from_utf8(output.stdout).ok()?;
+        Some(
+            output
+                .lines()
+                .filter(|line| !line.is_empty())
+                .map(|line| line.to_owned())
+                .collect(),
+        )
+    }
+
+    /// Resolves a label, excluding the target name, given a BUILD file
+    fn resolve_label_from_build_file(
+        &self,
+        build_file_path: &Path,
+        workspace_root: Option<&Path>,
+    ) -> Option<String> {
+        let (repo_name, path) =
+            if let Some((repo_name, path)) = self.get_repository_for_path(build_file_path) {
+                (Some(repo_name), path)
+            } else {
+                (None, build_file_path.strip_prefix(workspace_root?).ok()?)
+            };
+
+        let package_directory = path.parent()?;
+
+        if let Some(repo_name) = repo_name {
+            Some(format!("@{repo_name}//{}", package_directory.display()))
+        } else {
+            Some(format!("//{}", package_directory.display()))
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BazelTargets {
+    workspace_root: PathBuf,
+    targets: Vec<String>,
+}
+
+pub enum BazelCommand {
+    Build(BazelTargets),
+    Run(BazelTargets),
+}
+
+impl starlark_lsp::server::Command for BazelCommand {
+    fn to_lsp(&self) -> lsp_types::Command {
+        match self {
+            BazelCommand::Build(targets) => lsp_types::Command {
+                title: "Build".to_string(),
+                command: "bazel.buildTarget".to_string(),
+                arguments: Some(vec![serde_json::to_value(targets).unwrap()]),
+            },
+            BazelCommand::Run(targets) => lsp_types::Command {
+                title: "Run".to_string(),
+                command: "bazel.runTarget".to_string(),
+                arguments: Some(vec![serde_json::to_value(targets).unwrap()]),
+            },
+        }
     }
 }
 
 impl LspContext for BazelContext {
+    type Command = BazelCommand;
+
     fn parse_file_with_contents(&self, uri: &LspUrl, content: String) -> LspEvalResult {
         match uri {
             LspUrl::File(uri) => {
@@ -882,5 +974,62 @@ impl LspContext for BazelContext {
         }
 
         Ok(names)
+    }
+
+    fn codelens(
+        &self,
+        document_uri: &LspUrl,
+        workspace_root: Option<&Path>,
+        ast: &AstModule,
+    ) -> Vec<Codelens<Self::Command>> {
+        if let (LspUrl::File(build_file_path), Some(workspace_root)) =
+            (document_uri, workspace_root)
+        {
+            if let Some(label_prefix) =
+                self.resolve_label_from_build_file(&build_file_path, Some(workspace_root))
+            {
+                if let (Some(buildable_targets), Some(executable_targets)) = (
+                    self.query_buildable_targets(&label_prefix, Some(workspace_root)),
+                    self.query_executable_targets(&label_prefix, Some(workspace_root)),
+                ) {
+                    let buildable_targets: HashSet<_> = buildable_targets.into_iter().collect();
+                    let executable_targets: HashSet<_> = executable_targets.into_iter().collect();
+
+                    let mut codelenses = Vec::new();
+
+                    for call in ast.find_named_function_calls() {
+                        let label = format!("{label_prefix}:{}", call.name);
+
+                        if buildable_targets.contains(&call.name) {
+                            codelenses.push(Codelens {
+                                command: BazelCommand::Build(BazelTargets {
+                                    workspace_root: workspace_root.to_owned(),
+                                    targets: vec![label.clone()],
+                                }),
+                                span: call.span,
+                            })
+                        }
+
+                        if executable_targets.contains(&call.name) {
+                            codelenses.push(Codelens {
+                                command: BazelCommand::Run(BazelTargets {
+                                    workspace_root: workspace_root.to_owned(),
+                                    targets: vec![label],
+                                }),
+                                span: call.span,
+                            });
+                        }
+                    }
+
+                    codelenses
+                } else {
+                    Vec::new()
+                }
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
     }
 }
