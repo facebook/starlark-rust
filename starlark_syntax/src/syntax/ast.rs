@@ -21,7 +21,6 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fmt::Write;
 
 use allocative::Allocative;
 use dupe::Dupe;
