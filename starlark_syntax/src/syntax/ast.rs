@@ -21,6 +21,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::fmt::Write;
 
 use allocative::Allocative;
 use dupe::Dupe;
@@ -757,6 +758,7 @@ impl Stmt {
             Stmt::Load(load) => {
                 write!(f, "{}load(", tab)?;
                 fmt_string_literal(f, &load.module.node)?;
+                f.write_str(", ")?;
                 comma_separated_fmt(
                     f,
                     &load.args,
