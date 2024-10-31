@@ -605,7 +605,7 @@ impl Display for Expr {
                 for x in c {
                     write!(f, "{}", x)?;
                 }
-                f.write_str("}}")
+                f.write_str("}")
             }
             Expr::Literal(x) => write!(f, "{}", x),
             Expr::FString(x) => {
