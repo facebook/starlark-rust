@@ -1471,10 +1471,10 @@ mod tests {
         Url::from_file_path(PathBuf::from("/tmp").join(rel_path)).unwrap()
     }
 
-    // Converts PathBuf to string that can be used in starlark load statements.
-    // Performs simple string quoting by replacing \ with \\ (for windows paths).
+    // Converts PathBuf to string that can be used in starlark load statements within "" quotes.
+    // Replaces \ with / (for Windows paths).
     fn path_buf_to_load_string(p: &PathBuf) -> String {
-        p.to_str().unwrap().replace("\\", "\\\\")
+        p.to_str().unwrap().replace('\\', "/")
     }
 
     fn uri_to_load_string(uri: &Url) -> String {
