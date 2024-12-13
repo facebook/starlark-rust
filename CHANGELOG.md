@@ -1,5 +1,15 @@
 # Starlark
 
+## 0.13 (Dec 13, 2024)
+
+- Some API changes (but alas, too many for us to enumerate).
+- Move to more Python-like type annotations, e.g. `dict[str, int]` now.
+- Support for the `set` data type.
+- Improve documentation, both the docs and the doc generator.
+- Performance improvements.
+- More trait implementation (`Trace`, `Allocative`, `AllocValue` etc).
+- Bump dependencies.
+
 ## 0.12 (Feb 9, 2024)
 
 - Implemented `reverse()` for `SmallMap`.
