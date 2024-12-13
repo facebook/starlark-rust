@@ -25,9 +25,9 @@ cmp_any = { version = "0.8.1", path = "gazebo/cmp_any" }
 display_container = { version = "0.9.0", path = "gazebo/display_container" }
 dupe = { version = "0.9.0", path = "gazebo/dupe" }
 
-starlark_lsp = { version = "0.9", path = "starlark_lsp" }
-starlark_map = { version = "0.9", path = "starlark_map" }
-starlark_syntax = { version = "0.9", path = "starlark_syntax" }
+starlark_lsp = { version = "0.13", path = "starlark_lsp" }
+starlark_map = { version = "0.13", path = "starlark_map" }
+starlark_syntax = { version = "0.13", path = "starlark_syntax" }
 
 anyhow = "1.0.65"
 ctor = "0.1.26"
