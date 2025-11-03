@@ -18,6 +18,7 @@
 use std::collections::HashSet;
 use std::mem;
 use std::mem::MaybeUninit;
+use std::time::Instant;
 
 use dupe::Dupe;
 use starlark_syntax::eval_exception::EvalException;
@@ -117,6 +118,35 @@ const INFREQUENT_INSTRUCTION_CHECK_PERIOD: u32 = 1000;
 /// Default value for max starlark stack size
 pub(crate) const DEFAULT_STACK_SIZE: usize = 50;
 
+/// Lightweight runtime metrics collected during evaluation (kept small and copyable).
+#[derive(Clone, Debug, Default)]
+pub struct EvalMetrics {
+    /// Approximate number of instructions executed (incremented periodically).
+    pub instructions_executed: u64,
+    /// Number of garbage collections that happened.
+    pub gc_count: u64,
+    /// Maximum allocated bytes observed at GC points.
+    pub max_allocated_bytes: usize,
+    /// Total time spent executing bytecode in nanoseconds (approx).
+    pub total_exec_time_ns: u128,
+    /// Timestamp (ns since evaluator creation) of last GC if any.
+    pub last_gc_time_ns: Option<u128>,
+}
+
+impl EvalMetrics {
+    pub fn to_json(&self) -> String {
+        // Manual JSON encoding to avoid adding serde as a dependency.
+        format!(
+            "{{\"instructions_executed\":{},\"gc_count\":{},\"max_allocated_bytes\":{},\"total_exec_time_ns\":{},\"last_gc_time_ns\":{} }}",
+            self.instructions_executed,
+            self.gc_count,
+            self.max_allocated_bytes,
+            self.total_exec_time_ns,
+            match self.last_gc_time_ns { Some(v) => v.to_string(), None => "null".to_owned() }
+        )
+    }
+}
+
 /// Holds everything about an ongoing evaluation (local variables, globals, module resolution etc).
 pub struct Evaluator<'v, 'a, 'e> {
     // The module that is being used for this evaluation
@@ -175,6 +205,10 @@ pub struct Evaluator<'v, 'a, 'e> {
     pub(crate) is_cancelled: Box<dyn Fn() -> bool + 'a>,
     /// A counter to track when to perform "infrequent" checks like cancellation, timeouts, etc
     pub(crate) infrequent_instr_check_counter: u32,
+    /// Runtime-collected lightweight metrics
+    pub(crate) metrics: EvalMetrics,
+    /// Instant when evaluator was created (used to compute relative times)
+    pub(crate) start_instant: Instant,
 }
 
 // We use this to validate that the Evaluator lifetimes have the expected variance.
@@ -270,6 +304,8 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
             max_callstack_size: None,
             is_cancelled: Box::new(|| false),
             infrequent_instr_check_counter: 0,
+            metrics: EvalMetrics::default(),
+            start_instant: Instant::now(),
         }
     }
 
@@ -404,9 +440,7 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
             ProfileMode::BytecodePairs => self.gen_bc_pairs_profile(),
             ProfileMode::TimeFlame => self.time_flame_profile.r#gen(),
             ProfileMode::Typecheck => self.typecheck_profile.r#gen(),
-            ProfileMode::None => Ok(ProfileData {
-                profile: ProfileDataImpl::None,
-            }),
+            ProfileMode::None => Ok(ProfileData { profile: ProfileDataImpl::None }),
         }
     }
 
@@ -783,6 +817,15 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
             self.time_flame_profile
                 .record_call_enter(const_frozen_string!("GC").to_value());
 
+            // Record metrics: GC count and max allocated bytes at GC time
+            self.metrics.gc_count += 1;
+            let current_alloc = self.heap().allocated_bytes();
+            if current_alloc > self.metrics.max_allocated_bytes {
+                self.metrics.max_allocated_bytes = current_alloc;
+            }
+            let rel_time = Instant::now().duration_since(self.start_instant).as_nanos();
+            self.metrics.last_gc_time_ns = Some(rel_time);
+
             self.heap().garbage_collect(|tracer| self.trace(tracer));
 
             self.time_flame_profile.record_call_exit();
@@ -846,14 +889,19 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
     ) -> Result<Value<'v>, EvalException> {
         debug_assert!(self.eval_instrumentation.enabled);
         if self.eval_instrumentation.heap_or_flame_profile {
+            // measure time spent in bc.run
+            let t0 = Instant::now();
             self.heap_profile.record_call_enter(def, self.heap());
             self.time_flame_profile.record_call_enter(def);
             let res = bc.run(self, &mut EvalCallbacksDisabled);
+            let elapsed = t0.elapsed().as_nanos();
+            self.metrics.total_exec_time_ns += elapsed as u128;
             self.heap_profile.record_call_exit(self.heap());
             self.time_flame_profile.record_call_exit();
             res
         } else {
-            bc.run(
+            let t0 = Instant::now();
+            let res = bc.run(
                 self,
                 &mut EvalCallbacksEnabled {
                     mode: match (
@@ -876,7 +924,10 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
                     stmt_locs: &bc.instrs.stmt_locs,
                     bc_start_ptr: bc.instrs.start_ptr(),
                 },
-            )
+            );
+            let elapsed = t0.elapsed().as_nanos();
+            self.metrics.total_exec_time_ns += elapsed as u128;
+            res
         }
     }
 
@@ -885,7 +936,11 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
         if self.eval_instrumentation.enabled {
             self.eval_bc_with_callbacks(def, bc)
         } else {
-            bc.run(self, &mut EvalCallbacksDisabled)
+            let t0 = Instant::now();
+            let res = bc.run(self, &mut EvalCallbacksDisabled);
+            let elapsed = t0.elapsed().as_nanos();
+            self.metrics.total_exec_time_ns += elapsed as u128;
+            res
         }
     }
 
@@ -905,7 +960,14 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
     #[inline(always)]
     pub(crate) fn run_infrequent_instr_checks(&mut self) -> crate::Result<()> {
         self.infrequent_instr_check_counter += 1;
+        // Approximate the number of instructions executed.
+        // Some callers increment more frequently; this provides a minimal estimate.
         if self.infrequent_instr_check_counter >= INFREQUENT_INSTRUCTION_CHECK_PERIOD {
+            // update instruction count by the period
+            self.metrics.instructions_executed = self.metrics.instructions_executed.saturating_add(
+                INFREQUENT_INSTRUCTION_CHECK_PERIOD as u64,
+            );
+
             if (self.is_cancelled)() {
                 return Err(crate::Error::new_other(EvaluatorError::Cancelled));
             }
@@ -914,6 +976,16 @@ impl<'v, 'a, 'e: 'a> Evaluator<'v, 'a, 'e> {
 
         // TODO(T219887296): implement CPU-time-limiting checks here
         Ok(())
+    }
+
+    /// Return a copy of the current runtime metrics. Cheap and copyable.
+    pub fn collect_metrics(&self) -> EvalMetrics {
+        self.metrics.clone()
+    }
+
+    /// Reset runtime metrics (keeps start time unchanged).
+    pub fn reset_metrics(&mut self) {
+        self.metrics = EvalMetrics::default();
     }
 }
 
