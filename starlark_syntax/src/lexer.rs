@@ -57,6 +57,8 @@ pub enum LexemeError {
     CommentSpanComputedIncorrectly,
     #[error("Cannot parse `{0}` as an integer in base {1}")]
     CannotParse(String, u32),
+    #[error("Parse error: f-string expression is missing closing `}}`")]
+    UnfinishedFStringExpression,
 }
 
 impl From<LexemeError> for crate::error::Error {
@@ -363,7 +365,11 @@ impl<'a> Lexer<'a> {
             match it.next_char() {
                 None => {
                     return self.err_span(
-                        LexemeError::UnfinishedStringLiteral,
+                        if self.in_fstring_expr_mode() {
+                            LexemeError::UnfinishedFStringExpression
+                        } else {
+                            LexemeError::UnfinishedStringLiteral
+                        },
                         string_start,
                         string_end + it.pos(),
                     );
@@ -820,7 +826,11 @@ impl<'a> Lexer<'a> {
                 Some('\n') if !is_triple => {
                     // Newline in non-triple string - error
                     return Some(self.err_span(
-                        LexemeError::UnfinishedStringLiteral,
+                        if self.in_fstring_expr_mode() {
+                            LexemeError::UnfinishedFStringExpression
+                        } else {
+                            LexemeError::UnfinishedStringLiteral
+                        },
                         start,
                         start + it.pos(),
                     ));
