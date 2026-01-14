@@ -2,10 +2,13 @@
 members = [
     "allocative/allocative",
     "allocative/allocative_derive",
+    "gazebo/gazebo",
     "gazebo/display_container",
     "gazebo/dupe",
     "gazebo/strong_hash",
     "gazebo/strong_hash_derive",
+    "pagable",
+    "pagable_derive",
     "starlark",
     "starlark_bin",
     "starlark_derive",
@@ -26,6 +29,7 @@ allocative_derive = { version = "0.3.3", path = "allocative/allocative_derive" }
 cmp_any = { version = "0.8.1", path = "gazebo/cmp_any" }
 display_container = { version = "0.9.0", path = "gazebo/display_container" }
 dupe = { version = "0.9.1", path = "gazebo/dupe" }
+gazebo = { path = "gazebo/gazebo" }
 strong_hash = { path = "gazebo/strong_hash" }
 strong_hash_derive = { path = "gazebo/strong_hash_derive" }
 
@@ -44,4 +48,20 @@ memchr = "2.4.1"
 proc-macro2 = "1.0"
 quote = "1.0.3"
 ref-cast = "1.0.0"
+relative-path = { version = "1.7.0", features = ["serde"] }
 syn = "2"
+
+pagable = { path = "pagable" }
+pagable_derive = { path = "pagable_derive" }
+# dependencies of pagable
+async-trait = "0.1.24"
+blake3 = { version = "1.3.1", features = ["default", "rayon", "std", "traits-preview"] }
+bytemuck = { version = "1.24", features = ["const_zeroed", "derive", "min_const_generics", "must_cast", "nightly_stdsimd"] }
+parking_lot = { version = "0.11.2", features = ["send_guard"] }
+postcard = { version = "1.0.8", features = ["use-crc", "use-std"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = { version = "1.0.48", features = ["raw_value"] }
+static_assertions = "1.1.0"
+take_mut = "0.2.2"
+tokio = { version = "1.25.0", features = ["full", "test-util", "tracing"] }
+triomphe = "0.1.11"
