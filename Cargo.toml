@@ -43,6 +43,7 @@ derivative = "2.2"
 derive_more = { version = "1.0.0", features = ["full"] }
 either = "1.8"
 equivalent = "1.0.0"
+erased-serde = "0.3.20"
 indenter = "0.3.3"
 memchr = "2.4.1"
 proc-macro2 = "1.0"
