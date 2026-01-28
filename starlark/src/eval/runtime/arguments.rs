@@ -429,7 +429,7 @@ impl<'v, 'a> Arguments<'v, 'a> {
     /// Collect exactly `N` positional arguments from the [`Arguments`], failing if there are too many/few
     /// arguments. Ignores named arguments.
     #[inline(always)]
-    pub(crate) fn positional<const N: usize>(
+    pub fn positional<const N: usize>(
         &self,
         heap: Heap<'v>,
     ) -> crate::Result<[Value<'v>; N]> {
