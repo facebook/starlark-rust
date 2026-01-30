@@ -46,6 +46,7 @@ equivalent = "1.0.0"
 erased-serde = "0.3.20"
 indenter = "0.3.3"
 memchr = "2.4.1"
+num-bigint = { version = "0.4.3", features = ["serde"] }
 proc-macro2 = "1.0"
 quote = "1.0.3"
 ref-cast = "1.0.0"
