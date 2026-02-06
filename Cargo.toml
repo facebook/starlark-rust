@@ -45,6 +45,7 @@ either = "1.8"
 equivalent = "1.0.0"
 erased-serde = "0.3.20"
 indenter = "0.3.3"
+inventory = "0.3.8"
 memchr = "2.4.1"
 num-bigint = { version = "0.4.3", features = ["serde"] }
 proc-macro2 = "1.0"
