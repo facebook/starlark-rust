@@ -18,21 +18,21 @@
 use std::env;
 use std::fmt::Write;
 use std::fs;
+use std::path::Path;
 
 use anyhow::Context;
 
 const REGENERATE_VAR_NAME: &str = "STARLARK_RUST_REGENERATE_GOLDEN_TESTS";
 
 #[allow(clippy::write_literal)] // We mark generated files as generated, but not this file.
-fn make_golden(output: &str) -> String {
+fn make_golden(output: &str, package_name: &str) -> String {
     let mut golden = String::new();
     writeln!(golden, "# {at}generated", at = "@").unwrap();
     writeln!(golden, "# To regenerate, run:").unwrap();
     writeln!(golden, "# ```").unwrap();
     writeln!(
         golden,
-        // TODO(nga): fix instruction for `starlark_syntax` crate.
-        "# {REGENERATE_VAR_NAME}=1 cargo test -p starlark --lib"
+        "# {REGENERATE_VAR_NAME}=1 cargo test -p {package_name} --lib"
     )
     .unwrap();
     writeln!(golden, "# ```").unwrap();
@@ -49,9 +49,14 @@ pub fn golden_test_template(golden_rel_path: &str, output: &str) {
     let manifest_dir =
         env::var("CARGO_MANIFEST_DIR").expect("`CARGO_MANIFEST_DIR` variable must be set");
 
+    // Infer package name from CARGO_PKG_NAME.
+    let package_name = env::var("CARGO_PKG_NAME")
+        .ok()
+        .unwrap_or_else(|| "starlark".to_owned());
+
     let golden_file_path = format!("{manifest_dir}/{golden_rel_path}");
 
-    let output_with_prefix = make_golden(output);
+    let output_with_prefix = make_golden(output, &package_name);
 
     if env::var(REGENERATE_VAR_NAME).is_ok() {
         fs::write(&golden_file_path, &output_with_prefix)
