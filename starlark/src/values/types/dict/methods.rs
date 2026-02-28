@@ -169,7 +169,7 @@ pub(crate) fn dict_methods(registry: &mut MethodsBuilder) {
     fn pop<'v>(
         this: Value<'v>,
         #[starlark(require = pos)] key: Value<'v>,
-        #[starlark(require = pos)] default: Option<Value<'v>>,
+        default: Option<Value<'v>>,
     ) -> starlark::Result<Value<'v>> {
         let mut me = DictMut::from_value(this)?;
         match me.aref.remove_hashed(key.get_hashed()?) {
@@ -383,6 +383,14 @@ mod tests {
     fn test_error_codes() {
         assert::fail(r#"x = {"one": 1}; x.pop("four")"#, "not found");
         assert::fail("x = {}; x.popitem()", "empty");
+    }
+
+    #[test]
+    fn test_dict_pop_default_named() {
+        // Bazel compatibility: dict.pop() accepts `default` as a named kwarg
+        assert::is_true(r#"{"a": 1}.pop("b", default = None) == None"#);
+        assert::is_true(r#"{"a": 1}.pop("a", default = 99) == 1"#);
+        assert::is_true(r#"{"a": 1}.pop("b", default = 42) == 42"#);
     }
 
     #[test]
