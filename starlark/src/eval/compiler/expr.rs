@@ -1051,6 +1051,11 @@ impl AstLiteralCompile for AstLiteral {
             AstLiteral::Int(i) => heap.alloc(StarlarkInt::from(i.node.clone())),
             AstLiteral::Float(f) => heap.alloc(f.node),
             AstLiteral::String(x) => heap.alloc(x.node.as_str()),
+            AstLiteral::Bytes(b) => {
+                heap.alloc(crate::values::types::bytes::value::StarlarkBytes::new(
+                    &b.node,
+                ))
+            }
             AstLiteral::Ellipsis => heap.alloc(Ellipsis),
         }
     }
