@@ -35,6 +35,7 @@ use crate::lexer::Lexer;
 use crate::lexer::Token;
 use crate::syntax::AstLoad;
 use crate::syntax::Dialect;
+use crate::syntax::comments::Comment;
 use crate::syntax::ast::ArgumentP;
 use crate::syntax::ast::AstExpr;
 use crate::syntax::ast::AstStmt;
@@ -126,6 +127,8 @@ pub struct AstModule {
     /// Lint issues suppressed in this module using inline comments of shape
     /// # starlark-lint-disable <ISSUE_NAME>, <ISSUE_NAME>, ...
     lint_suppressions: LintSuppressions,
+    /// All comments found in the source, in source order.
+    comments: Vec<Comment>,
 }
 
 /// This trait is not exported as public API of starlark.
@@ -164,6 +167,7 @@ impl AstModule {
         dialect: &Dialect,
         typecheck: bool,
         lint_suppressions: LintSuppressions,
+        comments: Vec<Comment>,
     ) -> crate::Result<AstModule> {
         let mut errors = Vec::new();
         validate_module(
@@ -184,6 +188,7 @@ impl AstModule {
             dialect: dialect.clone(),
             typecheck,
             lint_suppressions,
+            comments,
         })
     }
 
@@ -217,6 +222,8 @@ impl AstModule {
         let mut lint_suppressions_builder = LintSuppressionsBuilder::new();
         // Keep track of block of comments, used for accumulating lint suppressions
         let mut in_comment_block = false;
+        // Collect all comments in source order
+        let mut comments = Vec::new();
         let mut errors = Vec::new();
         match StarlarkParser::new().parse(
             &mut ParserState {
@@ -228,6 +235,10 @@ impl AstModule {
                 // Filter out comment tokens and accumulate lint suppressions
                 Ok((start, Token::Comment(comment), end)) => {
                     lint_suppressions_builder.parse_comment(&codemap, comment, *start, *end);
+                    comments.push(Comment {
+                        span: Span::new(Pos::new(*start as u32), Pos::new(*end as u32)),
+                        text: comment.clone(),
+                    });
                     in_comment_block = true;
                     false
                 }
@@ -250,6 +261,7 @@ impl AstModule {
                     dialect,
                     typecheck,
                     lint_suppressions_builder.build(),
+                    comments,
                 )?)
             }
             Err(p) => Err(parse_error_add_span(p, codemap.source().len(), &codemap)),
@@ -369,6 +381,12 @@ impl AstModule {
     pub fn is_suppressed(&self, issue_short_name: &str, issue_span: Span) -> bool {
         self.lint_suppressions
             .is_suppressed(issue_short_name, issue_span)
+    }
+
+    /// Returns all comments found in the source, in source order.
+    /// Each comment has a [`Span`] that can be resolved via [`file_span`](AstModule::file_span).
+    pub fn comments(&self) -> &[Comment] {
+        &self.comments
     }
 }
 
