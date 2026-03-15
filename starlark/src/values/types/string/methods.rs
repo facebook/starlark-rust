@@ -221,22 +221,31 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// https://github.com/bazelbuild/starlark/blob/master/spec.md#string·endswith
     /// ): determine if a string ends with a given suffix.
     ///
-    /// `S.endswith(suffix)` reports whether the string S has the specified
-    /// suffix.
+    /// `S.endswith(suffix[, start[, end]])` reports whether the string
+    /// `S[start:end]` has the specified suffix.
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
     /// "filename.sky".endswith(".sky") == True
+    /// "hello".endswith("ell", 0, 4) == True
+    /// "hello".endswith("lo", 3) == True
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
     fn endswith(
         this: &str,
         #[starlark(require = pos)] suffix: StringOrTuple,
+        #[starlark(require = pos, default = NoneOr::None)] start: NoneOr<i32>,
+        #[starlark(require = pos, default = NoneOr::None)] end: NoneOr<i32>,
     ) -> anyhow::Result<bool> {
+        let haystack =
+            match convert_str_indices(this, start.into_option(), end.into_option()) {
+                Some(StrIndices { haystack, .. }) => haystack,
+                None => return Ok(false),
+            };
         match suffix {
-            StringOrTuple::String(x) => Ok(this.ends_with(x)),
-            StringOrTuple::Tuple(xs) => Ok(xs.items.iter().any(|x| this.ends_with(x))),
+            StringOrTuple::String(x) => Ok(haystack.ends_with(x)),
+            StringOrTuple::Tuple(xs) => Ok(xs.items.iter().any(|x| haystack.ends_with(x))),
         }
     }
 
@@ -1121,8 +1130,8 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// https://github.com/bazelbuild/starlark/blob/master/spec.md#string·startswith
     /// ): test whether a string starts with a given prefix.
     ///
-    /// `S.startswith(suffix)` reports whether the string S has the specified
-    /// prefix.
+    /// `S.startswith(prefix[, start[, end]])` reports whether the string
+    /// `S[start:end]` has the specified prefix.
     ///
     /// ```
     /// # starlark::assert::all_true(r#"
@@ -1131,16 +1140,27 @@ pub(crate) fn string_methods(builder: &mut MethodsBuilder) {
     /// 'abc'.startswith(('a', 'A')) == True
     /// 'ABC'.startswith(('a', 'A')) == True
     /// 'def'.startswith(('a', 'A')) == False
+    /// "//foo".startswith("//", 0, 2) == True
+    /// "//foo".startswith("foo", 2) == True
+    /// "hello".startswith("ell", 1, 4) == True
+    /// "hello".startswith("ell", 2, 4) == False
     /// # "#);
     /// ```
     #[starlark(speculative_exec_safe)]
     fn startswith(
         this: &str,
         #[starlark(require = pos)] prefix: StringOrTuple,
+        #[starlark(require = pos, default = NoneOr::None)] start: NoneOr<i32>,
+        #[starlark(require = pos, default = NoneOr::None)] end: NoneOr<i32>,
     ) -> anyhow::Result<bool> {
+        let haystack =
+            match convert_str_indices(this, start.into_option(), end.into_option()) {
+                Some(StrIndices { haystack, .. }) => haystack,
+                None => return Ok(false),
+            };
         match prefix {
-            StringOrTuple::String(x) => Ok(this.starts_with(x)),
-            StringOrTuple::Tuple(xs) => Ok(xs.items.iter().any(|x| this.starts_with(x))),
+            StringOrTuple::String(x) => Ok(haystack.starts_with(x)),
+            StringOrTuple::Tuple(xs) => Ok(xs.items.iter().any(|x| haystack.starts_with(x))),
         }
     }
 
@@ -1308,5 +1328,31 @@ mod tests {
     fn test_opaque_iterator() {
         assert::is_true("type('foo'.elems()) != type([])");
         assert::is_true("type('foo'.codepoints()) != type([])");
+    }
+
+    #[test]
+    fn test_startswith_with_start_end() {
+        assert::all_true(
+            r#"
+"//foo".startswith("//", 0, 2) == True
+"//foo".startswith("foo", 2) == True
+"hello".startswith("ell", 1, 4) == True
+"hello".startswith("ell", 2, 4) == False
+"hello".startswith("hel", -5) == True
+"hello".startswith(("he", "wo"), 0, 3) == True
+"#,
+        );
+    }
+
+    #[test]
+    fn test_endswith_with_start_end() {
+        assert::all_true(
+            r#"
+"hello".endswith("ell", 0, 4) == True
+"hello".endswith("lo", 3) == True
+"hello".endswith("llo", 0, -1) == False
+"hello".endswith(("lo", "la"), 3) == True
+"#,
+        );
     }
 }
