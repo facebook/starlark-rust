@@ -1,3 +1,4 @@
 /target/
 Cargo.lock
 *.wasm
+.DS_Store
